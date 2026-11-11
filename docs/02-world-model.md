@@ -157,6 +157,7 @@ pub struct Realm {
     pub sites: SiteTable,
     pub travelers: TravelerTable,
     pub vars: VarMap,
+    pub plan: RealmPlan,                       // computed once when the realm is made (10 §9.2)
     pub state: RealmState,                     // Active | Destroyed
 }
 ```
@@ -397,7 +398,7 @@ turns into should not share a threshold; the linter warns when they do.
     "flags": ["opaque"],
     "states": {
       "closed": {},
-      "open": { "add_flags": ["passable"], "remove_flags": ["opaque"], "glyph": { "ch": "'" } }
+      "open": { "add_flags": ["passable"], "remove_flags": ["opaque"], "coverage": 0.0, "glyph": { "ch": "'" } }
     },
     "glyph": { "ch": "+", "fg": "material" } },
 
@@ -648,7 +649,10 @@ matter (01 R11, document 15), and the two can differ.
 `CollapseSettled`, `BodyLaunched`, `BodyImpact`, `BodyHitOccupant`,
 `BodyLanded`, `BodyLeftLoaded`, `OccupantUnsupported`, `OccupantExposed`,
 `OccupantDosed`, `OccupantShaken`,
-`TremorStarted`, `TremorEnded`, `StateChanged`, `TractLoaded`,
+`TremorStarted`, `TremorEnded`, `StateChanged` (an element or field
+changed state by temperature), `OccupantDisplaced`, `OccupantEntombed`,
+`LeftRealm` (something crossed a `void` edge and is gone),
+`FieldBudgetExceeded`, `TicketRefused`, `AreaBreached`, `TractLoaded`,
 `TractUnloading`, `TractDevastated`, `RegionDevastated`, `AreaEntered`,
 `AreaExited`, `PortalTraversed`, `RealmCreated`, `RealmDestroyed`,
 `SubgridMoved`, `SubgridDetached`, `SubgridMerged`.
@@ -700,6 +704,10 @@ Two occupants interact (collide, see, hit) only if their plane masks share a
 bit. Terrain exists on all planes. An astral projection, a ghost, or a fight
 in a mirror layer over the same streets is a plane change, not a realm change.
 Walking through walls is a movement ability, not a plane.
+
+Planes are named by definitions (`{ "type": "plane", "id": "astral" }`;
+at most thirty-two). `set_plane { who, planes }` sets which an occupant
+is on, and `who.planes` reads it.
 
 ### 8.3 Areas
 
@@ -806,6 +814,7 @@ pub struct TractRecord {                      // about 16 bytes; a surveyed regi
     pub rot: u8, pub variant: u8,
     pub state: TractState,                    // Surveyed | Realized { pristine: bool }
     pub devastation: u8,                      // section 17
+    pub devastation_kind: Option<DevastationKindId>,   // of whichever delivered the most; the later wins a tie
     pub site: Option<SiteIdx>,
     pub extra: Option<Box<TractExtra>>,
 }
@@ -1096,7 +1105,7 @@ scaling, and it makes radius grow with the cube root of energy, which matches
 real explosions across many orders of magnitude and keeps every scale in one
 formula:
 
-| Release | Energy | Radius at 70 kPa (walls fail) |
+| Release | Energy | Radius at 70 kPa (the example wall's threshold) |
 |---------|--------|-------------------------------|
 | Hand grenade | 8 × 10⁵ J | 1.4 m |
 | Car bomb | 2 × 10⁹ J | 19 m |
@@ -1765,7 +1774,11 @@ edge somewhere else:
 | `{ "exit": "chart", "chart": …, "node": … }` | Leave cell scale and become a traveler on a chart (section 20). |
 
 **Realm transfer** is one function that moves an occupant, body or subgrid
-between grids, updates clocks and tickets, and emits events. Portals,
+between grids, updates clocks and tickets, and emits events. It takes a
+ticket for where the mover is going. If that tract is not loaded the
+mover is held out of the world until the next safe point has loaded it,
+and then placed. It is refused, with a reason, only where there is nowhere
+to arrive: a barrier edge, a destroyed realm. Portals,
 boundary links, teleport effects and travel all use it.
 
 ## 20. Travel
@@ -1849,7 +1862,8 @@ A derived realm uses a generator that takes another realm as input:
 
 `pristine` reproduces the source's generated tracts, ignoring changes since.
 `live` copies the source tract's current cells the first time each tract is
-realized. `transform` is a map transform (10 §10) applied on top:
+realized; if the source tract is not loaded it is loaded for the copy, at
+a safe point. `transform` is a map transform (10 §10) applied on top:
 swap palettes, add growths, remove people.
 
 **Creation.** `create_realm(def, seed, params) -> RealmId` at any safe point.
@@ -1935,6 +1949,67 @@ of sight; area and
 site membership; tract devastation; variables at cell, area, site, tract,
 region, realm and global scope.
 
+**Verb names.** The effects above are written in data as: `set_floor`,
+`set_block`, `set_fixture`, `set_material`, `damage`, `release`, `tremor`,
+`devastate`, `add_field`, `add_decal`, `remove_decal`, `set_var`,
+`launch`, `impulse`, `arrest`, `detach`, `merge`, `apply_map`,
+`open_portal`, `close_portal`, `create_realm`, `destroy_realm`,
+`create_area`, `remove_area`, `set_clock_rate`, `enclose`, `hold_ticket`,
+`release_ticket`, `add_pending_edit`, `transfer`, `set_plane`,
+`set_liquid_level`.
+
+**When an edit meets an occupant.** An edit never fails because someone is
+standing there. If it puts something an occupant cannot share a cell with
+into that cell, the occupant is displaced to the nearest cell it can
+occupy within `edit.displace_range` (default 2 cells), with
+`OccupantDisplaced`. If there is none it stays where it is and
+`OccupantEntombed` is raised; what being walled in does is for rules.
+
+**Errors.** World operations that cannot be done return one of: not
+loaded; outside the realm; a barrier; not connected (for `detach`); too
+deeply nested (subgrids nest four deep); over budget. `detach` and
+`transfer` report them as refusals with reasons (14 §5).
+
+**What a mind may read** (05 §7.3). Safe for belief: the shape of the
+world, meaning what a cell's elements are made of and whether they can be
+stood on, passed or seen through. Not safe: an element's state, damage
+and variables, fields, decals, who is where, and anything about areas and
+sites the character has not perceived. The tag `hidden` is reserved: an
+element, area, site or mark that carries it is left out of even the
+shape until perceived.
+
+**Content named by data, not by the engine.** A damage type flagged
+`"kinetic": true` is the one bodies and falling masses deliver; exactly
+one must be loaded if anything can be thrown or fall. A damage type names
+the kind of devastation it leaves (`"devastation": "blast"`). A fluid or
+atmosphere names the damage type its pressure does (11 §10.4). Without
+them the load fails with a diagnostic; the engine supplies no default id
+of its own (invariant W9).
+
+**Definition types added here**: `plane`, `decal`, `sky` (ambient light by
+time of day, and a backdrop; 15 §3.3, 12 §6.1). The query `decals` reads
+the marks in a cell with what left them.
+
+**Body properties.** `depth` and `restitution` are fields of `projectile`
+definitions (07 §11.1), and of items and templates for when they are
+thrown. Sliding friction is the floor material's `friction`. `REST_SPEED`
+is a named constant.
+
+**Fixed sets.** Field rules, release shapes, exposure routes and engine
+flags are implemented natively. A mod configures and combines them and
+cannot add one. Where a new behaviour is needed, `FieldContact` and the
+other events are the way in. This is a known limit of the modding
+surface.
+
+**Constants.** Where this document says "a wide margin", "a flat shelter
+factor", "a bounded box" or "a fixed number of passes", each is a named
+setting under `release.` or `support.`, as is the hot radius around a
+controlled character (`world.hot_radius`) and the vacuum default for a
+release's speed (`release.vacuum_speed`). Devastation is scaled between
+`world.min_intensity` and `devastation.max_intensity`. `spread` ignites
+materials carrying the tag its `needs` names. `catch_up` is one of
+`burn_out`, `disperse`, `settle`, `keep`, `none`.
+
 **Settings**: `world.min_intensity`, `release.max_cells`,
 `field.max_active_cells`, `body.max_ticket_tracts`, `max_loaded_tracts`,
 `sight.portal_depth`, and the debris budget of section 12.3
@@ -1947,7 +2022,7 @@ Nothing in this document is reachable only from Rust.
 | # | Invariant |
 |---|-----------|
 | W1 | Cells change only through `WorldEdit`. The occupant index changes only through `place`, `relocate`, `remove`. |
-| W2 | Generation is pure: a function of definitions, realm seed, position and records. |
+| W2 | Generation is pure: a function of definitions, realm seed, position and records. A derived realm in `live` mode also reads its source's cells as they are (section 21); that is its purpose and the one exception. |
 | W3 | Loading a tract is a pure function of cosmos state, tract and tick. |
 | W4 | Every occupant, body and process is in a loaded tract. |
 | W5 | A process holds a ticket for the tracts it touches, or has been resolved. |

@@ -117,7 +117,12 @@ rules.
 | `spawns` | Creatures and populations (06 §12) |
 | `wiring` | Conduit layers and device links (section 3.6) |
 | `joints` | Where it can connect to other maps (section 7.2) |
-| `anchor` | What level 0 sits on: `ground`, `sea_level`, `sea_floor`, or an absolute storey |
+| `base` | What level 0 sits on: `ground`, `sea_level`, `sea_floor`, or an absolute storey |
+| `sit` | How it meets uneven ground: `level`, `foundation`, `follow` or `none` (section 4.2) |
+| `turn`, `over` | Whether a placement may turn it (section 3.3), and whether it may overlap another (section 4.1) |
+| `portals` | Portals (02 §19) between marks of this map, or from a mark to a named entry elsewhere |
+| `vehicles` | Vehicles (11 §12.1) standing at marks; a vessel is placed as a subgrid |
+| `if` | A condition on the placement's parameters; if false the map is not placed |
 
 A space character means "leave what is there". Everything else replaces.
 
@@ -206,7 +211,9 @@ in cell specs are linked by name. A map can ship a working machine room
 ### 3.7 Validation
 
 At load: row lengths, unknown characters, unresolved parameters, nested
-maps that cannot fit, links to unnamed devices, joints off the boundary.
+maps that cannot fit, maps that nest inside themselves or deeper than
+`gen.max_nesting` (default 8), links to unnamed devices, joints off the
+boundary.
 With `clash-tools map check`: rooms unreachable by walking; marks a site
 definition requires but its map does not supply; and whether the map
 stands. The map is realised on flat ground and the support and load passes
@@ -307,7 +314,10 @@ one storey, a ramp is placed.
 
 ### 5.2 What holds
 
-Each stratum says whether its blocks are `anchor` (02 §5.4). Rock that
+Each stratum says whether its blocks are `anchor` (02 §5.4). The flag
+belongs to a block's state, so a block used in loose strata defines a
+state without it, and `"anchor": false` on a stratum selects that state.
+The linter reports a stratum that asks for a state its block lacks. Rock that
 anchors can be tunnelled freely. Sand, gravel and loose soil given
 `"anchor": false` need support by span like any structure (02 §14), and a
 tunnel through them comes down. This settles open question 2 of 02 §26: it
@@ -749,8 +759,36 @@ seen in a running game.
 `assembly`, `region_kind`, `settlement`, `site`, `worldgen`,
 `map_transform`, `path_kind`, `names`. Field `presence` on populations.
 
-**Events**: `realm_planned`, `region_surveyed`, `tract_realized`,
-`site_created`, `map_applied`.
+**Events**: `realm_planned` (a realm's plan is computed), `region_surveyed`,
+`tract_realized` (a tract's cells were generated for the first time),
+`site_created`, `map_applied` (by `apply_map` or a pending edit),
+`placement_dropped` (a survey could not fit something, with what and
+why).
+
+`survey_region` surveys a region now instead of on first need.
+`here.placement` is the placement whose map made the cell, if any.
+
+A survey reports what it could not do. A `must_have` site or a planned
+site that cannot be placed is an error in the survey's report, and the
+settlement is laid out without it. A map chosen by tag for a site must
+supply the site's roles, or it is not eligible (invariant X7); the same
+holds for the pieces of an assembly taken together.
+
+**Named choices.** `near` is one of `coast`, `road`, `river`, `centre`,
+`edge`. A field's `shape` is one of `island`, `continent`, `flat`,
+`ridged`. A holder's `seat` is `largest_settlement`, `first`, or a named
+settlement. A worldgen names which of its fields is the surface height
+(`"surface": "height"`). A settlement names the mark that counts as a
+home (`"home_mark": "bed"`); the engine does not know what a bed is.
+Fields are read as `region.<field>` everywhere; `$name` is for parameters
+only. A generator of type `derived` copies another realm (02 §21).
+
+**Fixed sets.** Ground steps, transform steps, crossings and street
+patterns are implemented natively and configured by data. A mod cannot
+add one. This is a known limit of the modding surface.
+
+**Settings**: `gen.max_nesting`, `gen.max_settling` (the longest settling
+time a worldgen may ask for).
 
 **Effects**: `apply_map`, `plan_from_map`, `transform_area`,
 `create_realm` with a generator and parameters, `survey_region`.
