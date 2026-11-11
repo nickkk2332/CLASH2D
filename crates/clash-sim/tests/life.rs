@@ -740,7 +740,7 @@ fn damage_of(sim: &Sim, who: EntityId) -> Vec<(String, String, Vec<u8>)> {
 #[test]
 fn shelving_and_restoring_a_wounded_person_changes_nothing() {
     const FAR: i32 = 11;
-    let (mut sim, _realm) = city_sim();
+    let (mut sim, realm) = city_sim();
     debug(
         &mut sim,
         DebugCommand::CreateEntity {
@@ -778,6 +778,21 @@ fn shelving_and_restoring_a_wounded_person_changes_nothing() {
     let body_before = damage_of(&sim, finn);
     let wounds_before = sim.components().body.get(finn).unwrap().wounds().len();
 
+    // Someone is asked for where the walk goes, in a tract not loaded
+    // yet: the template answers when it loads (06 §10.3, §12.2).
+    let ahead = TractPos::new(START_TRACT.x + FAR, START_TRACT.y);
+    let asked_at = city_cell(ahead, 3, 3);
+    let request = clash_world::SpawnRequest {
+        what: "core:person".to_owned(),
+        at: asked_at.cell,
+        params: clash_core::VarMap::new(),
+    };
+    sim.world(|ctx| {
+        ctx.cosmos
+            .add_pending_edit(realm, ahead, clash_world::PendingEdit::Spawn(request))
+    })
+    .unwrap();
+
     for _ in 0..FAR {
         step(&mut sim, walker, 1);
     }
@@ -786,6 +801,14 @@ fn shelving_and_restoring_a_wounded_person_changes_nothing() {
         Some(Place::Stored),
         "shelved with its tract"
     );
+    let stranger = sim
+        .truth()
+        .entities()
+        .ids()
+        .find(|id| sim.truth().place(*id) == Some(Place::at(asked_at)))
+        .expect("the request was answered");
+    assert!(!sim.is_notable(stranger), "made for a tract: anonymous");
+    assert!(sim.components().body.contains(stranger));
     assert!(sim.components().stats.get(finn).unwrap().is_suspended());
     assert!(sim.components().body.get(finn).unwrap().is_suspended());
     // Time passes elsewhere; none of it for the shelved.
