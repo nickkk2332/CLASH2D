@@ -48,7 +48,7 @@ start while the world model is being built.
 | K9 | Messages and choices | S | K5 | todo |
 | K10 | Tracing, explain, profile, console | M | K5, W11 | todo |
 | T1 | Clock assignment | M | K1 | todo |
-| T2 | Action definitions | M | X4 | todo |
+| T2 | Action definitions | M | X4 | beta |
 | T3 | Action runtime | L | T2, K5 | todo |
 | T4 | Control, plans, free decisions | M | T3 | todo |
 | T5 | Windows and reactions | M | T4, T1 | todo |
@@ -541,6 +541,25 @@ Done when
 - The examples in 03 §6 and §8 load, with the names they borrow from later
   documents (`strike`, `auto_part`, `perceives`, `attr`, `takedown_result`)
   stubbed in the test fixture.
+
+As built (decisions D-400 to D-407), in `clash_sim::action`. Beta: both
+items above are built and tested in `crates/clash-sim/tests/action.rs`,
+with fixtures under `crates/clash-sim/tests/fixtures/action/`. A loaded
+action is read without a lookup by name: phases by index, channels as a
+`ChannelSet`, locals in one fixed order of slots that every expression was
+compiled against. The reasons for the refusals of 03 §6 to §8 are
+constants in `clash_sim::action::reason`. `clash_sim::action::register_defs`
+registers the three types and is called by `clash-tools`. Stubbed: effect
+lists are kept as the located JSON they were written as (`EffectsSource`)
+and nothing in them is checked until the rule runtime compiles effects
+(K5). Of the review additions, the definition halves are built: `footing`
+with its reason, and list parameters with their bounds, element type and
+indexing. The run-time halves are T3's: refusing an actor with nothing
+under it, holding a list to its bounds when a command gives it, and
+keeping it across a save. The events, hooks, effects and queries of 03 §13
+are registered by the packages that raise and run them. The fields other
+documents add to an action (`attacks`, `defence`, `cutscene`, the `choice`
+parameter type) are not accepted yet.
 
 ### T3 — Action runtime
 

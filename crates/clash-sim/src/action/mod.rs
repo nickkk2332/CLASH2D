@@ -64,18 +64,21 @@
 //!    [`reason::NO_FOOTING`].
 //! 3. Evaluate [`ActionDef::requires`] against truth
 //!    ([`reason::REQUIRES`], with `fail_text` as the sentence).
-//! 4. Claim slots. For an ordinary action, [`ActionDef::uses`] on the
+//! 4. Raise `ActionStarting`; a handler may change parameters, or
+//!    cancel ([`reason::VETOED`]).
+//! 5. Claim slots. For an ordinary action, [`ActionDef::uses`] on the
 //!    actor; for a joint one, each [`Role::uses`] on its participant.
 //!    [`ChannelUse::set`] against the set of channels the participant's
 //!    running actions hold tells at once whether slots need counting at
 //!    all; [`ChannelUse::needs`] says how many of each
 //!    ([`reason::CHANNEL_BUSY`], [`reason::CHANNEL_LACKING`]).
-//! 5. Raise `ActionStarting`; a handler may cancel
-//!    ([`reason::VETOED`]).
 //! 6. Evaluate [`ActionDef::requires_at_start`] against truth. If it
 //!    fails the action has begun and is interrupted at once
 //!    ([`reason::START_CONDITION`]).
 //! 7. Run `on_start`, then enter phase 0.
+//!
+//! Where 03 §6.6 leaves the order of two of these open, the runtime
+//! package settles it there; nothing in a definition depends on it.
 //!
 //! **Entering a phase** at a [`PhaseIndex`], with [`ActionDef::phase`]:
 //!

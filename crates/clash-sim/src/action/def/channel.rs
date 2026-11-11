@@ -4,7 +4,8 @@
 use std::fmt;
 
 use clash_data::{
-    Def, Diagnostic, FinishCx, FromKind, Kind, KindValue, Located, Ref, Span, Text, by_kind, code,
+    CompileCx, Def, Diagnostic, FinishCx, FromKind, Kind, KindValue, Located, Ref, Scope, Span,
+    Text, by_kind, code,
 };
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
@@ -32,6 +33,11 @@ impl Def for ChannelDef {
     const TYPE: &'static str = "channel";
     const DOC: &'static str =
         "Something an action needs exclusive use of: an arm, the voice, attention (03 §6.2).";
+
+    fn compile(&mut self, cx: &mut CompileCx<'_>) {
+        // A name is about nothing in particular: nothing is bound.
+        cx.compile(&mut self.name, &Scope::new().pure());
+    }
 
     fn placeholder() -> Option<ChannelDef> {
         Some(ChannelDef::default())

@@ -1107,6 +1107,34 @@ fn more_channels_than_a_set_holds_is_a_located_error() {
     assert_eq!(all.len(), ChannelSet::CAPACITY);
 }
 
+// ---- every refusal has a reason, and the document lists it --------------
+
+#[test]
+fn document_03_lists_every_reason_of_the_action_system() {
+    let document = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/03-time-and-actions.md");
+    let text = std::fs::read_to_string(document).expect("document 03 can be read");
+    assert!(!clash_sim::action::reason::REASONS.is_empty());
+    for reason in clash_sim::action::reason::REASONS {
+        let name = reason
+            .code
+            .strip_prefix("engine:")
+            .expect("a reason of the engine's");
+        assert!(
+            text.contains(&format!("`{name}`")),
+            "03 §13 does not list the reason `{name}`"
+        );
+    }
+    // The refusals the review addition and 14 §5 name are among them.
+    for code in [
+        "engine:action_no_footing",
+        "engine:action_requires",
+        "engine:action_channel_busy",
+        "engine:action_list_length",
+    ] {
+        assert!(clash_sim::action::reason::find(code).is_some(), "{code}");
+    }
+}
+
 // ---- actions are patched like anything else (04 §6.1) -------------------
 
 #[test]

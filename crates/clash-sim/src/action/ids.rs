@@ -33,8 +33,8 @@ const WORD_BITS: usize = u64::BITS as usize;
 /// A set of channels (03 §6.2): one bit for each `channel` definition.
 ///
 /// It says *which* channels, not how many slots of each: an action's
-/// needs are a [`ChannelUse`](super::ChannelUse), and an entity's slots
-/// are the action runtime's. Two actions whose sets do not
+/// needs are its `ChannelUse`, and an entity's slots are the action
+/// runtime's. Two actions whose sets do not
 /// [intersect](ChannelSet::intersects) can never want the same slot, which
 /// is the test made before slots are counted.
 ///
