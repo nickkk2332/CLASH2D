@@ -8,6 +8,10 @@ publish.workspace = true
 
 [dependencies]
 clash-scene.workspace = true
+crossterm.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

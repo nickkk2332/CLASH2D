@@ -1,0 +1,98 @@
+//! The widget gallery: every container and widget of the interface
+//! toolkit on one screen, in a terminal.
+//!
+//! ```text
+//! cargo run -p clash-front-term --example gallery
+//! ```
+//!
+//! Tab and Shift-Tab move the focus, the arrow keys act on whatever has
+//! it, and `q` or Esc quits. The screen, the theme and the keymap are
+//! read from `mods/ui`; a different mod directory may be given as the
+//! first argument.
+//!
+//! Without a terminal (input or output redirected) the example checks
+//! that the definitions load, prints the first frame as plain text and
+//! exits successfully.
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::time::{Duration, Instant};
+
+use clash_front_term::{TermError, TermFrontend};
+use clash_scene::defs::{DefError, UiDefs};
+use clash_scene::{Frame, NoHost, NullFrontend, RichText, Scene};
+
+/// How long the loop rests between frames.
+const FRAME_TIME: Duration = Duration::from_millis(16);
+/// The grid of the frame printed when there is no terminal.
+const HEADLESS_SIZE: (u16, u16) = (80, 24);
+
+fn mod_dir() -> PathBuf {
+    match std::env::args_os().nth(1) {
+        Some(dir) => PathBuf::from(dir),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mods/ui"),
+    }
+}
+
+fn describe(errors: Vec<DefError>) -> String {
+    let lines: Vec<String> = errors.iter().map(ToString::to_string).collect();
+    lines.join("\n")
+}
+
+/// Builds the scene with the gallery screen open and a few lines in the
+/// log for the `log` widget to show.
+fn gallery() -> Result<Scene<NoHost>, String> {
+    let defs = UiDefs::load_mod(&mod_dir()).map_err(describe)?;
+    let mut scene = defs.scene("default", "default").map_err(describe)?;
+    let screen = defs.screen("gallery", scene.theme()).map_err(describe)?;
+    scene.open(screen);
+    for n in 1..=12 {
+        let line = format!("Log line {n}.");
+        scene.log_mut().push("demo", RichText::plain_text(&line));
+    }
+    Ok(scene)
+}
+
+fn run() -> Result<(), String> {
+    let mut scene = gallery()?;
+    let mut frame = Frame::new(0, 0);
+    let mut front = match TermFrontend::start(true) {
+        Ok(front) => front,
+        Err(TermError::NotATerminal) => {
+            let mut null = NullFrontend::new(HEADLESS_SIZE.0, HEADLESS_SIZE.1);
+            scene.turn(&mut null, &mut frame, 0.0);
+            print!("{}", frame.text());
+            println!(
+                "gallery: not started, because standard input and output are not both a terminal."
+            );
+            println!(
+                "The definitions loaded and the first frame is shown above. Run it in a terminal to use it."
+            );
+            return Ok(());
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    let mut last = Instant::now();
+    loop {
+        let now = Instant::now();
+        let seconds = now.duration_since(last).as_secs_f64();
+        last = now;
+        let turn = scene.turn(&mut front, &mut frame, seconds);
+        // Running interface effects is not built yet; the one effect the
+        // gallery's screen asks for is `close`.
+        if turn.close_requested || turn.asks_for("close") {
+            return Ok(());
+        }
+        std::thread::sleep(FRAME_TIME);
+    }
+}
+
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("gallery: {message}");
+            ExitCode::FAILURE
+        }
+    }
+}

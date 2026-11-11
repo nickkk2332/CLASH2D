@@ -1,0 +1,9 @@
+{
+  "id": "ui",
+  "name": "Interface",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "The default screens built with the toolkit, with the default theme, colours and keymap. So far: the theme, the keymap and a gallery of every widget.",
+  "authors": ["CLASH2D contributors"],
+  "requires": []
+}

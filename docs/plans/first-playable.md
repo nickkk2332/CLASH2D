@@ -41,12 +41,12 @@ actions that call `hit`.
 | S8 | Speech | M | S7, T6 | todo |
 | S9 | Party perception | M | S5 | todo |
 | S10 | Coloured light (experimental) | S | S1, U4, P4 | todo |
-| U1 | Scene skeleton, frames, themes | M | K2 | todo |
-| U2 | Terminal frontend | S | U1 | todo |
+| U1 | Scene skeleton, frames, themes | M | K2 | beta |
+| U2 | Terminal frontend | S | U1 | done |
 | U3 | Window frontend | L | U1 | todo |
 | U4 | View model and world drawing | L | U1, S9 | todo |
 | U5 | Playback | L | U4 | todo |
-| U6a | Toolkit: layout and widgets | L | U1 | todo |
+| U6a | Toolkit: layout and widgets | L | U1 | beta |
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | todo |
 | U7 | Input, controls, pickers | M | U6b, T5 | todo |
 | U8 | Slots and theming | S | U6b | todo |
@@ -422,6 +422,15 @@ Done when
 - The scene type exposes no route to the simulation except `submit`
   (invariant V1), shown by a compile-fail test.
 
+Beta: built ahead of the simulation (K2). Stubbed: the scene's link to
+the simulation is the `SceneHost` trait with `submit` and nothing else, so
+there is no `SimView` and the compile-fail tests show only that the host
+cannot be reached; they must be joined by tests against the real handle.
+Definitions are read by `clash_scene::defs`, a small reader, until
+`clash-data` is joined to the crate. The linter's warning for glyph states
+that differ in colour alone (invariant V10) waits for the linter. A
+glyph's `shape` is checked and can be read by facing; drawing by it is U4.
+
 ### U2 — Terminal frontend
 
 **Spec** 12 §11 · **Size** S
@@ -429,6 +438,11 @@ Done when
 Done when
 - A frame is displayed in a terminal with colour mapping; sprites snap to
   cells; keys arrive as input events.
+
+Done, with one caution: it was built and tested against an in-memory
+writer and translated events, and has not yet been watched in a real
+terminal. `cargo run -p clash-front-term --example gallery` is the thing
+to try first.
 
 ### U3 — Window frontend
 
@@ -481,6 +495,20 @@ Build
 Done when
 - Layout fixtures at several sizes have golden frames.
 - Each widget has a golden frame and a navigation test.
+
+Beta: every container and widget is laid out, drawn, focused and
+navigated with content written in the definition. Stubbed, each waiting
+for the package that owns it: a property that is an expression is held
+unparsed (`Prop::Bound`) and shown as a placeholder until an `Evaluator`
+is supplied, and rows and options from a query are empty (U6b); effects
+are held as written and handed back in `UiEvent`s, not run (U6b);
+`map_view`, `section_view`, `region_map` and `chart_view` have their
+place, focus and fields and draw an empty area unless given a
+`ViewPainter` (U4); `log` shows a `MessageLog` that nothing fills yet
+(U5); `slot` holds its name (U8); `console`, `canvas` and `trace_view`
+have their place and focus only (tooling plan); rebuilding the screen
+stack on reload (12 §10.3) is not built; a `number` is stepped, not
+typed.
 
 ### U6b — Toolkit: binding and UI effects
 

@@ -1,0 +1,24 @@
+clash-frame 1
+size 10x3
+chars
+|6        │|
+|7        │|
+|8        █|
+fg
+|0000000002|
+|0000000002|
+|0000000000|
+bg
+|1111111111|
+|1111111111|
+|1111111111|
+attrs
+|.........1|
+|.........1|
+|.........1|
+palette
+0 #c8c8c8 white
+1 #101010 black
+2 #707070 bright_black
+sprites 0
+fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none
