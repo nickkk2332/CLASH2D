@@ -27,9 +27,14 @@
 //! units ([`Length`], [`Mass`], [`Time`], [`Energy`], [`Power`],
 //! [`Force`], [`Temperature`], [`Volume`], [`Pressure`], [`Speed`],
 //! [`Rate`], [`Frequency`]), references ([`Ref`], [`Inline`]), [`Tag`]
-//! and [`TagSet`], [`Text`], [`Located`] and [`Gated`]. A field that
-//! takes more than one shape (an id or an object) is read with
-//! [`by_kind`]. What a definition struct must avoid is listed in [`de`].
+//! and [`TagSet`], [`Text`], [`Located`] and [`Gated`], and the
+//! expression fields [`Expr`] and [`Cond`]. A field that takes more than
+//! one shape (an id or an object) is read with [`by_kind`]. What a
+//! definition struct must avoid is listed in [`de`].
+//!
+//! Expressions, conditions and text templates are compiled when mods
+//! load. A type says what is in scope in each such field in
+//! [`Def::compile`]; [`expr`] explains how.
 //!
 //! # For a crate that loads
 //!
@@ -38,6 +43,8 @@
 //!
 //! let mut types = DefTypes::new();
 //! // Each crate's `register_defs(&mut types)` goes here.
+//! // The simulation's registry of kinds, properties and functions goes in
+//! // with `.expr_registry(&registry)`.
 //! let outcome = Loader::new(&types).search_path("mods").load_profile("default");
 //! eprint!("{}", outcome.diagnostics.render());
 //! if let Some(defs) = outcome.defs {
@@ -54,6 +61,7 @@
 //! | Syntax | [`json`] | Malformed JSON |
 //! | Structure, merge | `merge` | Missing `type` or `id`, duplicates, bad patches, inheritance cycles |
 //! | Typed load, link | [`de`], [`fields`] | Unknown keys, wrong types, bad units, unknown references |
+//! | Compile | [`expr`] | Expression syntax, names, types, purity and belief; bad functions and variables |
 //! | Semantic, cross | [`defs`] | Each type's `validate`; whole-set checks |
 //!
 //! Every mistake is a [`Diagnostic`] with file, line, column, definition
@@ -62,10 +70,10 @@
 //!
 //! # What is not built yet
 //!
-//! - `Expr`, `Cond` and `Effects` fields and the compiling of [`Text`]
-//!   templates (the expression packages). An expression field can be read
-//!   today as a [`Located<String>`]; [`SourceMap::span_in_string`] maps an
-//!   offset inside it back to the file.
+//! - `Effects` fields (the rule runtime) and queries. A crate that
+//!   compiles a syntax of its own reads it as a [`Located<String>`] or
+//!   with [`by_site`], builds its context with [`CompileCx::context`]
+//!   and reports with [`CompileCx::report_compiler`].
 //! - The `setting` and `migration` definition types, obsolete-reference
 //!   warnings and save placeholders (packages P6 and P7).
 //! - JSON Schema and reference generation (package P5).
@@ -75,6 +83,7 @@
 pub mod de;
 pub mod defs;
 pub mod diag;
+pub mod expr;
 pub mod fields;
 pub mod json;
 pub mod load;
@@ -86,15 +95,16 @@ pub mod units;
 pub use de::from_node;
 pub use defs::{
     CrossCheck, CrossCx, Def, DefTypes, Defs, DefsView, FinishCx, FinishedTree, LoadedModInfo,
-    Registry, TagTable, TypeInfo, ValidateCx,
+    Registry, RegistryCx, RegistryStep, TagTable, TypeInfo, ValidateCx,
 };
 pub use diag::{
     CODES, Code, CodeInfo, DefLabel, Diagnostic, Diagnostics, Note, Severity, code, explain,
 };
+pub use expr::{CompileCx, Cond, Evaluator, Expr, ExprDefs, Runner, Scope, ValueSource};
 pub use fields::{
-    Energy, Feature, Force, Frequency, FromKind, Gated, HasRate, Inline, Kind, KindValue, Length,
-    Located, Mass, Power, Pressure, Quantity, Rate, Ref, Seconds, Speed, Tag, TagSet, Temperature,
-    Text, Time, Volume, by_kind, dur,
+    Energy, Feature, Force, Frequency, FromKind, FromSite, Gated, HasRate, Inline, Kind, KindValue,
+    Length, Located, Mass, Power, Pressure, Quantity, Rate, Ref, Seconds, Site, Speed, Tag, TagSet,
+    Temperature, Text, Time, Volume, by_kind, by_site, dur,
 };
 pub use json::{COMMENT_KEY, Limits, Member, Node, NodeKind, Num, parse_json};
 pub use load::{LoadOutcome, Loader};

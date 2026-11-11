@@ -492,6 +492,22 @@ Content stores its own state in **variables** on subjects.
 
 All variables are saved.
 
+A declaration's fields:
+
+| Field | Meaning |
+|-------|---------|
+| `scope` | What the variable lives on: a kind of subject, by the names of the table above. `cell` is the kind `loc`. Required. |
+| `value` | The type, as section 3 writes types: `bool`, `int`, `real`, `string`, `id<material>`, `list<int>`, `map<real>`, a kind of subject. Required. |
+| `default` | What the variable reads as until it is set: a constant of the declared type. Left out, the variable reads as null until it is set, and its type is the declared one or null. |
+| `watch` | As above. Default false. |
+| `belief_safe` | Whether a character may read it of things other than itself in a mind context (section 7.3). Default false. |
+| `doc` | Shown in the inspector and the reference. |
+
+A variable is declared at the top level of a data file, not in place
+inside another definition. `strict_vars` belongs to the mod that wrote
+the expression: a strict mod's rules are held to it wherever they end up,
+and another mod's are not.
+
 ## 7. Where expressions appear
 
 ### 7.1 Expression fields
@@ -505,6 +521,23 @@ A field of type `Expr<T>` accepts:
 | `{ "expr": "…" }` | An expression, always. Needed when `T` is a string or an id. |
 | A value source (section 7.4) | A computed value |
 
+In detail:
+
+- A JSON number is an `int` if it is written whole and a `real`
+  otherwise; where an `int` is wanted, a number with a zero fraction or
+  an exponent (`2.0e1`) is one. A JSON list of numbers, booleans, texts
+  and lists is a list literal. `null` is a literal only where the field
+  may be null.
+- Where `T` is a string, a JSON string is that text; where `T` is an id,
+  it is an id, resolved when mods load like any reference, and one that
+  names nothing is an error with the closest id.
+- Where `T` is a number, a JSON string that is a quantity of 04 §7.1
+  (`"250 ms"`, `"5 m/s"`, `"-5 C"`) is that quantity in SI units, so
+  compound units and offsets may be written in such a field although the
+  expression language has neither. Anything else is an expression.
+- A literal of the wrong type is a load error, as an expression of the
+  wrong type is.
+
 ### 7.2 Conditions
 
 A condition is an expression of type `bool`, or a structure:
@@ -515,6 +548,13 @@ A condition is an expression of type `bool`, or a structure:
 
 `all`, `any` and `not` nest freely and compile to the same thing as the
 string form.
+
+A condition may also be `true` or `false`, or `{ "expr": "…" }`. An
+object has exactly one of `all`, `any`, `not`, `exists` and `expr`. Each
+string of a structure is compiled by itself, so a mistake in one is
+reported at that string, and the structure is evaluated left to right,
+stopping as soon as the answer is known. A part that comes to null
+counts as false, as it does in the string form.
 
 ### 7.3 Contexts and purity
 
@@ -551,6 +591,19 @@ is the character's own, `self.loc.material` is the world's. Everything
 else must be registered safe. Naming a bound subject, a local or an event
 field is always allowed; it is reading from them that is checked.
 
+Who declares the context: the definition type that owns the field, in
+Rust, once for each field (04 §7.3). It lists the subjects with their
+kinds, the locals with their types, the event, whether the field is pure
+and whether it is a mind context, naming the character with `mind` (the
+own subject, in a context that reads belief) or with `own` alone where
+the same subject is bound in a context that reads truth. A mod cannot
+widen what a field offers. Mistakes against the context are load errors
+at the name: an unbound subject, a local or an event field that is not
+there, a random function in a pure field, an unsafe read in a mind
+context. The context also carries what the loader knows about the string
+itself: the namespace of the mod that wrote it and that mod's imports,
+for bare names, and whether that mod asked for `strict_vars`.
+
 A condition may also be `{ "exists": query }`, true when the query
 (section 11) has any result.
 
@@ -570,6 +623,18 @@ source** object can:
 | `{ "run": { "eoc": id, "with": { … } } }` | What a rule returns (section 9.5). Allowed only where effects are; never in a pure context. |
 
 Queries are defined in section 11.
+
+A value source is written where an `Expr` is and is one object with
+exactly one of the keys above, or `expr`. `weight` belongs with `pick`
+and `of` with `sum`, `min` and `max`. The `args` of a `call` are given by
+parameter name, each an `Expr` of the parameter's type compiled in the
+scope of the field the source is in; a parameter with a default may be
+left out. A `call` names a function definition, or a function the
+simulation registered: the engine's built-in functions are called in an
+expression. A source is held to its field's context like an expression:
+`pick`, `run` and a `call` of a random function are refused where the
+value must be pure, and a `call` of a function that is not safe for
+belief is refused in a mind context.
 
 ### 7.5 Reactive expressions
 
@@ -937,6 +1002,39 @@ A function is pure unless it uses a random function or `pick`, in which case
 it is random and cannot be used in pure contexts. Functions never change
 state.
 
+The fields in detail:
+
+| Field | Meaning |
+|-------|---------|
+| `params` | The parameters, in the order written, which is the order arguments are given in. Each is a name and its type (`"of": "entity"`), or a name and an object with `type`, and optionally `default` and `doc`. A parameter with a default may be left out of a call; those come last, and a default is a constant. Default: none. |
+| `returns` | The type of the result. Left out, the result is `any`, which is checked when the function runs. |
+| `value` | The body. It sees the parameters, as `$name`, and nothing else: no subject of whoever calls it. |
+| `doc` | Shown in the reference. |
+
+What the loader works out, from the body and from every function it
+calls, directly or through others:
+
+- **Random.** A function is random if it calls a random function, or its
+  value is a `pick` or a `run` source.
+- **Safe for belief.** A function is safe for belief if everything it
+  reads is: its body would compile in a mind context that binds only its
+  parameters, and so would the body of every function it calls. A
+  function that reads a property of a parameter which is not registered
+  safe is therefore not safe, even when it is called with the character
+  itself. Until queries are built, a function whose value is a query is
+  not safe.
+- **Recursion.** A function that calls itself on every path through its
+  body, directly or through others, could never finish, and is a load
+  error that names the chain. A call counts as made on every path unless
+  it is inside a branch of `if`, or follows `and`, `or` or `??`. Any
+  other recursion is allowed to the depth `rules.max_call_depth`
+  (section 13.2); the call that would go deeper is refused when it runs,
+  gives null and is reported.
+
+A function is registered under its qualified id, so a function defined in
+place inside another definition cannot be called by name. A function may
+not take the qualified name of one the engine registered.
+
 Functions are how content supplies the defaults of decision D-037, scoring
 for AI (09), derived statistics, and any formula used in more than one
 place.
@@ -1016,7 +1114,20 @@ Notes on the steps:
   the range of bytes of the source string it is about, and a suggestion
   where there is one. Codes are `X1..` for syntax, `X2..` for names, `X3..`
   for types, `X4..` for purity and belief, and `X9..` for run-time
-  warnings. The data layer adds the file, line and JSON path.
+  warnings. The data layer adds the file, line and JSON path, and gives
+  each a code of its own group `06` (04 §8.2), which is the code a modder
+  sees and `explain` explains.
+- The field's context comes from its definition type, which states for
+  each field what is in scope there (04 §7.3). The registry is the one
+  the simulation filled, with the ids of every definition type, the
+  variables mods declare and the functions mods define added before
+  anything is compiled.
+- A compiled expression carries an origin number, from which a run-time
+  warning is traced to its definition, its JSON path and the position in
+  its string.
+- A function defined in data is not inlined. The machine asks its host
+  for the result, and the evaluator that stands between the machine and
+  the simulation runs the function's body with the arguments as locals.
 - Step 2 gives every bound subject, local and event field a **slot**, its
   position in its context, which is how the machine asks for it. A text
   where an `id<T>` is wanted, compared with one, or listed against one, is
@@ -1087,6 +1198,13 @@ compiler's limits on nesting, tree depth, source length and arguments
 (section 4.1, section 14); how many warnings a site may raise before they
 are thinned (section 4.5); the number format of a text, which is `.N` and
 nothing else (section 4.6); and the set of simple units (section 4.7).
+
+**Gaps.** Reachable only from Rust for now: what is in scope in a field,
+which its definition type states (04 §7.3) and a mod cannot widen; and
+whether a function is random or safe for belief, which is worked out and
+cannot be declared. Queries, and with them value sources over a query,
+`exists` in a condition and `run` as a source, are read and kept and
+give null with a warning until the rule runtime builds them.
 
 ## 18. Invariants
 

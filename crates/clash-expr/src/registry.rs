@@ -846,6 +846,35 @@ impl Registry {
         Ok(id)
     }
 
+    /// Changes whether a registered function is random and whether it
+    /// is safe for belief. Both are inferred for a function defined in
+    /// data (05 §12), from a body that can only be read once every
+    /// function it might call is registered: the data layer registers
+    /// them all, works the two out and sets them here before anything is
+    /// compiled against them. Does nothing for an id that is not
+    /// registered.
+    ///
+    /// ```
+    /// use clash_expr::{Context, FunctionSpec, Registry, Type, compile};
+    ///
+    /// let mut registry = Registry::with_builtins();
+    /// let lucky = registry
+    ///     .add_function(FunctionSpec::new("core:lucky", Type::Int))
+    ///     .unwrap();
+    /// let pure = Context::new().pure();
+    /// assert!(compile("core:lucky()", &registry, &pure, &Type::Int).value.is_some());
+    /// // Its body turned out to draw at random.
+    /// registry.set_function_traits(lucky, true, true);
+    /// let outcome = compile("core:lucky()", &registry, &pure, &Type::Int);
+    /// assert_eq!(outcome.diagnostics[0].code.as_str(), "X401");
+    /// ```
+    pub fn set_function_traits(&mut self, id: FunctionId, random: bool, belief_safe: bool) {
+        if let Some(function) = self.functions.get_mut(id.index()) {
+            function.spec.random = random;
+            function.spec.belief_safe = belief_safe;
+        }
+    }
+
     /// Registers an event type.
     pub fn add_event(&mut self, spec: EventSpec) -> Result<EventId, RegistryError> {
         check_name("event", &spec.name, true)?;

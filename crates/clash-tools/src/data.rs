@@ -245,7 +245,7 @@ fn wrap(text: &str, width: usize) -> String {
 /// Every code `explain` knows: this is where a crate that adds a
 /// pipeline stage adds its table.
 fn all_codes() -> Vec<&'static CodeInfo> {
-    CODES.iter().collect()
+    CODES.iter().chain(clash_data::expr::CODES).collect()
 }
 
 /// `explain <code>`: prints the long explanation of a diagnostic.

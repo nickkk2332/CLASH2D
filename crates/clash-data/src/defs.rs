@@ -11,6 +11,7 @@ use serde::de::DeserializeOwned;
 
 use crate::de::{DeCx, FeatureUse, LinkShared, Resolved, read_def, resolve_id};
 use crate::diag::{Code, DefLabel, Diagnostic, Diagnostics, Severity, code};
+use crate::expr::{CompileCx, CompileEnv, ExprDefs, ExprRegistry};
 use crate::fields::{Located, Tag};
 use crate::json::Node;
 use crate::mods::{ModManifest, Profile};
@@ -118,6 +119,26 @@ pub trait Def: DeserializeOwned + Send + Sync + 'static {
     /// plain reading cannot: a reference written in a syntax of the
     /// type's own, kept until now as a [`Located`] string.
     fn finish(&mut self, _cx: &mut FinishCx<'_>) {}
+
+    /// Called once on each definition after every definition has been
+    /// read, to compile its expression fields (04 §7.3): each
+    /// [`Expr`](crate::Expr), [`Cond`](crate::Cond) and
+    /// [`Text`](crate::Text). The type says what is in scope in each
+    /// field with a [`Scope`](crate::Scope) and hands the field to
+    /// [`CompileCx::compile`]:
+    ///
+    /// ```ignore
+    /// fn compile(&mut self, cx: &mut CompileCx<'_>) {
+    ///     let scope = Scope::new().subject("self", "entity").subject("here", "loc");
+    ///     cx.compile(&mut self.when, &scope);
+    ///     cx.compile(&mut self.energy, &scope);
+    ///     cx.compile(&mut self.log, &scope);
+    /// }
+    /// ```
+    ///
+    /// A field that is not handed over is never compiled: it evaluates
+    /// to null, and a text renders as it was written.
+    fn compile(&mut self, _cx: &mut CompileCx<'_>) {}
 
     /// The type's own checks: ranges, fields that exclude each other,
     /// limits (04 §8.1, the semantic stage). Runs after every definition
@@ -308,6 +329,10 @@ pub(crate) trait AnyType: Send + Sync {
 /// The definitions of one type while loading: some may have failed.
 pub(crate) trait AnyStaged {
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+    /// Compiles the expression fields of every definition that loaded
+    /// (04 §8.1, the compile stage).
+    fn compile(&mut self, env: &CompileEnv<'_>, lenient: bool, diagnostics: &mut Diagnostics);
     fn validate(&self, view: &DefsView<'_>, sources: &SourceMap, diagnostics: &mut Diagnostics);
     /// Turns into a registry, if every definition is there.
     fn into_registry(self: Box<Self>) -> Option<(TypeId, Box<dyn AnyRegistry>)>;
@@ -340,6 +365,64 @@ struct Staged<T: Def> {
     obsolete: Vec<bool>,
     /// The type has more definitions than its id can count.
     overflow: bool,
+}
+
+/// The definitions of one type while loading, for a stage that knows
+/// the type: each definition if it loaded, its qualified id, where its
+/// id was written (`None` for one of the engine's own) and whether it
+/// is a placeholder.
+pub(crate) struct StagedDefs<'a, T: Def> {
+    pub(crate) items: &'a mut [Option<T>],
+    pub(crate) names: &'a [String],
+    pub(crate) spans: &'a [Option<Span>],
+    pub(crate) placeholders: &'a mut [bool],
+}
+
+/// The staged definitions of type `T`, if the type is registered.
+pub(crate) fn staged_defs<'a, T: Def>(
+    staged: &'a mut BTreeMap<&'static str, Box<dyn AnyStaged>>,
+) -> Option<StagedDefs<'a, T>> {
+    let staged = staged
+        .get_mut(T::TYPE)?
+        .as_any_mut()
+        .downcast_mut::<Staged<T>>()?;
+    Some(StagedDefs {
+        items: &mut staged.items,
+        names: &staged.names,
+        spans: &staged.spans,
+        placeholders: &mut staged.placeholders,
+    })
+}
+
+/// What a lenient load puts in place of a broken definition (04 §8.3):
+/// the type's placeholder, with a note, or nothing, with an error that
+/// says the type has none.
+pub(crate) fn stand_in_for<T: Def>(
+    label: &DefLabel,
+    id_span: Option<Span>,
+    sources: &SourceMap,
+    diagnostics: &mut Diagnostics,
+) -> Option<T> {
+    let stand_in = T::placeholder();
+    let mut diagnostic = match &stand_in {
+        Some(_) => Diagnostic::new(
+            code::PLACEHOLDER,
+            format!("{label} is broken and was replaced by a placeholder"),
+        ),
+        None => Diagnostic::new(
+            code::NO_PLACEHOLDER,
+            format!(
+                "{label} is broken, and the type `{}` has no placeholder to stand in for it",
+                T::TYPE
+            ),
+        ),
+    }
+    .in_def(Some(label));
+    if let Some(span) = id_span {
+        diagnostic = diagnostic.at(sources, span);
+    }
+    diagnostics.push(diagnostic);
+    stand_in
 }
 
 impl<T: Def> AnyType for TypeEntry<T> {
@@ -445,28 +528,8 @@ impl<T: Def> AnyType for TypeEntry<T> {
             }
             let mut placeholder = false;
             if value.is_none() && env.lenient && !entry.builtin {
-                let mut diagnostic = match T::placeholder() {
-                    Some(stand_in) => {
-                        value = Some(stand_in);
-                        placeholder = true;
-                        Diagnostic::new(
-                            code::PLACEHOLDER,
-                            format!("{label} is broken and was replaced by a placeholder"),
-                        )
-                    }
-                    None => Diagnostic::new(
-                        code::NO_PLACEHOLDER,
-                        format!(
-                            "{label} is broken, and the type `{}` has no placeholder to stand in for it",
-                            T::TYPE
-                        ),
-                    ),
-                }
-                .in_def(Some(&label));
-                if let Some(span) = entry.id_span {
-                    diagnostic = diagnostic.at(env.sources, span);
-                }
-                diagnostics.push(diagnostic);
+                value = stand_in_for::<T>(&label, entry.id_span, env.sources, diagnostics);
+                placeholder = value.is_some();
             }
             staged.items.push(value);
             staged.names.push(entry.id.to_owned());
@@ -481,6 +544,34 @@ impl<T: Def> AnyType for TypeEntry<T> {
 impl<T: Def> AnyStaged for Staged<T> {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn compile(&mut self, env: &CompileEnv<'_>, lenient: bool, diagnostics: &mut Diagnostics) {
+        for (index, item) in self.items.iter_mut().enumerate() {
+            let Some(value) = item else {
+                continue;
+            };
+            // A placeholder is inert; a builtin is the engine's own.
+            if self.placeholders[index] || self.spans[index].is_none() {
+                continue;
+            }
+            let label = DefLabel::new(T::TYPE, self.names[index].clone());
+            let mut cx = CompileCx::new(env, &label, self.spans[index]);
+            value.compile(&mut cx);
+            let failed = cx.failed();
+            diagnostics.extend(cx.into_diagnostics());
+            if failed {
+                *item = None;
+                if lenient {
+                    *item = stand_in_for::<T>(&label, self.spans[index], env.sources, diagnostics);
+                    self.placeholders[index] = item.is_some();
+                }
+            }
+        }
     }
 
     fn validate(&self, view: &DefsView<'_>, sources: &SourceMap, diagnostics: &mut Diagnostics) {
@@ -530,6 +621,43 @@ impl<T: Def> AnyStaged for Staged<T> {
 /// definition of every type and reports what is wrong between them.
 pub type CrossCheck = fn(&mut CrossCx<'_>);
 
+/// A step that adds to the expression registry what a crate's own
+/// definitions declare, such as the events mods define. It runs after
+/// every definition has been read and before any expression is
+/// compiled.
+pub type RegistryStep = fn(&mut RegistryCx<'_>);
+
+/// What a [`RegistryStep`] works with.
+pub struct RegistryCx<'a> {
+    pub(crate) view: &'a DefsView<'a>,
+    pub(crate) registry: &'a mut ExprRegistry,
+    pub(crate) sources: &'a SourceMap,
+    pub(crate) diagnostics: &'a mut Diagnostics,
+}
+
+impl<'a> RegistryCx<'a> {
+    /// Every definition that loaded.
+    pub fn defs(&self) -> &'a DefsView<'a> {
+        self.view
+    }
+
+    /// The registry expressions will be compiled against: the host's,
+    /// with the definition ids of the mods being loaded. Add to it.
+    pub fn registry(&mut self) -> &mut ExprRegistry {
+        self.registry
+    }
+
+    /// The files of this load, for positions.
+    pub fn sources(&self) -> &'a SourceMap {
+        self.sources
+    }
+
+    /// Reports a diagnostic.
+    pub fn report(&mut self, diagnostic: Diagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+}
+
 /// The definition types the engine knows.
 ///
 /// Each crate that owns definition types offers one function that
@@ -539,6 +667,7 @@ pub type CrossCheck = fn(&mut CrossCx<'_>);
 pub struct DefTypes {
     types: BTreeMap<&'static str, Box<dyn AnyType>>,
     cross_checks: Vec<CrossCheck>,
+    registry_steps: Vec<RegistryStep>,
     reserved: Vec<&'static str>,
 }
 
@@ -570,6 +699,16 @@ impl DefTypes {
     /// own `validate`.
     pub fn add_cross_check(&mut self, check: CrossCheck) -> &mut DefTypes {
         self.cross_checks.push(check);
+        self
+    }
+
+    /// Adds a step that fills the expression registry from definitions,
+    /// run before any expression is compiled (04 §7.3). The loader adds
+    /// definition ids, `function` definitions and `variable` declarations
+    /// itself; a crate whose definitions declare something else that
+    /// expressions name, such as events, adds it with a step.
+    pub fn add_registry_step(&mut self, step: RegistryStep) -> &mut DefTypes {
+        self.registry_steps.push(step);
         self
     }
 
@@ -614,6 +753,10 @@ impl DefTypes {
 
     pub(crate) fn cross_checks(&self) -> &[CrossCheck] {
         &self.cross_checks
+    }
+
+    pub(crate) fn registry_steps(&self) -> &[RegistryStep] {
+        &self.registry_steps
     }
 }
 
@@ -893,6 +1036,7 @@ pub struct Defs {
     profile: Option<Profile>,
     trees: Vec<FinishedTree>,
     experimental: Vec<String>,
+    exprs: ExprDefs,
 }
 
 /// The pieces a [`Defs`] is assembled from.
@@ -905,6 +1049,7 @@ pub(crate) struct DefsParts {
     pub(crate) profile: Option<Profile>,
     pub(crate) trees: Vec<FinishedTree>,
     pub(crate) experimental: Vec<String>,
+    pub(crate) exprs: ExprDefs,
 }
 
 impl Defs {
@@ -925,7 +1070,33 @@ impl Defs {
             profile: parts.profile,
             trees: parts.trees,
             experimental: parts.experimental,
+            exprs: parts.exprs,
         }
+    }
+
+    /// The expression side of the load: the registry every expression
+    /// was compiled against, the functions and variables mods define,
+    /// and where each compiled expression came from.
+    pub fn exprs(&self) -> &ExprDefs {
+        &self.exprs
+    }
+
+    /// The registry every expression was compiled against: what the
+    /// host gave the loader, with the definition ids, functions and
+    /// variables of the loaded mods added. Shared, so the simulation can
+    /// keep it.
+    pub fn expr_registry(&self) -> &Arc<ExprRegistry> {
+        self.exprs.registry()
+    }
+
+    /// The compiled functions mods define (05 §12).
+    pub fn functions(&self) -> &crate::expr::Functions {
+        self.exprs.functions()
+    }
+
+    /// The variables mods declare (05 §6).
+    pub fn variables(&self) -> &crate::expr::Variables {
+        self.exprs.variables()
     }
 
     /// The registry of a definition type.

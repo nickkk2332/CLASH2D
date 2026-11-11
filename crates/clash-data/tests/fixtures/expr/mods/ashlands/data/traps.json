@@ -1,0 +1,20 @@
+[
+  { "type": "function", "id": "scorch",
+    "params": { "who": "entity" },
+    "returns": "real",
+    "value": "fall_energy(2) + $who.var.heat * 10",
+    "doc": "What a vent does to whoever stands on it." },
+
+  { "type": "trap", "id": "vent",
+    "when": { "all": [ "self.material == 'glass'", { "not": "here.var.sealed" } ] },
+    "energy": "scorch(self) + $power",
+    "count": 3,
+    "delay": "250 ms",
+    "made_of": "iron",
+    "label": "a vent",
+    "log": "{cap(the(self))} {verb(self, 'feel')} {scorch(self):.1} J.",
+    "extra": {
+      "drop": { "call": "fall_energy", "args": { "height": "$power * 2" } },
+      "nearby": { "count": { "entities": { "around": "self", "radius": 12 } } }
+    } }
+]

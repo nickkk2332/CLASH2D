@@ -200,6 +200,9 @@ pub struct ModManifest {
     pub imports: Vec<String>,
     /// Experimental features this mod opts in to (04 §8.4).
     pub experimental: Vec<String>,
+    /// Whether a variable no definition declares is an error in what
+    /// this mod writes, and not a warning (05 §6).
+    pub strict_vars: bool,
     /// The manifest file.
     pub file: FileId,
     /// Where the id was written.
@@ -340,6 +343,7 @@ const MANIFEST_KEYS: &[&str] = &[
     "conflicts",
     "imports",
     "experimental",
+    "strict_vars",
 ];
 
 const PROFILE_KEYS: &[&str] = &[
@@ -391,6 +395,17 @@ pub(crate) fn read_manifest(
     let conflicts = reader.string_list("conflicts");
     let imports = node.get("imports").map(|_| reader.string_list("imports"));
     let experimental = reader.string_list("experimental");
+    let strict_vars = match node.get("strict_vars") {
+        None => false,
+        Some(written) => written.as_bool().unwrap_or_else(|| {
+            let message = format!(
+                "`strict_vars` in `mod.json` must be `true` or `false`, but this is {}",
+                written.kind_name()
+            );
+            reader.error(written.span, message);
+            false
+        }),
+    };
 
     let Some((id, id_span)) = id else {
         if node.get("id").is_none() {
@@ -479,6 +494,7 @@ pub(crate) fn read_manifest(
         conflicts: conflicts.into_iter().map(|(text, _)| text).collect(),
         imports,
         experimental: experimental.into_iter().map(|(text, _)| text).collect(),
+        strict_vars,
         file,
         id_span,
     })

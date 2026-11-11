@@ -272,11 +272,13 @@ codes! {
 }
 
 /// The explanation of a code of this crate, or `None` if the code is not
-/// one of them. Letter case is ignored.
+/// one of them. Letter case is ignored. The codes of the compile stage,
+/// which has a table of its own ([`crate::expr::CODES`]), are found too.
 pub fn explain(code: &str) -> Option<&'static CodeInfo> {
     CODES
         .iter()
         .find(|info| info.code.id.eq_ignore_ascii_case(code))
+        .or_else(|| crate::expr::codes::explain(code))
 }
 
 /// Which definition a diagnostic is in: its type and its qualified id.

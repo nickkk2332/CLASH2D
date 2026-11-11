@@ -64,8 +64,8 @@ directly any crate its arrows reach: `clash-scene` uses `clash-core`.
 crates/
   clash-core            maths, ids, deterministic RNG, state hashing, errors
   clash-time      → core                 ticks, clocks, event queue, processes
-  clash-data      → core                 mod loading, JSON → typed definitions, registries, schemas
   clash-expr      → core                 expression language: parse, check, compile, evaluate
+  clash-data      → core, expr           mod loading, JSON → typed definitions, registries, schemas
   clash-world     → core, time, data     cosmos, realms, grids, fields, damage, collapse, bodies in flight
   clash-gen       → world                region survey and tract generation (mapgen)
   clash-sim       → world, gen, expr     entities, actions, combat, powers, AI, EOC runtime, cold sim
@@ -88,6 +88,15 @@ a dependency upward or sideways, on a crate the arrows do not lead to.
 Definition *types* live in the crate that gives them meaning (`BlockDef` in
 `clash-world`, `ActionDef` in `clash-sim`). `clash-data` provides the loading
 framework and knows nothing about what a block or an action is.
+
+`clash-data` depends on `clash-expr` because expressions are compiled while
+mods load (04 §7.3). The loader compiles against a registry that the
+simulation fills and hands to it, so the data layer still names no kind of
+subject and no property. Every crate above reaches the expression language
+through `clash-data`, and `clash-expr` depends on nothing but `clash-core`.
+The two definition types that belong to the expression language itself,
+`function` and `variable`, live in `clash-data` with the stage that
+compiles them.
 
 ## 4. Determinism contract
 
