@@ -417,12 +417,22 @@ impl Screen {
                     });
                 }
             }
-            Kind::Number { var, label, .. } => {
+            Kind::Number {
+                var, label, typing, ..
+            } => {
                 let x = inner.x
                     + self.draw_label(&mut canvas, label, (inner.x, inner.y), inner.w, base);
                 let mut text = Small::new();
                 let _ = write!(text, "{} ", chrome.choice_prev);
-                let _ = write_number(&mut text, self.number_of(var));
+                match typing {
+                    // What is being typed, and where the next digit goes.
+                    Some(typed) => {
+                        let _ = write!(text, "{typed}_");
+                    }
+                    None => {
+                        let _ = write_number(&mut text, self.number_of(var));
+                    }
+                }
                 let _ = write!(text, " {}", chrome.choice_next);
                 canvas.print(x, inner.y, text.as_str(), active);
             }

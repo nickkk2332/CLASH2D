@@ -6,10 +6,16 @@
 //! ```
 //!
 //! Tab and Shift-Tab move the focus, the arrow keys act on whatever has
-//! it, and `q` or Esc quits. The screen, the theme and the keymap are
+//! it, and `q` or Esc quits. F2 opens a second screen that shows what
+//! the first cannot: widgets bound to expressions, effects that are run,
+//! a popup that asks, a preference that switches the theme and a slot
+//! filled by a `ui_part`. The screens, the themes and the keymap are
 //! those of the `ui` mod, read by the mod loader from the `mods`
 //! directory beside the crates; a different directory of mods may be
 //! given as the first argument.
+//!
+//! There is no game behind it. What the bound widgets show comes from
+//! the fake host and the fake application of `clash_scene::testing`.
 //!
 //! Without a terminal (input or output redirected) the example checks
 //! that the definitions load, prints the first frame as plain text and
@@ -21,7 +27,10 @@ use std::time::{Duration, Instant};
 
 use clash_data::{DefTypes, Diagnostics, Loader};
 use clash_front_term::{TermError, TermFrontend};
-use clash_scene::{Frame, NoHost, NullFrontend, RichText, Scene, UiDefs};
+use clash_scene::testing::{FakeApp, FakeHost};
+use clash_scene::{
+    Frame, NullFrontend, ROLE_CONFIRM, ROLE_PICK_LIST, RichText, Scene, UiDefs,
+};
 
 /// How long the loop rests between frames.
 const FRAME_TIME: Duration = Duration::from_millis(16);
@@ -36,6 +45,10 @@ const GALLERY_THEME: &str = "ui:default";
 const GALLERY_KEYMAP: &str = "ui:default";
 /// The gallery's screen.
 const GALLERY_SCREEN: &str = "ui:gallery";
+/// The screen the `confirm` effect opens.
+const CONFIRM_SCREEN: &str = "ui:confirm";
+/// The screen the `pick` effect opens for a list.
+const PICK_SCREEN: &str = "ui:pick_list";
 
 fn mods_dir() -> PathBuf {
     match std::env::args_os().nth(1) {
@@ -50,7 +63,7 @@ fn describe(diagnostics: Diagnostics) -> String {
 
 /// Builds the scene with the gallery screen open and a few lines in the
 /// log for the `log` widget to show.
-fn gallery() -> Result<Scene<NoHost>, String> {
+fn gallery() -> Result<Scene<FakeHost>, String> {
     // The types of every crate whose definitions the mod, or a mod it
     // requires, may hold.
     let mut types = DefTypes::new();
@@ -62,13 +75,16 @@ fn gallery() -> Result<Scene<NoHost>, String> {
         .into_result()
         .map_err(describe)?;
     let defs = UiDefs::from_defs(&loaded).map_err(describe)?;
+    // No simulation was registered with the loader, so `view` is `any`
+    // and the plain fake host answers it with a map.
     let mut scene = defs
-        .scene(GALLERY_THEME, GALLERY_KEYMAP)
-        .map_err(describe)?;
-    let screen = defs
-        .screen(GALLERY_SCREEN, scene.theme())
-        .map_err(describe)?;
-    scene.open(screen);
+        .scene_over(FakeHost::plain(), GALLERY_THEME, GALLERY_KEYMAP)
+        .map_err(describe)?
+        .with_app(Box::new(FakeApp::new()))
+        .running_effects();
+    scene.set_role(ROLE_CONFIRM, CONFIRM_SCREEN);
+    scene.set_role(ROLE_PICK_LIST, PICK_SCREEN);
+    scene.open_screen(GALLERY_SCREEN, Default::default())?;
     for n in 1..=12 {
         let line = format!("Log line {n}.");
         scene.log_mut().push("demo", RichText::plain_text(&line));
@@ -101,9 +117,10 @@ fn run() -> Result<(), String> {
         let seconds = now.duration_since(last).as_secs_f64();
         last = now;
         let turn = scene.turn(&mut front, &mut frame, seconds);
-        // Running interface effects is not built yet; the one effect the
-        // gallery's screen asks for is `close`.
-        if turn.close_requested || turn.asks_for("close") {
+        // The scene runs the screens' effects. It is over when the
+        // window is closed, an effect asks to quit, or the last screen
+        // has been closed.
+        if turn.close_requested || scene.top().is_none() {
             return Ok(());
         }
         std::thread::sleep(FRAME_TIME);

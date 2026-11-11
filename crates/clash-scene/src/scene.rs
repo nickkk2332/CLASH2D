@@ -1002,8 +1002,9 @@ where
                 }
                 UiEvent::Changed { var } => {
                     self.stale = true;
-                    if let VarRef::Pref(key) = var {
-                        self.pref_edited(key, &mut out);
+                    match var {
+                        VarRef::Pref(key) => self.pref_edited(key, &mut out),
+                        VarRef::Screen(_) => out.push(UiOutcome::Changed(var.clone())),
                     }
                 }
             }

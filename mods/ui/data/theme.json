@@ -34,6 +34,36 @@
     "borders": { "h": "─", "v": "│", "tl": "┌", "tr": "┐", "bl": "└", "br": "┘" }
   },
 
+  { "//": "A second theme, for the dark hours: the same names in cooler colours, with double borders. The player chooses between themes with the `theme` preference.",
+    "type": "color", "id": "frost", "rgb": "#a8b8d0", "word": "white", "fallback": "white" },
+  { "type": "color", "id": "pitch", "rgb": "#080818", "word": "black", "fallback": "black" },
+  { "type": "color", "id": "slate", "rgb": "#506080", "word": "grey", "fallback": "bright_black" },
+  { "type": "color", "id": "ice", "rgb": "#70c0e0", "word": "cyan", "fallback": "cyan" },
+  { "type": "theme", "id": "night",
+    "colors": {
+      "text": "frost", "background": "pitch", "dim": "slate",
+      "accent": "ice", "blood": "crimson", "good": "moss", "info": "sky"
+    },
+    "styles": {
+      "title": { "fg": "accent", "underline": true },
+      "border": { "fg": "dim" },
+      "border_focus": { "fg": "accent", "bold": true },
+      "selected": { "fg": "pitch", "bg": "accent" },
+      "selected_idle": { "fg": "accent", "underline": true },
+      "header": { "fg": "info", "bold": true },
+      "bar": { "fg": "accent" },
+      "bar_empty": { "fg": "dim" },
+      "field": { "underline": true },
+      "button": { "fg": "info" },
+      "hotkey": { "fg": "accent", "bold": true },
+      "tip": { "fg": "dim", "italic": true },
+      "notice": { "fg": "accent", "bold": true },
+      "warn": { "fg": "blood", "bold": true },
+      "sfx": { "fg": "accent", "italic": true }
+    },
+    "borders": { "h": "═", "v": "║", "tl": "╔", "tr": "╗", "bl": "╚", "br": "╝" }
+  },
+
   { "//": "What each key means. Screens in a context this does not list use `menu`.",
     "type": "keymap", "id": "default",
     "menu": {
@@ -42,7 +72,8 @@
       "escape": "back", "q": "back",
       "tab": "focus_next", "shift+tab": "focus_prev",
       "page_up": "page_prev", "page_down": "page_next", "home": "first", "end": "last",
-      "backspace": "erase", "delete": "delete"
+      "backspace": "erase", "delete": "delete",
+      "f2": "more"
     }
   }
 ]
