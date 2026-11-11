@@ -1,0 +1,13 @@
+{
+  "id": "ashlands",
+  "name": "The Ashlands",
+  "version": "0.3.0",
+  "engine": ">=0.1",
+  "description": "A dead world and the things that live on it.",
+  "authors": ["someone"],
+  "requires": [ { "id": "core", "version": ">=0.1" } ],
+  "after": ["weather_plus"],
+  "conflicts": ["old_ashlands"],
+  "imports": ["core"],
+  "experimental": []
+}

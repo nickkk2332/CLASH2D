@@ -1,0 +1,20 @@
+[
+  { "//": "A parent for the stones. Never instantiated.",
+    "type": "material", "id": "base_stone", "abstract": true,
+    "density": 2600, "toughness": 1.5e6, "span": 4, "tags": ["mineral"] },
+
+  { "type": "material", "id": "granite", "copy_from": "base_stone",
+    "toughness": 2.5e6, "bearing": "130 MPa",
+    "resist": { "impact": { "threshold": "20 MPa" } },
+    "extend": { "tags": ["igneous"] },
+    "name": "Granite" },
+
+  { "type": "material", "id": "concrete", "copy_from": "base_stone",
+    "density": 2400, "toughness": 1.0e6, "bearing": "30 MPa",
+    "resist": {
+      "impact": { "threshold": "20 MPa" },
+      "blast":  { "threshold": "100 MPa" },
+      "heat":   { "threshold": "50 MPa", "factor": 0.1 }
+    },
+    "name": "Concrete" }
+]

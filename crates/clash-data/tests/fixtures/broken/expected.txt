@@ -1,0 +1,51 @@
+error[E0202]: missing field "toughness"
+ --> tests/fixtures/broken/mods/broken/data/errors.json:2:3
+  |
+2 |   { "//": "An unknown key.",
+  |   ^
+  = in: material broken:ash
+
+error[E0203]: unknown key "thougness"
+ --> tests/fixtures/broken/mods/broken/data/errors.json:4:5
+  |
+4 |     "thougness": 2.0e4 },
+  |     ^^^^^^^^^^^ did you mean "toughness"?
+  = in: material broken:ash
+
+error[E0204]: unknown unit "MPA"
+ --> tests/fixtures/broken/mods/broken/data/errors.json:8:16
+  |
+8 |     "bearing": "30 MPA" },
+  |                ^^^^^^^^ did you mean "MPa"?
+  = in: material broken:slag, at bearing
+
+error[E0501]: no material "ashh"
+  --> tests/fixtures/broken/mods/broken/data/errors.json:11:53
+   |
+11 |     "type": "block", "id": "ash_drift", "material": "ashh", "height": 1.0 },
+   |                                                     ^^^^^^ did you mean "ash"?
+   = in: block broken:ash_drift, at material
+
+error[E0405]: definitions inherit from each other in a circle: broken:loop_a -> broken:loop_b -> broken:loop_a
+  --> tests/fixtures/broken/mods/broken/data/errors.json:15:54
+   |
+15 |   { "type": "material", "id": "loop_b", "copy_from": "loop_a" },
+   |                                                      ^^^^^^^^
+   = in: material broken:loop_b
+
+error[E0305]: material "broken:slag" is already defined
+  --> tests/fixtures/broken/mods/broken/data/errors.json:18:31
+   |
+18 |     "type": "material", "id": "slag", "density": 3000, "toughness": 4.0e5 },
+   |                               ^^^^^^ to change it add "patch": true; to replace it add "override": true
+   = in: material broken:slag
+   = note: first defined here (tests/fixtures/broken/mods/broken/data/errors.json:7:31)
+
+error[E0201]: expected a number, found a string
+  --> tests/fixtures/broken/mods/broken/data/errors.json:22:13
+   |
+22 |     "fill": "0.2" }
+   |             ^^^^^
+   = in: block broken:ash_wall, at fill
+
+7 errors, 0 warnings

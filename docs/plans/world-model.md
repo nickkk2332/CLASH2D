@@ -27,7 +27,7 @@ Section references such as "02 §14" point into those documents.
 | F1 | Workspace and gates | S | — | done |
 | F2 | `clash-core` | M | F1 | done |
 | F3 | `clash-time` | M | F2 | done |
-| F4 | `clash-data` v0 | L | F2 | todo |
+| F4 | `clash-data` v0 | L | F2 | beta |
 | W1 | Dimensions and coordinates | S | F2 | done |
 | W2 | Paletted storage | S | F2 | done |
 | W3 | Cell definitions | M | F4, W1 | beta |
@@ -213,6 +213,24 @@ Done when
   expected message with file, line, column and path.
 - Ids are identical across runs and independent of directory enumeration
   order.
+
+As built (decisions D-260 to D-268). Built together with packages P1 to P4
+of [sim-kernel.md](sim-kernel.md), so the loader is past the subset of
+04 §19. A definition type is a plain struct that derives
+`serde::Deserialize` and implements `clash_data::Def`; the crate that owns
+it registers it in a `DefTypes`, and a `Loader` turns a profile, a
+directory of mods or mods given as text into an `Arc<Defs>`. The fixtures
+are under `crates/clash-data/tests/fixtures/`, and the definition types
+they use are test types: the engine's own are registered by the crates
+that own them, in `clash-tools`' `engine_types`.
+
+Stubbed: JSON Schema generation. `clash-tools schema` answers that it is
+not built yet; package P5 builds it, by hand from the registered types
+since `schemars` is not among the workspace's dependencies. Files are read
+one after another, not in parallel, and no benchmark is committed. A rough
+timing on the build machine, optimised and on one thread: 50,000
+definitions of four types with 20,000 inline ones, in 2,000 files given
+from memory, loaded in about 0.95 s (target 2 s, 04 §18).
 
 ## World
 

@@ -57,6 +57,8 @@ name = "clash-data"
 version = "0.1.0"
 dependencies = [
  "clash-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -138,8 +140,11 @@ dependencies = [
 name = "clash-tools"
 version = "0.1.0"
 dependencies = [
+ "clash-core",
+ "clash-data",
  "clash-save",
  "clash-sim",
+ "serde",
 ]
 
 [[package]]

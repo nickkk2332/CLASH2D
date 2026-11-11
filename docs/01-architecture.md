@@ -81,7 +81,9 @@ docs/
 ```
 
 An arrow carries what its target depends on: a crate may depend directly on
-any crate its arrows already reach, as `clash-gen` does on `clash-core`.
+any crate its arrows already reach, as `clash-gen` does on `clash-core` and
+`clash-tools`, through `clash-sim`, on `clash-data`. What stays forbidden is
+a dependency upward or sideways, on a crate the arrows do not lead to.
 
 Definition *types* live in the crate that gives them meaning (`BlockDef` in
 `clash-world`, `ActionDef` in `clash-sim`). `clash-data` provides the loading

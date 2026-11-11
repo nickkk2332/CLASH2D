@@ -1,0 +1,6 @@
+{
+  "id": "tweaks",
+  "name": "Tweaks",
+  "version": "1.0",
+  "requires": ["core", "ashlands"]
+}
