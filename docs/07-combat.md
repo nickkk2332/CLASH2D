@@ -143,6 +143,18 @@ The `strike` effect resolves one attack against one target:
 A strike at a cell rather than a creature skips steps 3 to 5 and delivers
 its whole energy to the element as a packet (02 §12).
 
+### 3.5 Speed behind the blow
+
+`closing_energy(self, target, mass)` is the kinetic energy of that mass at
+the speed `self` is closing on `target`: `½ · mass · v²`, with `v` the part
+of their relative velocity along the line between them. `self.velocity` is
+the mover's own while it is stepping, the mount's or vehicle's for a
+rider, and the body's for anything in flight.
+
+An attack's `energy` may add a share of it. A couched lance carries the
+horse. A diving blow carries the fall. A punch thrown while standing still
+carries nothing extra.
+
 ## 4. Aim
 
 ### 4.1 Contests
@@ -184,7 +196,7 @@ rule about backs.
 
 An attack reaches a band of heights above the attacker's footing. A part
 can be aimed at only if its own band (06 §6.1), scaled to the target's
-height and shifted by the difference in where the two are standing,
+height in its present posture (06 §11.1) and shifted by the difference in where the two are standing,
 overlaps it. A strike with no part chosen picks among the parts in reach.
 If nothing is in reach the attack cannot be made, and says so.
 
@@ -344,6 +356,21 @@ This is scene S4, and the reason a master cuts down a rank of ordinary foes
 is the reason given by the numbers: enough energy on a fine enough edge
 that flesh takes little of it.
 
+### 6.5 Contact with the world
+
+A floor, block or fixture may carry a **contact** surface (02 §5.4):
+spikes, wire, broken glass, a hot plate. It strikes whatever touches it.
+
+| When | The hit |
+|------|---------|
+| Something walks or crawls into the cell | Made with the element's surface and its stated `energy`, on the parts whose bands reach its height |
+| Something lands on it or is thrown into it | Made with the element's surface and the energy the body arrived with (02 §15.2), in place of the blunt impact |
+| Something stays on it, if it says `each` | Made again at that interval |
+
+Intensity comes from the surface's area, so a fall onto spikes pierces
+where a fall onto flagstones bruises. The element takes the recoil
+(section 6.3) and may break.
+
 ## 7. Push
 
 The share of energy set aside by `push` moves the target.
@@ -368,6 +395,21 @@ as push, sends eighty kilograms away at ninety metres a second. That is
 scene S1, and with a tougher target, S2.
 
 Mass is in the denominator. Heavy things are hard to move.
+
+### 7.1 In the air
+
+Someone who has been launched is a body in flight (02 §15) and is still a
+creature. They can be struck by anything that reaches where they are at
+the moment of impact. They cannot leave (section 5.2), though a defence
+that needs no footing still works. A strike that lands adds its push to
+their velocity. Hitting someone again before they come down is this.
+
+Someone who launched themselves with `leap` (06 §11) keeps their channels.
+An action that does not need `footing` (03 §6) can be run during the
+flight, and its strike reaches whoever is within reach when it falls due:
+a flying kick, a diving stab, a blow brought down from a jump. Its energy
+may include the speed of the leap (section 3.5). Someone thrown, who has
+not recovered, cannot.
 
 ## 8. Clashes
 
@@ -542,6 +584,31 @@ need not be made blind.
 Thrown things are projectiles that are items: a knife, a rock, a spear, a
 car. `throw` launches the item itself with its own mass and surfaces.
 
+A projectile may also drive and steer itself:
+
+```json
+{ "type": "projectile", "id": "seeker_rocket",
+  "mass": "6 kg", "area": 0.008, "drag": 0.3,
+  "thrust": { "accel": 120, "burn": "2 s" },
+  "guidance": { "by": "seeker", "sense": "heat", "cone": 40, "range": 300, "turn": 1.2 },
+  "on_impact": [ { "release": { "kind": "blast", "energy": "3 MJ" } } ] }
+```
+
+- `thrust` accelerates it along its path for the burn time. After that it
+  is ballistic.
+- `guidance` turns its path toward a point, by up to `turn` radians a
+  second. It is still a body: it is slowed by drag, stopped by walls and
+  can be intercepted (section 11.6).
+
+| `by` | The point it steers for |
+|------|-------------------------|
+| `point` | A place fixed at launch |
+| `seeker` | The strongest source of the named signal (15 §3) within its cone and range. It follows what it can sense, so a hotter decoy draws it off and a target behind a wall is lost. |
+| `launcher` | Where the launcher believes the target is (15 §7), for as long as the launcher keeps a guiding action going. When that ends it flies on unguided. |
+| `return` | The launcher, once it has passed its target or its range |
+
+`on_impact` runs when it strikes or when its fuse time passes.
+
 ### 11.2 Time of flight
 
 A projectile is on the timeline. A window of kind `shot` opens for the
@@ -584,7 +651,7 @@ A ranged weapon is an item, and usually an assembly (16 §11).
 
 | Weapon | Built from |
 |--------|-----------|
-| Firearm | A fire action with a cost of one round from a magazine store. Projectile and energy from the ammunition; speed from energy, barrel efficiency and projectile mass. |
+| Firearm | A fire action that takes the next round from the magazine. Projectile and energy from the round; speed from energy, barrel efficiency and projectile mass. |
 | Bow, sling | A held draw phase that charges; energy from the archer, capped by the bow |
 | Automatic fire | A phase with a tick that shoots and spends each time |
 | Scopes, stocks, suppressors | Modules that modify spread, noise (15 §3.2) and so on while fitted |
@@ -592,6 +659,20 @@ A ranged weapon is an item, and usually an assembly (16 §11).
 | Grenade, shell | A projectile whose impact or timer triggers an energy release |
 | Flame, spray | A cone of field (02 §16) |
 | Spell | Any of the above with a different pool |
+
+**Ammunition** is items. A round names what it fires:
+
+```json
+{ "type": "item", "id": "rifle_round_ap", "tags": ["rifle_round"], "stack": true,
+  "round": { "projectile": "ap_bullet", "energy": "3.4 kJ", "count": 1 } }
+```
+
+A magazine is a hold (06 §9.2) that accepts rounds by tag and gives them
+up in order. Firing takes the next one, launches its projectile with its
+energy, and leaves its casing if it names one. Loads may be mixed: every
+fifth round a tracer. A quiver and a belt are holds too. Loading is an
+interaction. `count` above one is shot. A weapon that draws on a store
+instead (a power cell, a pool) uses a cost (16 §11.2).
 
 Recoil is an impulse on the shooter and a rule that widens spread.
 
@@ -699,12 +780,13 @@ A warm entity attacked by a hot one is promoted first (03 §10).
 
 **Definition types**: `contest`, `projectile`. Blocks `attacks`, `defence`
 and `cutscene` on actions; `surfaces` and `band` on body parts; `give` and
-`span` on surfaces; `group` on traits.
+`span` on surfaces; `group` on traits; `thrust`, `guidance` and
+`on_impact` on projectiles; `round` on items; `contact` on elements.
 
 **Events**: `strike_landed`, `strike_missed`, `strike_defended`,
 `strike_recoiled`, `staggered`, `launched`, `clash_resolved`, `seized`,
 `grip_broken`, `thrown`, `projectile_fired`, `projectile_hit`,
-`projectile_passed`.
+`projectile_passed`, `projectile_lost_lock`, `contact_struck`.
 
 **Hooks**: `strike_resolving`, `defence_resolving`, `knockback_incoming`,
 `clash_resolving`, `seize_resolving`.
@@ -713,7 +795,7 @@ and `cutscene` on actions; `surfaces` and `band` on body parts; `give` and
 `shove`, `wrench`, `intercept`.
 
 **Functions**: `contest`, `odds`, `strike_preview`, `lead_point`,
-`ballistic_dir`, `band_point`.
+`ballistic_dir`, `band_point`, `closing_energy`.
 
 **Queries**: `grips` (of or on an entity), `defences` (in force on an
 entity), `in_arc`.

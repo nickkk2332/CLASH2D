@@ -347,6 +347,7 @@ action does".
 | `requires` | Condition that must hold to start. `fail_text` gives the reason shown when it does not. |
 | `tempo` | Expression dividing phase durations (section 6.5). Default 1. |
 | `foreground` | Whether finishing this action can prompt a decision. Default true. A sustained aura or a conversation is background. |
+| `footing` | Whether the actor must be standing on something. Default true. An action without it can be done in the air (07 §7.1). |
 | `reaction_to` | Window kinds this action may answer (section 7). |
 | `on_behalf` | Whether, as a reaction, it may answer a window aimed at someone else. Default false. |
 | `phases` | Section 6.4. |

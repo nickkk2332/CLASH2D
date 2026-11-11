@@ -66,6 +66,20 @@ character.
 
 Mods add kinds: heat, vibration, a magical aura, radio.
 
+A signal kind may **expose** as well as inform:
+
+```json
+{ "type": "signal_kind", "id": "radiation", "model": "through", "falloff": 2,
+  "block_by": "radiation_block",
+  "exposes": { "pool": "dose", "per_strength": 0.001, "step": "1 s" } }
+```
+
+Each step, every occupant within reach of a standing source of that kind
+has the strength it receives, after distance and whatever stands between,
+added to the pool. Walls of the right material shelter. An emitter steps
+only while someone is within its reach. This is how radiation, a baleful
+aura and a cold that goes through stone are made.
+
 ### 3.2 Where signals come from
 
 | Source | How |
@@ -525,6 +539,7 @@ another character is the persona the controlled character perceives.
 
 **Definition types**: `signal_kind`, `sense`, `event_signal`,
 `relation_kind`, `group`, `lines`, `message_kind`, `appearance_feature`.
+`exposes` on signal kinds.
 Fields `signals` on
 actions and phases; `signature` and `senses` on templates and traits;
 `light` on elements, fields, items and traits; `sound_block` on materials.

@@ -422,6 +422,15 @@ active state's index is stored in `bits`.
 `on_destroy` may name what the element becomes. Without it, the element is
 removed and its material's `rubble` fixture is left behind.
 
+`contact` gives an element a striking surface of its own, for whatever
+walks into it, lands on it or is thrown against it (07 §6.5):
+
+```json
+{ "type": "fixture", "id": "spikes", "material": "iron", "height": 0.5, "fill": 0.05,
+  "contact": { "surface": { "kind": "pierce", "area": 3.0e-5, "give": 0.003, "span": 0.02 },
+               "energy": 60 } }
+```
+
 **Engine flags** (fixed set, stored as a bitset per state):
 
 | Flag | Meaning |
@@ -637,7 +646,8 @@ matter (01 R11, document 15), and the two can differ.
 `FieldAppeared`,
 `FieldVanished`, `FieldContact`, `EnergyReleased`, `CollapseStarted`,
 `CollapseSettled`, `BodyLaunched`, `BodyImpact`, `BodyHitOccupant`,
-`BodyLanded`, `OccupantUnsupported`, `OccupantExposed`, `OccupantShaken`,
+`BodyLanded`, `BodyLeftLoaded`, `OccupantUnsupported`, `OccupantExposed`,
+`OccupantDosed`, `OccupantShaken`,
 `TremorStarted`, `TremorEnded`, `StateChanged`, `TractLoaded`,
 `TractUnloading`, `TractDevastated`, `RegionDevastated`, `AreaEntered`,
 `AreaExited`, `PortalTraversed`, `RealmCreated`, `RealmDestroyed`,
@@ -1334,6 +1344,7 @@ pub struct Body {
     pub drag: Real,              // drag coefficient
     pub depth: Real,             // m, stopping distance for impact intensity; default 0.1
     pub restitution: Real,       // 0..1
+    pub drive: Option<Drive>,    // thrust along its path for a time; a turn rate (07 §11.1)
     pub cause: Cause,
 }
 
@@ -1341,10 +1352,16 @@ impl WorldCtx<'_> {
     pub fn launch(&mut self, body: Body) -> BodyId;
     pub fn impulse(&mut self, id: BodyId, j: [Real; 3]);
     pub fn arrest(&mut self, id: BodyId) -> Body;     // caught, or recovered control
+    pub fn steer(&mut self, id: BodyId, toward: Option<[Real; 3]>);   // where a driven body turns to
 }
 ```
 
 Bodies are point masses with a cross-section. There is no rotation.
+
+A body with a `drive` gains speed along its path while its thrust lasts,
+and turns its path toward the point last given to `steer`, no faster than
+its turn rate. The world does not know what it is aiming at. The
+simulation tells it where to turn (07 §11.1).
 
 ### 15.1 Motion
 
@@ -1398,6 +1415,23 @@ velocity (times restitution). Remaining horizontal velocity decays by
 friction as it slides, still colliding with obstacles. When it stops,
 `BodyLanded` is emitted and the body is removed.
 
+### 15.4 Leaving loaded space
+
+The ticket a body carries ahead of itself is small: enough for a thrown
+person or a rifle shot. A body whose path runs further than
+`body.max_ticket_tracts` (default 3) beyond what is otherwise loaded is
+**finished by arithmetic**. Its flight is worked out over the ground
+heights the tract records give, without loading anything, to find where
+and when it comes down. Then it is removed.
+
+| Where it comes down | What happens |
+|---------------------|--------------|
+| In a loaded tract | It is put back as a body just short of impact, at the right time, and lands in full |
+| In an unloaded tract | A pending edit (section 17.3) carries its impact: a release of the energy it arrived with, and whatever it was set to do on impact. A creature or item it was, or carried, is left there (06 §12). |
+
+Buildings in unloaded tracts along the way are not struck. A shell fired
+over the horizon and a person punched across a city both arrive.
+
 ## 16. Fields
 
 A field is a per-cell value from 0 to 255 that evolves by rule.
@@ -1432,6 +1466,7 @@ Built-in rules, implemented natively and configured by data:
 | `convert` | React with another field: water and fire make steam. |
 | `damage` | Send packets to elements in the cell and exposure events to occupants. |
 | `drift` | Be carried by the movement of the medium (11 §4.7). Contents move downwind or downstream, and `spread` is likelier that way. |
+| `expose` | Add to a pool (06 §4.2) of each occupant, by a route. See below. |
 
 A field may state `warms`: the kelvin each level adds to the temperature
 of its cell (11 §4.6), negative to cool. A field may have `changes` like a
@@ -1483,6 +1518,28 @@ written once, as **field reactions**, not separately in each field.
 
 A reaction may also `leave` an element in the cell: lava meeting water
 gives steam and leaves basalt.
+
+**Exposure.** Not all harm is a blow. The `expose` rule adds to a pool of
+each occupant in the cell, in proportion to the field's level, by a
+**route**:
+
+```json
+{ "rule": "expose", "pool": "toxin", "per_level": 0.02, "route": "breath" }
+```
+
+| Route | Reaches |
+|-------|---------|
+| `breath` | Those who breathe the cell's medium. Not those with air of their own: a sealed suit or volume (11 §10) while its air lasts. Not bodies that do not breathe. |
+| `skin` | The share of the body not under a worn layer that guards against it |
+| `any` | Everyone in the cell |
+
+Worn items may state `guards`, the share they keep out by route (06 §9.1):
+a mask, a filter, a coat. The hook `exposure_incoming` lets rules change
+the amount. What the pool then does to its owner is content (06 §4.2): a
+poison, a sickness, a slow burn.
+
+Harm that passes through walls is not a field. It is a signal that
+exposes (15 §3.1).
 
 Reactions are compiled into the field stepper and follow its rules:
 buffered writes and positional randomness. The `convert` rule in a field's

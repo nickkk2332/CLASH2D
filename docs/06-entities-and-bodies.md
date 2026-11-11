@@ -217,7 +217,7 @@ A trait with a duration is a status. Without one it lasts until removed.
 | `sockets` | Where other parts may attach, how many, and which kinds |
 | `exposure` | Relative likelihood of being struck by an unaimed hit |
 | `surfaces` | What the part can strike with: fists, feet, claws, teeth, horns (07 §3.2) |
-| `band` | The share of the body's height the part occupies, from the ground up. Decides what a shot at a given height can hit, and what cover protects (07 §11.1). |
+| `band` | The share of the body's height the part occupies, from the ground up. Decides what a shot at a given height can hit, and what cover protects (07 §11.1). The body's height is scaled by its posture (section 11.1). |
 | `inside` | For organs: listed under the part that contains them |
 
 Materials used as tissue carry three optional extras:
@@ -552,6 +552,8 @@ material and volume. Weapons notch and break; armour wears through.
 | `holds` | Capacity as a container: volume, mass, what kinds |
 | `stack` | Items equal in every respect (definition, material, damage, traits, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
 | `grants`, `traits`, `rules` | Given to whoever holds or wears it |
+| `guards` | While worn, the share of exposure it keeps out, by route: `{ "breath": 0.95 }` for a mask (02 §16) |
+| `round` | For ammunition: the projectile it fires and with what energy (07 §11.5) |
 | `interactions`, `device` | As for elements (02 §5.5; 16) |
 
 ### 9.2 Holding
@@ -727,6 +729,36 @@ together, and it counts as the mover's step. Who yields is decided by the
 hook `passage_requested`; members of a formation yield to each other
 (09 §5.5). Shoving and forcing past are actions content defines.
 
+### 11.1 Posture
+
+A character is in one **posture** at a time.
+
+```json
+[
+  { "type": "posture", "id": "standing", "height": 1.0 },
+  { "type": "posture", "id": "crouched", "height": 0.6, "speed": 0.5, "signature": 0.6 },
+  { "type": "posture", "id": "prone",    "height": 0.2, "speed": 0.15, "signature": 0.3,
+    "movement": ["crawl"], "holds": { "leg": "all" }, "traits": ["steadied"] }
+]
+```
+
+| Field | Effect |
+|-------|--------|
+| `height` | Scales the body's height, and with it the height of every part's band. So it decides what cover hides (02 §5.3), what a shot at a given height meets (07 §11.1), and what can be reached (07 §4.3). |
+| `speed`, `movement` | A factor on movement, and which movement modes are allowed |
+| `signature` | A factor on how easily the body is perceived (15 §5.3) |
+| `holds` | Channel slots unavailable while in it |
+| `traits` | Whatever else content wants it to carry: a steadier aim, a weaker guard |
+
+Changing posture is an action, with a time and a noise. `set_posture`
+forces one: a rule may put someone on the ground when a stagger is severe
+enough (07 §7). A body with nobody acting for it takes the posture its
+plan names as `limp`.
+
+Getting up takes time, and someone lying down is below most swings and
+within reach of every boot. Postures are content. A body plan lists which
+it has: a horse has its own, and a snake has one.
+
 ## 12. Coming and going
 
 ### 12.1 Three ways to exist
@@ -771,7 +803,8 @@ A stored entity keeps every component. Its timers follow 03 §9. Its place is
 
 **Definition types**: `attribute`, `pool`, `track`, `trait`, `body_part`,
 `body_plan`, `body_function`, `template`, `creature`, `mind`, `item`,
-`movement`, `population`, `content_table`. Tissue extras on `material`.
+`movement`, `posture`, `population`, `content_table`. Tissue extras on
+`material`.
 `ages` on items and `keeps` on containers.
 Body flags on `damage_type` (`severs`).
 
@@ -781,7 +814,7 @@ Body flags on `damage_type` (`severs`).
 `part_severed`, `part_destroyed`, `body_changed`, `function_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
 `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
-`item_broken`, `item_stage_reached`, `item_turned`,
+`item_broken`, `item_stage_reached`, `item_turned`, `posture_changed`,
 `contents_materialised`, `became_notable`.
 
 **Hooks**: `hit_incoming`, `entity_dying`, `trait_adding`, `pool_changing`,
@@ -798,7 +831,7 @@ Body flags on `damage_type` (`severs`).
 `volume`, `scale`, `part(key)` and its `condition`, `state`, `layers`,
 `exposed`; `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
-`templates`, `name`; on items, `age`.
+`templates`, `name`, `posture`, `velocity`; on items, `age`.
 
 ## 14. Invariants
 

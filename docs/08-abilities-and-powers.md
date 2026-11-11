@@ -463,6 +463,7 @@ exist. Section references are where the mechanism is specified.
 | Great strength | Attributes that feed attack `energy` (07 §3). Throwing and lifting conditions on mass. |
 | Great durability | Tissue materials with high thresholds and toughness (06 §6.1); or a rule on `hit_incoming` |
 | Energy bolt | `shoot` (07 §11) with a projectile whose impact rule calls `release` (02 §13) |
+| Bolts that seek, weapons that return | A projectile with guidance (07 §11.1) |
 | Beam | An instant shot, or `release` shaped as a beam; sustained by a ticking phase |
 | Explosion, shockwave | `release` as a sphere or cone |
 | Blow of force at range | Section 7.7 |
