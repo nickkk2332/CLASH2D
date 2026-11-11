@@ -34,8 +34,9 @@ pub use quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temp
 pub use raw::{
     AreaKindDef, AtmosphereDef, BlockDef, BoundaryLinkSpec, ContactSpec, ContactSurfaceSpec,
     DamageTypeDef, DefRef, DerivedGeneratorSpec, EdgeKind, EdgeSpec, EdgesSpec, ExitKind, FillSpec,
-    FixtureDef, FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, LinkMapSpec, MaterialDef,
-    OrderedMap, PlaneDef, RawWorldDefs, RealmDef, ResistSpec, StateSpec, StratumSpec, WrapAxis,
+    FixtureDef, FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, LeakSpec, LinkMapSpec,
+    MaterialDef, OrderedMap, PlaneDef, RawWorldDefs, RealmDef, ResistSpec, SignalSpec, StateSpec,
+    StratumSpec, WrapAxis,
 };
 pub use state::{
     AreaKindId, AtmosphereId, BlockId, BlockState, DamageTypeId, ElementState, FixtureId,

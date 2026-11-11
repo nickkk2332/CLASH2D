@@ -56,6 +56,7 @@
 pub mod action;
 pub mod activity;
 pub mod advance;
+pub mod body;
 pub mod bus;
 pub mod clock;
 pub mod command;
@@ -121,4 +122,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     rule::register_defs(types);
     action::register_defs(types);
     stats::register_defs(types);
+    body::register_defs(types);
 }

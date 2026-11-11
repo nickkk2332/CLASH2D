@@ -406,22 +406,38 @@ A trait with a duration is a status. Without one it lasts until removed.
 
 | Field | Meaning |
 |-------|---------|
-| `layers` | Outermost first. Each is a material (02 §5.4) and a thickness. `weight` says how much the part's working depends on that layer. |
-| `provides` | Contribution to body functions (section 6.3) |
-| `channels` | Channel slots this part supplies (03 §6.2) |
-| `sockets` | Where other parts may attach, how many, and which kinds |
-| `exposure` | Relative likelihood of being struck by an unaimed hit |
-| `surfaces` | What the part can strike with: fists, feet, claws, teeth, horns (07 §3.2) |
-| `band` | The share of the body's height the part occupies, from the ground up. Decides what a shot at a given height can hit, and what cover protects (07 §11.1). The body's height is scaled by its posture (section 11.1). |
-| `inside` | For organs: listed under the part that contains them |
+| `name` | What a reader calls it. |
+| `mass` | Its mass at scale 1. Required. |
+| `length`, `girth` | How long it is and how far across, at scale 1. Required, above zero. The **area** a part presents is its silhouette, `length × girth`, and every layer of it has that area. A cut whose span is at least the girth goes all the way through (section 7.2). |
+| `layers` | Outermost first, from one to 16. Each is a `material` (02 §5.4) and a `thickness`. `weight`, from 0 to 1, says how much the part's working depends on that layer; the weights of a part add up to at most 1. Layers that leave it out share what the others leave of 1, by thickness. |
+| `provides` | Contribution to body functions (section 6.3): for each function, what the part gives in perfect condition. |
+| `channels` | Channel slots this part supplies while it works (03 §6.2): for each channel, how many. |
+| `sockets` | Where other parts may attach, by name: `count`, how many it takes (default 1), and `accepts`, the part definitions it takes (empty for any). |
+| `exposure` | Relative likelihood of being struck by an unaimed hit, as a factor on the part's area. Default 1. |
+| `surfaces` | What the part can strike with: fists, feet, claws, teeth, horns (07 §3.2). Each has an `id`, a `kind` (a damage type), an `area` in square metres, a `give` and a `span`. |
+| `band` | The share of the body's height the part occupies, from the ground up: `[low, high]`, each from 0 to 1. Decides what a shot at a given height can hit, and what cover protects (07 §11.1). The body's height is scaled by its posture (section 11.1). A part with no band is never found by height. |
+| `disable_below` | The condition below which the part stops working (section 6.4). Default 0.5. |
+| `inside` | Organs that come with the part wherever it is used: a list of `{ "id", "part" }`. In a body each is a part `in` this one, named `<this part's name>.<id>`. A plan may instead list an organ itself, with `in`. |
+| `leaves` | What the part leaves when it is severed or destroyed (section 7.5): `item` (the default), or `nothing`. |
+| `tags` | Free-form tags. |
 
-Materials used as tissue carry three optional extras:
+Materials used as tissue carry three optional extras. They are fields of
+the world's `material` type, which reads them and gives them no meaning:
 
 | Property | Meaning |
 |----------|---------|
-| `leak` | When breached, drains a named pool at a rate per square metre. If the pool names a substance (16 §9.5), what drains is spilled where the body is. |
-| `signal` | When damaged, adds to a named pool per joule absorbed (pain, alarm, heat) |
-| `heal` | Rate at which damage recovers unaided |
+| `leak` | `{ "pool", "rate", "closes" }`. While a wound through a layer of this material is open, it drains the named pool by `rate` for each second and each square metre of the layer the wound lays open (section 7.3). `closes` is how long such a breach leaks before it closes by itself; left out, it leaks until something closes it. If the pool names a substance (16 §9.5), what drains is spilled where the body is. |
+| `signal` | `{ "pool", "per_joule" }`. When a layer of this material absorbs energy from a hit, the named pool gains `per_joule` for each joule (pain, alarm, heat), stopping at its bounds. It is added as it is: the hook `pool_changing` is for verbs (section 4.4). |
+| `heal` | The share of a layer that recovers each second, unaided: `"0.5 /d"`. Left out, damage to it stays until something mends it. |
+
+The pool is named by id, bare or qualified. A bare id is looked up in the
+namespace of the material's own definition and then in every namespace in
+sorted order, as the world's own references are (decision D-283). A pool
+that does not exist is a load error. A body with no such pool, or with no
+stats at all, simply does not leak or signal: a robot built of flesh by
+mistake bleeds nothing.
+
+A damage type may be flagged `severs` (section 7.2).
 
 A robot's plating leaks nothing and signals nothing. A slime is one layer.
 
@@ -442,6 +458,25 @@ A robot's plating leaks nothing and signals nothing. A slime is one layer.
 `on` attaches a part externally: lose the parent and it goes too. `in` puts
 it inside: it can be reached only through the parent's layers.
 
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls the plan. |
+| `height` | How tall a body of this plan stands at scale 1. |
+| `footprint` | The cells it fills, `[x, y, storeys]`. Default one cell. |
+| `parts` | The parts, each with: `id`, its name in the body; `part`, its definition; `on` or `in`, the name of the part it is joined to; `socket`, the socket of that part it takes, for a part that is `on`; `side`, a free-form label that tells it from its twin; `scale`, its size relative to the rest of the body (default 1). |
+
+Exactly one part is joined to nothing: the **root**. Names are not
+repeated. A socket must exist on the parent's definition, accept the
+part's definition, and have room. No part is joined to itself, directly or
+round in a circle. A body has at most 1024 parts, organs included, and
+organs nest at most eight deep by their definitions' `inside` lists. Each
+of these is a load error at the entry that breaks it.
+
+A part's place in the plan gives it its **key** in a body made from it:
+the plan's parts in the order written, then the organs their definitions
+bring. A key is never given to another part of the same body, so it means
+the same part after others have come and gone.
+
 A plan is only a starting point. The instance owns its own tree.
 
 ### 6.3 Functions
@@ -452,11 +487,22 @@ A plan is only a starting point. The instance owns its own tree.
 
 A **function** is something the body as a whole can do to some degree:
 manipulate, move about, see, breathe, circulate, think. Its capacity is the
-combination (`sum`, `min`, `max` or `mean`) of every working part's
-contribution, each scaled by that part's condition.
+combination (`sum`, the default, `min`, `max` or `mean`) of every working
+part's contribution, each scaled by that part's condition. It may have a
+`name`.
+
+Every part that `provides` the function counts. One that works contributes
+what it provides times its condition. One that is disabled or gone
+contributes nothing and still counts: with `min` the function is then
+zero, and with `mean` it falls by that part's share. Contributions are
+combined in order of part key. A function nothing provides is zero. A
+part taken off by an edit (section 6.5) no longer counts at all: the body
+simply has no such part.
 
 Functions are read as `self.fn.manipulation`, feed derived attributes, and
-emit `function_changed` when they move. What losing a function means is a
+emit `function_changed` when they move. The body does not work the
+attributes out again itself: whoever is told of the change does
+(section 4.1). What losing a function means is a
 rule: bundled content says a body with no circulation dies; a skeleton's
 content says no such thing.
 
@@ -466,34 +512,75 @@ content says no such thing.
 pub struct Body {
     plan: BodyPlanId,                // where it started
     scale: Real,                     // overall size factor
-    parts: Vec<PartInst>,            // the live tree
-    wounds: Vec<Wound>,
-    functions: Vec<Real>,            // cached capacities
+    height_factor: Real,             // what its posture makes of its height
+    parts: Vec<PartInst>,            // the live tree, in order of key
+    wounds: Vec<Wound>,              // in order of id
+    derived: Derived,                // cached: functions, slots, mass and size
+    clock: ClockId, synced: Dur,     // the time wounds close and heal on (section 7.3)
+    wake: Option<WakeId>,
 }
 
 pub struct PartInst {
-    id: PartKey,
+    key: PartKey,                       // its number in this body
+    name: String,                       // its name: the plan's `id`
     def: BodyPartId,
-    parent: Option<PartIdx>, relation: On | In,
-    scale: Real,
-    layers: SmallVec<[LayerInst; 4]>,   // material (overridable), thickness, damage 0..=255
+    parent: Option<PartKey>, relation: On | In,
+    socket: Option<String>, side: Option<String>,
+    scale: Real,                        // relative to the body's
+    layers: Vec<LayerInst>,             // material (overridable), thickness, weight, damage 0..=255
     state: PartState,                   // Whole | Disabled | Severed | Destroyed
+    held: bool,                         // disabled from outside
 }
 ```
 
-A part's **condition** is `1 − Σ (layer weight × layer damage fraction)`.
-Below its `disable_below` (default 0.5) the part is disabled: it contributes
-nothing and its channel slots are disabled, which interrupts any action
-using them (03 §6.2).
+A part's **condition** is `1 − Σ (layer weight × layer damage fraction)`,
+kept between 0 and 1. Below its `disable_below` (default 0.5) the part is
+disabled: it contributes nothing and its channel slots are disabled, which
+interrupts any action using them (03 §6.2). A part may also be disabled
+from outside, whatever its condition, by `disable_part`, and is then
+disabled until `restore_part`.
 
-Size matters physically. Thickness scales with `scale`, area with its
-square, mass with its cube. A giant is harder to cut through because there
-is more of it.
+| State | Means |
+|-------|-------|
+| `whole` | There, and working. |
+| `disabled` | There, and not working: its condition is below `disable_below`, or something disabled it. |
+| `severed` | Gone: cut off, or gone with the part it was on. |
+| `destroyed` | Gone: destroyed where it was (section 7.5). |
+
+A part that is gone stays listed, with no layers, so that what a body has
+lost can be read and still counts, as nothing, toward its functions
+(section 6.3).
+
+Size matters physically. Thickness and length scale with `scale`, area
+with its square, mass with its cube. A giant is harder to cut through
+because there is more of it. A part's size factor is the body's times its
+own.
+
+**What follows from the parts** is cached, saved and hashed, and always
+equals a recomputation (invariants B2, B3):
+
+| Value | Is |
+|-------|----|
+| Functions | Section 6.3. |
+| Channel slots | For each channel, the sum over working parts of the slots they supply; and the set of those channels. When a part stops working or comes off, the change that reports it names the part, the channels and how many slots of each went, so that an action holding one can be interrupted. |
+| Mass | The sum of the masses of the parts that are there. |
+| Volume | For each part that is there, its mass over the mean density of its layers, by thickness. |
+| Height | The plan's `height` × `scale` × the posture's factor (section 11.1). |
+| Cross-section | The sum of the areas of the parts on the outside. |
+
+Mass, volume, height and cross-section are handed to the entity's
+`Physical` (section 3.1) whenever they change. The footprint is the plan's
+when the body is made, and whatever `Physical` holds afterwards.
+
+A body's **reach** is the greatest, among its working parts that have a
+striking surface, of the part's own length and that of every part between
+it and the root.
 
 A body that has never been wounded or edited does not hold a copy of its
 parts. It shares them with every other unchanged body of the same plan and
 scale, and is given its own at the first change. Rules cannot tell the
-difference. A crowd of the unhurt costs little.
+difference. A crowd of the unhurt costs little. (Not built yet: every
+body holds its own parts.)
 
 ### 6.5 Editing bodies
 
@@ -509,10 +596,18 @@ Because the instance owns its tree, effects can change it at any time:
 | `scale_part`, `scale_body` | Resize |
 | `set_body_plan` | Rebuild from another plan, mapping parts by id where possible |
 | `heal_part`, `damage_part` | Direct changes to layer damage |
+| `disable_part`, `restore_part` | Disable a part from outside, whatever its condition, and let it go again |
 
 Every edit recomputes functions, channel slots, mass and attributes, and
 emits `body_changed`. Scene S17 is a rule that calls several of these on its
 target.
+
+Built so far, as functions in Rust: `disable_part` and `restore_part`;
+`remove_part`, which returns the part and everything on it and in it as
+data for whoever makes an item of it (section 7.5), and either leaves them
+listed as gone or, as an edit, takes them out of the body altogether; and
+`heal_part { part, share }`, which takes a share of a whole layer off the
+damage of every layer of a part. Removing the root is refused.
 
 ### 6.6 Bodies made of cells
 
@@ -566,6 +661,64 @@ into battle with archers on its back, is a body made of cells.
 A power that grows a creature across that line is a change of body plan
 (section 6.5).
 
+### 6.7 Reading a body
+
+`fn` is a property of an entity that gives what its body can do: a subject
+of the kind `functions`, the same entity seen as its functions. Each
+`body_function` definition is a property of that kind, under its qualified
+id and, where nothing else has the name, under its bare id, as stats are
+(section 4.4). A part and a wound are subjects of their own kinds, `part`
+and `wound` (05 §5.1).
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.fn` | `functions` | What the entity's body can do |
+| `functions.<id>`, `functions.value(function)` | `real` | A function's capacity |
+| `entity.scale` | `real?` | The body's overall size factor |
+| `entity.reach` | `real?` | How far it can reach to strike, in metres (section 6.4) |
+| `entity.part(name)` | `part?` | A part by its name in the body, one that is gone included |
+| `entity.parts` | `list<part>` | Every part that is there, in order of key |
+| `entity.wounds` | `list<wound>` | Every wound, in order of id |
+| `part.name` | `string` | Its name in its body |
+| `part.def` | `id<body_part>` | What kind of part it is |
+| `part.owner` | `entity` | Whose body it is a part of |
+| `part.parent` | `part?` | The part it is joined to |
+| `part.side` | `string?` | Its side label |
+| `part.condition` | `real` | From 0 to 1 (section 6.4); 0 for a part that is gone |
+| `part.state` | `string` | `whole`, `disabled`, `severed` or `destroyed` |
+| `part.working` | `bool` | Whether it is there and not disabled |
+| `part.exposed` | `bool` | Whether it is there and on the outside: it sits inside no other part |
+| `part.size` | `real` | The area it presents, in square metres |
+| `part.length`, `part.girth`, `part.mass` | `real` | Scale applied; a part that is gone has no mass |
+| `part.reach` | `real` | Its own length and that of every part between it and the root |
+| `part.layers` | `int` | How many layers it is built of |
+| `part.layer_damage(layer)` | `real?` | A layer's damage, from 0 to 1; layer 0 is the outermost |
+| `part.layer_material(layer)` | `id<material>?` | What a layer is made of |
+| `part.layer_thickness(layer)` | `real?` | How thick a layer is, in metres |
+| `part.has_tag(tag)` | `bool` | Whether its definition carries a tag |
+| `part.wounds` | `list<wound>` | The wounds on it |
+| `part.inside`, `part.attached` | `list<part>` | The parts that are there and sit in it, or on it |
+| `wound.part` | `part` | The part it is on |
+| `wound.owner` | `entity` | Whose wound it is |
+| `wound.kind` | `id<damage_type>` | The kind of damage that made it |
+| `wound.depth` | `int` | How many of the part's layers it goes through |
+| `wound.area`, `wound.energy` | `real` | Section 7.3 |
+| `wound.age` | `real` | Seconds of its owner's time since it was made |
+| `wound.state` | `string` | `open` or `closed` |
+| `wound.rate` | `real` | What it drains from pools each second, every pool summed |
+| `wound.stump` | `bool` | Whether it is where a part came off |
+
+None is settable: a body changes through hits and the body verbs, so that
+hooks run and what follows is reported. None is safe for belief: what a
+body can do, the state of its parts and the wounds it carries are its
+owner's to know and anyone else's to perceive (15). A character reads its
+own (05 §7.3). Anything read of an entity with no body, of a part or a
+wound that is not there, or by an id that names nothing is null. A
+function's capacity, a part's state and the lists name the events that
+change them, so they may be read in reactive expressions (05 §7.5). A
+part's condition moves a 255th at a time as it heals and may not: react
+to its state.
+
 ## 7. Hits and wounds
 
 ### 7.1 A hit
@@ -573,18 +726,29 @@ A power that grows a creature across that line is a change of body plan
 ```rust
 pub struct Hit {
     pub target: EntityId,
-    pub part: Option<PartKey>,     // None: spread over the body
+    pub at: HitAt,                 // Part(key) | Height(m) | Any | Spread
     pub packet: DamagePacket,      // kind, energy, intensity, cause (02 §12.1)
     pub area: Real,                // m² of contact
     pub span: Real,                // m of contact across the part (07 §3.2)
-    pub dir: Option<[Real; 3]>,
+    pub dir: Option<[Real; 3]>,    // east, south, up
 }
 ```
 
 Everything that harms a body arrives as a `Hit`: a strike (07), a field
 (02 §16), an impact after being thrown (02 §15.2), exposure to a pressure
 wave (02 §13.2). The hook `hit_incoming` lets rules alter, redirect or
-cancel it first.
+cancel it first (section 7.6).
+
+| A hit `at` | Lands |
+|------------|-------|
+| `Part` | On that part. |
+| `Height` | On one outer part whose band (section 6.1) holds that height above the target's footing, chosen by exposed area. If none does, on nothing. |
+| `Any` | On one outer part, chosen by exposed area. |
+| `Spread` | On every outer part (section 7.4). |
+
+A part's **exposed area** is its area times its `exposure`, and nothing
+for a part that is gone or sits inside another. A hit that lands on
+nothing is not refused: all of its energy exits.
 
 ### 7.2 Through the layers
 
@@ -592,26 +756,50 @@ For the struck part, the layers are: anything worn over it, outermost first
 (section 9.2), then the part's own.
 
 ```
-energy = packet.energy
+contact = min(hit.area, the part's area)
+cover   = min(1, hit.span / the part's girth)
+energy  = packet.energy
 for each layer, outside in:
     if the layer is worn and the hit found a gap in its coverage: skip it
-    capacity = material.toughness × area × thickness
-    apply the packet rule of 02 §12.2 with that capacity
-    record what the layer absorbed as damage to it
-    if the layer was not breached: stop
-    energy = what passed
+    if the layer is the part's own and wholly gone (damage 255): it is not in the way
+    capacity = material.toughness × contact × thickness
+    apply the packet rule of 02 §12.2 with that capacity and the layer's damage
+    unaffected:  stop. The energy stays with whatever delivered it (07 §6.3)
+    damaged:     the layer gains cover × the 255ths the rule gives; stop
+    breached:    the layer gains cover × 255; energy = what passed
 ```
+
+The rule is applied to the volume under the contact, which is why a small
+contact goes deep. What is recorded on the layer is the share of the
+part's width the breach crosses, because that is what the part's working
+depends on: a blade drawn across a limb undoes it, and a needle through it
+does not. A layer that is affected always gains at least one 255th, and
+one that is damaged and not breached stops at 254. A hit below a layer's
+threshold changes nothing, however often it is repeated.
 
 If every layer is breached:
 
-- Parts `inside` this one may be struck with what remains, each with a
-  chance in proportion to its size.
-- If the damage type is flagged `severs` and the hit's `span` is at least
-  the part's girth, the part is **severed**: it and everything on it become
-  an item, and the wound is on the parent.
-- Otherwise what remains exits, and may strike whatever is behind.
+- One of the parts `inside` this one may be struck with what remains: each
+  has a chance equal to its area over this part's, and at most one is
+  struck. It is resolved in the same way, and what it passes goes on.
+- If the hit named or found this one part, the damage type is flagged
+  `severs`, the hit's `span` is at least the part's girth, and the part is
+  `on` another, the part is **severed**: it and everything on it and in it
+  come off as they were before the hit, and the wound is on the parent
+  (section 7.3). The root, and a part `in` another, cannot be severed.
+- Whatever energy remains exits, and is returned so that it can be carried
+  on to whatever is behind.
 
-A worn layer's damage is damage to that item.
+A worn layer is handed in by whoever holds the items, with its material,
+thickness, `coverage` and the item's damage. It is resolved by the same
+rule and its own damage is not changed here: what it absorbed, and whether
+it was unaffected, damaged or breached, is handed back as damage to that
+item. A layer whose coverage is between 0 and 1 is in the way with that
+chance.
+
+Energy is accounted for: what the body's layers absorbed, what worn
+layers absorbed, what was stopped by a layer it could not affect and what
+exits add up to what the hit delivered.
 
 This is the rule that broke the wall in 02 §12.2, applied to a smaller
 volume. A blade concentrates its energy on a tiny area, so its intensity is
@@ -623,16 +811,33 @@ what "bulletproof" means.
 
 ```rust
 pub struct Wound {
+    pub id: WoundId,               // its number in this body
     pub part: PartKey,
     pub kind: DamageTypeId,
-    pub depth: u8,                 // layers breached
-    pub area: Real,
+    pub depth: u8,                 // layers it goes through, from the outside
+    pub area: Real,                // m² of tissue it lays open
     pub energy: Real,              // absorbed
     pub age: Dur,
     pub state: WoundState,         // Open | Closed | Healed
+    pub closes_in: Option<Dur>,    // local time left before it closes by itself
+    pub lost: Option<PartKey>,     // for a stump: the part that came off
     pub cause: Cause,
 }
 ```
+
+A hit that breaches at least one layer of a part leaves a wound on it. Its
+`depth` is how many layers the hit got through. Its `area` is the tissue
+it lays open: the contact area, or, where that is larger, the face of the
+cut, which is as wide as the contact crosses the part (the lesser of the
+hit's `span` and the part's girth) and as deep as the layers it went
+through. A breach of a part that already has an open wound of the same
+kind makes that wound worse (deeper, larger, its time to close begun
+again) and does not add another. Damage that breaches nothing leaves no
+wound, and heals all the same.
+
+A part that is severed, or destroyed while `on` another, leaves a **stump**
+on the part it was joined to: a wound through every layer of that part,
+with the area of the lost part's cross-section, girth × girth.
 
 A wound has consequences, all through mechanisms already described:
 
@@ -649,29 +854,121 @@ The last row is the death spiral of scene S14, and it is content. The engine
 guarantees only that nothing is cushioned: there is no buffer between being
 cut and being impaired.
 
-Wounds close and heal over time at their tissues' `heal` rates, as timers.
-Treatment, regeneration and scarring are verbs and rules: `close_wound`,
-`reopen_wound` and `heal_part`, with the events `wound_closed` and
-`wound_healed`.
+A wound is open, then closed, then gone:
+
+| State | Means |
+|-------|-------|
+| Open | It leaks. Each layer it goes through has its share of the wound's area, by thickness, and one whose tissue has a `leak` drains its pool by `rate × that share`. The sum for each pool is a rate on the pool with the wound as its source (section 4.2). The layers it goes through do not heal. |
+| Closed | Nothing leaks: its rates are removed. Its layers recover at their tissues' `heal` rates. |
+| Healed | Every layer it went through is whole again. The wound is removed and reported once. |
+
+- An open wound closes by itself after the longest `closes` among the
+  leaking tissues it goes through, if each gives one. With a tissue that
+  gives none it stays open until `close_wound`. A wound through nothing
+  that leaks is closed from the start.
+- A damaged layer whose tissue has a `heal` rate recovers one 255th at a
+  time, each after `1 / (255 × heal)` seconds of its owner's time, unless
+  an open wound goes through it. As it recovers the part's condition
+  rises, and a part that was disabled by its condition works again
+  (`part_restored`).
+- A stump is healed as soon as it has closed.
+- Nothing runs per tick. A body with something ahead keeps one wake-up,
+  on its owner's clock, for the earliest wound to close or layer to
+  recover a 255th. It is a timer of 03 §9: when its owner leaves the
+  simulation it stands still, and when the owner returns the local time
+  that passed is applied in one step, each closing and healing in order.
+- `close_wound { who, wound }` closes an open wound. `reopen_wound { who,
+  wound }` opens a closed one again: it leaks as it did and its time to
+  close starts over. `heal_part` (section 6.5) takes damage off layers
+  directly, and a wound whose layers are whole again is healed whatever
+  state it was in.
 
 Which part an unaimed hit finds, which inner part is struck, and whether a
 hit finds a gap in what is worn are drawn from the simulation's random
-stream. A rule on `hit_incoming` may set the part outright.
+stream. A rule on `hit_incoming` may set the part outright. A hit at a
+named part, with nothing worn loosely over it and nothing inside it, draws
+nothing.
 
 ### 7.4 Spread hits
 
-A hit with no part is distributed. Parts are chosen in proportion to
-exposure, limited to those facing `dir` if given, and each receives a share
-of the energy at the hit's intensity. A hit whose energy exceeds what the
-whole body could absorb many times over destroys it outright without
-resolving layers.
+A spread hit is distributed. Every outer part that is there receives a
+share of the energy in proportion to its exposed area (section 7.1), at
+the hit's intensity, over the whole of the part: its contact is the part's
+area and its cover is 1. Each part is resolved as in section 7.2. A spread
+hit severs nothing: a part it takes every layer of is destroyed.
+
+`dir`, if given, is meant to limit the hit to the parts that face it.
+Nothing yet says which way a body or a part of it faces, so every exposed
+part takes its share, and `dir` is carried on with whatever exits.
+
+A hit whose energy exceeds what the whole body could absorb many times
+over destroys it outright without resolving layers. That is so when the
+hit has full effect on every layer of every part that is there (its
+intensity is at least twice each threshold, and no factor is zero) and its
+energy is at least `hit.overkill_factor` (default 10, and never less than
+1) times the sum, over those layers, of `toughness × area × thickness ×
+(1 − damage) / factor`. Every part is then destroyed and that sum is what
+the body absorbed.
+
+**What the world reports** becomes a hit:
+
+| Report | Hit |
+|--------|-----|
+| `OccupantExposed { kind, energy, intensity }` (02 §13.2, §14.3) | Spread. The cell was delivered `energy`; the body takes what that intensity puts into its own volume, `intensity × volume`, and never more than was delivered. |
+| A body impact (02 §15.2): the energy the flying creature lost, and the intensity | Spread, with all of that energy and the direction of travel. If what it struck has a contact surface of its own (07 §6.5), a hit `Any` with that surface's kind, area and span instead. |
+| A field's `damage` rule (02 §16) | As `OccupantExposed`, with the field's level times its `energy_per_level` and `intensity_per_level`. |
 
 ### 7.5 Destruction and remains
 
+A part every layer of which is gone is **destroyed**. If it is `on`
+another it comes off, with everything on it and in it, and leaves a stump
+(section 7.3). If it is `in` another it is gone where it was. If it is the
+root, the body is **in pieces**: everything `on` the root comes off as it
+is, the root and what is inside it are destroyed, and its wounds are gone
+with it.
+
 A destroyed or severed part becomes an item made of its materials, or
-nothing, as its definition says. A body destroyed entirely leaves whatever
-its template's `remains` names. A body that stops working but is not
-destroyed is still that body: see section 8.3.
+nothing, as its definition's `leaves` says. What the body model hands on
+is the part as it was: the keys, names, layers and damage of the part and
+of everything that went with it, the wounds that were on them, their mass,
+how it came off (severed, destroyed, or removed by an edit) and the cause.
+Making the item is the item package's.
+
+A body destroyed entirely leaves whatever its template's `remains` names.
+The body model reports that the body is in pieces and decides nothing
+more: whether that ends the creature is section 8.3. A body that stops
+working but is not destroyed is still that body.
+
+### 7.6 Events, the hook and refusals
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `hit_incoming` (hook) | `self` | `part` (`part?`), the part aimed at; `height` (`real?`), for a hit at a height; `spread` (`bool`); `kind` (`id<damage_type>`); `energy`, `intensity`, `area`, `span` (`real`); `dir` (`list<real>?`). A handler may change `energy`, `intensity`, `part` and `dir`, or cancel. `actor` and `instigator` are whoever is behind the hit. |
+| `hit_landed` | `self` | `part` (`part`); `kind` (`id<damage_type>`); `absorbed`, `passed` (`real`), the joules the part's layers took and those that went on; `depth` (`int`), the layers the hit got through. Once for each part reached: the part struck, then a part inside it. |
+| `wound_inflicted` | `self` | `wound` (`wound`), `part` (`part`), `kind` (`id<damage_type>`), `depth` (`int`), `area` (`real`). Also raised when a wound is made worse, and for a stump. |
+| `wound_closed`, `wound_reopened` | `self` | `wound` (`wound`), `part` (`part`) |
+| `wound_healed` | `self` | `part` (`part`), `kind` (`id<damage_type>`) |
+| `part_disabled`, `part_restored`, `part_destroyed` | `self` | `part` (`part`) |
+| `part_severed` | `self` | `part` (`part`), `parent` (`part?`). For the part cut, not for what went with it. |
+| `function_changed` | `self` | `function` (`id<body_function>`), `old`, `new` (`real`) |
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `no_body` | The entity has no body | `entity` |
+| `has_body` | It is given a body and has one | `entity` |
+| `unknown_plan` | The id is not a plan a body can be built from | — |
+| `no_such_part` | The body has no part with that key | `entity`, `part` |
+| `part_missing` | The part is gone | `entity`, `part` |
+| `root_part` | The part is the root, which cannot be taken off | `entity`, `part` |
+| `no_such_wound` | The body has no wound with that id | `entity`, `wound` |
+| `wound_not_open`, `wound_not_closed` | `close_wound` of one that is not open; `reopen_wound` of one that is not closed | `entity`, `wound` |
+| `bad_amount` | A scale, a share or a factor is not finite and above zero | `amount` |
+| `bad_hit` | A hit's energy, intensity, area, span, height or direction is negative or not finite | `what` |
+| `no_clock` | The clock the body runs on is gone | — |
+| `bad_shape` | The body's mass and size could not be handed on (section 3.1) | — |
+| `bodies_not_registered` | The definitions were loaded without the bodies' definition types and properties | — |
 
 ## 8. Minds
 
@@ -1025,8 +1322,9 @@ A stored entity keeps every component. Its timers follow 03 §9. Its place is
 **Definition types**: `attribute`, `pool`, `track`, `trait`, `body_part`,
 `body_plan`, `body_function`, `template`, `creature`, `mind`, `item`,
 `movement`, `posture`, `population`, `content_table`. Tissue extras on
-`material`. `seat` on attributes, pools, tracks and traits. `limp` and
-`postures` on body plans; `remains` on templates.
+`material` (`leak`, `signal`, `heal`; section 6.1). `seat` on attributes,
+pools, tracks and traits. `limp` and `postures` on body plans; `remains`
+on templates.
 `ages` on items and `keeps` on containers.
 Body flags on `damage_type` (`severs`).
 
@@ -1034,7 +1332,7 @@ Body flags on `damage_type` (`severs`).
 `entity_revived`, `mind_released`, `mind_transferred`, `hit_landed`,
 `wound_inflicted`, `wound_healed`, `part_disabled`, `part_restored`,
 `part_severed`, `part_destroyed`, `body_changed`, `body_cells_damaged`,
-`wound_closed`, `function_changed`, `attr_changed`,
+`wound_closed`, `wound_reopened`, `function_changed`, `attr_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
 `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
 `item_broken`, `item_stage_reached`, `item_turned`, `posture_changed`,
@@ -1043,14 +1341,17 @@ Body flags on `damage_type` (`severs`).
 **Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
 `trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
 `item_leaving`, `body_changing`, `mind_transferring`, `posture_changing`,
-`passage_requested`. Each is described in the table below, and
-`pool_changing` with its fields in section 4.4.
+`passage_requested`. Each is described in the table below,
+`pool_changing` with its fields in section 4.4, and `hit_incoming` with
+its fields, and the events of bodies and wounds with theirs, in
+section 7.6.
 
 **Effects**: the verbs of sections 6.5, 8.2, 8.3, 9.2 and 11, and:
 `hit`, `add_trait`, `remove_trait`, `set_attr_base`, `add_modifier`,
 `remove_modifier`, `pool_add`, `pool_rate`, `advance_track`, `spawn`,
 `destroy`, `apply_template`, `make_notable`, `make_anonymous`, `rename`,
-`set_color`, `close_wound`, `reopen_wound`.
+`set_color`, `close_wound`, `reopen_wound`, `disable_part`,
+`restore_part`.
 
 | Hook | Runs before | A handler may |
 |------|-------------|---------------|
@@ -1070,16 +1371,18 @@ Body flags on `damage_type` (`severs`).
 in something that has a mind; `transfer_mind` into something that has a
 mind, unless it says `"swap": true`, in which case the two change places.
 Parts of an old plan that `set_body_plan` cannot map are dropped as items.
-The refusals of attributes, pools and tracks are tabled in section 4.4.
+The refusals of attributes, pools and tracks are tabled in section 4.4,
+and those of bodies, hits and wounds in section 7.6.
 
 **Settings**: `hit.overkill_factor` (how many times what a whole body could
 absorb destroys it outright, section 7.4).
 
 **Queries** (05 §11): `parts`, `wounds`, `traits`, `held`.
 
-**Properties**: `attr.*`, `pool.*`, `track.*` (section 4.4), `fn.*`, `mass`, `height`,
-`volume`, `scale`, `part(key)` and its `condition`, `state`, `layers`,
-`exposed`; `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
+**Properties**: `attr.*`, `pool.*`, `track.*` (section 4.4); `fn.*`,
+`scale`, `reach`, `part(name)`, `parts`, `wounds` and the properties of a
+part and of a wound (section 6.7); `mass`, `height`, `volume`;
+`has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
 `templates`, `name`, `posture`, `velocity`, `color`; on items, `age`.
 
@@ -1108,6 +1411,19 @@ definition types, properties and events; the verbs of section 4.4 are
 functions in Rust until the rule runtime registers them, a track's
 `on_advance` is kept and not yet run, and what is seated in a mind does
 not yet move with it. A pool cannot yet name a substance (16 §9.5).
+Bodies, hits and wounds are built with their definition types, properties
+and events (sections 6.1 to 6.4, 6.7 and 7). Reachable only from Rust
+until the kernel and the rule runtime call them: giving an entity a body;
+applying a hit, which waits for the kernel to raise `hit_incoming` and
+the events, to hand on what exits and what came off, and to interrupt
+actions whose slots went; the verbs `close_wound`, `reopen_wound`,
+`heal_part`, `disable_part`, `restore_part` and `remove_part`; and the
+conversion of the world's exposure and impact reports into hits. The
+queries `parts` and `wounds` (05 §11) are list properties until queries
+are built. Not built: the other verbs of section 6.5, bodies made of
+cells (section 6.6), shared parts (section 6.4), which parts face a
+hit's direction (section 7.4), and what a pool that names a substance
+spills.
 
 ## 14. Invariants
 

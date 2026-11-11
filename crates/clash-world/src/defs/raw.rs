@@ -115,6 +115,40 @@ pub struct DamageTypeDef {
     /// Free-form tags.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Whether a hit of this type that goes through a body part across
+    /// its whole width takes the part off (06 §7.2). Read by the body
+    /// model; the world gives it no meaning.
+    #[serde(default)]
+    pub severs: bool,
+}
+
+/// What a breached layer of tissue drains (06 §6.1): a pool of the body
+/// it belongs to, by so much a second for each square metre of wound.
+///
+/// The pool is a definition of the simulation's, which the world cannot
+/// name: it is kept as written and resolved by the body model.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LeakSpec {
+    /// The pool drained, by id.
+    pub pool: DefRef,
+    /// What is drained each second for each square metre of wound.
+    pub rate: Real,
+    /// How long a breach leaks before it closes by itself. Left out, it
+    /// leaks until something closes it.
+    #[serde(default)]
+    pub closes: Option<clash_data::Seconds>,
+}
+
+/// What damaged tissue adds to a pool of the body it belongs to
+/// (06 §6.1): so much for each joule the tissue absorbed.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SignalSpec {
+    /// The pool added to, by id.
+    pub pool: DefRef,
+    /// What is added for each joule absorbed.
+    pub per_joule: Real,
 }
 
 /// A `material` definition (02 §5.4).
@@ -148,6 +182,18 @@ pub struct MaterialDef {
     /// Free-form tags.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// As tissue (06 §6.1): what a breached layer of this material
+    /// drains. Read by the body model; the world gives it no meaning.
+    #[serde(default)]
+    pub leak: Option<LeakSpec>,
+    /// As tissue (06 §6.1): what a damaged layer of this material adds
+    /// to a pool. Read by the body model.
+    #[serde(default)]
+    pub signal: Option<SignalSpec>,
+    /// As tissue (06 §6.1): the share of a layer of this material that
+    /// recovers each second, unaided. Read by the body model.
+    #[serde(default)]
+    pub heal: Option<clash_data::Frequency>,
 }
 
 /// An `atmosphere` definition (02 §4.1).
