@@ -26,13 +26,14 @@ use crate::entity::{Control, EntitySpec, EntityTable, KernelEntity, Place};
 use crate::event::{EventBody, SimEvent, Where};
 use crate::later::{ActionTable, RuleState, WindowTable};
 use crate::reason::{Reason, codes};
+use crate::registry::Bindings;
 
 /// The four bytes that mark a blob as the simulation's own state.
 pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 2;
+pub const SAVE_VERSION: u32 = 3;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -98,6 +99,9 @@ pub struct Sim {
     pub(crate) handlers: Handlers,
     /// Not state: the event types and who listens for them.
     pub(crate) bus: Bus,
+    /// Not state: the simulation's entries of the expression registry
+    /// and what answers each (05 §5.3).
+    pub(crate) exprs: Arc<Bindings>,
     /// Not state: what makes the cells of a tract that is loaded for
     /// the first time (02 §9.3).
     pub(crate) generators: Generators,
@@ -238,6 +242,7 @@ impl Sim {
     /// simulation others.
     pub fn from_parts(defs: Arc<Defs>, cosmos: Cosmos, timeline: Timeline, seed: u64) -> Sim {
         let bus = Bus::for_defs(&defs);
+        let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
         Sim {
             defs,
@@ -261,6 +266,7 @@ impl Sim {
             steps: 0,
             handlers: Handlers::default(),
             bus,
+            exprs,
             generators,
             store: Box::new(MemoryStore::new()),
         }
@@ -738,6 +744,7 @@ impl Sim {
         }
         cosmos.restore_activity(saved.activity);
         let bus = Bus::for_defs(&defs);
+        let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
         Ok(Sim {
             defs,
@@ -761,6 +768,7 @@ impl Sim {
             steps: saved.steps,
             handlers: Handlers::default(),
             bus,
+            exprs,
             generators,
             store: Box::new(MemoryStore::new()),
         })

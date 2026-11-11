@@ -121,8 +121,9 @@ Joined to the kernel since (decision D-460): the simulation holds the
 `Components`, saves them in its blob, hashes them as a part of its own,
 implements `Containment` over places, refreshes masses on relocation and
 removal and writes changed masses to the world's occupant records
-(`Sim::set_shape`, `Sim::set_own_mass`). Still stubbed: definition ids
-in saved components go through no id table (K7).
+(`Sim::set_shape`, `Sim::set_own_mass`); the properties these components
+back are registered (06 §13). Still stubbed: definition ids in saved
+components go through no id table (K7); `templates` is not a property.
 
 ### E2 — Attributes, pools, tracks
 

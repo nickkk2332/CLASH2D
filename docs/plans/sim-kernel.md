@@ -40,7 +40,7 @@ start while the world model is being built.
 | K1 | Simulation skeleton and kernel entities | M | W7, F3 | done |
 | K2 | Advance, commands, input log | M | K1, W9 | beta |
 | K3 | Events and hooks | M | K2, X2 | beta |
-| K4 | Subjects, properties, variable storage | L | K1, X3 | todo |
+| K4 | Subjects, properties, variable storage | L | K1, X3 | beta |
 | K5 | Rule runtime | L | K3, K4, X4 | todo |
 | K6 | Queries and value sources | M | K5 | todo |
 | K7 | Timers, continuations, simulation saves | L | K5, W10 | todo |
@@ -453,8 +453,8 @@ tested (`crates/clash-sim/tests/events.rs`), with handlers as Rust
 closures registered through `Sim::on` and `Sim::on_subject`, which the
 rule runtime (K5) will use for rules. Stubbed: `rule_cascade_limit` is a
 test of that name, not yet a test script, until the runner exists. Event
-types are kept by the simulation (`Sim::event_types`) and are not yet
-entered in the expression registry, which needs the subject kinds of K4.
+types are kept by the simulation (`Sim::event_types`); K4 enters them in
+the expression registry.
 A field's value is null, a plain value or a subject. `clash-tools` must
 call `clash_sim::register_defs` for the linter to know the `event` type.
 
@@ -473,6 +473,28 @@ Done when
 - Property chains across kinds work (`self.loc.tract.devastation`).
 - Setters go through the engine's mutation paths (shown by events emitted).
 - A watched variable raises `var_changed` with old and new values.
+
+As built (decisions D-463 to D-469). Beta: the kinds `entity`, `loc`,
+`element`, `area`, `site`, `tract`, `realm` and `global` with their
+handles; `clash_sim::engine_registry()` and the loader's registry step;
+about a hundred properties and nine functions, with `exists`, each
+documented, tested in
+`crates/clash-sim/tests/subjects.rs` and stated in 05 §5.3 and §17,
+02 §23, 03 §13 and 06 §13; eight settable properties, each through the
+engine's own function; the host (`Sim::host`, `Sim::with_random`); the
+write side for the rule runtime (`Sim::assign`, `Sim::set_var`,
+`Sim::set_property`); variables on every scope the kernel serves, with
+declared defaults, types and `watch`; belief marks; the kernel's, the
+world's and mods' events as event types of the expression registry.
+`clash-tools lint` loads with the real registry, and `mods/core` holds a
+variable and three functions that use real properties. Stubbed, each
+listed as a gap in its document: a field's value, ambient temperature,
+drift and decals (02 §23); the queries over actions, channels, plans and
+windows (03 §13); properties of a definition reached through an id, and
+the scopes `region`, `subgrid`, `action`, `scenario` and `legacy`
+(05 §17); `templates` and names taken from definitions (06 §13); the
+reader's text helpers, which answer in plain forms (K9). No test script,
+until expressions can be asserted from one (K10), and no benchmark.
 
 ### K5 — Rule runtime
 
@@ -580,8 +602,10 @@ Done when
 As built (decision D-363). Beta: clock assignment, rehoming and the three
 operations are built and tested (`crates/clash-sim/tests/clocks.rs`).
 Stubbed: `set_time_rate`, `anchor_clock` and `set_clock_rate` are kernel
-functions; their effects are bound by the rule runtime (K5). Bodies in
-flight and world processes are rehomed by the world, when it has them.
+functions; their effects are bound by the rule runtime (K5). Since K4,
+an entity's `time_rate` and an area's and a realm's `clock_rate` are
+settable properties that call the first and the last. Bodies in flight
+and world processes are rehomed by the world, when it has them.
 
 ### T2 — Action definitions
 

@@ -82,6 +82,7 @@ pub mod test_support;
 mod ticket;
 mod topology;
 mod tract;
+mod vars;
 
 pub use area::{
     AREA_MAX_CELLS, AREA_MAX_TRACTS, AmbientOverride, Area, AreaAnchor, AreaDrift, AreaId,

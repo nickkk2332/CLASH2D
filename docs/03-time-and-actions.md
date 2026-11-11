@@ -362,9 +362,11 @@ As built (decisions D-361, D-362):
   accessors and changed only by `relocate`, `set_presence`, `set_control`,
   `set_time_rate` and `anchor_clock`. `place` is private to the module
   that holds `relocate`, and no owned kernel entity ever leaves the crate,
-  so nothing else can change it. The rest (`tags`, `vars`, `channels`,
-  `actions`, `plan`, `attached`) is open to whoever holds the entity
-  mutably until its packages give it owners.
+  so nothing else can change it. `vars` is changed by `Sim::set_var`
+  (05 §6), which holds a declared variable to its declaration and raises
+  `var_changed`; the field itself stays open for setting a scene up. The
+  rest (`tags`, `channels`, `actions`, `plan`, `attached`) is open to
+  whoever holds the entity mutably until its packages give it owners.
 - `actions` is a plain list. `ChannelSlots` (an entity's slots and who
   holds each), `Plan`, the action table, the window table and the rule
   state are empty typed placeholders that already serialise and hash. A
@@ -1139,6 +1141,7 @@ lists. A subject marked `?` is bound only when there is one.
 | `entity_unsupported` | `self`: entity; `here`: loc | none | What held an entity up has gone (02 §14.3). It is where it was: what falling does is for the movement package. Follows the world's `occupant_unsupported` |
 | `entity_exposed` | `self`: entity; `here`: loc | `kind`: string, the qualified id of a damage type; `energy`: real, joules; `intensity`: real, pascals | Something struck the cell an entity is in (02 §14.3). What that does to it is for the body model. Follows the world's `occupant_exposed` |
 | `spawn_requested` | `here`: loc | `what`: string, the id the request names; `realm`: int | A tract that has just been loaded asks for something to be put at `here` (02 §9.4) |
+| `var_changed` | `self?`: entity; `here?`: loc; `area?`; `site?`; `tract?`; `realm?` | `name`, `scope`: string; `old`, `new`: any | A variable declared with `"watch": true` changed (05 §6). What it lives on is bound under the name of its kind |
 | `fault` | none | `code`, `message`: string | The engine contained a fault. Goes straight to the output; no handler receives it |
 | `event_cancelled` | none | `event`, `code`, `message`: string | A hook was cancelled (05 §8.2) |
 
@@ -1169,16 +1172,46 @@ tract and ticket events, with `first` (bool) on `tract_loaded` and
 `time.refused`, `advance.unhandled_wake`, `advance.tick_limit`,
 `events.cascade_limit`, `events.hook_depth`, `events.unknown_type`,
 `events.bad_payload`, `events.field_fixed`, `events.cancelled`,
-`decision.none_pending`, `replay.diverged`. Each is documented in the
-table the generated reference reads.
+`decision.none_pending`, `replay.diverged`; and, from writing variables
+and properties (05 §6, §10.3), `subject.gone`, `vars.wrong_scope`,
+`vars.wrong_type`, `vars.too_deep`, `write.not_settable`,
+`write.bad_value`, `write.bad_key`, `write.cannot_add`,
+`write.not_a_subject`. Each is documented in the table the generated
+reference reads.
+
+**The queries as properties** (05 §5.3). All read truth and none is safe
+for belief; a mind reads them of itself.
+
+| Property | Gives |
+|----------|-------|
+| `entity.loc` | `loc?`: the cell it is in, its own or that of what it is inside; null out of the world. **Settable**: relocates it to stand in the cell (`entity_relocated`, after the world's area events); null takes it out of the world |
+| `entity.container` | `entity?`: what it is directly inside. **Settable**: puts it inside another; null takes it out, to where its container is |
+| `entity.outermost` | `entity?`: itself, or the container everything it is nested in is inside |
+| `entity.contents` | `list<entity>`: what is directly inside it, in id order |
+| `entity.in_world` | `bool` |
+| `entity.altitude` | `real?`: metres above the base of its cell |
+| `entity.occupant_kind` | `string`: `creature`, `item`, `device` or `other` |
+| `entity.tags`, `entity.has_tag(tag: string)` | Its tags |
+| `entity.control` | `string`: `none`, `direct` or `delegated`. **Settable** (`control_changed`) |
+| `entity.time_rate` | `real?`: the rate of its personal clock, or null. **Settable**: a rate gives it a personal clock or changes it, null takes the clock away (`clock_rate_changed`) |
+| `entity.clock_rate` | `real?`: how fast time passes for it against universal time |
+| `entity.local_time` | `real?`: the local time of the clock it is on, in seconds |
+| `entity.own_time` | `real?`: its own time (section 3.4), in seconds |
+| `area.clock_rate`, `realm.clock_rate` | `real?`: the rate of the area's or the realm's own clock. **Settable** (`clock_rate_changed`); null takes an area's clock away and is refused for a realm |
+| `area.local_time`, `realm.local_time`, `loc.clock_rate`, `loc.local_time` | `real?`: 02 §23 |
+| `global.now` | `real`: universal time in seconds. Safe for belief |
+
+`now()` and `local_now(subject)` are functions (05 §17).
 
 **Not yet reachable from data.** The operations `set_time_rate`,
-`anchor_clock`, `set_clock_rate` and `set_control` are kernel functions;
-their effects are bound by the rule runtime. The queries of this section
-(`now`, local time and clock rate at a subject, control mode) are not
-registered as properties until subjects are. The debug commands are not
-yet console commands. A handler of an event can only be written in Rust
-until rules exist.
+`set_clock_rate` and `set_control` are reached by setting the properties
+above; as effects of their own names, and `anchor_clock` in any form,
+they are bound by the rule runtime. Not registered, because what they
+read is not built: an entity's running actions with their phase, tags
+and time remaining, whether a channel is free and the length of a plan
+(packages T3 and T4), and the time left on a window (T5). The debug
+commands are not yet console commands. A handler of an event can only be
+written in Rust until rules exist.
 
 **Settings**: `rules.max_cascade`, `rules.max_transitions` (zero-duration
 phase changes in one tick, default 1,000). `WARM_STEP` is a named

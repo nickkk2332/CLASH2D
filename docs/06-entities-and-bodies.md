@@ -946,11 +946,25 @@ absorb destroys it outright, section 7.4).
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
 `templates`, `name`, `posture`, `velocity`, `color`; on items, `age`.
 
-**Gaps.** Reachable only from Rust for now: everything of section 3. The
-stores, `Identity` and `Physical` are built, and the properties they back
-(`mass`, `carried_mass`, `volume`, `height`, `name`, `templates`) are
-registered when the kernel's subjects are. Whether an entity has a
-component of a given kind can be asked in Rust and is not a property.
+**Registered so far** (05 §5.3), from `Identity` and `Physical`. All
+read truth; none is safe for belief.
+
+| Property | Gives |
+|----------|-------|
+| `entity.mass` | `real?`: kilograms, with everything inside it |
+| `entity.own_mass` | `real?`: kilograms, of the entity alone; null without a `Physical`. **Settable**: every container round it and the world's record of each follow (section 3) |
+| `entity.carried_mass` | `real?`: kilograms, of everything inside it |
+| `entity.volume`, `entity.height` | `real?`: cubic metres; metres |
+| `entity.name`, `entity.description` | `string?`: the entity's own, null for one that goes by its definition's |
+| `entity.def` | `any`: the definition it was made from, as an id of whatever type that is; null for none |
+| `entity.has_component(component: string)` | `bool`: by the component's name, `identity` or `physical` |
+
+**Gaps.** Reachable only from Rust for now: `templates`, until
+`template` is a definition type an id can name; the name and the
+description an entity takes from its definition, which need a way to
+read a field of a definition of any type; and `scale`, `color`,
+`velocity` and the rest of the list above, which wait for the
+components that hold them.
 
 ## 14. Invariants
 

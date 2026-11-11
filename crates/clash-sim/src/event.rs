@@ -18,7 +18,9 @@
 
 use clash_core::{Dur, EntityId, Real, StateHash, StateHasher, Tick, Value};
 use clash_time::ClockId;
-use clash_world::{AreaId, Cause, Location, RealmId, SpawnRequest, WorldEvent};
+use clash_world::{
+    AreaId, Cause, Layer, Location, RealmId, SiteId, SpawnRequest, TractPos, WorldEvent,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::bus::{EventPayload, FieldValue};
@@ -26,10 +28,13 @@ use crate::decision::DecisionKind;
 use crate::entity::{Control, Place};
 use crate::reason::Reason;
 
-/// Something an event is about (05 §5.1).
+/// Something the simulation can refer to: what an event is about, what
+/// a property is read of, what a variable lives on (05 §5.1).
 ///
-/// The kernel names the kinds it can refer to itself. Package K4 turns
-/// these into the expression language's handles and adds the rest.
+/// These are the kinds the simulation serves so far. In an expression a
+/// subject is a handle: [`Kinds`](crate::subject::Kinds) converts
+/// between the two. Later packages add their kinds: match with a
+/// wildcard arm.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -40,16 +45,39 @@ pub enum Subject {
     Loc(Location),
     /// An area.
     Area(AreaId),
+    /// The floor, block or fixture of a cell.
+    Element(Location, Layer),
+    /// A site.
+    Site(SiteId),
+    /// A tract of a realm, loaded or not.
+    Tract(RealmId, TractPos),
+    /// A realm.
+    Realm(RealmId),
+    /// The whole simulation.
+    Global,
 }
 
 impl Subject {
     /// The name of the subject's kind as rules write it: `entity`, `loc`,
-    /// `area`.
+    /// `area`, `element`, `site`, `tract`, `realm`, `global`.
     pub const fn kind(&self) -> &'static str {
         match self {
             Subject::Entity(_) => "entity",
             Subject::Loc(_) => "loc",
             Subject::Area(_) => "area",
+            Subject::Element(..) => "element",
+            Subject::Site(_) => "site",
+            Subject::Tract(..) => "tract",
+            Subject::Realm(_) => "realm",
+            Subject::Global => "global",
+        }
+    }
+
+    /// The cell, if the subject is one or an element of one.
+    pub const fn loc(&self) -> Option<Location> {
+        match self {
+            Subject::Loc(loc) | Subject::Element(loc, _) => Some(*loc),
+            _ => None,
         }
     }
 
@@ -77,6 +105,25 @@ impl StateHash for Subject {
                 hasher.write_u8(2);
                 area.state_hash(hasher);
             }
+            Subject::Element(loc, layer) => {
+                hasher.write_u8(3);
+                loc.state_hash(hasher);
+                layer.state_hash(hasher);
+            }
+            Subject::Site(site) => {
+                hasher.write_u8(4);
+                site.state_hash(hasher);
+            }
+            Subject::Tract(realm, tract) => {
+                hasher.write_u8(5);
+                realm.state_hash(hasher);
+                tract.state_hash(hasher);
+            }
+            Subject::Realm(realm) => {
+                hasher.write_u8(6);
+                realm.state_hash(hasher);
+            }
+            Subject::Global => hasher.write_u8(7),
         }
     }
 }
@@ -248,6 +295,17 @@ pub enum EventBody {
         /// How concentrated the delivery was, in pascals.
         intensity: Real,
     },
+    /// A variable declared with `"watch": true` changed (05 §6).
+    VarChanged {
+        /// What the variable lives on.
+        owner: Subject,
+        /// The variable's qualified name.
+        name: String,
+        /// What it read as before.
+        old: FieldValue,
+        /// What it reads as now.
+        new: FieldValue,
+    },
     /// A tract that has just been loaded asks for something to be put
     /// into the world (02 §9.3, §9.4): its generator's request, or one
     /// that was left for it. Whoever makes entities from definitions
@@ -279,6 +337,7 @@ impl EventBody {
             EventBody::EntityUnsupported { .. } => "entity_unsupported",
             EventBody::EntityExposed { .. } => "entity_exposed",
             EventBody::SpawnRequested { .. } => "spawn_requested",
+            EventBody::VarChanged { .. } => "var_changed",
         }
     }
 
@@ -321,6 +380,10 @@ impl EventBody {
                 ("here", Subject::Loc(*loc)),
             ],
             EventBody::SpawnRequested { loc, .. } => vec![("here", Subject::Loc(*loc))],
+            EventBody::VarChanged { owner, .. } => match var_owner_name(owner) {
+                Some(name) => vec![(name, *owner)],
+                None => Vec::new(),
+            },
         }
     }
 
@@ -371,6 +434,18 @@ impl EventBody {
                 "realm" => Some(FieldValue::from(i64::from(realm.raw()))),
                 _ => None,
             },
+            EventBody::VarChanged {
+                owner,
+                name: variable,
+                old,
+                new,
+            } => match name {
+                "name" => Some(FieldValue::text(variable)),
+                "scope" => Some(FieldValue::text(owner.kind())),
+                "old" => Some(old.clone()),
+                "new" => Some(new.clone()),
+                _ => None,
+            },
             EventBody::EntityCreated { .. }
             | EventBody::EntityRemoved { .. }
             | EventBody::EntityRelocated { .. }
@@ -381,7 +456,7 @@ impl EventBody {
 }
 
 /// The name of a control mode as data writes it.
-const fn control_name(control: Control) -> &'static str {
+pub(crate) const fn control_name(control: Control) -> &'static str {
     match control {
         Control::None => "none",
         Control::Direct => "direct",
@@ -479,6 +554,22 @@ fn world_field(event: &WorldEvent, name: &str) -> Option<FieldValue> {
     }
 }
 
+/// The name `var_changed` binds the owner of the variable under, by its
+/// kind: an entity is `self`, a cell `here`, and an area, a site, a
+/// tract and a realm go by the name of their kind. A global variable
+/// has no owner to bind.
+pub(crate) const fn var_owner_name(owner: &Subject) -> Option<&'static str> {
+    match owner {
+        Subject::Entity(_) => Some("self"),
+        Subject::Loc(_) | Subject::Element(..) => Some("here"),
+        Subject::Area(_) => Some("area"),
+        Subject::Site(_) => Some("site"),
+        Subject::Tract(..) => Some("tract"),
+        Subject::Realm(_) => Some("realm"),
+        Subject::Global => None,
+    }
+}
+
 /// The name of a layer as data writes it.
 pub(crate) const fn layer_name(layer: clash_world::Layer) -> &'static str {
     match layer {
@@ -573,6 +664,18 @@ impl StateHash for EventBody {
                 realm.state_hash(hasher);
                 loc.state_hash(hasher);
                 request.state_hash(hasher);
+            }
+            EventBody::VarChanged {
+                owner,
+                name,
+                old,
+                new,
+            } => {
+                hasher.write_str(self.name());
+                owner.state_hash(hasher);
+                hasher.write_str(name);
+                old.state_hash(hasher);
+                new.state_hash(hasher);
             }
         }
     }
@@ -698,6 +801,32 @@ pub const KERNEL_EVENTS: &[EventInfo] = &[
             ("realm", "int", "The realm's id."),
         ],
         doc: "A tract that has just been loaded asks for something to be put into the world at `here`: its generator's request, or one left for it (02 §9.4).",
+    },
+    EventInfo {
+        name: "var_changed",
+        subjects: &[
+            ("self?", "entity"),
+            ("here?", "loc"),
+            ("area?", "area"),
+            ("site?", "site"),
+            ("tract?", "tract"),
+            ("realm?", "realm"),
+        ],
+        fields: &[
+            ("name", "string", "The variable's qualified name."),
+            (
+                "scope",
+                "string",
+                "The kind of what the variable lives on: `entity`, `loc`, `area`, `site`, `tract`, `realm` or `global`.",
+            ),
+            (
+                "old",
+                "any",
+                "What it read as before: its value, or its default if it was not set.",
+            ),
+            ("new", "any", "What it reads as now."),
+        ],
+        doc: "A variable declared with `\"watch\": true` changed (05 §6). What it lives on is bound under the name of its kind: an entity as `self`, a cell as `here`, an area, a site, a tract or a realm under those names; a global variable binds nothing.",
     },
     EventInfo {
         name: "fault",
