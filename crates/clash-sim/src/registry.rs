@@ -331,6 +331,7 @@ impl FunctionDef {
 pub fn engine_properties() -> Vec<PropertyDef> {
     let mut properties = crate::props::properties();
     properties.extend(crate::item::properties());
+    properties.extend(crate::movement::properties());
     properties
 }
 
@@ -395,6 +396,7 @@ pub fn register_engine(registry: &mut Registry) {
         }
     }
     crate::item::register_types(registry);
+    crate::movement::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)
@@ -415,6 +417,9 @@ pub fn register_engine(registry: &mut Registry) {
         mirror_event(registry, info);
     }
     crate::item::register_events(registry);
+    for info in crate::movement::MOVEMENT_EVENTS {
+        mirror_event(registry, info);
+    }
 }
 
 /// The registry of everything the simulation offers so far: the

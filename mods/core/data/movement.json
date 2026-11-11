@@ -1,0 +1,52 @@
+[
+  { "//": "Walking: on anything that can be stood on, up and down ramps and stairs, over what is no taller than a low step. A load slows it: carrying one's own weight again roughly halves the pace. Every creature that lists no ways of moving of its own walks.",
+    "type": "movement", "id": "walk", "name": "walking",
+    "surface": "standable",
+    "speed": "1.4 / (1 + (self.carried_mass ?? 0) / 60)",
+    "step_up": 0.5,
+    "noise": 0.3,
+    "default": true },
+
+  { "type": "posture", "id": "standing", "name": "standing", "height": 1.0 },
+  { "type": "posture", "id": "crouched", "name": "crouched", "height": 0.6, "speed": 0.5, "signature": 0.6 },
+  { "type": "posture", "id": "prone", "name": "prone", "height": 0.2, "speed": 0.15, "signature": 0.3 },
+
+  { "//": "One step to the cell next to the actor. `requires` is what the actor believes: it is shown before the step is asked for. The phase lasts as long as the step takes, in the actor's own time, and the step itself is taken as the phase ends, checked against the world as it then is: a door shut in the meantime refuses it, and `step_refused` says why. Someone in the air or in water steps too, so no footing is asked for.",
+    "type": "action", "id": "step", "name": "Step",
+    "params": { "dir": "string" },
+    "requires": "self.can_step($dir)",
+    "fail_text": "{self.step_fault($dir) ?? 'that is not a way to go'}.",
+    "footing": false,
+    "phases": [
+      { "id": "stride", "time": "self.step_time($dir) ?? 0", "cancel": true,
+        "on_exit": [ { "step": { "who": "self", "dir": { "expr": "$dir" } } } ] }
+    ] },
+
+  { "//": "Walks to a cell. `plan` plans a path from what the actor believes and keeps it; `stride` lasts as long as the path's next step takes and takes it as it ends. A step that is refused marks the path stale, and `plan` then plans again, round the cell that refused; when no plan is left `plan_path` raises `path_failed` with the reason and the action ends where the actor stands.",
+    "type": "action", "id": "go_to", "name": "Go to",
+    "params": { "to": "cell" },
+    "requires": "self.speed > 0",
+    "fail_text": "You cannot move.",
+    "footing": false,
+    "phases": [
+      { "id": "plan", "time": 0,
+        "do": [ { "plan_path": { "who": "self", "to": "$to" } } ],
+        "next": [ { "if": "self.path_left > 0", "goto": "stride" }, { "finish": true } ] },
+      { "id": "stride", "time": "self.step_time(self.path_next ?? '') ?? 0", "cancel": true,
+        "on_exit": [ { "follow_path": "self" } ],
+        "next": [ { "if": "self.path_stale", "goto": "plan" },
+                  { "if": "self.path_left > 0", "goto": "stride" },
+                  { "finish": true } ] }
+    ],
+    "on_cancel": [ { "clear_path": "self" } ],
+    "on_interrupt": [ { "clear_path": "self" } ] },
+
+  { "//": "Takes a posture: stands up, crouches, lies down. The posture is taken as the phase ends.",
+    "type": "action", "id": "set_posture", "name": "Change posture",
+    "params": { "posture": "id<posture>" },
+    "requires": "not (self.posture == $posture)",
+    "phases": [
+      { "id": "shift", "time": "600 ms",
+        "on_exit": [ { "set_posture": { "who": "self", "posture": { "expr": "$posture" } } } ] }
+    ] }
+]

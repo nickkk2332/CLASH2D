@@ -69,6 +69,7 @@ pub mod host;
 pub mod item;
 pub mod later;
 pub mod mass;
+pub mod movement;
 mod props;
 pub mod reason;
 pub mod registry;
@@ -126,4 +127,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     stats::register_defs(types);
     body::register_defs(types);
     item::register_defs(types);
+    movement::register_defs(types);
 }
