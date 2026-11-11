@@ -41,7 +41,7 @@ start while the world model is being built.
 | K2 | Advance, commands, input log | M | K1, W9 | beta |
 | K3 | Events and hooks | M | K2, X2 | beta |
 | K4 | Subjects, properties, variable storage | L | K1, X3 | beta |
-| K5 | Rule runtime | L | K3, K4, X4 | todo |
+| K5 | Rule runtime | L | K3, K4, X4 | beta |
 | K6 | Queries and value sources | M | K5 | todo |
 | K7 | Timers, continuations, simulation saves | L | K5, W10 | todo |
 | K8 | World verbs | M | K5 | todo |
@@ -516,6 +516,30 @@ Done when
 - Each limit, when exceeded, reports and continues.
 - Scenario `rule_alarm`.
 
+As built (decisions D-470 to D-479), in `clash_sim::rule`. Beta: every
+item above is built and tested in `crates/clash-sim/tests/rules.rs`, with
+fixtures under `crates/clash-sim/tests/fixtures/rule/`, against a host
+trait, `RuleHost`, and a fake host, as the console was. Built: the `eoc`,
+`rule_group` and `reason` definition types; the `Effects` field type,
+which action definitions now use; compiled effect trees for every effect
+of 05 §10.2, §10.3 and §10.5, `queue` among them; verbs checked against
+their `VerbSpec`; rules with parameters as verbs; the interpreter with an
+explicit stack and the limits of 05 §13.2; `RuleState` (attachments, run
+records, switched groups) with save and hash; `RuleSet::deliver`, which
+runs what answers an event in the order of 05 §8.3. The review additions
+"Returning from rules", "Rule groups" and the attached half of "Rules at
+lower detail" are built; the bodies of the test scripts `rule_alarm` and
+`winter_rules` are tests of those names. Waits: binding to `Sim`, which
+is six steps listed in the module's documentation and needs the
+subjects and properties of K4 (the kernel must also raise its save
+version for the new `RuleState`); timers and continuations, `after`,
+`every`, `cancel_timer` and a rule's own `every`, which are read, kept
+and report when they run (K7); queries, so `for_each` over one reports
+and a value source over one gives null (K6); the world's verbs (K8);
+`message` and `ask` (K9); tracing (K10). The two test scripts become
+`.scn` files once the simulation implements the console's host. No
+benchmark.
+
 ### K6 — Queries and value sources
 
 **Spec** 05 §7.4, §11 · **Size** M
@@ -629,10 +653,10 @@ action is read without a lookup by name: phases by index, channels as a
 `ChannelSet`, locals in one fixed order of slots that every expression was
 compiled against. The reasons for the refusals of 03 §6 to §8 are
 constants in `clash_sim::action::reason`. `clash_sim::action::register_defs`
-registers the three types and is called by `clash-tools`. Stubbed: effect
-lists are kept as the located JSON they were written as (`EffectsSource`)
-and nothing in them is checked until the rule runtime compiles effects
-(K5). Of the review additions, the definition halves are built: `footing`
+registers the three types and is called by `clash-tools`. Effect lists
+are `Effects` fields of the rule runtime (K5), compiled in
+`ActionDef::effect_scope` with the action's locals. Of the review
+additions, the definition halves are built: `footing`
 with its reason, and list parameters with their bounds, element type and
 indexing. The run-time halves are T3's: refusing an actor with nothing
 under it, holding a list to its bounds when a command gives it, and

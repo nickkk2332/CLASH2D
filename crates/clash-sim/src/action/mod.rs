@@ -14,7 +14,7 @@
 //! | [`ChannelSet`], [`ActionDefId`], [`ChannelId`], [`WindowKindId`], [`PhaseIndex`] | The ids, and channels as a bitset. They depend on nothing else in the crate. |
 //! | [`ActionDef`], [`ChannelDef`], [`WindowKindDef`] | The definition types. |
 //! | [`Phase`], [`Transition`], [`PhaseWindow`], [`Tick`], [`Param`], [`Var`], [`Role`], [`ChannelUse`] | What an action is made of. |
-//! | [`EffectsSource`] | An effect list as it was written, until the rule runtime compiles effects. |
+//! | [`Effects`] | A list of effects, compiled by the rule runtime ([`rule`](crate::rule)). |
 //! | [`reason`] | The reasons the action system gives when it declines (14 §5). |
 //!
 //! # Loading
@@ -31,9 +31,9 @@
 //!    reachable from the first and every window must be able to close.
 //!    Names of roles, parameters and variables must be distinct.
 //! 3. **Compile.** Types of parameters and variables are read, the
-//!    locals are laid out in slots, and every expression is compiled
-//!    against that one layout. What each field may read is in the table
-//!    on [`ActionDef`].
+//!    locals are laid out in slots, and every expression and every list
+//!    of effects is compiled against that one layout. What each field
+//!    may read is in the table on [`ActionDef`].
 //!
 //! What comes out is immutable and is the same struct the registry
 //! holds: `defs.get::<ActionDef>(id)`.
@@ -106,14 +106,16 @@
 //! [`reason::CANCEL_ONLY_FOR`]); on a held phase it is release. The
 //! `interrupt` effect is ignored while [`Phase::uninterruptible`].
 //!
+//! **Running effects.** An effect list is run with
+//! [`RuleSet::run_effects`](crate::rule::RuleSet::run_effects): the one
+//! subject is the actor, and the locals are the instance's, which `set`
+//! and `add` change in place.
+//!
 //! **Saving.** An instance is its [`ActionDefId`], its [`PhaseIndex`],
 //! its locals and its wake-ups. All of them are plain values.
 //!
 //! # What is not here yet
 //!
-//! - Effect lists are kept as written ([`EffectsSource`]) and nothing in
-//!   them is checked. The rule runtime (package K5) compiles them, in
-//!   [`ActionDef::effect_scope`].
 //! - The fields later documents add to an action: `attacks` and
 //!   `defence` (07), `cutscene` (12), the `choice` parameter type
 //!   (08 §9.2). A definition that writes one is told the key is unknown.
@@ -129,9 +131,9 @@ pub mod reason;
 use clash_data::DefTypes;
 
 pub use def::{
-    ACTOR_SUBJECT, ActionDef, CancelRule, ChannelDef, ChannelNeed, ChannelUse, EffectsSource,
-    ListBounds, Local, LocalSource, MIN_ROLES, Next, Param, Phase, PhaseRef, PhaseTime,
-    PhaseWindow, Role, Slots, Tick, Transition, Var, WINDOW_LOCAL, WindowKindDef,
+    ACTOR_SUBJECT, ActionDef, CancelRule, ChannelDef, ChannelNeed, ChannelUse, Effects, ListBounds,
+    Local, LocalSource, MIN_ROLES, Next, Param, Phase, PhaseRef, PhaseTime, PhaseWindow, Role,
+    Slots, Tick, Transition, Var, WINDOW_LOCAL, WindowKindDef,
 };
 pub use ids::{ActionDefId, ChannelId, ChannelSet, PhaseIndex, WindowKindId};
 

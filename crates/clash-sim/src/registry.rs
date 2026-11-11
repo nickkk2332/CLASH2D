@@ -454,7 +454,9 @@ fn registry_step(cx: &mut RegistryCx<'_>) {
                 Some(FieldType::Str) => Type::Str,
                 Some(FieldType::Any) | None => Type::Any,
             };
-            spec = spec.field(field.clone(), ty.nullable(), "");
+            // As declared: a rule that emits the event gives every field
+            // (05 §10.5), so a listener need not guard against null.
+            spec = spec.field(field.clone(), ty, "");
         }
         if def.hook {
             spec = spec.hook(def.mutable.iter().cloned());

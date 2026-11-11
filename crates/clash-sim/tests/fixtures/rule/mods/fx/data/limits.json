@@ -1,0 +1,114 @@
+[
+  {
+    "//": "05 §13.2: a loop that never ends is ended by the step budget.",
+    "type": "eoc", "id": "spin",
+    "do": [ { "note": "spinning" }, { "while": "true", "do": [] }, { "note": "never" } ]
+  },
+  {
+    "//": "A rule that runs another that never ends: the whole run is ended.",
+    "type": "eoc", "id": "spin_inside",
+    "do": [ { "run": "spin" }, { "note": "never" } ]
+  },
+
+  {
+    "//": "05 §13.2: a rule that calls itself is refused at the call depth, and each caller carries on.",
+    "type": "eoc", "id": "deeper",
+    "subjects": { "self": "entity" },
+    "params": { "n": "int" },
+    "do": [
+      { "set": { "self.var.n": "$n" } },
+      { "deeper": { "n": "$n + 1" } },
+      { "add": { "self.var.x": 1 } }
+    ]
+  },
+
+  {
+    "//": "05 §13.2: a value that wraps itself is refused once it is too deep.",
+    "type": "eoc", "id": "nest",
+    "subjects": { "self": "entity" },
+    "do": [
+      { "set": { "self.var.nest": [] } },
+      { "repeat": 100, "do": [ { "set": { "self.var.nest": "[self.var.nest]" } } ] },
+      { "let": { "mine": [] } },
+      { "repeat": 100, "do": [ { "set": { "$mine": "[$mine]" } } ] },
+      { "note": "done" }
+    ]
+  },
+
+  {
+    "//": "05 §13.2: a list that grows past the size limit stops growing.",
+    "type": "eoc", "id": "swell",
+    "subjects": { "self": "entity" },
+    "do": [
+      { "repeat": 10, "do": [ { "add": { "self.var.log": "x" } } ] },
+      { "note": "done" }
+    ]
+  },
+
+  {
+    "//": "05 §13.2: more rules queued than the queue holds.",
+    "type": "eoc", "id": "flood",
+    "do": [ { "repeat": 20, "do": [ { "queue": "plain" } ] }, { "note": "flooded" } ]
+  },
+
+  {
+    "//": "05 §13.2: a hook raised from inside itself is skipped at the hook depth.",
+    "type": "event", "id": "echo",
+    "subjects": { "caster": "entity" },
+    "fields": { "n": "int" },
+    "hook": true
+  },
+  {
+    "type": "eoc", "id": "echoes",
+    "on": "echo",
+    "do": [
+      { "add": { "caster.var.n": 1 } },
+      { "emit": { "event": "echo", "caster": "caster", "n": "event.n + 1" } }
+    ]
+  },
+
+  {
+    "//": "Timers are read and kept, and say so when they run.",
+    "type": "eoc", "id": "later",
+    "do": [
+      { "after": "2 s", "name": "fuse", "while_unloaded": "elapse", "do": [ { "note": "late" } ] },
+      { "every": "1 s", "times": 3, "do": [ { "note": "again" } ] },
+      { "cancel_timer": "fuse" },
+      { "note": "now" }
+    ]
+  },
+  {
+    "//": "A query is kept as written, and says so when it is iterated.",
+    "type": "eoc", "id": "asks",
+    "do": [
+      { "for_each": { "entities": { "around": "self", "radius": 3 } }, "as": "e",
+        "do": [ { "note": "found" } ] },
+      { "note": "asked" }
+    ]
+  },
+
+  {
+    "//": "What the simulation refuses is reported, and the rule carries on.",
+    "type": "eoc", "id": "refused",
+    "subjects": { "self": "entity" },
+    "params": { "nobody": "entity?" },
+    "do": [
+      { "refuse": { "why": "not today" } },
+      { "set": { "self.sealed": 1 } },
+      { "emit": { "event": "sim_started" } },
+      { "set": { "$nobody.var.n": 1 } },
+      { "set": { "self.var.nest": { "expr": "'a text'" } } },
+      { "add": { "self.var.nest": 1 } },
+      { "set": { "self.var.log[5]": "far" } },
+      { "note": "carried on" }
+    ]
+  },
+
+  {
+    "//": "A value of the wrong type is returned as null.",
+    "type": "eoc", "id": "returns_wrongly",
+    "params": { "what": "any" },
+    "returns": "int",
+    "do": [ { "return": "$what" } ]
+  }
+]

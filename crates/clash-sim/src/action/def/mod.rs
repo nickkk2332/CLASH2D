@@ -8,7 +8,6 @@
 //! slots. See the [module above](crate::action) for how it is walked.
 
 mod channel;
-mod effects;
 mod param;
 mod phase;
 mod window;
@@ -26,8 +25,8 @@ use clash_data::{
 use serde::Deserialize;
 use serde::de::{Deserializer, MapAccess, Visitor};
 
+pub use crate::rule::Effects;
 pub use channel::{ChannelDef, ChannelNeed, ChannelUse, Slots};
-pub use effects::EffectsSource;
 pub use param::{ListBounds, Local, LocalSource, Param, Var, WINDOW_LOCAL};
 pub use phase::{
     CancelRule, HOLD, Next, Phase, PhaseRef, PhaseTime, PhaseWindow, Tick, Transition,
@@ -168,8 +167,10 @@ fn unit_tempo() -> Expr<Number> {
 ///
 /// A parameter's `default` sees the locals before the parameter, and its
 /// `check` those and the parameter itself; `name` sees no locals. Effect
-/// lists are not compiled yet ([`EffectsSource`]); they will read truth
-/// in [`effect_scope`](ActionDef::effect_scope).
+/// lists ([`Effects`]) read truth and may draw at random; they are
+/// compiled in [`effect_scope`](ActionDef::effect_scope), and whatever
+/// they define with `let` takes the slots after the action's own
+/// locals.
 #[derive(Debug, Deserialize)]
 pub struct ActionDef {
     /// What the action is called, shown to players. A text template in
@@ -218,20 +219,20 @@ pub struct ActionDef {
     phases: Vec<Phase>,
     /// Effects run when the action starts, before its first phase.
     #[serde(default)]
-    pub on_start: EffectsSource,
+    pub on_start: Effects,
     /// Effects run when the last phase has ended.
     #[serde(default)]
-    pub on_finish: EffectsSource,
+    pub on_finish: Effects,
     /// Effects run when the actor abandons the action.
     #[serde(default)]
-    pub on_cancel: EffectsSource,
+    pub on_cancel: Effects,
     /// Effects run when the action is ended against the actor's will.
     #[serde(default)]
-    pub on_interrupt: EffectsSource,
+    pub on_interrupt: Effects,
     /// Effects run when the action ends because its actor left the
     /// simulation (03 §9).
     #[serde(default)]
-    pub on_abandon: EffectsSource,
+    pub on_abandon: Effects,
     #[serde(default)]
     roles: Option<Located<Roles>>,
     /// Free-form tags, queryable by rules and named by a phase's
@@ -353,10 +354,29 @@ impl ActionDef {
         with_locals(Scope::new().mind(ACTOR_SUBJECT, ENTITY_KIND), &self.locals)
     }
 
-    /// The scope the action's effect lists are to be compiled in: they
-    /// read truth and may draw at random.
+    /// The scope the action's effect lists are compiled in: they read
+    /// truth and may draw at random.
     pub fn effect_scope(&self) -> Scope {
         self.scope()
+    }
+
+    /// Every effect list of the action, in the order written: its own
+    /// five, then for each phase `do`, `on_exit` and the tick's.
+    pub fn effect_lists(&self) -> impl Iterator<Item = &Effects> {
+        let own = [
+            &self.on_start,
+            &self.on_finish,
+            &self.on_cancel,
+            &self.on_interrupt,
+            &self.on_abandon,
+        ];
+        let phases = self.phases.iter().flat_map(|phase| {
+            [Some(&phase.on_enter), Some(&phase.on_exit)]
+                .into_iter()
+                .chain([phase.tick.as_ref().map(|tick| &tick.effects)])
+                .flatten()
+        });
+        own.into_iter().chain(phases)
     }
 
     /// An action that does nothing: one phase of no length. What a
@@ -378,11 +398,11 @@ impl ActionDef {
             on_behalf: false,
             ready: None,
             phases: vec![Phase::inert(nowhere)],
-            on_start: EffectsSource::empty(),
-            on_finish: EffectsSource::empty(),
-            on_cancel: EffectsSource::empty(),
-            on_interrupt: EffectsSource::empty(),
-            on_abandon: EffectsSource::empty(),
+            on_start: Effects::empty(),
+            on_finish: Effects::empty(),
+            on_cancel: Effects::empty(),
+            on_interrupt: Effects::empty(),
+            on_abandon: Effects::empty(),
             roles: None,
             tags: TagSet::new(),
             low_attention: false,
@@ -903,9 +923,27 @@ impl Def for ActionDef {
                 cx.compile(&mut window.aimed_at, &aimed);
             }
         }
+
+        // The effect lists: truth, with the action's locals.
+        let effects = self.effect_scope();
+        cx.compile(&mut self.on_start, &effects);
+        cx.compile(&mut self.on_finish, &effects);
+        cx.compile(&mut self.on_cancel, &effects);
+        cx.compile(&mut self.on_interrupt, &effects);
+        cx.compile(&mut self.on_abandon, &effects);
+        for phase in &mut self.phases {
+            cx.compile(&mut phase.on_enter, &effects);
+            cx.compile(&mut phase.on_exit, &effects);
+            if let Some(tick) = &mut phase.tick {
+                cx.compile(&mut tick.effects, &effects);
+            }
+        }
     }
 
     fn validate(&self, cx: &mut ValidateCx<'_>) {
+        for effects in self.effect_lists() {
+            effects.validate(cx);
+        }
         let constant = |expr: &Expr<Number>| expr.constant().and_then(|value| value.as_number());
         let mut refuse_at = |span: Option<Span>, path: String, message: &str| {
             let mut diagnostic = Diagnostic::new(code::VALIDATION, message).with_path(path);

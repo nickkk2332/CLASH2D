@@ -6,8 +6,9 @@
 //! table, the file, line and column, the definition and the JSON path.
 //! The second and third digits follow the compiler's groups: `060` and
 //! `061` syntax, `062` and `063` names, `064` types, `066` purity and
-//! belief, `067` and `068` what this stage finds itself, `069` what goes
-//! wrong while an expression runs.
+//! belief, `067` what this stage finds itself, `068` what the rule
+//! runtime finds in a list of effects or a rule, `069` what goes wrong
+//! while an expression runs.
 
 use crate::diag::{Code, CodeInfo, Severity};
 
@@ -155,6 +156,18 @@ expr_codes! {
         "A value source is not well formed.",
         "Where an expression string cannot say a value, an object can (05 §7.4): `{ \"expr\": \"…\" }`, `{ \"call\": \"function\", \"args\": { … } }`, or a query under `count`, `collect`, `first`, `pick`, `sum`, `min` or `max`. A `call` names a function definition and gives its arguments by parameter name.";
 
+    UNKNOWN_EFFECT = "E0681", Error, "compile", None,
+        "An effect names nothing that can be done.",
+        "An effect is an object with one key, its verb (05 §10.1): one of the effects of 05 §10.2 to §10.5, a verb a subsystem registered, or a rule that takes parameters. Nothing of the name under the caret was found. A rule is looked up in the mod's own namespace and then in each namespace it imports; one with no `params` is run with `{ \"run\": \"its_id\" }`.";
+    BAD_EFFECT = "E0682", Error, "compile", None,
+        "An effect is not well formed.",
+        "Each effect takes its arguments in a fixed form (05 §10): a verb takes them by name in an object, or its one obvious argument directly; `if` takes `then` and `else`; a loop takes `do`. The message says what is missing, unknown or misplaced, and shows what the effect takes.";
+    MISPLACED_EFFECT = "E0683", Error, "compile", None,
+        "An effect is used where it has no meaning.",
+        "`return` gives a value to whoever called a rule, so it is written in a rule and nowhere else. `modify`, `cancel_event` and `consume` act on the event a rule is handling: `modify` and `cancel_event` only in a rule that listens for a hook, and `modify` only on a field the hook declares mutable (05 §8.2, §10.5). A `run` or `emit` whose result is wanted is written as the value of a `let`.";
+    BAD_RULE = "E0684", Error, "compile", None,
+        "A rule, a rule group or a reason is not well formed.",
+        "A rule names the event it listens for in `on`, which must be registered; `as` and `filter` name a subject and fields of that event; `params` are named like locals, and those with a default come last; `returns` and the kinds in `subjects` are types as the language writes them (05 §9). A reason's `values` are named like locals and typed the same way (14 §15).";
     RUN_NULL_ARITHMETIC = "W0691", Warning, "run time", Some("X901"),
         "While running, arithmetic met a null.",
         "A value was needed and what arrived was null: a target that no longer exists, a variable that was never set, a property of something that is not loaded (05 §4.4). The operation gave null. Give a value for that case with `??`.";

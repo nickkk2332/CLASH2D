@@ -1584,7 +1584,7 @@ fn the_simulations_events_are_event_types_of_the_expression_language() {
     let ritual = spec("core:ritual_completed");
     assert_eq!(ritual.subjects[0], ("caster".to_owned(), kinds.entity));
     assert_eq!(ritual.fields[0].name, "power");
-    assert_eq!(ritual.fields[0].ty, Type::Real.nullable());
+    assert_eq!(ritual.fields[0].ty, Type::Real);
 
     // An expression in an event's scope type-checks against it, and is
     // evaluated against what the event binds.

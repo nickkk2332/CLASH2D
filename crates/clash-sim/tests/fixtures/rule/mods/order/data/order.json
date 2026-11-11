@@ -1,0 +1,58 @@
+[
+  { "type": "variable", "id": "trace", "scope": "global", "value": "list<string>", "default": [],
+    "doc": "The rules that ran, in order." },
+  { "type": "variable", "id": "count", "scope": "entity", "value": "int", "default": 0,
+    "doc": "How often a rule attached to this one ran." },
+
+  { "//": "05 §8.3: global rules, by priority and then by id.",
+    "type": "eoc", "id": "b_low", "on": "alarm_tripped",
+    "do": [ { "add": { "global.var.trace": "b_low" } } ] },
+  { "type": "eoc", "id": "a_low", "on": "alarm_tripped",
+    "do": [ { "add": { "global.var.trace": "a_low" } } ] },
+  { "type": "eoc", "id": "z_high", "on": "alarm_tripped", "priority": 5,
+    "do": [ { "add": { "global.var.trace": "z_high" } } ] },
+
+  { "//": "05 §8.4: a filter on two fields; the first is the index.",
+    "type": "eoc", "id": "filtered", "on": "alarm_tripped", "priority": 1,
+    "filter": { "kind": "glass", "loud": true },
+    "do": [ { "add": { "global.var.trace": "filtered" } } ] },
+
+  { "//": "05 §9.3: attached rules, after the global ones, by the event's subjects in order.",
+    "type": "eoc", "id": "on_here", "on": "alarm_tripped", "attached": true,
+    "do": [ { "add": { "global.var.trace": "on_here" } } ] },
+  { "type": "eoc", "id": "on_who", "on": "alarm_tripped", "attached": true, "as": "who", "priority": 9,
+    "do": [ { "add": { "global.var.trace": "on_who" } }, { "add": { "self.var.count": 1 } } ] },
+
+  { "//": "05 §9.1: once.",
+    "type": "eoc", "id": "once_only", "on": "alarm_tripped", "once": true,
+    "filter": { "kind": "once" },
+    "if": "event.loud",
+    "do": [ { "add": { "global.var.trace": "once" } } ] },
+
+  { "//": "05 §9.1: cooldown, on the owner's clock.",
+    "type": "eoc", "id": "cooled", "on": "alarm_tripped", "cooldown": "10 s",
+    "filter": { "kind": "cool" },
+    "do": [ { "add": { "global.var.trace": "cooled" } } ] },
+  { "type": "eoc", "id": "cooled_each", "on": "alarm_tripped", "attached": true, "as": "who",
+    "cooldown": "10 s",
+    "filter": { "kind": "cool" },
+    "do": [ { "add": { "self.var.count": 1 } } ] },
+
+  { "//": "05 §8.3: consume and skip_if_consumed.",
+    "type": "eoc", "id": "eater", "on": "alarm_tripped", "priority": 3,
+    "filter": { "kind": "eat" },
+    "do": [ { "consume": {} }, { "add": { "global.var.trace": "eater" } } ] },
+  { "type": "eoc", "id": "polite", "on": "alarm_tripped", "skip_if_consumed": true,
+    "filter": { "kind": "eat" },
+    "do": [ { "add": { "global.var.trace": "polite" } } ] },
+  { "type": "eoc", "id": "rude", "on": "alarm_tripped",
+    "filter": { "kind": "eat" },
+    "do": [ { "add": { "global.var.trace": "rude" } } ] },
+
+  { "//": "05 §9.1: if and else.",
+    "type": "eoc", "id": "picky", "on": "alarm_tripped",
+    "filter": { "kind": "pick", "energy": 12 },
+    "if": "event.loud",
+    "do": [ { "add": { "global.var.trace": "yes" } } ],
+    "else": [ { "add": { "global.var.trace": "no" } } ] }
+]

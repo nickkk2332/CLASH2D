@@ -528,6 +528,15 @@ loader adds to a copy of it what the mods define:
 4. `function` definitions (05 §12), by signature first so that bodies may
    call each other in any order.
 
+**Effects.** A list of effects is a field like the others: the type
+holds it in an `Effects`, hands it to `cx.compile` with the scope its
+effects run in, and in `validate` calls the list's own `validate`, which
+checks the rules it calls against what those rules need (05 §14). A
+piece of a definition that is kept as a tree and read when it is
+compiled, as an effect's arguments are, is read with `from_node_at`,
+which is given the JSON path of the piece so that what is found in it
+is reported at its whole path.
+
 `function` and `variable` are definition types of the data layer itself,
 registered with `clash_data::expr::register_defs`. The finished registry,
 the compiled functions and the variable declarations are part of `Defs`.
@@ -619,8 +628,9 @@ The compile stage has such a table. Each code of the expression compiler
 (05 §14) has a code in group `06`: `060` and `061` for syntax, `062` and
 `063` for names, `064` for types, `066` for purity and belief. `067` is
 what the stage finds itself (a bad type name, a function that always
-calls itself, a malformed function, variable or value source), and `069`
-stands for what goes wrong while an expression runs.
+calls itself, a malformed function, variable or value source), `068` is
+what the rule runtime finds in a list of effects or a rule (05 §10.1),
+and `069` stands for what goes wrong while an expression runs.
 
 ### 8.3 Outcome
 

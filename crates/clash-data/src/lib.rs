@@ -92,7 +92,7 @@ pub mod mods;
 pub mod source;
 pub mod units;
 
-pub use de::from_node;
+pub use de::{from_node, from_node_at};
 pub use defs::{
     CrossCheck, CrossCx, Def, DefTypes, Defs, DefsView, FinishCx, FinishedTree, LoadedModInfo,
     Registry, RegistryCx, RegistryStep, TagTable, TypeInfo, ValidateCx,

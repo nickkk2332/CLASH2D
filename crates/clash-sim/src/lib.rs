@@ -28,6 +28,7 @@
 //! | Saving and loading | [`Sim::save`], [`Sim::load`], then [`Sim::reindex`] |
 //! | Replay | [`Sim::input_log`], [`Sim::replay`] |
 //! | Why something was refused | [`Reason`]; the kernel's are listed in [`KERNEL_REASONS`] |
+//! | Rules, effects and the interpreter | [`rule`]: [`rule::EocDef`], [`rule::Effects`], [`rule::RuleSet`], [`rule::RuleHost`] |
 //! | The definition types of this crate | [`register_defs`] |
 //! | Components | [`Sim::components`], [`Sim::components_mut`]; a `Physical` through [`Sim::set_shape`] and [`Sim::set_own_mass`]; see [`mass`] |
 //! | Tickets, loading and unloading | [`Sim::start_session`], [`Sim::hold_ticket`], [`Sim::reconcile_activity`]; generators and store with [`Sim::with_io`]; see [`activity`] |
@@ -69,6 +70,7 @@ pub mod mass;
 mod props;
 pub mod reason;
 pub mod registry;
+pub mod rule;
 mod sim;
 pub mod stats;
 pub mod subject;
@@ -112,7 +114,11 @@ pub use vars::{Assign, MAX_VAR_NESTING};
 /// [`engine_registry`].
 pub fn register_defs(types: &mut clash_data::DefTypes) {
     bus::register_defs(types);
-    action::register_defs(types);
+    // Before the rules: the kernel's step enters a mod's events into the
+    // expression registry with their cause subjects, and the rule
+    // runtime's step leaves alone what is already there.
     registry::register_defs(types);
+    rule::register_defs(types);
+    action::register_defs(types);
     stats::register_defs(types);
 }
