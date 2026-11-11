@@ -615,14 +615,15 @@ impl GameHost {
         Ok(out)
     }
 
-    fn paint(&mut self) -> HostResult<clash_scene::Frame> {
+    /// The painter for the running game's definitions, made the first
+    /// time it is wanted.
+    fn painter(&mut self) -> HostResult<(&Game, &Painter)> {
         let game = self.game.as_ref().ok_or_else(|| {
             refuse(
                 reasons::NO_GAME,
                 "no simulation is running; `use <profile>` starts one",
             )
         })?;
-        let here = game.here()?;
         let world = game.sim.truth().cosmos().defs();
         if !self
             .painter
@@ -635,8 +636,29 @@ impl GameHost {
         let Some(painter) = &self.painter else {
             return Err(HostError::failed("the frame could not be set up"));
         };
+        Ok((game, painter))
+    }
+
+    fn paint(&mut self) -> HostResult<clash_scene::Frame> {
+        let (game, painter) = self.painter()?;
+        let here = game.here()?;
         painter
             .paint(&game.sim, here, game.marks.cols, game.marks.rows)
+            .map_err(HostError::Failed)
+    }
+
+    /// Draws the storey of the cursor from above into an area of a
+    /// canvas, the cursor in the middle, as `frame` does: for a viewer
+    /// that draws its own lines round the map.
+    pub fn draw_map(
+        &mut self,
+        canvas: &mut clash_scene::Canvas<'_>,
+        area: clash_scene::Rect,
+    ) -> HostResult<()> {
+        let (game, painter) = self.painter()?;
+        let here = game.here()?;
+        painter
+            .paint_into(&game.sim, here, canvas, area)
             .map_err(HostError::Failed)
     }
 

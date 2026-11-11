@@ -10,7 +10,7 @@ use clash_scene::ui::ViewDef;
 use clash_scene::view::omniscient;
 use clash_scene::view::{FieldSeen, WorldGlyphs};
 use clash_scene::{
-    Canvas, EntitySprite, Frame, GlyphPart, SpriteId, SpriteKind, Theme, ThemeDef, UiDefs,
+    Canvas, EntitySprite, Frame, GlyphPart, Rect, SpriteId, SpriteKind, Theme, ThemeDef, UiDefs,
     WorldView,
 };
 use clash_sim::Sim;
@@ -71,9 +71,24 @@ impl Painter {
     /// with what really is there, the strongest field of each cell and
     /// whoever stands in it.
     pub fn paint(&self, sim: &Sim, at: Location, cols: u16, rows: u16) -> Result<Frame, String> {
+        let mut frame = Frame::new(cols, rows);
+        let area = frame.area();
+        self.paint_into(sim, at, &mut Canvas::new(&mut frame), area)?;
+        Ok(frame)
+    }
+
+    /// As [`paint`](Painter::paint), into an area of a canvas: for a
+    /// viewer that draws more round the map.
+    pub fn paint_into(
+        &self,
+        sim: &Sim,
+        at: Location,
+        canvas: &mut Canvas<'_>,
+        area: Rect,
+    ) -> Result<(), String> {
         let cosmos = sim.truth().cosmos();
         let mut view = WorldView::new(self.glyphs.clone(), at);
-        let (half_w, half_h) = (i32::from(cols) / 2 + 1, i32::from(rows) / 2 + 1);
+        let (half_w, half_h) = (area.w / 2 + 1, area.h / 2 + 1);
         let cells = CellBox::new(
             CellPos::new(
                 at.cell.x - half_w,
@@ -143,9 +158,7 @@ impl Painter {
             }
         }
 
-        let mut frame = Frame::new(cols, rows);
-        let area = frame.area();
-        view.paint_map(&self.def, area, &mut Canvas::new(&mut frame));
-        Ok(frame)
+        view.paint_map(&self.def, area, canvas);
+        Ok(())
     }
 }

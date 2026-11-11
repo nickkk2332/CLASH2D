@@ -16,6 +16,7 @@ use clash_data::DefTypes;
 mod data;
 mod save;
 mod scenario;
+mod worldview;
 
 /// Every definition type the engine knows.
 ///
@@ -39,10 +40,11 @@ pub const ENGINE_CHECKS: &[data::BuildCheck] = &[
 
 fn usage() -> String {
     format!(
-        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}",
+        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}\n{}",
         data::USAGE,
         scenario::USAGE,
-        save::USAGE
+        save::USAGE,
+        worldview::USAGE
     )
 }
 
@@ -59,6 +61,7 @@ fn main() -> ExitCode {
     let own = match command.as_str() {
         "scenario" => Some(scenario::run(rest)),
         "save" => Some(save::run(rest)),
+        "worldview" => Some(worldview::run(rest)),
         _ => None,
     };
     if let Some(output) = own {

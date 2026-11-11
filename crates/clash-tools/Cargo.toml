@@ -14,6 +14,7 @@ clash-gen.workspace = true
 clash-sim.workspace = true
 clash-save.workspace = true
 clash-scene.workspace = true
+clash-front-term.workspace = true
 
 [dev-dependencies]
 clash-time.workspace = true
