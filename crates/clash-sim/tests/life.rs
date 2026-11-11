@@ -524,8 +524,19 @@ fn unconsciousness_is_refused_a_command_and_minds_move() {
     let ada_pain = level(&sim, ada, "core:pain");
     let dog_pain = level(&sim, dog, "core:pain");
     let ada_blood = level(&sim, ada, "core:blood");
+    sim.set_control(ada, clash_sim::Control::Delegated, Cause::DEBUG)
+        .unwrap();
     sim.transfer_mind(ada, dog, true, Cause::DEBUG).unwrap();
     sim.pump();
+    // Control goes with the mind (06 §8.2).
+    assert_eq!(
+        sim.truth().entity(dog).unwrap().control(),
+        clash_sim::Control::Delegated
+    );
+    assert_eq!(
+        sim.truth().entity(ada).unwrap().control(),
+        clash_sim::Control::None
+    );
     assert!(sim.components().stats.get(ada).unwrap().has_pool(blood));
     assert_eq!(
         level(&sim, ada, "core:blood"),
@@ -871,4 +882,85 @@ fn a_replay_reproduces_the_hash() {
     advance_to(&mut second, Tick(400_000_000));
     assert_eq!(second.state_hash(), first.state_hash());
     assert_eq!(second.vital(who), first.vital(who));
+}
+
+/// A species of the tests' own, with choices of every kind, one inside
+/// an option.
+const SPECIES: &str = r#"[
+  { "type": "template", "id": "tinker", "kind": "species", "name": "Tinker",
+    "body": "humanoid", "pools": ["blood"], "mind": "careful",
+    "tags": ["tinker"], "items": ["core:toolkit"], "traits": ["core:steady_hands"],
+    "variables": { "guild": "'bellows'" },
+    "choices": [
+      { "id": "craft", "kind": "pick", "default": ["smith"],
+        "options": [
+          { "id": "smith", "traits": ["core:burn_scars"],
+            "choices": [ { "id": "metal", "kind": "pick", "options": [ { "id": "iron" }, { "id": "bronze" } ] } ] },
+          { "id": "weaver", "items": ["core:loom"] } ] },
+      { "id": "spares", "kind": "assemble", "budget": 2, "parts": ["arm", "hand"] },
+      { "id": "motto", "kind": "text", "sets": "description", "default": "measure twice" }
+    ] }
+]"#;
+
+#[test]
+fn every_kind_of_choice_takes_what_it_should_and_refuses_the_rest() {
+    let defs = common::life_defs(SPECIES);
+    let spec = CharacterSpec::of(["tinker"])
+        .with(
+            "tinker.craft.smith.metal",
+            Selection::Options(vec!["bronze".into()]),
+        )
+        .with(
+            "core:tinker.spares",
+            Selection::Options(vec!["arm".into(), "core:hand".into()]),
+        );
+    let resolved = resolve(&defs, &spec).unwrap();
+    assert_eq!(resolved.assembled.len(), 2);
+    assert_eq!(resolved.traits, ["core:steady_hands", "core:burn_scars"]);
+    assert_eq!(resolved.items, ["core:toolkit"]);
+    assert_eq!(resolved.description.as_deref(), Some("measure twice"));
+    assert_eq!(resolved.mind, Some(Some("careful".to_owned())));
+    assert!(
+        resolved
+            .select
+            .contains_key("core:tinker.craft.smith.metal")
+    );
+    // A nested choice is closed while its option is not chosen.
+    let weaver = CharacterSpec::of(["tinker"])
+        .with(
+            "core:tinker.craft",
+            Selection::Options(vec!["weaver".into()]),
+        )
+        .with(
+            "core:tinker.craft.smith.metal",
+            Selection::Options(vec!["iron".into()]),
+        );
+    assert_eq!(
+        resolve(&defs, &weaver).unwrap_err().code(),
+        "unknown_choice"
+    );
+    // Over budget, and a part it does not allow.
+    for parts in [vec!["arm", "arm", "hand"], vec!["leg"]] {
+        let spec = CharacterSpec::of(["tinker"]).with(
+            "core:tinker.spares",
+            Selection::Options(parts.into_iter().map(str::to_owned).collect()),
+        );
+        assert_eq!(resolve(&defs, &spec).unwrap_err().code(), "bad_selection");
+    }
+    // Made, it is told to whoever gives traits and items.
+    let mut sim = common::sim_over(defs, 12);
+    let made = sim.spawn_template(&spec, on(2, 2), Cause::DEBUG).unwrap();
+    assert_eq!(made.items, ["core:toolkit"]);
+    sim.pump();
+    let told = sim.drain_events();
+    let spawned = told
+        .iter()
+        .find(|event| event.name() == "entity_spawned")
+        .unwrap();
+    assert!(spawned.body.field("traits").is_some());
+    assert_eq!(sim.mind(made.entity).unwrap().profile(), Some("careful"));
+    assert_eq!(
+        sim.var(Subject::Entity(made.entity), "guild"),
+        Value::from("bellows")
+    );
 }
