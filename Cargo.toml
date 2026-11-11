@@ -35,6 +35,18 @@ thiserror = "2"
 # `Real` that passed through JSON would no longer be bit-identical (01 R1, R7).
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
+# Listed here ahead of use so that crates built in parallel do not each
+# edit this table. A crate that needs one adds `name.workspace = true` to
+# its own manifest. Nothing is downloaded until some crate does.
+smallvec = "1"
+bitflags = "2"
+indexmap = "2"
+rustc-hash = "2"
+lz4_flex = "0.14"
+redb = "4"
+rayon = "1"
+crossterm = "0.29"
+
 # Tests only.
 proptest = { version = "1", default-features = false, features = ["std"] }
 
