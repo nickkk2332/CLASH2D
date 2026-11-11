@@ -49,8 +49,8 @@ start while the world model is being built.
 | K10 | Tracing, explain, profile, console | M | K5, W11 | todo |
 | T1 | Clock assignment | M | K1 | beta |
 | T2 | Action definitions | M | X4 | beta |
-| T3 | Action runtime | L | T2, K5 | todo |
-| T4 | Control, plans, free decisions | M | T3 | todo |
+| T3 | Action runtime | L | T2, K5 | beta |
+| T4 | Control, plans, free decisions | M | T3 | beta |
 | T5 | Windows and reactions | M | T4, T1 | todo |
 | T6 | Joint actions | M | T5 | todo |
 | T7 | Unloading and lower detail | M | T3, K7 | todo |
@@ -529,10 +529,15 @@ records, switched groups) with save and hash; `RuleSet::deliver`, which
 runs what answers an event in the order of 05 §8.3. The review additions
 "Returning from rules", "Rule groups" and the attached half of "Rules at
 lower detail" are built; the bodies of the test scripts `rule_alarm` and
-`winter_rules` are tests of those names. Waits: binding to `Sim`, which
-is six steps listed in the module's documentation and needs the
-subjects and properties of K4 (the kernel must also raise its save
-version for the new `RuleState`); timers and continuations, `after`,
+`winter_rules` are tests of those names. The binding to `Sim` is built
+(decision D-540): the simulation is the rule host, one bus handler per
+event type a rule listens for, verbs by registry id from
+`engine_verbs()`, faults as thinned `fault` events, the save layout at
+version 4; `crates/clash-sim/tests/live_rules.rs` runs `rule_alarm` and
+`winter_rules` against the real simulation from fixture mods, across a
+save and a replay, and the kernel's verbs (D-541). Waits: rules carried
+by definitions (`rules_of`) until a definition type of the simulation
+carries `rules`; timers and continuations, `after`,
 `every`, `cancel_timer` and a rule's own `every`, which are read, kept
 and report when they run (K7); queries, so `for_each` over one reports
 and a value source over one gives null (K6); the world's verbs (K8);
@@ -702,6 +707,24 @@ Done when
   relocates beyond a pressure wave's front before it arrives (needs W15).
 - A zero-duration phase loop ends with an error after the transition limit.
 
+As built (decisions D-543, D-545). Beta: tested in
+`crates/clash-sim/tests/acting.rs` with the fixture mod `acts` under
+`crates/clash-sim/tests/fixtures/act/mods/`: `punch_timing` for five
+tempos and clock rates, `one_arm`, `time_stop_windup`, the transition
+limit, held phases with ticks, `until` and release, cancel rules and a
+follow-up breaking off a recovery, every refusal with its reason and no
+change of state, `footing`, `requires_at_start`, both hooks, list
+parameters across a save (the review additions "Footing" and "List
+parameters"), abandoning on leaving the world, an `ask` in an action's
+list answered after a save, every action verb, and a save and a replay
+in the middle of actions. Stubbed: `speedster_outruns_blast` (needs
+W15); slots are counted per channel, so a `part` parameter does not name
+a slot; a joint action claims only its first role's slots and offers no
+roles (T6); a phase's window is raised as `window_opened` and offered to
+nobody (T5); the queries of 03 §13 are not registered as properties;
+the test scripts are tests until the simulation implements the
+console's host; no benchmark.
+
 ### T4 — Control, plans, free decisions
 
 **Spec** 03 §5 · **Size** M
@@ -716,6 +739,17 @@ Done when
 - A plan step whose `requires` fails clears the plan and requests a
   decision with the reason.
 - A delegated entity accepts orders and is never asked.
+
+As built (decisions D-544, D-545). Beta: tested in
+`crates/clash-sim/tests/acting.rs`: a character starts a two-phase action
+from one command and is asked again exactly when it ends, while a
+second, on a clock twice as fast and paced by a rule standing in for the
+AI, interleaves; `party_order`; a plan step whose `requires` fails clears
+the plan and asks with the reason; a delegated character takes orders,
+is never asked and idles while something listens for
+`decision_needed`; `Wait`; commands to an entity nobody controls are
+refused. Stubbed: the AI that answers `decision_needed` (09); plans are
+not handed to the cold simulation (T7).
 
 ### T5 — Windows and reactions
 

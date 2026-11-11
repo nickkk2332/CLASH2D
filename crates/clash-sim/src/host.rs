@@ -117,6 +117,8 @@ pub struct SimHost<'a> {
     rng: Option<Rng>,
     warnings: Vec<RuntimeWarning>,
     dropped: usize,
+    /// Who a text is being written for (05 §4.6), if anyone.
+    reader: Option<EntityId>,
 }
 
 impl<'a> SimHost<'a> {
@@ -171,7 +173,7 @@ impl Host for SimHost<'_> {
     }
 
     fn call(&mut self, function: FunctionId, args: &[Value]) -> Value {
-        self.sim.call_function(function, args)
+        self.sim.call_function_for(function, args, self.reader)
     }
 
     fn rng(&mut self) -> Option<&mut Rng> {
@@ -307,6 +309,17 @@ impl Sim {
             rng: None,
             warnings: Vec::new(),
             dropped: 0,
+            reader: None,
+        }
+    }
+
+    /// A host as [`host`](Sim::host) makes it, for a text written for a
+    /// reader (05 §4.6): the text helpers say "you" of `reader` and name
+    /// everyone else as `reader` knows them ([`reader`](crate::reader)).
+    pub fn host_for_reader(&self, bound: Bound, reader: EntityId) -> SimHost<'_> {
+        SimHost {
+            reader: Some(reader),
+            ..self.host(bound)
         }
     }
 
@@ -322,6 +335,7 @@ impl Sim {
             rng: Some(rng),
             warnings: Vec::new(),
             dropped: 0,
+            reader: None,
         };
         let result = run(&mut host);
         if let Some(rng) = host.rng.take() {

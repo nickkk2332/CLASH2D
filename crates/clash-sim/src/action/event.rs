@@ -8,7 +8,7 @@
 //! its subjects and fields; the two hooks of 03 §13, which handlers may
 //! change or cancel, are in [`ACT_HOOKS`] and are raised as payloads.
 
-use clash_core::{Dur, EntityId, Real, StateHash, StateHasher, Tick, Value};
+use clash_core::{Dur, EntityId, Real, StateHash, StateHasher, Tick};
 use clash_expr::{EventSpec, Registry, Type};
 use serde::{Deserialize, Serialize};
 
@@ -195,7 +195,7 @@ pub enum ActEvent {
 }
 
 /// The name of a reason an entity is free, as data writes it.
-pub(crate) const fn free_name(why: &FreeReason) -> &'static str {
+pub const fn free_name(why: &FreeReason) -> &'static str {
     match why {
         FreeReason::Started => "started",
         FreeReason::Finished(_) => "finished",
@@ -540,7 +540,7 @@ pub const ACT_EVENTS: &[EventInfo] = &[
         name: "action_refused",
         subjects: ACTOR,
         fields: &[ACTION, CODE, MESSAGE],
-        doc: "An action that an effect or a plan asked for did not start: a failed `requires`, busy channels, a veto. A refused command is told its reason directly and raises nothing.",
+        doc: "An action that an effect or a plan asked for did not start: a failed `requires`, slots lacking, a veto. A command refused before any handler ran is told its reason directly and raises nothing; one that a handler of `action_starting` refused raises it.",
     },
     EventInfo {
         name: "plan_cleared",
@@ -735,11 +735,6 @@ pub(crate) fn register_hooks(registry: &mut Registry) {
         }
         let _ = registry.add_event(spec.hook(hook.mutable.iter().copied()));
     }
-}
-
-/// A duration in seconds as a field of an event.
-pub(crate) fn seconds(dur: Dur) -> Value {
-    Value::Real(dur.as_secs_real())
 }
 
 /// A field that holds seconds, as a duration: null and what is not a

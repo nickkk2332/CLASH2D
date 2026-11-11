@@ -510,7 +510,11 @@ fn an_action_uses_several_channels_and_every_slot_of_one() {
     assert_eq!(block.path(), "on_start");
     assert!(matches!(
         &block.effects()[0].kind,
-        EffectKind::Message { to: None, style: None, .. }
+        EffectKind::Message {
+            to: None,
+            style: None,
+            ..
+        }
     ));
     assert!(
         bellow

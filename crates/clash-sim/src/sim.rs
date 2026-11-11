@@ -480,6 +480,8 @@ impl Sim {
             // Nobody will be asked: what it was asked is settled now.
             self.settle_choices(id);
         }
+        // One that is free is asked by whoever now decides for it.
+        self.control_followed(id, cause);
         Ok(old)
     }
 

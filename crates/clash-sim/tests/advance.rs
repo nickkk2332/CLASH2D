@@ -610,6 +610,16 @@ fn decisions_stop_time_and_come_in_entity_order() {
         },
     )
     .unwrap();
+    // Each was asked what to do as it came under direct control
+    // (package T4); the test answers for them.
+    for entity in [first, second] {
+        assert!(matches!(
+            sim.answer_decision(entity),
+            Ok(DecisionKind::Free {
+                why: FreeReason::Started
+            })
+        ));
+    }
     // The second is on a clock of its own, twice as fast.
     sim.set_time_rate(second, Some(clash_core::Real::of(2.0)), Cause::DEBUG)
         .unwrap();

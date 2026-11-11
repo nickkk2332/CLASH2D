@@ -1,0 +1,153 @@
+[
+  { "type": "channel", "id": "arm", "name": "arm" },
+  { "type": "channel", "id": "voice" },
+  { "type": "window_kind", "id": "strike" },
+
+  { "type": "variable", "id": "quickness", "scope": "entity", "value": "real", "default": 1,
+    "doc": "What divides the time of a punch." },
+  { "type": "variable", "id": "nerve", "scope": "entity", "value": "int", "default": 1,
+    "doc": "Whether an entity goes through with a lunge." },
+  { "type": "variable", "id": "hits", "scope": "entity", "value": "int", "default": 0, "doc": "Blows landed." },
+  { "type": "variable", "id": "finished", "scope": "entity", "value": "int", "default": 0, "doc": "Actions finished." },
+  { "type": "variable", "id": "cancelled", "scope": "entity", "value": "int", "default": 0, "doc": "Actions cancelled." },
+  { "type": "variable", "id": "interrupted", "scope": "entity", "value": "int", "default": 0, "doc": "Actions interrupted." },
+  { "type": "variable", "id": "abandoned", "scope": "entity", "value": "int", "default": 0, "doc": "Actions abandoned." },
+  { "type": "variable", "id": "power", "scope": "entity", "value": "int", "default": -1, "doc": "What a charge came to." },
+  { "type": "variable", "id": "route_len", "scope": "entity", "value": "int", "default": 0, "doc": "How long a traced route was." },
+  { "type": "variable", "id": "route_start", "scope": "entity", "value": "loc", "doc": "Where a traced route began." },
+  { "type": "variable", "id": "answers", "scope": "entity", "value": "int", "default": 0, "doc": "Questions answered." },
+  { "type": "variable", "id": "paces", "scope": "entity", "value": "int", "default": 0, "doc": "Paces made." },
+
+  { "type": "action", "id": "punch",
+    "uses": { "arm": 1 },
+    "params": { "target": "entity" },
+    "tempo": "self.var.quickness",
+    "vars": { "landed": { "type": "bool", "default": false } },
+    "tags": ["strike"],
+    "phases": [
+      { "id": "windup", "time": "300 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "set": { "$landed": true } }, { "add": { "self.var.hits": 1 } } ] },
+      { "id": "recovery", "time": "400 ms", "cancel": ["follow_up"] }
+    ],
+    "on_finish": [ { "if": "$landed", "then": [ { "add": { "self.var.finished": 1 } } ] } ],
+    "on_cancel": [ { "add": { "self.var.cancelled": 1 } } ],
+    "on_interrupt": [ { "add": { "self.var.interrupted": 1 } } ],
+    "on_abandon": [ { "add": { "self.var.abandoned": 1 } } ] },
+
+  { "type": "action", "id": "jab",
+    "uses": { "arm": 1 },
+    "tags": ["follow_up"],
+    "phases": [ { "id": "snap", "time": "100 ms", "do": [ { "add": { "self.var.hits": 1 } } ] } ] },
+
+  { "type": "action", "id": "hook",
+    "uses": { "arm": 1 },
+    "phases": [ { "id": "swing", "time": "100 ms" } ] },
+
+  { "type": "action", "id": "hug",
+    "uses": { "arm": 2 },
+    "phases": [ { "id": "hold", "time": "1 s" } ] },
+
+  { "type": "action", "id": "shout",
+    "uses": { "voice": "all" },
+    "foreground": false,
+    "phases": [ { "id": "yell", "time": "2 s" } ] },
+
+  { "type": "action", "id": "step",
+    "uses": { "arm": 1 },
+    "phases": [
+      { "id": "lift", "time": "200 ms" },
+      { "id": "land", "time": "300 ms", "do": [ { "add": { "self.var.paces": 1 } } ] }
+    ] },
+
+  { "type": "action", "id": "lunge",
+    "requires_at_start": "self.var.nerve > 0",
+    "phases": [ { "id": "go", "time": "500 ms" } ],
+    "on_interrupt": [ { "add": { "self.var.interrupted": 1 } } ] },
+
+  { "type": "action", "id": "count_off",
+    "params": { "count": { "type": "int", "default": "3" } },
+    "requires": "$count > 0",
+    "fail_text": "There is nothing to count.",
+    "phases": [ { "id": "count", "time": "$count * 0.1" } ] },
+
+  { "type": "action", "id": "charge",
+    "uses": { "arm": 1 },
+    "vars": { "power": { "type": "int", "default": 0 } },
+    "phases": [
+      { "id": "gather", "time": "hold", "max": "3 s", "cancel": true,
+        "tick": { "every": "250 ms", "do": [ { "add": { "$power": 1 } } ] },
+        "until": "$power >= 10",
+        "next": [ { "if": "$power >= 4", "goto": "release" }, { "goto": "fizzle" } ] },
+      { "id": "release", "time": "100 ms",
+        "do": [ { "set": { "self.var.power": "$power" } } ], "next": [ { "finish": true } ] },
+      { "id": "fizzle", "time": 0, "do": [ { "set": { "self.var.power": 0 } } ] }
+    ] },
+
+  { "type": "action", "id": "spin",
+    "phases": [
+      { "id": "left", "time": 0, "next": [ { "goto": "right" } ] },
+      { "id": "right", "time": 0, "next": [ { "goto": "left" } ] }
+    ],
+    "on_interrupt": [ { "add": { "self.var.interrupted": 1 } } ] },
+
+  { "type": "action", "id": "float",
+    "footing": false,
+    "phases": [ { "id": "hover", "time": "100 ms" } ] },
+
+  { "type": "action", "id": "trace",
+    "params": { "route": { "type": "list", "of": "cell", "min": 1, "max": 3,
+                           "check": "null" } },
+    "vars": { "steps": { "type": "int", "default": 0 } },
+    "phases": [
+      { "id": "walk", "time": "1 s", "do": [ { "set": { "$steps": "len($route)" } } ] },
+      { "id": "done", "time": 0,
+        "do": [ { "set": { "self.var.route_len": "$steps", "self.var.route_start": "$route[0]" } } ] }
+    ] },
+
+  { "type": "action", "id": "ponder",
+    "phases": [
+      { "id": "think", "time": "1 s",
+        "do": [ { "let": { "depth": 2 } },
+                { "ask": { "prompt": "Go on?", "options": [
+                  { "label": "Yes", "do": [ { "add": { "self.var.answers": "$depth" } } ] },
+                  { "label": "No", "do": [] } ] } } ] }
+    ] },
+
+  { "type": "reason", "id": "too_tired", "text": "Too tired.", "doc": "Given when a tired entity tries to act." },
+  { "type": "eoc", "id": "veto_tired", "on": "action_starting", "if": "self.has_tag('tired')",
+    "doc": "Refuses every action of a tired entity.",
+    "do": [ { "cancel_event": { "reason": "too_tired" } } ] },
+  { "type": "eoc", "id": "slow_motion", "on": "phase_timing", "if": "self.has_tag('slowed')",
+    "doc": "Doubles the phases of a slowed entity.",
+    "do": [ { "set": { "event.duration": "event.duration * 2" } } ] },
+  { "type": "eoc", "id": "pace_on", "on": "decision_needed", "if": "self.has_tag('pacer')",
+    "doc": "What stands in for the AI: a pacer paces whenever it is free.",
+    "do": [ { "start_action": { "who": "self", "action": "step" } } ] },
+  { "type": "eoc", "id": "trip", "subjects": { "self": "entity" },
+    "doc": "Takes the use of an arm away.",
+    "do": [ { "disable_channel": { "who": "self", "channel": "arm" } } ] },
+  { "type": "eoc", "id": "untrip", "subjects": { "self": "entity" },
+    "doc": "Gives it back.",
+    "do": [ { "enable_channel": { "who": "self", "channel": "arm" } } ] },
+  { "type": "eoc", "id": "stop_all", "subjects": { "self": "entity" },
+    "doc": "Interrupts whatever an entity does with its arm.",
+    "do": [ { "interrupt": { "who": "self", "channel": "arm" } } ] },
+  { "type": "eoc", "id": "plan_two", "subjects": { "self": "entity" },
+    "doc": "Plans two steps.",
+    "do": [ { "enqueue_action": { "who": "self", "action": "step" } },
+            { "enqueue_action": { "who": "self", "action": "step" } } ] },
+  { "type": "eoc", "id": "rest", "subjects": { "self": "entity" },
+    "doc": "Waits two seconds.",
+    "do": [ { "wait": { "who": "self", "time": "2 s" } } ] },
+  { "type": "eoc", "id": "rethink", "subjects": { "self": "entity" },
+    "doc": "Clears a plan and asks again.",
+    "do": [ { "interrupt_plan": { "who": "self" } } ] },
+  { "type": "eoc", "id": "drop_it", "subjects": { "self": "entity" },
+    "doc": "Cancels whatever can be cancelled.",
+    "do": [ { "cancel_action": { "who": "self" } } ] },
+  { "type": "eoc", "id": "try_hug", "subjects": { "self": "entity" },
+    "doc": "Starts an action that needs two arms.",
+    "do": [ { "start_action": { "who": "self", "action": "hug" } } ] }
+]

@@ -248,13 +248,18 @@ fn asked(sim: &mut Sim) -> (EntityId, ChoiceId) {
     (who, choice)
 }
 
-/// Answers whatever free decision an entity is waiting for.
+/// Answers whatever free decision an entity is waiting for, as a
+/// frontend does: by waiting no time.
 fn answer_free(sim: &mut Sim, who: EntityId) {
     while matches!(
         sim.decisions().front_of(who),
         Some(DecisionKind::Free { .. })
     ) {
-        sim.answer_decision(who).unwrap();
+        sim.submit(Command::Wait {
+            entity: who,
+            dur: Dur::ZERO,
+        })
+        .unwrap();
     }
 }
 

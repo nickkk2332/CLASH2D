@@ -16,6 +16,10 @@
 //! | [`Phase`], [`Transition`], [`PhaseWindow`], [`Tick`], [`Param`], [`Var`], [`Role`], [`ChannelUse`] | What an action is made of. |
 //! | [`Effects`] | A list of effects, compiled by the rule runtime ([`rule`](crate::rule)). |
 //! | [`reason`] | The reasons the action system gives when it declines (14 §5). |
+//! | [`run`] | The runtime: [`Sim::start_action`](crate::Sim::start_action), phases on the actor's clock, cancelling, interrupting, slots. |
+//! | [`plan`] | Control, plans, waits and free decisions (03 §5). |
+//! | [`verbs`] | The verbs of 03 §13 that rules call. |
+//! | [`ActionTable`], [`RunningAction`], [`ChannelSlots`], [`Plan`] | What the runtime keeps: plain state, saved and hashed. |
 //!
 //! # Loading
 //!
@@ -78,7 +82,7 @@
 //! 7. Run `on_start`, then enter phase 0.
 //!
 //! Where 03 §6.6 leaves the order of two of these open, the runtime
-//! package settles it there; nothing in a definition depends on it.
+//! settles it ([`run`]); nothing in a definition depends on it.
 //!
 //! **Entering a phase** at a [`PhaseIndex`], with [`ActionDef::phase`]:
 //!
@@ -127,7 +131,11 @@
 pub mod def;
 mod event;
 mod ids;
+pub mod plan;
 pub mod reason;
+pub mod run;
+mod state;
+pub mod verbs;
 
 use clash_data::DefTypes;
 
@@ -137,10 +145,14 @@ pub use def::{
     Slots, Tick, Transition, Var, WINDOW_LOCAL, WindowKindDef,
 };
 pub use event::{
-    ACT_EVENTS, ACT_HOOKS, ACTION_STARTING, ActEvent, HookInfo, PHASE_TIMING, is_engine_event,
+    ACT_EVENTS, ACT_HOOKS, ACTION_STARTING, ActEvent, HookInfo, PHASE_TIMING, free_name,
+    is_engine_event,
 };
 pub(crate) use event::{hook_types, register_hooks};
 pub use ids::{ActionDefId, ChannelId, ChannelSet, PhaseIndex, WindowKindId};
+pub use plan::{DEFAULT_IDLE_WAIT, IDLE_WAIT_SETTING};
+pub use run::{DEFAULT_MAX_TRANSITIONS, DEFAULT_SLOTS, MAX_TRANSITIONS_SETTING, RUNTIME_REASONS};
+pub use state::{ActionTable, ChannelSlots, How, Params, Plan, PlanStep, RunningAction, Waiting};
 
 /// Registers the definition types of the simulation crate with the mod
 /// loader: `action`, `channel` and `window_kind` (03 §13).

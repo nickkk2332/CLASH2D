@@ -150,8 +150,10 @@ impl<'a> SimRules<'a> {
             .filter(|id| self.sim.entities.contains(*id))
     }
 
-    /// The cause of what an effect does, given what is running (see the
-    /// [module documentation](self)).
+    /// The cause of what an effect does, given what is running: its
+    /// actor is the rule's owner, else `self`, else the actor of the
+    /// event answered; its instigator is `instigator`, else the event's,
+    /// else the actor (05 §13.1).
     pub fn cause(&self, by: &RunView<'_>) -> Cause {
         let owner = by
             .owner
@@ -224,19 +226,7 @@ impl Host for SimRules<'_> {
     }
 
     fn warn(&mut self, warning: RuntimeWarning) {
-        self.sim.rt.fault_count += 1;
-        let Some(count) = self.sim.rt.warnings.admit(&warning) else {
-            return;
-        };
-        let defs = Arc::clone(self.rules.defs());
-        let mut reason = Reason::new(reason::EXPRESSION_WARNING, warning.fault.to_string())
-            .with("count", i64::try_from(count).unwrap_or(i64::MAX));
-        if let Some(origin) = defs.exprs().origin(warning.origin) {
-            reason = reason
-                .with("definition", origin.definition.to_string())
-                .with("path", origin.path.as_str());
-        }
-        self.sim.fault(reason);
+        self.sim.report_warning(warning);
     }
 
     fn def_name(&self, id: DefRef) -> Option<&str> {
@@ -565,6 +555,25 @@ fn deliver(sim: &mut Sim, delivery: &mut Delivery<'_>) {
 }
 
 impl Sim {
+    /// Reports a run-time warning of an expression the simulation
+    /// evaluated for a rule or an action, as a `fault` event thinned by
+    /// count (05 §4.5).
+    pub(crate) fn report_warning(&mut self, warning: RuntimeWarning) {
+        self.rt.fault_count += 1;
+        let Some(count) = self.rt.warnings.admit(&warning) else {
+            return;
+        };
+        let defs = Arc::clone(&self.defs);
+        let mut reason = Reason::new(reason::EXPRESSION_WARNING, warning.fault.to_string())
+            .with("count", i64::try_from(count).unwrap_or(i64::MAX));
+        if let Some(origin) = defs.exprs().origin(warning.origin) {
+            reason = reason
+                .with("definition", origin.definition.to_string())
+                .with("path", origin.path.as_str());
+        }
+        self.fault(reason);
+    }
+
     /// The rules of the simulation's definitions (05 §9). Not state.
     pub fn rule_set(&self) -> &Arc<RuleSet> {
         &self.rt.rules
@@ -572,8 +581,7 @@ impl Sim {
 
     /// The simulation as the rule runtime's host, for one run: whatever
     /// the run changes is caused by `cause`, with the actor and the
-    /// instigator the running rule adds (see the
-    /// [module documentation](self)).
+    /// instigator the running rule adds ([`SimRules::cause`]).
     pub fn rule_host(&mut self, cause: Cause) -> SimRules<'_> {
         let rules = Arc::clone(&self.rt.rules);
         SimRules {
@@ -769,9 +777,15 @@ impl Sim {
     }
 
     /// Ends what an entity that is about to be removed was part of and
-    /// forgets what rules kept for it: the rules attached to it and
-    /// when rules last ran for it (05 §9.3).
+    /// forgets what rules kept for it: its actions are abandoned and its
+    /// plan dropped, and the rules attached to it and when rules last ran
+    /// for it are forgotten (05 §9.3).
     pub(crate) fn release_entity(&mut self, id: EntityId, _cause: Cause) {
+        // Its actions end as an actor's do that leaves the world (03 §9).
+        self.abandon_all(id);
+        if let Some(record) = self.entities.get_mut(id) {
+            record.plan.clear();
+        }
         if let Some(handle) = self.exprs.kinds().handle(Subject::Entity(id)) {
             self.rules.forget(handle);
         }

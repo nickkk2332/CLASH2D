@@ -144,6 +144,7 @@ impl Default for Handlers {
             by_domain: BTreeMap::new(),
         };
         handlers.set(WakeDomain::World, world_wake);
+        handlers.set(WakeDomain::Action, crate::action::run::action_wake);
         handlers
     }
 }
