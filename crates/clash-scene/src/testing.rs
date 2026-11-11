@@ -57,6 +57,7 @@
 //!
 //! - An event is **seen** if a cell it is about is seen in the picture
 //!   playback has, or a thing it is about has a sprite in such a cell.
+//!   Its `actor` and `instigator` do not count: they may be elsewhere.
 //! - Otherwise it is **heard** from that cell if the cell lies within
 //!   [`FakeHost::set_hearing`] cells of where `view` is placed (12 by
 //!   default), and else not perceived.
@@ -591,19 +592,19 @@ impl SceneHost for FakeHost {
                 .sprite(SpriteId::new(entity.to_bits()))
                 .map(|sprite| sprite.loc)
         };
-        // The cells the event is about, its `here` first, and the cells
-        // the things it is about are drawn in.
+        // Where it happened: the cells the event is about, its `here`
+        // first, and the cells the things it is about are drawn in. Who
+        // did it is somewhere else.
         let mut places: Vec<Location> = event
             .subject("here")
             .and_then(|s| s.loc())
             .into_iter()
             .collect();
-        places.extend(subjects.iter().filter_map(|(_, subject)| subject.loc()));
-        places.extend(
-            subjects
-                .iter()
-                .filter_map(|(_, subject)| subject.entity().and_then(sprite_of)),
-        );
+        let about = subjects
+            .iter()
+            .filter(|(name, _)| !["actor", "instigator"].contains(name));
+        places.extend(about.clone().filter_map(|(_, subject)| subject.loc()));
+        places.extend(about.filter_map(|(_, subject)| subject.entity().and_then(sprite_of)));
         if places
             .iter()
             .any(|at| picture.cell(*at).is_some_and(|cell| cell.seen()))

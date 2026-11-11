@@ -105,7 +105,7 @@ use crate::scene::{Scene, SceneHost};
 use crate::text::RichText;
 use crate::theme::Theme;
 use crate::ui::PreferenceDef;
-use crate::view::{HeardMarker, ViewDifference, ViewModel};
+use crate::view::{HeardMarker, SpriteId, ViewDifference, ViewModel};
 use queue::{Effect, Line, Op, Step, Target};
 
 /// The name a keymap gives the key that jumps playback to its end
@@ -275,6 +275,39 @@ impl Host for ShowHost<'_> {
     }
 }
 
+/// Makes the last change a batch makes to each sprite leave it as the
+/// party perceives it when the batch ends, which is what the host said
+/// for every step: one that ends perceived ends where it is perceived,
+/// and one that is no longer perceived leaves the picture at the last
+/// event that moves it. Until then it is drawn moving where the events
+/// say (12 §5).
+fn settle_sprites(steps: &mut [Step]) {
+    let mut last: std::collections::BTreeMap<SpriteId, (usize, usize)> =
+        std::collections::BTreeMap::new();
+    for (index, step) in steps.iter().enumerate() {
+        for (at, op) in step.ops.iter().enumerate() {
+            if let Op::Sprite { id, .. } = op {
+                last.insert(*id, (index, at));
+            }
+        }
+    }
+    for (index, at) in last.into_values() {
+        let op = &mut steps[index].ops[at];
+        match op {
+            Op::Sprite {
+                look: Some(_), to, ..
+            } => *to = None,
+            Op::Sprite {
+                id,
+                look: None,
+                to: Some(_),
+                ..
+            } => *op = Op::Gone { id: *id },
+            _ => {}
+        }
+    }
+}
+
 /// A rendered line as the log holds it: styled by its tags where they
 /// are sound, and with a capital first letter (05 §4.6).
 fn finished_line(rendered: &str, theme: &Theme) -> Option<RichText> {
@@ -304,6 +337,7 @@ impl<H: SceneHost> Scene<H> {
                 steps.push(step);
             }
         }
+        settle_sprites(&mut steps);
         self.playback.push(steps);
         if !self.playback.is_caught_up() {
             // Bindings on the view show the moment playback has

@@ -22,8 +22,12 @@ use std::collections::BTreeMap;
 
 use clash_core::{Value, define_id};
 use clash_data::defs::ValidateCx;
-use clash_data::{CompileCx, Cond, Def, Diagnostic, Located, Span, Text, Time, code};
+use clash_data::{
+    CompileCx, Cond, Def, Diagnostic, FromKind, Kind, KindValue, Located, Span, Text, Time,
+    by_kind, code,
+};
 use serde::Deserialize;
+use serde::de::MapAccess;
 
 use super::log::Importance;
 use crate::color::ColorRef;
@@ -80,21 +84,26 @@ struct SpriteChangeObject {
     to: Option<Located<String>>,
 }
 
+impl<'de> FromKind<'de> for SpriteChangeDef {
+    fn from_kind<A: MapAccess<'de>>(kind: Kind, value: KindValue<'_, A>) -> Result<Self, A::Error> {
+        match kind {
+            Kind::String => value.read().map(|of| SpriteChangeDef { of, to: None }),
+            Kind::Object => value
+                .read::<SpriteChangeObject>()
+                .map(|whole| SpriteChangeDef {
+                    of: whole.of,
+                    to: whole.to,
+                }),
+            other => Err(other.unexpected("a subject's name, or an object with `of` and `to`")),
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for SpriteChangeDef {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Either {
-            Bare(Located<String>),
-            Whole(SpriteChangeObject),
-        }
-        Ok(match Either::deserialize(deserializer)? {
-            Either::Bare(of) => SpriteChangeDef { of, to: None },
-            Either::Whole(whole) => SpriteChangeDef {
-                of: whole.of,
-                to: whole.to,
-            },
-        })
+        // Read through the loader, which keeps where each part was
+        // written (see `clash_data::de`).
+        by_kind(deserializer)
     }
 }
 
