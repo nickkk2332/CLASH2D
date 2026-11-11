@@ -4,5 +4,15 @@
 //! only through `WorldEdit`, and the world emits events rather than calling
 //! upward: it does not know that entities, rules or a renderer exist.
 //! Specified in `docs/02-world-model.md`.
-//!
-//! This is a stub. It is filled in by W1 to W25 of `docs/plans/world-model.md`.
+
+pub mod dims;
+pub mod iter;
+mod pos;
+pub mod storage;
+mod topology;
+
+pub use pos::{
+    CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,
+    distance_sq_cells,
+};
+pub use topology::{Edge, Extent, Topology};
