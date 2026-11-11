@@ -1043,6 +1043,19 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
         }
     }
 
+    /// Tells the host what is running, before a write to the
+    /// simulation: the write itself carries only what is written.
+    fn tell_writing(&mut self) {
+        if let Some(frame) = self.frames.last() {
+            self.host.writing(&RunView {
+                rule: frame.rule.map(|(id, _)| id),
+                owner: frame.owner,
+                names: &frame.names,
+                values: &frame.subjects,
+            });
+        }
+    }
+
     /// Puts a value in a place, or with `None` removes what is there.
     fn write_root(
         &mut self,
@@ -1070,11 +1083,15 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
                 }
                 return;
             }
-            (PlaceRoot::Variable(name), Some(handle)) => match value {
-                Some(value) => self.host.set_variable(handle, name, value),
-                None => self.host.unset_variable(handle, name),
-            },
+            (PlaceRoot::Variable(name), Some(handle)) => {
+                self.tell_writing();
+                match value {
+                    Some(value) => self.host.set_variable(handle, name, value),
+                    None => self.host.unset_variable(handle, name),
+                }
+            }
             (PlaceRoot::Property(property), Some(handle)) => {
+                self.tell_writing();
                 self.host
                     .set_property(*property, handle, value.unwrap_or_default())
             }

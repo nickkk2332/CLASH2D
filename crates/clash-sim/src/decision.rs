@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use clash_core::{Dur, EntityId, StateHash, StateHasher};
+use clash_core::{Dur, EntityId, StateHash, StateHasher, define_id};
 use clash_world::Cause;
 use serde::{Deserialize, Serialize};
 
@@ -24,6 +24,29 @@ use crate::entity::Control;
 use crate::event::{EventBody, Where};
 use crate::later::ActionId;
 use crate::reason::{Reason, codes};
+
+define_id! {
+    /// A choice put by a rule's `ask` (05 §10.6): never reused within
+    /// one simulation.
+    pub struct ChoiceId(u64);
+}
+
+/// One option of a choice, as whoever chooses is shown it.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct ChoiceOption {
+    /// What it says, rendered for the one who chooses.
+    pub label: String,
+    /// Whether it may be taken: its `if` held when the choice was put.
+    /// One that may not is shown and refused.
+    pub available: bool,
+}
+
+impl StateHash for ChoiceOption {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        hasher.write_str(&self.label);
+        self.available.state_hash(hasher);
+    }
+}
 
 /// A request for a directly controlled entity to choose (03 §5.2).
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -48,6 +71,16 @@ pub enum DecisionKind {
         /// Why the entity is free to choose.
         why: FreeReason,
     },
+    /// One of several options, put by a rule's `ask` (05 §10.6). The
+    /// `Choose` command answers with the position of an option.
+    Choice {
+        /// Which choice: what `Choose` names.
+        choice: ChoiceId,
+        /// The question, rendered for the one who chooses.
+        prompt: String,
+        /// The options, in the order written.
+        options: Vec<ChoiceOption>,
+    },
 }
 
 /// Why an entity needs a free decision.
@@ -64,6 +97,8 @@ pub enum FreeReason {
     /// Its plan ran out or was cleared; the reason says why if a step
     /// could not be started.
     PlanEmpty(Option<Reason>),
+    /// A wait it asked for is over.
+    Waited,
 }
 
 impl StateHash for DecisionKind {
@@ -72,6 +107,16 @@ impl StateHash for DecisionKind {
             DecisionKind::Free { why } => {
                 hasher.write_u8(0);
                 why.state_hash(hasher);
+            }
+            DecisionKind::Choice {
+                choice,
+                prompt,
+                options,
+            } => {
+                hasher.write_u8(1);
+                choice.state_hash(hasher);
+                hasher.write_str(prompt);
+                options.state_hash(hasher);
             }
         }
     }
@@ -93,6 +138,7 @@ impl StateHash for FreeReason {
                 hasher.write_u8(3);
                 reason.state_hash(hasher);
             }
+            FreeReason::Waited => hasher.write_u8(4),
         }
     }
 }
@@ -148,6 +194,40 @@ impl DecisionQueue {
     /// Forgets every request of an entity.
     pub(crate) fn forget(&mut self, entity: EntityId) {
         self.pending.remove(&entity);
+    }
+
+    /// Whether an entity is being asked what to do next.
+    pub fn has_free(&self, entity: EntityId) -> bool {
+        self.pending
+            .get(&entity)
+            .is_some_and(|kinds| kinds.iter().any(|kind| matches!(kind, DecisionKind::Free { .. })))
+    }
+
+    /// The choices an entity is being asked to make, oldest first.
+    pub fn choices_of(&self, entity: EntityId) -> impl Iterator<Item = ChoiceId> + '_ {
+        self.pending
+            .get(&entity)
+            .into_iter()
+            .flatten()
+            .filter_map(|kind| match kind {
+                DecisionKind::Choice { choice, .. } => Some(*choice),
+                DecisionKind::Free { .. } => None,
+            })
+    }
+
+    /// Takes out the first request of an entity that `which` picks.
+    pub(crate) fn take(
+        &mut self,
+        entity: EntityId,
+        which: impl Fn(&DecisionKind) -> bool,
+    ) -> Option<DecisionKind> {
+        let kinds = self.pending.get_mut(&entity)?;
+        let at = kinds.iter().position(which)?;
+        let kind = kinds.remove(at);
+        if kinds.is_empty() {
+            self.pending.remove(&entity);
+        }
+        kind
     }
 }
 
@@ -220,6 +300,22 @@ impl Sim {
             record.time.decided = own;
         }
         Ok(kind)
+    }
+
+    /// Takes the first request of an entity that `which` picks as
+    /// answered, and starts counting the entity's time since it decided
+    /// afresh. `None` if it is waiting for no such request.
+    pub(crate) fn answer_which(
+        &mut self,
+        entity: EntityId,
+        which: impl Fn(&DecisionKind) -> bool,
+    ) -> Option<DecisionKind> {
+        let kind = self.decisions.take(entity, which)?;
+        let own = self.own_time(entity);
+        if let Some(record) = self.entities.get_mut(entity) {
+            record.time.decided = own;
+        }
+        Some(kind)
     }
 
     /// How much of an entity's own time has passed since it last decided.

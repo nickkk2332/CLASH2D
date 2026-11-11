@@ -1266,6 +1266,25 @@ namespace:
 | `set_clock_rate` | Change the rate of an area's or realm's clock |
 | `wait` | Occupy an entity for a duration |
 
+The verbs as built (decisions D-540 to D-547), each with its arguments.
+An argument marked `?` may be left out, and is then null. A verb that
+declines says why (`rule.verb_refused` carries the reason), and the rule
+carries on. Whatever a verb changes is caused by the rule that called
+it (05 §13.1).
+
+| Verb | Arguments | Does | Raises |
+|------|-----------|------|--------|
+| `set_time_rate` | `who`: entity; `rate?`: real, zero or more | Gives `who` a personal clock at `rate`, or changes the rate of the one it has. With no rate the personal clock, and any anchor, is taken away | `clock_rate_changed` |
+| `anchor_clock` | `who`: entity; `to?`: an area that has a clock, a realm, a cell or an entity | Pins the personal clock of `who` under the clock `to` stands for: the area's, the realm's, the cell's location's, the clock the entity is on. An entity with no personal clock is given one at rate 1. With no `to` the anchor is lifted | `clock_rate_changed`, when a clock is given |
+| `set_clock_rate` | `of`: an area or a realm; `rate?`: real, zero or more | Changes the rate of the area's or the realm's clock. With no rate an area's clock is taken away; refused for a realm | `clock_rate_changed` |
+| `set_control` | `who`: entity; `mode`: string, `none`, `direct` or `delegated` | Changes who decides for `who` (section 5.1) | `control_changed`; `decision_requested` or `decision_needed` if it is then free |
+| `add_tag` | `to`: entity; `tag`: string | Gives an entity a tag | `tag_changed`, if it did not have it |
+| `remove_tag` | `from`: entity; `tag`: string | Takes a tag away | `tag_changed`, if it had it |
+
+A verb given an argument it cannot use (null where an entity is needed,
+a word that is no mode) declines with `verb.bad_argument`, which carries
+`verb` and `argument`.
+
 **Queries** for expressions: an entity's running actions and their phase,
 tags and time remaining; whether a channel is free; plan length; control
 mode; `now`, local time and clock rate at a subject; time left on a window.

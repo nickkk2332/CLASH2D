@@ -44,7 +44,7 @@
 //! | The random stream | The rule stream, inside [`Sim::with_random`]; none otherwise, and a random function then gives null with a warning |
 //! | A warning | Kept, up to [`MAX_HOST_WARNINGS`], for the caller to take |
 
-use clash_core::{Real, Rng};
+use clash_core::{EntityId, Real, Rng};
 use clash_data::Runner;
 use clash_expr::{Compiled, DefRef, FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value};
 
@@ -257,6 +257,19 @@ impl Sim {
     /// The result of a function the simulation registered, by the id
     /// the registry gave it. Null for one that is not the simulation's.
     pub fn call_function(&self, function: FunctionId, args: &[Value]) -> Value {
+        self.call_function_for(function, args, None)
+    }
+
+    /// The result of a function, as [`call_function`](Sim::call_function)
+    /// gives it, where a text is being written for a reader (05 §4.6):
+    /// the text helpers then say "you" of the reader and name everyone
+    /// else as the reader knows them ([`reader`](crate::reader)).
+    pub fn call_function_for(
+        &self,
+        function: FunctionId,
+        args: &[Value],
+        reader: Option<EntityId>,
+    ) -> Value {
         if let Some(def) = self.exprs.function(function) {
             return (def.call)(self, args);
         }
@@ -280,7 +293,7 @@ impl Sim {
                 _ => true,
             }),
             other => self
-                .reader_text(other, &first, args.get(1))
+                .reader_text(other, &first, args.get(1), reader)
                 .map_or(Value::Null, Value::from),
         }
     }
@@ -309,7 +322,13 @@ impl Sim {
     /// no reader and no `language` definition until the message package
     /// (K9) and perception (first-playable S5, S6) are built, so nobody
     /// is "you" and everything goes by its own name.
-    fn reader_text(&self, helper: &str, first: &Value, second: Option<&Value>) -> Option<String> {
+    fn reader_text(
+        &self,
+        helper: &str,
+        first: &Value,
+        second: Option<&Value>,
+        _reader: Option<EntityId>,
+    ) -> Option<String> {
         let word = second.and_then(Value::as_str).unwrap_or("");
         Some(match helper {
             "name" => self.plain_name(first),

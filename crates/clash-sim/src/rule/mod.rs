@@ -128,6 +128,7 @@
 //! - `message` and `ask` are verbs of package K9, and the world's verbs
 //!   are package K8's.
 
+mod bind;
 mod compile;
 mod def;
 mod effects;
@@ -139,6 +140,8 @@ pub mod testing;
 mod tree;
 mod value;
 
+pub(crate) use bind::Runtime;
+pub use bind::SimRules;
 pub use compile::{CORE_EFFECTS, EMIT_CANCELLED, EMIT_REASON, EffectInfo, MAX_BLOCK_DEPTH};
 pub use def::{
     EOC_TYPE, EocDef, EocId, GLOBAL_SUBJECT, OWNER_SUBJECT, REASON_TYPE, RULE_GROUP_TYPE,

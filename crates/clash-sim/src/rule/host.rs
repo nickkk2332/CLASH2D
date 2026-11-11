@@ -235,6 +235,13 @@ pub trait RuleHost: clash_expr::Host {
         let _ = (subject, out);
     }
 
+    /// Told what is running just before each of the three writes
+    /// below, which carry only what is written: a host that says who
+    /// caused a change reads the rule, its owner and its subjects here.
+    fn writing(&mut self, by: &RunView<'_>) {
+        let _ = by;
+    }
+
     /// Sets a variable of a subject, by qualified name, through the
     /// simulation's own path for it (so that a watched variable raises
     /// `var_changed`).

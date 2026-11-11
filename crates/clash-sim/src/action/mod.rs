@@ -125,6 +125,7 @@
 //!   the runtime packages that raise and run them.
 
 pub mod def;
+mod event;
 mod ids;
 pub mod reason;
 
@@ -135,6 +136,10 @@ pub use def::{
     Local, LocalSource, MIN_ROLES, Next, Param, Phase, PhaseRef, PhaseTime, PhaseWindow, Role,
     Slots, Tick, Transition, Var, WINDOW_LOCAL, WindowKindDef,
 };
+pub use event::{
+    ACT_EVENTS, ACT_HOOKS, ACTION_STARTING, ActEvent, HookInfo, PHASE_TIMING, is_engine_event,
+};
+pub(crate) use event::{hook_types, register_hooks};
 pub use ids::{ActionDefId, ChannelId, ChannelSet, PhaseIndex, WindowKindId};
 
 /// Registers the definition types of the simulation crate with the mod

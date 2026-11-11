@@ -1489,6 +1489,48 @@ simulated; and where reports go. What is kept between runs is plain
 state: the rules attached at run time, when each rule with `once` or a
 `cooldown` last ran for each owner, and the groups a rule has switched.
 
+As bound to the simulation (decision D-540):
+
+- **The host** is the simulation itself, for the length of one run
+  (`Sim::rule_host`). It reads truth through the properties and
+  functions of section 5.3 and draws from the rule stream; it writes
+  through `Sim::set_var` and `Sim::set_property`; a verb is found by the
+  id the registry gave its name, in the table every package adds to
+  (`clash_sim::verb::engine_verbs`), and is a plain function over the
+  simulation. A verb that is registered and that nothing carries out
+  declines with `rule.verb_unbound`.
+- **Events.** The rules of the definitions are a `RuleSet`, built when
+  the simulation is set up and again after a load. Every event type
+  some rule listens for has one handler on the bus, which hands the
+  event to the rules with its subjects and fields in the order its
+  type declares them, `actor` and `instigator` from its cause among
+  them, and writes back what they did: the fields they changed, whether
+  they consumed it, and the reason they cancelled it for.
+- **Cause.** Whatever a rule changes carries a cause of the kind `eoc`
+  (`action` for an action's own effect lists). Its actor is the entity
+  the rule is attached to; else the entity bound as `self` where the
+  effect is written; else the actor of the event being answered. Its
+  instigator is the entity bound as `instigator`; else the instigator of
+  the event being answered; else that actor. `emit` raises its event
+  with that cause, so the event binds `actor` and `instigator` without
+  the rule naming them; a rule that does name one says who it is. The
+  event is stamped on the clock of the first entity it binds, else of
+  the first cell.
+- **Lists of effects** of other definitions, an action's among them,
+  are run with `Sim::run_effects`, and one rule is called from outside
+  with `Sim::call_rule`.
+- **Reports.** A fault, and a run-time warning of an expression a rule
+  evaluated (`rule.expression_warning`), is a `fault` event (03 §13),
+  thinned by count as section 4.5 says. The counts are not state: a
+  loaded simulation starts them afresh, and the output is not hashed.
+- **State.** The rule state is saved with the simulation and is part
+  of its `rules` hash. When an entity is removed, what was kept for it
+  is forgotten. The rules that definitions carry for their instances
+  (section 9.3) are found once a definition type of the simulation
+  carries `rules`; none does yet.
+- The limits are read from the settings of section 13.2 each time a run
+  begins.
+
 ### 13.2 Limits
 
 | Limit | Default | On exceeding |
@@ -1551,6 +1593,8 @@ As built (decision D-475):
 | `rule.no_random` | `weighted` had to choose and there is no stream to draw from. |
 | `rule.timers_unavailable` | A timer effect ran; timers are not built yet. |
 | `rule.queries_unavailable` | `for_each` was given a query; queries are not built yet. |
+| `rule.verb_unbound` | An effect called a verb that is registered and that nothing in the engine carries out. Nothing was done. |
+| `rule.expression_warning` | An expression a rule or a list of effects evaluated gave a run-time warning (section 4.5). The operation gave null. |
 
 In every case but the first the rule carries on with its next effect.
 

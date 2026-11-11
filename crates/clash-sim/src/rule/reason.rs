@@ -48,6 +48,11 @@ pub const TIMERS_UNAVAILABLE: &str = "rule.timers_unavailable";
 /// A query was iterated; queries are not built yet.
 pub const QUERIES_UNAVAILABLE: &str = "rule.queries_unavailable";
 
+/// A verb ran that nothing in the engine carries out.
+pub const VERB_UNBOUND: &str = "rule.verb_unbound";
+/// An expression a rule evaluated gave a run-time warning (05 §4.5).
+pub const EXPRESSION_WARNING: &str = "rule.expression_warning";
+
 /// The rule runtime's reasons, for the generated reference.
 pub const RULE_REASONS: &[ReasonInfo] = &[
     ReasonInfo {
@@ -122,6 +127,14 @@ pub const RULE_REASONS: &[ReasonInfo] = &[
         code: QUERIES_UNAVAILABLE,
         doc: "`for_each` was given a query. Queries are read and kept and not yet built: the body did not run. Values: `rule`, `path`.",
     },
+    ReasonInfo {
+        code: VERB_UNBOUND,
+        doc: "An effect called a verb that is in the registry and that nothing in the engine carries out: a verb of a package that is not built into this simulation. Nothing was done. Values: `verb`.",
+    },
+    ReasonInfo {
+        code: EXPRESSION_WARNING,
+        doc: "An expression that a rule or a list of effects evaluated gave a run-time warning (05 §4.5): a division by zero, a value of the wrong type. The operation gave null and the rule carried on. Values: `definition`, `path`, `count`.",
+    },
 ];
 
 #[cfg(test)]
@@ -160,6 +173,8 @@ mod tests {
             NO_RANDOM,
             TIMERS_UNAVAILABLE,
             QUERIES_UNAVAILABLE,
+            VERB_UNBOUND,
+            EXPRESSION_WARNING,
         ];
         for code in used {
             assert!(seen.contains(&code), "{code} is used and not listed");

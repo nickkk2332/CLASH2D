@@ -72,7 +72,9 @@ impl std::fmt::Debug for VerbDef {
 /// Every verb the simulation offers. A package that adds verbs adds its
 /// table here, one line.
 pub fn engine_verbs() -> Vec<VerbDef> {
-    Vec::new()
+    let mut verbs = Vec::new();
+    verbs.extend(crate::kernel_verbs::kernel_verbs());
+    verbs
 }
 
 /// Enters the engine's verbs into a registry, leaving alone those it
