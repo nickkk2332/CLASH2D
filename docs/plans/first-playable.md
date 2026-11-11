@@ -288,8 +288,8 @@ and carries exits on as `hit_exited`; `slots_lost` and `slots_gained`
 are raised for the action runtime to interrupt what held a slot;
 `function_changed` works the stats out again; the world's
 `occupant_exposed` and `occupant_dosed` become a hit and a dose
-(through `exposure_incoming`), and `Sim::body_impact` waits for whoever
-follows bodies in flight; `hit`, `close_wound`, `reopen_wound`,
+(through `exposure_incoming`), and so do `body_impact` of an entity
+and `body_hit_occupant` (`Sim::body_impact`); `hit`, `close_wound`, `reopen_wound`,
 `heal_part`, `disable_part`, `restore_part` and `remove_part` are
 verbs. `one_bad_cut` and a collapse that hurts whoever stands under it
 are integration tests against the real simulation

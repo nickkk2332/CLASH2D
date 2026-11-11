@@ -964,3 +964,48 @@ fn every_kind_of_choice_takes_what_it_should_and_refuses_the_rest() {
         Value::from("bellows")
     );
 }
+
+#[test]
+fn thrown_into_a_wall_a_person_is_hurt_by_the_impact() {
+    use clash_world::{Body, BodyOwner};
+    let mut sim = sim(13);
+    let wall = common::wall(&sim);
+    for y in 8..13 {
+        debug(
+            &mut sim,
+            DebugCommand::SetElement {
+                loc: Location::new(GRID, CellPos::new(14, y, 0)),
+                layer: Layer::Block,
+                state: wall.raw(),
+            },
+        )
+        .unwrap();
+    }
+    let ada = spawn(&mut sim, &person("Ada"), on(10, 10));
+    sim.drain_events();
+    let mass = sim.components().body.get(ada).unwrap().mass();
+    let r = Real::of;
+    let body = Body::of_mass(
+        BodyOwner::Entity(ada),
+        GRID,
+        [r(10.5), r(10.5), r(1.0)],
+        [r(20.0), r(0.0), r(0.0)],
+        mass,
+        Cause::DEBUG,
+    );
+    sim.world(|ctx| ctx.launch(body)).unwrap();
+    advance_to(&mut sim, Tick(3_000_000));
+    let told = sim.drain_events();
+    let all = names(&told);
+    let impact = all.iter().position(|name| *name == "body_impact");
+    assert!(impact.is_some(), "{all:?}");
+    let landed = told
+        .iter()
+        .position(|event| event.name() == "hit_landed" && entity_of(event, "self") == Some(ada));
+    assert!(landed.is_some_and(|at| at > impact.unwrap()), "{all:?}");
+    assert_eq!(
+        told.iter().filter(|e| e.name() == "fault").count(),
+        0,
+        "{all:?}"
+    );
+}

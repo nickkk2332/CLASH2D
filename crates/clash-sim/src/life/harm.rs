@@ -10,7 +10,8 @@
 //! |----------------|----------------|
 //! | `occupant_exposed`: a mass landed on the cell, or a field's `damage` rule struck it | A hit spread over the body ([`exposure_hit`]): the body takes what that intensity puts into its own volume, and never more than the cell was delivered. It goes through `hit_incoming` and the layers like any other hit ([`Sim::hit`]) |
 //! | `occupant_dosed`: a field's `expose` rule | The hook `exposure_incoming` with the pool, the amount and the route, whose handlers may lessen the amount (a mask) or cancel; then the amount is added to the pool, stopping at its bounds. A body with no stats or without that pool takes nothing |
-//! | A body in flight that is an entity struck something (`BodyImpact`, 02 §15.2) | [`Sim::body_impact`]: a hit of all the energy the body lost, spread, or with the surface it landed on. Called by whoever follows bodies in flight |
+//! | `body_impact`: a body in flight that is an entity struck an element (02 §15.2) | [`Sim::body_impact`]: a hit of all the energy the body lost, spread over it with no direction, or anywhere with the element's contact surface if it has one |
+//! | `body_hit_occupant`: a body in flight struck an occupant | The occupant takes the blow's packet spread over its body, travelling the way the body was |
 //!
 //! The answer comes after the kernel's own event about the entity
 //! (`entity_exposed`), so what the hit did follows what caused it in
@@ -23,8 +24,9 @@
 //! as a tissue's is (decision D-521).
 
 use clash_core::{EntityId, Real};
+use clash_world::defs::Contact;
 use clash_world::defs::DamageTypeId;
-use clash_world::{Cause, ExposureRoute, FieldId, Location, WorldEvent};
+use clash_world::{BodyOwner, Cause, ExposureRoute, FieldId, Location, WorldEvent};
 
 use crate::Sim;
 use crate::body::{self, HitOutcome, Impact, exposure_hit, impact_hit};
@@ -45,6 +47,23 @@ pub(crate) enum Harm {
         kind: DamageTypeId,
         energy: Real,
         intensity: Real,
+        cause: Cause,
+    },
+    /// A body in flight that is this entity struck an element.
+    Impact {
+        entity: EntityId,
+        energy: Real,
+        intensity: Real,
+        contact: Option<Contact>,
+        cause: Cause,
+    },
+    /// A body in flight struck this occupant.
+    Struck {
+        entity: EntityId,
+        kind: DamageTypeId,
+        energy: Real,
+        intensity: Real,
+        dir: [Real; 3],
         cause: Cause,
     },
     /// A field's `expose` rule dosed the occupant.
@@ -95,6 +114,33 @@ impl Harm {
                 route: *route,
                 cause: *cause,
             }),
+            WorldEvent::BodyImpact {
+                owner: BodyOwner::Entity(entity),
+                energy,
+                intensity,
+                contact,
+                cause,
+                ..
+            } => Some(Harm::Impact {
+                entity: *entity,
+                energy: *energy,
+                intensity: *intensity,
+                contact: contact.as_deref().cloned(),
+                cause: *cause,
+            }),
+            WorldEvent::BodyHitOccupant {
+                occupant,
+                packet,
+                vel,
+                ..
+            } => Some(Harm::Struck {
+                entity: *occupant,
+                kind: packet.kind,
+                energy: packet.energy,
+                intensity: packet.intensity,
+                dir: *vel,
+                cause: packet.cause,
+            }),
             _ => None,
         }
     }
@@ -114,6 +160,57 @@ impl Sim {
             } => self
                 .expose(entity, kind, energy, intensity, cause)
                 .map(|_| ()),
+            Harm::Impact {
+                entity,
+                energy,
+                intensity,
+                contact,
+                cause,
+            } => {
+                let kind = match &contact {
+                    Some(contact) => Some(contact.kind),
+                    None => self.cosmos.defs().kinetic_damage_type(),
+                };
+                match kind {
+                    Some(kind) => {
+                        let impact = Impact {
+                            kind,
+                            energy,
+                            intensity,
+                            dir: None,
+                            contact: contact.map(|contact| {
+                                (
+                                    contact.area,
+                                    contact.span.unwrap_or_else(|| contact.area.sqrt()),
+                                )
+                            }),
+                            cause,
+                        };
+                        self.body_impact(entity, &impact).map(|_| ())
+                    }
+                    // A world with no kinetic damage type has nothing to
+                    // strike with.
+                    None => Ok(()),
+                }
+            }
+            Harm::Struck {
+                entity,
+                kind,
+                energy,
+                intensity,
+                dir,
+                cause,
+            } => {
+                let impact = Impact {
+                    kind,
+                    energy,
+                    intensity,
+                    dir: Some(dir),
+                    contact: None,
+                    cause,
+                };
+                self.body_impact(entity, &impact).map(|_| ())
+            }
             Harm::Dosed {
                 entity,
                 loc,
@@ -155,9 +252,9 @@ impl Sim {
     /// or anywhere with the surface it landed on if that has one of its
     /// own. `None` for an entity that has no body.
     ///
-    /// Whoever follows bodies in flight calls this for a `BodyImpact`
-    /// whose owner is an entity, and for the occupant of a
-    /// `BodyHitOccupant`.
+    /// The simulation calls this for the world's `body_impact` whose
+    /// owner is an entity, and for the occupant of a
+    /// `body_hit_occupant`.
     pub fn body_impact(
         &mut self,
         entity: EntityId,

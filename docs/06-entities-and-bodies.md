@@ -960,10 +960,14 @@ the body absorbed.
 As built (decision D-553). The simulation answers the world's
 `occupant_exposed` after it has passed on its own `entity_exposed`: an
 entity with a body takes the spread hit through `hit_incoming` and the
-layers like any other, and one with none is not hurt. A body impact is
-`Sim::body_impact`, called by whoever follows bodies in flight for a
-`BodyImpact` whose owner is an entity and for the occupant of a
-`BodyHitOccupant`. The world's `occupant_dosed` (02 §16) raises the hook
+layers like any other, and one with none is not hurt. The world's
+`body_impact` whose body is an entity hurts that entity with all the
+energy it lost: spread with no direction, or with the element's contact
+surface, its kind, area and span (the square root of its area if it
+gives none), as a hit `Any`; a world with no kinetic damage type hurts
+nothing. The world's `body_hit_occupant` hurts the occupant struck with
+the blow's packet, spread, travelling the way the body was. Both are
+`Sim::body_impact`. The world's `occupant_dosed` (02 §16) raises the hook
 `exposure_incoming` and then adds what its handlers left of the amount
 to the named pool, stopping at its bounds; a body with no stats or
 without that pool takes nothing. The pool is text, resolved as a
