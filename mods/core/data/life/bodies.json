@@ -1,6 +1,6 @@
 [
-  { "type": "channel", "id": "arm", "name": "arm" },
-  { "type": "channel", "id": "grip", "name": "grip" },
+  { "//": "The channel `arm` is defined with the items, which need it to be wielded.",
+    "type": "channel", "id": "grip", "name": "grip" },
   { "type": "channel", "id": "leg", "name": "leg" },
   { "type": "channel", "id": "voice", "name": "voice" },
   { "type": "channel", "id": "mouth", "name": "mouth" },

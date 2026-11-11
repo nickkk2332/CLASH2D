@@ -116,6 +116,12 @@ pub fn life_defs(extra: &str) -> Arc<Defs> {
     let types = types();
     let mut files = core_files();
     files.extend(core_dir_files("life"));
+    // The channel arms supply is defined with `mods/core`'s items,
+    // which need the interface's colours: here it is on its own.
+    files.push((
+        "data/test/channels.json".to_owned(),
+        r#"[{ "type": "channel", "id": "arm", "name": "arm" }]"#.to_owned(),
+    ));
     files.push(("data/test/extra.json".to_owned(), extra.to_owned()));
     let files: Vec<(&str, &str)> = files
         .iter()
