@@ -162,6 +162,9 @@ pub enum PendingEdit {
     /// [`Cosmos::take_pending_maps`](crate::Cosmos::take_pending_maps)
     /// and applies it.
     Map(PendingMap),
+    /// A body that left loaded space and came down here (02 §15.4). Kept
+    /// in the list until the coarse layer plays it out (package W17).
+    Impact(crate::body::PendingImpact),
 }
 
 impl StateHash for PendingEdit {
@@ -182,6 +185,10 @@ impl StateHash for PendingEdit {
             PendingEdit::Map(map) => {
                 hasher.write_u8(3);
                 map.state_hash(hasher);
+            }
+            PendingEdit::Impact(impact) => {
+                hasher.write_u8(4);
+                impact.state_hash(hasher);
             }
         }
     }

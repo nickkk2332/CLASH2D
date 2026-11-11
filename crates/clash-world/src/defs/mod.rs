@@ -236,6 +236,9 @@ pub struct Material {
     /// Resistance to each damage type, by dense id: the material's own,
     /// or else the damage type's default.
     pub resist: Vec<Resist>,
+    /// The coefficient of sliding friction of a surface of it, if the
+    /// definition says (02 §15.3).
+    pub friction: Option<Real>,
 }
 
 /// A resolved `atmosphere` definition.
@@ -287,7 +290,7 @@ impl StateInfo {
 }
 
 /// A resolved striking surface of an element (02 §5.4).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Contact {
     /// The damage type it delivers.
     pub kind: DamageTypeId,
@@ -300,6 +303,14 @@ pub struct Contact {
     /// The energy in joules it delivers of its own.
     pub energy: Real,
 }
+
+clash_core::impl_state_hash!(Contact {
+    kind,
+    area,
+    give,
+    span,
+    energy
+});
 
 /// A resolved `floor`, `block` or `fixture` definition.
 #[derive(Clone, Debug)]

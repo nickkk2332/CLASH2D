@@ -41,7 +41,7 @@ use crate::defs::{
     Resist, WorldDefs,
 };
 use crate::dims::STOREY_MM;
-use crate::edit::{WorldCtx, WorldEdit};
+use crate::edit::WorldEdit;
 use crate::error::WorldError;
 use crate::event::WorldEvent;
 use crate::grid::{HEIGHT_FULL, HEIGHT_NONE};
@@ -244,10 +244,10 @@ impl StateHash for Destruction {
     }
 }
 
-/// What a destruction would throw: the fragments of an element that a
-/// packet destroyed with energy to spare (02 §12.3). The bodies package
-/// turns this into debris bodies; until then nothing is thrown and all
-/// of the element is left as rubble.
+/// What a destruction offers to be thrown: the fragments of an element
+/// that a packet destroyed with energy to spare (02 §12.3). Part of the
+/// mass flies as debris bodies with part of the energy; the rest of the
+/// element is left as rubble.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct DebrisSpec {
     /// The cell of the element that was destroyed.
@@ -380,19 +380,6 @@ impl Cosmos {
     }
 }
 
-impl WorldCtx<'_> {
-    /// Offers the fragments of a destroyed element to be thrown as
-    /// debris bodies (02 §12.3), and returns the mass in kilograms that
-    /// left as bodies. The rest of the element is left as rubble.
-    pub(crate) fn throw_debris(&mut self, spec: &DebrisSpec) -> Real {
-        // W14: launch debris bodies along `spec.dir` with `spec.energy`,
-        // within the budget `debris.max_bodies`, and return the mass they
-        // carry. Until bodies are built nothing is thrown.
-        let _ = spec;
-        Real::ZERO
-    }
-}
-
 impl WorldEdit<'_> {
     /// Applies a packet of damage to one element of a cell, by the rule
     /// of 02 §12.2 ([`resolve_packet`]), and says what it did.
@@ -425,7 +412,9 @@ impl WorldEdit<'_> {
 
     /// As [`damage`](WorldEdit::damage), for a hit that has a direction:
     /// east, south and up. Fragments of what the packet destroys are
-    /// thrown along it, once bodies are built (02 §12.3).
+    /// thrown along it as debris bodies (02 §12.3), and the energy of
+    /// their motion is taken out of what passes: it is counted as
+    /// absorbed, so that the two still add up to the packet's energy.
     pub fn damage_along(
         &mut self,
         loc: Location,
@@ -475,8 +464,11 @@ impl WorldEdit<'_> {
             }
             DamageResult::Destroyed => {
                 let how = Destruction::Damage(packet.kind);
-                let wreck = edit.wreck(loc, layer, how, outcome, dir, leave_rubble)?;
-                Ok((outcome, wreck))
+                let wrecked = edit.wreck_thrown(loc, layer, how, outcome, dir, leave_rubble)?;
+                Ok(match wrecked {
+                    Some((wreck, outcome)) => (outcome, Some(wreck)),
+                    None => (outcome, None),
+                })
             }
         }
     }
@@ -496,6 +488,28 @@ impl WorldEdit<'_> {
         dir: Option<[Real; 3]>,
         leave_rubble: bool,
     ) -> Result<Option<Wreck>, WorldError> {
+        let wrecked = self.wreck_thrown(loc, layer, how, outcome, dir, leave_rubble)?;
+        Ok(wrecked.map(|(wreck, _)| wreck))
+    }
+
+    /// As [`wreck`](WorldEdit::wreck), returning with the matter lost
+    /// the outcome as it stands once fragments have been thrown: the
+    /// energy they carry off is taken out of what passed and counted
+    /// as absorbed, so that the two still add up to the packet's
+    /// energy (02 §12.1, invariant W8).
+    ///
+    /// Fragments are thrown only by a packet with a direction and
+    /// energy to spare, and only where the wreck is left in the cell:
+    /// whoever carries the wreck off takes all of it.
+    pub(crate) fn wreck_thrown(
+        &mut self,
+        loc: Location,
+        layer: Layer,
+        how: Destruction,
+        mut outcome: DamageOutcome,
+        dir: Option<[Real; 3]>,
+        leave_rubble: bool,
+    ) -> Result<Option<(Wreck, DamageOutcome)>, WorldError> {
         let tick = self.ctx.timeline.now();
         let cause = self.cause;
         let defs = Arc::clone(self.ctx.cosmos.defs());
@@ -528,26 +542,29 @@ impl WorldEdit<'_> {
         }
 
         if let Destruction::Damage(kind) = how
+            && leave_rubble
             && outcome.passed > Real::ZERO
             && wreck.mass > Real::ZERO
+            && !defs.is_rubble(layer, old)
         {
-            let thrown = self
-                .ctx
-                .throw_debris(&DebrisSpec {
-                    from: loc,
-                    layer,
-                    material: old.material,
-                    mass: wreck.mass,
-                    energy: outcome.passed,
-                    kind,
-                    dir,
-                    cause,
-                })
-                .clamp(Real::ZERO, wreck.mass);
+            let (thrown, carried) = self.ctx.throw_debris(&DebrisSpec {
+                from: loc,
+                layer,
+                material: old.material,
+                mass: wreck.mass,
+                energy: outcome.passed,
+                kind,
+                dir,
+                cause,
+            });
+            let thrown = thrown.clamp(Real::ZERO, wreck.mass);
             if thrown > Real::ZERO {
                 wreck.volume *= Real::ONE - thrown / wreck.mass;
                 wreck.mass -= thrown;
             }
+            let carried = carried.clamp(Real::ZERO, outcome.passed);
+            outcome.passed -= carried;
+            outcome.absorbed += carried;
         }
         if leave_rubble && !defs.is_rubble(layer, old) {
             self.leave_rubble(loc, wreck.material, wreck.volume)?;
@@ -564,7 +581,7 @@ impl WorldEdit<'_> {
             passed: outcome.passed,
             cause,
         });
-        Ok(Some(wreck))
+        Ok(Some((wreck, outcome)))
     }
 
     /// Leaves a volume of a material as its rubble, where something
