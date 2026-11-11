@@ -481,7 +481,7 @@ Build
 - Stamp storage at tract, region and realm level; watermarks; lazy pull-down
   at load.
 - Devastation: calculation, cache, `devastation_at`, the ruin shortcut.
-- `PendingEdit`: `Stamp` and `Cells` applied by the world; `Mapgen`, `Spawn`
+- `PendingEdit`: `Stamp` and `Cells` applied by the world; `Map`, `Spawn`
   and `Eoc` stored and surfaced through events for later layers.
 - `release` dispatch between detailed and coarse.
 - Coarse resolution of bodies that lose their ticket.
@@ -578,7 +578,8 @@ Done when
 
 Build
 - The derived generator in `pristine` and `live` modes with a palette-swap
-  transform as a stand-in until document 10.
+  transform as a stand-in. Package WG5 of [worldgen.md](worldgen.md)
+  replaces the stand-in with real transforms.
 - `destroy_realm` with its policies; storage deletion at save.
 
 Done when

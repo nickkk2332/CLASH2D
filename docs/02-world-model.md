@@ -196,7 +196,7 @@ A realm has no hard-coded "kind". What a realm is follows from its properties.
 | `calendar` | Optional. The length of the day and year and the names of their parts (09 §14.2). |
 | `wrap` | Axes that wrap around. A planet wraps `x`. A torus wraps both. |
 | `z_range` | Lowest and highest storey. Storage is sparse, so a tall range costs nothing. |
-| `generator` | Which generator surveys regions and realises tracts (section 9). |
+| `generator` | Which world generator plans the realm, surveys regions and realises tracts (section 9; 10 §9). |
 | `fill` | What implicit cells contain below and above the generated range of a tract. |
 | `strata` | Ambient conditions by altitude: gravity (m/s², along −z), atmosphere (a definition giving density, pressure, sound speed, breathability; `null` is vacuum), and sky (a presentation hint). |
 | `time_rate` | Rate of the realm's clock relative to universal time. |
@@ -717,8 +717,10 @@ Everything the engine knows about unloaded space is in records.
 
 ```rust
 pub struct RegionRecord {
-    pub survey: RegionSurvey,                 // biome, elevation, settlement, roads: generator-defined summary
+    pub survey: RegionSurvey,                 // region kind and field values (10 §8)
     pub tracts: Box<[TractRecord; 4096]>,
+    pub placements: Vec<Placement>,           // maps placed in this region, indexed by tract (10 §4.1)
+    pub paths: Vec<PathLine>,                 // roads, rivers, walls crossing it (10 §8.3)
     pub stamps: Vec<Stamp>,                   // region-wide stamps
     pub sites: Vec<SiteId>,
     pub vars: VarMap,
@@ -1340,7 +1342,7 @@ tract definition's ruin variant, or the realm's wasteland definition.
 pub enum PendingEdit {
     Stamp(Stamp),
     Cells(Vec<CellEdit>),                   // explicit small changes
-    Mapgen { update: MapgenUpdateId, at: CellPos, params: VarMap },
+    Map { map: MapId, at: CellPos, turn: Turn, params: VarMap, mode: MapMode },   // 10 §4.3
     Spawn(SpawnRequest),
     Eoc { id: EocId, context: VarMap },     // run when the tract loads
 }
@@ -1556,7 +1558,7 @@ A derived realm uses a generator that takes another realm as input:
 
 `pristine` reproduces the source's generated tracts, ignoring changes since.
 `live` copies the source tract's current cells the first time each tract is
-realized. `transform` is a mapgen transform (document 10) applied on top:
+realized. `transform` is a map transform (10 §10) applied on top:
 swap palettes, add growths, remove people.
 
 **Creation.** `create_realm(def, seed, params) -> RealmId` at any safe point.
@@ -1618,7 +1620,7 @@ Elements may declare `interactions` and a `device` (section 5.5).
 | Mark a cell | `add_decal`, `set_var` |
 | Throw, push, catch | `launch`, `impulse`, `arrest` |
 | Tear loose, set down | `detach`, `merge` |
-| Stamp a map fragment | mapgen update at a location, live or pending |
+| Stamp a map fragment | `apply_map` at a location, live or pending (10 §4.3) |
 | Open or close a portal | portal table |
 | Create or destroy a realm | `create_realm`, `destroy_realm` |
 | Create an area; set its clock rate | area table, clock |
@@ -1679,8 +1681,8 @@ settle it.
 1. **Crush failure.** The support model has no load limit: a column carries
    any weight. Add a compressive load check per column if collapses look
    wrong without it. (This document, after the first collapse scenarios run.)
-2. **Cave-ins.** Natural ground is `anchor` and never collapses. Decide
-   whether tunnelling should be able to bring down what is above. (10)
+2. **Cave-ins.** Settled in 10 §5.2: whether ground anchors is chosen per
+   stratum. Rock holds; loose ground needs support and can come down.
 3. **Turning subgrids.** Settled in 11 §5.5: motion is in any direction;
    the grid itself swings in quarter-turns.
 4. **Very large creatures.** Decide whether a creature tens of metres tall is

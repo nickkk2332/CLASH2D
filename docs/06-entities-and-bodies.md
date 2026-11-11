@@ -639,7 +639,7 @@ places, shoving and squeezing past are actions content defines.
 
 | Form | Is | Cost |
 |------|----|------|
-| **Population** | A count of a kind of creature in a tract or region, with a table of creature definitions | A few bytes |
+| **Population** | A count of a kind of creature in a tract or region, with a table of creature definitions and a table of where its members are by time of day (10 §11.2) | A few bytes |
 | **Individual** | A full entity | Its components |
 | **Agent** | A stored individual with goals, stepped by the cold simulation (09) | A serialised entity and a small record |
 

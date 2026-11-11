@@ -652,6 +652,11 @@ tract (06 §12). Counts change by casualties, by `migrate` (a daily cold
 rule moving people between places by their conditions), and by whatever
 else content defines.
 
+A population has homes and a **presence** table: what share of it is at
+home, at work or about at each time of day (10 §11.2). The anonymous
+individuals instantiated when a tract loads follow from that, so a street
+is busy at noon and empty before dawn.
+
 Sites and regions carry statistics as variables: wealth, order, mood,
 whatever a mod measures. The engine gives them no meaning.
 

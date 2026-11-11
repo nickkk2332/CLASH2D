@@ -21,6 +21,7 @@ specification that implementation work follows.
 | [docs/07-combat.md](docs/07-combat.md) | Strikes, defences, clashes, grapples, takedowns, ranged weapons |
 | [docs/08-abilities-and-powers.md](docs/08-abilities-and-powers.md) | What an ability is, costs, suppression, bindings, and a catalogue of powers built from existing parts |
 | [docs/09-ai-and-simulation.md](docs/09-ai-and-simulation.md) | How characters decide, navigate and work together; agents, incidents, knowledge, weather |
+| [docs/10-world-generation.md](docs/10-world-generation.md) | The map format, placements, ground, settlements, realm plans, ruin, and seeding the world with people |
 | [docs/11-vehicles-and-travel.md](docs/11-vehicles-and-travel.md) | Mounts, craft, vessels, the sea, submarines, space, journeys |
 | [docs/12-presentation-and-ui.md](docs/12-presentation-and-ui.md) | Playback, cutscenes, input, the UI toolkit, frontends |
 | [docs/15-perception-and-social.md](docs/15-perception-and-social.md) | Senses, stealth, beliefs, disguise, relations, speech |
@@ -32,6 +33,7 @@ specification that implementation work follows.
 | [docs/plans/abilities.md](docs/plans/abilities.md) | Work packages for abilities and powers |
 | [docs/plans/ai.md](docs/plans/ai.md) | Work packages for AI and the layered simulation |
 | [docs/plans/devices.md](docs/plans/devices.md) | Work packages for devices, networks, building and kit |
+| [docs/plans/worldgen.md](docs/plans/worldgen.md) | Work packages for world generation and maps |
 | [docs/plans/vehicles.md](docs/plans/vehicles.md) | Work packages for vehicles, water and travel |
 | [docs/roadmap.md](docs/roadmap.md) | What is designed, what is next, open questions |
 | [docs/decisions.md](docs/decisions.md) | Settled decisions and their reasons |
