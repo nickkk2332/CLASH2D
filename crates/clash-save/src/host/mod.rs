@@ -44,7 +44,7 @@
 //! | `set <at> <layer> <state>` | Sets the floor, block or fixture of a cell; `none` clears it | `DebugCommand::SetElement` |
 //! | `control <who> <mode>` | Changes who decides for an entity; one under direct control becomes `@self` | `DebugCommand::SetControl` |
 //! | `session <who> [at]` | Starts a session: loads the tracts round a place, puts the entity there and holds its ticket | `DebugCommand::StartSession` |
-//! | `damage <at> <energy> [kind] [intensity] [layer]` | Sends a packet of damage to a cell | `WorldEdit::damage` |
+//! | `damage <at> <energy> [kind] [intensity] [layer]` | Sends a packet of damage to one element of a cell: the one named, else the first there is of its block, its fixture and its floor | `WorldEdit::damage` |
 //! | `field <at> <kind> [amount]` | Adds to a field in a cell, or takes from it | `WorldEdit::add_field` |
 //! | `look [at]` | Moves the cursor (`@here`) and says what is in its cell | Nothing: the cursor is the console's |
 //! | `frame` | Prints the frame as plain text | Nothing |
@@ -399,7 +399,7 @@ pub fn host_commands() -> Vec<CommandSpec> {
             .param(P::optional("at", T::Subject, "The cell. The cursor's cell if left out."))
             .changes(),
         cmd("damage")
-            .doc("Sends a packet of damage to a cell (02 §12): to one of its elements, or to its block, its fixture and its floor in turn.")
+            .doc("Sends a packet of damage to one element of a cell (02 §12): the one named, else what a blow meets first, the first there is of its block, its fixture and its floor.")
             .param(P::required("at", T::Subject, "The cell."))
             .param(P::required("energy", T::Real, "Joules delivered: `5kJ`, `1e6`."))
             .param(P::optional("kind", T::Word, "The damage type's id. The kinetic damage type if left out."))
@@ -1151,9 +1151,24 @@ impl Game {
                 .with("name", name),
             )
         })?;
+        // What a blow to the cell meets first: its block, else its
+        // fixture, else its floor.
         let layers: Vec<Layer> = match self.word_arg(command, "layer", LAYERS, "layer")? {
             Some(layer) => vec![layer],
-            None => vec![Layer::Block, Layer::Fixture, Layer::Floor],
+            None => {
+                let cell = self.sim.truth().cosmos().cell(loc).ok();
+                let first = [Layer::Block, Layer::Fixture, Layer::Floor]
+                    .into_iter()
+                    .find(|layer| {
+                        cell.is_some_and(|cell| match layer {
+                            Layer::Block => !cell.block.is_none(),
+                            Layer::Fixture => !cell.fixture.is_none(),
+                            Layer::Floor => !cell.floor.is_none(),
+                        })
+                    })
+                    .unwrap_or(Layer::Block);
+                vec![first]
+            }
         };
         let packet = DamagePacket::new(kind, energy, intensity, Cause::DEBUG);
         let struck = self.sim.world(|ctx| {
