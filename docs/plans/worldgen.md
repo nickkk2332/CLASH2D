@@ -283,6 +283,7 @@ Under `scenarios/worldgen/`.
 | `town_day` | WG9 | S7 | People, homes, presence, routines |
 | `tower_of_forty` | WG10 | S2 | Stacks; structure that can fall |
 | `crypt_walkable` | WG10 | S21 | Assemblies |
+| `road_over_water` | WG7 | — | Path kinds and crossings |
 
 ## Review additions
 

@@ -917,7 +917,7 @@ and `value` on grants (08 §11).
 `casualties`, `set_agent`, `make_agent`, `fold_agent`, `found_site`,
 `set_site_role`, `dissolve_site`, `add_knowledge`,
 `share_knowledge`, `publish`, `migrate`, `move_stock`, `set_stock`,
-`send_shipment`, `set_weather`.
+`send_shipment`, `set_weather`, `set_service`, `set_site`, `set_region`.
 
 **Queries**: `visible`, `heard`, `allies`, `threats` (all from belief),
 `jobs`, `agents` (of a site, group or region), `incidents`, `knowledge`.

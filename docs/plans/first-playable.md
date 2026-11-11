@@ -574,6 +574,12 @@ Under `scenarios/people/`. Presentation scenarios also have golden frames.
 | `minion_orders` | S7 | S16 | Command relation, orders must be heard |
 | `cutscene_takedown` | U10 | S6 | Choreography over decided events |
 | `creation_flow` | U9 | S20 | Data-driven character creation |
+| `the_open_door` | S4 | — | Watched things and discrepancies |
+| `a_tall_figure_in_red` | S6 | — | Features and descriptions |
+| `bodyguard` | S7 | — | Relations that intervene |
+| `the_larder` | E8 | — | Ageing |
+| `gas_mask` | E2, E8 | — | Exposure by route |
+| `behind_lead` | S2 | — | Signals that expose |
 
 ## Review additions
 
@@ -605,3 +611,5 @@ small package of its own.
 | Colours, fallbacks and inline styles | U1, U2 | 12 §4.3 | `color` definitions load with a word and a fallback; the terminal frontend uses the fallback; `<name>…</>` styles text; the linter warns on glyph states that differ in colour alone (invariant V10). |
 | Looks, shapes, own colour and ambience | U4, U5 | 12 §4.1, §4.4, §6.4 | Frame tests: a holder of a look is drawn with it from the moment the event is played and only to viewers with the needed sense; a creature of several cells is drawn by its shape for its facing; two cloaks of one definition are drawn in their own colours, and a witness's description names the same colour; rain is drawn only on cells known to be open to the sky. |
 | Route picker | U7 | 12 §9.3 | Frame test: the picker draws a numbered path as steps are added, shows the parameter's `check` beside the step that fails it, lets steps be taken back, and submits the list in order. |
+| Presentation testing | U1 | 12 §12 | Golden frames as text for the bundled screens; the view model equals a fresh one after every scripted playback; a test asserts the scene reaches the simulation only through `submit`. |
+| Perception at lower detail | S3 | 15 §14 | A warm entity does not sweep; a signal strong enough promotes it; a cold agent keeps its beliefs unchanged while stored. |

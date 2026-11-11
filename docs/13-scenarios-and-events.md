@@ -211,7 +211,7 @@ you.
 ```json
 "plot": [
   { "id": "arrival",     "when": "start",
-    "do": [ { "open": "ashfall_intro" } ] },
+    "do": [ { "show_screen": { "screen": "ashfall_intro", "to": "view" } } ] },
   { "id": "first_night", "after": ["arrival"], "when": "realm.time_of_day == 'night'",
     "do": [ { "start_incident": { "id": "scavengers_come", "at": "start.site" } } ] },
   { "id": "signal",      "after": ["first_night"], "when": "party.any(it.has_item_tag('radio_part'))",
@@ -436,7 +436,7 @@ remembers is a scenario with one line of configuration.
 ```json
 "ends": [
   { "if": "party.count == 0", "as": "lost" },
-  { "on": "objective_done", "filter": { "id": "escape_the_island" }, "as": "escaped",
+  { "on": "objective_changed", "filter": { "id": "escape_the_island", "state": "done" }, "as": "escaped",
     "then": { "scenario": "mainland", "carry": ["party"] } } ]
 ```
 

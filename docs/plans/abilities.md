@@ -265,6 +265,8 @@ Under `scenarios/abilities/`.
 | `planted_memory` | A10 | S15 | Belief without perception |
 | `dominated` | A10 | S16 | Driver |
 | `cheat_skill` | A10 | S20 | Template, parameters, interface part |
+| `as_planned` | A10 | — | Planned movement and imposed spaces |
+| `the_court` | A10 | — | Planned movement and imposed spaces |
 
 ## Review additions
 

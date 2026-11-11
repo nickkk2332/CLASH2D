@@ -296,3 +296,5 @@ small package of its own.
 |----------|---------|------|-----------|
 | Sheet view | TL10 | 14 §10.2 | A map made of placed maps is shown whole; a piece can be moved and turned, and opening it puts it on the canvas. May follow the rest of TL10. |
 | Stepping through a rule | TL15 | 14 §6.4 | See the package. |
+| Map and generation previews | worldgen WG12 | 14 §10.1; 10 §12 | Built with worldgen package WG12; listed here so that every section of 14 has an owner. |
+| Logs and failures | TL3 | 14 §14 | The structured log carries time, tick, subsystem, severity and fields; rule warnings are rate-limited per site; a simulated panic is caught at the top and writes a report. |

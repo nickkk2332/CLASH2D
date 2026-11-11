@@ -702,6 +702,8 @@ Each scenario is a console script with a golden hash, run in all four modes.
 | `the_tremor` | W24 | — | Weakened span and bearing; devastation by kind |
 | `the_thaw` | W25 | — | State change by region temperature; floating floors |
 | `ice_wall` | W25 | — | State change by fields; rubble by damage type |
+| `quench` | W16 | — | Field reactions |
+| `over_the_horizon` | W14, W17 | — | Leaving loaded space |
 
 ## Review additions
 
@@ -722,3 +724,6 @@ small package of its own.
 | Leaving loaded space | W14, W17 | 02 §15.4 | Test script `over_the_horizon`: a shell fired across twenty tracts loads none of them, comes down at the place and time its flight gives, and its impact is found when that tract is loaded. One that comes down in a loaded tract lands in full. A person thrown the same distance is there afterwards. |
 | Exposure from fields | W16 | 02 §16 | The `expose` rule raises `OccupantDosed` for each occupant with the amount its level gives. The world applies no routes; the simulation does. |
 | Contact on elements | W3, W14 | 02 §5.4, §15.2 | An element's `contact` loads and is reported with a body impact against it. |
+| Timeline ordering and the clock tree | F3 | 03 §3.2, §3.3; 01 §5 | Wake-ups pop in (tick, sequence) order; a clock's rate change preserves the remaining local time of everything on it (invariants T1, T2). |
+| Mod layout, `mod.json` and ids | F4 | 04 §3.1, §3.2, §4.1, §4.2 | A mod directory with a `mod.json` loads; ids are namespaced and an id that breaks the form is a diagnostic. |
+| Interiors that do not fit | W20a | 02 §18.4 | A vessel map whose interior is larger than its envelope is a load error that says to use a realm behind a portal. |

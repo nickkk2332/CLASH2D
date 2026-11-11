@@ -1054,7 +1054,8 @@ When an element is destroyed:
 2. Its material's rubble for the damage type that destroyed it is added to
    the cell (or the nearest standable cell below): a fixture, or a field. Rubble amounts add up; a full cell of rubble becomes
    the fixture's `heap` block.
-3. If the packet passed energy on and the debris budget allows, part of the
+3. If the packet passed energy on and the debris budget (`debris.max_bodies`)
+   allows, part of the
    element's mass is launched as debris bodies along the direction of the hit
    (section 15). Debris does secondary damage.
 4. `ElementDestroyed` is emitted, and a stability check is queued.
@@ -1933,6 +1934,11 @@ height; ambient gravity, atmosphere, temperature and drift; distance; line
 of sight; area and
 site membership; tract devastation; variables at cell, area, site, tract,
 region, realm and global scope.
+
+**Settings**: `world.min_intensity`, `release.max_cells`,
+`field.max_active_cells`, `body.max_ticket_tracts`, `max_loaded_tracts`,
+`sight.portal_depth`, and the debris budget of section 12.3
+(`debris.max_bodies`).
 
 Nothing in this document is reachable only from Rust.
 

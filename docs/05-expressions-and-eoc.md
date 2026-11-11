@@ -645,7 +645,8 @@ the timer was set.
 | `{ "message": { "text": …, "to": subject, "style": … } }` | Put a line in the message log of whoever controls `to`; default `self` |
 | `{ "ask": { "who": entity, "prompt": text, "options": [ { "label": …, "if": …, "do": […] } ] } }` | Stop and offer a choice (03 §5.2). Each option carries the effects to run if chosen. For entities not under direct control, the first available option is taken unless a rule says otherwise. |
 
-Opening screens and other interface effects belong to document 12.
+Opening screens and other interface effects belong to document 12. A rule
+asks for a screen with `show_screen` (12 §10.5).
 
 ### 10.7 Subsystem verbs
 

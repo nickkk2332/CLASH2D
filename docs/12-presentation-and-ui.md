@@ -587,6 +587,13 @@ Keys, clicks and widget events run lists of UI effects.
 
 UI effects cannot change the simulation except by submitting commands.
 
+**From the simulation.** A rule may ask for a screen:
+`{ "show_screen": { "screen": "trade", "to": "self", "with": { … } } }`.
+Like a cutscene's cue (section 8.1) it is an output event and changes
+nothing in the simulation. The interface of whoever controls `to` opens
+the screen with those values. If nobody does, nothing happens. This is how
+an interaction opens a shop, a book, a terminal or a mod's own screen.
+
 ### 10.6 Extending screens
 
 ```json
@@ -682,8 +689,11 @@ A third, **null** frontend records frames for tests.
 field on everything drawable. The `look` field on traits, modes, postures
 and worn items. The `cutscene` field on actions.
 
-**Simulation effect**: `play_cutscene`. **Rule field**: `ui_callable`.
-**Command**: `Ui { rule, args }`.
+**Simulation effects**: `play_cutscene`, `show_screen`. **Rule field**:
+`ui_callable`. **Command**: `Ui { rule, args }`.
+
+**Settings**: `stretch_time`, `look_down`, and the player's preferences
+for playback speed and how often cutscenes play.
 
 **Widgets**: section 10.3. **UI effects**: section 10.5.
 **Binding names**: section 10.4.

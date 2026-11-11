@@ -317,6 +317,10 @@ Under `scenarios/vehicles/`.
 | `orbit_to_luna` | V12 | S9 | Edge exit, lane, arrival |
 | `the_colossus` | V14 | S11 | A creature that is a place |
 | `in_the_cockpit` | V15 | S25 | A machine with limbs and a pilot |
+| `she_rolls` | V4 | — | List and capsizing |
+| `convoy` | V7 | — | Fleets |
+| `downstream` | V1 | — | Drift |
+| `going_up` | V6b | — | Lifts |
 
 ## Review additions
 
@@ -336,3 +340,4 @@ small package of its own.
 | Drift | V1 | 11 §4.7 | Test script `downstream`: a swimmer and a floating crate in a river are carried along its line at its current; an occupant in a storm-force wind is staggered and one in a breeze is not; under a roof neither is touched. |
 | Held temperature | V3 | 11 §4.6 | A closed sealed area with a supplied `climate` device reaches its set point in the time its volume and rate give, by one scheduled wake-up. Opened, it takes the outside temperature. Unpowered, it moves toward the outside at its `leak`. |
 | Lifts | V6b | 11 §5.2 | Test script `going_up`: a platform on vertical track answers a call signal, stops level with the storey, and carries those standing on it. With its hoist destroyed it falls and lands as an impact. |
+| Loading, storing and detail | V2 | 11 §14 | A parked, loaded vehicle schedules nothing. A stored one is saved with its anchor tract and returns identical. A travelling one is a traveler record, with a carrier realm only if someone is aboard. |

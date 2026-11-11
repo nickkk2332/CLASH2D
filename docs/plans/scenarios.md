@@ -264,6 +264,7 @@ Under `scenarios/games/`.
 | `remembered_dawn` | SC7 | — | Restore with memories carried |
 | `second_chapter` | SC8 | S21 | Campaign carry |
 | `relived_minute` | SC11 | S10 | Experimental. World rewind with memories carried |
+| `second_look` | SC6 | — | Reopening a case |
 
 ## Review additions
 

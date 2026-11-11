@@ -380,6 +380,8 @@ Under `scenarios/ai/`.
 | `power_station_down` | L5 | S7 | Services |
 | `storm_at_sea` | L6 | S22 | Weather into vehicles |
 | `distant_battle` | L7 | S19 | Battles in both forms |
+| `parked` | I2 | — | Berths |
+| `homestead` | L5 | — | Founding a site |
 
 ## Review additions
 

@@ -456,6 +456,8 @@ Under `scenarios/devices/`.
 | `firebrick` | G16 | S24 | A machine made of cells in a shape |
 | `spiked` | G19 | — | Mixtures, ingestion, antidotes |
 | `envenomed` | G19 | — | Coatings and injection |
+| `thin_wire` | G4 | — | Junctions between capacities |
+| `walkway` | G7 | — | Moving floors |
 
 ## Review additions
 

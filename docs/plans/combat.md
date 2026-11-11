@@ -279,6 +279,14 @@ Under `scenarios/combat/`.
 | `bullet_time` | C9 | S3 | Time of flight against notice delay |
 | `volley` | C9 | S19 | Many projectiles |
 | `hold_back` | C11 | — | Effort from preview |
+| `blade_in_a_corridor` | C2 | — | Swings meet the world |
+| `bodyguard` | C4 | — | Defending someone else |
+| `off_its_hinges` | C7 | — | Holding the world |
+| `caught_arrow` | C9 | — | Stopping a shot |
+| `the_pit` | C2 | — | Contact surfaces |
+| `before_they_land` | C5 | — | In the air |
+| `heat_seeker` | C9 | — | Driven and guided projectiles |
+| `mixed_belt` | C10 | — | Ammunition as items |
 
 ## Review additions
 
@@ -301,3 +309,4 @@ small package of its own.
 | In the air | C5 | 07 §7.1; 03 §6 | Test script `before_they_land`: a launched target is struck again in flight and its velocity changes by the push; a leaping attacker's strike lands during the leap with the leap's speed added; an action that needs footing is refused in the air with a reason. |
 | Driven and guided projectiles | C9 | 07 §11.1; 02 §15 | Test script `heat_seeker`: a seeker turns toward its target within its turn rate, is drawn off by a stronger source in its cone, and loses a target that goes behind a wall. A launcher-guided shot goes ballistic when the guiding action ends. A returning projectile comes back to where its thrower then is. |
 | Ammunition as items | C10 | 07 §11.5; 06 §9.1 | Test script `mixed_belt`: a magazine loaded with two kinds of round fires them in the order loaded, each with its own projectile and energy; an empty magazine refuses with a reason; `count` above one launches that many. |
+| Fighting at lower detail | C11 | 07 §15 | A shot fired in a warm tract is instant. A warm entity attacked by a hot one is promoted before the strike resolves. Bulk exchanges themselves are ai package I8. |

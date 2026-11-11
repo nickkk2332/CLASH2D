@@ -577,6 +577,9 @@ Under `scenarios/kernel/`, run in all modes of the scenario runner.
 | `too_fast_to_notice` | T5 | S14, S19 | Notice latency; the gap is real |
 | `takedown_lock` | T6 | S6 | Joint action |
 | `reload_midfight` | P8 | S12 | Hot reload under load |
+| `winter_rules` | K5 | — | Rule groups |
+| `bodyguard` | T5 | — | Who is offered a window |
+| `who_did_it` | K9, X4 | — | Text for a reader |
 
 ## Review additions
 
@@ -596,3 +599,8 @@ small package of its own.
 | Footing | T2 | 03 §6 | An action whose `footing` is true is refused, with a reason, for an actor with nothing under it. One without it runs. |
 | Text for a reader | K9, X4 | 05 §4.6 | Test script `who_did_it`: one event's log line reads "You…" to the one who did it, names a known person by name to a second reader, and describes a stranger by their features to a third. The grammar helpers have unit tests against the bundled `language`. Reading another's `.name` in a message is a lint warning. Until first-playable packages S5 and S6 exist, what a reader knows is supplied by a test fixture. |
 | List parameters | T2 | 03 §6.3 | A parameter of type `list` accepts between its least and greatest number of values of its element type, is indexable in the action's expressions, and survives save and load mid-action. `check` is evaluated on request and never refuses by itself. |
+| What presentation is given | K2 | 03 §12 | Every event carries the universal tick, the local time of its clock, its subjects and its cause; a decision request carries the time elapsed for that entity; phase events carry their start and scheduled end. |
+| Total conversions | P3 | 04 §14 | A profile that lists none of the bundled mods starts at its own boot screen, and a frame test shows nothing of the engine's is drawn before it. |
+| Safety limits | P4 | 04 §15 | A file over the size limit, nesting over the depth limit and a definition count over its limit each give a diagnostic and no crash. A file reference that leaves the mod's directory is refused. |
+| Rules at lower detail | K5, T7 | 05 §13.5 | Attached rules on a stored entity do not run; recurring ones follow `while_unloaded`; nothing cold raises a cell-level event. |
+| The script hook | none | 05 §16 | Reserved. No package builds it, and nothing may depend on it. |

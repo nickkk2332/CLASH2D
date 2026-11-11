@@ -1076,6 +1076,8 @@ and `worth` on items; `services` on tract definitions.
 **Queries**: `interactions`, `devices`, `networks`, `members`, `jobs`,
 `modules`, `recipes`, `offers`, `payments`.
 
+**Settings**: `supply_range`.
+
 **Properties**: on devices, `mode`, `config.*`, `supply(resource)`,
 `store(resource)` with `level` and `frac`, `network(port)`, `process` with
 `recipe` and `progress`, `input(name)`, `slot(id)`, `bearer`, `assembly`;

@@ -802,7 +802,7 @@ start. `forget` makes an individual anonymous again.
 ### 12.3 Stored entities
 
 A stored entity keeps every component. Its timers follow 03 §9. Its place is
-`Stored`. Loading restores it exactly; invariant R7 covers it.
+`Stored`. Loading restores it exactly; rule R7 (01 §2) covers it.
 
 ## 13. Modding surface
 
@@ -823,7 +823,7 @@ Body flags on `damage_type` (`severs`).
 `contents_materialised`, `became_notable`.
 
 **Hooks**: `hit_incoming`, `entity_dying`, `trait_adding`, `pool_changing`,
-`item_taking`, `passage_requested`.
+`item_taking`, `passage_requested`, `exposure_incoming` (02 §16; 16 §9.5).
 
 **Effects**: the verbs of sections 6.5, 8.2, 8.3, 9.2 and 11, and:
 `hit`, `add_trait`, `remove_trait`, `set_attr_base`, `add_modifier`,
