@@ -574,7 +574,7 @@ fn an_elements_contact_surface_is_reported_with_the_impact() {
             loc,
             contact,
             ..
-        } => Some((loc.cell, *contact)),
+        } => Some((loc.cell, contact.as_deref().copied())),
         _ => None,
     });
     let (cell, contact) = on_spikes.expect("it met the spikes");

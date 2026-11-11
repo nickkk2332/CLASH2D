@@ -900,12 +900,15 @@ whoever owns it drains. Rules name an event in snake case
 | `EnergyReleased` | `release`, `loc`, `kind`, `energy`, `absorbed` (J elements took), `reach` (m the front got to), `cells` (visited), `cut_off` (stopped for the budget), `tallies` (by instigator: `elements` destroyed, their `mass` in kg, occupants `exposed` and `thrown`, J `absorbed`) | A release's front has gone as far as it goes (section 13.2). Its cause is the release's doing |
 | `BodyLaunched` | `body` (id), `owner` (what it is), `loc`, `pos` (m), `vel` (m/s), `mass` (kg) | Something was set flying (section 15); its cause is what launched it |
 | `BodyImpact` | `body`, `owner`, `loc` (the cell struck), `layer`, `state` (the element as it was), `pos`, `energy` (J the body lost), `intensity` (Pa), `result` (unaffected, damaged, destroyed), `contact` (the element's striking surface, if it has one) | A body struck a floor, block or fixture (section 15.2). Its cause, and that of the three below, is the body's doing |
-| `BodyHitOccupant` | `body`, `owner`, `occupant`, `loc`, `pos`, `packet` (kind, energy, intensity, cause), `vel` (the body's as it struck), `push` (m/s the occupant takes if free to move) | A body struck an occupant (section 15.2) |
+| `BodyHitOccupant` | `body`, `owner`, `occupant`, `loc`, `pos`, `packet` (kind, energy, intensity, cause: the event's cause is the packet's), `vel` (the body's as it struck), `push` (m/s the occupant takes if free to move) | A body struck an occupant (section 15.2) |
 | `BodyLanded` | `body`, `owner`, `loc`, `pos` | A body came to rest and is a body no longer (section 15.3) |
 | `BodyLeftLoaded` | `body`, `owner`, `loc` (the last loaded cell it was in), `lands` (where it comes down or back in, if it does), `at` (when), `returns` (it comes back in and flies on), `energy` (J as it arrives) | A body's flight took it out of loaded space and was finished by arithmetic (section 15.4) |
 
 The three tract events carry no cause of their own: `cause()` gives the
-coarse cause for them. What a field does of itself has the cause kind
+coarse cause for them. An event is kept small, at most 176 bytes, since
+the simulation holds it inline beside small things: what would make one
+larger is boxed, as `BodyHitOccupant`'s packet and `BodyImpact`'s contact
+are. What a field does of itself has the cause kind
 `Field` with, as instigator, whoever is responsible for the field in
 that cell (section 16).
 

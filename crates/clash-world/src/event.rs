@@ -510,8 +510,9 @@ pub enum WorldEvent {
         intensity: Real,
         /// What the blow did to the element.
         result: DamageResult,
-        /// The element's striking surface, if it has one.
-        contact: Option<Contact>,
+        /// The element's striking surface, if it has one. Boxed, to
+        /// keep every event small.
+        contact: Option<Box<Contact>>,
         /// The body's doing: it as the actor, for whoever set it going.
         cause: Cause,
     },
@@ -534,16 +535,15 @@ pub enum WorldEvent {
         /// part of it.
         pos: [Real; 3],
         /// The blow: the whole energy of the body's motion, as
-        /// concentrated as its surface makes it.
-        packet: DamagePacket,
+        /// concentrated as its surface makes it. Its cause, the body's
+        /// doing, is the event's. Boxed, to keep every event small.
+        packet: Box<DamagePacket>,
         /// The body's velocity as it struck, in m/s.
         vel: [Real; 3],
         /// The velocity, in m/s, that the blow gives the occupant if it
         /// is free to move, by conservation of momentum. Zero where the
         /// world was told no mass for it.
         push: [Real; 3],
-        /// The body's doing.
-        cause: Cause,
     },
     /// A body has come to rest and is no longer a body (02 §15.3). A
     /// fragment has been left as rubble. An entity is in the cell
@@ -683,6 +683,7 @@ impl WorldEvent {
     pub fn cause(&self) -> Cause {
         match self {
             WorldEvent::DecalAdded { decal, .. } => decal.cause,
+            WorldEvent::BodyHitOccupant { packet, .. } => packet.cause,
             WorldEvent::ElementChanged { cause, .. }
             | WorldEvent::ElementDamaged { cause, .. }
             | WorldEvent::DecalsRemoved { cause, .. }
@@ -705,7 +706,6 @@ impl WorldEvent {
             | WorldEvent::FieldBudgetExceeded { cause, .. }
             | WorldEvent::BodyLaunched { cause, .. }
             | WorldEvent::BodyImpact { cause, .. }
-            | WorldEvent::BodyHitOccupant { cause, .. }
             | WorldEvent::BodyLanded { cause, .. }
             | WorldEvent::BodyLeftLoaded { cause, .. }
             | WorldEvent::ReleaseStarted { cause, .. }
@@ -1164,7 +1164,6 @@ impl StateHash for WorldEvent {
                 packet,
                 vel,
                 push,
-                cause,
             } => {
                 tick.state_hash(hasher);
                 body.state_hash(hasher);
@@ -1175,7 +1174,6 @@ impl StateHash for WorldEvent {
                 packet.state_hash(hasher);
                 vel.state_hash(hasher);
                 push.state_hash(hasher);
-                cause.state_hash(hasher);
             }
             WorldEvent::BodyLanded {
                 tick,
@@ -1256,5 +1254,22 @@ impl StateHash for WorldEvent {
                 cause.state_hash(hasher);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The most an event may take, in bytes. The simulation keeps world
+    /// events inline in enums beside small variants, which clippy refuses
+    /// when the difference passes 200 bytes: what an event carries beyond
+    /// this is boxed, as a blow's packet and an element's contact are.
+    const MAX_EVENT_BYTES: usize = 176;
+
+    #[test]
+    fn an_event_stays_small() {
+        let size = std::mem::size_of::<WorldEvent>();
+        assert!(size <= MAX_EVENT_BYTES, "a world event takes {size} bytes");
     }
 }

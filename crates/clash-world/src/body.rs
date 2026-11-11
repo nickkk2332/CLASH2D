@@ -1431,7 +1431,8 @@ impl WorldCtx<'_> {
             .cosmos
             .defs()
             .element(layer, state)
-            .and_then(|element| element.contact);
+            .and_then(|element| element.contact)
+            .map(Box::new);
         self.events.emit(WorldEvent::BodyImpact {
             tick: self.timeline.now(),
             body: flight.id,
@@ -1500,10 +1501,9 @@ impl WorldCtx<'_> {
             occupant,
             loc: hit.loc,
             pos: hit.point,
-            packet,
+            packet: Box::new(packet),
             vel: body.vel,
             push,
-            cause,
         });
         // The packet has arrived in the occupant's cell: the fields
         // there that pass its kind of damage on do so (02 §16).
