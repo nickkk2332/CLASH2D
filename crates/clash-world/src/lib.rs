@@ -35,7 +35,8 @@
 //! | What is known of space that is not loaded | [`RegionRecord`], [`TractRecord`]; [`Cosmos::tract_record`], [`Cosmos::add_pending_edit`] |
 //! | Generating: the interfaces, and choosing a generator | [`RegionSurveyor`], [`TractRealizer`], [`GenCtx`]; [`GeneratorRegistry`], [`Generators`] |
 //! | Loading and unloading tracts | [`WorldCtx::load_tracts`], [`WorldCtx::unload_tract`], with a [`TractIo`] |
-//! | Where changed tracts are kept | [`TractStore`], [`MemoryStore`]; [`encode_column`], [`decode_column`] |
+//! | Where a save is kept | [`TractStore`], [`MemoryStore`], [`RedbStore`]; [`encode_tract`], [`decode_tract`]; [`SaveIds`] |
+//! | Saving and loading the world | [`Cosmos::save_world`], [`Cosmos::load_world`]; [`save`] |
 //! | Keeping tracts loaded | [`Ticket`], [`Cosmos::hold_ticket`], [`WorldCtx::reconcile_activity`] |
 //! | Why something could not be done | [`WorldError`] |
 //! | A world for a test | [`test_support`] |

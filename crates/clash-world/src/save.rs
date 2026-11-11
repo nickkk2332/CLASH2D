@@ -25,7 +25,8 @@
 //! that has not is generated again when the world is loaded, like any
 //! pristine tract.
 //!
-//! **A new world subsystem adds its section to [`WORLD_SECTIONS`]**: a
+//! **A new world subsystem adds its section to `WORLD_SECTIONS`**, the
+//! list in this module: a
 //! name beginning with `world.`, a kind, a version, a function that
 //! writes its state and one that puts it back. If its state names
 //! definitions by dense id it implements `MapIds` (see
@@ -131,7 +132,7 @@ pub const TRACTS_BLOB_VERSION: u32 = 1;
 /// The most warnings a cosmos keeps until they are taken. Past this the
 /// oldest are kept and the rest dropped: the same definition missing
 /// from a thousand tracts is one thing to tell the player.
-pub const SAVE_WARNINGS_MAX: usize = 1024;
+pub const SAVE_WARNINGS_MAX: usize = 1000;
 
 /// Where a definition that is missing was met.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]

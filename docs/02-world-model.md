@@ -163,6 +163,7 @@ pub struct Cosmos {
     stability: StabilityQueue,                 // checks asked for and not yet made (section 14.2)
     activity: WorldActivity,                   // the world's processes and the collapses in progress (section 14.3)
     vars: VarMap,                              // global variables
+    save: SaveState,                           // the save's id tables and entity sections waiting (section 11); not state
 }
 
 pub struct Realm {
@@ -1240,6 +1241,7 @@ pub struct TractExtra {
     pub stamp_watermark: u64,                 // stamps up to this sequence are already applied
     pub last_loaded: Tick,                    // when it was last unloaded, in the local time of its realm's clock
     pub vars: VarMap,
+    pub generated: Option<Hash128>,           // the generator fingerprint its cells were last generated with (section 11.3)
 }
 ```
 
@@ -1425,6 +1427,8 @@ pub struct LoadedTract {
     pub from_store: bool,                     // read, not generated
     pub spawns: Vec<SpawnRequest>,            // for the simulation
     pub areas: Vec<AreaId>,                   // made from what the generator asked for
+    pub entities: Vec<u8>,                    // the simulation's entity section, handed back once (section 11.1)
+    pub regenerated: bool,                    // generated again from other inputs: new content (section 11.3)
 }
 ```
 
@@ -1436,8 +1440,11 @@ As built:
   9.3). Then each tract is installed in the order given: its column joins
   the grid, the changes waiting for it are made, and `TractLoaded` is
   emitted.
-- A tract is read from the store when its record says `Realized { pristine:
-  false }` and generated otherwise (section 11).
+- A tract is read from the store when the store holds cells for it:
+  always when its record says `Realized { pristine: false }`, and for a
+  pristine tract when everything is stored. Otherwise it is generated
+  (section 11.3). The entity section the store holds for it is handed
+  over either way.
 - What a generator asks for besides cells is acted on once, the first time
   a tract is loaded: its areas are made (they are the cosmos's and outlive
   the loading) and its spawn requests are handed over. A pristine tract
@@ -1484,8 +1491,9 @@ three steps are not one call:
 
 A column that has changed since it was loaded is written whole, and its
 record becomes `Realized { pristine: false }`. One that has not is not
-written. The checks for bodies and processes come with them (sections 14
-and 15).
+written, unless everything is stored or the simulation handed in an
+entity section for the tract (section 11). The checks for bodies and
+processes come with them (sections 14 and 15).
 
 ## 10. Activity
 
@@ -1628,7 +1636,7 @@ budget leaves room for about four more such areas.
 
 ## 11. Persistence
 
-- World data is stored per tract behind a trait:
+- A save is kept behind a trait:
 
 ```rust
 pub trait TractStore {
@@ -1636,12 +1644,18 @@ pub trait TractStore {
     fn put(&mut self, realm: RealmId, pos: TractPos, blob: &[u8]);
     fn delete(&mut self, realm: RealmId, pos: TractPos);
     fn commit(&mut self) -> Result<(), StoreError>;        // atomic
+    fn section(&self, name: &str) -> Result<Option<Vec<u8>>, StoreError>;
+    fn put_section(&mut self, name: &str, blob: &[u8]);
+    fn delete_section(&mut self, name: &str);
+    fn section_names(&self) -> Result<Vec<String>, StoreError>;   // in order
 }
 ```
 
-  The default implementation uses `redb`. Tests use an in-memory map
-  (`MemoryStore`). `put` and `delete` take effect for later `get`s at once;
-  `commit` makes what was done since the last commit durable.
+  It holds tract blobs by realm and tract, and named sections for
+  everything of a save that is not a tract. The default implementation
+  uses `redb` (`RedbStore`). Tests use an in-memory map (`MemoryStore`).
+  `put` and `delete` take effect for later reads at once; `commit` makes
+  what was done since the last commit durable, all of it or none.
 - A tract blob holds its column (chunks with compacted palettes, sparse
   layers, fields, fills) and an opaque entity section owned by the simulation.
   It is compressed with LZ4.
@@ -1664,17 +1678,197 @@ pub trait TractStore {
 Rule R7 (save/load is invisible) is tested for every world scenario,
 including saves taken in the middle of a collapse and a blast.
 
-Built so far, with tract loading: the trait, `MemoryStore`, and a column
-codec behind two functions, `encode_column(&Column)` and
-`decode_column(&WorldDefs, &[u8])`. A tract blob has kind `TRCT` and version
-1. Its body is the column's two fills, the chunk height of its first stored
-chunk and its chunks, without those at either end that hold only the fill;
-each chunk is its three element layers with compacted palettes and its four
-sparse layers. Equal columns give equal bodies. The pristine policy is the
-record's `pristine` flag alone. Left to the persistence package, which
-replaces the two functions: states by save id, the entity section, fields,
-the generator fingerprint, `save.store_pristine` and the `redb` store. Until
-then a blob holds runtime ids and is good for the mod set that wrote it.
+### 11.1 The tract blob
+
+Kind `TRCT`, version 2. `encode_tract(defs, ids, cells, entities)` writes
+one and `decode_tract(defs, ids, blob)` reads it. The body is two fields:
+
+| Field | Holds |
+|-------|-------|
+| `cells` | Optional. The column: its two fills, the chunk height of its first stored chunk, and its chunks without those at either end that hold only the fill; each chunk is its three element layers with compacted palettes and its four sparse layers. Absent for a tract whose cells are generated again |
+| `entities` | The simulation's entity section, as bytes |
+
+Equal columns written against equal tables give equal bodies. Version 1
+held dense ids and no entity section and was never written to disk; it
+is refused, with the version it states.
+
+**The entity section** is bytes the world neither reads nor drops. The
+simulation hands it in for a loaded tract with
+`Cosmos::set_tract_entities(realm, tract, bytes)`, when it answers
+`TractUnloading` by taking its entities out (section 9.5). The world
+writes it with the tract when the tract is unloaded or the world is
+saved, and hands it back in `LoadedTract::entities` when the tract is
+next loaded. It is handed over once: as it is, the section is taken out
+of the store, so that what the simulation then holds live is not also
+waiting in the tract. A tract that has never been changed and has an
+entity section is stored as that section alone.
+
+### 11.2 Save ids and placeholders
+
+A cosmos keeps the tables of its save (`SaveIds`): one for each kind of
+definition that saved state names (`DefKind`: `floor`, `block`,
+`fixture`, `material`, `area_kind`, `realm`), each the qualified ids in
+the order the save first named them. Save id 0 of each element type and
+of materials is the built-in `engine:none`.
+
+- Writing turns dense ids into save ids and adds a definition to its
+  table the first time the save names it. The tables only grow.
+- Reading turns save ids into the dense ids of the definitions loaded
+  now. A save id its table does not hold is damage, and an error.
+- The tables are not state and are not hashed. They are written with
+  the world, in `world.ids`, each under the name of its definition
+  type, so that a build with more kinds reads the saves of one with
+  fewer and keeps the tables of kinds it does not know.
+- Everything the world saves is walked for the ids it holds: element
+  states in cells, fills and waiting changes, a realm's definition, an
+  area's kind, the materials of a falling mass.
+- Written as they are, because their definition types are not built
+  and the world gives the numbers no meaning: decal, conduit, site,
+  tract, devastation kind, map, region kind and path kind ids. A named
+  state of an element is written as its position among the
+  definition's states.
+
+**Placeholders.** When a save is loaded, an id whose definition is no
+longer there (04 §12.3) is given a placeholder: a definition of the
+right type, added after every real one in a copy of the definitions,
+which keeps the id the save wrote as its own. `Cosmos::defs` of a loaded
+world holds them; every definition that was passed in keeps its dense
+id. A placeholder is written back under the id it keeps, so a save made
+without the mod loses nothing, and when the mod is loaded again the id
+finds its definition and the content is as it was. A placeholder is not
+found by name: a reference in data to something that does not exist
+stays a mistake. What a placeholder is like is the engine's, and the
+same for every id:
+
+| Type | The placeholder |
+|------|-----------------|
+| `floor` | No thickness. It can be stood on |
+| `block` | No volume; `load_bearing`, `anchor` and `passable`: it does not fall, holds up what stood on it, and is neither seen through nor walked into |
+| `fixture` | No volume |
+| `material` | No density, no toughness, the default resistance of every damage type, never crushed, and a span that reaches as far as a check looks |
+| `area_kind` | Nothing: an area keeps the tags, variables, clock and priority it was made with |
+| `realm` | No strata, no generator, barrier edges, and the extent the realm was saved with. Its stored tracts load; nothing more is generated |
+
+Each element placeholder is drawn as `?` and carries the tag
+`placeholder`, as a placeholder material does. An element that is a
+placeholder, or is made of one, has no capacity: the first blow that
+takes effect destroys it, and it leaves no rubble. Destroyed, it is
+gone for good.
+
+`Cosmos::take_save_warnings` lists each missing definition with where
+it was met: among the save's ids, in a section of the world, or in the
+cells of a tract, as the tract is read. Migration entries (04 §12.1)
+are consulted before a placeholder is made, once the `migration` type
+is built.
+
+### 11.3 The pristine policy
+
+- A tract's record says `Realized { pristine: true }` until the tract
+  is unloaded with cells that have changed since they were generated or
+  read. Such a tract writes no blob, when it is unloaded and when the
+  world is saved, unless it has an entity section.
+- **The fingerprint.** `Cosmos::generator_fingerprint(realm)` is a hash
+  of what a realm's tracts are generated from: the content fingerprint
+  of the definitions (04 §9; `WorldDefs::fingerprint`), the generator
+  the realm's definition names with its parameters, and the realm's
+  seed. A tract's record keeps the fingerprint its cells were last
+  generated with (`TractExtra::generated`). When a pristine tract is
+  generated again under another fingerprint, its cells are new content:
+  `LoadedTract::regenerated` says so, and the record takes the new
+  fingerprint. Only the cells are made again. The areas and spawn
+  requests of the first generation were acted on then and are not
+  repeated, and whatever the simulation kept for the tract may no
+  longer fit what stands there.
+- **`save.store_pristine`** (`Cosmos::set_store_pristine`, off by
+  default) stores every tract when it is unloaded and every loaded
+  tract when the world is saved. A tract stored this way stays
+  pristine in its record. Cells that are in a tract's blob are what the
+  tract loads with, whatever the setting is now and whatever the
+  fingerprint says: with everything stored, the world is kept as it
+  was seen, and content that has gone shows as placeholders.
+
+### 11.4 Saving and loading the world
+
+`Cosmos::save_world(store)` writes the whole world into a store, and
+`Cosmos::load_world(defs, io)` makes a cosmos of what a store holds. The
+cosmos that comes back hashes equal to the one that was saved, and the
+two go on alike (invariant W7).
+
+| Section | Kind | Holds |
+|---------|------|-------|
+| `world.cosmos` | `WCOS` | The realms with their region and tract records, the table of grids, the global variables, and `store_pristine` |
+| `world.areas` | `WARE` | Every area |
+| `world.sites` | `WSIT` | Every site |
+| `world.tickets` | `WTKT` | The tickets, which tracts they keep, and what the last reconciliation worked out |
+| `world.stability` | `WSTB` | The stability checks waiting |
+| `world.activity` | `WACT` | The world's processes and the collapses in progress |
+| `world.tracts` | `WTRC` | Which tracts are loaded, and for each whether its cells are stored and whether it had changed |
+| `world.ids` | `WIDS` | The tables of save ids |
+
+Each is a blob with a kind and a version of its own, at version 1.
+The sections are a list in the code (`WORLD_SECTIONS` in
+`clash_world::save`): a world subsystem that has state adds an entry
+there, with a function that writes it and one that puts it back. A
+section a save does not hold leaves its subsystem as it is in a new
+cosmos. Names that begin with `world.` are the world's: a section of
+that prefix which this build does not know is refused when loading,
+because loading would drop it, and one that a save does not write is
+deleted from the store. The simulation's sections go beside them under
+other names.
+
+The cells of loaded tracts go where the cells of unloaded tracts are. A
+loaded tract that has changed, or that no generator can make again, is
+written as its tract blob. A loaded tract that has not changed is not
+written: `load_world` generates it again, with the generators it is
+given, as any pristine tract is. Saving changes nothing that is hashed
+and unloads nothing.
+
+**Saving**, at a safe point:
+
+1. The simulation hands in the entity section of any tract it is about
+   to let go of.
+2. `cosmos.save_world(store)`.
+3. The simulation writes its own sections: the timeline with its
+   clocks, its entities and the rest.
+4. `store.commit()`.
+
+A store is committed only after `save_world`: tract blobs written
+between saves name definitions through tables that `save_world` writes.
+
+**Loading**, in this order:
+
+1. The mods are loaded and the world's definitions built.
+2. The generators are bound to them.
+3. `Cosmos::load_world(&defs, &mut TractIo)`. From here on the
+   definitions to use are `Cosmos::defs`, which may hold placeholders.
+4. The timeline is restored from the simulation's section. The world
+   does not touch the timeline while it loads: the clocks of realms and
+   areas and the wake-ups of its processes are in the timeline as it
+   was saved, and the cosmos holds their ids. The two must come from
+   the same save.
+5. The simulation places its entities again with `WorldCtx::place`, into
+   an event sink that is thrown away. Placing changes nothing that is
+   hashed.
+6. `Cosmos::take_save_warnings` says what has become a placeholder.
+
+Loading reads the store and changes nothing in it. Anything missing or
+damaged is a `SaveError` that names the section or the tract.
+
+### 11.5 The file
+
+`RedbStore::open(path)` opens a save file, or makes an empty one. The
+file is a `redb` database with two tables: tract blobs keyed by realm,
+row and column, and sections keyed by name. What is put and deleted is
+kept in memory until `commit`, which writes it in one transaction, so
+the file holds all of one save or all of the one before it, and a game
+that is not saved leaves its file as it was. The file is checked as it
+is opened: one that has been cut short or written over is an error, as
+is any blob in it that fails its own checksum. The store is read and
+written only at safe points (01 R5).
+
+Not built: region records as blobs of their own (`world.cosmos` is
+written whole at every save); migration entries; the columns of grids
+that are not a realm's base grid (section 18.5); benchmarks.
 
 ## 12. Damage
 
@@ -2096,7 +2290,7 @@ it crushes, drops or breaks carries that cause. `CollapseSettled`
 carries its totals by instigator.
 
 The world's processes are one table, saved and hashed with the cosmos
-(`Cosmos::processes`, `Cosmos::restore_activity`), and every one of their
+(`Cosmos::processes`; section 11.4 saves it), and every one of their
 wake-ups carries the world's domain. `WorldCtx::handle_wake(wake)` is
 the one entry point: the kernel calls it for each such wake-up it pops.
 A collapse in progress is nothing but that state and the timeline, so a
@@ -3067,7 +3261,7 @@ that name asks for none. The light at a cell (`light`, `fill_light`,
 | W6 | No result depends on hash iteration order, chunk load order or thread count. |
 | W7 | Save, load and continue equals continue. |
 | W8 | Energy absorbed by a release or impact never exceeds energy delivered. |
-| W9 | No definition id appears in engine code. Fills, rubble and placeholders are named by data. |
+| W9 | No definition id appears in engine code. Fills and rubble are named by data, and a placeholder by the id the save wrote (section 11.2). |
 | W10 | Reading unloaded space returns an error value. It never loads and never panics. |
 | W11 | Temperature is never polled. A change of state happens only at the three moments of section 5.4. |
 | W12 | A tract's devastation and its kind are the same whether the cause was played out while it was loaded or applied when it next loaded. |

@@ -37,7 +37,7 @@ Section references such as "02 §14" point into those documents.
 | W7 | Occupancy, planes, areas, sites | M | W6 | beta |
 | W8 | Tracts, regions, generation, loading | L | W7 | beta |
 | W9 | Tickets and activity | M | W8 | beta |
-| W10 | Persistence | M | W8 | todo |
+| W10 | Persistence | M | W8 | beta |
 | W11 | World viewer and scenario runner | M | W8 | todo |
 | W12 | Damage and destruction | M | W6 | beta |
 | W13 | Structural support and collapse | L | W12, W9 | beta |
@@ -501,8 +501,9 @@ Stubbed:
   `PortalSpec` and `SubgridSpec` are typed and carried and nothing reads
   them. `TractDefId` is a bare id: the `tract` definition type is
   document 10's. A generator's portals and subgrids are dropped.
-- The tract blob holds runtime ids, no entity section and no fingerprint:
-  the final layout, the save-id table and the `redb` store are W10's.
+- The tract blob held runtime ids, no entity section and no
+  fingerprint. W10 has since built the final layout, the save-id tables
+  and the `redb` store.
 - A mistake in a realm's `generator_params` names the definition and the
   parameter's path and is not yet a diagnostic with file and line: the
   linter does not bind generators (`clash-tools` was closed to this
@@ -569,6 +570,37 @@ Done when
   content.
 - A pristine tract writes no blob.
 - A corrupted blob produces an error, not a panic.
+
+Status `beta` (decisions D-480 to D-486). Built as 02 §11 now reads: the
+tract blob at version 2, with states by save id, an optional column and
+the simulation's entity section (`encode_tract`, `decode_tract`,
+`Cosmos::set_tract_entities`, `LoadedTract::entities`); `SaveIds` and
+`DefKind`, with placeholders added to the definitions when a save is
+loaded and `Cosmos::take_save_warnings`; named sections on `TractStore`,
+`MemoryStore`, and `RedbStore`, one database file for each save; the
+generator fingerprint in each tract's record, `LoadedTract::regenerated`
+and `Cosmos::set_store_pristine`; and `Cosmos::save_world` and
+`Cosmos::load_world`, with the sections listed in `WORLD_SECTIONS`. The
+save in the middle of `tower_pancake` is a real one. The tests are in
+`crates/clash-world/tests/save.rs` and `tests/store.rs`. A save of a
+world with nine loaded tracts, three of them changed, is about 1.5 KB;
+a stored `test_city` tract is about 1 KB. Stubbed:
+
+- Migration entries (04 §12.1) are not consulted: the `migration` type
+  is P7's. `SaveIds::bind` is where they go.
+- Region records are not blobs of their own: `world.cosmos` holds every
+  realm's records and is written whole at every save, about 37 KB a
+  surveyed region before compression and a few hundred bytes after.
+- Decal, conduit, site, tract, devastation kind, map, region kind and
+  path kind ids are written as numbers: their definition types are not
+  built. A named state is written as its position.
+- The columns of grids that are not a realm's base grid are not saved
+  (subgrids, W20a). Fields join the chunk's stored form and bodies a
+  section of their own with W16 and W14.
+- `save.store_pristine` is a function of the cosmos until settings are
+  bound (P6).
+- No test script (W11) and no benchmark (W23). An ignored test in
+  `tests/save.rs` prints the sizes of a save.
 
 ### W11 — World viewer and scenario runner
 
@@ -678,10 +710,9 @@ the kernel calls. Stubbed:
   force-resolving a collapse with it.
 - Floating floors (02 §14.1) are W25's, and the tremor's factors on
   span and bearing W24's.
-- The save in the middle of `tower_pancake` writes the timeline and
-  `Cosmos::processes` with the codec and copies the cells: tract blobs
-  and the cosmos's own serialisation are W10's, which must write
-  `activity` and the stability queue with the rest.
+- The save in the middle of `tower_pancake` was the timeline and
+  `Cosmos::processes` with copied cells. Since W10 it is a real save:
+  `Cosmos::save_world` and `load_world`.
 - The bodies of `tower_pancake` and `weakened_columns` are tests of
   those names in `crates/clash-world/tests/collapse.rs`. The scripts are
   owed to the script runner (W11).

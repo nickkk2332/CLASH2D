@@ -78,10 +78,19 @@ impl RedbStore {
     /// the path. The file is checked as it is opened: one that is not a
     /// save, or has been damaged, is an error.
     pub fn open(path: impl AsRef<Path>) -> Result<RedbStore, StoreError> {
-        let db = Database::builder()
-            .set_check_integrity_on_open(true)
-            .create(path)
-            .map_err(backend)?;
+        let path = path.as_ref();
+        // The checked open reports a damaged file as an error. Should
+        // the database ever give up on one in another way, that is an
+        // error too, and not the end of the game (01 R6).
+        let opened = std::panic::catch_unwind(|| {
+            Database::builder()
+                .set_check_integrity_on_open(true)
+                .create(path)
+        });
+        let db = match opened {
+            Ok(opened) => opened.map_err(backend)?,
+            Err(_) => return Err(backend("the file is damaged beyond reading")),
+        };
         Ok(RedbStore {
             db,
             tracts: BTreeMap::new(),

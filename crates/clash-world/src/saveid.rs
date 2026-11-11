@@ -25,10 +25,11 @@
 //!
 //! # Which state names definitions
 //!
-//! Everything the world saves is walked by [`MapIds`], which hands each
-//! dense id it holds to an [`IdMap`]. A state type that holds the id of
-//! a definition implements `MapIds`; a new one must, or what it holds
-//! will mean something else after the mods change.
+//! Everything the world saves is walked by `MapIds`, a trait of this
+//! module, which hands each dense id it holds to an `IdMap`. A state
+//! type that holds the id of a definition implements `MapIds`; a new
+//! one must, or what it holds will mean something else after the mods
+//! change.
 //!
 //! Left as they are, because their definition types are not built and
 //! the world gives the numbers no meaning: `DecalId`, `ConduitId`,
