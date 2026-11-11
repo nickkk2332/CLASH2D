@@ -21,6 +21,19 @@
   },
 
   {
+    "//": "03 §6.3: a parameter written as its type alone, and a default written as a value source.",
+    "type": "action",
+    "id": "jab",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "part": { "type": "part",
+                "default": { "call": "auto_part", "args": { "target": "$target" } } }
+    },
+    "phases": [ { "id": "snap", "time": "120 ms" } ]
+  },
+
+  {
     "//": "03 §6.2: several channels, and every slot of one.",
     "type": "action",
     "id": "bellow",

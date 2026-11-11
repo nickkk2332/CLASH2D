@@ -258,7 +258,7 @@ fn the_examples_of_document_03_load() {
     let defs = spec();
     assert_eq!(defs.registry::<ChannelDef>().len(), 4);
     assert_eq!(defs.registry::<WindowKindDef>().len(), 2);
-    assert_eq!(defs.registry::<ActionDef>().len(), 6);
+    assert_eq!(defs.registry::<ActionDef>().len(), 7);
     // Dense ids in order of qualified id (04 §7.2).
     assert_eq!(channel(&defs, "spec:arm"), ChannelId::new(0));
     assert_eq!(channel(&defs, "spec:voice"), ChannelId::new(3));
@@ -398,6 +398,16 @@ fn parameters_take_slots_in_the_order_the_scope_uses() {
         Some(7),
         "auto_part($target)"
     );
+    // The same default written as a value source, by the function's
+    // name, with its argument compiled in the same scope.
+    let jab = action(&defs, "spec:jab");
+    assert_eq!(jab.param("target").map(|target| target.ty()), Some(&entity));
+    let named = jab
+        .param("part")
+        .and_then(|part| part.default.as_ref())
+        .expect("a default");
+    let chosen = named.value(&mut runner.on(&defs, &mut host));
+    assert_eq!(chosen.as_subject().map(|handle| handle.payload), Some(7));
     // `requires` holds at one metre and not at two.
     assert!(punch.requires.holds(&mut runner.on(&defs, &mut host)));
     host.distance = Real::of(2.0);
@@ -754,7 +764,7 @@ fn ids_are_dense_and_the_types_are_documented() {
     let ids: Vec<ActionDefId> = defs.registry::<ActionDef>().ids().collect();
     assert_eq!(
         ids.iter().map(|id| id.index()).collect::<Vec<_>>(),
-        [0, 1, 2, 3, 4, 5]
+        [0, 1, 2, 3, 4, 5, 6]
     );
     let names: BTreeSet<&str> = types().names().into_iter().collect();
     for name in ["action", "channel", "window_kind"] {
