@@ -20,7 +20,7 @@ plan's scenarios. The test generators stay, as fixtures.
 |----|-------|------|------------|--------|
 | WG1 | Map format | L | W3, X4 | beta |
 | WG2 | Placing and applying maps | L | WG1, W8, W17 | beta |
-| WG3 | Ground | M | WG1 | in progress |
+| WG3 | Ground | M | WG1 | beta |
 | WG4 | Tract definitions and realisation | M | WG2, WG3 | in progress |
 | WG5 | Transforms and ruin | M | WG4, W22 | todo |
 | WG6 | World generators and realm plans | L | WG4 | todo |
@@ -144,6 +144,19 @@ Done when
   anchor, and no tract has anything unsupported when first realised.
 - Sea fills to `sea_level` as uniform chunks.
 - Scatter respects spacing and density over many seeds.
+
+Built (beta), in `clash_gen::ground`: the `ground` type with its
+parameters, and the steps `strata`, `surface` (with ramps), `liquid`,
+`veins`, `pockets`, `caves` and `scatter` of elements and of maps; the
+rules of 10 §5.2 that keep what is generated standing (decision D-516).
+Every "Done when" above has a test in `crates/clash-gen/tests/ground.rs`.
+Stubbed: `float` is not built and a ground that uses it fails to load;
+`paths` draws nothing until surveys record paths (WG7); `liquid` with
+`to: plan` fills nothing until lakes are planned (WG6, the review
+addition "Lakes"); the surface height is the realm generator's `height`
+parameter, not a realm plan's field (WG6); a ground's parameters are
+plain defaults, and `region.*` is not offered (WG7); density with
+`apart` is capped (10 §13).
 
 ### WG4 — Tract definitions and realisation
 
