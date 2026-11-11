@@ -1169,6 +1169,29 @@ on `cell_var_changed`; `collapse` (int) on the two collapse events;
 tract and ticket events, with `first` (bool) on `tract_loaded` and
 `ticket` (int) on `ticket_refused`.
 
+The events of fields, bodies and releases are passed on the same way.
+`field_contact`, `occupant_dosed` and `body_hit_occupant` bind `target`
+(the occupant) and `here`. `body_launched`, `body_impact`, `body_landed`
+and `body_left_loaded` bind `target` when the body is an entity, and
+`here`: the cell it starts in, the cell of the element it struck, the
+cell it came to rest in, the last loaded cell it was in. The rest bind
+`here`. Their fields are `level` (int) on `field_appeared`,
+`field_contact` and `occupant_dosed`, with `pool` (string), `amount`
+(real) and `route` (`breath`, `skin` or `any`) on the last; `active` and
+`max` (int) on `field_budget_exceeded`; on every body event `body`
+(int), `owner` (`entity`, `debris` or `projectile`) and `tag` (int, a
+projectile's, else null), with `mass` and `speed` (real) on
+`body_launched`, `layer`, `energy`, `intensity` and `result`
+(`unaffected`, `damaged` or `destroyed`) on `body_impact`, `energy` and
+`intensity` on `body_hit_occupant`, and `returns` (bool) and `energy` on
+`body_left_loaded`; `release` (int), `energy` and `reach` (real) on
+`release_started` and `energy_released`, and on the second also
+`absorbed` (real), `cells` (int), `cut_off` (bool) and its totals over
+everyone responsible: `elements`, `exposed` and `thrown` (int) and
+`mass` (real). A definition an event names by id (a field, a damage
+type, a material) is not a field a filter can test: the kernel's own
+event names it where there is one, as `entity_exposed` does.
+
 **Reasons** (14 §5) of the kernel, by code: `entity.unknown`,
 `entity.stored`, `entity.ids_exhausted`, `relocate.inside_itself`,
 `relocate.too_deep`, `world.not_loaded`, `world.outside_realm`,

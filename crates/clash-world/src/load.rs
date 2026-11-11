@@ -99,6 +99,7 @@ impl Def for MaterialDef {
                 leak: None,
                 signal: None,
                 heal: None,
+                friction: None,
             },
         )]
     }

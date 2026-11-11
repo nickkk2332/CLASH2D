@@ -15,16 +15,19 @@
 //! | `material` | No density and no toughness, the default resistance of every damage type, never crushed, and a span that reaches as far as any check looks. |
 //! | `area_kind` | No tags, variables, clock or rules. An area keeps what it was made with. |
 //! | `realm` | No strata, no generator, barrier edges, and the extent it was saved with. Its stored tracts load; nothing new is generated. |
+//! | `damage_type` | A default resistance nothing gets past: it harms no element. It is not `kinetic` and leaves no devastation. |
+//! | `plane` | A plane with nothing on it but what the save put there. |
 //!
-//! Each shows as [`PLACEHOLDER_GLYPH`] and carries the tag
-//! [`PLACEHOLDER_TAG`].
+//! Each element shows as [`PLACEHOLDER_GLYPH`], and each element,
+//! material, damage type and plane carries the tag [`PLACEHOLDER_TAG`].
 
 use clash_core::{DenseId, Hash128, Real};
 
 use super::{
-    AreaKind, BlockState, CellFlags, EdgeRule, Element, ElementFlags, EngineFlag, GlyphSpec, Layer,
-    Material, MaterialId, RealmKind, StateInfo, Table, WorldDefs,
+    AreaKind, BlockState, CellFlags, DamageType, EdgeRule, Element, ElementFlags, EngineFlag,
+    GlyphSpec, Layer, Material, MaterialId, Plane, RealmKind, Resist, StateInfo, Table, WorldDefs,
 };
+use crate::occupancy::PlaneMask;
 use crate::topology::{Extent, Topology};
 
 /// The character a placeholder element is drawn as.
@@ -58,11 +61,15 @@ pub enum DefKind {
     AreaKind,
     /// A `realm` definition.
     Realm,
+    /// A `damage_type` definition.
+    DamageType,
+    /// A `plane` definition.
+    Plane,
 }
 
 impl DefKind {
     /// How many kinds there are.
-    pub const COUNT: usize = 6;
+    pub const COUNT: usize = 8;
 
     /// Every kind, in the order their tables are written.
     pub const ALL: [DefKind; DefKind::COUNT] = [
@@ -72,6 +79,8 @@ impl DefKind {
         DefKind::Material,
         DefKind::AreaKind,
         DefKind::Realm,
+        DefKind::DamageType,
+        DefKind::Plane,
     ];
 
     /// The name of the definition type in data, which is also the name
@@ -84,6 +93,8 @@ impl DefKind {
             DefKind::Material => "material",
             DefKind::AreaKind => "area_kind",
             DefKind::Realm => "realm",
+            DefKind::DamageType => "damage_type",
+            DefKind::Plane => "plane",
         }
     }
 
@@ -219,6 +230,8 @@ impl WorldDefs {
             DefKind::Material => self.materials.len(),
             DefKind::AreaKind => self.area_kinds.len(),
             DefKind::Realm => self.realms.len(),
+            DefKind::DamageType => self.damage_types.len(),
+            DefKind::Plane => self.planes.len(),
         }
     }
 
@@ -232,6 +245,8 @@ impl WorldDefs {
             DefKind::Material => self.materials.name_at(id),
             DefKind::AreaKind => self.area_kinds.name_at(id),
             DefKind::Realm => self.realms.name_at(id),
+            DefKind::DamageType => self.damage_types.name_at(id),
+            DefKind::Plane => self.planes.name_at(id),
         }
     }
 
@@ -246,6 +261,8 @@ impl WorldDefs {
             DefKind::Material => self.materials.number_of(qualified),
             DefKind::AreaKind => self.area_kinds.number_of(qualified),
             DefKind::Realm => self.realms.number_of(qualified),
+            DefKind::DamageType => self.damage_types.number_of(qualified),
+            DefKind::Plane => self.planes.number_of(qualified),
         }
     }
 
@@ -319,6 +336,7 @@ impl WorldDefs {
                         color: None,
                         tags: vec![PLACEHOLDER_TAG.to_owned()],
                         resist,
+                        friction: None,
                     },
                 )
             }
@@ -344,6 +362,33 @@ impl WorldDefs {
                         strata: Vec::new(),
                         time_rate: Real::ONE,
                         edges: core::array::from_fn(|_| EdgeRule::Barrier),
+                    },
+                )
+            }
+            // No element or material states a resistance to it, so each
+            // takes this one: nothing gets past it.
+            DefKind::DamageType => self.damage_types.push_unlisted(
+                qualified,
+                DamageType {
+                    default_resist: Resist {
+                        threshold: Real::INFINITY,
+                        factor: Real::ZERO,
+                    },
+                    kinetic: false,
+                    devastation: None,
+                    tags: vec![PLACEHOLDER_TAG.to_owned()],
+                },
+            ),
+            // A plane's id is its bit in a mask: there is room for so
+            // many, placeholders included.
+            DefKind::Plane => {
+                if real >= PlaneMask::BITS {
+                    return None;
+                }
+                self.planes.push_unlisted(
+                    qualified,
+                    Plane {
+                        tags: vec![PLACEHOLDER_TAG.to_owned()],
                     },
                 )
             }
@@ -415,5 +460,42 @@ mod tests {
         }
         assert_eq!(DefKind::from_name("creature"), None);
         assert_eq!(DefKind::of_layer(Layer::Fixture), DefKind::Fixture);
+    }
+
+    #[test]
+    fn a_damage_type_that_has_gone_harms_nothing_and_a_plane_keeps_its_bit() {
+        use crate::defs::DamageTypeId;
+
+        let mut defs = WorldDefs::build(RawWorldDefs::default()).unwrap_or_else(|_| unreachable!());
+        let real = u32::try_from(defs.def_count(DefKind::DamageType)).unwrap_or_default();
+        let gone = defs
+            .add_placeholder(DefKind::DamageType, "gone:acid", None)
+            .unwrap_or_default();
+        assert_eq!(gone, real);
+        assert!(defs.is_placeholder(DefKind::DamageType, gone));
+        assert_eq!(defs.def_name(DefKind::DamageType, gone), Some("gone:acid"));
+        assert_eq!(defs.def_lookup(DefKind::DamageType, "gone:acid"), None);
+        let kind = DamageTypeId::new(u16::try_from(gone).unwrap_or_default());
+        let resist = defs.resist(Layer::Block, ElementState::NONE, kind);
+        assert_eq!(resist.factor, Real::ZERO);
+        assert_eq!(resist.threshold, Real::INFINITY);
+        assert_ne!(defs.kinetic_damage_type(), Some(kind));
+
+        // The built-in plane is plane 0, and a plane that has gone takes
+        // the next bit. There is room for as many as a mask has bits.
+        assert_eq!(
+            defs.def_name(DefKind::Plane, 0),
+            Some(crate::defs::DEFAULT_PLANE_ID)
+        );
+        for bit in 1..PlaneMask::BITS {
+            let name = format!("gone:plane_{bit}");
+            assert_eq!(defs.add_placeholder(DefKind::Plane, &name, None), Some(bit));
+        }
+        assert_eq!(
+            defs.add_placeholder(DefKind::Plane, "gone:one_more", None),
+            None
+        );
+        assert!(defs.is_placeholder(DefKind::Plane, 1));
+        assert!(!defs.is_placeholder(DefKind::Plane, 0));
     }
 }
