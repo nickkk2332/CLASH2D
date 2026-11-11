@@ -36,10 +36,12 @@ use clash_core::{StateHash, StateHasher};
 use clash_time::{ClockId, Next, ProcessId, ProcessTable, Wake, WakeDomain};
 use serde::{Deserialize, Serialize};
 
+use crate::body::{BodyFlight, BodyState};
 use crate::collapse::{CollapseState, FallingMass};
 use crate::cosmos::Cosmos;
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
+use crate::pos::Location;
 
 /// A stability check that is waiting out the settle delay on a clock
 /// (02 §14.2). When it wakes, the checks asked for where that clock
@@ -62,6 +64,21 @@ pub enum WorldProcess {
     Settle(SettleCheck),
     /// A mass of debris on its way down (02 §14.3).
     Fall(FallingMass),
+    /// A body in flight (02 §15).
+    Body(BodyFlight),
+}
+
+impl WorldProcess {
+    /// The cell a process is at, for one that is somewhere and goes
+    /// onto the clock of where it is.
+    fn place(&self) -> Option<Location> {
+        match self {
+            WorldProcess::Fall(mass) => Some(mass.at),
+            WorldProcess::Body(flight) => Some(flight.location()),
+            // A settle check keeps the clock it began on.
+            WorldProcess::Settle(_) => None,
+        }
+    }
 }
 
 impl StateHash for WorldProcess {
@@ -74,6 +91,10 @@ impl StateHash for WorldProcess {
             WorldProcess::Fall(mass) => {
                 hasher.write_u8(1);
                 mass.state_hash(hasher);
+            }
+            WorldProcess::Body(flight) => {
+                hasher.write_u8(2);
+                flight.state_hash(hasher);
             }
         }
     }
@@ -89,6 +110,8 @@ pub struct WorldActivity {
     pub(crate) processes: ProcessTable<WorldProcess>,
     /// The collapses in progress and the checks waiting.
     pub(crate) collapse: CollapseState,
+    /// What is kept about the bodies in flight besides their processes.
+    pub(crate) bodies: BodyState,
 }
 
 impl WorldActivity {
@@ -97,6 +120,7 @@ impl WorldActivity {
         WorldActivity {
             processes: ProcessTable::new(WakeDomain::World),
             collapse: CollapseState::default(),
+            bodies: BodyState::default(),
         }
     }
 
@@ -122,6 +146,7 @@ impl StateHash for WorldActivity {
     fn state_hash(&self, hasher: &mut StateHasher) {
         self.processes.state_hash(hasher);
         self.collapse.state_hash(hasher);
+        self.bodies.state_hash(hasher);
     }
 }
 
@@ -165,10 +190,14 @@ impl WorldCtx<'_> {
                 let (mass, next) = self.run_fall(mass);
                 (WorldProcess::Fall(mass), next)
             }
+            WorldProcess::Body(flight) => {
+                let (flight, next) = self.run_body(flight);
+                (WorldProcess::Body(flight), next)
+            }
         };
-        if let (WorldProcess::Fall(mass), Next::Sleep(_)) = (&process, next) {
-            // It goes on falling, on the clock of where it now is.
-            let clock = self.cosmos.ambient(mass.at).map(|ambient| ambient.clock);
+        if let (Some(at), Next::Sleep(_)) = (process.place(), next) {
+            // It goes on, on the clock of where it now is.
+            let clock = self.cosmos.ambient(at).map(|ambient| ambient.clock);
             if let Ok(clock) = clock {
                 self.keep_clock(id, clock);
             }
@@ -181,7 +210,7 @@ impl WorldCtx<'_> {
     }
 
     /// Moves a process to a clock, if it is not on it already.
-    fn keep_clock(&mut self, id: ProcessId, clock: ClockId) {
+    pub(crate) fn keep_clock(&mut self, id: ProcessId, clock: ClockId) {
         let table = &mut self.cosmos.activity.processes;
         if table.clock_of(id) != Some(clock) {
             // A clock that has gone leaves the process where it is.
@@ -202,10 +231,7 @@ impl WorldCtx<'_> {
             .activity
             .processes
             .iter()
-            .filter_map(|(id, process)| match process {
-                WorldProcess::Fall(mass) => Some((id, mass.at)),
-                WorldProcess::Settle(_) => None,
-            })
+            .filter_map(|(id, process)| Some((id, process.place()?)))
             .filter_map(|(id, at)| Some((id, self.cosmos.ambient(at).ok()?.clock)))
             .collect();
         for (id, clock) in placed {

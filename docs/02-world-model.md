@@ -155,13 +155,12 @@ pub struct Cosmos {
     grids: Vec<Option<Box<GridSlot>>>,         // base grids and subgrids, indexed by GridId
     charts: BTreeMap<ChartId, Chart>,
     tickets: TicketTable,
-    bodies: BodyTable,
     portals: PortalTable,
     areas: AreaTable,                          // every area, of every grid (section 8.3)
     sites: SiteTable,                          // every site, of every realm (section 8.4)
     occupants: LookupMap<EntityId, OccupantRecord>,   // where each occupant is (section 8.1); not state
     stability: StabilityQueue,                 // checks asked for and not yet made (section 14.2)
-    activity: WorldActivity,                   // the world's processes and the collapses in progress (section 14.3)
+    activity: WorldActivity,                   // the world's processes: checks, falling masses, bodies in flight, releases (sections 13 to 15)
     vars: VarMap,                              // global variables
 }
 
@@ -410,6 +409,7 @@ decided by the movement rules in the simulation, which know the mover.
 | `span` | cells | How far an element of this material can reach sideways from support (section 14). |
 | `bearing` | Pa | The stress it can carry in compression before it is crushed (section 14.5). Absent means it is never crushed. |
 | `rubble` | fixture id | What destroyed elements of this material leave behind. May be given per damage type, and may be a field: ice destroyed by heat leaves water. |
+| `friction` | — | The coefficient of sliding friction of a surface of it (section 15.3). Absent, a half. |
 | `changes` | — | What it becomes by temperature. See below. |
 
 **Change of state.** A material may say what it becomes when the
@@ -869,7 +869,7 @@ whoever owns it drains. Rules name an event in snake case
 | `AreaEntered`, `AreaExited` | `area`, `occupant`, `loc` (where the occupant is), `clock` (the area's, if it has one) | An occupant came to be inside an area or stopped being (section 8.3) |
 | `AreaBreached` | `area`, `leak` (a cell) | An enclosed area no longer closes |
 | `AreaClosed` | `area`, `loc` (where it was enclosed from) | A breached area closes again |
-| `OccupantDisplaced` | `occupant`, `from`, `to` | An edit left an occupant no room and it was moved (section 23) |
+| `OccupantDisplaced` | `occupant`, `from`, `to` | The world moved an occupant: an edit left it no room (section 23), or it is a body in flight and was carried into another cell (section 15) |
 | `OccupantEntombed` | `occupant`, `loc` | An edit left an occupant no room and there was nowhere to go |
 | `ElementDestroyed` | `loc`, `layer`, `old`, `new` (states; `new` is the `on_destroy` state or nothing), `how` (`damage` with its type, `crushed` or `fell`), `absorbed`, `passed` (J; zero unless by damage) | A floor, block or fixture was destroyed (section 12.3). It follows the `ElementChanged` events of the change and of the rubble left |
 | `OccupantUnsupported` | `occupant`, `loc` (where it is) | What held an occupant up has gone (section 7.2) |
@@ -879,6 +879,11 @@ whoever owns it drains. Rules name an event in snake case
 | `TractLoaded` | `realm`, `tract`, `loc` (the tract's cell with the lowest coordinates, at storey 0), `first` (never loaded before) | A tract has been loaded, after the changes waiting for it were made (section 9.4) |
 | `TractUnloading` | `realm`, `tract`, `loc` | A tract is about to be unloaded, or is to be and still holds occupants (section 9.5) |
 | `TicketRefused` | `ticket` (the id it had), `realm`, `loc` (the tract it was centred on), `reason` (who held it) | The tickets wanted more tracts than may be loaded and this one was dropped (section 10.3) |
+| `BodyLaunched` | `body` (id), `owner` (what it is), `loc`, `pos` (m), `vel` (m/s), `mass` (kg) | Something was set flying (section 15); its cause is what launched it |
+| `BodyImpact` | `body`, `owner`, `loc` (the cell struck), `layer`, `state` (the element as it was), `pos`, `energy` (J the body lost), `intensity` (Pa), `result` (unaffected, damaged, destroyed), `contact` (the element's striking surface, if it has one) | A body struck a floor, block or fixture (section 15.2). Its cause, and that of the three below, is the body's doing |
+| `BodyHitOccupant` | `body`, `owner`, `occupant`, `loc`, `pos`, `packet` (kind, energy, intensity, cause), `vel` (the body's as it struck), `push` (m/s the occupant takes if free to move) | A body struck an occupant (section 15.2) |
+| `BodyLanded` | `body`, `owner`, `loc`, `pos` | A body came to rest and is a body no longer (section 15.3) |
+| `BodyLeftLoaded` | `body`, `owner`, `loc` (the last loaded cell it was in), `lands` (where it comes down or back in, if it does), `at` (when), `returns` (it comes back in and flies on), `energy` (J as it arrives) | A body's flight took it out of loaded space and was finished by arithmetic (section 15.4) |
 
 The three tract events carry no cause of their own: `cause()` gives the
 coarse cause for them.
@@ -1544,9 +1549,9 @@ impl Cosmos {
   entity is centred on the tract its occupant is in, follows it, and takes
   on its realm when it crosses into another. While the entity is not in
   the world the ticket stays where it was last, and one that has never
-  been seen covers nothing. `Body` and `Subgrid` anchors come with bodies
-  and subgrids; until then their holders move a fixed anchor with
-  `move_ticket`.
+  been seen covers nothing. A body holds a ticket with a fixed anchor
+  and moves it ahead of itself with `move_ticket` (section 15.1): a
+  `Body` anchor is not needed. A `Subgrid` anchor comes with subgrids.
 - `TicketReason::Eoc` carries the rule's number, which the world gives no
   meaning.
 - `Cosmos::activity` gives a tract's level as of the last reconciliation:
@@ -1802,10 +1807,30 @@ state is smaller.
 
 Rubble by damage type, and rubble that is a field, come with change of
 state (section 5.4; package W25): until then a material names one
-fixture. Debris bodies come with section 15: until then `damage` offers
-the fragments (the mass the element lost, its material, the energy the
-packet had left, the direction of the hit) to a hook that throws
-nothing, and all of the element is left as rubble.
+fixture.
+
+**Debris.** An element destroyed by a packet with a direction
+(`damage_along`) and energy to spare throws fragments:
+
+- up to three (`DEBRIS_PER_ELEMENT`), fewer when fewer than that are
+  left of the budget: at most `debris.max_bodies` (256) fragments are in
+  flight at once, and past that what is destroyed is left whole;
+- a quarter of the mass the element lost between them
+  (`DEBRIS_MASS_SHARE`), the rest left as rubble where it stood;
+- a tenth of the energy the packet had left over between them
+  (`DEBRIS_ENERGY_SHARE`), as the energy of their motion. It is taken
+  out of what passes and counted as absorbed, so that `absorbed + passed`
+  is still the packet's energy (W8). Whatever the packet goes on to, a
+  body or a blast, goes on with the rest;
+- each from the middle of the cell, along the direction of the hit
+  turned by up to 0.35 of a unit on each axis (`DEBRIS_SCATTER`), by a
+  positional hash of the cell, the tick and which fragment it is.
+
+A fragment is a body (section 15) on every plane, with the cross-section
+of a lump of its volume. It strikes what it meets and is left as rubble
+of its material where it comes to rest. A blow with no direction, rubble
+that is destroyed, an element that fell or was crushed and a wreck that
+is carried off by what broke it (section 14.3) throw none.
 
 A fixture left with nothing under it, because the floor or the block it
 stood on was destroyed, comes down at the stability check the
@@ -2197,7 +2222,7 @@ hit very hard, a thrown car, shrapnel, a falling mass, a detached subgrid.
 
 ```rust
 pub struct Body {
-    pub owner: BodyOwner,        // Entity(EntityId) | Debris(DebrisSpec) | Subgrid(SubgridId)
+    pub owner: BodyOwner,        // Entity(EntityId) | Debris { material, volume } | Projectile { kind, area, give, tag }
     pub grid: GridId,
     pub pos: [Real; 3],          // m
     pub vel: [Real; 3],          // m/s
@@ -2207,15 +2232,16 @@ pub struct Body {
     pub drag: Real,              // drag coefficient
     pub depth: Real,             // m, stopping distance for impact intensity; default 0.1
     pub restitution: Real,       // 0..1
-    pub drive: Option<Drive>,    // thrust along its path for a time; a turn rate (07 §11.1)
+    pub drive: Option<Drive>,    // { accel (m/s²), burn (s left), turn (rad/s) } (07 §11.1)
+    pub plane: PlaneMask,        // it strikes only occupants that share a plane
     pub cause: Cause,
 }
 
 impl WorldCtx<'_> {
-    pub fn launch(&mut self, body: Body) -> BodyId;
-    pub fn impulse(&mut self, id: BodyId, j: [Real; 3]);
-    pub fn arrest(&mut self, id: BodyId) -> Body;     // caught, or recovered control
-    pub fn steer(&mut self, id: BodyId, toward: Option<[Real; 3]>);   // where a driven body turns to
+    pub fn launch(&mut self, body: Body) -> Result<BodyId, WorldError>;
+    pub fn impulse(&mut self, id: BodyId, j: [Real; 3]) -> Result<(), WorldError>;   // kg·m/s
+    pub fn arrest(&mut self, id: BodyId) -> Result<Body, WorldError>;     // caught, or recovered control
+    pub fn steer(&mut self, id: BodyId, toward: Option<[Real; 3]>) -> Result<(), WorldError>;
 }
 ```
 
@@ -2224,24 +2250,82 @@ Bodies are point masses with a cross-section. There is no rotation.
 A body with a `drive` gains speed along its path while its thrust lasts,
 and turns its path toward the point last given to `steer`, no faster than
 its turn rate. The world does not know what it is aiming at. The
-simulation tells it where to turn (07 §11.1).
+simulation tells it where to turn (07 §11.1). With no point it does not
+turn.
+
+**What a body is.**
+
+| Owner | What it is | It strikes with |
+|-------|-----------|-----------------|
+| `Entity` | A creature thrown, an item hurled | The damage type flagged `kinetic`, over its own `area` and `depth` |
+| `Debris` | A fragment of something destroyed: so much of a material | The same. Where it rests it is left as that much rubble |
+| `Projectile` | A shot (07 §11.1), with a `tag` the simulation gives it and the world reports back | Its surface: a damage type, an area and a give |
+
+`Body::of_mass` fills in a body whose size the world is not told: the
+volume its mass has at 1000 kg/m³, the cross-section of a lump of that
+volume, drag 1, depth 0.1 m, no bounce.
+
+- `launch` is refused for a mass that is not above zero, a number that
+  is not finite, a depth or restitution out of range, a place that is not
+  loaded and an entity already in flight. `impulse`, `steer` and
+  `arrest` are refused for a body that is not in flight, and the first
+  two for one that is beyond loaded space (section 15.4).
+- `impulse` and `steer` first bring the body up to now, then change it.
+  `arrest` takes it out where it is now and emits nothing.
+- An entity that is an occupant stays one while it is a body. The world
+  carries it: whenever the body enters another cell the occupant is moved
+  there with `relocate`, and each move is reported as
+  `OccupantDisplaced`, as when an edit moves it. An occupant that fills
+  several cells has the body at its middle. So someone in flight is where
+  their body is, can be struck there (07 §7.1), and enters and leaves
+  areas as they pass.
+- What a body breaks carries its doing as cause: a process, with the
+  entity it is as actor (or else the actor of what launched it) and the
+  instigator of what launched it (section 7.3).
 
 ### 15.1 Motion
 
-Each body is a process on the clock of where it is. It advances from cell
-boundary to cell boundary, with a maximum step of 20 ms local so that gravity
-and drag integrate accurately:
+Each body is a process on the clock of where it is. It sleeps for the
+time it takes to cross a cell at its speed, at least 10 µs and at most
+20 ms of local time, so that gravity and drag integrate accurately. When
+it wakes it has flown for the time it slept:
 
 ```
-w   = v − drift                    (the medium's own movement, 11 §4.7)
-a   = gravity(strata) − ½ · ρ_air · drag · area · |w| · w / mass
-v  += a · dt
-pos += v · dt
+v   = v + ½ · g · dt                   (g: ambient gravity as a vector)
+v   = v + thrust along v               (while the drive burns)
+w   = v − drift                        (the medium's own movement, 11 §4.7)
+w   = w / (1 + k · |w| · dt)           (k = ½ · ρ · drag · area / mass)
+v   = w + drift + ½ · g · dt
+v   turned toward the steered point by at most turn · dt
+pos = pos + ½ · (v_before + v_after) · dt
 ```
 
-Terminal velocity, vacuum and zero gravity all follow from the strata. A body
-carries a small ticket ahead of itself. Runs of implicit empty cells may be
-integrated in one step if the result is identical.
+With no drag this is exact for any step, so a throw in vacuum is the
+parabola. The drag step is the closed form for drag alone and cannot
+overshoot however light the body. Terminal velocity, vacuum and zero
+gravity all follow from the strata. The straight stretch it covered is
+then followed through the cells (section 15.2).
+
+- A body wakes at ticks its own flight gives, and what it does at each
+  is a function of its state and the world: nothing depends on how the
+  timeline is advanced.
+- Ambient conditions are read where the body is when it wakes. After
+  each wake it goes onto the clock of the cell it is now in, and when an
+  area's clock comes, goes or changes it does so at once: time stopped
+  round a body leaves it hanging, and it resumes with the time it had
+  left. A body that flies into stopped time stops within a step of the
+  edge.
+- Drift is what `Cosmos::ambient` reports for the cell. A flow is a
+  velocity. A vortex turns about the middle of its area, from east toward
+  south, at `speed`, draws inward at `inflow` and rises at `lift`.
+- Where nothing pulls on a body (no gravity, no thrust, no drift worth
+  the name) and it is slower than `REST_SPEED`, it has stopped: it
+  hangs there and lands (section 15.3). A body is never state that never
+  ends.
+- A body holds a ticket ahead of itself: warm, radius 1, on the tract one
+  tract's length ahead along its heading, when that tract is not loaded.
+  The ticket has a fixed anchor that the body moves (section 10.1), and
+  is released when the body ends.
 
 Self-propelled flight is not a body. A flying character moves by actions.
 They become a body when something takes control away from them, and stop
@@ -2271,12 +2355,75 @@ sufficiently tough one goes through the wall unharmed.
 A colliding occupant is struck with conservation of momentum, emits
 `BodyHitOccupant`, and may become a body itself.
 
+- **The path** of one wake is a straight stretch, followed with the
+  projectile ray of section 22. The first thing struck ends the stretch
+  there: the body is put a hair's breadth short of what turned it back,
+  or past what it went through, and flies on from there at its next
+  wake. So an impact is dealt with at the first wake after it happened,
+  never before: whoever has left the cell by then is not struck.
+- **The direction of entry** is the axis along which the path entered
+  the cell: east–west, north–south or up–down. A floor is met from above
+  or below, and so is anything the path comes down onto inside its cell.
+  Only the motion along that axis counts and only it is changed.
+- **What closes part of a cell** (section 22) is struck by its share
+  widened by the body's own width, `share + √area / 1 m`, on a roll
+  drawn from the body's own seed and the cell: the same body meets the
+  same thing the same way however often it is asked. What closes the
+  whole width is always struck.
+- **A projectile** delivers its surface's damage type at
+  `KE / (surface area × give)`. Anything else delivers the damage type
+  flagged `kinetic` at `KE / (area × depth)`; with none loaded it harms
+  nothing and is still turned back.
+- **Through.** Past a block or fixture it destroyed the body is in that
+  cell. A floor lies between two cells: the body stays on the near side
+  and meets what is in the cell beyond as it enters it. The fragments of
+  what it destroyed take their share of what passed (section 12.3).
+- **An occupant** is struck when the path enters its cell, if it is
+  flagged `COLLIDES` and shares a plane with the body. `BodyHitOccupant`
+  carries a packet of the whole energy of the body's motion at the
+  intensity its surface gives, the body's velocity, and the `push`: the
+  velocity the occupant takes if it is free to move. With the occupant's
+  mass `M`, the body's `m` and restitution `e`, along the body's path:
+
+  ```
+  body:      v ← v · (m − e·M) / (m + M)
+  push:          v · m · (1 + e) / (m + M)
+  ```
+
+  The world changes nothing else: what the blow does to the occupant,
+  and whether it flies in turn, is the simulation's (07 §7, §11.1). A
+  shot that should pass through is given what exits with `impulse`.
+  Where the world was told no mass for the occupant there is nothing to
+  push against: the body goes on as it was and the push is zero. The
+  world knows no occupant's shape: whoever is in the cell is struck, at
+  the height the event gives, once while the body passes.
+- **`contact`.** `BodyImpact` carries the striking surface of the
+  element struck, if it has one (section 5.4), for the simulation to
+  strike the body with in place of the blunt impact (07 §6.5).
+- **An edge of the realm.** A barrier turns a body back like a wall
+  nothing can break. By any other edge it leaves: `BodyLeftLoaded` with
+  nowhere to land.
+
 ### 15.3 Landing
 
 A body that hits a standable surface and cannot break it loses its vertical
 velocity (times restitution). Remaining horizontal velocity decays by
 friction as it slides, still colliding with obstacles. When it stops,
 `BodyLanded` is emitted and the body is removed.
+
+- A body comes to **rest** on whatever it came down onto and could not
+  break, once its speed back up is below `REST_SPEED` (0.5 m/s). While
+  it rests it slides: each wake it looks for what is under it, loses
+  `friction × g × dt` of speed, and strikes what is in its way as in
+  flight. `friction` is the `friction` of the material it lies on, or a
+  half where the material states none. With nothing under it any more it
+  falls again.
+- It has **landed** when it is slower than `REST_SPEED` or friction
+  would stop it within the step. A fragment is left as rubble of its
+  material where something dropped there comes to rest (section 12.3).
+  An entity is in the cell `BodyLanded` names, back in the simulation's
+  hands. A projectile is gone: what it leaves, if anything, is the
+  simulation's.
 
 ### 15.4 Leaving loaded space
 
@@ -2294,6 +2441,29 @@ and when it comes down. Then it is removed.
 
 Buildings in unloaded tracts along the way are not struck. A shell fired
 over the horizon and a person punched across a city both arrive.
+
+- The ticket is put on at most `body.max_ticket_tracts` tracts that were
+  not loaded. A body that comes to space that is still not loaded when
+  it arrives, for whatever reason, is finished by arithmetic from there.
+- The arithmetic is the motion of section 15.1 in steps of 20 ms with
+  nothing in the way, for at most about six hours of flight.
+- **Coming back in.** As soon as a step ends in a loaded tract the body
+  is a body again: it sleeps until the moment it arrives there and then
+  flies on in full. Until then it is `away`: it is listed, and cannot be
+  pushed or steered. An occupant it is waits in the last loaded cell and
+  is carried on when the body wakes.
+- **Coming down.** Otherwise it comes down where it reaches the ground,
+  and is a body no longer. Its impact is added to that tract's pending
+  edits as `PendingEdit::Impact`: the cell, the tick, what it was, its
+  mass, and the velocity and energy it arrived with. It stays there
+  when the tract loads, for the coarse layer to play out (section 17).
+  A tract whose region has never been surveyed has no record to keep it.
+- **The ground** is taken to lie where it did under the last loaded cell
+  the body was in: the tract records keep no heights yet.
+- `BodyLeftLoaded` says which: where and when it comes back in or comes
+  down, whether it `returns`, and the energy it arrives with. The
+  simulation takes an entity that does not return out of the world and
+  leaves it for that tract (06 §12).
 
 ## 16. Fields
 
@@ -2497,6 +2667,7 @@ pub enum PendingEdit {
     Liquid { level: i32, block: BlockState },   // fill or drain to a storey (11 §4.3)
     Devastation { kind: DevastationKindId, amount: u8 },   // section 17.2
     Eoc { id: EocId, context: VarMap },     // run when the tract loads
+    Impact(PendingImpact),                  // a body that came down here unseen (section 15.4)
 }
 ```
 
@@ -2994,8 +3165,24 @@ the marks in a cell with what left them.
 
 **Body properties.** `depth` and `restitution` are fields of `projectile`
 definitions (07 §11.1), and of items and templates for when they are
-thrown. Sliding friction is the floor material's `friction`. `REST_SPEED`
-is a named constant.
+thrown. Sliding friction is the `friction` of the material a body lies
+on, a half (`BODY_DEFAULT_FRICTION`) where the material states none.
+`REST_SPEED` is a named constant, 0.5 m/s.
+
+**Bodies, for whoever binds them.** `launch { body }` takes the fields
+of `Body` (section 15); `impulse { body, j }` an impulse in kg·m/s;
+`steer { body, toward }` a point in metres or nothing; `arrest { body }`
+returns the body. A subject of kind `body` is a `BodyId`. Reachable
+only from Rust so far: the bodies in flight and the body an entity is
+(`bodies`, `body`, `body_flight`, `body_of`), the number of fragments
+in flight (`debris_in_flight`), and the constants of flight and debris:
+`BODY_MAX_STEP` (20 ms), `BODY_MIN_STEP` (10 µs), `BODY_DEFAULT_DEPTH_M`,
+`BODY_DEFAULT_DRAG`, `BODY_ASSUMED_DENSITY`, and for fragments
+`DEBRIS_PER_ELEMENT`, `DEBRIS_MASS_SHARE`, `DEBRIS_ENERGY_SHARE`,
+`DEBRIS_SCATTER`, `DEBRIS_DRAG` and `DEBRIS_RESTITUTION`. The settings
+`body.max_ticket_tracts` and `debris.max_bodies` are the constants
+`BODY_MAX_TICKET_TRACTS` (3) and `DEBRIS_MAX_BODIES` (256) until settings
+are bound.
 
 **Fixed sets.** Field rules, release shapes, exposure routes and engine
 flags are implemented natively. A mod configures and combines them and

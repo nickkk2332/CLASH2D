@@ -546,6 +546,9 @@ impl WorldCtx<'_> {
                 PendingEdit::Spawn(spawn) => loaded.spawns.push(spawn),
                 // Stamps wait for the coarse layer (W17).
                 stamp @ PendingEdit::Stamp(_) => waiting.push(stamp),
+                // So does a body that came down here unseen (02 §15.4):
+                // it stays on the record, where whoever loads finds it.
+                impact @ PendingEdit::Impact(_) => waiting.push(impact),
             }
         }
         if !waiting.is_empty()

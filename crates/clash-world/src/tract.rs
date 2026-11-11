@@ -156,6 +156,9 @@ pub enum PendingEdit {
     /// Something for the simulation to put there. Handed over with the
     /// loaded tract.
     Spawn(SpawnRequest),
+    /// A body that left loaded space and came down here (02 §15.4). Kept
+    /// in the list until the coarse layer plays it out (package W17).
+    Impact(crate::body::PendingImpact),
 }
 
 impl StateHash for PendingEdit {
@@ -172,6 +175,10 @@ impl StateHash for PendingEdit {
             PendingEdit::Spawn(spawn) => {
                 hasher.write_u8(2);
                 spawn.state_hash(hasher);
+            }
+            PendingEdit::Impact(impact) => {
+                hasher.write_u8(3);
+                impact.state_hash(hasher);
             }
         }
     }

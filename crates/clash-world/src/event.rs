@@ -10,12 +10,13 @@ use clash_time::ClockId;
 use serde::{Deserialize, Serialize};
 
 use crate::area::AreaId;
+use crate::body::{BodyId, BodyOwner};
 use crate::cause::{Cause, CauseKind};
 use crate::chunk::{Decal, DecalId};
 use crate::collapse::{CollapseId, CollapseTally};
 use crate::cosmos::RealmId;
-use crate::damage::Destruction;
-use crate::defs::{DamageTypeId, ElementState, Layer};
+use crate::damage::{DamagePacket, DamageResult, Destruction};
+use crate::defs::{Contact, DamageTypeId, ElementState, Layer};
 use crate::pos::{CellBox, Location, TractPos};
 use crate::ticket::{TicketId, TicketReason};
 
@@ -378,6 +379,129 @@ pub enum WorldEvent {
         /// Who and what is behind it.
         cause: Cause,
     },
+    /// Something has been set flying (02 §15). From now on the world
+    /// moves it.
+    BodyLaunched {
+        /// When.
+        tick: Tick,
+        /// The body.
+        body: BodyId,
+        /// What it is.
+        owner: BodyOwner,
+        /// The cell it starts in.
+        loc: Location,
+        /// Where it starts, in metres in its grid's frame.
+        pos: [Real; 3],
+        /// Its velocity in m/s.
+        vel: [Real; 3],
+        /// Its mass in kilograms.
+        mass: Real,
+        /// Who and what set it going.
+        cause: Cause,
+    },
+    /// A body in flight struck a floor, block or fixture (02 §15.2).
+    /// What the blow did to the element is reported by the element's
+    /// own events. If the body is an entity, what the blow does to it
+    /// is for the simulation: it took `energy` at `intensity`, on the
+    /// element's `contact` surface if it has one (07 §6.5).
+    BodyImpact {
+        /// When.
+        tick: Tick,
+        /// The body.
+        body: BodyId,
+        /// What it is.
+        owner: BodyOwner,
+        /// The cell of the element it struck.
+        loc: Location,
+        /// Which of the cell's elements.
+        layer: Layer,
+        /// The element as it was when it was struck.
+        state: ElementState,
+        /// Where it struck, in metres in its grid's frame.
+        pos: [Real; 3],
+        /// The joules of its motion the body lost.
+        energy: Real,
+        /// How concentrated the blow was, in pascals.
+        intensity: Real,
+        /// What the blow did to the element.
+        result: DamageResult,
+        /// The element's striking surface, if it has one.
+        contact: Option<Contact>,
+        /// The body's doing: it as the actor, for whoever set it going.
+        cause: Cause,
+    },
+    /// A body in flight struck an occupant (02 §15.2). The world has
+    /// shared their momentum along the body's path and changed nothing
+    /// else: what the blow does to the occupant, and whether the
+    /// occupant flies in turn, is for the simulation.
+    BodyHitOccupant {
+        /// When.
+        tick: Tick,
+        /// The body.
+        body: BodyId,
+        /// What it is.
+        owner: BodyOwner,
+        /// Who was struck.
+        occupant: EntityId,
+        /// The cell it was struck in.
+        loc: Location,
+        /// Where, in metres in the grid's frame: the height says which
+        /// part of it.
+        pos: [Real; 3],
+        /// The blow: the whole energy of the body's motion, as
+        /// concentrated as its surface makes it.
+        packet: DamagePacket,
+        /// The body's velocity as it struck, in m/s.
+        vel: [Real; 3],
+        /// The velocity, in m/s, that the blow gives the occupant if it
+        /// is free to move, by conservation of momentum. Zero where the
+        /// world was told no mass for it.
+        push: [Real; 3],
+        /// The body's doing.
+        cause: Cause,
+    },
+    /// A body has come to rest and is no longer a body (02 §15.3). A
+    /// fragment has been left as rubble. An entity is in the cell
+    /// named, back in the simulation's hands.
+    BodyLanded {
+        /// When.
+        tick: Tick,
+        /// The body it was.
+        body: BodyId,
+        /// What it is.
+        owner: BodyOwner,
+        /// The cell it came to rest in.
+        loc: Location,
+        /// Where, in metres in its grid's frame.
+        pos: [Real; 3],
+        /// The body's doing.
+        cause: Cause,
+    },
+    /// A body's flight has taken it out of loaded space, and has been
+    /// finished by arithmetic (02 §15.4).
+    BodyLeftLoaded {
+        /// When.
+        tick: Tick,
+        /// The body.
+        body: BodyId,
+        /// What it is.
+        owner: BodyOwner,
+        /// The last loaded cell it was in.
+        loc: Location,
+        /// Where it comes down, or comes back into loaded space. `None`
+        /// if it never does: it left the realm, or its flight has no end.
+        lands: Option<Location>,
+        /// When it does, in universal time.
+        at: Option<Tick>,
+        /// Whether it comes back into loaded space and flies on as a
+        /// body. If not it is a body no longer: its impact waits with
+        /// the tract it came down in.
+        returns: bool,
+        /// The joules of its motion as it arrives.
+        energy: Real,
+        /// The body's doing.
+        cause: Cause,
+    },
 }
 
 /// The cause of what the world does of itself when it loads and unloads
@@ -406,7 +530,12 @@ impl WorldEvent {
             | WorldEvent::CollapseStarted { tick, .. }
             | WorldEvent::CollapseSettled { tick, .. }
             | WorldEvent::OccupantUnsupported { tick, .. }
-            | WorldEvent::OccupantExposed { tick, .. } => *tick,
+            | WorldEvent::OccupantExposed { tick, .. }
+            | WorldEvent::BodyLaunched { tick, .. }
+            | WorldEvent::BodyImpact { tick, .. }
+            | WorldEvent::BodyHitOccupant { tick, .. }
+            | WorldEvent::BodyLanded { tick, .. }
+            | WorldEvent::BodyLeftLoaded { tick, .. } => *tick,
         }
     }
 
@@ -428,7 +557,12 @@ impl WorldEvent {
             | WorldEvent::CollapseStarted { cause, .. }
             | WorldEvent::CollapseSettled { cause, .. }
             | WorldEvent::OccupantUnsupported { cause, .. }
-            | WorldEvent::OccupantExposed { cause, .. } => *cause,
+            | WorldEvent::OccupantExposed { cause, .. }
+            | WorldEvent::BodyLaunched { cause, .. }
+            | WorldEvent::BodyImpact { cause, .. }
+            | WorldEvent::BodyHitOccupant { cause, .. }
+            | WorldEvent::BodyLanded { cause, .. }
+            | WorldEvent::BodyLeftLoaded { cause, .. } => *cause,
             WorldEvent::TractLoaded { .. }
             | WorldEvent::TractUnloading { .. }
             | WorldEvent::TicketRefused { .. } => ACTIVITY_CAUSE,
@@ -456,7 +590,12 @@ impl WorldEvent {
             | WorldEvent::CollapseStarted { loc, .. }
             | WorldEvent::CollapseSettled { loc, .. }
             | WorldEvent::OccupantUnsupported { loc, .. }
-            | WorldEvent::OccupantExposed { loc, .. } => *loc,
+            | WorldEvent::OccupantExposed { loc, .. }
+            | WorldEvent::BodyLaunched { loc, .. }
+            | WorldEvent::BodyImpact { loc, .. }
+            | WorldEvent::BodyHitOccupant { loc, .. }
+            | WorldEvent::BodyLanded { loc, .. }
+            | WorldEvent::BodyLeftLoaded { loc, .. } => *loc,
             WorldEvent::AreaBreached { leak, .. } => *leak,
             WorldEvent::OccupantDisplaced { to, .. } => *to,
         }
@@ -484,6 +623,11 @@ impl WorldEvent {
             WorldEvent::CollapseSettled { .. } => "collapse_settled",
             WorldEvent::OccupantUnsupported { .. } => "occupant_unsupported",
             WorldEvent::OccupantExposed { .. } => "occupant_exposed",
+            WorldEvent::BodyLaunched { .. } => "body_launched",
+            WorldEvent::BodyImpact { .. } => "body_impact",
+            WorldEvent::BodyHitOccupant { .. } => "body_hit_occupant",
+            WorldEvent::BodyLanded { .. } => "body_landed",
+            WorldEvent::BodyLeftLoaded { .. } => "body_left_loaded",
         }
     }
 }
@@ -728,6 +872,111 @@ impl StateHash for WorldEvent {
                 kind.state_hash(hasher);
                 energy.state_hash(hasher);
                 intensity.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::BodyLaunched {
+                tick,
+                body,
+                owner,
+                loc,
+                pos,
+                vel,
+                mass,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                body.state_hash(hasher);
+                owner.state_hash(hasher);
+                loc.state_hash(hasher);
+                pos.state_hash(hasher);
+                vel.state_hash(hasher);
+                mass.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::BodyImpact {
+                tick,
+                body,
+                owner,
+                loc,
+                layer,
+                state,
+                pos,
+                energy,
+                intensity,
+                result,
+                contact,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                body.state_hash(hasher);
+                owner.state_hash(hasher);
+                loc.state_hash(hasher);
+                layer.state_hash(hasher);
+                state.state_hash(hasher);
+                pos.state_hash(hasher);
+                energy.state_hash(hasher);
+                intensity.state_hash(hasher);
+                result.state_hash(hasher);
+                contact.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::BodyHitOccupant {
+                tick,
+                body,
+                owner,
+                occupant,
+                loc,
+                pos,
+                packet,
+                vel,
+                push,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                body.state_hash(hasher);
+                owner.state_hash(hasher);
+                occupant.state_hash(hasher);
+                loc.state_hash(hasher);
+                pos.state_hash(hasher);
+                packet.state_hash(hasher);
+                vel.state_hash(hasher);
+                push.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::BodyLanded {
+                tick,
+                body,
+                owner,
+                loc,
+                pos,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                body.state_hash(hasher);
+                owner.state_hash(hasher);
+                loc.state_hash(hasher);
+                pos.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::BodyLeftLoaded {
+                tick,
+                body,
+                owner,
+                loc,
+                lands,
+                at,
+                returns,
+                energy,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                body.state_hash(hasher);
+                owner.state_hash(hasher);
+                loc.state_hash(hasher);
+                lands.state_hash(hasher);
+                at.state_hash(hasher);
+                returns.state_hash(hasher);
+                energy.state_hash(hasher);
                 cause.state_hash(hasher);
             }
         }

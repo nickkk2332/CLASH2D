@@ -41,8 +41,8 @@ Section references such as "02 §14" point into those documents.
 | W11 | World viewer and scenario runner | M | W8 | todo |
 | W12 | Damage and destruction | M | W6 | beta |
 | W13 | Structural support and collapse | L | W12, W9 | beta |
-| W14 | Bodies | L | W12, W7, W9 | todo |
-| W15 | Energy releases | L | W13, W14 | todo |
+| W14 | Bodies | L | W12, W7, W9 | beta |
+| W15 | Energy releases | L | W13, W14 | in progress |
 | W16 | Fields | L | W12 | todo |
 | W17 | Coarse layer | L | W15, W10 | todo |
 | W18 | Queries | M | W7 | beta |
@@ -319,7 +319,8 @@ that step. Stubbed:
 - No placeholder is supplied for lenient loading.
 - Not read yet, each left to the package that gives it meaning: `changes`,
   rubble by damage type or as a field (W25); `fluid` (vehicles V1);
-  `friction` (W14); `load`, `when_supplied`, `conveys` (devices plan).
+  `load`, `when_supplied`, `conveys` (devices plan). A material's
+  `friction` is read since W14.
 
 ### W4 — Chunks and grids
 
@@ -620,8 +621,9 @@ rubble that keeps matter, piles up and becomes a heap, and
 `ElementDestroyed`; `OccupantUnsupported` from any edit that takes an
 occupant's footing away. Stubbed:
 
-- The debris hook throws nothing: `WorldCtx::throw_debris` is where W14
-  launches bodies, within `debris.max_bodies`.
+- The debris hook threw nothing until W14 filled it in: a destruction
+  with a direction now throws fragments, within `debris.max_bodies`
+  (02 §12.3, D-493).
 - A material names one rubble fixture. Rubble by damage type and rubble
   that is a field are W25's.
 - The body of `wall_punch` is the test `a_wall_is_punched_through` in
@@ -706,6 +708,43 @@ Done when
   invariant W8; the 20 m/s example stops at the first wall.
 - A body inside a rate-0 area hangs and resumes.
 - Scenarios `three_buildings` and `time_stop_street`.
+
+Status `beta` (decisions D-490 to D-494). Built as 02 §15 and the
+debris paragraph of §12.3 now read: `Body` with its three kinds of
+owner, `launch`, `impulse`, `steer` and `arrest`; flight as a process on
+the clock of where the body is, exact in vacuum, with drag against the
+moving medium and a drive; impacts along the projectile ray with the
+roll for what closes part of a cell, on elements through
+`WorldEdit::damage_along` and on occupants as `BodyHitOccupant`; rest,
+sliding by the `friction` of materials, and landing; occupants carried
+cell by cell; debris from the hook of W12 within `debris.max_bodies`;
+the ticket ahead; and flights that leave loaded space finished by
+arithmetic, with `PendingEdit::Impact` for those that come down unseen.
+With the review additions drift on bodies, driven bodies, contact on
+elements and the W14 half of leaving loaded space. Stubbed:
+
+- A body that is a subgrid (W20b), portals and boundary links in a
+  body's way, and `LeftRealm` at a void edge (W19): a body that leaves
+  by an edge is reported by `BodyLeftLoaded` with nowhere to land.
+- The ticket has a fixed anchor that the body moves: `TicketAnchor`
+  gained no `Body` variant. A body whose ticket is refused is not told:
+  it is finished by arithmetic when it comes to unloaded space, which
+  is what refusal asks for.
+- The tract records keep no ground heights, so the arithmetic takes the
+  ground to lie where it did under the last loaded cell. Applying a
+  pending impact when its tract loads is the coarse layer's (W17), as
+  is leaving the entity there (06 §12).
+- The world knows no occupant's shape: whoever is in a cell a body
+  enters is struck. `volume` is stored for buoyancy (11 §4.4) and not
+  used.
+- The bodies of `three_buildings`, `time_stop_street` and
+  `over_the_horizon` are tests of those names in
+  `crates/clash-world/tests/bodies.rs`. The scripts are owed to the
+  script runner (W11).
+- A timing test prints figures
+  (`timing_of_a_projectile_across_thirty_metres`, ignored): about 12 µs
+  for a flight of 30 m, 430 ns a step. The benchmark and its budget are
+  W23's.
 
 ### W15 — Energy releases
 

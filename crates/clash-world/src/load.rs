@@ -95,6 +95,7 @@ impl Def for MaterialDef {
                 rubble: None,
                 color: None,
                 tags: Vec::new(),
+                friction: None,
             },
         )]
     }

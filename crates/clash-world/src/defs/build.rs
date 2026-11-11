@@ -652,6 +652,7 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         color: None,
         tags: Vec::new(),
         resist: default_resists.clone(),
+        friction: None,
     });
     for (id, def) in &material_defs {
         let at = At {
@@ -680,6 +681,9 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
             color: def.color.clone(),
             tags: tags(&def.tags),
             resist,
+            friction: def
+                .friction
+                .map(|friction| not_negative(friction, at, "friction", errors)),
         });
     }
 
