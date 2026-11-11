@@ -1,0 +1,45 @@
+[
+  { "type": "variable", "id": "alarm_raised", "scope": "site", "value": "bool", "default": false,
+    "doc": "Set once the vault alarm has gone off." },
+  { "type": "variable", "id": "alarms", "scope": "global", "value": "int", "default": 0,
+    "doc": "How many alarms have been raised anywhere." },
+  { "type": "variable", "id": "alerted", "scope": "entity", "value": "bool", "default": false,
+    "doc": "Whether this one has been told of an alarm." },
+
+  { "type": "event", "id": "reinforcements_due",
+    "subjects": { "here": "loc" },
+    "fields": { "squads": "int" },
+    "doc": "Reinforcements have been sent for." },
+
+  {
+    "//": "05 §2: when something breaks in the vault, if the alarm has not gone off, raise it.",
+    "type": "eoc", "id": "vault_alarm",
+    "on": "alarm_tripped",
+    "filter": { "kind": "glass" },
+    "if": "event.loud and not here.site.var.alarm_raised",
+    "doc": "Raises the alarm of the site, once.",
+    "do": [
+      { "set": { "here.site.var.alarm_raised": true } },
+      { "add": { "global.var.alarms": 1 } },
+      { "run": { "eoc": "alert", "with": { "whom": "who" } } },
+      { "emit": { "event": "reinforcements_due", "here": "here", "squads": 2 } }
+    ]
+  },
+
+  {
+    "type": "eoc", "id": "alert",
+    "params": { "whom": "entity" },
+    "doc": "Tells someone of the alarm.",
+    "do": [
+      { "set": { "$whom.var.alerted": true } },
+      { "note": { "text": "the alarm is raised", "to": "$whom" } }
+    ]
+  },
+
+  {
+    "type": "eoc", "id": "reinforce",
+    "on": "reinforcements_due",
+    "doc": "Sends the squads out.",
+    "do": [ { "repeat": "event.squads", "do": [ { "note": "a squad sets out" } ] } ]
+  }
+]

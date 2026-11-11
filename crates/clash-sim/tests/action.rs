@@ -6,9 +6,9 @@
 //! The fixtures are under `tests/fixtures/action/mods`: `spec` holds the
 //! examples of document 03, `broken` one definition for each mistake.
 //! The names the examples borrow from later documents (`strike`,
-//! `auto_part`, `perceives`, `attr`, `route_fault`) are stubbed in the
-//! registry made here; `takedown_result` is named only inside an effect
-//! list, which is not compiled yet.
+//! `sweep`, `message`, `auto_part`, `perceives`, `attr`, `route_fault`)
+//! are stubbed in the registry made here, and `takedown_result` is a
+//! rule of the `spec` mod that does nothing.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -23,10 +23,11 @@ use clash_expr::{
     RuntimeWarning, Type, Value, VerbSpec,
 };
 use clash_sim::action::{
-    ActionDef, ActionDefId, CancelRule, ChannelDef, ChannelId, ChannelSet, EffectsSource,
-    ListBounds, LocalSource, Next, PhaseIndex, PhaseTime, Slots, WindowKindDef, WindowKindId,
-    register_defs,
+    ActionDef, ActionDefId, CancelRule, ChannelDef, ChannelId, ChannelSet, Effects, ListBounds,
+    LocalSource, Next, PhaseIndex, PhaseTime, Slots, WindowKindDef, WindowKindId,
 };
+use clash_sim::register_defs;
+use clash_sim::rule::EffectKind;
 
 // ---- the stubs ----------------------------------------------------------
 
@@ -82,14 +83,25 @@ fn registry() -> Registry {
             .add_function(spec)
             .expect("the functions have distinct names");
     }
-    registry
-        .add_verb(
-            VerbSpec::new("strike")
-                .arg("target", subject(entity), "Who is struck.")
-                .optional_arg("part", subject(part), "Where.")
-                .doc("Stands for whatever an action does."),
-        )
-        .expect("the verb has a name of its own");
+    let verbs = [
+        VerbSpec::new("strike")
+            .arg("target", subject(entity), "Who is struck.")
+            .optional_arg("part", subject(part), "Where.")
+            .doc("Stands for whatever an action does."),
+        VerbSpec::new("sweep")
+            .arg("who", subject(entity), "Who moves.")
+            .arg("to", subject(loc).nullable(), "Where to.")
+            .doc("Stands for moving along a route."),
+        VerbSpec::new("message")
+            .arg("text", Type::Str, "The line.")
+            .direct("text")
+            .doc("Stands for a line in the log."),
+    ];
+    for spec in verbs {
+        registry
+            .add_verb(spec)
+            .expect("the verbs have distinct names");
+    }
     registry
 }
 
@@ -338,7 +350,20 @@ fn a_punch_is_phases_by_index_and_channels_as_a_set() {
     assert_eq!(window.closes.name(), "impact");
     assert_eq!(window.aimed_at.len(), 1);
 
-    // The effects are kept as written, in order, with their places.
+    // The effects are compiled against the action's layout: the actor
+    // is the one subject, and the locals are the action's.
+    let compiled = phases[1].on_enter.block().expect("the list is compiled");
+    assert_eq!(compiled.len(), 1);
+    assert_eq!(&*compiled.effects()[0].path, "phases.impact.do[0]");
+    assert!(matches!(
+        &compiled.effects()[0].kind,
+        EffectKind::Verb { args, .. } if args.iter().all(Option::is_some)
+    ));
+    assert_eq!(phases[1].on_enter.subject_names().len(), 1);
+    assert_eq!(&*phases[1].on_enter.subject_names()[0], "self");
+    assert_eq!(phases[1].on_enter.frame_size(), punch.locals().len());
+
+    // They are also kept as written, in order, with their places.
     let effects = &phases[1].on_enter;
     assert_eq!(effects.len(), 1);
     assert_eq!(effects.path(), "phases.impact.do");
@@ -473,7 +498,22 @@ fn an_action_uses_several_channels_and_every_slot_of_one() {
     assert_eq!(bellow.on_cancel.len(), 1);
     assert_eq!(bellow.on_interrupt.len(), 1);
     assert_eq!(bellow.on_abandon.len(), 1);
-    assert_eq!(EffectsSource::empty().len(), 0);
+    assert_eq!(Effects::empty().len(), 0);
+    // And each is compiled: a call of the verb, with its one argument.
+    let block = bellow.on_start.block().expect("the list is compiled");
+    assert_eq!(block.len(), 1);
+    assert_eq!(block.path(), "on_start");
+    assert!(matches!(
+        &block.effects()[0].kind,
+        EffectKind::Verb { args, .. } if args.len() == 1 && args[0].is_some()
+    ));
+    assert!(
+        bellow
+            .on_finish
+            .block()
+            .is_some_and(|block| block.is_empty())
+    );
+    assert_eq!(bellow.effect_lists().count(), 7);
 }
 
 // ---- Review addition: list parameters -----------------------------------

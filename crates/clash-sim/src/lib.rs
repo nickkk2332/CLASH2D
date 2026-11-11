@@ -28,6 +28,7 @@
 //! | Saving and loading | [`Sim::save`], [`Sim::load`], then [`Sim::reindex`] |
 //! | Replay | [`Sim::input_log`], [`Sim::replay`] |
 //! | Why something was refused | [`Reason`]; the kernel's are listed in [`KERNEL_REASONS`] |
+//! | Rules, effects and the interpreter | [`rule`]: [`rule::EocDef`], [`rule::Effects`], [`rule::RuleSet`], [`rule::RuleHost`] |
 //! | The definition types of this crate | [`register_defs`] |
 //!
 //! # Rules this crate keeps
@@ -53,6 +54,7 @@ pub mod entity;
 pub mod event;
 pub mod later;
 pub mod reason;
+pub mod rule;
 mod sim;
 
 pub use advance::{
@@ -81,5 +83,6 @@ pub use sim::{LoadError, SAVE_KIND, SAVE_VERSION, Sim, SimHashes, Truth};
 /// The application and the tools call this once (04 §9).
 pub fn register_defs(types: &mut clash_data::DefTypes) {
     bus::register_defs(types);
+    rule::register_defs(types);
     action::register_defs(types);
 }

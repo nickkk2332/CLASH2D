@@ -640,6 +640,12 @@ a load error where it is read.
 compiled in the mind context so that it can be previewed, and is tested
 against truth only when the action is started (05 §7.3).
 
+An effect list (05 §10) is compiled with the action's locals in their
+slots, so `set` and `add` change the running action's own values. What a
+list defines with `let` takes the slots after them and lasts until the
+list ends. `return` has no meaning in an action's list and is a load
+error; `stop` ends the list.
+
 ### 6.2 Channels
 
 A **channel** is something an action needs exclusive use of.
