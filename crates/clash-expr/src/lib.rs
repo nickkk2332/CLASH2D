@@ -5,4 +5,27 @@
 //! simulation state of its own. Specified in
 //! `docs/05-expressions-and-eoc.md`.
 //!
-//! This is a stub. It is filled in by X1 to X4 of `docs/plans/sim-kernel.md`.
+//! # Syntax
+//!
+//! [`parse_expr`] turns a source string into a syntax tree ([`Expr`]) and
+//! [`parse_template`] does the same for a text template ([`Template`]).
+//! [`print_expr`] and [`print_template`] write a tree back as source.
+//! A mistake is a [`Diagnostic`] whose [`Span`] is the offending bytes of
+//! the source string.
+
+pub mod ast;
+pub mod diag;
+mod lexer;
+mod parser;
+mod print;
+pub mod unit;
+
+pub use ast::{
+    BinaryOp, Expr, ExprKind, Format, MAX_FORMAT_PRECISION, Name, Number, Template, TemplatePart,
+    UnaryOp,
+};
+pub use diag::{Code, Diagnostic, Severity, Span, closest_name, codes, offset_in_json_string};
+pub use lexer::is_keyword;
+pub use parser::{MAX_NESTING, MAX_SOURCE_LEN, MAX_TREE_HEIGHT, parse_expr, parse_template};
+pub use print::{print_expr, print_template};
+pub use unit::{Quantity, Unit};

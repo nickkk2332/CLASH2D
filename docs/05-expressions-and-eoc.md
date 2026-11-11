@@ -97,12 +97,34 @@ power    := postfix ( '^' unary )?
 postfix  := primary ( '.' name | '(' args? ')' | '[' expr ']' )*
 primary  := number unit? | string | 'true' | 'false' | 'null'
           | name | '$' name | '(' expr ')' | '[' args? ']'
+          | '{' ( entry ( ',' entry )* )? '}'
+args     := expr ( ',' expr )*
+entry    := expr ':' expr
 name     := ident ( ':' ident )?
 ```
 
 Strings use single quotes so they sit comfortably inside JSON's double
-quotes. Whitespace is free. There are no statements and no assignment:
-expressions only read.
+quotes. A quote inside a string is written twice: `'it''s'`. There are no
+other escapes; a line break or a tab comes from JSON's own. Whitespace is
+free. There are no statements and no assignment: expressions only read.
+
+Lexical details:
+
+- An `ident` is ASCII letters, digits and `_`, not starting with a digit.
+  `if then else and or not in true false null` are reserved.
+- A number with a point or an exponent is a `real` (`3.5`, `1e6`); without
+  either it is an `int`. A digit is needed on both sides of the point.
+  There are no negative literals: `-5` is the negation of `5`.
+- `namespace:name` is one name only when nothing separates its parts. A
+  colon followed by anything but a letter is a colon, which is what lets
+  `{x: 1}` be a map and `{event.energy:.0}` carry a format.
+- A unit follows its number directly (`300ms`) or after spaces (`300 ms`).
+- Comparisons do not chain: `a < b < c` is a syntax error.
+
+Limits, so that nothing a mod writes can exhaust the compiler: brackets,
+`if`, `not` and unary minus nest at most 32 deep; a syntax tree is at most
+100 operations deep, which is also the longest chain of one operator; a
+source string is at most 65,536 bytes. Exceeding one is a load error.
 
 ### 4.2 Names
 
@@ -152,8 +174,13 @@ and always name the rule, the JSON path and the position in the string.
 ### 4.6 Text
 
 `Text` fields are templates: `"{the(self)} staggers back."`. Anything in
-braces is an expression. `{{` is a literal brace. Numbers may be formatted:
-`{event.energy:.0}`. Inline styles are written as tags (12 §4.3).
+braces is an expression. `{{` and `}}` are literal braces; a lone `}` is a
+load error. Numbers may be formatted: `{event.energy:.0}`. The format is
+`.N`, for N digits after the point, N from 0 to 17; it applies to numbers
+and leaves other values as they are. Because `{{` is a literal brace, a map
+literal that opens a template expression is written in brackets:
+`{({'a': 1})['a']}`. Inline styles are written as tags (12 §4.3); the
+expression compiler passes them through as text.
 
 **Who is reading.** Text shown to a player is written for a **reader**:
 the controlled character in whose log or on whose screen it appears. The
@@ -206,7 +233,11 @@ Subsystems add functions through the same registry that holds properties
 `without(xs, x)` and `without_key(m, k)` give copies with an element or a
 key removed. Inside an expression only simple units may follow a number
 (`ms`, `kg`, `kPa`); compound ones such as `m/s` are written in JSON unit
-strings.
+strings. The simple units are those of 04 §7.1 that are a scale: `us ms s
+min h d`, `mm cm m km`, `ml L`, `g kg t`, `J kJ MJ GJ`, `W kW MW`, `N kN`,
+`Pa kPa MPa GPa` and `K`. `C` is an offset and is not accepted, because
+`-5C` would read as minus 278.15. A number with a unit is a `real` in SI
+units.
 
 Random functions draw from the simulation's rule stream and are
 deterministic. They are not allowed in **pure** contexts (section 7.3).

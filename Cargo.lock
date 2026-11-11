@@ -63,6 +63,8 @@ name = "clash-expr"
 version = "0.1.0"
 dependencies = [
  "clash-core",
+ "proptest",
+ "thiserror",
 ]
 
 [[package]]

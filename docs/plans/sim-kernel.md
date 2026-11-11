@@ -33,8 +33,8 @@ start while the world model is being built.
 | P6 | Settings | S | K5 | todo |
 | P7 | Migration and obsoletion | M | P4, W10 | todo |
 | P8 | Hot reload | M | K7, P7 | todo |
-| X1 | Expression parser | M | F2 | todo |
-| X2 | Registry, contexts, type checking | L | X1, F4 | todo |
+| X1 | Expression parser | M | F2 | done |
+| X2 | Registry, contexts, type checking | L | X1, F4 | in progress |
 | X3 | Bytecode and evaluation | M | X2 | todo |
 | X4 | Expression fields, functions, variables | M | X3, P4 | todo |
 | K1 | Simulation skeleton and kernel entities | M | W7, F3 | todo |
