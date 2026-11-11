@@ -241,7 +241,9 @@ impl Def for PostureDef {
 
     fn validate(&self, cx: &mut ValidateCx<'_>) {
         if !(self.height.is_finite() && self.height > Real::ZERO) {
-            cx.error("`height` is the share of its standing height a body has: a number above zero");
+            cx.error(
+                "`height` is the share of its standing height a body has: a number above zero",
+            );
         }
         for (name, factor) in [("speed", self.speed), ("signature", self.signature)] {
             if !(factor.is_finite() && factor >= Real::ZERO) {

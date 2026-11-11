@@ -2,12 +2,12 @@
 //! [`step_time`], and [`move_to`], which puts a mover somewhere it can
 //! be.
 
+use clash_core::Dir8;
 use clash_core::{Dur, EntityId, Real};
 use clash_world::{
     Cause, CellGeometry, Footing, Footprint, Location, OccupantFilter, OccupantFlags, Step,
     StepKind, distinct_ids,
 };
-use clash_core::Dir8;
 
 use crate::Sim;
 use crate::bus::{EventPayload, FieldValue};
@@ -123,19 +123,23 @@ pub(super) fn fault_reason(fault: StepFault, entity: EntityId, step: &Step) -> R
         StepFault::Blocked | StepFault::Avoided => {
             Reason::new(codes::BLOCKED, "something is in the way").with("height", height)
         }
-        StepFault::Closed => {
-            Reason::new(codes::CLOSED, "the way is closed").with("height", height)
-        }
+        StepFault::Closed => Reason::new(codes::CLOSED, "the way is closed").with("height", height),
         StepFault::Corner => Reason::new(
             codes::CORNER,
             "something is in the way of cutting the corner",
         ),
         StepFault::TooSteep => {
-            let way = if step.kind == StepKind::Up { "up" } else { "down" };
+            let way = if step.kind == StepKind::Up {
+                "up"
+            } else {
+                "down"
+            };
             Reason::new(codes::TOO_STEEP, format!("there is no way {way} here"))
         }
         StepFault::Liquid => Reason::new(codes::LIQUID, "that is liquid, and it cannot swim"),
-        StepFault::NoFooting => Reason::new(codes::NO_FOOTING, "there is nothing to stand on there"),
+        StepFault::NoFooting => {
+            Reason::new(codes::NO_FOOTING, "there is nothing to stand on there")
+        }
     }
 }
 
@@ -202,8 +206,7 @@ fn fits(sim: &Sim, footprint: Footprint, corner: Location) -> bool {
         let Ok(around) = cosmos.neighbours(Location::new(corner.grid, cell)) else {
             return false;
         };
-        let inside_floor =
-            cell.z > corner.cell.z && around.here.footing == Footing::Floor;
+        let inside_floor = cell.z > corner.cell.z && around.here.footing == Footing::Floor;
         !around.here.walk_blocked() && !inside_floor
     })
 }
@@ -243,8 +246,7 @@ fn yields(sim: &mut Sim, mover: EntityId, other: EntityId, at: Location, cause: 
         .with(YIELDS_FIELD, false);
     match sim.raise(Where::Entity(mover), cause, payload) {
         Ok(raised) => {
-            !raised.is_cancelled()
-                && raised.field(YIELDS_FIELD) == Some(&FieldValue::from(true))
+            !raised.is_cancelled() && raised.field(YIELDS_FIELD) == Some(&FieldValue::from(true))
         }
         Err(_) => false,
     }
@@ -308,20 +310,28 @@ fn try_step(
         .neighbours(from)
         .map_err(|error| Reason::from_world(&error))?;
     let Some(step) = around.step(kind) else {
-        return Err(Reason::new(codes::EDGE, "there is nothing there to step into")
-            .with("dir", dir_name(kind)));
+        return Err(
+            Reason::new(codes::EDGE, "there is nothing there to step into")
+                .with("dir", dir_name(kind)),
+        );
     };
     let (seconds, cost_m, mode) = match rules.judge(&step) {
         Ok(price) => (price.seconds, price.cost_m, price.mode),
         Err(StepFault::NoFooting) if drop => {
-            let mode = rules.modes().first().map_or(MovementId::new(0), |mode| mode.id);
+            let mode = rules
+                .modes()
+                .first()
+                .map_or(MovementId::new(0), |mode| mode.id);
             (step.length_m / rules.best_speed(), step.length_m, mode)
         }
         Err(fault) => return Err(fault_reason(fault, entity, &step)),
     };
     let to = Location::new(from.grid, step.to.cell);
     if !fits(sim, presence.footprint, to) {
-        return Err(Reason::new(codes::NO_ROOM, "there is not room for it there"));
+        return Err(Reason::new(
+            codes::NO_ROOM,
+            "there is not room for it there",
+        ));
     }
     let mut swapped = None;
     match blockers(sim, entity, &presence, to).as_slice() {
@@ -410,7 +420,12 @@ pub fn step_time(sim: &Sim, entity: EntityId, kind: StepKind) -> Result<Dur, Rea
 /// does not), it does not fit, or someone who blocks movement fills it
 /// on a plane it shares. Nobody is asked to yield. If nothing holds it
 /// up there it falls.
-pub fn move_to(sim: &mut Sim, entity: EntityId, to: Location, cause: Cause) -> Result<Place, Reason> {
+pub fn move_to(
+    sim: &mut Sim,
+    entity: EntityId,
+    to: Location,
+    cause: Cause,
+) -> Result<Place, Reason> {
     let done = try_move_to(sim, entity, to, cause);
     if let Err(reason) = &done {
         report_refusal(sim, entity, "", reason, cause);
@@ -448,7 +463,10 @@ fn try_move_to(
         return Err(Reason::new(code, message).with("height", here.obstacle_m));
     }
     if !fits(sim, presence.footprint, to) {
-        return Err(Reason::new(codes::NO_ROOM, "there is not room for it there"));
+        return Err(Reason::new(
+            codes::NO_ROOM,
+            "there is not room for it there",
+        ));
     }
     if let Some(first) = blockers(sim, entity, &presence, to).first() {
         return Err(occupied(*first));

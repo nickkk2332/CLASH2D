@@ -59,9 +59,7 @@ impl ModeRule {
         }
         match self.surface {
             Surface::Standable => !cell.liquid && cell.footing != Footing::None,
-            Surface::Climbable => {
-                cell.connection.is_some() || cell.footing == Footing::Connection
-            }
+            Surface::Climbable => cell.connection.is_some() || cell.footing == Footing::Connection,
             Surface::Liquid => cell.liquid,
             Surface::Open | Surface::Solid => true,
         }

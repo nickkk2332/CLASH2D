@@ -81,9 +81,13 @@ pub fn fall(sim: &mut Sim, entity: EntityId, cause: Cause) -> Option<Landing> {
         return None;
     }
     let to = cosmos.resting_cell(from).ok()?;
-    let storeys = from.cell.z.checked_sub(to.cell.z).filter(|storeys| *storeys > 0)?;
-    let height_m =
-        Real::from_i64(i64::from(storeys)) * STOREY_M + Real::from_i64(i64::from(alt_mm)) / MM_PER_M;
+    let storeys = from
+        .cell
+        .z
+        .checked_sub(to.cell.z)
+        .filter(|storeys| *storeys > 0)?;
+    let height_m = Real::from_i64(i64::from(storeys)) * STOREY_M
+        + Real::from_i64(i64::from(alt_mm)) / MM_PER_M;
     let mass = sim
         .components()
         .get::<Physical>(entity)

@@ -103,7 +103,10 @@ fn run_set_posture(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<V
         None
     } else {
         Some(def_arg::<PostureDef>(sim, wanted).ok_or_else(|| {
-            Reason::new(codes::POSTURE_UNKNOWN, format!("there is no posture {wanted}"))
+            Reason::new(
+                codes::POSTURE_UNKNOWN,
+                format!("there is no posture {wanted}"),
+            )
         })?)
     };
     posture::set_posture(sim, who, posture, cause)?;

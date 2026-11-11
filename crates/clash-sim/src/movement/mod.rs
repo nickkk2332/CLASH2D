@@ -179,8 +179,16 @@ pub const MOVEMENT_EVENTS: &[EventInfo] = &[
         subjects: &[("self", "entity"), ("here", "loc")],
         fields: &[
             ("height", "real", "How far it fell, in metres."),
-            ("speed", "real", "How fast it was falling when it landed, in metres a second."),
-            ("energy", "real", "The energy of the fall, in joules: its mass, with what it carries, times gravity times the height."),
+            (
+                "speed",
+                "real",
+                "How fast it was falling when it landed, in metres a second.",
+            ),
+            (
+                "energy",
+                "real",
+                "The energy of the fall, in joules: its mass, with what it carries, times gravity times the height.",
+            ),
         ],
         doc: "A fall ended at `here`. What the landing does to the entity is for whoever turns impacts into hits (06 §7).",
     },
@@ -257,7 +265,11 @@ pub fn register_types(registry: &mut Registry) {
             }
         }
         for field in &hook.fields {
-            spec = spec.field(field.name.clone(), hook_field_type(&field.ty), field.doc.clone());
+            spec = spec.field(
+                field.name.clone(),
+                hook_field_type(&field.ty),
+                field.doc.clone(),
+            );
         }
         let _ = registry.add_event(spec.hook(hook.mutable.iter().cloned()));
     }
@@ -422,7 +434,11 @@ mod tests {
         for info in MOVEMENT_EVENTS {
             assert!(!info.doc.is_empty(), "`{}` has no documentation", info.name);
             for (name, _, doc) in info.fields {
-                assert!(!doc.is_empty(), "`{}.{name}` has no documentation", info.name);
+                assert!(
+                    !doc.is_empty(),
+                    "`{}.{name}` has no documentation",
+                    info.name
+                );
             }
         }
         for hook in hook_types() {

@@ -24,7 +24,7 @@ use clash_expr::Value;
 use clash_sim::action::{ActionDef, PhaseTime};
 use clash_sim::component::{Physical, Shape};
 use clash_sim::movement::{
-    self, Mover, MovementDef, PostureDef, Stepped, codes, dir_name, parse_dir,
+    self, MovementDef, Mover, PostureDef, Stepped, codes, dir_name, parse_dir,
 };
 use clash_sim::{
     AdvanceLimit, Bound, DebugCommand, Handler, Place, Reason, Sim, SimEvent, Subject,
@@ -33,7 +33,7 @@ use clash_time::{Timeline, Wake, WakeDomain, WakeId};
 use clash_world::dims::STOREY_M;
 use clash_world::{
     AreaShape, AreaSpec, BlockState, Cause, CellBox, CellPos, Cosmos, FloorState, Footprint,
-    GridId, Layer, Location, PathLimits, StepKind, WorldDefs,
+    GridId, Layer, Location, MemoryStore, PathLimits, StepKind, TractIo, WorldDefs,
 };
 
 use common::{creature, debug, item, names};
@@ -74,7 +74,8 @@ const FIXTURES: &str = r#"[
 /// fixtures.
 fn defs() -> Arc<Defs> {
     let path = common::mods_dir().join("core/data/movement.json");
-    let core = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    let core = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     common::try_defs_with(&[
         ("data/movement.json", core.as_str()),
         ("data/test/movement.json", FIXTURES),
@@ -137,7 +138,12 @@ fn shape(sim: &mut Sim, entity: EntityId, mass: f64, height: f64) {
 }
 
 fn set_block(sim: &mut Sim, at: Location, state: &str) {
-    let state = sim.truth().cosmos().defs().block_state(state, None).unwrap();
+    let state = sim
+        .truth()
+        .cosmos()
+        .defs()
+        .block_state(state, None)
+        .unwrap();
     debug(
         sim,
         DebugCommand::SetElement {
@@ -166,12 +172,20 @@ fn text_field(event: &SimEvent, name: &str) -> String {
     event
         .body
         .field(name)
-        .and_then(|value| value.plain().and_then(|plain| plain.as_str().map(str::to_owned)))
+        .and_then(|value| {
+            value
+                .plain()
+                .and_then(|plain| plain.as_str().map(str::to_owned))
+        })
         .unwrap_or_default()
 }
 
 fn real_field(event: &SimEvent, name: &str) -> Real {
-    event.body.field(name).and_then(|value| value.as_real()).unwrap()
+    event
+        .body
+        .field(name)
+        .and_then(|value| value.as_real())
+        .unwrap()
 }
 
 // ---- driving the actions by hand ------------------------------------------
@@ -203,8 +217,12 @@ fn act_step(sim: &mut Sim, actor: EntityId, dir: &str) -> Dur {
     let time = phase_time(sim, "core:step", "stride", actor, &[Value::text(dir)]);
     let kind = parse_dir(dir).unwrap();
     let at = StepKind::ALL.iter().position(|have| *have == kind).unwrap();
-    sim.schedule_for(actor, time, Wake::new(WakeDomain::Stepper, actor.to_bits(), at as u64))
-        .unwrap();
+    sim.schedule_for(
+        actor,
+        time,
+        Wake::new(WakeDomain::Stepper, actor.to_bits(), at as u64),
+    )
+    .unwrap();
     time
 }
 
@@ -222,8 +240,12 @@ fn enter_stride(sim: &mut Sim, actor: EntityId, to: Location) {
     }
     let to = sim.subject_value(Subject::Loc(to));
     let time = phase_time(sim, "core:go_to", "stride", actor, &[to]);
-    sim.schedule_for(actor, time, Wake::new(WakeDomain::Stepper, actor.to_bits(), GO_TO))
-        .unwrap();
+    sim.schedule_for(
+        actor,
+        time,
+        Wake::new(WakeDomain::Stepper, actor.to_bits(), GO_TO),
+    )
+    .unwrap();
 }
 
 /// The end of a phase: what its `on_exit` calls, and its `next`.
@@ -248,6 +270,29 @@ fn phase_ends(sim: &mut Sim, _id: WakeId, wake: Wake) {
     } else {
         enter_stride(sim, actor, to);
     }
+}
+
+/// Saves a simulation and loads it again as a fresh process would: the
+/// world through its own save (02 §11), into a store of its own, and
+/// the simulation through its blob; then everyone is placed again.
+///
+/// The common helper swaps the world's columns out and in instead,
+/// which is enough for flat ground but loses what the loading of the
+/// city's tracts through tickets recorded.
+fn save_and_load(sim: &Sim) -> Sim {
+    let blob = sim.save().unwrap();
+    let mut cosmos = sim.truth().cosmos().clone();
+    let mut store = MemoryStore::new();
+    cosmos.save_world(&mut store).unwrap();
+    let generators = clash_gen::generators(cosmos.defs());
+    let mut io = TractIo {
+        generators: &generators,
+        store: &mut store,
+    };
+    let cosmos = Cosmos::load_world(cosmos.defs(), &mut io).unwrap();
+    let mut loaded = Sim::load(Arc::clone(sim.defs()), cosmos, &blob).unwrap();
+    assert_eq!(loaded.reindex(), []);
+    loaded
 }
 
 /// What has happened since it was last asked: whatever is waiting is
@@ -275,7 +320,11 @@ fn a_walker_steps_each_way_at_the_cost_of_the_distance() {
     for kind in &StepKind::ALL[..8] {
         let dir = dir_name(*kind);
         let diagonal = dir.contains('_');
-        let length = if diagonal { Real::of(2.0).sqrt() } else { Real::ONE };
+        let length = if diagonal {
+            Real::of(2.0).sqrt()
+        } else {
+            Real::ONE
+        };
         let time = movement::step_time(&sim, walker, *kind).unwrap();
         assert_eq!(time, Dur::from_secs_real(length / speed), "{dir}");
         assert_eq!(
@@ -325,7 +374,10 @@ fn a_walker_climbs_the_stairs_and_comes_down() {
     let (x, y) = STAIRS;
     let (mut sim, walker) = city(cell(x + 1, y, 0));
     // Beside the stairs there is no way up.
-    assert_eq!(step(&mut sim, walker, "up").unwrap_err().code, codes::TOO_STEEP);
+    assert_eq!(
+        step(&mut sim, walker, "up").unwrap_err().code,
+        codes::TOO_STEEP
+    );
     step(&mut sim, walker, "west").unwrap();
     let up = step(&mut sim, walker, "up").unwrap();
     assert_eq!(up.to, cell(x, y, 1));
@@ -335,7 +387,10 @@ fn a_walker_climbs_the_stairs_and_comes_down() {
     step(&mut sim, walker, "south").unwrap();
     assert_eq!(loc_of(&sim, walker), cell(x, y + 1, 1));
     // From the floor there is no way down.
-    assert_eq!(step(&mut sim, walker, "down").unwrap_err().code, codes::TOO_STEEP);
+    assert_eq!(
+        step(&mut sim, walker, "down").unwrap_err().code,
+        codes::TOO_STEEP
+    );
     step(&mut sim, walker, "north").unwrap();
     let down = step(&mut sim, walker, "down").unwrap();
     assert_eq!(down.to, cell(x, y, 0));
@@ -367,7 +422,10 @@ fn a_step_is_refused_by_a_wall_a_closed_door_and_a_creature_each_with_its_reason
     let other = common::spawn(&mut sim, creature(), Place::at(cell(door_x + 2, door_y, 0)));
     let taken = step(&mut sim, walker, "east").unwrap_err();
     assert_eq!(taken.code, codes::OCCUPIED);
-    assert_eq!(taken.value("by"), Some(&clash_core::Value::from(other.to_string())));
+    assert_eq!(
+        taken.value("by"),
+        Some(&clash_core::Value::from(other.to_string()))
+    );
     assert_eq!(loc_of(&sim, walker), cell(door_x + 1, door_y, 0));
 
     let events = heard(&mut sim);
@@ -396,7 +454,10 @@ fn a_step_is_refused_by_a_wall_a_closed_door_and_a_creature_each_with_its_reason
         Value::Bool(true)
     );
     set_block(&mut sim, cell(door_x, door_y, 0), "door#closed");
-    assert_eq!(step(&mut sim, walker, "west").unwrap_err().code, codes::CLOSED);
+    assert_eq!(
+        step(&mut sim, walker, "west").unwrap_err().code,
+        codes::CLOSED
+    );
     open_door(&mut sim, EAST_DOOR);
     step(&mut sim, walker, "west").unwrap();
     assert_eq!(loc_of(&sim, walker), cell(door_x, door_y, 0));
@@ -406,7 +467,10 @@ fn a_step_is_refused_by_a_wall_a_closed_door_and_a_creature_each_with_its_reason
 fn a_creature_yields_only_where_a_rule_says_so() {
     let (mut sim, walker) = city(cell(17, 17, 0));
     let other = common::spawn(&mut sim, creature(), Place::at(cell(18, 17, 0)));
-    assert_eq!(step(&mut sim, walker, "east").unwrap_err().code, codes::OCCUPIED);
+    assert_eq!(
+        step(&mut sim, walker, "east").unwrap_err().code,
+        codes::OCCUPIED
+    );
     // A handler of the hook lets the walker by.
     sim.on(
         movement::PASSAGE_REQUESTED,
@@ -446,10 +510,14 @@ fn a_step_takes_distance_over_speed_on_the_clock_where_the_walker_is() {
     // time of the walker's own, and half as long as the world counts.
     let mut spec = AreaSpec::new(
         GRID,
-        AreaShape::Box(CellBox::new(CellPos::new(16, 16, 0), CellPos::new(19, 19, 0))),
+        AreaShape::Box(CellBox::new(
+            CellPos::new(16, 16, 0),
+            CellPos::new(19, 19, 0),
+        )),
     );
     spec.clock_rate = Some(Real::of(2.0));
-    sim.world(|ctx| ctx.create_area(spec, Cause::DEBUG)).unwrap();
+    sim.world(|ctx| ctx.create_area(spec, Cause::DEBUG))
+        .unwrap();
     sim.pump();
     let started = sim.now();
     assert_eq!(act_step(&mut sim, walker, "west"), expected);
@@ -469,7 +537,10 @@ fn a_load_slows_a_walker_by_its_speed_expression() {
     let sack = common::spawn(&mut sim, item(), Place::Stored);
     shape(&mut sim, sack, 60.0, 0.5);
     sim.relocate(sack, Place::In(walker), Cause::DEBUG).unwrap();
-    assert_eq!(property(&sim, walker, "speed", &[]), Value::Real(Real::of(0.7)));
+    assert_eq!(
+        property(&sim, walker, "speed", &[]),
+        Value::Real(Real::of(0.7))
+    );
     let laden = movement::step_time(&sim, walker, StepKind::ALL[2]).unwrap();
     assert_eq!(laden, Dur::from_secs_real(Real::ONE / Real::of(0.7)));
     let stepped = step(&mut sim, walker, "east").unwrap();
@@ -477,7 +548,10 @@ fn a_load_slows_a_walker_by_its_speed_expression() {
     // Put down, it is as quick as it was.
     sim.relocate(sack, Place::at(loc_of(&sim, walker)), Cause::DEBUG)
         .unwrap();
-    assert_eq!(movement::step_time(&sim, walker, StepKind::ALL[2]).unwrap(), light);
+    assert_eq!(
+        movement::step_time(&sim, walker, StepKind::ALL[2]).unwrap(),
+        light
+    );
 }
 
 #[test]
@@ -486,7 +560,10 @@ fn what_cannot_move_by_its_definitions_does_not_move() {
     let stump = sim.defs().lookup::<MovementDef>("core:stump").unwrap();
     movement::set_modes(&mut sim, walker, &[stump]).unwrap();
     // Two legs, by the variable's default.
-    assert_eq!(property(&sim, walker, "speed", &[]), Value::Real(Real::of(1.4)));
+    assert_eq!(
+        property(&sim, walker, "speed", &[]),
+        Value::Real(Real::of(1.4))
+    );
     step(&mut sim, walker, "east").unwrap();
     // The definition's speed comes to nothing: nothing in the engine
     // knows why.
@@ -498,21 +575,35 @@ fn what_cannot_move_by_its_definitions_does_not_move() {
     )
     .unwrap();
     assert_eq!(property(&sim, walker, "speed", &[]), Value::Null);
-    assert_eq!(step(&mut sim, walker, "west").unwrap_err().code, codes::CANNOT_MOVE);
     assert_eq!(
-        movement::step_time(&sim, walker, StepKind::ALL[6]).unwrap_err().code,
+        step(&mut sim, walker, "west").unwrap_err().code,
         codes::CANNOT_MOVE
     );
     assert_eq!(
-        movement::plan_path(&mut sim, walker, cell(17, 20, 0), PathLimits::DEFAULT, Cause::DEBUG)
+        movement::step_time(&sim, walker, StepKind::ALL[6])
             .unwrap_err()
             .code,
+        codes::CANNOT_MOVE
+    );
+    assert_eq!(
+        movement::plan_path(
+            &mut sim,
+            walker,
+            cell(17, 20, 0),
+            PathLimits::DEFAULT,
+            Cause::DEBUG
+        )
+        .unwrap_err()
+        .code,
         codes::CANNOT_MOVE
     );
     // Something that is no creature and lists no way of moving has
     // none: the defaults are for creatures.
     let crate_ = common::spawn(&mut sim, item(), Place::at(cell(17, 18, 0)));
-    assert_eq!(step(&mut sim, crate_, "south").unwrap_err().code, codes::CANNOT_MOVE);
+    assert_eq!(
+        step(&mut sim, crate_, "south").unwrap_err().code,
+        codes::CANNOT_MOVE
+    );
     // It can still be put somewhere it can lie.
     movement::move_to(&mut sim, crate_, cell(17, 19, 0), Cause::DEBUG).unwrap();
     assert_eq!(loc_of(&sim, crate_), cell(17, 19, 0));
@@ -534,7 +625,12 @@ fn go_to_reaches_a_room_across_the_street_through_open_doors() {
     open_door(&mut sim, FAR_WEST_DOOR);
     let cost = movement::path_cost(&sim, walker, goal).unwrap();
     assert_eq!(
-        property(&sim, walker, "path_cost", &[sim.subject_value(Subject::Loc(goal))]),
+        property(
+            &sim,
+            walker,
+            "path_cost",
+            &[sim.subject_value(Subject::Loc(goal))]
+        ),
         Value::Real(cost)
     );
     let started = sim.now();
@@ -553,7 +649,10 @@ fn go_to_reaches_a_room_across_the_street_through_open_doors() {
     // step rounds to.
     let seconds = sim.now().since(started).as_secs_real();
     let expected = cost / Real::of(1.4);
-    assert!((seconds - expected).abs() < Real::of(1e-4), "{seconds} against {expected}");
+    assert!(
+        (seconds - expected).abs() < Real::of(1e-4),
+        "{seconds} against {expected}"
+    );
     // It went by the two doors.
     let through: Vec<Location> = of_name(&events, "entity_relocated")
         .iter()
@@ -581,7 +680,11 @@ fn go_to_stops_with_a_reason_at_a_door_that_is_closed() {
     // that shut, and gave up there with the reason.
     let refused = of_name(&events, "step_refused");
     assert_eq!(refused.len(), 2);
-    assert!(refused.iter().all(|event| text_field(event, "code") == codes::CLOSED));
+    assert!(
+        refused
+            .iter()
+            .all(|event| text_field(event, "code") == codes::CLOSED)
+    );
     let failed = of_name(&events, "path_failed");
     assert_eq!(failed.len(), 1);
     assert_eq!(text_field(failed[0], "code"), codes::NO_WAY);
@@ -603,7 +706,9 @@ fn go_to_stops_with_a_reason_at_a_door_that_is_closed() {
     assert_eq!(stopped.code, codes::CLOSED);
     assert_eq!(property(&sim, walker, "path_stale", &[]), Value::Bool(true));
     assert_eq!(
-        movement::follow_path(&mut sim, walker, cause(walker)).unwrap_err().code,
+        movement::follow_path(&mut sim, walker, cause(walker))
+            .unwrap_err()
+            .code,
         codes::OFF_PATH
     );
 }
@@ -624,11 +729,8 @@ fn a_save_and_a_load_in_the_middle_of_a_path_change_nothing() {
                 sim.advance(AdvanceLimit::Work(steps)),
                 clash_sim::Advance::Yielded
             ));
-            let before = sim.state_hash();
-            let (mut loaded, unplaced) = common::save_and_load(&sim);
-            assert_eq!(unplaced, []);
-            eprintln!("{:#?}\n{:#?}", sim.hashes(), loaded.hashes());
-            assert_eq!(loaded.state_hash(), before);
+            let mut loaded = save_and_load(&sim);
+            assert_eq!(loaded.hashes(), sim.hashes());
             loaded.set_wake_handler(WakeDomain::Stepper, phase_ends);
             sim = loaded;
             // In the middle of the path, with the rest of it kept.
@@ -668,11 +770,12 @@ fn a_walker_whose_floor_is_removed_falls_to_the_storey_below() {
     let events = heard(&mut sim);
     let order: Vec<&str> = names(&events)
         .into_iter()
-        .filter(|name| {
-            ["entity_unsupported", "fell", "entity_relocated", "landed"].contains(name)
-        })
+        .filter(|name| ["entity_unsupported", "fell", "entity_relocated", "landed"].contains(name))
         .collect();
-    assert_eq!(order, ["entity_unsupported", "fell", "entity_relocated", "landed"]);
+    assert_eq!(
+        order,
+        ["entity_unsupported", "fell", "entity_relocated", "landed"]
+    );
     let fell = of_name(&events, "fell")[0];
     assert_eq!(fell.subject("here"), Some(Subject::Loc(above)));
     let landed = of_name(&events, "landed")[0];
@@ -680,8 +783,14 @@ fn a_walker_whose_floor_is_removed_falls_to_the_storey_below() {
     assert_eq!(landed.subject("here"), Some(Subject::Loc(below)));
     let gravity = Real::of(9.81);
     assert_eq!(real_field(landed, "height"), STOREY_M);
-    assert_eq!(real_field(landed, "energy"), Real::of(70.0) * gravity * STOREY_M);
-    assert_eq!(real_field(landed, "speed"), (Real::of(2.0) * gravity * STOREY_M).sqrt());
+    assert_eq!(
+        real_field(landed, "energy"),
+        Real::of(70.0) * gravity * STOREY_M
+    );
+    assert_eq!(
+        real_field(landed, "speed"),
+        (Real::of(2.0) * gravity * STOREY_M).sqrt()
+    );
 }
 
 #[test]
@@ -699,7 +808,10 @@ fn what_can_stay_in_the_air_does_not_fall_and_a_step_off_an_edge_needs_to_be_mea
     )
     .unwrap();
     // A walker will not step into the hole.
-    assert_eq!(step(&mut sim, walker, "east").unwrap_err().code, codes::NO_FOOTING);
+    assert_eq!(
+        step(&mut sim, walker, "east").unwrap_err().code,
+        codes::NO_FOOTING
+    );
     assert_eq!(loc_of(&sim, walker), above);
     // A flier steps over it and stays; the floor under it can go too.
     let flit = sim.defs().lookup::<MovementDef>("core:flit").unwrap();
@@ -742,19 +854,37 @@ fn what_can_stay_in_the_air_does_not_fall_and_a_step_off_an_edge_needs_to_be_mea
 fn a_posture_scales_height_and_speed_and_says_which_ways_of_moving_are_allowed() {
     let (mut sim, walker) = city(cell(17, 17, 0));
     shape(&mut sim, walker, 70.0, 1.8);
-    let height = |sim: &Sim| sim.components().get::<Physical>(walker).unwrap().height().get();
+    let height = |sim: &Sim| {
+        sim.components()
+            .get::<Physical>(walker)
+            .unwrap()
+            .height()
+            .get()
+    };
     let low = sim.defs().lookup::<PostureDef>("core:low").unwrap();
     let flat = sim.defs().lookup::<PostureDef>("core:flat").unwrap();
     let prone = sim.defs().lookup::<PostureDef>("core:prone").unwrap();
     assert_eq!(property(&sim, walker, "posture", &[]), Value::Null);
 
     // Half the height, half the speed.
-    assert_eq!(movement::set_posture(&mut sim, walker, Some(low), Cause::DEBUG), Ok(None));
+    assert_eq!(
+        movement::set_posture(&mut sim, walker, Some(low), Cause::DEBUG),
+        Ok(None)
+    );
     assert_eq!(height(&sim), Real::of(0.9));
-    assert_eq!(property(&sim, walker, "height", &[]), Value::Real(Real::of(0.9)));
-    assert_eq!(property(&sim, walker, "speed", &[]), Value::Real(Real::of(0.7)));
+    assert_eq!(
+        property(&sim, walker, "height", &[]),
+        Value::Real(Real::of(0.9))
+    );
+    assert_eq!(
+        property(&sim, walker, "speed", &[]),
+        Value::Real(Real::of(0.7))
+    );
     assert_eq!(movement::posture_of(&sim, walker), Some(low));
-    assert!(matches!(property(&sim, walker, "posture", &[]), Value::Id(_)));
+    assert!(matches!(
+        property(&sim, walker, "posture", &[]),
+        Value::Id(_)
+    ));
     let events = heard(&mut sim);
     let changed = of_name(&events, "posture_changed");
     assert_eq!(changed.len(), 1);
@@ -762,7 +892,10 @@ fn a_posture_scales_height_and_speed_and_says_which_ways_of_moving_are_allowed()
     assert_eq!(text_field(changed[0], "to"), "core:low");
     assert_eq!(text_field(changed[0], "look"), "stooped");
     // The same posture again changes nothing and says nothing.
-    assert_eq!(movement::set_posture(&mut sim, walker, Some(low), Cause::DEBUG), Ok(Some(low)));
+    assert_eq!(
+        movement::set_posture(&mut sim, walker, Some(low), Cause::DEBUG),
+        Ok(Some(low))
+    );
     assert!(heard(&mut sim).is_empty());
 
     // The bundled prone posture: a fifth of the height.
@@ -774,17 +907,26 @@ fn a_posture_scales_height_and_speed_and_says_which_ways_of_moving_are_allowed()
     // posture's share of that speed.
     movement::set_posture(&mut sim, walker, Some(flat), Cause::DEBUG).unwrap();
     assert_eq!(property(&sim, walker, "speed", &[]), Value::Null);
-    assert_eq!(step(&mut sim, walker, "east").unwrap_err().code, codes::CANNOT_MOVE);
+    assert_eq!(
+        step(&mut sim, walker, "east").unwrap_err().code,
+        codes::CANNOT_MOVE
+    );
     let walk = sim.defs().lookup::<MovementDef>("core:walk").unwrap();
     let crawl = sim.defs().lookup::<MovementDef>("core:crawl").unwrap();
     movement::set_modes(&mut sim, walker, &[walk, crawl]).unwrap();
-    assert_eq!(property(&sim, walker, "speed", &[]), Value::Real(Real::of(0.5)));
+    assert_eq!(
+        property(&sim, walker, "speed", &[]),
+        Value::Real(Real::of(0.5))
+    );
     assert_eq!(step(&mut sim, walker, "east").unwrap().mode, crawl);
 
     // Standing again, it is as tall and as fast as it was.
     movement::set_posture(&mut sim, walker, None, Cause::DEBUG).unwrap();
     assert!((height(&sim) - Real::of(1.8)).abs() < Real::of(1e-12));
-    assert_eq!(property(&sim, walker, "speed", &[]), Value::Real(Real::of(1.4)));
+    assert_eq!(
+        property(&sim, walker, "speed", &[]),
+        Value::Real(Real::of(1.4))
+    );
     assert_eq!(step(&mut sim, walker, "west").unwrap().mode, walk);
 
     // A rule may forbid a change of posture: the hook cancels it.
@@ -835,51 +977,93 @@ fn the_verbs_do_what_the_functions_do() {
         (verb.run)(sim, &call, Cause::DEBUG)
     };
     let who = sim.subject_value(Subject::Entity(walker));
-    let result = run(&mut sim, "step", &[who.clone(), Value::text("east"), Value::Null]).unwrap();
+    let result = run(
+        &mut sim,
+        "step",
+        &[who.clone(), Value::text("east"), Value::Null],
+    )
+    .unwrap();
     assert_eq!(loc_of(&sim, walker), cell(18, 17, 0));
     let result = result.as_map().unwrap().clone();
     assert_eq!(result.get("distance"), Some(&Value::Real(Real::ONE)));
-    let refused = run(&mut sim, "step", &[who.clone(), Value::text("sideways"), Value::Null]);
+    let refused = run(
+        &mut sim,
+        "step",
+        &[who.clone(), Value::text("sideways"), Value::Null],
+    );
     assert_eq!(refused.unwrap_err().code, codes::BAD_DIRECTION);
-    let refused = run(&mut sim, "step", &[Value::Null, Value::text("east"), Value::Null]);
+    let refused = run(
+        &mut sim,
+        "step",
+        &[Value::Null, Value::text("east"), Value::Null],
+    );
     assert_eq!(refused.unwrap_err().code, codes::BAD_ARGUMENT);
 
     let to = sim.subject_value(Subject::Loc(cell(17, 20, 0)));
-    run(&mut sim, "plan_path", &[who.clone(), to.clone(), Value::Null]).unwrap();
+    run(
+        &mut sim,
+        "plan_path",
+        &[who.clone(), to.clone(), Value::Null],
+    )
+    .unwrap();
     assert_eq!(property(&sim, walker, "path_left", &[]), Value::Int(3));
-    assert_eq!(property(&sim, walker, "path_next", &[]), Value::text("south_west"));
+    assert_eq!(
+        property(&sim, walker, "path_next", &[]),
+        Value::text("south_west")
+    );
     run(&mut sim, "follow_path", std::slice::from_ref(&who)).unwrap();
     assert_eq!(loc_of(&sim, walker), cell(17, 18, 0));
     run(&mut sim, "clear_path", std::slice::from_ref(&who)).unwrap();
     assert_eq!(property(&sim, walker, "path_left", &[]), Value::Null);
-    let too_far = run(&mut sim, "plan_path", &[who.clone(), to.clone(), Value::Real(Real::ONE)]);
+    let too_far = run(
+        &mut sim,
+        "plan_path",
+        &[who.clone(), to.clone(), Value::Real(Real::ONE)],
+    );
     assert_eq!(too_far.unwrap_err().code, codes::TOO_FAR);
 
     run(&mut sim, "move_to", &[who.clone(), to]).unwrap();
     assert_eq!(loc_of(&sim, walker), cell(17, 20, 0));
-    run(&mut sim, "set_posture", &[who.clone(), Value::text("core:prone")]).unwrap();
+    run(
+        &mut sim,
+        "set_posture",
+        &[who.clone(), Value::text("core:prone")],
+    )
+    .unwrap();
     assert!(movement::posture_of(&sim, walker).is_some());
     run(&mut sim, "set_posture", &[who.clone(), Value::Null]).unwrap();
     assert_eq!(movement::posture_of(&sim, walker), None);
-    let none = run(&mut sim, "set_posture", &[who.clone(), Value::text("core:sprawled")]);
+    let none = run(
+        &mut sim,
+        "set_posture",
+        &[who.clone(), Value::text("core:sprawled")],
+    );
     assert_eq!(none.unwrap_err().code, codes::POSTURE_UNKNOWN);
     let modes = Value::list([Value::text("core:flit")]);
     run(&mut sim, "set_movement", &[who, modes]).unwrap();
-    assert_eq!(property(&sim, walker, "speed", &[]), Value::Real(Real::of(4.0)));
+    assert_eq!(
+        property(&sim, walker, "speed", &[]),
+        Value::Real(Real::of(4.0))
+    );
 }
 
 #[test]
 fn an_unloaded_or_missing_mover_is_refused_with_a_reason() {
     let (mut sim, walker) = city(cell(17, 17, 0));
     let stored = common::spawn(&mut sim, creature(), Place::Stored);
-    assert_eq!(step(&mut sim, stored, "east").unwrap_err().code, codes::NOWHERE);
+    assert_eq!(
+        step(&mut sim, stored, "east").unwrap_err().code,
+        codes::NOWHERE
+    );
     sim.remove_entity(stored, Cause::DEBUG).unwrap();
     assert_eq!(
         step(&mut sim, stored, "east").unwrap_err().code,
         clash_sim::codes::ENTITY_UNKNOWN
     );
     assert_eq!(
-        movement::follow_path(&mut sim, walker, Cause::DEBUG).unwrap_err().code,
+        movement::follow_path(&mut sim, walker, Cause::DEBUG)
+            .unwrap_err()
+            .code,
         codes::NO_PATH
     );
     assert_eq!(BlockState::NONE.raw(), FloorState::NONE.raw());
