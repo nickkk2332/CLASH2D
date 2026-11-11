@@ -9,6 +9,12 @@ world of demons and cheat skills, a horror scenario spent hiding in lockers, a
 Napoleonic battlefield visited with a modern rifle, a roguelike dungeon, and a
 grounded campaign where a half-decent swordsman dies to one bad cut.
 
+In a sense, CLASH2D is very much an engine for those who want a tile based, simulation sandbox. 
+
+Due to this, coherence often falls onto the mod creator. The engine provides powerful tools to use and a comprehensive physics engine that can be tweaked to ones liking. 
+
+All kinds of genres, provided it is a turn based tile based singleplayer top down view game with a player avatar, are possible. 
+
 Every later design document is judged against this one. If a design cannot
 produce the scenes in section 4, the design is wrong.
 
@@ -190,7 +196,7 @@ The reasoning and consequences of each are recorded in [decisions.md](decisions.
   rules. A mod could build trees from the UI toolkit and EOCs; the engine
   does not aim at them.
 - Multiplayer in the first version. Determinism keeps lockstep co-op possible
-  later; nothing else is done for it now.
+  later; nothing else is done for it now. It is also not planned at the moment.
 - True 3D rendering, or cubic 1 m voxels.
 - Rigid-body rotation, joints, or accurate fluid dynamics. Physics is
   impulse-based and grid-quantised, chosen to be legible and fast.
