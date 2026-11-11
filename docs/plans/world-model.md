@@ -39,8 +39,8 @@ Section references such as "02 §14" point into those documents.
 | W9 | Tickets and activity | M | W8 | todo |
 | W10 | Persistence | M | W8 | todo |
 | W11 | World viewer and scenario runner | M | W8 | todo |
-| W12 | Damage and destruction | M | W6 | todo |
-| W13 | Structural support and collapse | L | W12, W9 | todo |
+| W12 | Damage and destruction | M | W6 | in progress |
+| W13 | Structural support and collapse | L | W12, W9 | in progress |
 | W14 | Bodies | L | W12, W7, W9 | todo |
 | W15 | Energy releases | L | W13, W14 | todo |
 | W16 | Fields | L | W12 | todo |

@@ -874,6 +874,9 @@ impl Cosmos {
     }
 
     /// Sets what an area changes about the ambient conditions inside it.
+    ///
+    /// This asks for no stability check. A change of gravity made with
+    /// [`WorldCtx::set_area_ambient`] does (02 §14.5).
     pub fn set_area_ambient(
         &mut self,
         id: AreaId,
@@ -1130,8 +1133,19 @@ impl WorldCtx<'_> {
         if enclosure.is_some() {
             table.enclosures += 1;
         }
+        let (grid, weighs, timed) = (
+            area.grid,
+            area.ambient.is_some_and(|over| over.gravity.is_some()),
+            area.clock.is_some(),
+        );
+        let covers = (weighs || timed).then(|| area.shape.clone());
         table.areas.insert(id, area);
         self.settle_members(id, &[], cause);
+        if let Some(shape) = covers {
+            // What stands in new gravity is checked, and what is falling
+            // inside a new clock goes onto it.
+            self.area_changed(grid, &shape, weighs, timed, cause);
+        }
         Ok(id)
     }
 
@@ -1176,6 +1190,10 @@ impl WorldCtx<'_> {
         if let Some(clock) = area.clock {
             // A clock that is already gone needs no destroying.
             let _ = self.timeline.destroy_clock(clock);
+        }
+        let weighs = area.ambient.is_some_and(|over| over.gravity.is_some());
+        if weighs || area.clock.is_some() {
+            self.area_changed(grid, &area.shape, weighs, area.clock.is_some(), cause);
         }
         Ok(area)
     }
@@ -1241,6 +1259,11 @@ impl WorldCtx<'_> {
         let old_view = self.cosmos.grid(old_grid)?;
         let old_tracts = area.shape.tracts(old_view.topology())?;
         let before = occupants_in_shape(&old_view, &old_tracts, &area.shape);
+        let (weighs, timed) = (
+            area.ambient.is_some_and(|over| over.gravity.is_some()),
+            area.clock.is_some(),
+        );
+        let covered = (weighs || timed).then(|| (area.shape.clone(), shape.clone()));
 
         let table = &mut self.cosmos.areas;
         table.unlist(id, old_grid, &old_tracts);
@@ -1250,6 +1273,11 @@ impl WorldCtx<'_> {
             area.shape = shape;
         }
         self.settle_members(id, &before, cause);
+        if let Some((old_shape, new_shape)) = covered {
+            // Gravity and the clock changed where it was and where it is.
+            self.area_changed(old_grid, &old_shape, weighs, timed, cause);
+            self.area_changed(grid, &new_shape, weighs, false, cause);
+        }
         Ok(())
     }
 
@@ -1332,6 +1360,8 @@ impl WorldCtx<'_> {
         if let Some(area) = self.cosmos.areas.areas.get_mut(&id) {
             area.clock = clock;
         }
+        // What is falling inside goes onto the clock that now applies.
+        self.sync_process_clocks();
         Ok(())
     }
 

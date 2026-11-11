@@ -22,6 +22,7 @@ use crate::error::WorldError;
 use crate::grid::{CellView, Column, Grid};
 use crate::occupancy::OccupantRecord;
 use crate::pos::{CellPos, GridId, Location, TractPos};
+use crate::process::WorldActivity;
 use crate::site::SiteTable;
 use crate::topology::Topology;
 
@@ -356,6 +357,8 @@ pub struct Cosmos {
     pub(crate) occupants: LookupMap<EntityId, OccupantRecord>,
     /// The stability checks edits have asked for (02 §14.2).
     pub(crate) stability: StabilityQueue,
+    /// The world's processes and the collapses in progress (02 §14.3).
+    pub(crate) activity: WorldActivity,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -386,6 +389,7 @@ impl Cosmos {
             sites: SiteTable::new(),
             occupants: LookupMap::new(),
             stability: StabilityQueue::default(),
+            activity: WorldActivity::new(),
         }
     }
 
@@ -627,8 +631,9 @@ impl Cosmos {
 
 /// Hashes the realms in id order, then the grids in id order with their
 /// loaded columns in tract order, then the global variables, the areas,
-/// the sites and the stability checks waiting. Who occupies which cell is
-/// not hashed: the simulation above owns the entities.
+/// the sites, the stability checks waiting and what the world has under
+/// way. Who occupies which cell is not hashed: the simulation above owns
+/// the entities.
 impl StateHash for Cosmos {
     fn state_hash(&self, hasher: &mut StateHasher) {
         self.realms.state_hash(hasher);
@@ -641,5 +646,6 @@ impl StateHash for Cosmos {
         self.areas.state_hash(hasher);
         self.sites.state_hash(hasher);
         self.stability.state_hash(hasher);
+        self.activity.state_hash(hasher);
     }
 }
