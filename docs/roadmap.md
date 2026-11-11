@@ -63,9 +63,9 @@ What the review left unanswered on purpose:
 
 | State | Questions |
 |-------|-----------|
-| **Open until it can be tested** | Whether fighting in bulk looks continuous with fighting in full (07 §19, 09 §20). How well characters use trickery and control on their own (08 §15). |
-| **Deferred** | Translation, wide characters and translation tools (04, 12, 14). Mods as single archives (04). Seeing the future, and cheaper world history (08, 13). A past for generated worlds (10). Sound, screen readers, controllers (12). A remote inspector (14). Coloured light (15). |
-| **Kept out** | Lambdas in expressions (05). Search-based planning; map memory for characters the player does not control (09). Simulated waves (11). Tilesets in the first version (12). Shared worlds across saves (13). Distributing mods (14). |
+| **Open until it can be tested** | Whether fighting in bulk looks continuous with fighting in full (07 §19, 09 §20). |
+| **Deferred** | Translation, wide characters and translation tools (04, 12, 14). Mods as single archives (04). Seeing the future, and cheaper snapshots for the experimental rewind (08, 13). Sound, screen readers, controllers (12). A remote inspector (14). Coloured light (15). |
+| **Kept out** | Lambdas in expressions (05). Characters that scheme or plan ahead; map memory for characters the player does not control (09). A simulated past for generated worlds (10). Simulated waves (11). Tilesets in the first version (12). Shared worlds across saves (13). Distributing mods (14). |
 
 The ones most likely to change something once code exists:
 
@@ -77,7 +77,6 @@ The ones most likely to change something once code exists:
 | Maps are authored as text | 10 §16; 14 §10.2 | Large content depends on the map editor arriving |
 | Flow limits are by junction, not along every segment | 16 §6.2 | Automation puzzles may still want finer limits |
 | Vessels list as a number and are drawn upright | 11 §10.6 | Capsizing is an event, not something seen to happen |
-| Characters do not plan ahead or get lost | 09 §20 | Cunning is authored, not reasoned |
 | "Scenario" means two things | 13 §1; decision D-157 | A rename is possible if the note proves insufficient |
 | Whole-world rewind is experimental | 13 §9.5; decision D-181 | Its cost is unmeasured and several interactions are unresolved. It may change or be withdrawn. Nothing else depends on it. |
 

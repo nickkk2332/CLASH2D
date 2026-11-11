@@ -395,4 +395,5 @@ small package of its own.
 | Scoring helpers | I5 | 09 §6.1 | `threat_removed`, `harm_prevented`, `escape_margin` and `detection_risk` are registered, read belief only (refused in a load test if given truth), and each has a unit test against a hand-computed case. |
 | Threat from observed capabilities | I5 | 09 §6.2; 15 §7.1 | `threat` rises after the character sees an attack it had not seen before and is unchanged by one it cannot have perceived. |
 | Formations of vehicles | I7 | 09 §8; 11 §7 | A collective whose members are vehicles holds a formation behind its leader. Completed with vehicles package V7. |
+| Consistent, not clever | I10 | 09 §1 | Each bundled mind's behaviour is stated in a sentence or two in its documentation, and a test script shows it doing that twice running from different seeds, differing only where its rules draw chance. No bundled mind reads anything that singles out the player. |
 | Usual guard in bulk exchanges | I8 | 09 §9.1 | Bulk previews include the defences each side's representative members have ready. A shielded line loses fewer to a volley than an unshielded one of the same number. |

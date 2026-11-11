@@ -773,10 +773,10 @@ Targets, unmeasured.
 ## 16. Open questions
 
 1. **Drawing maps.** Closed by the map editor (14 §10.2).
-2. **History.** Deferred. The direction, when it is taken up: a pass over
-   the realm plan that ages it in coarse steps (settlements grow, fall and
-   change hands; routes shift) before anything is surveyed, not years of
-   the cold simulation.
+2. **History.** Not planned beyond the barest level, which exists
+   already: a place's parameters, drawn from the seed, can say how old it
+   is and who built it, and transforms make it look its age or lie in
+   ruins (section 10). Nothing simulates a past.
 3. **Water that makes sense.** Settled for lakes: planned basins with
    their own levels (section 9.2). Erosion and catchments are not
    modelled.

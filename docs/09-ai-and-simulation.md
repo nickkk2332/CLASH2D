@@ -31,6 +31,20 @@ Fixed from earlier documents:
 Names of minds, goals and incidents in examples are illustrative content.
 The engine has no "guard" and no "robbery" (01 R10).
 
+**The aim is consistency, not cleverness.** A character behaves by rules
+that follow from who it is, what it believes and how it feels, with a
+little chance in them. A player should be able to learn how a kind of
+character behaves and then rely on it: the guard who comes to look, loses
+the trail and goes back to his post; the squad that calls out, moves to
+the flank and falls back when it is losing.
+
+Characters will sometimes do things that look smart, because sound rules
+in the right situation do. They do not reason about the player, lay
+schemes or build deceptions over time, even when they hold powers that
+could, and nothing in this design tries to make them. A scheme in a story
+is authored: as a plot (13 §6), an incident (section 11) or a method
+(section 4).
+
 ## 2. The picture
 
 Every character that decides has a **mind**, and a mind has **goals**. Each
@@ -879,9 +893,9 @@ Targets, unmeasured.
    and the comparison tool (14 §11).
 2. **Agreement of live and abstract.** Closed by `incident compare`
    (14 §11).
-3. **Minds that plan ahead.** Kept as it is. Goals and methods are
-   reactive; a trap or a con is authored as a method. Search-based planning
-   is not provided.
+3. **Minds that plan ahead.** Not a goal (section 1). Goals and methods
+   are reactive; a trap or a con is authored as a method. Search-based
+   planning is not provided.
 4. **Learning what others can do.** Settled: a bounded list of observed
    capabilities on each track (15 §7.1).
 5. **Map memory for characters.** Kept as it is. Only the player's

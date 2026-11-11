@@ -786,7 +786,8 @@ Targets, unmeasured.
    machinery and has the same cost.
 3. **Shared minds.** Settled in 12 §9.6: several controlled characters can
    be given one command together.
-4. **Judging non-harmful abilities.** Scoring helpers are supplied
-   (09 §6.1). How well characters use trickery and control in play is open
-   until it can be tested.
+4. **Judging non-harmful abilities.** Settled. Scoring helpers are
+   supplied (09 §6.1), and that is as far as it goes. A character uses
+   trickery and control when its rules and scores say to, the same way
+   each time. It is not expected to build schemes out of them (09 §1).
 5. **Reactions between elements.** Settled in 02 §16: field reactions.

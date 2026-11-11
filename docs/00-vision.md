@@ -183,6 +183,8 @@ states which scenes it serves.
 | UI | An ASCII toolkit that mods use for their own screens, up to replacing the main menu |
 | Building | Survival, base building and automation in the manner of CDDA, RimWorld and Minecraft's tech and magic mods are first-class: custom resource grids, devices that need real supply, powerful automation |
 | Kit | Gadgets of every kind and powered suits must be possible |
+| Character AI | Consistent, not clever. Characters follow readable rules that depend on who they are, with some chance in them, in the manner of Hitman, F.E.A.R. and immersive sims. They can do things that look smart. They do not scheme or plan around the player, even with powers that could |
+| World history | Not simulated, beyond the barest level of a few facts given to places when a world is made |
 
 The reasoning and consequences of each are recorded in [decisions.md](decisions.md).
 
@@ -197,6 +199,9 @@ The reasoning and consequences of each are recorded in [decisions.md](decisions.
   does not aim at them.
 - Multiplayer in the first version. Determinism keeps lockstep co-op possible
   later; nothing else is done for it now. It is also not planned at the moment.
+- Characters that plot. The AI is built to be consistent and readable, not
+  to outwit the player. A scheme in a story is authored content.
+- A simulated past. Generated worlds are not run through years of history.
 - True 3D rendering, or cubic 1 m voxels.
 - Rigid-body rotation, joints, or accurate fluid dynamics. Physics is
   impulse-based and grid-quantised, chosen to be legible and fast.
