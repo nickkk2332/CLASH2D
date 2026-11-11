@@ -88,7 +88,8 @@ particular), where it came from, and its strength.
   capped distance. Rooms with windows are lit near the windows.
 - **Sources.** Elements, fields, items and creatures tagged as light sources
   contribute `intensity / (1 + d²)` to cells they have line of sight to,
-  within their radius.
+  within their radius. An intensity may be negative: a source of darkness.
+  Light at a cell is never below zero.
 - The static part is cached per chunk and rebuilt when the chunk's
   structure revision or its fixed sources change. Moving sources are added
   at query time.
@@ -117,6 +118,10 @@ sees (12).
 
 Senses come from templates and traits (06). A creature may have any number.
 A device may have senses too: a camera, a tripwire, sonar (11).
+
+`relay_senses { from, to }` delivers one entity's percepts to another mind,
+which perceives and remembers them as its own (08 §7.5). Ending the relay
+stops the flow; what was learned stays.
 
 The `Senses` component holds which senses an entity has and its **facing**.
 
@@ -224,7 +229,7 @@ pub struct Beliefs {
 
 | Kind | Holds |
 |------|-------|
-| **Track** | What this mind knows about one persona: where and when last perceived, what they were doing, how it knows (saw, heard, was told, inferred), and a confidence. |
+| **Track** | What this mind knows about one persona: where and when last perceived, what they were doing, how it knows (saw, heard, was told, inferred), and a confidence. A track may also hold **facts**: true values of particular properties, recorded by `appraise` (08 §7.5) at the moment of appraisal. |
 | **Memory** | Something that happened: the event type, where, when, which personas played which roles, how it knows, confidence, and salience. |
 | **Map memory** | What places looked like when last seen. Kept for controlled characters. |
 
@@ -474,7 +479,7 @@ actions and phases; `signature` and `senses` on templates and traits;
 **Hooks**: `identity_check`, `order_received`, `understands`,
 `talk_options`, `signal_receiving`.
 
-**Effects**: `emit_signal`, `say`, `remember`, `forget_memory`,
+**Effects**: `relay_senses`, `appraise`, `emit_signal`, `say`, `remember`, `forget_memory`,
 `add_track`, `clear_track`, `set_awareness`, `set_relation`,
 `add_relation`, `clear_relation`, `join_group`, `leave_group`,
 `set_group_relation`, `report_to_group`, `order`, `face`, and the persona

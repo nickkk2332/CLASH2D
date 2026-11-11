@@ -79,6 +79,7 @@ pub struct ComponentStore<C> {
 | `Physical` | Anything in the world | Mass, volume, height, footprint, cross-section |
 | `Stats` | Creatures, some items | Attributes, pools, tracks (section 4) |
 | `Traits` | Anything | Trait instances (section 5) |
+| `Abilities` | Anything | Ability instances (08 §3.2) |
 | `Body` | Creatures | Parts, wounds, functions (section 6) |
 | `Mind` | Anything that decides | Section 8 |
 | `Holds` | Anything that carries | What is held where (section 9.2) |
@@ -172,7 +173,8 @@ a species feature, a mutation, a perk, a blessing, a curse, a drug, a stun.
 | `modifiers` | Attribute modifiers while present |
 | `rates` | Pool rates while present |
 | `tags` | Added to the entity |
-| `grants` | Actions the entity may use (03 §6) |
+| `grants` | Actions the entity may use (03 §6). An entry may carry a cost, a cooldown and a condition (08 §5.1). |
+| `abilities` | Abilities conferred while the trait is present (08 §3.3) |
 | `channels` | Channel slots added or disabled |
 | `senses` | Senses added or altered (15) |
 | `rules` | Attached rules (05 §9.3) |
@@ -180,6 +182,8 @@ a species feature, a mutation, a perk, a blessing, a curse, a drug, a stun.
 | `duration` | If present, the trait ends by itself. A timer (03 §9). |
 | `stacking` | `none`, `refresh`, or `stack` with a `max`; a stacked trait has a `stacks` count its expressions can read |
 | `group` | Traits in the same group exclude each other: adding one removes the others. Stances, forms, moods. |
+| `while` | A reactive condition (05 §7.5). While false the trait is dormant and confers nothing. |
+| `bound` | When added by an ability: the trait ends when that ability does (08 §7.3) |
 
 There is no separate concept of "status effect", "mutation" or "perk".
 A trait with a duration is a status. Without one it lasts until removed.
@@ -553,7 +557,7 @@ always the same items. A city of unopened drawers costs nothing.
 ```
 
 A template contributes a body or edits to one, attributes, pools, tracks,
-traits, senses, rules, starting holdings, and **choices**.
+traits, abilities (08), senses, rules, starting holdings, and **choices**.
 
 `kind` is a free-form label. "Species", "background", "class", "origin" and
 "cheat skill" are kinds that content invents. The engine treats all

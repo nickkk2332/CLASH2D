@@ -20,7 +20,7 @@ Vehicle package V5 depends on it.
 | G2 | Device model | M | E12 | todo |
 | G3 | Resources and network balancing | L | G2, K7 | todo |
 | G4 | Conduits and ports | L | G3, W6 | todo |
-| G5 | Signals and control | M | G4 | todo |
+| G5 | Signals and control | M | G4, A1 | todo |
 | G6 | Recipes and work | L | G3, E8 | todo |
 | G7 | Movers and item conduits | M | G6, G4 | todo |
 | G8 | Construction and jobs | L | G6, W13 | todo |
@@ -133,8 +133,9 @@ Done when
 **Spec** 16 §7 · **Size** M
 
 Build
-- Signal resources and combining; `outputs` with dependency tracking;
-  `inputs`; `signal_changed`; delays; wireless channels.
+- Signal resources and combining; `outputs` as reactive expressions
+  (package A1 of [abilities.md](abilities.md)); `inputs`; `signal_changed`;
+  delays; wireless channels.
 - The bundled basic set: switch, plate, gate, comparator, timer.
 - Sensors as devices with senses.
 

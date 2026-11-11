@@ -88,7 +88,7 @@ An action declares its attacks and strikes with them in a phase.
 
 | Attack field | Meaning |
 |--------------|---------|
-| `with` | The striking surface: on a held item, on a body part, or on a gripped creature or object |
+| `with` | The striking surface: on a held item, on a body part, on a gripped creature or object, or given inline for a strike made with no physical thing (08 §7.7) |
 | `reach` | Metres. The target must be within it at impact. |
 | `energy` | Joules at full effort |
 | `push` | Share of the energy that moves the target instead of harming it (section 7) |

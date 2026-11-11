@@ -19,6 +19,7 @@ specification that implementation work follows.
 | [docs/05-expressions-and-eoc.md](docs/05-expressions-and-eoc.md) | The rule system: expressions, events, effects, queries |
 | [docs/06-entities-and-bodies.md](docs/06-entities-and-bodies.md) | Bodies, wounds, minds, items, species and character creation |
 | [docs/07-combat.md](docs/07-combat.md) | Strikes, defences, clashes, grapples, takedowns, ranged weapons |
+| [docs/08-abilities-and-powers.md](docs/08-abilities-and-powers.md) | What an ability is, costs, suppression, bindings, and a catalogue of powers built from existing parts |
 | [docs/11-vehicles-and-travel.md](docs/11-vehicles-and-travel.md) | Mounts, craft, vessels, the sea, submarines, space, journeys |
 | [docs/12-presentation-and-ui.md](docs/12-presentation-and-ui.md) | Playback, cutscenes, input, the UI toolkit, frontends |
 | [docs/15-perception-and-social.md](docs/15-perception-and-social.md) | Senses, stealth, beliefs, disguise, relations, speech |
@@ -27,6 +28,7 @@ specification that implementation work follows.
 | [docs/plans/sim-kernel.md](docs/plans/sim-kernel.md) | Work packages for data, rules and actions |
 | [docs/plans/first-playable.md](docs/plans/first-playable.md) | Work packages for entities, perception and presentation |
 | [docs/plans/combat.md](docs/plans/combat.md) | Work packages for combat |
+| [docs/plans/abilities.md](docs/plans/abilities.md) | Work packages for abilities and powers |
 | [docs/plans/devices.md](docs/plans/devices.md) | Work packages for devices, networks, building and kit |
 | [docs/plans/vehicles.md](docs/plans/vehicles.md) | Work packages for vehicles, water and travel |
 | [docs/roadmap.md](docs/roadmap.md) | What is designed, what is next, open questions |

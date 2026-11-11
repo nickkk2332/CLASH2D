@@ -345,8 +345,9 @@ several drivers (`max`, `sum`, `any`).
 { "type": "resource", "id": "control", "signal": true, "combine": "max" }
 ```
 
-- A device **drives** a signal with an `outputs` entry: a pure expression
-  over the device, re-evaluated when anything it reads changes. A pressure
+- A device **drives** a signal with an `outputs` entry: a reactive
+  expression (05 §7.5) over the device, re-evaluated when anything it reads
+  changes. A pressure
   plate drives 1 when something stands on it. A tank gauge drives its fill
   fraction.
 - A device **reads** a signal with an `inputs` entry, bound to a name its
@@ -604,8 +605,8 @@ one holding, wearing or implanted with it), conditionally:
 | `when_unsupplied` | While it does not |
 | `always` | While installed |
 
-Each may list traits (06 §5), granted actions, senses (15 §4), attribute
-modifiers and interface parts (12 §10.6).
+Each may list traits (06 §5), abilities (08), granted actions, senses
+(15 §4), attribute modifiers and interface parts (12 §10.6).
 
 A granted action may have a `cost`: an amount drawn from the assembly's
 stores when the action starts. If it is not there, the action is

@@ -18,7 +18,7 @@ Document numbers are stable. Other documents refer to them by number.
 | 05 | [Expressions and EOC](05-expressions-and-eoc.md) | Written |
 | 06 | [Entities, bodies, species and items](06-entities-and-bodies.md) | Written |
 | 07 | [Combat, techniques and clashes](07-combat.md) | Written |
-| 08 | Abilities and powers | Next |
+| 08 | [Abilities and powers](08-abilities-and-powers.md) | Written |
 | 09 | AI and the layered simulation | Next |
 | 10 | World generation and map format | Any time |
 | 11 | [Vehicles, mounts, the sea, space and travel](11-vehicles-and-travel.md) | Written |
@@ -37,6 +37,7 @@ Document numbers are stable. Other documents refer to them by number.
 | [first-playable](plans/first-playable.md) | 06, 15, 12 | M3 |
 | [combat](plans/combat.md) | 07 | M3 |
 | [devices](plans/devices.md) | 16 | M4 |
+| [abilities](plans/abilities.md) | 08 | M4 |
 | [vehicles](plans/vehicles.md) | 11 | M6 |
 
 ## What each remaining document must settle
@@ -44,32 +45,6 @@ Document numbers are stable. Other documents refer to them by number.
 "Fixed" items are already decided and are not reopened without a new entry
 in [decisions.md](decisions.md). Every document must respect rule R10 of the
 architecture: mechanism, not meaning.
-
-### 08 — Abilities and powers
-
-Scope: an ability as a bundle of actions, passive effects, resources and
-scaling; costs and sources; composition; acquisition, training and loss.
-The document must show that the same building blocks cover force (strength,
-speed, energy projection), movement (flight, teleportation), control of
-matter, bodies and time, and **non-violent** abilities: stealth, illusion,
-disguise, mind influence, command, summoning and binding, reading and
-planting beliefs.
-
-Fixed:
-- Abilities act through the same effects as everything else. "Magic",
-  "superpower", "skill" and "technology" are labels chosen by content.
-- An ability is conferred by a trait (06 §5): its actions are grants, its
-  costs are pools, its growth is a track.
-- Abilities over minds and perception use the verbs of 15: personas,
-  memories, relations, signals, orders.
-- An ability may come from equipment: modules confer traits and actions
-  while supplied (16 §11.2). Innate and equipped abilities are the same
-  kind of thing.
-- Abilities that harm do so through attacks, shots and energy releases
-  (07; 02 §13), so they can be aimed, defended against, held back by
-  `effort`, previewed, and can clash.
-- Power that outruns durability hurts its user (07 §6.3). Content that
-  wants otherwise supplies the durability.
 
 ### 09 — AI and the layered simulation
 
@@ -95,6 +70,11 @@ Fixed:
   which sees only what the character could know.
 - Fights between warm entities are resolved in bulk from previews
   (07 §15). Battles between cold ones are events with outcomes.
+- Abilities describe themselves to this layer with `intent` and `value`
+  (08 §11). Characters must be able to use trickery, control and escape,
+  not only harm.
+- Summoned and bound entities (08 §7.3) are characters like any other
+  while they last.
 
 ### 10 — World generation and map format
 
@@ -129,6 +109,9 @@ Fixed:
 - Survival play is content built from pools, recipes, construction and
   networks (16 §12). A survival scenario needs no engine support beyond
   them.
+- Returning to an earlier moment of the whole world (a checkpoint, a
+  return after death) is a scenario rule over saving and loading, not an
+  ability effect (08 §15).
 
 ## Suggested build order
 
@@ -138,15 +121,15 @@ Fixed:
 | M1 | World model (plan: world-model, W1–W23) | A world that can be generated, viewed, wrecked and saved from a console |
 | M2 | Data, rules and actions (plan: sim-kernel) | Actions on the timeline; mods and EOC complete |
 | M3 | Entities, perception, presentation (plan: first-playable) and combat (plan: combat) | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
-| M4 | Devices (plan: devices), then documents 08 and 09 | Interactions, power, crafting, base building, automation, gadgets and suits; abilities; characters with lives; large groups |
+| M4 | Devices (plan: devices), abilities (plan: abilities), then document 09 | Interactions, power, crafting, base building, automation, gadgets and suits; abilities of every family; characters with lives; large groups |
 | M5 | Documents 10, 13 | Generated worlds; scenarios and modes |
 | M6 | Vehicles (plan: vehicles) | Mounts, craft, ships, submarines, aircraft, spacecraft, journeys |
 
 The water and hull physics in the vehicles plan (V1, V3, V4) depend only on
 the world model and can be built much earlier than M6.
 
-The documents still to write are 08 (abilities), 09 (AI and the layered
-simulation), 10 (world generation), 13 (scenarios) and 14 (tooling).
+The documents still to write are 09 (AI and the layered simulation), 10
+(world generation), 13 (scenarios) and 14 (tooling).
 
 From M3 onward, each stage adds to a set of small **reference mods** in
 different genres (for example a modern block with supers, a fantasy dungeon,

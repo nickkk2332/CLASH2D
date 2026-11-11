@@ -242,6 +242,9 @@ pub struct Property {
 }
 ```
 
+Each property also lists the events that can change its value, which is
+what reactive expressions (section 7.5) subscribe to.
+
 Getters take a read-only view. Setters go through the same functions the
 engine uses, so rule R3 holds for rules too.
 
@@ -340,6 +343,24 @@ source** object can:
 | `{ "call": "fn_id", "args": { … } }` | A function result |
 
 Queries are defined in section 11.
+
+### 7.5 Reactive expressions
+
+Some fields hold a pure expression whose value must be kept current: a
+device's output (16 §7), the `while` condition of a trait or ability
+(08 §6.1). These are **reactive**.
+
+- When a reactive expression is evaluated, the engine records which
+  properties of which subjects it read.
+- Every property is registered with the events that can change it
+  (section 5.3). When one of those events occurs for a subject a reactive
+  expression read, the expression is marked stale.
+- Stale expressions are re-evaluated at the end of the event pump
+  (03 §4.3), once each, in a defined order. If the value changed, whatever
+  owns the expression is told.
+
+Nothing is polled. An expression whose inputs do not change is never
+re-evaluated. Reactive expressions may not call random functions.
 
 ## 8. Events
 

@@ -652,7 +652,9 @@ Walking through walls is a movement ability, not a plane.
 pub struct Area {
     pub id: AreaId,
     pub kind: Option<AreaKindId>,    // definition supplying defaults and attached rules
-    pub shape: AreaShape,            // Box { min, max } | Cells(sorted Vec<CellPos>)
+    pub shape: AreaShape,            // Box { min, max } | Cells(sorted Vec<CellPos>) | Radius(m)
+    pub anchor: Option<AreaAnchor>,  // an entity or subgrid it moves with
+    pub ambient: Option<AmbientOverride>,   // gravity inside it, as a scale or a vector
     pub grid: GridId,
     pub tags: TagSet,
     pub vars: VarMap,
@@ -673,6 +675,15 @@ sealed volume with compartments and pressure (11 §10).
 
 An area with a clock is how scene S10 works. Occupants, bodies and processes
 inside it are re-parented to the area's clock on entry and back on exit.
+
+An **anchored** area moves with its anchor. When it moves, what it now
+covers and no longer covers is worked out, and the same enter and exit
+events are raised as when an occupant moves. Auras, carried fields and
+bubbles around a person are anchored areas (08 §7.2).
+
+An area's **ambient override** replaces the stratum's gravity inside it.
+`Cosmos::ambient` consults areas before strata. Where areas overlap, the
+one with the highest priority applies.
 
 ### 8.4 Sites
 
