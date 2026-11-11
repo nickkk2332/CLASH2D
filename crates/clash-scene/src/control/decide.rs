@@ -98,8 +98,9 @@ where
 {
     /// Asks the host whether a decision is waiting and, if it is one the
     /// scene has not shown yet, opens the screen for it (12 §9.5).
-    /// [`Scene::turn`] does this each pass; an application that drives
-    /// the scene itself calls it when playback reaches the decision.
+    /// [`Scene::turn`] does this each pass once playback has caught up;
+    /// an application that drives the scene itself calls it when
+    /// playback reaches the decision ([`Scene::playback_caught_up`]).
     ///
     /// While a command is being put together nothing is opened: the
     /// decision waits for it.
