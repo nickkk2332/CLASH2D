@@ -8,6 +8,13 @@
 //! This is the base that the expression language (document 05) extends.
 //! [`Value`] is marked `#[non_exhaustive]`: more kinds of value will be
 //! added, so a `match` on it outside this crate needs a wildcard arm.
+//!
+//! A variable may hold anything the expression language can compute
+//! (05 §3, §6), so beside the four plain kinds a `Value` holds a list, a
+//! map, a reference to a definition and a reference to a subject. The
+//! two references are numbers that mean something only to the
+//! simulation, which made them: this crate stores them and gives them no
+//! meaning.
 
 use core::borrow::Borrow;
 use core::fmt;
@@ -47,17 +54,57 @@ pub enum Value {
     Real(Real),
     /// A text.
     Str(String),
+    /// Nothing. Only inside a list or a map: a variable that holds
+    /// nothing is simply not set.
+    Null,
+    /// A reference to a definition: the number of its type and its
+    /// number within the type, as the simulation knows them (04 §7.2).
+    Id {
+        /// The type of definition.
+        ty: u16,
+        /// The definition's number within its type.
+        index: u32,
+    },
+    /// A reference to a subject (05 §5.1): the number of its kind and
+    /// sixty-four bits that mean something only to the simulation.
+    Subject {
+        /// The kind of subject.
+        kind: u16,
+        /// The simulation's own reference.
+        payload: u64,
+    },
+    /// Ordered values.
+    List(Vec<Value>),
+    /// Values by key, in order of key.
+    Map(BTreeMap<String, Value>),
 }
 
 impl Value {
     /// The name of the value's type as the expression language writes it:
-    /// `"bool"`, `"int"`, `"real"` or `"string"`.
+    /// `"bool"`, `"int"`, `"real"`, `"string"`, `"null"`, `"id"`,
+    /// `"subject"`, `"list"` or `"map"`.
     pub const fn type_name(&self) -> &'static str {
         match self {
             Value::Bool(_) => "bool",
             Value::Int(_) => "int",
             Value::Real(_) => "real",
             Value::Str(_) => "string",
+            Value::Null => "null",
+            Value::Id { .. } => "id",
+            Value::Subject { .. } => "subject",
+            Value::List(_) => "list",
+            Value::Map(_) => "map",
+        }
+    }
+
+    /// How deeply lists and maps are nested in the value: zero for a
+    /// plain value, one for a list of plain values. Whoever stores a
+    /// value keeps this within what the codec can write (01 §11.1).
+    pub fn nesting(&self) -> usize {
+        match self {
+            Value::List(items) => 1 + items.iter().map(Value::nesting).max().unwrap_or(0),
+            Value::Map(entries) => 1 + entries.values().map(Value::nesting).max().unwrap_or(0),
+            _ => 0,
         }
     }
 
@@ -131,7 +178,9 @@ impl From<&str> for Value {
 }
 
 /// The value as plain text: `true`, `42`, `3.5`, or a text as it is,
-/// without quotes.
+/// without quotes; `null`; a list as `[a, b]` and a map as
+/// `{key: value}`. A definition is written `id#N` and a subject
+/// `subject#K:N`, because only the simulation knows their names.
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -139,11 +188,36 @@ impl fmt::Display for Value {
             Value::Int(value) => fmt::Display::fmt(value, f),
             Value::Real(value) => fmt::Display::fmt(value, f),
             Value::Str(value) => f.write_str(value),
+            Value::Null => f.write_str("null"),
+            Value::Id { index, .. } => write!(f, "id#{index}"),
+            Value::Subject { kind, payload } => write!(f, "subject#{kind}:{payload}"),
+            Value::List(items) => {
+                f.write_str("[")?;
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        f.write_str(", ")?;
+                    }
+                    fmt::Display::fmt(item, f)?;
+                }
+                f.write_str("]")
+            }
+            Value::Map(entries) => {
+                f.write_str("{")?;
+                for (index, (key, value)) in entries.iter().enumerate() {
+                    if index > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{key}: {value}")?;
+                }
+                f.write_str("}")
+            }
         }
     }
 }
 
-/// A one-byte tag for the kind of value, then the value.
+/// A one-byte tag for the kind of value, then the value. The tags and
+/// what follows them are those of the expression language's value, so a
+/// value hashes the same in either form.
 impl StateHash for Value {
     fn state_hash(&self, hasher: &mut StateHasher) {
         match self {
@@ -162,6 +236,32 @@ impl StateHash for Value {
             Value::Str(value) => {
                 hasher.write_u8(3);
                 value.state_hash(hasher);
+            }
+            Value::Null => hasher.write_u8(4),
+            Value::Id { ty, index } => {
+                hasher.write_u8(5);
+                hasher.write_u16(*ty);
+                hasher.write_u32(*index);
+            }
+            Value::Subject { kind, payload } => {
+                hasher.write_u8(6);
+                hasher.write_u16(*kind);
+                hasher.write_u64(*payload);
+            }
+            Value::List(items) => {
+                hasher.write_u8(7);
+                hasher.write_len(items.len());
+                for item in items {
+                    item.state_hash(hasher);
+                }
+            }
+            Value::Map(entries) => {
+                hasher.write_u8(8);
+                hasher.write_len(entries.len());
+                for (key, value) in entries {
+                    hasher.write_str(key);
+                    value.state_hash(hasher);
+                }
             }
         }
     }
@@ -344,6 +444,47 @@ mod tests {
         assert_eq!(values[3].as_bool(), None);
         assert_eq!(Value::from(7_i32), Value::Int(7));
         assert_eq!(Value::from("ash".to_owned()), Value::from("ash"));
+    }
+
+    #[test]
+    fn wider_values_are_stored_named_hashed_and_serialised() {
+        let list = Value::List(vec![Value::from(1), Value::Null, Value::from("x")]);
+        let map = Value::Map(
+            [
+                ("b".to_owned(), Value::from(2)),
+                ("a".to_owned(), list.clone()),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let id = Value::Id { ty: 3, index: 9 };
+        let subject = Value::Subject {
+            kind: 1,
+            payload: 77,
+        };
+        let names: Vec<&str> = [&Value::Null, &id, &subject, &list, &map]
+            .iter()
+            .map(|value| value.type_name())
+            .collect();
+        assert_eq!(names, ["null", "id", "subject", "list", "map"]);
+        assert_eq!(list.to_string(), "[1, null, x]");
+        assert_eq!(map.to_string(), "{a: [1, null, x], b: 2}");
+        assert_eq!(id.to_string(), "id#9");
+        assert_eq!(subject.to_string(), "subject#1:77");
+        assert_eq!(Value::from(1).nesting(), 0);
+        assert_eq!(list.nesting(), 1);
+        assert_eq!(map.nesting(), 2);
+
+        let all = [Value::Null, id, subject, list, map];
+        for (index, value) in all.iter().enumerate() {
+            for other in &all[index + 1..] {
+                assert_ne!(Hash128::of(value), Hash128::of(other));
+            }
+            let bytes = crate::codec::to_bytes(value).unwrap();
+            assert_eq!(&crate::codec::from_bytes::<Value>(&bytes).unwrap(), value);
+            let json = serde_json::to_string(value).unwrap();
+            assert_eq!(&serde_json::from_str::<Value>(&json).unwrap(), value);
+        }
     }
 
     #[test]

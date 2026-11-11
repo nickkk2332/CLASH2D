@@ -88,11 +88,18 @@ A map's keys are texts. An id used as a key counts as its qualified id, so
 `m[here.block.material]` and `m['core:glass']` read the same entry. A map
 iterates, prints and hashes in order of key.
 
-The expression crate has its own `Value`, which holds all of these;
-`clash_core::Value` holds the four scalar kinds and converts into it. A
+The expression crate has its own `Value`, which holds all of these. A
 reference to a subject is a **handle**: its kind and 64 bits that mean
 something only to the simulation. An id is its definition type and the
 dense number of 04 §7.2.
+
+`clash_core::Value` is the value as a variable stores it (decision
+D-463). It holds the same things in a form that can be saved: the four
+plain kinds, a list, a map, an id as two numbers, a handle as a number
+and 64 bits, and null, which occurs only inside a list or a map because
+a variable that holds nothing is not set. The two convert into each
+other without loss (`Value::to_stored`, `Value::from`) and hash the
+same. A stored value nests lists and maps at most 32 deep.
 
 ## 4. The expression language
 
@@ -369,6 +376,30 @@ properties.
 | `window` | An open window (03 §7) |
 | `global` | The whole simulation |
 
+As built (decision D-464), the simulation serves these kinds; the rest
+are registered by the packages that build what they refer to. In Rust a
+subject is a `Subject`; in an expression it is a handle, and
+`Kinds::handle` and `Kinds::subject` convert between the two.
+
+| Kind | The 64 bits of its handle |
+|------|---------------------------|
+| `entity` | The entity's id: slot and generation |
+| `loc` | The location, packed from the top bit down: the grid's id in 10 bits; `x` and `y` in 21 bits each and `z` in 10, two's complement; two bits that are zero |
+| `element` | As `loc`, with the layer in the lowest two bits: 1 floor, 2 block, 3 fixture |
+| `area`, `site`, `realm` | The id |
+| `tract` | The realm's id in 16 bits, then the tract's `x` and `y` in 24 bits each, two's complement |
+| `global` | Zero |
+
+A handle is a value and may outlive what it names. Reading through one
+that names nothing any more gives null and never another thing: an
+entity's handle carries its generation, ids of areas, sites and realms
+are never reused, and a cell, a tract and the simulation always exist.
+`exists(x)` says whether what a handle names is still there. A cell
+beyond the first 1024 grids, more than 1,048,576 cells from the origin
+along `x` or `y`, or more than 512 storeys from it, has no handle and
+reads as null; so has a tract beyond 8,388,608 tracts from the origin or
+of a realm past the first 65,536.
+
 Each context binds some subjects by name. An event binds the ones it
 declares (section 8.1). By convention:
 
@@ -446,6 +477,52 @@ variable of a handle by qualified name; a registered function; the random
 stream; and where run-time warnings go. A name may be registered once;
 `var` and the reserved words cannot be names.
 
+How the simulation fills it (decision D-465):
+
+- `clash_sim::engine_registry()` gives the registry of everything the
+  simulation offers so far: the built-in functions, the kinds of section
+  5.1, every property and function, and the kernel's and the world's
+  events. Whoever loads mods gives it to the loader
+  (`clash_scene::engine_loader` does). The simulation's registry step
+  (04 §7.3) enters whatever of it a registry lacks and then the events
+  mods define, so a loader that was given no registry, or a test's own,
+  still ends with every entry.
+- Each property is a `PropertyDef`: the kind, the name, the arguments
+  and the type as the language writes types, the documentation, whether
+  it is safe for belief, the events that change it, a getter and, if it
+  can be set, a setter. Each function is a `FunctionDef`. A package adds
+  its table to `engine_properties` or `engine_functions`. A getter is
+  given the simulation to read, the subject and the arguments, and gives
+  null for whatever it cannot answer. A setter calls the function the
+  engine itself uses, so it emits what that function emits.
+- A simulation joins the registry its definitions were compiled against
+  to the tables by name (`Bindings`), so ids need not be the same from
+  one load to the next.
+- The host is `SimHost`. `Sim::host(bound)` reads only; inside
+  `Sim::with_random(bound, …)` random functions draw from the rule
+  stream. `bound` holds a value for each subject, local and event field
+  of the scope the expression was compiled in, in the order the scope
+  declared them. `Bindings::bind_event(event)` gives what an event
+  binds. A field is evaluated through the data layer's `Runner` over the
+  host; `Sim::eval(code, bound)` evaluates one compiled expression.
+- `exists` is answered from the simulation. The reader's helpers of
+  section 4.6 answer in plain forms (`the door`, `2 doors`) until the
+  message package gives a reader and a `language`.
+
+The core properties, on the kinds that have them:
+
+| Property | On | Gives |
+|----------|----|-------|
+| `kind` | Every kind | `string`: the kind's name |
+| `tags` | `entity`, `loc`, `element`, `area`, `site` | `list<string>?`: its tags in order; for a cell, those of the definitions of its three elements; null for what does not exist or is not loaded |
+| `has_tag(tag: string)` | The same | `bool` |
+| `def` | `entity`, `element`, `area`, `realm` | The definition it was made from: `any` for an entity or an element, whose type varies; `id<area_kind>?`; `id<realm>?` |
+| `loc` | `entity`, `element`, `area`, `site`, `tract` | `loc?`: where it is; for an area its middle, for a site its anchor, for a tract its corner at storey 0 |
+| `var` | Every kind but `element` | Section 6 |
+
+The rest are listed where their subsystem is specified: an entity's in
+03 §13 and 06 §13, the world's in 02 §23.
+
 ### 5.4 Truth and belief
 
 Properties read ground truth. That is right for rules of the world: physics,
@@ -456,6 +533,18 @@ character could not know (01 R11). Document 15 provides the belief-side
 vocabulary: what `self` has perceived, believes and remembers. A rule
 attached to a creature that reads `target.loc` directly, rather than where
 `self` believes `target` to be, is flagged by the linter.
+
+As registered (decision D-466), nothing is safe for belief unless it is
+marked, and what is marked is arithmetic on a reference: a subject's
+`kind`; a cell's `x`, `y`, `z`, `grid`, `tract` and `realm`; a tract's
+`x`, `y`, `realm` and `loc`; an element's `layer` and `loc`; `global.now`;
+and the functions `dist`, `dir`, `offset`, `now`, `setting` and
+`has_def`. Everything about an entity is truth, which a mind context
+reads of its own subject and of no other. Everything that reads a cell's
+contents is truth as well, the shape that 02 §23 allows included, and so
+are `los` and `light`: the tag `hidden` cannot be honoured until
+perception is built, and a read that ignored it would leak. They become
+safe when document 15 supplies the belief side.
 
 ## 6. Variables
 
@@ -507,6 +596,44 @@ A variable is declared at the top level of a data file, not in place
 inside another definition. `strict_vars` belongs to the mod that wrote
 the expression: a strict mod's rules are held to it wherever they end up,
 and another mod's are not.
+
+As stored (decision D-467):
+
+| Scope | Kept in | Written through |
+|-------|---------|-----------------|
+| `entity` | The kernel entity | `Sim::set_var` |
+| `cell` | The cell's sparse variables in its chunk | The world's `WorldEdit`, which emits `cell_var_changed` |
+| `area`, `site` | The area's or the site's record | `Cosmos::set_area_var`, `set_site_var` |
+| `tract` | The tract's record, loaded or not | `Cosmos::set_tract_var` |
+| `realm` | The realm's record | `Cosmos::set_realm_var` |
+| `global` | The cosmos | `Cosmos::set_global_var` |
+
+- `Sim::var(subject, name)` reads: what was set; for a variable that was
+  never set, its declared default if it is declared for that kind of
+  subject; otherwise null. Nothing is read of a subject that no longer
+  exists, a default included.
+- `Sim::set_var(subject, name, value, cause)` is the one way a variable
+  changes, and returns what it read as before. Setting null unsets. A
+  declared variable is held to its declaration: it is refused on a
+  subject of another kind (`vars.wrong_scope`) and with a value that is
+  not of its type (`vars.wrong_type`), where an int serves as a real. An
+  undeclared variable holds anything on anything. A value nested deeper
+  than 32 is refused (`vars.too_deep`), as is a subject that no longer
+  exists (`subject.gone`) and whatever the world refuses: a cell that is
+  not loaded, a tract whose region has not been surveyed. An element has
+  no variables of its own.
+- A watched variable raises `var_changed` when what it reads as changes,
+  with what it read as before and what it reads as now: for one that was
+  not set, its default. What it lives on is bound under the name of its
+  kind: an entity as `self`, a cell as `here`, an area, a site, a tract
+  or a realm under those names; a global variable binds nothing. The
+  fields are `name` (string), `scope` (string, the kind), `old` and `new`
+  (any).
+
+Not built: the scopes `region` and `subgrid` (their kinds are not
+served yet; the world keeps a region's variables and
+`Cosmos::set_region_var` writes them), `action`, `scenario` and
+`legacy`, which come with their packages.
 
 ## 7. Where expressions appear
 
@@ -944,6 +1071,27 @@ a settable property (`self.health`), optionally followed by keys
 written and checked like an expression, and the subject it lives on and
 its keys are evaluated when the effect runs.
 
+The write is the simulation's (decision D-468). `Sim::assign(place, how,
+value, bound, cause)` evaluates the place's subject and keys against
+what is bound and assigns; `Sim::assign_to` assigns where the caller has
+evaluated them. `how` is `Set` or `Add`.
+
+- A variable is written through `Sim::set_var` (section 6) and a
+  property through the setter registered for it
+  (`Sim::set_property`), which is the engine's own function: setting an
+  entity's `loc` relocates it and emits `entity_relocated`.
+- With keys, the value is read, changed at the end of the path and
+  written back whole. A key into nothing makes a map; a key of a map is
+  a text or an id; a key of a list is the position of an element that is
+  there. An entry set to null is removed.
+- `add` adds to a number, an int staying an int unless a real is added,
+  and appends to a list. A variable that was never set is added to from
+  its default.
+- A local and a field of the event are kept by whoever runs the rule
+  and are refused here (`write.not_a_subject`). The other reasons are
+  `subject.gone`, `write.not_settable`, `write.bad_value`,
+  `write.bad_key` and `write.cannot_add` (03 §13).
+
 ### 10.4 Time
 
 | Effect | Does |
@@ -1170,9 +1318,11 @@ Notes on the steps:
   sees and `explain` explains.
 - The field's context comes from its definition type, which states for
   each field what is in scope there (04 §7.3). The registry is the one
-  the simulation filled, with the ids of every definition type, the
-  variables mods declare and the functions mods define added before
-  anything is compiled.
+  the simulation filled (`clash_sim::engine_registry()`, section 5.3),
+  with the ids of every definition type, the variables mods declare, the
+  events mods define and the functions mods define added before anything
+  is compiled. `clash-tools lint` loads with it, so a mod's expressions
+  are checked against the real kinds and properties.
 - A compiled expression carries an origin number, from which a run-time
   warning is traced to its definition, its JSON path and the position in
   its string.
@@ -1232,6 +1382,18 @@ Nothing in the engine or the bundled content may depend on it.
 for variables declared with `"watch": true`), `setting_changed` (id, old,
 new), `rule_error` (the rule, the reason, the trace).
 
+`var_changed` is built (section 6): subjects `self?`: entity, `here?`:
+loc, `area?`, `site?`, `tract?`, `realm?`, of which the one the variable
+lives on is bound; fields `name`: string, `scope`: string, `old`, `new`:
+any. Every event of the kernel and of the world (03 §13) is an event
+type of the expression registry, with `actor` and `instigator` after its
+own subjects, so that a definition's scope for an event and `event.field`
+type-check. A subject an event binds only sometimes is null when it is
+not bound. An event a mod defines is entered under its qualified id with
+its fields as declared, each nullable; a subject of a kind the
+simulation does not serve yet (section 5.1) is delivered to handlers
+and is not bound in expressions.
+
 **Core effects**: sections 10.2 to 10.6, and `set_rule_group`.
 
 **Settings**: `rules.max_steps`, `rules.max_call_depth`,
@@ -1242,7 +1404,24 @@ new), `rule_error` (the rule, the reason, the trace).
 **Core functions**: section 4.7.
 
 **Core properties**, available on every subject kind: `var`, `has_tag`,
-`tags`, `def`, `kind`, and for anything with a position, `loc`.
+`tags`, `def`, `kind`, and for anything with a position, `loc`. Which
+kind has which is in the table of section 5.3.
+
+**Core functions answered by the simulation** (section 4.7), with their
+arguments:
+
+| Function | Gives |
+|----------|-------|
+| `dist(a: any, b: any)` | `real?`: metres between two things, a storey counting three, the shorter way round on wrapped axes. Each is a cell, an element, an entity, an area (its middle) or a site (its anchor). Null if either is nowhere or they are in different grids. Safe for belief |
+| `dir(from: any, to: any)` | `list<int>?`: the signs of the shortest offset east, south and up, each -1, 0 or 1. Safe for belief |
+| `offset(at: loc, dx: int, dy: int, dz?: int)` | `loc?`: the cell so many cells east, south and up, wrapped; null beyond an edge. Safe for belief |
+| `los(a: any, b: any)` | `bool?`: whether terrain leaves a clear line, an entity seen from the height it stands at; null if either is nowhere or the line reaches space that is not loaded |
+| `light(at: any)` | `real?`: how bright a cell is now (15 §3.3) |
+| `now()` | `real`: universal time in seconds. Safe for belief |
+| `local_now(subject: any)` | `real?`: the local time, in seconds, of the clock an entity or a cell is on, or of an area's or a realm's own |
+| `setting(id: string)` | `any`: a setting's value, or null. Safe for belief |
+| `has_def(type: string, id: string)` | `bool`: whether a definition of a type with a qualified id is loaded. Safe for belief |
+| `exists(x)` | `bool`: whether what a handle names is still there; false for null |
 
 **Known limits.** Fixed in the engine and not reachable from data: the
 compiler's limits on nesting, tree depth, source length and arguments
@@ -1253,7 +1432,14 @@ nothing else (section 4.6); and the set of simple units (section 4.7).
 **Gaps.** Reachable only from Rust for now: what is in scope in a field,
 which its definition type states (04 §7.3) and a mod cannot widen; and
 whether a function is random or safe for belief, which is worked out and
-cannot be declared. Queries, and with them value sources over a query,
+cannot be declared. A property of a definition reached through an id
+(`here.block.material.density`, `self.def.tags`) cannot be written yet:
+the registry holds properties of kinds of subject, and an id is not one;
+`element.def_id` gives the qualified id as a text meanwhile. `subject.var`
+on a `region`, a `subgrid`, an `action`, the scenario and the legacy
+waits for those kinds. Assigning with `set` and `add` is a function of
+the simulation (`Sim::assign`) until the rule runtime gives it its
+effects. Queries, and with them value sources over a query,
 `exists` in a condition and `run` as a source, are read and kept and
 give null with a warning until the rule runtime builds them.
 

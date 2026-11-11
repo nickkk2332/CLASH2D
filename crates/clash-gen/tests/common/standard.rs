@@ -57,7 +57,7 @@ fn built_from(defs: Arc<Defs>) -> Result<Built, String> {
 /// and built. Definitions of types this crate does not know are passed
 /// over (decision D-450).
 pub fn bundled() -> Result<Built, String> {
-    let types = super::types();
+    let types = super::bundled_types();
     let defs = Loader::new(&types)
         .search_path(super::mods_dir())
         .only_known_types(true)
@@ -70,7 +70,7 @@ pub fn bundled() -> Result<Built, String> {
 /// The world content of `mods/core` with one more mod laid over it,
 /// given as the text of a JSON array: `data/gen.json` of a mod `t`.
 pub fn try_with_core(extra: &str) -> Result<Built, String> {
-    let types = super::types();
+    let types = super::bundled_types();
     let defs = Loader::new(&types)
         .search_path(super::mods_dir())
         .only_known_types(true)

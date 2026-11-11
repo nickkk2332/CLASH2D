@@ -54,6 +54,17 @@ pub fn types() -> DefTypes {
     types
 }
 
+/// The definition types of this crate and of the world, for reading the
+/// bundled `core` mod: without `function` and `variable`, because the
+/// bundled ones name kinds only the simulation registers. With
+/// `Loader::only_known_types` they are passed over.
+pub fn bundled_types() -> DefTypes {
+    let mut types = DefTypes::new();
+    clash_world::register_defs(&mut types);
+    clash_gen::register_defs(&mut types);
+    types
+}
+
 /// Loads the test world with some maps, given as the text of a JSON
 /// array. The file the maps are in is `data/maps.json`.
 pub fn load(maps: &str, registry: Option<&Registry>) -> (Option<Arc<Defs>>, Diagnostics) {

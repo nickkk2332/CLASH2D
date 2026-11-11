@@ -87,6 +87,22 @@ pub struct ComponentStore<C> {
 - Mods do not add component types. They add variables (05 §6), attributes,
   traits and rules, which cover the same ground with full tooling support.
 
+As held by the simulation (decision D-460). `Sim::components()` reads
+every store and `Sim::components_mut()` hands them out to change. A
+`Physical` is the exception: the masses of the containers round it and
+the world's occupant record depend on it, so it is given and changed
+only through `Sim::set_shape(entity, shape, cause)` and
+`Sim::set_own_mass(entity, mass, cause)`. Both work out again the mass of
+the entity and of every container round it and write each new mass to
+the kernel's record of the entity and, for one that stands in the world,
+to the world's occupant record (02 §8.1); `set_shape` also gives the
+entity the shape's footprint and is refused if that does not fit where
+it stands. Relocation does the same for the container an entity left and
+the one it entered. Removing an entity removes its components. An entity
+shelved with an unloaded tract (03 §4.3) keeps its id, so its components
+stay where they are. The reasons are `component.missing` and
+`physical.bad_measure` (03 §13).
+
 ### 3.1 Components
 
 | Component | On | Holds |
@@ -1067,16 +1083,31 @@ absorb destroys it outright, section 7.4).
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
 `templates`, `name`, `posture`, `velocity`, `color`; on items, `age`.
 
-**Gaps.** Reachable only from Rust for now: everything of section 3. The
-stores, `Identity` and `Physical` are built, and the properties they back
-(`mass`, `carried_mass`, `volume`, `height`, `name`, `templates`) are
-registered when the kernel's subjects are. Whether an entity has a
-component of a given kind can be asked in Rust and is not a property.
-Attributes, pools and tracks are built with their definition types,
-properties and events; the verbs of section 4.4 are functions in Rust
-until the rule runtime registers them, a track's `on_advance` is kept
-and not yet run, and what is seated in a mind does not yet move with
-it. A pool cannot yet name a substance (16 §9.5).
+**Registered so far** (05 §5.3), from `Identity` and `Physical`. All
+read truth; none is safe for belief.
+
+| Property | Gives |
+|----------|-------|
+| `entity.mass` | `real?`: kilograms, with everything inside it |
+| `entity.own_mass` | `real?`: kilograms, of the entity alone; null without a `Physical`. **Settable**: every container round it and the world's record of each follow (section 3) |
+| `entity.carried_mass` | `real?`: kilograms, of everything inside it |
+| `entity.volume`, `entity.height` | `real?`: cubic metres; metres |
+| `entity.name`, `entity.description` | `string?`: the entity's own, null for one that goes by its definition's |
+| `entity.def` | `any`: the definition it was made from, as an id of whatever type that is; null for none |
+| `entity.has_component(component: string)` | `bool`: by the component's name, `identity` or `physical` |
+
+**Gaps.** Reachable only from Rust for now: `templates`, until
+`template` is a definition type an id can name; the name and the
+description an entity takes from its definition, which need a way to
+read a field of a definition of any type; and `scale`, `color`,
+`velocity` and the rest of the list above, which wait for the
+components that hold them.
+Whether an entity has a component of a given kind is the property
+`entity.has_component`. Attributes, pools and tracks are built with their
+definition types, properties and events; the verbs of section 4.4 are
+functions in Rust until the rule runtime registers them, a track's
+`on_advance` is kept and not yet run, and what is seated in a mind does
+not yet move with it. A pool cannot yet name a substance (16 §9.5).
 
 ## 14. Invariants
 

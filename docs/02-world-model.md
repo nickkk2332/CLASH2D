@@ -1524,6 +1524,10 @@ written, unless everything is stored or the simulation handed in an
 entity section for the tract (section 11). The checks for bodies and
 processes come with them (sections 14 and 15).
 
+The simulation's side of this, and of `TractLoaded`, is 03 §4.3: it
+reconciles at every safe point, shelves the entities of a tract that is
+to go and puts them back when the tract is loaded again.
+
 ## 10. Activity
 
 ### 10.1 Tickets
@@ -3305,6 +3309,68 @@ of sight; area and
 site membership; tract devastation; variables at cell, area, site, tract,
 region, realm and global scope.
 
+**The queries as properties** (05 §5.3; decision D-465). Null where
+the cell is not loaded or the thing does not exist. None is safe for
+belief except those marked.
+
+| Property | Gives |
+|----------|-------|
+| `loc.x`, `loc.y`, `loc.z`, `loc.grid` | `int`: the coordinates and the grid's id. Safe |
+| `loc.realm`, `loc.tract` | `realm?`, `tract?`. Safe |
+| `loc.site` | `site?`: the site its tract belongs to |
+| `loc.areas` | `list<area>`: the areas that cover it, in id order |
+| `loc.in_area(kind: id<area_kind>)`, `loc.in_area_tagged(tag: string)` | `bool`: whether an area of a kind, or one carrying a tag, covers it |
+| `loc.floor`, `loc.block`, `loc.fixture` | `element?`: null where the cell has none |
+| `loc.is_loaded` | `bool` |
+| `loc.standable`, `loc.is_open`, `loc.under_open_sky` | `bool?` (sections 5.2, 7.1) |
+| `loc.obstacle_height` | `real?`: metres |
+| `loc.has_flag(flag: string)` | `bool?`: one of `walk_blocked`, `opaque`, `has_floor`, `solid_top`, `fragile` (section 6.2) |
+| `loc.tags`, `loc.has_tag(tag: string)` | The tags of the definitions of its three elements |
+| `loc.light` | `real?`: how bright it is now (15 §3.3), without moving sources |
+| `loc.gravity` | `real?`: ambient gravity in m/s² |
+| `loc.atmosphere` | `id<atmosphere>?`: null is vacuum |
+| `loc.time_of_day` | `real?`: seconds since midnight by the sky of its stratum |
+| `loc.occupants` | `list<entity>`: who has a cell of their footprint there |
+| `loc.clock_rate`, `loc.local_time` | `real?`: the rate against universal time, and the local time in seconds, of the clock things there run on |
+| `element.layer`, `element.loc` | `string` (`floor`, `block`, `fixture`), `loc`. Safe |
+| `element.def`, `element.def_id` | Its definition: an id of `floor`, `block` or `fixture` by layer, typed `any`; and its qualified id as a `string?` |
+| `element.material` | `id<material>?` |
+| `element.state`, `element.state_name` | `int?`: the state's bits; `string?`: the name of a declared state |
+| `element.damage` | `int?`: 0 to 255 |
+| `element.height` | `real?`: metres |
+| `element.has_flag(flag: string)` | `bool?`: one of the engine flags of section 5.4 |
+| `element.tags`, `element.has_tag(tag: string)` | The tags of its definition |
+| `area.def` | `id<area_kind>?` |
+| `area.tags`, `area.has_tag(tag: string)` | Its tags |
+| `area.site`, `area.loc`, `area.grid`, `area.priority` | `site?`; `loc?`, its middle; `int?`; `int?` |
+| `area.contains(at: any)` | `bool?`: whether it covers a cell, or where something is |
+| `area.occupants` | `list<entity>` |
+| `area.breached` | `bool?` |
+| `area.clock_rate`, `area.local_time` | `real?`: the rate of its own clock and that clock's local time; null if it has none. `clock_rate` can be set: 03 §13 |
+| `site.name` | `string?`. Can be set |
+| `site.tags`, `site.has_tag(tag: string)` | Its tags |
+| `site.realm`, `site.loc`, `site.tracts` | `realm?`; `loc?`, its anchor; `list<tract>` |
+| `tract.realm`, `tract.x`, `tract.y`, `tract.loc` | `realm`, `int`, `int`, `loc?`: its corner at storey 0. Safe |
+| `tract.loaded`, `tract.surveyed` | `bool` |
+| `tract.activity` | `string?`: `hot`, `warm`, or null |
+| `tract.devastation` | `int?`: 0 to 255 |
+| `tract.site` | `site?` |
+| `realm.def`, `realm.grid` | `id<realm>?`, `int?` |
+| `realm.clock_rate`, `realm.local_time` | `real?`. `clock_rate` can be set: 03 §13 |
+
+Distance and line of sight are the functions `dist` and `los`, and
+`light(at)` reads the light (05 §17). Variables at cell, area, site,
+tract, realm and global scope are read and written as 05 §6 lays down.
+
+Not bound yet, each for a reason: a field's value (`loc.field(kind)`),
+because fields are being built and have no definition type an id could
+name; ambient temperature, because the world has no function that gives
+the temperature of a cell; drift, because it is a vector with a medium
+and there is no value for one; the marks in a cell (`decals`), which
+want a query; a region's kind, field values and variables, because the
+kind `region` is not served; and the properties of a definition reached
+through an id, such as a material's density (05 §17).
+
 **Verb names.** The effects above are written in data as: `set_floor`,
 `set_block`, `set_fixture`, `set_material`, `damage`, `release`, `tremor`,
 `devastate`, `add_field`, `add_decal`, `remove_decal`, `set_var`,
@@ -3350,6 +3416,13 @@ and variables, fields, decals, who is where, and anything about areas and
 sites the character has not perceived. The tag `hidden` is reserved: an
 element, area, site or mark that carries it is left out of even the
 shape until perceived.
+
+As registered so far (decision D-466), the shape is not marked safe
+either: nothing can honour `hidden` until perception is built, and a
+property that ignored it would tell a mind what it has not seen. Only
+what follows from a reference alone is safe: a cell's coordinates, grid,
+tract and realm, a tract's coordinates and realm, an element's layer and
+cell.
 
 **Content named by data, not by the engine.** A damage type flagged
 `"kinetic": true` is the one bodies and falling masses deliver; exactly
@@ -3409,8 +3482,17 @@ does not know is an error, not ignored.
 
 **Tickets and pending edits from Rust.** `hold_ticket`, `release_ticket`
 and `add_pending_edit` are functions of `Cosmos` with the arguments of
-sections 10.1 and 9.4. As verbs they are bound with the rule runtime, as
-are a tract's activity and its record's variables as queries.
+sections 10.1 and 9.4. As verbs they are bound with the rule runtime. A
+tract's activity and its record's variables are read as `tract.activity`
+and `tract.var`.
+
+**Variables of records.** `Cosmos::set_global_var(key, value)`,
+`set_realm_var(realm, key, value)`, `set_tract_var(realm, tract, key,
+value)` and `set_region_var(realm, region, key, value)` set a variable,
+or clear it with no value, and return what it held; `tract_var(realm,
+tract, key)` reads one. A tract or a region that has not been surveyed
+has no record and is refused. They emit nothing: the simulation raises
+`var_changed` for watched variables (05 §6).
 
 **Reachable only from Rust** so far, each wanting a verb or a property
 when the rule runtime binds this document: the queries of section 22 other
@@ -3429,9 +3511,9 @@ pile of rubble holds (`rubble_units`); the direction of a hit
 (`damage_along`); and the collapses in progress and masses in flight
 (`collapses`, `falling_masses`). An area's gravity is changed with a
 check through `WorldCtx::set_area_ambient`; the `Cosmos` function of
-that name asks for none. The light at a cell (`light`, `fill_light`,
-`add_moving_light`) is reachable only from Rust too; 15 §3.3 names
-`light(loc)` for rules. From fields (section 16): setting a level
+that name asks for none. Of the light at a cell, `fill_light` and
+`add_moving_light` are reachable only from Rust; the light itself is the
+property `loc.light` and the function `light(at)`. From fields (section 16): setting a level
 outright (`set_field`); telling the fields of a cell that a packet
 arrived (`conduct`), which whatever delivers damage to a cell must do
 for a reaction to damage to happen; every field of a cell or of a box

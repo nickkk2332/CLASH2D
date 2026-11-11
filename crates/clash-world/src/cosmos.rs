@@ -524,6 +524,18 @@ impl Cosmos {
         &self.vars
     }
 
+    /// Sets or clears a global variable and returns the value it had.
+    pub fn set_global_var(
+        &mut self,
+        key: clash_core::VarKey,
+        value: Option<Value>,
+    ) -> Option<Value> {
+        match value {
+            Some(value) => self.vars.set(key, value),
+            None => self.vars.remove(key.as_str()),
+        }
+    }
+
     /// A read-only handle on one grid, for reading many cells of it.
     #[inline]
     pub fn grid(&self, grid: GridId) -> Result<GridView<'_>, WorldError> {

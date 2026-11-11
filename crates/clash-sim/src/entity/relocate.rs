@@ -146,7 +146,9 @@ impl Sim {
     /// place** (01 R3). Returns where it was.
     ///
     /// It keeps the world's occupant index in step (only an entity `At`
-    /// a cell is in it), keeps containment free of loops, puts the
+    /// a cell is in it), keeps containment free of loops, brings the
+    /// mass of the container it left and of the one it entered up to
+    /// date (06 §3.1), puts the
     /// entity and everything inside it on the clock of where it now is
     /// with the local time its wake-ups had left (03 §3.4), and emits
     /// `entity_relocated` after the world's own `area_exited` and
@@ -172,6 +174,18 @@ impl Sim {
         }
         self.index(id, &presence, to, cause)?;
         self.entities.set_place(id, to);
+        if to != Place::Stored {
+            // Whoever gives it a place takes it off the shelf of an
+            // unloaded tract.
+            self.shelf.forget(id);
+        }
+        // What it weighs counts with whatever holds it (06 §3.1).
+        if let Place::In(old) = from {
+            self.refresh_mass(old, cause);
+        }
+        if let Place::In(new) = to {
+            self.refresh_mass(new, cause);
+        }
         self.sync_clocks_under(id);
         if self.entities.location(id).is_none() {
             self.drop_wakes(id);

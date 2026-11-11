@@ -149,6 +149,31 @@ pub mod codes {
     pub const WORLD_UNKNOWN_REALM: &str = "world.unknown_realm";
     /// The world refused for another reason.
     pub const WORLD_REFUSED: &str = "world.refused";
+    /// A tract could not be loaded or unloaded.
+    pub const WORLD_TRACT_FAILED: &str = "world.tract_failed";
+    /// The entity has no component of the kind the change needs.
+    pub const COMPONENT_MISSING: &str = "component.missing";
+    /// A mass, volume, height or cross-section is negative or not finite.
+    pub const PHYSICAL_BAD_MEASURE: &str = "physical.bad_measure";
+    /// What was to be written to no longer exists, or is not a subject.
+    pub const SUBJECT_GONE: &str = "subject.gone";
+    /// A declared variable was set on another kind of subject.
+    pub const VARS_WRONG_SCOPE: &str = "vars.wrong_scope";
+    /// A declared variable was given a value that is not of its type.
+    pub const VARS_WRONG_TYPE: &str = "vars.wrong_type";
+    /// A value is nested more deeply than a variable may hold.
+    pub const VARS_TOO_DEEP: &str = "vars.too_deep";
+    /// The property cannot be set.
+    pub const WRITE_NOT_SETTABLE: &str = "write.not_settable";
+    /// A property was given a value it cannot take.
+    pub const WRITE_BAD_VALUE: &str = "write.bad_value";
+    /// A key names no entry of what is assigned to.
+    pub const WRITE_BAD_KEY: &str = "write.bad_key";
+    /// `add` was given what cannot be added to what is there.
+    pub const WRITE_CANNOT_ADD: &str = "write.cannot_add";
+    /// The place is a local or an event field, which the simulation does
+    /// not keep.
+    pub const WRITE_NOT_A_SUBJECT: &str = "write.not_a_subject";
     /// No clock has this id.
     pub const CLOCK_UNKNOWN: &str = "clock.unknown";
     /// A clock's rate must be zero or more, and finite.
@@ -225,6 +250,54 @@ pub const KERNEL_REASONS: &[ReasonInfo] = &[
     ReasonInfo {
         code: codes::WORLD_REFUSED,
         doc: "The world refused the change; the message says why.",
+    },
+    ReasonInfo {
+        code: codes::WORLD_TRACT_FAILED,
+        doc: "A tract could not be loaded or unloaded at a safe point; the message says why. It is tried again when something changes. Values: `realm`, `x`, `y`.",
+    },
+    ReasonInfo {
+        code: codes::COMPONENT_MISSING,
+        doc: "The entity has no component of the kind the change needs.",
+    },
+    ReasonInfo {
+        code: codes::PHYSICAL_BAD_MEASURE,
+        doc: "A mass, volume, height or cross-section is negative or not finite.",
+    },
+    ReasonInfo {
+        code: codes::SUBJECT_GONE,
+        doc: "What was to be written to no longer exists, or the place's subject came to something that is not a subject. Values: `kind`.",
+    },
+    ReasonInfo {
+        code: codes::VARS_WRONG_SCOPE,
+        doc: "A declared variable was set on a subject of another kind than it was declared for, or a variable was set on an element. Values: `variable`, `declared`, `found`.",
+    },
+    ReasonInfo {
+        code: codes::VARS_WRONG_TYPE,
+        doc: "A declared variable was given a value that is not of its declared type. Values: `variable`, `declared`, `found`.",
+    },
+    ReasonInfo {
+        code: codes::VARS_TOO_DEEP,
+        doc: "A value's lists and maps are nested more deeply than a variable may hold. Values: `variable`, `limit`.",
+    },
+    ReasonInfo {
+        code: codes::WRITE_NOT_SETTABLE,
+        doc: "The subject has no such property, or the property cannot be set. Values: `kind`, `property`.",
+    },
+    ReasonInfo {
+        code: codes::WRITE_BAD_VALUE,
+        doc: "A settable property was given a value it cannot take; the message says what it takes. Values: `found`, `property`.",
+    },
+    ReasonInfo {
+        code: codes::WRITE_BAD_KEY,
+        doc: "A key of a place names no element of the list, is not a text or an id for a map, or steps into what has no entries. Values: `length` for a list.",
+    },
+    ReasonInfo {
+        code: codes::WRITE_CANNOT_ADD,
+        doc: "`add` was given what cannot be added to what is there: it adds to numbers and appends to lists.",
+    },
+    ReasonInfo {
+        code: codes::WRITE_NOT_A_SUBJECT,
+        doc: "The place is a local or a field of the event, which whoever runs the rule keeps and assigns.",
     },
     ReasonInfo {
         code: codes::CLOCK_UNKNOWN,

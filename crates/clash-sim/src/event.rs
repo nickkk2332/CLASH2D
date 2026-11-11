@@ -18,7 +18,9 @@
 
 use clash_core::{Dur, EntityId, Real, StateHash, StateHasher, Tick, Value};
 use clash_time::ClockId;
-use clash_world::{AreaId, Cause, Location, WorldEvent};
+use clash_world::{
+    AreaId, Cause, Layer, Location, RealmId, SiteId, SpawnRequest, TractPos, WorldEvent,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::bus::{EventPayload, FieldValue};
@@ -26,10 +28,13 @@ use crate::decision::DecisionKind;
 use crate::entity::{Control, Place};
 use crate::reason::Reason;
 
-/// Something an event is about (05 §5.1).
+/// Something the simulation can refer to: what an event is about, what
+/// a property is read of, what a variable lives on (05 §5.1).
 ///
-/// The kernel names the kinds it can refer to itself. Package K4 turns
-/// these into the expression language's handles and adds the rest.
+/// These are the kinds the simulation serves so far. In an expression a
+/// subject is a handle: [`Kinds`](crate::subject::Kinds) converts
+/// between the two. Later packages add their kinds: match with a
+/// wildcard arm.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -40,16 +45,39 @@ pub enum Subject {
     Loc(Location),
     /// An area.
     Area(AreaId),
+    /// The floor, block or fixture of a cell.
+    Element(Location, Layer),
+    /// A site.
+    Site(SiteId),
+    /// A tract of a realm, loaded or not.
+    Tract(RealmId, TractPos),
+    /// A realm.
+    Realm(RealmId),
+    /// The whole simulation.
+    Global,
 }
 
 impl Subject {
     /// The name of the subject's kind as rules write it: `entity`, `loc`,
-    /// `area`.
+    /// `area`, `element`, `site`, `tract`, `realm`, `global`.
     pub const fn kind(&self) -> &'static str {
         match self {
             Subject::Entity(_) => "entity",
             Subject::Loc(_) => "loc",
             Subject::Area(_) => "area",
+            Subject::Element(..) => "element",
+            Subject::Site(_) => "site",
+            Subject::Tract(..) => "tract",
+            Subject::Realm(_) => "realm",
+            Subject::Global => "global",
+        }
+    }
+
+    /// The cell, if the subject is one or an element of one.
+    pub const fn loc(&self) -> Option<Location> {
+        match self {
+            Subject::Loc(loc) | Subject::Element(loc, _) => Some(*loc),
+            _ => None,
         }
     }
 
@@ -77,6 +105,25 @@ impl StateHash for Subject {
                 hasher.write_u8(2);
                 area.state_hash(hasher);
             }
+            Subject::Element(loc, layer) => {
+                hasher.write_u8(3);
+                loc.state_hash(hasher);
+                layer.state_hash(hasher);
+            }
+            Subject::Site(site) => {
+                hasher.write_u8(4);
+                site.state_hash(hasher);
+            }
+            Subject::Tract(realm, tract) => {
+                hasher.write_u8(5);
+                realm.state_hash(hasher);
+                tract.state_hash(hasher);
+            }
+            Subject::Realm(realm) => {
+                hasher.write_u8(6);
+                realm.state_hash(hasher);
+            }
+            Subject::Global => hasher.write_u8(7),
         }
     }
 }
@@ -225,6 +272,52 @@ pub enum EventBody {
     /// An event of a type registered at run time: one a mod defined with
     /// an `event` definition, or one of a later package (05 §8.1).
     Custom(EventPayload),
+    /// What held an entity up has gone (02 §14.3). The entity is where
+    /// it was: what falling does to it is for the movement package.
+    EntityUnsupported {
+        /// Who has nothing under them.
+        entity: EntityId,
+        /// Where it is.
+        loc: Location,
+    },
+    /// Something struck the cell an entity is in: a mass that landed
+    /// there (02 §14.3). What that does to the entity is for the body
+    /// model.
+    EntityExposed {
+        /// Who was there.
+        entity: EntityId,
+        /// The cell that was struck.
+        loc: Location,
+        /// The kind of damage: the qualified id of a `damage_type`.
+        kind: String,
+        /// Joules delivered to the cell.
+        energy: Real,
+        /// How concentrated the delivery was, in pascals.
+        intensity: Real,
+    },
+    /// A variable declared with `"watch": true` changed (05 §6).
+    VarChanged {
+        /// What the variable lives on.
+        owner: Subject,
+        /// The variable's qualified name.
+        name: String,
+        /// What it read as before.
+        old: FieldValue,
+        /// What it reads as now.
+        new: FieldValue,
+    },
+    /// A tract that has just been loaded asks for something to be put
+    /// into the world (02 §9.3, §9.4): its generator's request, or one
+    /// that was left for it. Whoever makes entities from definitions
+    /// answers.
+    SpawnRequested {
+        /// The realm of the tract.
+        realm: RealmId,
+        /// Where, in the realm's base grid.
+        loc: Location,
+        /// What to make and what else the request says.
+        request: SpawnRequest,
+    },
 }
 
 impl EventBody {
@@ -241,6 +334,10 @@ impl EventBody {
             EventBody::Fault { .. } => "fault",
             EventBody::EventCancelled { .. } => "event_cancelled",
             EventBody::Custom(payload) => &payload.name,
+            EventBody::EntityUnsupported { .. } => "entity_unsupported",
+            EventBody::EntityExposed { .. } => "entity_exposed",
+            EventBody::SpawnRequested { .. } => "spawn_requested",
+            EventBody::VarChanged { .. } => "var_changed",
         }
     }
 
@@ -277,6 +374,16 @@ impl EventBody {
                 .iter()
                 .map(|(name, subject)| (name.as_str(), *subject))
                 .collect(),
+            EventBody::EntityUnsupported { entity, loc }
+            | EventBody::EntityExposed { entity, loc, .. } => vec![
+                ("self", Subject::Entity(*entity)),
+                ("here", Subject::Loc(*loc)),
+            ],
+            EventBody::SpawnRequested { loc, .. } => vec![("here", Subject::Loc(*loc))],
+            EventBody::VarChanged { owner, .. } => match var_owner_name(owner) {
+                Some(name) => vec![(name, *owner)],
+                None => Vec::new(),
+            },
         }
     }
 
@@ -311,16 +418,45 @@ impl EventBody {
                 _ => None,
             },
             EventBody::Custom(payload) => payload.field(name).cloned(),
+            EventBody::EntityExposed {
+                kind,
+                energy,
+                intensity,
+                ..
+            } => match name {
+                "kind" => Some(FieldValue::text(kind)),
+                "energy" => Some(FieldValue::from(*energy)),
+                "intensity" => Some(FieldValue::from(*intensity)),
+                _ => None,
+            },
+            EventBody::SpawnRequested { realm, request, .. } => match name {
+                "what" => Some(FieldValue::text(&request.what)),
+                "realm" => Some(FieldValue::from(i64::from(realm.raw()))),
+                _ => None,
+            },
+            EventBody::VarChanged {
+                owner,
+                name: variable,
+                old,
+                new,
+            } => match name {
+                "name" => Some(FieldValue::text(variable)),
+                "scope" => Some(FieldValue::text(owner.kind())),
+                "old" => Some(old.clone()),
+                "new" => Some(new.clone()),
+                _ => None,
+            },
             EventBody::EntityCreated { .. }
             | EventBody::EntityRemoved { .. }
             | EventBody::EntityRelocated { .. }
-            | EventBody::DecisionRequested { .. } => None,
+            | EventBody::DecisionRequested { .. }
+            | EventBody::EntityUnsupported { .. } => None,
         }
     }
 }
 
 /// The name of a control mode as data writes it.
-const fn control_name(control: Control) -> &'static str {
+pub(crate) const fn control_name(control: Control) -> &'static str {
     match control {
         Control::None => "none",
         Control::Direct => "direct",
@@ -360,7 +496,9 @@ fn world_subjects(event: &WorldEvent) -> Vec<(&'static str, Subject)> {
             ("target", Subject::Entity(*occupant)),
             ("here", Subject::Loc(*to)),
         ],
-        WorldEvent::OccupantEntombed { occupant, loc, .. } => vec![
+        WorldEvent::OccupantEntombed { occupant, loc, .. }
+        | WorldEvent::OccupantUnsupported { occupant, loc, .. }
+        | WorldEvent::OccupantExposed { occupant, loc, .. } => vec![
             ("target", Subject::Entity(*occupant)),
             ("here", Subject::Loc(*loc)),
         ],
@@ -372,13 +510,38 @@ fn world_subjects(event: &WorldEvent) -> Vec<(&'static str, Subject)> {
 fn world_field(event: &WorldEvent, name: &str) -> Option<FieldValue> {
     match (event, name) {
         (
-            WorldEvent::ElementChanged { layer, .. } | WorldEvent::ElementDamaged { layer, .. },
+            WorldEvent::ElementChanged { layer, .. }
+            | WorldEvent::ElementDamaged { layer, .. }
+            | WorldEvent::ElementDestroyed { layer, .. },
             "layer",
-        ) => Some(FieldValue::text(match layer {
-            clash_world::Layer::Floor => "floor",
-            clash_world::Layer::Block => "block",
-            clash_world::Layer::Fixture => "fixture",
+        ) => Some(FieldValue::text(layer_name(*layer))),
+        (WorldEvent::ElementDestroyed { how, .. }, "how") => Some(FieldValue::text(match how {
+            clash_world::Destruction::Damage(_) => "damage",
+            clash_world::Destruction::Crushed => "crushed",
+            clash_world::Destruction::Fell => "fell",
         })),
+        (WorldEvent::ElementDestroyed { absorbed, .. }, "absorbed") => {
+            Some(FieldValue::from(*absorbed))
+        }
+        (WorldEvent::ElementDestroyed { passed, .. }, "passed") => Some(FieldValue::from(*passed)),
+        (WorldEvent::CollapseStarted { collapse, .. }, "collapse")
+        | (WorldEvent::CollapseSettled { collapse, .. }, "collapse") => {
+            Some(FieldValue::from(i64::from(collapse.raw())))
+        }
+        (WorldEvent::OccupantExposed { energy, .. }, "energy") => Some(FieldValue::from(*energy)),
+        (WorldEvent::OccupantExposed { intensity, .. }, "intensity") => {
+            Some(FieldValue::from(*intensity))
+        }
+        (WorldEvent::TractLoaded { first, .. }, "first") => Some(FieldValue::from(*first)),
+        (
+            WorldEvent::TractLoaded { realm, .. }
+            | WorldEvent::TractUnloading { realm, .. }
+            | WorldEvent::TicketRefused { realm, .. },
+            "realm",
+        ) => Some(FieldValue::from(i64::from(realm.raw()))),
+        (WorldEvent::TicketRefused { ticket, .. }, "ticket") => {
+            Some(FieldValue::from(i64::from(ticket.raw())))
+        }
         (WorldEvent::ElementDamaged { old, .. }, "old") => Some(FieldValue::from(i64::from(*old))),
         (WorldEvent::ElementDamaged { new, .. }, "new") => Some(FieldValue::from(i64::from(*new))),
         (WorldEvent::DecalsRemoved { count, .. }, "count") => {
@@ -388,6 +551,31 @@ fn world_field(event: &WorldEvent, name: &str) -> Option<FieldValue> {
         (WorldEvent::CellVarChanged { old, .. }, "old") => old.clone().map(plain_field),
         (WorldEvent::CellVarChanged { new, .. }, "new") => new.clone().map(plain_field),
         _ => None,
+    }
+}
+
+/// The name `var_changed` binds the owner of the variable under, by its
+/// kind: an entity is `self`, a cell `here`, and an area, a site, a
+/// tract and a realm go by the name of their kind. A global variable
+/// has no owner to bind.
+pub(crate) const fn var_owner_name(owner: &Subject) -> Option<&'static str> {
+    match owner {
+        Subject::Entity(_) => Some("self"),
+        Subject::Loc(_) | Subject::Element(..) => Some("here"),
+        Subject::Area(_) => Some("area"),
+        Subject::Site(_) => Some("site"),
+        Subject::Tract(..) => Some("tract"),
+        Subject::Realm(_) => Some("realm"),
+        Subject::Global => None,
+    }
+}
+
+/// The name of a layer as data writes it.
+pub(crate) const fn layer_name(layer: clash_world::Layer) -> &'static str {
+    match layer {
+        clash_world::Layer::Floor => "floor",
+        clash_world::Layer::Block => "block",
+        clash_world::Layer::Fixture => "fixture",
     }
 }
 
@@ -448,6 +636,47 @@ impl StateHash for EventBody {
                 reason.state_hash(hasher);
             }
             EventBody::Custom(payload) => payload.state_hash(hasher),
+            EventBody::EntityUnsupported { entity, loc } => {
+                hasher.write_str(self.name());
+                entity.state_hash(hasher);
+                loc.state_hash(hasher);
+            }
+            EventBody::EntityExposed {
+                entity,
+                loc,
+                kind,
+                energy,
+                intensity,
+            } => {
+                hasher.write_str(self.name());
+                entity.state_hash(hasher);
+                loc.state_hash(hasher);
+                hasher.write_str(kind);
+                energy.state_hash(hasher);
+                intensity.state_hash(hasher);
+            }
+            EventBody::SpawnRequested {
+                realm,
+                loc,
+                request,
+            } => {
+                hasher.write_str(self.name());
+                realm.state_hash(hasher);
+                loc.state_hash(hasher);
+                request.state_hash(hasher);
+            }
+            EventBody::VarChanged {
+                owner,
+                name,
+                old,
+                new,
+            } => {
+                hasher.write_str(self.name());
+                owner.state_hash(hasher);
+                hasher.write_str(name);
+                old.state_hash(hasher);
+                new.state_hash(hasher);
+            }
         }
     }
 }
@@ -535,6 +764,69 @@ pub const KERNEL_EVENTS: &[EventInfo] = &[
         subjects: &[("self", "entity")],
         fields: &[("kind", "decision", "What is being asked (03 §5.2).")],
         doc: "A directly controlled entity must choose. Time does not move until it has.",
+    },
+    EventInfo {
+        name: "entity_unsupported",
+        subjects: &[("self", "entity"), ("here", "loc")],
+        fields: &[],
+        doc: "What held an entity up has gone: its floor, the solid top below it or the stairs it stood on (02 §14.3). It is where it was. Follows the world's `occupant_unsupported`.",
+    },
+    EventInfo {
+        name: "entity_exposed",
+        subjects: &[("self", "entity"), ("here", "loc")],
+        fields: &[
+            (
+                "kind",
+                "string",
+                "The kind of damage: the qualified id of a `damage_type`.",
+            ),
+            ("energy", "real", "Joules delivered to the cell."),
+            (
+                "intensity",
+                "real",
+                "How concentrated the delivery was, in pascals.",
+            ),
+        ],
+        doc: "Something struck the cell an entity is in: a mass that landed there (02 §14.3). The entity receives the packet the cell did. Follows the world's `occupant_exposed`.",
+    },
+    EventInfo {
+        name: "spawn_requested",
+        subjects: &[("here", "loc")],
+        fields: &[
+            (
+                "what",
+                "string",
+                "What to make: the id of a definition, as the request wrote it.",
+            ),
+            ("realm", "int", "The realm's id."),
+        ],
+        doc: "A tract that has just been loaded asks for something to be put into the world at `here`: its generator's request, or one left for it (02 §9.4).",
+    },
+    EventInfo {
+        name: "var_changed",
+        subjects: &[
+            ("self?", "entity"),
+            ("here?", "loc"),
+            ("area?", "area"),
+            ("site?", "site"),
+            ("tract?", "tract"),
+            ("realm?", "realm"),
+        ],
+        fields: &[
+            ("name", "string", "The variable's qualified name."),
+            (
+                "scope",
+                "string",
+                "The kind of what the variable lives on: `entity`, `loc`, `area`, `site`, `tract`, `realm` or `global`.",
+            ),
+            (
+                "old",
+                "any",
+                "What it read as before: its value, or its default if it was not set.",
+            ),
+            ("new", "any", "What it reads as now."),
+        ],
+        doc: "A variable declared with `\"watch\": true` changed (05 §6). What it lives on is bound under the name of its kind: an entity as `self`, a cell as `here`, an area, a site, a tract or a realm under those names; a global variable binds nothing.",
     },
     EventInfo {
         name: "fault",
@@ -645,6 +937,84 @@ pub const WORLD_EVENTS: &[EventInfo] = &[
         subjects: &[("target", "entity"), ("here", "loc")],
         fields: &[],
         doc: "An edit left an entity no room and there was nowhere near to go. It stays where it is.",
+    },
+    EventInfo {
+        name: "occupant_unsupported",
+        subjects: &[("target", "entity"), ("here", "loc")],
+        fields: &[],
+        doc: "What held an entity up has gone. `entity_unsupported` follows.",
+    },
+    EventInfo {
+        name: "occupant_exposed",
+        subjects: &[("target", "entity"), ("here", "loc")],
+        fields: &[
+            ("energy", "real", "Joules delivered to the cell."),
+            (
+                "intensity",
+                "real",
+                "How concentrated the delivery was, in pascals.",
+            ),
+        ],
+        doc: "Something struck the cell an entity is in. `entity_exposed` follows.",
+    },
+    EventInfo {
+        name: "element_destroyed",
+        subjects: &[("here", "loc")],
+        fields: &[
+            ("layer", "string", "`floor`, `block` or `fixture`."),
+            ("how", "string", "`damage`, `crushed` or `fell`."),
+            (
+                "absorbed",
+                "real",
+                "The joules it took from the packet that destroyed it.",
+            ),
+            (
+                "passed",
+                "real",
+                "The joules of that packet that carried on beyond it.",
+            ),
+        ],
+        doc: "A floor, block or fixture was destroyed: by damage, by the load on it, or by falling (02 §12.3).",
+    },
+    EventInfo {
+        name: "collapse_started",
+        subjects: &[("here", "loc")],
+        fields: &[("collapse", "int", "The collapse's id.")],
+        doc: "A stability check found something giving way where no collapse was in progress. `here` is the cell whose change started it (02 §14.3).",
+    },
+    EventInfo {
+        name: "collapse_settled",
+        subjects: &[("here", "loc")],
+        fields: &[("collapse", "int", "The collapse's id.")],
+        doc: "A collapse has ended: nothing of it is in flight and no check is waiting near it.",
+    },
+    EventInfo {
+        name: "tract_loaded",
+        subjects: &[("here", "loc")],
+        fields: &[
+            ("realm", "int", "The realm's id."),
+            (
+                "first",
+                "bool",
+                "Whether the tract has never been loaded before.",
+            ),
+        ],
+        doc: "A tract has been loaded. `here` is its cell with the lowest horizontal coordinates, at storey 0. The entities that were waiting for it are put back (02 §9.4).",
+    },
+    EventInfo {
+        name: "tract_unloading",
+        subjects: &[("here", "loc")],
+        fields: &[("realm", "int", "The realm's id.")],
+        doc: "A tract is about to be unloaded. The entities standing in it leave the world and wait for it to be loaded again (02 §9.5).",
+    },
+    EventInfo {
+        name: "ticket_refused",
+        subjects: &[("here", "loc")],
+        fields: &[
+            ("realm", "int", "The realm's id."),
+            ("ticket", "int", "The id the ticket had."),
+        ],
+        doc: "A ticket was refused because the tickets together wanted more tracts than may be loaded. It is no longer held (02 §10.3).",
     },
 ];
 

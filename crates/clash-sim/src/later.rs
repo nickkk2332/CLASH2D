@@ -38,9 +38,12 @@ impl_state_hash!(RuleState {});
 
 /// An entity's channel slots and which action holds each (03 §6.2).
 /// Built by package T3; document 06 derives the slots from the body.
+///
+/// Not to be confused with [`ChannelSet`](crate::action::ChannelSet),
+/// which is a set of channel ids: what an action definition uses.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct ChannelSet {}
-impl_state_hash!(ChannelSet {});
+pub struct ChannelSlots {}
+impl_state_hash!(ChannelSlots {});
 
 /// The things an entity will do next (03 §5.3). Built by package T4.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]

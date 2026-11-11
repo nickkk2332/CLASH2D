@@ -47,8 +47,10 @@ fn parse_turn(text: &str) -> Option<Turn> {
 
 fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // The `function` and `variable` types are left out on purpose: the
+    // bundled ones name kinds of subject that only the simulation, which
+    // sits above this crate, registers (decision D-450).
     let mut types = DefTypes::new();
-    clash_data::expr::register_defs(&mut types);
     clash_world::register_defs(&mut types);
     clash_gen::register_defs(&mut types);
     let mods = concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods");
