@@ -1372,7 +1372,9 @@ edits, what a scenario supplies for pre-made characters, and what a
 
 ## 11. Movement
 
-Moving is an action (03 §6.6) whose effect is one of these verbs.
+Moving is an action (03 §6.6) whose effect is one of these verbs. A verb
+takes no time: the action's phase waits as long as the step takes, and the
+verb then takes it, checked against the world as it is at that moment.
 
 ```json
 { "type": "movement", "id": "walk",
@@ -1380,34 +1382,194 @@ Moving is an action (03 §6.6) whose effect is one of these verbs.
   "speed": "1.4 * self.fn.locomotion",
   "step_up": 0.6,
   "uses": { "legs": "all" },
-  "noise": 0.3 }
+  "noise": 0.3,
+  "default": true }
 ```
 
-A `movement` definition says where a mover may go (`standable`, `liquid`,
-`open`, `climbable`, `solid` for burrowers and phasers), how fast, and what
-it costs. The engine checks a step against the world's geometry
-(02 §22 `neighbours`) and the mover's size.
+A `movement` definition is a way of moving: where it takes a mover, how
+fast, and what it needs. The engine checks a step against the world's
+geometry (02 §22 `neighbours`) and the mover's size, and names no leg, fin
+or wing: what a creature can do is what its definitions say.
 
-| Verb | Does |
-|------|------|
-| `move` | One step to an adjacent cell by a movement mode |
-| `sweep` | Many cells in one go along a line. Stops at the first obstruction and strikes it as a body impact (02 §15.2) with the mover's mass and speed. A speedster's dash. |
-| `leap` | Launches the mover as a body with a computed velocity (02 §15). Lands where physics says. |
-| `set_altitude` | Changes height within the cell for fliers and climbers |
-| `teleport` | Realm transfer (02 §19) |
+| Field | Effect |
+|-------|--------|
+| `name` | What a reader calls it |
+| `surface` | Where it takes the mover: one of the table below. `standable` if left out |
+| `speed` | Metres for each second of the mover's own time: an expression about the mover (`self`), pure and reading truth, compiled at load and worked out whenever a step is priced. It may read attributes, body functions, `carried_mass` or anything else of the mover. Zero, less or null: the mover cannot move this way now |
+| `step_up` | The tallest thing in a cell the mover steps over, in metres. 0.5, ordinary walking (02 §5.2), if left out |
+| `rough` | How many times longer a step into a `rough` cell takes. At least 1; 2 if left out |
+| `climb` | How many times longer a step between storeys takes. At least 1; 1 if left out |
+| `uses` | The channel slots that must be working to move this way, written as an action's `uses` (03 §6.2). A body's slots are counted less those its posture `occupies`; a mover with no body is not asked |
+| `noise` | How loud a step is, as a factor for signals (15 §3). Carried for perception |
+| `default` | Whether a creature that lists no ways of moving of its own moves this way |
 
-An entity whose footing goes (`OccupantUnsupported`), or who is struck hard
-enough, becomes a world body and is the world's until it lands or is caught.
+| Surface | The mover may be in | Steps it makes |
+|---------|---------------------|----------------|
+| `standable` | A cell with footing that is not liquid | On the level; up from a cell that holds a ramp or stairs, and down into one |
+| `climbable` | A cell that holds a ramp, stairs or ladder, or the cell its top holds up | Up from a cell that holds any of them, and down into one |
+| `liquid` | A liquid cell | On the level into liquid; up and down between liquid cells |
+| `open` | Any cell | On the level; up where the cell above has no floor, down where neither this cell's floor nor a solid top below is in the way |
+| `solid` | Any cell, whatever stands in it | Any |
 
-One creature that blocks movement may occupy a cell per plane. A mover may
-**swap** places with a creature that yields to it: both are relocated
-together, and it counts as the mover's step. Who yields is decided by the
-hook `passage_requested`; members of a formation yield to each other
-(09 §5.5). Shoving and forcing past are actions content defines.
+Whatever the surface but `solid`, a cell is closed to the mover where
+something in it stands taller than `step_up`, and a diagonal step is
+refused where either cell it passes is closed so: movers do not cut
+corners.
+
+**A mover's ways of moving.** An entity's are those it has been given
+(`set_movement`, which whoever builds a creature from its template calls),
+in order; a creature that has been given none moves by every definition
+flagged `default`, in order of id; anything else that has been given none
+does not move by itself. Of those, a way counts only while its posture
+allows it, its body has the slots it `uses`, and its `speed` comes to more
+than zero; the posture's `speed` multiplies that. An entity left with none
+cannot move. Together these are the mover's rules, the world's `MoveRules`
+for that one mover (02 §22).
+
+**What a step costs.** A step's length (1 m on the level, √2 m on a
+diagonal, a storey between storeys), times `rough` into a rough cell,
+times `climb` between storeys, over the speed of the way of moving, is
+the time it takes in the mover's own time. Of the ways that make the step,
+the quickest is used, the first listed on a tie. A path search adds up
+each step's time times the mover's best speed: metres at that speed, so
+the cheapest path is the quickest, and never below the step's length.
+Because the time is the mover's own (03 §3.4), the same step takes half as
+long, as the world counts it, where the mover's clock runs twice as fast.
+
+**What a step checks**, in this order, against truth at the moment it is
+taken: the mover stands in the world and can move; there is a cell there;
+one of its ways of moving makes the step (nothing in the way, footing or
+whatever else its surface asks, a ramp, stairs or ladder between storeys,
+no corner cut); a mover wider or taller than a cell fits; and nobody who
+blocks movement fills the cell on a plane it shares. A step into a cell
+with nothing to stand on is refused (`move.no_footing`) unless the mover
+can be there, flying or swimming, or the step is given `drop`: then it is
+taken and the mover falls. A refused step changes nothing and raises
+`step_refused` with its reason.
+
+**Occupancy.** One creature that blocks movement may occupy a cell per
+plane. A mover may **swap** places with a creature that yields to it: both
+are relocated together, and it counts as the mover's step. Who yields is
+decided by the hook `passage_requested`: a handler sets its field `yields`
+to true. Only a single cell mover swaps with a single cell creature; two
+or more in the way refuse the step. Members of a formation yield to each
+other (09 §5.5). Shoving and forcing past are actions content defines.
+
+**Paths.** A path is planned from what the mover believes (01 R11) and
+kept with the mover; each step of it is checked against truth when it is
+taken. The plan goes through what the mover expects to open, a closed
+door, at the cost of 2 m of walking. A step that is refused marks the path
+stale and teaches the mover that it cannot enter that cell: the next plan
+to the same place goes round it, and when no plan is left the journey ends
+with the reason, raised as `path_failed`. The functions that read what a
+mover believes are one seam (`clash_sim::movement::belief`), which reads
+truth until perception is built (document 15).
+
+**Losing one's footing.** When the world reports an entity with nothing
+under it (`entity_unsupported`, 02 §14.3), a mover that can stay where it
+is, by flying or swimming, stays; anything else falls. An entity that
+falls becomes a world body (02 §15) and is the world's until it lands or
+is caught; so is one struck hard enough. `fell` is raised where it lost
+its footing, and the entity is launched (02 §15) at rest from the middle
+of its cell, with its mass, volume, cross-section and planes. The world
+carries the occupant down, and the kernel follows each cell as
+`entity_relocated`; while it is carried it cannot step or be placed
+(`move.in_flight`). When the world reports `body_landed`, `landed` is
+raised where it came to rest, with the height below where it set off,
+and the speed and energy of a free fall that far. So is any entity the
+world carries, whoever launched it. What the landing does to it is the
+hit that the world's `body_impact` makes (section 7). Where there is no
+gravity, or nowhere below to come to rest, it stays; one the world will
+not take as a body, having no mass, is put where something dropped from
+its cell comes to rest (`resting_cell`) at once, and `landed` follows
+straight away.
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `step` | `who: entity`, `dir: string`, `drop: bool?` | One step to the cell next to the mover in `dir`: `north`, `north_east`, `east`, `south_east`, `south`, `south_west`, `west`, `north_west`, `up` or `down`. Gives `distance` and `cost` in metres and `time` in seconds of the mover's own time |
+| `move_to` | `who: entity`, `to: loc` | Puts an entity in a cell, from anywhere and without time, where nothing it does not step over stands, it fits and nobody who blocks it is. Nobody is asked to yield. If nothing holds it up there it falls. For rules that place someone |
+| `set_posture` | `who: entity`, `posture: id<posture>?` | Section 11.1 |
+| `plan_path` | `who: entity`, `to: loc`, `max_cost: number?` | Plans a path from what the mover believes and keeps it as the path it follows. Gives `steps` and `cost` |
+| `follow_path` | `who: entity` | Takes the next step of the path the mover follows, as `step` does. Entering the last cell ends the journey |
+| `clear_path` | `who: entity` | Forgets the path the mover follows |
+| `set_movement` | `who: entity`, `modes: list<id<movement>>` | Says which ways of moving an entity has, in the order they are tried. Empty: the definitions flagged `default`, for a creature |
+| `sweep` | | Many cells in one go along a line. Stops at the first obstruction and strikes it as a body impact (02 §15.2) with the mover's mass and speed. A speedster's dash. **Not built** |
+| `leap` | | Launches the mover as a body with a computed velocity (02 §15). Lands where physics says. **Not built** |
+| `set_altitude` | | Changes height within the cell for fliers and climbers. **Not built** |
+| `teleport` | | Realm transfer (02 §19). **Not built** |
+
+The bundled mod defines the actions the play screen's controls name
+(12 §9.2), in `mods/core/data/movement.json`:
+
+| Action | Parameters | Phases |
+|--------|------------|--------|
+| `step` | `dir: string` | `stride`, lasting `self.step_time($dir)`, and `step` as it ends. `requires` is `self.can_step($dir)`, and `fail_text` gives `self.step_fault($dir)` |
+| `go_to` | `to: cell` | `plan` (no time): `plan_path`, then `stride` while a path is left. `stride`, lasting `self.step_time(self.path_next)`: `follow_path` as it ends, then `plan` again if the path went stale, `stride` while a path is left, and the end. Cancelled or interrupted, it forgets the path |
+| `set_posture` | `posture: id<posture>` | `shift`, 600 ms, and `set_posture` as it ends |
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `step_refused` | `self`: entity | `dir`: string, empty for a placement; `code`, `message`: string, the reason | A step, or a placement by `move_to`, was refused. The mover is where it was |
+| `path_failed` | `self`: entity; `here`: loc, the goal, if it is a cell | `code`, `message`: string | No path could be planned. Whatever path the mover followed is forgotten |
+| `posture_changed` | `self`: entity | `from`, `to`: string, qualified ids of the postures, empty for none; `look`: string, the new posture's | An entity's posture changed |
+| `fell` | `self`: entity; `here`: loc | none | An entity lost its footing where it could not stay, and began to fall from `here`: the world carries it as a body |
+| `landed` | `self`: entity; `here`: loc | `height`: real, metres below where it set off, zero if higher; `speed`: real, metres a second, `sqrt(2 g h)`; `energy`: real, joules, its mass with what it carries times gravity times the height | The world stopped carrying an entity as a body: it came to rest at `here`, after a fall or a throw |
+
+Moving itself is the kernel's `entity_relocated` (03 §13).
+
+| Hook | Subjects | Fields | A handler may |
+|------|----------|--------|---------------|
+| `posture_changing` | `self`: entity | `from`, `to`: string | Cancel: the posture stays |
+| `passage_requested` | `self`: the mover; `target`: who fills the cell; `here`: loc | `yields`: bool, false | Set `yields` to make the two change places. Cancelling, or leaving it false, refuses the step |
+
+| Property | Gives |
+|----------|-------|
+| `entity.posture` | `id<posture>?`: the posture it is in; null in none |
+| `entity.speed` | `real?`: metres for each second of its own time by its fastest way of moving that works, posture included; null if it cannot move |
+| `entity.can_step(dir: string)` | `bool`: whether it believes it can step that way: a cell is there and one of its ways makes the step. Who is in the cell is not asked |
+| `entity.step_fault(dir: string)` | `string?`: why it believes it cannot, as a sentence; null if it believes it can |
+| `entity.step_time(dir: string)` | `real?`: how long it expects the step to take, in seconds of its own time; null if it believes it cannot make it. What a phase's `time` waits |
+| `entity.can_reach(to: loc)` | `bool`: whether `to` is next to it and it believes it can step there |
+| `entity.path_cost(to: loc)` | `real?`: what the way to `to` costs as it believes the way to be, in metres at its best speed (09 §6.4); null if it believes there is none. A search each time |
+| `entity.path_left` | `int?`: steps left of the path it follows; null for none |
+| `entity.path_next` | `string?`: the direction of its path's next step; null for none, or if it is not next to that cell |
+| `entity.path_stale` | `bool`: whether its path must be planned again before the next step |
+
+None is safe for belief (D-466): each is the mover's own state, which a
+mind context reads of its own subject (05 §7.3). Those that read the world
+beyond the mover read it through what the mover believes, so a character
+may decide by them; a step is still checked against truth when it is
+taken.
+
+| Reason | When |
+|--------|------|
+| `move.cannot_move` | The mover has no way of moving that works now, or none makes this step and nothing more particular applies. Carries `entity` |
+| `move.nowhere` | The mover is not standing in the world. Carries `entity` |
+| `move.bad_direction` | A direction is not one of the ten. Carries `dir` |
+| `move.bad_argument` | A verb was given something it does not take. Carries `argument` |
+| `move.edge` | There is no cell to step into: not loaded, or beyond the realm. Carries `dir` |
+| `move.blocked` | Something stands in the cell that the mover does not step over and that cannot stand aside: a wall. Carries `height` |
+| `move.closed` | What stands in the cell could stand aside and does not: a closed door. Carries `height` |
+| `move.corner` | A diagonal step would cut past something in the way |
+| `move.too_steep` | No way up or down here for this mover |
+| `move.no_footing` | Nothing to stand on, and the mover cannot be there otherwise |
+| `move.liquid` | The cell is liquid, and the mover does not swim |
+| `move.occupied` | Someone who blocks movement fills the cell on a shared plane and did not yield. Carries `by` |
+| `move.no_room` | A mover wider or taller than a cell does not fit |
+| `move.no_way` | No path leads to the goal, or none was found in as many cells as the search may settle (`searched`) |
+| `move.too_far` | No path within the cost allowed. Carries `max_cost` |
+| `move.goal_blocked` | The mover believes it cannot be in the goal cell |
+| `move.other_grid` | The goal is in another grid |
+| `move.no_path` | `follow_path` for a mover that follows no path |
+| `move.in_flight` | The world is carrying the mover as a body: it is falling or thrown. Carries `entity` |
+| `move.off_path` | The mover is not where its path left it, or a step of it was refused: plan again |
+| `move.unknown_movement` | A way of moving no loaded definition has |
+| `posture.unknown` | A posture no loaded definition has |
 
 ### 11.1 Posture
 
-A character is in one **posture** at a time.
+A character is in one **posture** at a time, or in none, which changes
+nothing about it.
 
 ```json
 [
@@ -1420,17 +1582,21 @@ A character is in one **posture** at a time.
 
 | Field | Effect |
 |-------|--------|
-| `height` | Scales the body's height, and with it the height of every part's band. So it decides what cover hides (02 §5.3), what a shot at a given height meets (07 §11.1), and what can be reached (07 §4.3). |
-| `speed`, `movement` | A factor on movement, and which movement modes are allowed |
-| `signature` | A factor on how easily the body is perceived (15 §5.3) |
-| `occupies` | Channel slots unavailable while in it |
+| `name` | What a reader calls it |
+| `height` | Scales the body's height, and with it the height of every part's band. So it decides what cover hides (02 §5.3), what a shot at a given height meets (07 §11.1), and what can be reached (07 §4.3). The share of its standing height, above zero; 1 if left out |
+| `speed`, `movement` | A factor on the speed of every way of moving (1 if left out), and which ways of moving are allowed (all if left out) |
+| `signature` | A factor on how easily the body is perceived (15 §5.3); 1 if left out |
+| `occupies` | Channel slots unavailable while in it, written as an action's `uses` |
 | `traits` | Whatever else content wants it to carry: a steadier aim, a weaker guard |
-| `look` | How the body is drawn in it (12 §4.4) |
+| `look` | How the body is drawn in it (12 §4.4), reported with `posture_changed` |
 
 Changing posture is an action, with a time and a noise. `set_posture`
 forces one: a rule may put someone on the ground when a stagger is severe
-enough (07 §7). A body with nobody acting for it takes the posture its
-plan names as `limp`.
+enough (07 §7). The hook `posture_changing` runs first and may cancel; then
+the height of the entity's `Physical` becomes the posture's share of its
+standing height, which sight and cover read, and `posture_changed` is
+raised. A posture the entity is already in changes nothing. A body with
+nobody acting for it takes the posture its plan names as `limp`.
 
 Getting up takes time, and someone lying down is below most swings and
 within reach of every boot. Postures are content. A body plan lists which
@@ -1495,13 +1661,15 @@ Body flags on `damage_type` (`severs`).
 `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
 `item_repaired`, `item_broken`, `item_split`, `item_merged`,
 `item_stage_reached`, `item_turned`, `posture_changed`,
-`contents_materialised`, `became_notable`. Those of items are described
-with their fields in section 9.2.
+`contents_materialised`, `became_notable`, `step_refused`, `path_failed`,
+`fell`, `landed`. Those of items are described with their fields in
+section 9.2, and those of movement and posture in section 11.
 
 **Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
 `trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
 `item_leaving`, `body_changing`, `mind_transferring`, `posture_changing`,
-`passage_requested`. Each is described in the table below,
+`passage_requested`. Each is described in the table below, the last two
+with their fields in section 11,
 `pool_changing` with its fields in section 4.4, and `hit_incoming` with
 its fields, and the events of bodies and wounds with theirs, in
 section 7.6.
@@ -1535,8 +1703,8 @@ in something that has a mind; `transfer_mind` into something that has a
 mind, unless it says `"swap": true`, in which case the two change places.
 Parts of an old plan that `set_body_plan` cannot map are dropped as items.
 The refusals of attributes, pools and tracks are tabled in section 4.4,
-those of bodies, hits and wounds in section 7.6, and those of items in
-section 9.2.
+those of bodies, hits and wounds in section 7.6, those of items in
+section 9.2, and those of movement and posture in section 11.
 
 **Settings**: `hit.overkill_factor` (how many times what a whole body could
 absorb destroys it outright, section 7.4).
@@ -1548,10 +1716,14 @@ absorb destroys it outright, section 7.4).
 part and of a wound (section 6.7); `mass`, `height`, `volume`;
 `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
-`templates`, `name`, `posture`, `velocity`, `color`; on items, `age`.
+`templates`, `name`, `posture`, `velocity`, `color`; on items, `age`;
+`speed`, `can_step(dir)`, `step_fault(dir)`, `step_time(dir)`,
+`can_reach(to)`, `path_cost(to)`, `path_left`, `path_next` and
+`path_stale` (section 11).
 
-**Registered so far** (05 §5.3), from `Identity` and `Physical`. All
-read truth; none is safe for belief.
+**Registered so far** (05 §5.3), from `Identity` and `Physical`, and
+movement's, which are tabled in section 11. None is safe for belief;
+those of `Identity` and `Physical` read truth.
 
 | Property | Gives |
 |----------|-------|
@@ -1627,6 +1799,18 @@ are built. Not built: the other verbs of section 6.5, bodies made of
 cells (section 6.6), shared parts (section 6.4), which parts face a
 hit's direction (section 7.4), and what a pool that names a substance
 spills.
+Movement and posture are built with their definition types, verbs,
+properties, events, hooks and reasons (section 11), and the bundled
+`step`, `go_to` and `set_posture` actions are data that calls them. Not
+yet: the verbs `sweep`, `leap`, `set_altitude` and `teleport`; catching
+a falling entity, and a body that leaves loaded space; what a mover
+believes, which reads truth behind one seam until perception is
+built; a posture's effect on a body's part bands, its `traits` and the
+`limp` posture, and the slots it `occupies` being held against actions,
+which is a function in Rust (`posture_occupies`) until the action
+runtime claims slots; `noise` and `signature`, which are carried for
+perception; and a path for a mover wider than a cell, which is planned
+for its corner cell and checked whole at each step.
 
 ## 14. Invariants
 
