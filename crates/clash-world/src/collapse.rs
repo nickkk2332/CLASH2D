@@ -87,6 +87,9 @@ pub struct FallingMass {
     pub energy: Real,
     /// What it is made of, by material in id order.
     pub parts: Vec<DebrisPart>,
+    /// Whether it has already struck the cell it is in, and gone through
+    /// the floor there. Whoever is in that cell has been told.
+    pub struck: bool,
     /// Who and what brought it down.
     pub cause: Cause,
 }
@@ -98,6 +101,7 @@ clash_core::impl_state_hash!(FallingMass {
     mass,
     energy,
     parts,
+    struck,
     cause
 });
 
@@ -642,6 +646,7 @@ impl WorldCtx<'_> {
             mass: Real::ZERO,
             energy: Real::ZERO,
             parts: Vec::new(),
+            struck: false,
             cause,
         };
         let mut elements = 0;
@@ -734,6 +739,9 @@ impl WorldCtx<'_> {
         }
 
         let energy = mass.energy + mass.mass * gravity * height(mass.at.cell.z - rest.cell.z);
+        // Having gone through a cell's floor, it strikes what is under
+        // the floor: the same cell, whose occupants it has already met.
+        let again = mass.struck && rest.cell == mass.at.cell;
         mass.at = rest;
         mass.land_z = rest.cell.z;
         mass.energy = energy;
@@ -753,7 +761,9 @@ impl WorldCtx<'_> {
             && energy > Real::ZERO
         {
             let intensity = energy / (CELL_M * CELL_M * FALL_IMPACT_DEPTH_M);
-            self.expose(rest, kind, energy, intensity, &mass);
+            if !again {
+                self.expose(rest, kind, energy, intensity, &mass);
+            }
             let packet = DamagePacket::new(kind, energy, intensity, mass.cause);
             let down = [Real::ZERO, Real::ZERO, -Real::ONE];
             let struck = self
@@ -766,6 +776,7 @@ impl WorldCtx<'_> {
                 mass.take(wreck);
                 self.tally(mass.collapse, mass.cause, 1, wreck.mass, 0);
                 mass.energy = outcome.passed;
+                mass.struck = target.cell == rest.cell;
                 mass.at = target;
                 mass.land_z = self
                     .cosmos

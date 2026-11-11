@@ -160,6 +160,7 @@ pub struct Cosmos {
     sites: SiteTable,                          // every site, of every realm (section 8.4)
     occupants: LookupMap<EntityId, OccupantRecord>,   // where each occupant is (section 8.1); not state
     stability: StabilityQueue,                 // checks asked for and not yet made (section 14.2)
+    activity: WorldActivity,                   // the world's processes and the collapses in progress (section 14.3)
     vars: VarMap,                              // global variables
 }
 
@@ -734,7 +735,8 @@ impl WorldEdit<'_> {
     pub fn set_element(&mut self, loc: Location, layer: Layer, s: ElementState) -> Result<ElementState, WorldError>;
     pub fn set_material(&mut self, loc: Location, layer: Layer, m: MaterialId) -> Result<ElementState, WorldError>;
     pub fn set_damage(&mut self, loc: Location, layer: Layer, damage: u8) -> Result<u8, WorldError>;
-    pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> DamageOutcome;      // section 12
+    pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> Result<DamageOutcome, WorldError>;   // section 12
+    pub fn damage_along(&mut self, loc: Location, layer: Layer, p: DamagePacket, dir: Option<[Real; 3]>) -> Result<DamageOutcome, WorldError>;
     pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16);                       // section 16
     pub fn lay_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;         // 16 §6
     pub fn cut_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;
@@ -775,7 +777,16 @@ An edit is never refused because someone is standing there (section 23).
 - **The queue** holds one request for each cell, the first made, with its
   tick and cause, in order of location. Edits only add to it;
   `Cosmos::take_stability_requests` hands the requests to the collapse
-  process (section 14.2). It is state: it is hashed and saved.
+  process (section 14.2). It is state: it is hashed and saved. A request
+  that is new also sees to it that the check will be made: a wake-up of
+  the world's waits out the settle delay on the clock of that cell.
+- **Footing.** An edit that takes away what an occupant stood on (the
+  floor of its cell, or the solid top or the ramp, stairs or ladder of
+  the block or fixture below it) raises `OccupantUnsupported` for each
+  occupant standing there that `Cosmos::footing` now finds nothing
+  under. An occupant that fills several cells is held up while any cell
+  of its lowest storey is. The occupant is not moved: falling is the
+  simulation's business.
 - **Marks and variables** are not structure. `add_decal` stamps the mark
   with the edit's cause and the tick. Each emits its own event when it
   changes something.
@@ -840,6 +851,11 @@ whoever owns it drains. Rules name an event in snake case
 | `AreaClosed` | `area`, `loc` (where it was enclosed from) | A breached area closes again |
 | `OccupantDisplaced` | `occupant`, `from`, `to` | An edit left an occupant no room and it was moved (section 23) |
 | `OccupantEntombed` | `occupant`, `loc` | An edit left an occupant no room and there was nowhere to go |
+| `ElementDestroyed` | `loc`, `layer`, `old`, `new` (states; `new` is the `on_destroy` state or nothing), `how` (`damage` with its type, `crushed` or `fell`), `absorbed`, `passed` (J; zero unless by damage) | A floor, block or fixture was destroyed (section 12.3). It follows the `ElementChanged` events of the change and of the rubble left |
+| `OccupantUnsupported` | `occupant`, `loc` (where it is) | What held an occupant up has gone (section 7.2) |
+| `OccupantExposed` | `occupant`, `loc` (the cell struck), `kind` (damage type), `energy` (J), `intensity` (Pa) | Something struck the cell an occupant is in: so far, a mass that landed there (section 14.3) |
+| `CollapseStarted` | `collapse` (id), `loc` (the cell whose change started it) | A stability check found something giving way where no collapse was in progress |
+| `CollapseSettled` | `collapse`, `loc`, `bounds` (the box of cells it touched), `tallies` (by instigator: `elements` destroyed, `mass` brought down in kg, occupants `exposed`) | Nothing of a collapse is in flight and no check is waiting near it |
 
 Events that sum many changes (`EnergyReleased`, `CollapseSettled`,
 `TractDevastated`) carry totals by instigator: elements destroyed, mass
@@ -1007,7 +1023,10 @@ An `AreaSpec` gives the grid and the shape, and optionally a kind, an
 anchor, an ambient override, a journal span, tags, variables, a clock rate,
 a priority and a site. Tags, variables and the override are changed in
 place through `Cosmos` (`set_area_tag`, `set_area_var`, `set_area_ambient`,
-`set_area_priority`, `set_area_anchor`). `Cosmos::areas_at` lists the areas
+`set_area_priority`, `set_area_anchor`). A change of gravity that should
+weigh on what stands in the area is made with
+`WorldCtx::set_area_ambient(id, ambient, cause)`, which also asks for
+the stability check of section 14.5. `Cosmos::areas_at` lists the areas
 that cover a cell and `Cosmos::occupants_in_area` who is inside one.
 
 **Inside.** An occupant is inside an area when any cell of its footprint
@@ -1392,6 +1411,14 @@ Two numbers are needed because energy alone cannot distinguish a thousand
 taps from one hammer blow. **Intensity** decides whether the target is
 affected at all. **Energy** decides how much.
 
+What a packet does carries the packet's cause, whatever cause the edit
+that applies it was begun for. A target that is affected takes all of
+the packet that does not pass: `absorbed + passed` is the packet's
+energy. A target that is not affected takes none and passes none: the
+energy stays with whatever delivered it. Where there is nothing to hit,
+all of it passes. So energy absorbed never exceeds energy delivered
+(invariant W8), whatever a `factor` is.
+
 ### 12.2 Applying a packet to an element
 
 ```
@@ -1401,16 +1428,30 @@ effective = energy × resist.factor × gain
 capacity  = volume × material.toughness
 remaining = capacity × (1 − damage / 255)
 
-if effective ≥ remaining:
-    Destroyed.  passed = energy × (1 − remaining / effective)
-elif effective > 0:
-    Damaged.    damage += ceil(255 × effective / capacity);  passed = 0
-else:
+if effective ≤ 0:
     Unaffected. passed = 0
+elif effective ≥ remaining:
+    Destroyed.  passed = energy × (1 − remaining / effective)
+else:
+    Damaged.    damage += ceil(255 × effective / capacity);  passed = 0
 ```
 
 Below threshold nothing happens, however often it is repeated. Full effect is
 reached at twice the threshold. Accumulated damage is stored in 255ths.
+
+- The test for "unaffected" comes first, so that something with no
+  capacity is destroyed by whatever affects it and by nothing that does
+  not.
+- An element that is damaged and not destroyed keeps at least one part
+  of its capacity: its damage stops at 254. Any packet that affects it
+  adds at least one part.
+- With no threshold, any intensity above zero has full effect.
+- The rule alone is the function `resolve_packet(resist, capacity,
+  damage, energy, intensity)`, which the body model shares (document 06).
+  `WorldEdit::damage(loc, layer, packet)` applies it to one element of a
+  cell; `damage_along` is the same with the direction of the hit, for
+  debris. A fixture that piles up (section 12.3) has the capacity of the
+  amount it holds.
 
 Worked example with the illustrative values above. A wall cell holds
 0.6 m³ of concrete, so its capacity is 0.6 MJ. An 80 kg person thrown into it
@@ -1441,6 +1482,42 @@ When an element is destroyed:
    element's mass is launched as debris bodies along the direction of the hit
    (section 15). Debris does secondary damage.
 4. `ElementDestroyed` is emitted, and a stability check is queued.
+
+**Rubble.** Matter is kept. What an element leaves is the volume it
+lost: all of it if it is removed, and the difference if its `on_destroy`
+state is smaller.
+
+- A fixture that names a `heap` **piles up**: the bits of its state are
+  an amount, in litres (`RUBBLE_UNITS_PER_M3`, 1000 to the cubic metre).
+  Its mass and its capacity follow the amount, not the definition's
+  `fill`. A state written with no amount (`"rubble"`) holds the volume
+  its definition gives. The pile is made of the material of what was
+  destroyed (`rubble@brick#600`); where piles of two materials meet, the
+  larger gives the pile its material.
+- Rubble comes to rest where something dropped into the cell would
+  (`Cosmos::resting_cell`): the cell itself if it can be stood in, or
+  else the nearest below that can. A fixture of another kind lying
+  there is buried: its volume joins the pile.
+- A cell is full at its three cubic metres (`RUBBLE_CELL_UNITS`, 3000).
+  A pile that reaches that in a cell with no block becomes the heap
+  block, of the pile's material, and what is over goes on top of it, in
+  the cell above. Beside a block that stands in the cell the pile only
+  grows.
+- Rubble that is destroyed leaves none: neither a fixture that piles up
+  nor the heap block of one.
+- What was destroyed by falling (section 14.3) leaves nothing where it
+  stood. It is carried down and left where the mass comes to rest.
+
+Rubble by damage type, and rubble that is a field, come with change of
+state (section 5.4; package W25): until then a material names one
+fixture. Debris bodies come with section 15: until then `damage` offers
+the fragments (the mass the element lost, its material, the energy the
+packet had left, the direction of the hit) to a hook that throws
+nothing, and all of the element is left as rubble.
+
+A fixture left with nothing under it, because the floor or the block it
+stood on was destroyed, comes down at the stability check the
+destruction asked for (section 14.3).
 
 ## 13. Energy releases
 
@@ -1603,6 +1680,28 @@ So a slab reaches `span` cells from the walls or columns under it, a wall
 stands on the wall below it or on a supported slab, and knocking out a column
 drops whatever was relying on it alone.
 
+- "Horizontally adjacent" is the eight cells round a cell: a step
+  across a corner counts one, like a step along a side. A slab of span
+  4 reaches a square of nine cells by nine from one column, which is
+  the 39 tonnes of section 14.5.
+- A material that states no `span` has a span of zero: an element of it
+  must stand on something.
+- A block flagged `liquid` is not structure. It does not fall, it is
+  never crushed and it holds nothing up, except as floating says below.
+- A block flagged `anchor` is always supported, and so is a floor laid
+  on one, and so is the solid fill outside a tract's stored cells. They
+  are sources and are never examined: the ground under a street does
+  not join every building on it into one structure.
+- What lies beyond the reach of a check, or in a tract that is not
+  loaded, is assumed supported, and what is next to it can hang from
+  it.
+- Where ambient gravity is zero or less, nothing falls: an element
+  with no support stays where it is, and holds nothing up.
+- Sources are found in order of position and support spreads breadth
+  first, a step at a time, the eight neighbours taken clockwise from
+  north, so that which of two equally near supports carries an element
+  is the same on every machine.
+
 **Floating.** A floor lying on still liquid denser than its own material is
 a source: it floats. It carries no blocks. It holds up occupants, items
 and fixtures up to the mass that it and the floating floors joined to it
@@ -1617,6 +1716,34 @@ location. Checks within `SETTLE_DELAY` (50 ms local) are merged, so one blast
 is one evaluation. The check examines elements at or above the change that
 are structurally connected to it, within a bounded box. Elements outside the
 box are assumed supported.
+
+- **The delay** is local time where the change was made. The first
+  request made where a clock applies starts a wake-up on that clock,
+  `SETTLE_DELAY` later. When it fires, every request then waiting where
+  that clock applies is taken together. A request where another clock
+  applies waits for its own wake-up: inside stopped time a check waits
+  until time moves.
+- **What is examined.** The requests taken together are grouped: each
+  group is the requests within reach of the first of them. For a group,
+  the check starts from what each change could have been holding up
+  (what is in its cell, in the eight cells round it and in the cell
+  above) and follows the structure along every way support or load can
+  pass: between the floor and the block of a cell, to like elements of
+  the eight cells round it, up from a block to what stands on it, and
+  down to the block under a floor or a block. Going down matters: the
+  load that a lost support carried lands on other supports, all the way
+  to the ground. This is the **island**. It never includes anchors or
+  floors laid on them.
+- **Bounds.** The island is cut off `support.reach` cells (24) sideways
+  and `support.reach_storeys` storeys (40) up and down from the changes
+  of its group, and at `support.max_elements` elements (131,072).
+- **Asking.** `WorldCtx::check_stability(loc, cause)` asks for a check
+  as an edit does. Putting an element in place asks for none (section
+  7.2), so whoever builds asks, as `map check` does (10 §3.7).
+- **Reading.** `Cosmos::assess_stability(grid, cells)` makes the same
+  evaluation and changes nothing. Its `Assessment` says what is crushed
+  and what falls, and for every element examined whether it is
+  supported, its carrier, its distance from support and its load.
 
 ### 14.3 Falling
 
@@ -1635,6 +1762,53 @@ box are assumed supported.
 
 The collapse is a process. It holds a ticket over its extent and emits
 `CollapseStarted` and `CollapseSettled`.
+
+**A falling mass** is the unsupported floors and blocks of one vertical
+run of cells, with the fixtures in those cells. A fixture that has
+nothing under it, in a changed cell or the cell over one, falls the
+same way. The elements leave the world when the check finds them
+(`ElementDestroyed`, `how: fell`), and the mass is a process of the
+world on the clock of the cell its base was in.
+
+- **Where it lands** is where something dropped from its base comes to
+  rest (`Cosmos::resting_cell`): the first cell, from its base down,
+  that has a floor or lies on a solid top. That is looked at again when
+  it arrives. If something has been put in the way it lands there; if
+  what it was to land on has gone it keeps going, with the speed it
+  has.
+- **The blow.** It strikes the floor of the cell it lands in, or else
+  the block below, with one packet of the damage type flagged
+  `kinetic`: `energy = carried + m · g · h`, and `intensity = energy /
+  (1 m² × 0.1 m)`, the cross-section of a cell and the default stopping
+  depth of a body (section 15). Every occupant of that cell gets
+  `OccupantExposed` with the same numbers, once. With no kinetic damage
+  type loaded it strikes nothing.
+- **Through.** If what it struck is destroyed, the mass takes the
+  wreck with it, keeps the energy that passed and goes on down from
+  there, starting at the speed that energy gives it. If not, it comes
+  to rest in that cell: each material it is made of is left as that
+  material's rubble (section 12.3).
+- **Clocks.** When an area's clock is made, removed, moved or given
+  another rate, every mass in flight goes onto the clock of where it
+  is. Time stopped round a falling mass leaves it hanging, and it
+  resumes with the time it had left.
+
+**A collapse** is everything that follows from one failure. A check
+that finds something giving way joins the collapse already in progress
+in the same grid whose box of touched cells it meets or adjoins, or
+starts one (`CollapseStarted`). The collapse ends (`CollapseSettled`)
+when none of its masses is in flight and no stability request is
+waiting in or beside its box. Its cause is a process, with the
+instigator of the earliest of the requests that found it: every element
+it crushes, drops or breaks carries that cause. `CollapseSettled`
+carries its totals by instigator.
+
+The world's processes are one table, saved and hashed with the cosmos
+(`Cosmos::activity`, `Cosmos::restore_activity`), and every one of their
+wake-ups carries the world's domain. `WorldCtx::handle_wake(wake)` is
+the one entry point: the kernel calls it for each such wake-up it pops.
+A collapse in progress is nothing but that state and the timeline, so a
+save taken in the middle of one resumes it.
 
 ### 14.4 Resolve mode
 
@@ -1665,6 +1839,16 @@ load × gravity / area  >  bearing × (1 − damage / 255)
   compression. Blocks flagged `anchor` are not checked.
 - A crushed block is destroyed, with the collapse as its cause, and the
   check runs again for what it was carrying.
+- Every block that is overloaded in one pass is crushed together, and
+  both passes run again without them, within the same check, up to
+  `support.max_passes` times (48). Whatever is still overloaded then is
+  found by the check that the crushing itself asks for. A crushed block
+  becomes its `on_destroy` state or rubble, like any destroyed element
+  (`ElementDestroyed`, `how: crushed`).
+- A fixture counts with the floor of its cell, or, in a cell without
+  one, with the block below.
+- An element that is not `load_bearing` is never crushed, though it
+  passes on what hangs from it.
 
 What follows from it:
 
@@ -1677,7 +1861,11 @@ What follows from it:
 - **Weight is local.** `gravity` is the ambient value where the block is
   (section 4.1; areas, section 8.3). Nothing is crushed in free fall. A
   change of ambient gravity over an area queues a check for what stands in
-  it, so a field of heavy gravity can bring a building down.
+  it, so a field of heavy gravity can bring a building down. The change
+  is one made through `WorldCtx`: an area that sets gravity being made,
+  removed, moved or reshaped, or `WorldCtx::set_area_ambient`. Each
+  floor and each block that is not an anchor in the loaded cells of the
+  area is asked about, up to about a million cells looked at.
 - **What is built must stand.** A tower on one mud pillar does not.
 
 With the illustrative values of section 5.4, a solid concrete pillar one
@@ -2528,7 +2716,15 @@ materials carrying the tag its `needs` names. `catch_up` is one of
 **Settings**: `world.min_intensity`, `release.max_cells`,
 `field.max_active_cells`, `body.max_ticket_tracts`, `max_loaded_tracts`,
 `sight.portal_depth`, and the debris budget of section 12.3
-(`debris.max_bodies`).
+(`debris.max_bodies`). For support and collapse (section 14):
+`support.settle_delay` (50 ms), `support.reach` (24 cells),
+`support.reach_storeys` (40), `support.max_elements` (131,072),
+`support.max_passes` (48) and `support.impact_depth` (0.1 m, the
+stopping depth of a falling mass). Until settings are bound they are the
+constants `SETTLE_DELAY`, `SUPPORT_REACH_CELLS`, `SUPPORT_REACH_STOREYS`,
+`SUPPORT_MAX_ELEMENTS`, `SUPPORT_MAX_PASSES` and `FALL_IMPACT_DEPTH_M`.
+The units of rubble (a litre) and the fill of a cell (3000 of them) are
+fixed.
 
 **Reachable only from Rust** so far, each wanting a verb or a property
 when the rule runtime binds this document: the queries of section 22 other
@@ -2539,7 +2735,15 @@ override, priority or anchor after it is made; an occupant's footprint
 (`relocate_as`) and its mass and flags (`update_occupant`); writing an
 element's damage directly (`set_damage`); the fill that `enclose` uses, as
 a query (`enclosed_cells`); and the occupant queries of section 8.1, which
-rules reach only through their own queries over entities (05).
+rules reach only through their own queries over entities (05). From
+damage and collapse: asking for a stability check (`check_stability`);
+what a check would find, with carriers and loads (`assess_stability`);
+where something dropped comes to rest (`resting_cell`); the amount a
+pile of rubble holds (`rubble_units`); the direction of a hit
+(`damage_along`); and the collapses in progress and masses in flight
+(`collapses`, `falling_masses`). An area's gravity is changed with a
+check through `WorldCtx::set_area_ambient`; the `Cosmos` function of
+that name asks for none.
 
 ## 24. Invariants
 
