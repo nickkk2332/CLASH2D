@@ -1130,6 +1130,85 @@ fn log_shows_the_latest_lines_and_scrolls_back() {
     );
 }
 
+#[test]
+fn log_wraps_folds_keeps_what_matters_and_stays_where_it_was_scrolled() {
+    use clash_scene::playback::Importance;
+    let fix = fixture();
+    let mut log = MessageLog::new();
+    log.add(
+        "event",
+        RichText::plain_text("A step."),
+        None,
+        Importance::Minor,
+    );
+    let long = "The beam groans, splits along its length and drops a shower of plaster.";
+    log.add(
+        "event",
+        RichText::parse(&format!("<blood>{long}</>"), &fix.theme).unwrap(),
+        None,
+        Importance::Major,
+    );
+    for _ in 0..3 {
+        log.add(
+            "event",
+            RichText::plain_text("Drip."),
+            None,
+            Importance::Normal,
+        );
+    }
+    let mut screen = fix.screen(
+        r#"{ "layout": { "cols": [ { "frame": "All", "log": { "id": "all" } },
+                                   { "frame": "Normal", "log": { "id": "normal", "importance": "normal" } } ] } }"#,
+    );
+    let rows = |screen: &mut Screen, log: &MessageLog| {
+        let data = UiData {
+            log: Some(log),
+            views: None,
+        };
+        let frame = draw_with(screen, 40, 7, &data);
+        (1..6).map(|row| frame.row_text(row)).collect::<Vec<_>>()
+    };
+    let data = UiData {
+        log: Some(&log),
+        views: None,
+    };
+    let frame = draw_with(&mut screen, 40, 7, &data);
+    assert_golden(golden("widget_log_wrapped"), &frame);
+    // Long lines wrap at spaces, a column narrower where there is a
+    // scrollbar; the three drips are one line with a count; the minor
+    // step is left out on the right, which then needs no scrollbar.
+    assert_eq!(
+        rows(&mut screen, &log),
+        [
+            "│splits along its │││The beam groans,  │",
+            "│length and drops │││splits along its  │",
+            "│a shower of      █││length and drops a│",
+            "│plaster.         █││shower of plaster.│",
+            "│Drip. (x3)       █││Drip. (x3)        │",
+        ]
+    );
+    assert_eq!(
+        frame.get(1, 1).unwrap().fg,
+        fix.theme.color("blood").unwrap()
+    );
+
+    // Scrolled back to the oldest row, the log stays on it as lines
+    // arrive; at the end it follows the newest again.
+    fix.press(&mut screen, &["home"]);
+    assert!(rows(&mut screen, &log)[0].starts_with("│A step. "));
+    log.add(
+        "event",
+        RichText::plain_text("A door bangs."),
+        None,
+        Importance::Normal,
+    );
+    assert!(rows(&mut screen, &log)[0].starts_with("│A step. "));
+    fix.press(&mut screen, &["end"]);
+    let last = rows(&mut screen, &log)[4].clone();
+    assert!(last.starts_with("│A door bangs. "), "{last}");
+    assert!(last.contains("││A door bangs. "), "{last}");
+}
+
 const VIEWS: &str = r#"{ "layout": { "grid": { "columns": ["fill", "fill"], "rows": ["fill", "fill"], "cells": [
     { "frame": "map", "map_view": { "id": "map", "zoom": 2, "overlay": "danger" } },
     { "frame": "section", "section_view": { "id": "section" } },

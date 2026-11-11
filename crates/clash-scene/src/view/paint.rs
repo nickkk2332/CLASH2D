@@ -44,10 +44,11 @@ use super::ambience::Ambience;
 use super::camera::{Camera, MAX_ZOOM, SectionAxis};
 use super::compose::{Composer, LOOK_DOWN_DEFAULT, OverlayDraw, Rank};
 use super::glyphs::WorldGlyphs;
-use super::model::ViewModel;
+use super::model::{SpriteId, ViewModel};
 use super::overlay::{BuiltinOverlay, Overlay, OverlayValues};
-use crate::frame::{Attrs, Canvas, FrameCell, Rect};
-use crate::glyph::{GlyphInputs, resolve_part};
+use crate::color::Color;
+use crate::frame::{Attrs, Canvas, FrameCell, Rect, Sprite};
+use crate::glyph::{GlyphInputs, GlyphPart, resolve_part};
 use crate::ui::{ViewDef, ViewKind, ViewPainter};
 
 /// Whether a view composites subgrids over their parent's cells
@@ -57,6 +58,67 @@ pub const SUBGRIDS_COMPOSITED: bool = false;
 /// Whether a view draws what is seen through a see-through portal beyond
 /// it (12 §6.1). Not yet: the world has no portals.
 pub const PORTALS_DRAWN: bool = false;
+
+/// A glyph drawn over a cell of a view for a while: one frame of an
+/// animation. It keeps the background of its cell.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CellFx {
+    /// The cell.
+    pub loc: Location,
+    /// What is drawn there. A part left out keeps what the cell shows.
+    pub part: GlyphPart,
+}
+
+/// A glyph drawn at a place that need not be a cell: something gliding
+/// between cells, a projectile on its way. In a frame it is a
+/// [`Sprite`]; a terminal shows it in the nearest cell.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct WorldSprite {
+    /// The grid it is in.
+    pub grid: clash_world::GridId,
+    /// Its position east, in cells: whole numbers are cell columns.
+    pub x: f32,
+    /// Its position south, in cells.
+    pub y: f32,
+    /// The storey it is on.
+    pub z: i32,
+    /// The character.
+    pub ch: char,
+    /// Its colour.
+    pub fg: Color,
+    /// Opacity, 0 to 1.
+    pub alpha: f32,
+    /// Drawing order among sprites.
+    pub layer: u8,
+}
+
+/// What playback draws over the views of the world for the frame being
+/// built (12 §7): never part of what is known, and gone when the
+/// effects that made it end.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct ViewFx {
+    /// Sprites of the view model that are not drawn in their cells,
+    /// because one of `sprites` draws them on their way there.
+    pub hidden: Vec<SpriteId>,
+    /// Glyphs drawn over cells.
+    pub cells: Vec<CellFx>,
+    /// Glyphs drawn between cells.
+    pub sprites: Vec<WorldSprite>,
+}
+
+impl ViewFx {
+    /// Whether there is nothing to draw.
+    pub fn is_empty(&self) -> bool {
+        self.hidden.is_empty() && self.cells.is_empty() && self.sprites.is_empty()
+    }
+
+    /// Removes everything, keeping the storage.
+    pub fn clear(&mut self) {
+        self.hidden.clear();
+        self.cells.clear();
+        self.sprites.clear();
+    }
+}
 
 /// The scene's view of the world: the view model, the camera, and what
 /// they are drawn with. See the [module](self).
@@ -72,6 +134,8 @@ pub struct WorldView {
     /// Whether the line from the followed position to the cursor is
     /// drawn.
     line: bool,
+    /// What playback draws over the views this frame.
+    fx: ViewFx,
 }
 
 /// The cells strictly between two cells of one storey, along the
@@ -111,7 +175,19 @@ impl WorldView {
             overlay_values: None,
             look_down: LOOK_DOWN_DEFAULT,
             line: false,
+            fx: ViewFx::default(),
         }
+    }
+
+    /// What playback draws over the views of the world.
+    pub fn fx(&self) -> &ViewFx {
+        &self.fx
+    }
+
+    /// What playback draws over the views of the world, to replace it
+    /// for the frame about to be built.
+    pub fn fx_mut(&mut self) -> &mut ViewFx {
+        &mut self.fx
     }
 
     /// Draws, or stops drawing, the line from the followed position to
@@ -240,6 +316,7 @@ impl WorldView {
             ambience: self.ambience.as_ref(),
             look_down: self.look_down,
             overlay: self.overlay_draw(def),
+            hidden: &self.fx.hidden,
         }
     }
 
@@ -302,6 +379,12 @@ impl WorldView {
                 .then_some((area.x + col, area.y + row))
         };
         self.paint_heard(canvas, &place);
+        let between = |x: f32, y: f32, z: i32| -> Option<(f32, f32)> {
+            let col = (x - first_x as f32) / zoom as f32;
+            let row = (y - first_y as f32) / zoom as f32;
+            (z == centre.z).then_some((area.x as f32 + col, area.y as f32 + row))
+        };
+        self.paint_fx(canvas, area, &place, &between);
         if let Some(cursor) = self.camera.cursor() {
             if self.line {
                 // What stands in a cell is not drawn over: the line
@@ -392,8 +475,78 @@ impl WorldView {
                 .then_some((area.x + col, area.y + row))
         };
         self.paint_heard(canvas, &place);
+        let between = |x: f32, y: f32, z: i32| -> Option<(f32, f32)> {
+            // Only what is on the line of the section shows in it.
+            let (across, along) = match axis {
+                SectionAxis::EastWest => (y - centre.y as f32, x - centre.x as f32),
+                SectionAxis::NorthSouth => (x - centre.x as f32, y - centre.y as f32),
+            };
+            (across.abs() < 0.5).then_some((
+                (area.x + mid_col) as f32 + along,
+                (area.y + mid_row - z.wrapping_sub(centre.z)) as f32,
+            ))
+        };
+        self.paint_fx(canvas, area, &place, &between);
         if let Some(cursor) = self.camera.cursor() {
             self.paint_cursor(canvas, place(cursor));
+        }
+    }
+
+    /// Draws what playback has put over the view: glyphs on cells, each
+    /// keeping the background of its cell, and sprites between cells,
+    /// which go to the frame's sprite list where they fall inside the
+    /// view.
+    fn paint_fx(
+        &self,
+        canvas: &mut Canvas<'_>,
+        area: Rect,
+        place: &dyn Fn(CellPos) -> Option<(i32, i32)>,
+        between: &dyn Fn(f32, f32, i32) -> Option<(f32, f32)>,
+    ) {
+        if self.fx.is_empty() {
+            return;
+        }
+        let grid = self.camera.grid();
+        let base = self.glyphs.base();
+        for fx in &self.fx.cells {
+            if fx.loc.grid != grid {
+                continue;
+            }
+            let Some((x, y)) = place(fx.loc.cell) else {
+                continue;
+            };
+            canvas.edit(x, y, |cell| {
+                let beneath = crate::CellStyle {
+                    bg: cell.bg,
+                    ..base
+                };
+                let ch = cell.ch;
+                *cell = resolve_part(fx.part, &GlyphInputs::default(), beneath);
+                if fx.part.ch.is_none() {
+                    cell.ch = ch;
+                }
+            });
+        }
+        for sprite in &self.fx.sprites {
+            if sprite.grid != grid {
+                continue;
+            }
+            let Some((x, y)) = between(sprite.x, sprite.y, sprite.z) else {
+                continue;
+            };
+            let drawn = Sprite {
+                ch: sprite.ch,
+                fg: sprite.fg,
+                x,
+                y,
+                scale: 1.0,
+                alpha: sprite.alpha,
+                layer: sprite.layer,
+            };
+            let (col, row) = drawn.cell();
+            if area.contains(col, row) && canvas.clip().contains(col, row) {
+                canvas.sprites().push(drawn);
+            }
         }
     }
 
