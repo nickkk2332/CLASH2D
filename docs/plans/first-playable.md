@@ -25,9 +25,9 @@ actions that call `hit`.
 | E4 | Bodies | L | E2, T3 | beta |
 | E5 | Hits and wounds | L | E4, W12 | beta |
 | E6 | Body editing | M | E4 | todo |
-| E7 | Minds and vital state | M | E1, T4 | todo |
+| E7 | Minds and vital state | M | E1, T4 | in progress |
 | E8 | Items and holds | L | E5 | todo |
-| E9 | Templates and creation | L | E3, E6, E8 | todo |
+| E9 | Templates and creation | L | E3, E6, E8 | in progress |
 | E10 | Movement | M | E4, W14, W18 | todo |
 | E11 | Coming and going | L | E9, W8 | todo |
 | E12 | Minimal devices | M | E8 | todo |

@@ -142,6 +142,7 @@ pub use physical::{
 pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::body::Body;
+use crate::mind::{Driver, Mind};
 use crate::stats::Stats;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
@@ -486,6 +487,12 @@ components! {
     stats: Stats = "stats";
     /// Parts, wounds and what the body can do. On creatures.
     body: Body = "body";
+    /// What decides for a body, and whether it does. On anything that
+    /// decides.
+    mind: Mind = "mind";
+    /// Who acts for a body without being its mind. On a body that is
+    /// driven.
+    driver: Driver = "driver";
 }
 
 // A `ComponentKinds` has one bit for each kind.

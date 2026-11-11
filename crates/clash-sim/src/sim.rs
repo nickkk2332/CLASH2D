@@ -33,7 +33,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 3;
+pub const SAVE_VERSION: u32 = 4;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -108,6 +108,10 @@ pub struct Sim {
     /// Not state of the simulation's own: where changed tracts are kept
     /// while they are not loaded (02 §11).
     pub(crate) store: Box<dyn SimStore>,
+    /// Not state: the tables of stats, bodies and templates worked out
+    /// from the definitions, and the machines their expressions run on
+    /// (06; see [`life`](crate::life)).
+    pub(crate) life: crate::life::Life,
 }
 
 /// Why saved state could not be loaded.
@@ -244,7 +248,9 @@ impl Sim {
         let bus = Bus::for_defs(&defs);
         let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
+        let life = Sim::life_for(&defs, cosmos.defs());
         Sim {
+            life,
             defs,
             cosmos,
             timeline,
@@ -577,6 +583,9 @@ impl Sim {
                 }
                 _ => {}
             }
+            // What the world did to someone's body or pools (06 §7.4;
+            // 02 §16), to be carried out once its events are queued.
+            let harm = crate::life::harm::Harm::of(&event);
             let (cause, loc) = (event.cause(), event.location());
             let stamped = self.stamped(Where::Loc(loc), cause, EventBody::World(event));
             self.events.push_back(stamped);
@@ -600,6 +609,9 @@ impl Sim {
                     let event = self.stamped(Where::Entity(entity), cause, body);
                     self.events.push_back(event);
                 }
+            }
+            if let Some(harm) = harm {
+                self.apply_harm(harm);
             }
         }
     }
@@ -746,7 +758,9 @@ impl Sim {
         let bus = Bus::for_defs(&defs);
         let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
+        let life = Sim::life_for(&defs, cosmos.defs());
         Ok(Sim {
+            life,
             defs,
             cosmos,
             timeline: saved.timeline,

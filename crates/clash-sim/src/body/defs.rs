@@ -413,6 +413,11 @@ pub struct BodyPlanDef {
     pub footprint: Option<[u8; 3]>,
     /// The parts. Exactly one is the root, attached to nothing.
     pub parts: Vec<PlanPartDef>,
+    /// The functions a body of this plan cannot do without, and what
+    /// having none of one does to an owner that has a mind (06 §8.3):
+    /// `unconscious` or `dead`.
+    #[serde(default)]
+    pub needs: BTreeMap<Ref<BodyFunctionDef>, crate::mind::Stop>,
 }
 
 impl BodyPlanDef {
@@ -753,7 +758,7 @@ fn namespace_of(qualified: &str) -> Option<&str> {
 /// exactly; a bare one in the namespace of the material that names it,
 /// then in every namespace in sorted order (as the world resolves its
 /// own references, decision D-283).
-fn pool_by_name<'a>(
+pub(crate) fn pool_by_name<'a>(
     names: impl Iterator<Item = &'a str> + Clone,
     material: &str,
     pool: &str,

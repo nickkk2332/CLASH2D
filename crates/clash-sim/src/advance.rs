@@ -144,6 +144,10 @@ impl Default for Handlers {
             by_domain: BTreeMap::new(),
         };
         handlers.set(WakeDomain::World, world_wake);
+        // Pools and bodies keep their wake-ups in the `Timer` domain. A
+        // package with timers of its own calls `life::handle_wake`
+        // first and handles the rest.
+        handlers.set(WakeDomain::Timer, crate::life::timer_wake);
         handlers
     }
 }
