@@ -124,6 +124,14 @@ there wakes into a field and flows (02 §16). Waves are not simulated. A
 region's **sea state**, **current** and **wind** are values set by the cold
 simulation's weather (09) that motion models read.
 
+Raising a sea, flooding a valley or draining a lake is one verb:
+`set_liquid_level { where, level, block }`, where `where` is a region, a
+planned lake or a box. Loaded tracts are filled or emptied to that level
+through `WorldEdit`, spread over steps within the edit budget. Unloaded
+tracts are given a pending edit (02 §17.3) and are changed when next
+loaded. Nothing flows. It is a coarse event, and `liquid_level_changed`
+lets rules decide what it did to the people and places it covered.
+
 ### 4.4 Buoyancy and drag
 
 Bodies in flight (02 §15) gain a `volume`. In any medium:
@@ -232,8 +240,13 @@ Motion is continuous: a vehicle may travel in any direction.
 A craft faces one of eight directions. A vessel's grid is always at a
 quarter-turn (02 §18). When a vessel's heading crosses a diagonal, its grid
 **swings** a quarter-turn about its pivot, taking a time set by its size.
-The swept area is checked and anything in it is a contact. So a ship
-heading north-east is drawn pointing north or east. This is the cost of
+The swept area is tested before the swing begins. If something solid is in
+it, the swing is refused with a reason (14 §5): the vessel keeps its
+quarter-turn and its heading stops at the diagonal. A helm action given
+with `force` swings anyway, and whatever is in the way is a collision
+(section 5.4). So a long ship cannot turn in a narrow channel unless its
+captain means to ram the bank. A ship heading north-east is drawn pointing
+north or east. This is the cost of
 exact, shear-free interiors, and it settles open question 3 of 02 §26.
 Views that are zoomed out far enough to show a vessel as an outline may
 draw that outline at its true heading (12 §6.2).
@@ -337,6 +350,11 @@ sonar console, a ballast panel, an engine room.
 Crews are groups with roles (15 §9.2). A captain's instructions are orders
 (15 §10) and have to be heard. The AI layer (09) fills stations and works
 them. An autopilot is a rule.
+
+Several vehicles under one command are a collective (09 §8.1) whose members
+are vehicles: a convoy, a squadron, a fleet. A formation (09 §8.2) gives
+each its place relative to the leader, and each steering controller holds
+it. Orders to the collective reach each vehicle's commander as orders do.
 
 ## 8. Mounts
 
@@ -470,6 +488,26 @@ thicknesses, and the rating follows. Scene S22 is this section.
 An exchange process that loses its ticket (02 §10.3) resolves at once: each
 compartment goes to its equilibrium, and a vessel that would sink is placed
 on the bottom.
+
+### 10.6 List
+
+A vessel's grid never tilts (section 5.5). How far the vessel leans is a
+number.
+
+Each exchange step computes `list`, from 0 to 1, and the side it is toward,
+from where the vessel's mass and the liquid inside it lie about its centre
+line. A flooded compartment to port lists it to port. Flooding the opposite
+side on purpose brings it back, by the same arithmetic.
+
+| List | What follows |
+|------|--------------|
+| Any | Motion models read it: a listing vessel is slower and turns worse |
+| Above the definition's `list_shift` | `vessel_listing` is raised. Each step, loose items and anyone standing on an open deck are pushed toward the low side (07 §7). |
+| Above the definition's `capsize` | The vessel **capsizes**: `vessel_capsized` is raised, it loses its motion mode, every opening counts as below the waterline, and those on open decks are put in the water |
+
+The vessel is still drawn upright. Its list is shown in the helm's
+readouts and in what `look` reports, and a capsized vessel is drawn with a
+mark (12 §6.2).
 
 ## 11. Air and space
 
@@ -619,17 +657,20 @@ on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
 `resource_restored`, `station_taken`, `station_left`, `boarded`,
 `alighted`, `unseated`, `docked`, `undocked`, `hull_breached`,
 `compartment_flooding`, `compartment_flooded`, `decompression`,
-`hull_crushing`, `vessel_sinking`, `vessel_settled`, `travel_started`,
+`hull_crushing`, `vessel_sinking`, `vessel_settled`, `vessel_listing`,
+`vessel_capsized`, `liquid_level_changed`, `travel_started`,
 `travel_step`, `travel_interrupted`, `travel_arrived`, `encounter_started`.
 
 **Hooks**: `boarding`, `travel_starting`, `collision_incoming`.
 
 **Effects**: the verbs of sections 7 and 12.2, and `board`, `alight`,
 `unseat`, `couple`, `uncouple`, `pump`, `vent`, `set_compartment_gas`,
-`open_valve`, `add_resource`, `drain_resource`, `end_travel`.
+`open_valve`, `add_resource`, `drain_resource`, `end_travel`,
+`set_liquid_level`.
 
 **Properties**: on vehicles, `mass`, `speed`, `heading`, `mode`,
-`top_speed`, `thrust`, `buoyancy`, `depth`, `altitude`, `range`,
+`top_speed`, `thrust`, `buoyancy`, `depth`, `altitude`, `range`, `list`,
+`capsized`,
 `resource(id)`, `crew`, `station(id).operator`; on any location,
 `medium.phase`, `medium.pressure`, `medium.density`, `medium.breathable`,
 `compartment`, `compartment.pressure`, `compartment.flooded`.
@@ -665,15 +706,16 @@ Targets, unmeasured.
 
 ## 18. Open questions
 
-1. **Listing and capsizing.** Vessels do not tilt. A ship floods and sinks
-   upright. Trim could be shown and could affect handling without rotating
-   the grid.
-2. **Waves.** Sea state is a number. Whether surface craft should bob in
-   the vertical is a question of presentation.
-3. **Very long vessels.** A swing sweeps a large area. Whether huge ships
-   should be barred from turning in confined water or turn by other means.
+1. **Listing and capsizing.** Settled in section 10.6: list is a number
+   with consequences, and the grid stays upright.
+2. **Waves.** Kept as it is. Sea state is a number that motion models
+   read. A frontend may bob surface craft for show; nothing in the
+   simulation moves.
+3. **Very long vessels.** Settled in section 5.5: an obstructed swing is
+   refused unless forced as a ram.
 4. **Finer wiring.** Settled: one bus per vehicle by default, or conduits
    inside the vessel (16 §6).
-5. **Formations and fleets.** Many vehicles acting together. (09)
-6. **Draining and flooding terrain at scale.** Woken liquid is budgeted
-   (02 §16). Emptying a sea is a coarse event, not a simulation.
+5. **Formations and fleets.** Settled in section 7: collectives and
+   formations of vehicles (09 §8).
+6. **Draining and flooding terrain at scale.** Settled in section 4.3:
+   `set_liquid_level`, a coarse event and not a simulation.

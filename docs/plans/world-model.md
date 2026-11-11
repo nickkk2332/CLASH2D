@@ -639,3 +639,16 @@ Each scenario is a console script with a golden hash, run in all four modes.
 | `time_stop_street` | W14 | S10 | Bodies freeze in a rate-0 area and resume |
 | `thrown_building` | W20b | S11 | Detach, flight, merge |
 | `rooftop_to_orbit` | W21 | S9 | Strata, edge exit, carrier, arrival |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Field reactions | W16 | 02 §16 | Test script `quench`: water and fire in one cell leave steam in the stated amounts; a field meeting a tagged material reacts; a shock packet arriving in water reaches every connected water cell within reach at the stated share. A field's own `convert` gives the same result as the equivalent reaction. |
+| Liquid level as a pending edit | W17 | 02 §17.3; 11 §4.3 | A tract given `PendingEdit::Liquid` while unloaded loads filled or drained to that storey, with the same state hash as the same change made while it was loaded. |

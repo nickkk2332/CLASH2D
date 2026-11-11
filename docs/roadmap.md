@@ -49,14 +49,23 @@ Document numbers are stable. Other documents refer to them by number.
 Nothing remains to design before building can start. The first package is
 F1 in [plans/world-model.md](plans/world-model.md).
 
-Each specification ends with its open questions. They are being reviewed
-with the project owner one document at a time, and the answers written back
-into the specifications.
+Each specification ends with its open questions. All have been reviewed
+with the project owner and the answers written back into the
+specifications. Work the review added is listed at the end of each plan
+under "Review additions".
 
 | Document | Open questions |
 |----------|----------------|
 | 02 World model | Reviewed and settled (decisions D-169 to D-181) |
-| All others | Awaiting review |
+| 03 to 16 | Reviewed (decisions D-182 to D-195) |
+
+What the review left unanswered on purpose:
+
+| State | Questions |
+|-------|-----------|
+| **Open until it can be tested** | Whether fighting in bulk looks continuous with fighting in full (07 §19, 09 §20). How well characters use trickery and control on their own (08 §15). |
+| **Deferred** | Translation, wide characters and translation tools (04, 12, 14). Mods as single archives (04). Seeing the future, and cheaper world history (08, 13). A past for generated worlds (10). Sound, screen readers, controllers (12). A remote inspector (14). Coloured light (15). |
+| **Kept out** | Lambdas in expressions (05). Search-based planning; map memory for characters the player does not control (09). Simulated waves (11). Tilesets in the first version (12). Shared worlds across saves (13). Distributing mods (14). |
 
 The ones most likely to change something once code exists:
 
@@ -66,8 +75,8 @@ The ones most likely to change something once code exists:
 | Fighting in bulk may not look continuous with fighting in full | 09 §20 | Large battles depend on it |
 | An incident's live and abstract forms are written separately | 09 §20; 14 §11 | The off-screen world is only as believable as their agreement |
 | Maps are authored as text | 10 §16; 14 §10.2 | Large content depends on the map editor arriving |
-| Network capacity is checked per network, not per segment | 16 §17 | Automation puzzles may want finer limits |
-| Vessels do not tilt | 11 §18 | Ships sink upright |
+| Flow limits are by junction, not along every segment | 16 §6.2 | Automation puzzles may still want finer limits |
+| Vessels list as a number and are drawn upright | 11 §10.6 | Capsizing is an event, not something seen to happen |
 | Characters do not plan ahead or get lost | 09 §20 | Cunning is authored, not reasoned |
 | "Scenario" means two things | 13 §1; decision D-157 | A rename is possible if the note proves insufficient |
 | Whole-world rewind is experimental | 13 §9.5; decision D-181 | Its cost is unmeasured and several interactions are unresolved. It may change or be withdrawn. Nothing else depends on it. |

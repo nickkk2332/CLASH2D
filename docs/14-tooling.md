@@ -88,7 +88,7 @@ check
 | Kind | Commands |
 |------|----------|
 | The world and simulation | One command for each verb (05 §10) and each engine function a subsystem exposes. They are registered with the verbs, so a new verb is a new command. |
-| Expressions and rules | `eval`, `do`, `run`, `explain` |
+| Expressions and rules | `eval`, `do`, `run`, `explain`; `break`, `next`, `continue` (section 6.4) |
 | Time | `advance`, `step`, `until`, `rewind` (section 8.3) |
 | Looking | `select`, `inspect`, `watch`, `trace`, `profile`, `view` |
 | State | `save`, `load`, `hash`, `check`, `diff` |
@@ -230,6 +230,26 @@ file, `budgets.toml`, each row with its benchmark and its limit.
 `cargo xtask bench --check` runs them and fails on any over its limit by
 more than its margin. When a target is replaced by a measured figure, the
 specification's table and this file change together.
+
+### 6.4 Stepping through a rule
+
+A later addition. Nothing else depends on it.
+
+| Command | Does |
+|---------|------|
+| `break <rule> [if <expr>]` | Marks a rule. The next time it is about to run, and the condition holds, the game pauses and the console opens on it, showing its bindings and its first effect. |
+| `next` | Shows the state after one more effect |
+| `continue` | Lets the rule finish and play go on |
+| `break off <rule>` | Removes the mark |
+
+The simulation is never suspended half-way through a rule. At a break the
+tool takes an in-memory save (the one hot reload uses, 04 §11). `next` runs
+the rule from that save as far as the next effect and shows the result, as
+many times as asked. `continue` runs it once for real. Because a rule is
+deterministic, what was shown is what happens.
+
+Breaks exist only in development profiles and change no outcome, so they
+are not written to the input log.
 
 ## 7. Test scripts
 
@@ -381,6 +401,7 @@ screen.
 | Layers | Elements; wiring (10 §3.6); marks; areas; joints |
 | Parameters | Set a placement's parameters and seed and see the result |
 | Nested maps | Place, turn and preview maps within the map |
+| Sheet | A later addition. A map made of placed maps (a street, an assembly, a settlement) shown whole and zoomed out, each placed map a piece that can be moved and turned. Opening a piece puts it on the canvas. |
 | Check | The checks of 10 §3.7, as it is edited |
 
 It reads and writes the map format. Its output is formatted consistently,
@@ -492,12 +513,10 @@ Targets, unmeasured.
 
 ## 18. Open questions
 
-1. **Stepping through a rule.** Traces show what a rule did. Pausing one
-   mid-run and stepping effect by effect is not offered.
-2. **A remote inspector.** Attaching the inspector to a game running
-   elsewhere, or headless, over a connection.
-3. **Editing very large maps.** The editor shows one storey of one map.
-   Editing a whole settlement at once needs something more.
-4. **Sharing mods.** Packaging, versions and distribution beyond a
-   directory are outside this design.
-5. **Translation tools.** Follows whatever 04 decides for translation.
+1. **Stepping through a rule.** Settled as a later package: section 6.4.
+2. **A remote inspector.** Deferred. The console already runs against a
+   headless game from a file or a terminal (section 3.1).
+3. **Editing very large maps.** Settled as a later addition: the editor's
+   sheet view (section 10.2).
+4. **Sharing mods.** Kept out of scope. A mod is a directory.
+5. **Translation tools.** Deferred, with translation (04 §20).

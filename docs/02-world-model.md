@@ -1340,6 +1340,33 @@ has passed: fires burn out, gases disperse, liquids settle.
 `field.max_active_cells` (default 200,000) bounds cost. Past it, the weakest
 cells decay faster and a diagnostic event is emitted.
 
+**Reactions.** What fields do to each other and to what they touch is
+written once, as **field reactions**, not separately in each field.
+
+```json
+[
+  { "type": "field_reaction", "id": "quench",
+    "when": ["water", "fire"],
+    "uses": { "water": 1, "fire": 3 }, "gives": { "steam": 2 } },
+  { "type": "field_reaction", "id": "oil_feeds_fire",
+    "when": ["fire", { "material_tag": "oily" }],
+    "gives": { "fire": 30, "smoke": 20 } },
+  { "type": "field_reaction", "id": "current_through_water",
+    "when": [ { "damage": "shock" }, "water" ],
+    "spreads": { "share": 0.8, "reach": 6 } }
+]
+```
+
+| Form | Happens |
+|------|---------|
+| Two fields | Each step, in every cell where both are present |
+| A field and a material tag | Each step, where the field shares a cell with an element or item of a material so tagged |
+| A damage type and a field | When a packet of that type arrives in a cell holding the field. `spreads` passes a share of the packet to every connected cell of that field within reach. |
+
+Reactions are compiled into the field stepper and follow its rules:
+buffered writes and positional randomness. The `convert` rule in a field's
+own definition is shorthand for a reaction between two fields.
+
 Still bodies of liquid (lakes, seas) are blocks flagged `liquid`, not fields.
 When an edit opens space beside one, cells along the opening are converted to
 the corresponding field so the liquid can move, within the same budget.
@@ -1403,6 +1430,7 @@ pub enum PendingEdit {
     Cells(Vec<CellEdit>),                   // explicit small changes
     Map { map: MapId, at: CellPos, turn: Turn, params: VarMap, mode: MapMode },   // 10 §4.3
     Spawn(SpawnRequest),
+    Liquid { level: i32, block: BlockState },   // fill or drain to a storey (11 §4.3)
     Eoc { id: EocId, context: VarMap },     // run when the tract loads
 }
 ```
@@ -1668,7 +1696,8 @@ update a hierarchical path graph incrementally.
 ## 23. Modding surface
 
 **Definition types**: `material`, `damage_type`, `atmosphere`, `floor`,
-`block`, `fixture`, `conduit` (16), `field`, `realm`, `area_kind`, `chart`,
+`block`, `fixture`, `conduit` (16), `field`, `field_reaction`, `realm`,
+`area_kind`, `chart`,
 `site`, `tract` (document 10).
 Elements may declare `interactions` and a `device` (section 5.5).
 

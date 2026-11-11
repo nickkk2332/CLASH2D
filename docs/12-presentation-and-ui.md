@@ -233,11 +233,13 @@ Bodies in flight (02 §15) report their path and are drawn along it.
   "text": { "say": "KSSH!", "style": "sfx" },
   "log": "Glass shatters.",
   "heard": { "log": "Glass breaks somewhere to the {dir(view, event.here)}.", "marker": "!" },
-  "shake": 0.1, "min_time": "120 ms", "weight": 2 }
+  "shake": 0.1, "min_time": "120 ms", "weight": 2, "sound": "glass_small" }
 ```
 
 A `show` definition says how an event appears: an animation, floating text,
-a log line, screen shake, and what to do if the event was only heard.
+a log line, screen shake, and what to do if the event was only heard. It
+may name a `sound` cue. No frontend plays sound in the first version; the
+name is carried so that content can be written ahead of one that does.
 Several may match one event; all apply. Events with no `show` simply update
 the view model.
 
@@ -382,6 +384,16 @@ reaches that tick, makes that entity active and opens the screen registered
 for the decision kind: none for a free decision, the reaction prompt with
 its options and a bar showing time remaining, or the choice screen for
 `ask`.
+
+### 9.6 Several at once
+
+The player may select several directly controlled characters. A command
+given then goes to each of them, in entity order, and each fills in its own
+parameters from its own defaults. A decision for one of them can be
+answered for all of them that have the same decision pending.
+
+This is how a party is moved together, and how someone in several bodies
+acts as one.
 
 ## 10. The UI toolkit
 
@@ -575,12 +587,13 @@ Targets, unmeasured.
 
 ## 16. Open questions
 
-1. **Sound.** There is none. Whether to add audio cues later, and how
-   content would name them.
-2. **Tilesets.** A sprite sheet in place of a font is a small step for the
-   window frontend. Not planned for the first version.
-3. **Wide characters.** Glyphs are single-width. Double-width scripts need
-   layout support.
-4. **Screen readers.** The log is complete by invariant V5. A mode that
-   emits plain text for assistive tools is feasible and unplanned.
-5. **Controllers.** Only keyboard and mouse are specified.
+1. **Sound.** Reserved, not built. `show` definitions may name a `sound`
+   cue (section 7.3), which nothing plays yet.
+2. **Tilesets.** Kept out of the first version. A sprite sheet in place of
+   a font is a small step for the window frontend.
+3. **Wide characters.** Deferred, with translation (04 §20). Glyphs are
+   single-width.
+4. **Screen readers.** Deferred. The log is complete by invariant V5, so a
+   plain-text mode for assistive tools is feasible.
+5. **Controllers.** Deferred. Keymaps name what a key means (section 9.2),
+   so another device can be mapped to the same names.

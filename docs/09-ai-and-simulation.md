@@ -238,6 +238,12 @@ and helm (11 §7) from its performance. Waypoints come from the tract-level
 route and a profile for its motion model: roads and open ground, water,
 air.
 
+The controller does not manoeuvre in tight places. Maps mark **berths**
+instead: a parking bay, a mooring, a landing pad, a dock, each with an
+approach line (10 §3.2). A driver heads for the start of the approach line,
+follows it, and stops in the berth. Leaving is the same in reverse. A place
+with no berth is somewhere an AI driver stops beside, not in.
+
 ### 5.7 Long distance
 
 Beyond loaded space there is nothing to path over cell by cell. A character
@@ -284,11 +290,22 @@ Because trickery and control are options scored on the same footing as
 blows, a character whose `value` functions and weights favour them will
 blind, bind, frighten, deceive and run, as readily as another will hit.
 
+Four helpers do the arithmetic most `value` functions need. Each reads only
+what the character believes.
+
+| Function | Gives |
+|----------|-------|
+| `threat_removed(self, x, time)` | How much of `threat(self, x)` goes away if `x` cannot act for that long |
+| `harm_prevented(self, who, time)` | The harm `who` is expected to take over that time from the enemies `self` knows of |
+| `escape_margin(self, loc)` | Time by which `self` reaches `loc` ahead of the fastest pursuer it knows of |
+| `detection_risk(self, loc)` | The chance, from 0 to 1, that someone `self` knows of perceives it at `loc` |
+
 ### 6.2 Knowing when one is outmatched
 
 `threat(self, x)` is how much harm `self` expects `x` could do to it: the
 best preview of what `self` has seen or been told `x` can do, against
-`self`'s own body and gear. `standing(self)` is how much fight `self` has
+`self`'s own body and gear. What it has seen and been told is the bounded
+list of observed capabilities on its track of `x` (15 §7.1). `standing(self)` is how much fight `self` has
 left, from its functions and pools.
 
 These feed the scores of goals such as fleeing, surrendering and calling
@@ -421,7 +438,9 @@ Warm characters who are opposed and in reach of each other exchange harm
 **in bulk**: expected results from previews, for representative members of
 each side, times numbers and time, applied to individuals chosen by
 positional randomness. Bodies fall, the wounded are wounded, lines thin,
-and none of it is resolved blow by blow.
+and none of it is resolved blow by blow. The previews assume each side's
+usual guard: the defences its representative members have ready, at their
+ordinary effort.
 
 A battle of six hundred is, by the cap of section 9.3, about a hundred and
 fifty hot characters around the player and the rest warm in formation,
@@ -814,7 +833,8 @@ and `value` on grants (08 §11).
 
 **Functions**: `weight`, `threat`, `standing`, `strength`, `severity`,
 `best_reaction`, `pick_position`, `path_cost`, `least_effort_that`,
-`price`.
+`price`, `threat_removed`, `harm_prevented`, `escape_margin`,
+`detection_risk`.
 
 **Settings**: `max_hot_minds`.
 
@@ -853,18 +873,18 @@ Targets, unmeasured.
 
 ## 20. Open questions
 
-1. **Believability of bulk fighting.** Warm exchanges and abstract battles
-   use expected values. Whether a battle watched from a distance and then
-   walked into looks continuous has to be tested with scene S19.
-2. **Agreement of live and abstract.** Nothing checks that an incident's
-   two forms tend to the same outcomes. A tool that runs both many times
-   and compares would help authors. (14)
-3. **Minds that plan ahead.** Goals and methods are reactive. A character
-   that reasons several steps forward, laying a trap or a con, is authored
-   as a method. Search-based planning is not provided.
-4. **Learning what others can do.** `threat` uses what was seen and told.
-   How finely a character remembers another's abilities is a cost question.
-5. **Map memory for characters.** Still only the player's characters keep
-   it (15 §18). Characters do not get lost.
-6. **Vehicle driving in tight spaces.** The steering controller follows
-   waypoints. Parking a lorry is beyond it.
+1. **Believability of bulk fighting.** Open. Warm exchanges and abstract
+   battles use expected values. Whether a battle watched from a distance
+   and then walked into looks continuous has to be tested with scene S19
+   and the comparison tool (14 §11).
+2. **Agreement of live and abstract.** Closed by `incident compare`
+   (14 §11).
+3. **Minds that plan ahead.** Kept as it is. Goals and methods are
+   reactive; a trap or a con is authored as a method. Search-based planning
+   is not provided.
+4. **Learning what others can do.** Settled: a bounded list of observed
+   capabilities on each track (15 §7.1).
+5. **Map memory for characters.** Kept as it is. Only the player's
+   characters keep it (15 §18). Characters do not get lost.
+6. **Vehicle driving in tight spaces.** Settled: berths with approach
+   lines (section 5.6).

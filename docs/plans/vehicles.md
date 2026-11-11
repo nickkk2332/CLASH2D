@@ -291,3 +291,18 @@ Under `scenarios/vehicles/`.
 | `voyage` | V11 | S9 | Aboard against skipped |
 | `orbit_to_luna` | V12 | S9 | Edge exit, lane, arrival |
 | `the_colossus` | V14 | S11 | A creature that is a place |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Setting a liquid level | V1 | 11 §4.3; 02 §17.3 | `set_liquid_level` fills or drains loaded tracts through `WorldEdit` within the edit budget and gives unloaded ones a pending edit; `liquid_level_changed` is raised once. |
+| List and capsizing | V4 | 11 §10.6 | Test script `she_rolls`: flooding one side raises `list` toward that side; counter-flooding lowers it; past `list_shift` loose things slide; past `capsize` the vessel capsizes, floods and puts those on deck in the water. The grid never turns. |
+| Refused swings | V6b | 11 §5.5 | A long vessel in a channel narrower than its swing is refused the swing with a reason and keeps its quarter-turn. Forced, it swings and the contact is resolved as a collision. |
+| Fleets | V7 | 11 §7; 09 §8 | Test script `convoy`: three vehicles in a collective keep formation on their leader through a turn, and an order to the collective reaches each commander. |

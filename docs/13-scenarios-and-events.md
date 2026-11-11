@@ -269,6 +269,12 @@ director starts one incident:
 
 While tension is above the band, the director starts nothing.
 
+An entry's distance may be a length or a time. As a time, it is how far
+the party would get at the pace it has kept over the last hour of its own
+time. "Ten minutes away" is a few streets for someone on foot and a
+province for someone who flies, so a party that crosses a continent in a
+minute still has things happen where it can reach them.
+
 On `travel_step` (11 §13.3) it does the same from `on_travel`, for
 journeys.
 
@@ -365,6 +371,12 @@ The engine does not check the accusation against the truth. A watch that
 has three witnesses to a face will convict the owner of that face. If
 someone else was wearing it (15 §8.3), that is scene S15, and the true
 record is still there for whoever looks harder.
+
+A closed case can be opened again. When a holder gains a finding about a
+case it has closed, `case_judging` runs again with `reopening` set. If its
+rules no longer accept the earlier blame, the case reopens and
+`case_reopened` is raised. `reopen_case { case }` does the same directly.
+What was already done to the one blamed is for rules to undo, or not.
 
 ### 8.6 From the other side
 
@@ -561,6 +573,7 @@ Scope `legacy` for variables.
 **Events**: `scenario_started`, `objective_changed`, `mission_started`,
 `mission_done`, `mission_failed`, `mission_expired`, `beat_fired`,
 `director_started`, `case_opened`, `finding_added`, `case_closed`,
+`case_reopened`,
 `party_gone`, `checkpoint_made`, `restored`, `world_rewound`,
 `scenario_ended`.
 
@@ -568,7 +581,8 @@ Scope `legacy` for variables.
 
 **Effects**: `add_objective`, `complete_objective`, `fail_objective`,
 `start_mission`, `post_mission`, `fire_beat`, `set_tension`, `open_case`,
-`add_finding`, `accuse`, `close_case`, `checkpoint`, `restore_checkpoint`,
+`add_finding`, `accuse`, `close_case`, `reopen_case`, `checkpoint`,
+`restore_checkpoint`,
 `end_scenario`, `next_scenario`, `keep_character`, `take_control`.
 
 **Experimental effects** (section 9.5; opt-in by 04 §8.4):
@@ -611,19 +625,16 @@ Targets, unmeasured.
 
 ## 16. Open questions
 
-1. **Seeing ahead.** A scenario could offer a preview of what a choice
-   leads to by running a copy of the simulation. Unexamined (08 §15).
-2. **Shared worlds.** One world visited by several characters across
-   separate saves, each leaving it changed for the next, needs a world save
-   distinct from a character's. Not designed.
-3. **Deduction.** Cases hold findings. A screen that helps a player reason
-   from them (linking, eliminating) is interface work and unspecified.
-4. **Trials.** `case_judging` is one decision by one holder. Disputed
-   accusations, appeals and evidence that overturns a closed case are
-   content, and may want more structure.
-5. **Director and distance.** The director places incidents near the
-   party. For a party that crosses a continent in a minute, "near" needs a
-   better definition.
-6. **Cheaper history.** World-history snapshots are whole. Copying only
-   what changed since the last one would cut the cost of section 9.5
-   considerably.
+1. **Seeing ahead.** Deferred until the experimental rewind of section 9.5
+   has been tried (08 §15).
+2. **Shared worlds.** Kept as it is: a save is a world. One world visited
+   by several characters is one save with several characters in it
+   (section 9.3, `continue`).
+3. **Deduction.** Closed by the case file (14 §13).
+4. **Trials.** Settled as far as the engine goes: closed cases can be
+   judged again on new findings (section 8.5). Courts, appeals and
+   sentences are content.
+5. **Director and distance.** Settled in section 7.3: distance may be
+   travel time at the party's recent pace.
+6. **Cheaper history.** Deferred, with the rest of section 9.5's
+   unresolved questions.

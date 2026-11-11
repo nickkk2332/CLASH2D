@@ -279,3 +279,19 @@ Under `scenarios/combat/`.
 | `bullet_time` | C9 | S3 | Time of flight against notice delay |
 | `volley` | C9 | S19 | Many projectiles |
 | `hold_back` | C11 | — | Effort from preview |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Swings meet the world | C2 | 07 §6.4 | Test script `blade_in_a_corridor`: a wide swing in a corridor strikes the wall first, spends energy on it and takes the recoil; a thrust along the same corridor is not hindered. |
+| Reach in height | C3 | 07 §4.3 | A part outside the attack's height band cannot be aimed at and the refusal carries a reason. The same part is reachable after climbing or from higher footing. |
+| Defending someone else | C4 | 07 §5.1; 03 §7.1 | A defence with `protects` takes a strike aimed at the character beside the defender. Completes sim-kernel test script `bodyguard` with a real strike. |
+| Holding the world | C7 | 07 §9.3 | Test script `off_its_hinges`: a grip on a ledge stops a fall; `wrench` with enough energy brings a door away as an item and a larger piece away as a subgrid, which can then be swung or thrown; with too little it does neither. |
+| Stopping a shot | C9 | 07 §11.6 | Test script `caught_arrow`: a character quick enough to have a `shot` window interposes, catches or intercepts a projectile, each by its own mechanism; one too slow gets no window. Two projectiles crossing do not interact. |

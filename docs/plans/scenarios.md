@@ -264,3 +264,16 @@ Under `scenarios/games/`.
 | `remembered_dawn` | SC7 | — | Restore with memories carried |
 | `second_chapter` | SC8 | S21 | Campaign carry |
 | `relived_minute` | SC11 | S10 | Experimental. World rewind with memories carried |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Distance as travel time | SC5 | 13 §7.3 | With an entry's distance given as ten minutes, incidents are placed a few streets from a party on foot and far further from one that has been flying, measured over the last hour of its own time. |
+| Reopening a case | SC6 | 13 §8.5 | Test script `second_look`: a finding gained after a case is closed runs `case_judging` again with `reopening` set; rules that no longer accept the blame reopen it and `case_reopened` is raised; `reopen_case` does the same directly. |

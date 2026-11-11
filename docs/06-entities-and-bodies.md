@@ -295,6 +295,11 @@ Size matters physically. Thickness scales with `scale`, area with its
 square, mass with its cube. A giant is harder to cut through because there
 is more of it.
 
+A body that has never been wounded or edited does not hold a copy of its
+parts. It shares them with every other unchanged body of the same plan and
+scale, and is given its own at the first change. Rules cannot tell the
+difference. A crowd of the unhurt costs little.
+
 ### 6.5 Editing bodies
 
 Because the instance owns its tree, effects can change it at any time:
@@ -543,7 +548,7 @@ material and volume. Weapons notch and break; armour wears through.
 | `grip` | Channel slots needed to wield it |
 | `wear` | Which body parts it covers, in which layer order, its thickness there and its coverage (the fraction of hits it intercepts) |
 | `holds` | Capacity as a container: volume, mass, what kinds |
-| `stack` | Identical items may share one entity with a count |
+| `stack` | Items equal in every respect (definition, material, damage, traits, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
 | `grants`, `traits`, `rules` | Given to whoever holds or wears it |
 | `interactions`, `device` | As for elements (02 §5.5; 16) |
 
@@ -785,12 +790,11 @@ Targets, unmeasured.
 
 ## 16. Open questions
 
-1. **Reference body detail.** The bundled humanoid uses limbs, hands and
-   feet, head features and major organs. Finer plans are possible and
+1. **Reference body detail.** Kept: the bundled humanoid uses limbs, hands
+   and feet, head features and major organs. Finer plans are possible and
    untested for cost.
 2. **Very large creatures.** Settled in section 6.6.
-3. **Crowds.** The number of characters simulated in full is capped
-   (09 §9.3). Whether anonymous soldiers also need a lighter body
-   representation is still a question for measurement.
-4. **Item stacks with state.** Stacked items share state. When one of a
-   stack is damaged it must split off. The rule for when is not settled.
+3. **Crowds.** Settled: the number simulated in full is capped (09 §9.3),
+   and unchanged bodies share their parts (section 6.4).
+4. **Item stacks with state.** Settled in section 9.1: a member that would
+   change is split off first, and equal items may rejoin.

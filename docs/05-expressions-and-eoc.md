@@ -72,6 +72,7 @@ positions (04 §8), not surprises during play.
 | `loc` | A location (02 §3.2) | — |
 | `area`, `site`, `tract`, `region`, `realm`, `subgrid`, `action`, `window` | References to those things | — |
 | `list<T>` | Ordered values | `[1, 2, 3]` |
+| `map<T>` | Values by key; keys are strings or ids | `{'ash': 3, 'iron': 1}` |
 | `null` | Nothing | `null` |
 | `any` | Unknown until run time | — |
 
@@ -129,6 +130,8 @@ Bare function names resolve like ids (04 §4.3).
 - `and`, `or`, `not` take and give `bool`. `and` and `or` short-circuit.
 - `in` tests membership in a list or tag set.
 - `a ?? b` is `a` unless `a` is `null`, then `b`.
+- `m['key']` reads a map entry, `null` if absent. `set` and `add`
+  (section 10.3) may address one: `"self.var.tally['ash']"`.
 
 ### 4.4 Null
 
@@ -163,7 +166,7 @@ braces is an expression. `{{` is a literal brace. Numbers may be formatted:
 |-------|-----------|
 | Maths | `min` `max` `clamp` `abs` `sign` `floor` `ceil` `round` `sqrt` `exp` `ln` `log10` `sin` `cos` `atan2` `lerp` `div` |
 | Random | `rand(a, b)` `rand_int(a, b)` `chance(p)` `pick(list)` |
-| Lists and text | `len` `contains` `first` `last` `sum` `str` |
+| Lists, maps and text | `len` `contains` `first` `last` `sum` `str` `keys` `values` `has` |
 | Space | `dist(a, b)` `dir(a, b)` `offset(loc, dx, dy, dz)` `los(a, b)` |
 | Time | `now()` `local_now(subject)` |
 | Data | `setting(id)` `has_def(type, id)` |
@@ -345,6 +348,7 @@ source** object can:
 | `{ "pick": query }` | One at random; with `"weight": "…"`, weighted |
 | `{ "sum": query, "of": "it.mass" }` | A total; likewise `min`, `max` |
 | `{ "call": "fn_id", "args": { … } }` | A function result |
+| `{ "run": { "eoc": id, "with": { … } } }` | What a rule returns (section 9.5). Allowed only where effects are; never in a pure context. |
 
 Queries are defined in section 11.
 
@@ -457,6 +461,7 @@ it.
 | `cooldown` | Minimum local time between runs per owner. |
 | `skip_if_consumed` | Section 8.3. |
 | `ui_callable` | The rule may be run from a screen through the `Ui` command (12 §10.5). Default false. |
+| `group` | A rule group this rule belongs to (section 9.6) |
 | `doc` | Shown in the reference and the trace. |
 
 ### 9.2 Global rules
@@ -519,6 +524,24 @@ It does not see or change its caller's locals.
 Libraries of parameterised rules are how large mods build their own
 vocabulary.
 
+A called rule may `return` a value. In an effect list the caller takes it
+with a value source: `{ "let": { "won": { "run": { "eoc": "arm_wrestle",
+"with": { "foe": "target" } } } } }`. Rules are still not callable from
+expressions. Only functions are, because expressions must not change
+anything.
+
+### 9.6 Groups
+
+```json
+{ "type": "rule_group", "id": "harsh_winter", "enabled": "setting('harsh_winter')" }
+```
+
+A rule may name a `group`. A group is on or off. While it is off, its rules
+do not run and cost nothing. A group's `enabled` is a reactive condition
+(section 7.5), so a setting can govern it. `set_rule_group` switches one
+from a rule. Optional rule sets, difficulty options and a scenario's
+special rules are groups.
+
 ## 10. Effects
 
 ### 10.1 Form
@@ -550,6 +573,7 @@ the effect runs.
 | `{ "weighted": [ { "weight": 3, "do": […] }, … ] }` | Run one entry at random |
 | `{ "as": { "self": "$g" }, "do": […] }` | Rebind subjects for a block |
 | `{ "stop": {} }` | End this rule |
+| `{ "return": expr }` | End this rule and give a value to whoever called it |
 
 ### 10.3 Variables
 
@@ -755,7 +779,7 @@ Nothing in the engine or the bundled content may depend on it.
 
 ## 17. Modding surface
 
-**Definition types**: `eoc`, `function`, `variable`, `event`.
+**Definition types**: `eoc`, `function`, `variable`, `event`, `rule_group`.
 
 **Core events**: `sim_started`, `entity_created`, `entity_destroyed`,
 `var_changed`, `setting_changed`, `rule_error`.
@@ -795,12 +819,8 @@ Targets, unmeasured.
 
 ## 20. Open questions
 
-1. **Maps as values.** Lists are in; keyed maps are not. Add if content
-   needs them.
-2. **Returning values from rules.** Rules do not return; functions do. If
-   content keeps wanting a rule that both acts and answers, add `out`
-   parameters.
-3. **Lambdas.** Queries cover filtering, sorting and weighting. Anonymous
-   functions in expressions are deliberately left out.
-4. **Rule sets as toggles.** Enabling and disabling groups of rules through
-   settings without `if` on each one.
+1. **Maps as values.** Settled: maps are a value type (section 3).
+2. **Returning values from rules.** Settled in section 9.5: a rule may
+   `return`, and a caller in an effect list may take the value.
+3. **Lambdas.** Kept out. Queries cover filtering, sorting and weighting.
+4. **Rule sets as toggles.** Settled in section 9.6: rule groups.

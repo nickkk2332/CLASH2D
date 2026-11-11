@@ -380,3 +380,19 @@ Under `scenarios/ai/`.
 | `power_station_down` | L5 | S7 | Services |
 | `storm_at_sea` | L6 | S22 | Weather into vehicles |
 | `distant_battle` | L7 | S19 | Battles in both forms |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Berths | I2 | 09 §5.6; 10 §3.2 | Test script `parked`: an AI driver reaches the start of a berth's approach line, follows it and stops in the berth, then leaves by it in reverse. With no berth it stops beside the destination. Until worldgen package WG1 exists the berth is supplied by a test fixture. |
+| Scoring helpers | I5 | 09 §6.1 | `threat_removed`, `harm_prevented`, `escape_margin` and `detection_risk` are registered, read belief only (refused in a load test if given truth), and each has a unit test against a hand-computed case. |
+| Threat from observed capabilities | I5 | 09 §6.2; 15 §7.1 | `threat` rises after the character sees an attack it had not seen before and is unchanged by one it cannot have perceived. |
+| Formations of vehicles | I7 | 09 §8; 11 §7 | A collective whose members are vehicles holds a formation behind its leader. Completed with vehicles package V7. |
+| Usual guard in bulk exchanges | I8 | 09 §9.1 | Bulk previews include the defences each side's representative members have ready. A shielded line loses fewer to a volley than an unshielded one of the same number. |

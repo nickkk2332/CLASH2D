@@ -550,3 +550,22 @@ Under `scenarios/people/`. Presentation scenarios also have golden frames.
 | `minion_orders` | S7 | S16 | Command relation, orders must be heard |
 | `cutscene_takedown` | U10 | S6 | Choreography over decided events |
 | `creation_flow` | U9 | S20 | Data-driven character creation |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Shared body parts | E4 | 06 §6.4 | A thousand unchanged bodies of one template store one set of parts; wounding one gives it its own copy and leaves the rest sharing. Measured in the E4 benchmark. |
+| Stacks split and rejoin | E8 | 06 §9.1 | Damaging one of a stack of forty leaves a stack of thirty-nine and one item. Repairing it in the same hold lets them rejoin. Counts are conserved throughout. |
+| Watched things and discrepancies | S4 | 15 §6; 10 §3.2 | Test script `the_open_door`: a guard who last saw a watched door shut receives a `discrepancy` percept on seeing it open, with what was expected and what was found; a passer-by with no routine at the site receives none. |
+| Observed capabilities | S5 | 15 §7.1 | Seeing a persona use an attack records it on the track with its strongest result; the list never exceeds `track_capabilities`; being told of a capability records it as told. |
+| Features and descriptions | S6 | 15 §8.4 | Test script `a_tall_figure_in_red`: a glimpse at low clarity yields height and dress only; `suspects` lists every known persona that matches; a later close look adds the face and merges the stranger's track into the right persona. Changing clothes changes `dress` alone. |
+| Relations that intervene | S7 | 15 §9.1; 03 §7.1 | A relation kind flagged `intervenes` makes its holder a window candidate. Covered by sim-kernel test script `bodyguard`, run here with real relations. |
+| Sound cue names | U5 | 12 §7.3 | A `show` definition's `sound` loads, is validated as a name, appears in the event the frontend receives, and plays nothing. |
+| Several at once | U7 | 12 §9.6 | With three controlled characters selected, one move command gives each its own action in entity order, and one answer settles the same pending decision for all three. |

@@ -265,3 +265,15 @@ Under `scenarios/abilities/`.
 | `planted_memory` | A10 | S15 | Belief without perception |
 | `dominated` | A10 | S16 | Driver |
 | `cheat_skill` | A10 | S20 | Template, parameters, interface part |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Field reactions in reference abilities | A10 | 02 §16; 08 §8 | The reference elemental abilities rely on field reactions (world-model package W16) for what fire, water and lightning do to each other, and define none of it themselves. |

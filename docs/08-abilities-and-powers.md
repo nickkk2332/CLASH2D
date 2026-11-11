@@ -505,7 +505,7 @@ exist. Section references are where the mechanism is specified.
 
 | Power | Built from |
 |-------|-----------|
-| Fire, frost, lightning, acid, gas | Fields (02 §16) placed with `add_field`; releases of those damage types |
+| Fire, frost, lightning, acid, gas | Fields (02 §16) placed with `add_field`; releases of those damage types. What they do to each other is field reactions (02 §16). |
 | Moving water, air, smoke | `move_field` (section 7.6) |
 | Raising walls, pillars, bridges | `conjure` (section 7.3); or a map fragment stamped in place (02 §23) |
 | Moving earth and stone | `detach` a piece, move it as a subgrid, `merge` (02 §18.3) |
@@ -781,15 +781,12 @@ Targets, unmeasured.
    simulation to be returned to an earlier moment with memories carried,
    where world history is being kept. Its cost and several of its
    interactions are unresolved and listed there.
-2. **Seeing the future.** The simulation is deterministic, so running a
-   copy ahead is possible in principle. Its cost and how it would be shown
-   are unexamined.
-3. **Shared minds.** Copies driven by one owner act one at a time through
-   plans. Truly simultaneous control of many bodies by one player is a
-   question of interface. (12)
-4. **Judging non-harmful abilities.** `intent` and `value` are hints. How
-   well characters use trickery and control on their own depends on the AI
-   layer. (09)
-5. **Reactions between elements.** Water on fire, lightning through water.
-   Fields have `convert` (02 §16); whether a higher-level table of
-   interactions would help authors is undecided.
+2. **Seeing the future.** Deferred until the experimental whole-world
+   rewind (13 §9.5) has been tried. Running a copy ahead needs the same
+   machinery and has the same cost.
+3. **Shared minds.** Settled in 12 §9.6: several controlled characters can
+   be given one command together.
+4. **Judging non-harmful abilities.** Scoring helpers are supplied
+   (09 §6.1). How well characters use trickery and control in play is open
+   until it can be tested.
+5. **Reactions between elements.** Settled in 02 §16: field reactions.

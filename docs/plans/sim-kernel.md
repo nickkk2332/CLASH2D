@@ -577,3 +577,19 @@ Under `scenarios/kernel/`, run in all modes of the scenario runner.
 | `too_fast_to_notice` | T5 | S14, S19 | Notice latency; the gap is real |
 | `takedown_lock` | T6 | S6 | Joint action |
 | `reload_midfight` | P8 | S12 | Hot reload under load |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Disputed fields | P2 | 04 §6.3 | Two mods replacing one field with different values give a warning naming both, the field and the winner. The warning is absent when the later mod lists the earlier in `requires` or `after`. Two mods that `scale` or `extend` the same field give none. |
+| Maps as values | X2, X4 | 05 §3, §5 | `map<T>` type-checks; `keys`, `values`, `has` and indexing by key work; iteration order is by key, shown by a state hash that does not vary with insertion order. |
+| Returning from rules | K5, K6 | 05 §9.5 | A rule's `return` value is taken by a `run` value source in an effect list. A rule is still refused in an expression, with a diagnostic. |
+| Rule groups | K5 | 05 §9.6 | Test script `winter_rules`: rules in a group do not run while it is off; a setting that its `enabled` reads turns it on; `set_rule_group` switches it from a rule; the state survives save and load. |
+| Who is offered a window | T5 | 03 §7.1; 15 §9.1 | Test script `bodyguard`: a blow aimed at one character opens a window for another who holds an `intervenes` relation toward them and is within `reach`, and a reaction flagged `on_behalf` is offered. A holder beyond reach is offered none. A directly controlled character within reach is offered one. Until first-playable package S7 exists the relation is supplied by a test fixture. |

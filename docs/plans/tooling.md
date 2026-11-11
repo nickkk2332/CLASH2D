@@ -38,6 +38,7 @@ says which.
 | TL12 | Player aids | M | SC3, SC6, A9 | todo |
 | TL13 | Save tools | S | K7, P7 | todo |
 | TL14 | Matchup and compat reports | S | C11, P4 | todo |
+| TL15 | Stepping through a rule | S | TL1, P8 | todo |
 
 ## Order and parallelism
 
@@ -51,6 +52,7 @@ they can be built.
 | M2, after TL1 | TL6, then TL7, TL8 |
 | M3, with screens | TL4, TL9 |
 | M3, with combat | TL14 |
+| Any time after hot reload | TL15 |
 | M4, with the layered simulation | TL11 |
 | M5, with maps and scenarios | TL10, TL12 |
 
@@ -265,3 +267,32 @@ Done when
   blow.
 - `compat` reports two mods patching one field to different values and
   names the winner.
+
+### TL15 — Stepping through a rule
+
+**Spec** 14 §6.4 · **Size** S · Added by the review. Nothing depends on it.
+
+Build
+- `break`, `next`, `continue`, `break off`; the in-memory save taken at a
+  break; running the rule from it up to a given effect; the console view of
+  bindings and the next effect.
+
+Done when
+- A break stops before the rule's first effect and shows its bindings.
+- After any number of `next` and then `continue`, the state hash equals
+  that of the same run with no break set.
+- Breaks are unavailable outside development profiles and absent from the
+  input log.
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Sheet view | TL10 | 14 §10.2 | A map made of placed maps is shown whole; a piece can be moved and turned, and opening it puts it on the canvas. May follow the rest of TL10. |
+| Stepping through a rule | TL15 | 14 §6.4 | See the package. |

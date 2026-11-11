@@ -240,6 +240,12 @@ definition; patches apply in load order. Patching something that does not
 exist is an error, unless `"optional": true` is set, in which case the patch
 is skipped.
 
+**Disputed fields.** Two mods that `scale`, `add` to or `extend` the same
+field compose. Two mods that *replace* the same field with different
+values do not: the later wins. That is reported as a warning naming both
+mods, the field and the winner, unless the later mod lists the earlier in
+its `requires` or `after`, which shows the choice was deliberate.
+
 ### 6.4 `override`
 
 ```json
@@ -292,7 +298,9 @@ wrong dimension for the field is an error.
 
 All player-facing strings use `Text`, so a translation layer can be added
 later without touching definitions. Translation itself is not in the first
-version.
+version. When it comes it will be files per language, keyed by definition
+id and field path, laid over `Text` fields, so a mod needs no change to be
+translatable.
 
 ### 7.2 Linking
 
@@ -324,7 +332,7 @@ in play.
 | Link | Unknown references |
 | Compile | Expression syntax and type errors; unknown verbs, events, properties, variables |
 | Semantic | Each type's own `validate`: ranges, mutually exclusive fields, limits such as 65,536 states |
-| Cross | Whole-set checks: unreachable abstract definitions, references to obsolete definitions, shadowed imports, undeclared variables |
+| Cross | Whole-set checks: unreachable abstract definitions, references to obsolete definitions, shadowed imports, undeclared variables, disputed fields (section 6.3) |
 
 A stage runs for every definition that survived the previous one. Loading
 never stops at the first error.
@@ -569,11 +577,11 @@ commands. The rest is built by the packages in plans/sim-kernel.
 
 ## 20. Open questions
 
-1. **Translation.** `Text` leaves room for it. Format and workflow are
-   undecided.
-2. **Archives.** Loading mods from a single compressed file.
-3. **Incremental reload.** Rebuilding only what a changed file affects. Do
-   it only if the budget in section 18 is missed.
-4. **Patch conflicts.** Two mods scaling the same number compose; two mods
-   replacing the same field do not, and the later silently wins. Whether
-   the linter should warn about this by default.
+1. **Translation.** Deferred. The direction is fixed in section 7.1: files
+   per language keyed by definition id and field path.
+2. **Archives.** Deferred. Loading a mod from a single compressed file
+   changes nothing else.
+3. **Incremental reload.** Kept as it is: the whole pipeline is rerun,
+   unless the budget in section 18 is missed.
+4. **Patch conflicts.** Settled in section 6.3: disputed fields are a
+   warning unless the later mod declares that it knows of the earlier.

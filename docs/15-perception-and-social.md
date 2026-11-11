@@ -219,6 +219,17 @@ Two functions give rules access to perception:
 
 Window kinds (03 §7.1) use `perceives(self, source)` as their `noticed_if`.
 
+**Something is not as it was.** A map may mark doors, containers, fixtures
+and placed items as `watched` (10 §3.2). A character whose routine belongs
+to that site keeps, for each watched thing, the state it last perceived it
+in: open or shut, locked or not, present or gone. When it perceives the
+thing in another state, it receives a percept of type `discrepancy`, with
+what, where, what was expected and what was found.
+
+That is all the engine does. What an open door means, and whether to look
+into it, shout or shrug, is for rules. This is map memory in miniature:
+only for watched things, and only for those whose place it is to mind them.
+
 ## 7. Beliefs
 
 ```rust
@@ -233,7 +244,7 @@ pub struct Beliefs {
 
 | Kind | Holds |
 |------|-------|
-| **Track** | What this mind knows about one persona: where and when last perceived, what they were doing, how it knows (saw, heard, was told, inferred), and a confidence. A track may also hold **facts**: true values of particular properties, recorded by `appraise` (08 §7.5) at the moment of appraisal. |
+| **Track** | What this mind knows about one persona: where and when last perceived, what they were doing, how it knows (saw, heard, was told, inferred), and a confidence. A track may also hold **facts**: true values of particular properties, recorded by `appraise` (08 §7.5) at the moment of appraisal. It also holds **observed capabilities**: for each action or ability this mind has seen the persona use or been told of, its id, the strongest result seen, and when. The list is bounded by the setting `track_capabilities` (default 8); the weakest and oldest go first. `threat` (09 §6.2) reads it. |
 | **Memory** | Something that happened: the event type, where, when, which personas played which roles, how it knows, confidence, and salience. |
 | **Map memory** | What places looked like when last seen. Kept for controlled characters. |
 
@@ -305,7 +316,7 @@ When an observer detects an entity presenting persona P:
    perceives the true persona, learns that the two are the same, and
    `disguise_seen_through` is raised.
 3. If the observer has no track for what it perceives, it gains one for a
-   stranger of that appearance.
+   stranger, holding the features it made out (section 8.4).
 
 ### 8.3 Verbs
 
@@ -321,6 +332,41 @@ A crime committed while presenting a copied persona is remembered by its
 witnesses as committed by that persona. The world's cause records
 (02 §7.3) still name the real actor. Scene S15 is the gap between the two.
 
+### 8.4 Features and descriptions
+
+An appearance is a set of **features**, each defined by content:
+
+```json
+[
+  { "type": "appearance_feature", "id": "height", "from": "self.height",
+    "bands": [[0, "short"], [1.6, "middling"], [1.85, "tall"]], "clarity": 1 },
+  { "type": "appearance_feature", "id": "dress",  "from": "worn_tags(self, 'outer')", "clarity": 1 },
+  { "type": "appearance_feature", "id": "voice",  "sense": "hearing", "clarity": 2, "identifying": true },
+  { "type": "appearance_feature", "id": "face",   "clarity": 3, "identifying": true }
+]
+```
+
+`from` derives the value from the body and what is worn. A feature without
+`from` is a value the persona carries. A persona may override any of them.
+
+A perception yields only the features whose `clarity` it reaches (section
+6) through a sense that can carry them. A glimpse across a dark street
+gives height and dress. A close look gives the face.
+
+What a witness got is a **description**: some features, not all. A track
+for a stranger holds one, and it grows as more is perceived. A description
+**matches** every persona whose appearance agrees with it on each feature
+it has, so "a tall figure in red" matches everyone tall and in red.
+
+| When | Then |
+|------|------|
+| A description gains an `identifying` feature that matches a persona the mind knows | The stranger's track is merged into that persona's |
+| It matches several and identifies none | It stays a stranger. The query `suspects(description)` lists the known personas that match. |
+| A description is passed on in speech or a report | The hearer gains the same partial track |
+
+Changing clothes changes `dress` and nothing else. A mask hides `face`; it
+does not hide height or voice.
+
 ## 9. Relations and groups
 
 ### 9.1 Relations
@@ -329,13 +375,18 @@ witnesses as committed by that persona. The world's cause records
 [
   { "type": "relation_kind", "id": "fear",     "range": [0, 1], "default": 0, "fade": 0.02 },
   { "type": "relation_kind", "id": "trust",    "range": [-1, 1], "default": 0 },
-  { "type": "relation_kind", "id": "commands", "kind": "flag", "orders": true }
+  { "type": "relation_kind", "id": "commands", "kind": "flag", "orders": true },
+  { "type": "relation_kind", "id": "guards",   "kind": "flag", "intervenes": true }
 ]
 ```
 
 A relation is a value held by one mind toward a persona or a group.
 `self.rel('fear', x)` reads it; verbs set, add and clear it. `fade` moves it
 toward its default per minute of local time.
+
+A kind flagged `intervenes` makes its holder a candidate for windows
+opened by actions against the one it is held toward (03 §7.1): the
+bodyguard may answer the blow aimed at the person guarded.
 
 Hostility, friendship, debt, love and ownership are relation kinds that
 content defines and that the AI layer (09) is told how to read.
@@ -472,7 +523,8 @@ another character is the persona the controlled character perceives.
 ## 15. Modding surface
 
 **Definition types**: `signal_kind`, `sense`, `event_signal`,
-`relation_kind`, `group`, `lines`, `message_kind`. Fields `signals` on
+`relation_kind`, `group`, `lines`, `message_kind`, `appearance_feature`.
+Fields `signals` on
 actions and phases; `signature` and `senses` on templates and traits;
 `light` on elements, fields, items and traits; `sound_block` on materials.
 
@@ -491,7 +543,9 @@ actions and phases; `signature` and `senses` on templates and traits;
 verbs of section 8.3.
 
 **Queries**: `tracks`, `memories`, `observers` (who currently perceives a
-subject), `members`.
+subject), `members`, `suspects`.
+
+**Settings**: `track_capabilities`.
 
 **Functions and properties**: `perceives`, `could_perceive`, `light(loc)`;
 on minds, the properties of section 7.2 and `rel`, `in_group`, `role_in`,
@@ -522,12 +576,11 @@ Targets, unmeasured.
 
 ## 18. Open questions
 
-1. **Who keeps map memory.** Only controlled characters do. If AI
-   characters should get lost in unfamiliar places, they need it too, at a
-   cost. (09)
-2. **Appearance detail.** How many descriptors an appearance has, and how
-   partial matches work ("a tall figure in red").
-3. **Inference.** A character concluding something it did not perceive
-   ("the door is open, so someone came through") is left to rules. Whether
-   to provide helpers.
-4. **Light colour.** Intensity only for now.
+1. **Who keeps map memory.** Kept as it is: only controlled characters.
+   Watched things (section 6) give other characters the small part of it
+   they need. (09)
+2. **Appearance detail.** Settled in section 8.4: features, descriptions
+   and partial matches.
+3. **Inference.** Settled as far as the engine goes: discrepancy percepts
+   (section 6). What a character concludes from one is left to rules.
+4. **Light colour.** Deferred. Intensity only.

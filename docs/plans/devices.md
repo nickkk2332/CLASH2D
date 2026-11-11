@@ -266,3 +266,18 @@ Under `scenarios/devices/`.
 | `the_suit` | G10 | S25 | Conferral, module damage, power loss |
 | `suit_in_vacuum` | G10 | S25 | Personal sealed volume |
 | `away_from_base` | G11 | S24 | Catch-up equals staying |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Junctions between capacities | G4 | 16 §6.2, §5.5 | Test script `thin_wire`: a heavy load behind a thin conduit is starved to the thin conduit's capacity while the thick network's other loads are fully supplied. A rule on `network_overloaded` can burn the wire instead. |
+| Loss on conduits | G4 | 16 §6.1 | A network's loss equals the sum of `loss` times length over its conduits, is drawn ahead of every consumer while the network is active, and is zero while it is idle. |
+| Logic tables | G5 | 16 §7 | A controller's table edited in play drives its outputs as its rows say, re-evaluates when an input changes, and survives save and load. A row cannot name anything the device's definition does not expose. |
+| Moving floors | G7 | 16 §9.4 | Test script `walkway`: a creature and a crate on a supplied moving floor are carried along at its speed; unsupplied, they are not; something anchored against a push stays put. |

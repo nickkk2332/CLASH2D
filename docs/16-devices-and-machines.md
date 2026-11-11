@@ -181,7 +181,7 @@ movement mode.
 | `produces`, `consumes`, `stores`, `converts` | Section 5 |
 | `holds` | Item storage with filters (06 §9.2) |
 | `auto`, `speed` | Whether it runs recipes by itself, and how fast (section 8) |
-| `config` | Settings a user may change: flags, numbers, choices, filters, a linked target. Read as `self.config.enabled`. |
+| `config` | Settings a user may change: flags, numbers, choices, filters, a linked target, a logic table (section 7). Read as `self.config.enabled`. |
 | `inputs`, `outputs` | Signals (section 7) |
 | `slots`, `bus`, `module` | Assemblies (section 11) |
 | `part` | What it adds to a vehicle (11 §6.1) |
@@ -289,10 +289,10 @@ run at all.
 
 ### 5.5 Limits
 
-Stores and ports have maximum rates. A conduit has a `capacity`. When what
-a network carries exceeds the capacity of its weakest conduit, the hook
-`network_overloaded` runs. Whether a breaker trips, a fuse blows or a cable
-burns is a rule.
+Stores and ports have maximum rates. A conduit has a `capacity`, and every
+conduit in one network has the same (section 6.2). When what a network
+carries exceeds it, the hook `network_overloaded` runs. Whether a breaker
+trips, a fuse blows or a cable burns is a rule.
 
 ## 6. Conduits
 
@@ -317,12 +317,24 @@ fixture, so a wire can pass under a floor or inside a wall.
   emit `conduit_changed`.
 - Subgrids have the layer too. A vessel may be wired instead of using one
   bus (11 §6.2).
+- A conduit may state a `loss` per metre. A network's loss is the sum over
+  its conduits, drawn as a standing load ahead of every consumer while the
+  network is active. It does not depend on what flows where. It makes a
+  long run cost something without tracking flow along it.
 
 ### 6.2 Networks from conduits
 
-Conduits carrying the same resource in neighbouring cells (the four sides,
-above and below) are connected. Each connected set is one network. Devices
-join through their ports.
+Conduits carrying the same resource at the same capacity in neighbouring
+cells (the four sides, above and below) are connected. Each connected set
+is one network. Devices join through their ports.
+
+Where conduits of different capacity meet there is a **junction**. The two
+sides are separate networks, and the junction passes the resource between
+them at no more than the smaller capacity, as a converter of the resource
+into itself would. A thin wire feeding a heavy load therefore starves the
+load, and the thick network behind it is unaffected. When more is wanted
+through a junction than it passes, `network_overloaded` runs for the
+thinner side, and a rule may burn the wire instead of letting it limit.
 
 When a conduit is added, removed or severed, the affected networks are
 split or merged by searching outward from the change. Cutting one wire in a
@@ -358,6 +370,20 @@ several drivers (`max`, `sum`, `any`).
 - A device may delay its output by a duration. With delay, loops make
   clocks and latches. A loop with no delay anywhere is cut by the cascade
   limit (03 §4.3) and the linter warns about it.
+
+A `config` entry of kind `logic` is a table the user fills in during play:
+
+```json
+{ "id": "program", "kind": "logic", "rows": 8,
+  "inputs": ["a", "b"], "outputs": ["x", "y"] }
+```
+
+Each row reads *input, comparison, value, output, value to drive*: "when
+`a` is above 0.8, drive `x` to 1". Rows are compiled to reactive
+expressions over the device's inputs, and the first row that holds for an
+output drives it. The configuration screen shows the table. A player
+programs a controller this way without writing rules, and cannot make it
+do anything a device definition could not.
 
 Sensors are devices with senses (15 §4) whose rules drive a signal on a
 percept. Gates, comparators, timers and counters are small devices defined
@@ -476,6 +502,26 @@ Severing an item conduit drops what was in transit near the break.
 Fluids and gases are ordinary resources in pipes and tanks. Released into
 the world, deliberately or by a breach, they become fields (02 §16), and a
 drain or intake takes a field back into a network.
+
+### 9.4 Moving floors
+
+A floor or fixture may state `conveys`: a speed. Its facing gives the
+direction.
+
+```json
+{ "type": "floor", "id": "walkway", "conveys": "1.5 m/s",
+  "load": { "power": "200 W" }, "when_supplied": "conveys" }
+```
+
+Each step, whatever stands or lies on it is pushed along (07 §7) by its
+speed times the step: creatures, loose items, a crate, a body. It is a
+push like any other, made through the relocation functions, and what can
+resist a push resists it.
+
+This is a walkway, a belt that can be ridden, a treadmill, an escalator on
+a ramp. It is separate from item conduits (section 9.2), whose goods are a
+queue and are not in the world while they travel. A line that must carry
+both goods and people uses moving floors, with movers at its ends.
 
 ## 10. Construction
 
@@ -723,8 +769,9 @@ changing costs nothing. Warm and hot tracts run devices identically.
 ## 14. Modding surface
 
 **Definition types**: `interaction`, `device`, `resource`, `conduit`,
-`recipe`. Fields `interactions`, `device`, `load`, `when_supplied` on
-elements; `qualities` on items; `services` on tract definitions.
+`recipe`. Fields `interactions`, `device`, `load`, `when_supplied`,
+`conveys` on elements; `loss` on conduits; config kind `logic` on devices;
+`qualities` on items; `services` on tract definitions.
 
 **Events**: `interacted`, `device_mode_changed`, `device_configured`,
 `network_changed`, `network_supplied`, `network_starved`,
@@ -785,15 +832,14 @@ Targets, unmeasured.
 
 ## 17. Open questions
 
-1. **True flow limits.** Capacity is checked per network, not per segment.
-   A thin wire feeding a heavy load at the far end of a thick network is
-   not caught. Segment-level flow is possible and costs more.
-2. **Loss over distance.** Not modelled. A per-metre loss on conduits would
-   make layout matter more.
-3. **Programmable devices.** Logic is built from devices and expressions.
-   Whether players should be able to write rules for a controller in play
-   is undecided.
-4. **Belts you can stand on.** Item conduits are abstract. A belt that also
-   moves creatures standing on it would be a field or a subgrid.
-5. **Catch-up across sites.** A machine fed by another site's output
-   catches up from that site's summary, which may itself be stale.
+1. **True flow limits.** Settled in section 6.2: conduits of different
+   capacity are separate networks joined by a junction that passes no more
+   than the smaller.
+2. **Loss over distance.** Settled in section 6.1: an optional `loss` per
+   metre, drawn as a standing load.
+3. **Programmable devices.** Settled in section 7: logic tables in a
+   device's configuration.
+4. **Belts you can stand on.** Settled in section 9.4: moving floors.
+5. **Catch-up across sites.** Kept as an accepted approximation. A machine
+   fed by another site's output catches up from that site's summary, which
+   may itself be stale.

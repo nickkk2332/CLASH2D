@@ -95,6 +95,8 @@ An action declares its attacks and strikes with them in a phase.
 | `lift` | Upward angle of the push |
 | `aim` | How the strike finds its mark (section 4). Absent means it cannot miss. |
 | `arc` | For strikes at several targets (section 6.4) |
+| `swing` | Degrees the surface travels through before it lands. Obstacles in that arc are struck first (section 6.4). Absent for thrusts and shoves. |
+| `height` | The band of heights, in metres above the attacker's footing, that the attack can reach (section 4.3). Defaults to the attacker's own height and a little over. |
 | `clashes` | Whether this attack can meet another (section 8) |
 | `spill`, `spill_kind` | What a locked clash releases (section 8) |
 | `on_land`, `on_miss`, `on_stopped` | Effect lists |
@@ -178,6 +180,18 @@ held, or cannot move. Such a target is simply hit. Striking from where the
 target cannot see is an advantage because of perception, not because of a
 rule about backs.
 
+### 4.3 Reach in height
+
+An attack reaches a band of heights above the attacker's footing. A part
+can be aimed at only if its own band (06 §6.1), scaled to the target's
+height and shifted by the difference in where the two are standing,
+overlaps it. A strike with no part chosen picks among the parts in reach.
+If nothing is in reach the attack cannot be made, and says so.
+
+The head of something four storeys tall is out of reach from the ground.
+It can be reached by leaping, by climbing (06 §6.6), by a longer weapon, or
+by bringing it down. A low sweep cannot be aimed at a head.
+
 ## 5. Defences
 
 ### 5.1 Definition
@@ -208,6 +222,7 @@ its phases.
 | `during` | The phase in which it is in force |
 | `form` | `avoid` or `interpose` |
 | `with` | For `interpose`: what is put in the way. A held item, a body part, a gripped creature. |
+| `protects` | Whom it defends. By default the defender. A defence may instead protect a character the defender is beside, taking strikes aimed at them. With a reaction that allows `on_behalf` (03 §7.1), this is stepping in front of a blow meant for someone else. |
 | `covers` | Which strikes it applies to: by direction, by the part they are aimed at |
 | `handles` | How many strikes it can deal with while in force; `"all"` for a shield wall |
 | `contest` | Whether it succeeds. Absent means it always does. |
@@ -317,6 +332,13 @@ would meet them. Each target is resolved by steps 2 to 8.
 With `through`, the energy that reaches each target is what **passed** the
 one before. A blade keeps going through whoever does not stop it. Five
 unarmoured men absorb a little each. The sixth, in mail, absorbs the rest.
+
+A sweep also meets the world. Blocks and fixtures standing in an attack's
+`arc`, or in the `swing` it travels through on the way to a single target,
+and tall enough to be in the surface's path, are struck in their turn as
+strikes at a cell (section 3.4). A long blade swung in a corridor finds the
+wall first, spends energy on it, and takes the recoil. A thrust has no
+swing and is not hindered.
 
 This is scene S4, and the reason a master cuts down a rank of ordinary foes
 is the reason given by the numbers: enough energy on a fine enough edge
@@ -430,6 +452,25 @@ Breaking free is an action with a contest, defined by content, that ends in
 
 Grappling positions and transitions are joint actions and traits defined by
 content.
+
+### 9.3 Holding the world
+
+`seize` may also take hold of a part of the world: an element of a cell, or
+a cell of a subgrid.
+
+- **Hanging on.** While the grip lasts the holder does not fall. A ledge
+  caught on the way down, a rope, the side of a moving vehicle, the hide of
+  something huge (06 §6.6).
+- **Wrenching.** `wrench` applies the holder's energy to what is held as a
+  packet of a damage type content names for tearing. If that is enough to
+  destroy it as a fixed thing (02 §12.2), it comes away in the holder's
+  grip instead of becoming rubble: a small thing as an item, a larger
+  connected piece as a subgrid by `detach` (02 §18.3). What is then held
+  can be carried, swung as a weapon (section 9.2) or thrown, if the holder
+  can bear its mass.
+
+A door off its hinges, a lamp post, a car door used as a shield and the
+corner of a building are one verb with different amounts of energy.
 
 ## 10. Takedowns
 
@@ -557,6 +598,20 @@ Recoil is an impulse on the shooter and a rule that widens spread.
 Technology is the content of these definitions. The engine does not know
 what century it is.
 
+### 11.6 Stopping a shot
+
+Bodies in flight do not collide with each other. Stopping a projectile is
+something a character does, as a reaction to its `shot` window, and so only
+for those quick enough to have one (section 11.2).
+
+| Way | Mechanism |
+|-----|-----------|
+| Put something in its path | An interposing defence (section 5.3). The shot lands on the blade or shield as any strike would. By `protects`, in front of someone else. |
+| Catch it | A reaction whose effect is `arrest` (02 §15) on a contest it names. The projectile ends in the catcher's hand. |
+| Knock it aside or shoot it down | `intercept`: an attack aimed at the projectile itself, by a contest against its size and speed. If it lands, the projectile is given an impulse, or ended. |
+
+Two beams or two charging bodies meeting head-on is a clash (section 8).
+
 ## 12. Stances, styles and combinations
 
 None of these are engine concepts. They are built as follows.
@@ -655,7 +710,7 @@ and `cutscene` on actions; `surfaces` and `band` on body parts; `give` and
 `clash_resolving`, `seize_resolving`.
 
 **Effects**: `strike`, `shoot`, `throw`, `seize`, `release_grip`, `drag`,
-`shove`.
+`shove`, `wrench`, `intercept`.
 
 **Functions**: `contest`, `odds`, `strike_preview`, `lead_point`,
 `ballistic_dir`, `band_point`.
@@ -696,16 +751,14 @@ Targets, unmeasured.
 
 ## 19. Open questions
 
-1. **Projectiles meeting projectiles.** Bodies do not collide with each
-   other in flight. Shooting an arrow out of the air needs that.
-2. **Reach in height.** A strike aimed at a part far above or below the
-   attacker's reach is not prevented. Height bands could be applied to
-   melee as they are to shots.
-3. **Swinging in confined space.** A long weapon in a corridor is not
-   hindered by the walls.
-4. **Gripping things that are not creatures.** Clinging to a subgrid,
-   including a creature made of cells, is settled in 06 §6.6. Gripping
-   ledges and other fixed parts of the world is still open.
-5. **Mass battles.** Bulk resolution from previews is sketched in
-   section 15. Whether it gives believable results for scene S19 has to be
-   tested. (09)
+1. **Projectiles meeting projectiles.** Settled in section 11.6: stopping
+   a shot is a reaction. There is no general collision between bodies in
+   flight.
+2. **Reach in height.** Settled in section 4.3.
+3. **Swinging in confined space.** Settled in section 6.4: a swing meets
+   whatever stands in its arc.
+4. **Gripping things that are not creatures.** Settled in section 9.3 and
+   06 §6.6.
+5. **Mass battles.** Open. Bulk resolution from previews is sketched in
+   section 15. Whether it gives believable results for scene S19 can only
+   be answered by testing. (09)

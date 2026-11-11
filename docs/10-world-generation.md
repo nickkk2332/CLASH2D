@@ -135,6 +135,8 @@ A palette maps a character to a **cell spec**.
 | `spawn` | A creature or population member in this cell |
 | `device` | Configuration for the element's device (16 §4.2), and a name for linking |
 | `mark` | Adds the cell to a named mark |
+| `berth` | Adds the cell to a named berth of a kind: a parking bay, a mooring, a landing pad. Cells given `approach` with the same name are the line an AI driver follows into it (09 §5.6). |
+| `watched` | Marks what is placed in the cell as something the site's people keep an eye on (15 §6) |
 | `area` | Adds the cell to an area of a kind; touching cells with the same entry are one area |
 | `var`, `decal` | Cell variables and marks (02 §5.1) |
 
@@ -231,6 +233,14 @@ Placements are records. A region survey writes them; realising a tract
 reads those that overlap it. A map may be far larger than a tract: each
 tract it covers realises its own window of it.
 
+**Overlap.** Every placement has a box: its footprint and its storeys,
+after turning. When a survey writes a placement it tests the box against
+those already written. Two placements may overlap only if the later one's
+map says `"over": true`, as a market stall on a square does. Otherwise the
+later is moved as its rule allows, or dropped and noted in the survey's
+report. The test is in three dimensions, so a sewer may run under a street
+and may not run through a cellar.
+
 ### 4.2 Sitting on the ground
 
 Ground is rarely flat and maps usually are.
@@ -284,7 +294,7 @@ Steps are implemented natively and configured by data.
 |------|------|
 | `strata` | Fills from the surface height down with layers of block states |
 | `surface` | Lays a floor, and optionally low blocks, on the top |
-| `liquid` | Fills open cells up to a level with still liquid (11 §4.3) |
+| `liquid` | Fills open cells up to a level with still liquid (11 §4.3). `to` is `sea_level`, a storey, or `plan`: the level of whichever planned lake covers the cell (section 9.2). |
 | `veins`, `pockets` | Replaces some of a stratum with another state, by noise |
 | `caves` | Carves connected voids, in strata that anchor only (section 5.2) |
 | `scatter` | Places maps or elements by density, with spacing |
@@ -487,6 +497,39 @@ entry.
 A hamlet, a walled city, a space colony's dome, a goblin warren and a
 military camp are settlement definitions with different patterns and maps.
 
+### 8.5 Path kinds and crossings
+
+What a path is made of, and what it does when it meets something, is a
+definition.
+
+```json
+{ "type": "path_kind", "id": "road",
+  "width": 3, "surface": { "floor": "paving@stone" }, "max_grade": 0.25,
+  "crossings": [
+    { "over": "liquid",    "use": { "maps": { "tag": "bridge_span" }, "ends": { "tag": "bridge_end" } } },
+    { "over": "path:rail", "use": { "maps": { "tag": "level_crossing" } } },
+    { "when": "rise > 2 and length < 40", "use": "tunnel",     "lining": "wall@stone" },
+    { "when": "rise > 0",                 "use": "cutting" },
+    { "when": "rise < 0",                 "use": "embankment", "fill": "solid@soil" } ] }
+```
+
+A path follows the ground while the ground is no steeper than `max_grade`,
+in storeys per cell along the line. Where it is steeper, or the line meets
+liquid or another path, the first crossing that applies is used for that
+stretch.
+
+| Crossing | Does |
+|----------|------|
+| Maps | Places the named maps end to end along the line from one side to the other, with end pieces if given |
+| `tunnel` | Carves the path's width through the rise at a steady grade, lined if a lining is given |
+| `cutting` | Cuts the ground down to the path's grade, open to the sky |
+| `embankment` | Fills under the path up to its grade |
+
+Crossings are decided in the survey from the line and the height field,
+which neighbouring regions share, so both sides of an edge choose alike.
+Map crossings are written as placements. The others are part of the path
+record and are cut or filled by the `paths` step.
+
 ## 9. Realms
 
 ### 9.1 World generators
@@ -508,6 +551,7 @@ A realm definition's `generator` names a **worldgen** definition.
   "sites": [ { "site": "old_crypt_site", "count": 1, "on": ["upland", "woodland"] } ],
   "routes": { "join": "settlements", "kind": "road" },
   "rivers": { "count": [2, 5], "from": "height > 15" },
+  "lakes":  { "count": [0, 3], "where": "height > 2 and moisture > 0.5", "size": [4, 20] },
   "holders": [ { "group": "island_lord", "seat": "largest_settlement", "holds": "all" } ],
   "wasteland": "ash_waste" }
 ```
@@ -518,6 +562,7 @@ A realm definition's `generator` names a **worldgen** definition.
 | `kinds` | The region kind for each region, by the first rule that holds |
 | `settlements`, `sites` | What to plan, how many, and where they may go |
 | `routes`, `rivers` | Lines to plan: which places to join, where rivers rise |
+| `lakes` | Basins to plan: how many, where, and how wide in tracts |
 | `holders` | Groups that hold territory, and what they hold |
 | `wasteland` | What totally devastated tracts become (02 §17.2) |
 
@@ -530,6 +575,9 @@ When a realm is created its plan is computed once and stored with it:
   rules, in a fixed order from the realm's seed.
 - Routes are found between them over region kinds, and rivers run downhill
   to the sea. Both are stored as lines.
+- Lakes are stored as outlines, each with a water level of its own: the
+  height of the lowest point on its rim. A river that reaches a lake ends
+  there, and one leaves from that lowest point.
 - Holders are given their settlements and the regions nearest them.
 
 The plan is small: a list of places, a list of lines, a table of holdings.
@@ -675,7 +723,7 @@ seen in a running game.
 
 **Definition types**: `map`, `palette`, `ground`, `tract`, `building`,
 `assembly`, `region_kind`, `settlement`, `site`, `worldgen`,
-`map_transform`. Field `presence` on populations.
+`map_transform`, `path_kind`. Field `presence` on populations.
 
 **Events**: `realm_planned`, `region_surveyed`, `tract_realized`,
 `site_created`, `map_applied`.
@@ -706,6 +754,7 @@ in assemblies; `rand`, `chance`, `pick` seeded by placement and cell.
 | X7 | Every role a site definition names is supplied by its map, or the definition fails to load. |
 | X8 | A map applied to the live world changes it only through `WorldEdit`. |
 | X9 | Nothing is unsupported or overloaded (02 §14) when a tract is first realised from ground steps alone. Placed maps are checked by `map check`. |
+| X10 | No two placements written by one survey overlap in three dimensions unless the later one's map is marked `over`. |
 
 ## 15. Budgets
 
@@ -723,18 +772,16 @@ Targets, unmeasured.
 
 ## 16. Open questions
 
-1. **Drawing maps.** Maps are text. A paint tool that writes the format
-   would make authoring far quicker. (14)
-2. **History.** A settling time of days is cheap. Running years of the cold
-   simulation to give a world a past is possible and its cost is not
-   measured.
-3. **Water that makes sense.** Rivers run downhill by the plan. Lakes,
-   erosion and catchments are not modelled.
-4. **Roads on slopes.** Paths follow the ground with ramps. Cuttings,
-   embankments, bridges and tunnels are placed by rule where a path meets
-   water or a steep rise, and the rules are simple.
-5. **Places under places.** A sewer under a town and a crypt under a church
-   are placements at other storeys. Nothing yet checks that an assembly
-   underground avoids a cellar above it beyond bounds.
-6. **Very large single maps.** A map many tracts across is realised window
-   by window. Authoring one as text is impractical; see question 1.
+1. **Drawing maps.** Closed by the map editor (14 §10.2).
+2. **History.** Deferred. The direction, when it is taken up: a pass over
+   the realm plan that ages it in coarse steps (settlements grow, fall and
+   change hands; routes shift) before anything is surveyed, not years of
+   the cold simulation.
+3. **Water that makes sense.** Settled for lakes: planned basins with
+   their own levels (section 9.2). Erosion and catchments are not
+   modelled.
+4. **Roads on slopes.** Settled: path kinds with crossings (section 8.5).
+5. **Places under places.** Settled: placements are tested for overlap in
+   three dimensions (section 4.1, invariant X10).
+6. **Very large single maps.** Closed by the map editor's sheet view
+   (14 §10.2).

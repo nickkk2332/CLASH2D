@@ -283,3 +283,18 @@ Under `scenarios/worldgen/`.
 | `town_day` | WG9 | S7 | People, homes, presence, routines |
 | `tower_of_forty` | WG10 | S2 | Stacks; structure that can fall |
 | `crypt_walkable` | WG10 | S21 | Assemblies |
+
+## Review additions
+
+The owner's review of the open questions (decisions D-182 to D-195) added
+the items below after the packages above were written. Each belongs to the
+package named. Build it with that package and treat its "Done when" as part
+of the package's. If the package is already `done`, take the addition as a
+small package of its own.
+
+| Addition | Package | Spec | Done when |
+|----------|---------|------|-----------|
+| Berths and watched things in maps | WG1 | 10 §3.2 | Cell specs `berth`, `approach` and `watched` load, turn with the map, and are recorded on the site. |
+| Lakes | WG3, WG6 | 10 §5.1, §9.2 | A planned lake is filled to its own level by the `liquid` step with `to: plan`, in every tract it covers, whichever is realised first. A river reaching it ends there and one leaves from the lowest point of its rim. |
+| Path kinds and crossings | WG7 | 10 §8.5 | Test script `road_over_water`: a road meeting a river is carried on bridge maps from bank to bank; meeting a steep rise it is cut or tunnelled as its crossings say; two neighbouring regions surveyed in either order agree on every crossing. |
+| Placement overlap | WG7 | 10 §4.1 | A survey never writes two placements whose boxes overlap in three dimensions unless the later map is marked `over` (invariant X10). A sewer piece that would pass through a cellar is moved or dropped, and the survey's report says which. |

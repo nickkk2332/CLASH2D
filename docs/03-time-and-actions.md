@@ -348,6 +348,7 @@ action does".
 | `tempo` | Expression dividing phase durations (section 6.5). Default 1. |
 | `foreground` | Whether finishing this action can prompt a decision. Default true. A sustained aura or a conversation is background. |
 | `reaction_to` | Window kinds this action may answer (section 7). |
+| `on_behalf` | Whether, as a reaction, it may answer a window aimed at someone else. Default false. |
 | `phases` | Section 6.4. |
 | `on_start`, `on_finish`, `on_cancel`, `on_interrupt` | Effect lists. |
 | `roles` | Present on joint actions (section 8). |
@@ -458,7 +459,8 @@ to happen, and those who notice may respond before it does.
 ```json
 { "type": "window_kind", "id": "strike",
   "notice": "self.attr.reaction_time",
-  "noticed_if": "true" }
+  "noticed_if": "true",
+  "reach": 6 }
 ```
 
 ```rust
@@ -474,9 +476,21 @@ pub struct Window {
 }
 ```
 
-A phase's `window` field opens one when the phase starts. `for` lists the
-candidates. `closes` names the later phase whose start is the deadline.
-The `open_window` effect opens one from any rule.
+A phase's `window` field opens one when the phase starts. `for` names
+those it is aimed at. `closes` names the later phase whose start is the
+deadline. The `open_window` effect opens one from any rule.
+
+**Candidates.** A window is offered to:
+
+- those it names;
+- anyone who holds, toward one of those, a relation whose kind is flagged
+  `intervenes` (15 §9.1): a bodyguard, a sworn protector, a parent;
+- any directly controlled character.
+
+The second and third are candidates only within the window kind's `reach`
+of the source or of someone it names. All candidates then go through
+noticing (section 7.2). So an attack on someone else can be answered by
+someone who cares and is close enough and quick enough to step in.
 
 ### 7.2 Noticing
 
@@ -691,9 +705,12 @@ measured figures.
 1. **Rewinding.** Settled: snapshots, area journals and restoring a place
    as generated (08 §7.4); the whole world by saving and loading with
    memories carried (13 §9.3, §9.5).
-2. **Windows without named candidates.** Bystanders reacting to something
-   not aimed at them needs perception. (15)
+2. **Windows without named candidates.** Settled in section 7.1: windows
+   are also offered to those who guard a named candidate and to controlled
+   characters, within reach. Bystanders who merely witness react through
+   `perceived` (15 §6).
 3. **Clash detection.** Settled in 07 §8: strikes at each other due within
    a tolerance are brought together and resolved once.
-4. **Warm fidelity.** Whether warm entities should keep windows for attacks
-   from other warm entities. Decide with measurements. (09)
+4. **Warm fidelity.** Settled: no. Warm characters have no windows. Bulk
+   exchanges (09 §9.1) count each side's usual guard in their expected
+   values.
