@@ -601,7 +601,8 @@ variables. They are saved, and a rule may read them.
 **Definition types**: `console_command`, `reason`.
 
 ```json
-{ "type": "reason", "id": "no_fuel", "text": "{the(target)} is out of fuel.", "doc": "Raised by engines with an empty tank." }
+{ "type": "reason", "id": "no_fuel", "text": "{the(target)} is out of fuel.",
+  "values": { "target": "entity" }, "doc": "Raised by engines with an empty tank." }
 ```
 
 A mod's own refusals carry reasons of its own. `cancel_event` names one
