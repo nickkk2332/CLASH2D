@@ -56,6 +56,18 @@ terminal world viewer, and line by line from a file as a test script
 In the game it is available when the profile allows it. A profile for
 players may switch it off.
 
+The terminal world viewer, `clash-tools worldview [--mods <dir>] [--load
+<save>] [--script <file>]` (world-model package W11), shows one storey
+round the console's cursor as it truly is, through the scene's world view
+in omniscient mode and the terminal frontend, with a console line under
+it: the arrows or `h` `j` `k` `l` move the cursor (ten cells with shift),
+`<` and `>` change storey, `:` or Enter opens the console line, `q` or
+Escape leaves. Without a terminal, or with `--script`, it runs console
+lines from the file or from standard input and prints what each gives, so
+that a world can be looked at from a pipe:
+`printf 'use default\ngen city size=2\nframe\n' | clash-tools worldview`.
+It exits 1 if a line failed.
+
 ### 3.2 Language
 
 ```
@@ -175,6 +187,58 @@ a span or until a condition, give the state hash, save to bytes and load
 from them, hand over the events and trace records since last asked, say
 why the last command was refused, present the frame as text, set the
 thread count, start from a profile and a seed, and build a small world.
+
+#### The host's commands
+
+The console's host over the real simulation (`clash_save::host::GameHost`,
+D-581) carries out `use`, `gen`, `eval`, `assert`, `advance`, `until`,
+`step`, `save`, `load`, `hash`, `hash <subsystem>`, `check`, `inspect` and
+`size`, and adds the commands below, as registrations with help. The
+other built-in commands are refused with `console.not_built` until what
+they need is built; a verb, `do` and `run` are refused with
+`console.rules_unbound` until the rule runtime is bound to the simulation,
+at one function of the host that is the seam for it.
+
+| Command | Does |
+|---------|------|
+| `use <profile> [seed]` | Loads a profile from the mods directory, with every definition type of the engine, and starts a simulation with an empty world |
+| `gen <kind> [size]` | Makes a realm and loads a block of `size` × `size` tracts from tract (0, 0) (at most 16 a side), held by debug tickets; puts the cursor in the middle, on the highest cell that can be stood in. `flat`, `city` and `country` name the generators `flat`, `test_city` and `standard`, and make the first realm definition that names that generator; a realm definition's id is also accepted. Each realm made draws from the seed plus the number of realms made before it |
+| `spawn <what> [at] [mass] [tag] [control]` | Makes an entity of a kind of occupant (`creature`, `item`, `device`, `other`) and puts it in a cell or inside an entity; the cursor's cell if `at` is left out. Gives the entity, for `as=` |
+| `move <who> <to>` | Moves an entity to a cell, or into an entity |
+| `remove <who>` | Removes an entity for good |
+| `set <at> <layer> <state>` | Sets the floor, block or fixture of a cell to an element state as data writes one (`core:wall`, `wall@brick`), or `none` |
+| `control <who> <mode>` | Sets who decides for an entity: `none`, `direct`, `delegated`. One put under direct control becomes `@self` |
+| `session <who> [at]` | Starts a session at a place that need not be loaded: loads the tracts round it, puts the entity there and holds its ticket |
+| `damage <at> <energy> [kind] [intensity] [layer]` | Sends a packet of damage to one element of a cell: the layer named, else the first there is of block, fixture and floor. The kinetic damage type and an intensity of one pascal for each joule if left out. The fields of the cell are told of the packet |
+| `field <at> <kind> [amount]` | Adds levels to a field in a cell, 255 if left out; a negative amount takes them away |
+| `look [at]` | Moves the cursor (`@here`) and says what is in its cell: elements and their damage, fields, occupants |
+| `frame` | Prints the cursor's storey from above as plain text, under a line saying where and when |
+
+`spawn`, `move`, `remove`, `set`, `control` and `session` are `Debug`
+commands of the kernel (03 §4.4), validated, logged and replayed. `damage`,
+`field` and `gen` change the world directly, with the debug cause: the
+kernel has no `Debug` command for them yet, so the input log does not hold
+them and only the console's transcript replays them (D-585).
+
+References: `@here` is the cursor, `@self` the active character, `@sel`
+what the last command named, `@c:x,y,z` a cell in the cursor's grid (or the
+first realm's), `@e:N` or `@e:NvG` an entity by slot and generation,
+`@site:name` a site by name, and `@name` whatever a command gave with
+`as=name`. An expression is evaluated against truth with `self` bound to
+the subject given, else the active character.
+
+The host's own refusals use the codes `console.no_game`,
+`console.no_world`, `console.no_cursor`, `console.no_active`,
+`console.nothing_selected`, `console.unknown_name`,
+`console.unknown_reference`, `console.not_a_place`,
+`console.not_an_entity`, `console.unknown_kind`, `console.too_large`,
+`console.not_built`, `console.rules_unbound`, `console.decision_pending`
+and `console.unknown_subsystem`, each listed with what it means and the
+values it carries in `clash_save::host::reasons::ALL`. The kernel's and
+the world's reasons are passed on as they are.
+
+`save <name>` keeps the whole game in memory as the bytes of a save file
+(01 §11.2), with the console's cursor, active character and selection.
 
 ### 3.4 Commands from mods
 
@@ -421,7 +485,17 @@ every invariant checker (section 7.3) after every command.
 | 0 | Every script passed in every mode |
 | 1 | A script failed or does not parse; or the directory cannot be read, or holds no script |
 | 2 | The command line was not understood |
-| 3 | The scripts parse, and no simulation is registered to run them against |
+
+The scripts run against the simulation itself, through the console's host
+of `clash-save` (section 3.3). `use` finds profiles in `--mods <dir>`, else
+in the `mods` directory beside the scripts' directory or above it.
+
+A comment before a script's first command may carry a marker (D-583):
+
+| Marker | Means |
+|--------|-------|
+| `# host: fake` | The script tests the console itself and runs against the fake host of `clash_sim::console::testing` |
+| `# known failure: <why>` | The smallest script that shows a bug still to be fixed, kept under `scenarios/known_failures/`. It is expected to fail and does not fail the run; if it passes in every mode the run fails, so that the marker is taken off |
 
 Mods ship scripts beside their data (04 §3.1) and run them the same way.
 
@@ -452,6 +526,15 @@ piece: which entities, which cells, which wake-ups.
 
 This is how nondeterminism is found, and how a bug seen once on someone
 else's machine is seen again.
+
+As built (D-587): `clash-tools replay <from> <to>` takes two saves of one
+game. It loads the earlier, replays the commands the later one's input log
+accepted since, runs on to the later one's tick and compares the state
+with it subsystem by subsystem (`world`, `timeline`, `entities`,
+`components`, `rules`, `settings`, `rng`, `kernel`). The input log carries
+no hashes at intervals yet, so a divergence is named by subsystem at the
+end, not found at the tick where it arose; `diff` and `report` are not
+built.
 
 `clash-tools report` gathers a save, its log, the mod list with
 fingerprints and the tail of the traces into one file for sending.
@@ -571,6 +654,14 @@ nobody watched tends to end as the ones that were watched do.
 | `save verify` | Loads it, runs every invariant checker, and compares the stored hash |
 | `save migrate` | Applies format and content migrations (04 §12) and writes the result |
 
+As built: `save inspect <file>` prints the metadata of 01 §11.2;
+`save verify <file>` loads the save with the profile it names, reads every
+tract blob in full against the save's tables of ids and compares the
+stored state hash with what loads, naming the first section or tract that
+is wrong (the invariant checkers wait for TL7); `save list <dir>` lists the
+saves of a directory with their names, as a load screen would. `save
+migrate` waits for migration entries.
+
 ## 13. Aids for players
 
 Built from the same parts, in ordinary screens, so they show only what the
@@ -631,6 +722,13 @@ there and nowhere else.
 `map check`, `gen plan`, `gen region`, `gen assembly`, `scenario run`,
 `replay`, `diff`, `report`, `incident compare`, `save inspect`,
 `save verify`, `save migrate`, `worldview`.
+
+**Gaps** (reachable only from Rust for now): the console's `damage`,
+`field` and `gen` are not `Debug` commands of the kernel and are not in the
+input log (D-585); `spawn` makes an entity of a kind of occupant, not from
+a template (06), and gives it no physical component; the invariant
+checkers that `check` and `save verify` should run are two built-in
+checks until TL7.
 
 **Screens** in the `debug` context: console, inspector, traces, profiler,
 reference browser, map editor. All are definitions and can be replaced or
