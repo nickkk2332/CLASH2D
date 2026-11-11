@@ -97,6 +97,18 @@ pub enum DebugCommand {
         /// What the handler is given.
         wake: Wake,
     },
+    /// Makes `count` items of a definition, as one stack, and puts them
+    /// somewhere ([`item::create`](crate::item::create)). Its id is the
+    /// one [`EntityTable::next_id`](crate::EntityTable::next_id) gave
+    /// before the command, and `entity_created` reports it.
+    CreateItem {
+        /// The `item` definition, by qualified id: `core:knife`.
+        def: String,
+        /// How many. More than one needs a definition that stacks.
+        count: u32,
+        /// Where to put it.
+        place: Place,
+    },
 }
 
 /// A command was refused. The state is as it was.
@@ -220,6 +232,10 @@ impl Sim {
                     .schedule_on(clash_time::ClockId::UNIVERSAL, after, wake)
                     .map(|_| ()),
             },
+            DebugCommand::CreateItem { def, count, place } => {
+                let def = crate::item::def_named(self, &def)?;
+                crate::item::create(self, def, count, place, cause).map(|_| ())
+            }
         }
     }
 
