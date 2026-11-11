@@ -3,9 +3,9 @@
 //! that saves and hashes; nothing here decides anything. The runtime
 //! that changes it is [`run`](super::run).
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 
-use clash_core::{Dur, EntityId, Tick, impl_state_hash};
+use clash_core::{Dur, EntityId, StateHash, StateHasher, Tick, impl_state_hash};
 use clash_time::WakeId;
 use serde::{Deserialize, Serialize};
 
@@ -177,36 +177,46 @@ impl ActionTable {
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
 pub struct ChannelSlots {
     /// Slots taken away by `disable_channel`, by channel, in order of
-    /// channel.
-    disabled: Vec<(ChannelId, u16)>,
+    /// channel. Boxed, and `None` when there are none, which is nearly
+    /// always: every entity's kernel record holds one.
+    disabled: Option<Box<[(ChannelId, u16)]>>,
 }
 
-impl_state_hash!(ChannelSlots { disabled });
+impl StateHash for ChannelSlots {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.list().state_hash(hasher);
+    }
+}
 
 impl ChannelSlots {
+    /// The disabled slots, by channel.
+    fn list(&self) -> &[(ChannelId, u16)] {
+        self.disabled.as_deref().unwrap_or(&[])
+    }
+
     /// How many slots of a channel are disabled.
     pub fn disabled(&self, channel: ChannelId) -> u16 {
-        self.disabled
-            .binary_search_by_key(&channel, |(have, _)| *have)
-            .map_or(0, |at| self.disabled[at].1)
+        let list = self.list();
+        list.binary_search_by_key(&channel, |(have, _)| *have)
+            .map_or(0, |at| list[at].1)
     }
 
     /// Disables `count` more slots of a channel, or enables them again
     /// with a negative count. Never below none.
     pub(crate) fn change(&mut self, channel: ChannelId, by: i32) {
-        let at = self
-            .disabled
-            .binary_search_by_key(&channel, |(have, _)| *have);
-        let now = at.map_or(0, |at| i32::from(self.disabled[at].1));
+        let mut list: Vec<(ChannelId, u16)> = self.list().to_vec();
+        let at = list.binary_search_by_key(&channel, |(have, _)| *have);
+        let now = at.map_or(0, |at| i32::from(list[at].1));
         let next = u16::try_from((now + by).max(0)).unwrap_or(u16::MAX);
         match (at, next) {
             (Ok(at), 0) => {
-                self.disabled.remove(at);
+                list.remove(at);
             }
-            (Ok(at), next) => self.disabled[at].1 = next,
+            (Ok(at), next) => list[at].1 = next,
             (Err(_), 0) => {}
-            (Err(at), next) => self.disabled.insert(at, (channel, next)),
+            (Err(at), next) => list.insert(at, (channel, next)),
         }
+        self.disabled = (!list.is_empty()).then(|| list.into_boxed_slice());
     }
 }
 
@@ -226,7 +236,9 @@ impl_state_hash!(PlanStep { action, params });
 /// channels they need come free.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
 pub struct Plan {
-    steps: VecDeque<PlanStep>,
+    /// Next first. A plan is short, and a list keeps the kernel record
+    /// small.
+    steps: Vec<PlanStep>,
 }
 
 impl_state_hash!(Plan { steps });
@@ -248,15 +260,15 @@ impl Plan {
     }
 
     pub(crate) fn push(&mut self, step: PlanStep) {
-        self.steps.push_back(step);
+        self.steps.push(step);
     }
 
     pub(crate) fn front(&self) -> Option<&PlanStep> {
-        self.steps.front()
+        self.steps.first()
     }
 
     pub(crate) fn pop(&mut self) -> Option<PlanStep> {
-        self.steps.pop_front()
+        (!self.steps.is_empty()).then(|| self.steps.remove(0))
     }
 
     pub(crate) fn clear(&mut self) -> usize {
