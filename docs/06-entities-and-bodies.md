@@ -314,6 +314,54 @@ Every edit recomputes functions, channel slots, mass and attributes, and
 emits `body_changed`. Scene S17 is a rule that calls several of these on its
 target.
 
+### 6.6 Bodies made of cells
+
+Most creatures occupy a cell, or a box of cells a few wide and a few
+storeys tall, and have a body as described above. A creature meant to be
+**stood on, climbed or entered** is built differently. It is a subgrid
+(02 §18) whose cells are its flesh.
+
+```json
+{ "type": "body_plan", "id": "colossus",
+  "cells": "colossus_form",
+  "parts": [ { "id": "torso", "part": "colossus_torso" },
+             { "id": "l_arm", "part": "colossus_arm", "on": "torso", "side": "left" },
+             { "id": "heart", "part": "colossus_heart", "in": "torso" } ] }
+```
+
+`cells` names a map (10 §3) that draws the creature storey by storey. Each
+cell spec names the part it belongs to, and its elements are made of that
+part's materials.
+
+- The creature is the subgrid's hull entity (11 §3). It has a `Body` whose
+  parts each own a set of cells.
+- A part's condition is the share of its cells that remain, weighted by
+  their damage. Functions, channel slots, leaks and signals follow as in
+  sections 6.3 and 7.3. A breached cell of tissue that leaks, leaks.
+- Harm reaches it as harm to cells (02 §12). There is no aiming at it: an
+  attacker damages the cells they can reach. Severing a limb is `detach`
+  (02 §18.3) of its cells, after which the limb is a piece of world.
+- It moves by a motion model (11 §5), usually `stride`, steered by its own
+  mind as a crew steers a vessel, and turns in quarter-turns (11 §5.5).
+- It does not flex. Its limbs do not move relative to its body. Its attacks
+  are strikes and energy releases (07; 02 §13) that originate at a part's
+  cells, with the reach and arc their definitions give.
+- Whatever stands on it or inside it is in its grid and is carried
+  (02 §18.1). **Clinging** to its side is being in an open cell of its grid
+  beside a solid one for as long as a held gripping action lasts (07 §9).
+  Letting go where there is no floor is falling out of its grid into the
+  world.
+- Inside, it may have compartments (11 §10) and fields.
+- When it stops (section 8.3), content decides whether it remains a subgrid
+  or is merged into the world as terrain of bone and hide.
+
+The dividing line is use, not size. A giant three storeys tall that nobody
+is meant to climb is an occupant. Something the size of a house, ridden
+into battle with archers on its back, is a body made of cells.
+
+A power that grows a creature across that line is a change of body plan
+(section 6.5).
+
 ## 7. Hits and wounds
 
 ### 7.1 A hit
@@ -630,8 +678,11 @@ it costs. The engine checks a step against the world's geometry
 An entity whose footing goes (`OccupantUnsupported`), or who is struck hard
 enough, becomes a world body and is the world's until it lands or is caught.
 
-One creature that blocks movement may occupy a cell per plane. Swapping
-places, shoving and squeezing past are actions content defines.
+One creature that blocks movement may occupy a cell per plane. A mover may
+**swap** places with a creature that yields to it: both are relocated
+together, and it counts as the mover's step. Who yields is decided by the
+hook `passage_requested`; members of a formation yield to each other
+(09 §5.5). Shoving and forcing past are actions content defines.
 
 ## 12. Coming and going
 
@@ -689,7 +740,7 @@ Body flags on `damage_type` (`severs`).
 `item_broken`, `contents_materialised`, `became_notable`.
 
 **Hooks**: `hit_incoming`, `entity_dying`, `trait_adding`, `pool_changing`,
-`item_taking`.
+`item_taking`, `passage_requested`.
 
 **Effects**: the verbs of sections 6.5, 8.2, 8.3, 9.2 and 11, and:
 `hit`, `add_trait`, `remove_trait`, `set_attr_base`, `add_modifier`,
@@ -737,11 +788,9 @@ Targets, unmeasured.
 1. **Reference body detail.** The bundled humanoid uses limbs, hands and
    feet, head features and major organs. Finer plans are possible and
    untested for cost.
-2. **Very large creatures.** A body tens of metres tall could be a subgrid
-   whose cells map to body parts (02 §26 item 4). Decide with document 11
-   in hand and a prototype.
-3. **Crowds.** Scene S19 wants hundreds of hot creatures. Whether anonymous
-   soldiers need a lighter body representation is a question for
-   measurement. (09)
+2. **Very large creatures.** Settled in section 6.6.
+3. **Crowds.** The number of characters simulated in full is capped
+   (09 §9.3). Whether anonymous soldiers also need a lighter body
+   representation is still a question for measurement.
 4. **Item stacks with state.** Stacked items share state. When one of a
    stack is damaged it must split off. The rule for when is not settled.

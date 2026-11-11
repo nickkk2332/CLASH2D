@@ -205,8 +205,11 @@ in cell specs are linked by name. A map can ship a working machine room
 
 At load: row lengths, unknown characters, unresolved parameters, nested
 maps that cannot fit, links to unnamed devices, joints off the boundary.
-With `clash-tools map check`: rooms unreachable by walking, and marks a
-site definition requires but its map does not supply.
+With `clash-tools map check`: rooms unreachable by walking; marks a site
+definition requires but its map does not supply; and whether the map
+stands. The map is realised on flat ground and the support and load passes
+(02 §14) are run. Anything that would fall or be crushed as drawn is
+reported with its cell.
 
 ## 4. Placing maps
 
@@ -283,7 +286,7 @@ Steps are implemented natively and configured by data.
 | `surface` | Lays a floor, and optionally low blocks, on the top |
 | `liquid` | Fills open cells up to a level with still liquid (11 §4.3) |
 | `veins`, `pockets` | Replaces some of a stratum with another state, by noise |
-| `caves` | Carves connected voids |
+| `caves` | Carves connected voids, in strata that anchor only (section 5.2) |
 | `scatter` | Places maps or elements by density, with spacing |
 | `paths` | Rasterises the roads, rivers, walls and rails that the region survey recorded as crossing this tract (section 8.3) |
 | `float` | Raises islands of ground into the sky by noise |
@@ -299,6 +302,12 @@ anchors can be tunnelled freely. Sand, gravel and loose soil given
 `"anchor": false` need support by span like any structure (02 §14), and a
 tunnel through them comes down. This settles open question 2 of 02 §26: it
 is a property of the ground, chosen per stratum.
+
+Generation must leave nothing unsupported. The `caves` step carves only
+where the stratum anchors, so a generated cave never hangs in loose ground
+waiting for the first nearby edit to bring it down. A void in loose ground
+is made by digging, in play, where the support rule applies from the first
+cell removed.
 
 ## 6. Tracts
 
@@ -696,6 +705,7 @@ in assemblies; `rand`, `chance`, `pick` seeded by placement and cell.
 | X6 | Random choices in generation come only from positional seeds. |
 | X7 | Every role a site definition names is supplied by its map, or the definition fails to load. |
 | X8 | A map applied to the live world changes it only through `WorldEdit`. |
+| X9 | Nothing is unsupported or overloaded (02 §14) when a tract is first realised from ground steps alone. Placed maps are checked by `map check`. |
 
 ## 15. Budgets
 

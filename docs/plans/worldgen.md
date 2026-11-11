@@ -109,6 +109,8 @@ Build
 Done when
 - A tunnel through anchoring rock stands and one through loose ground
   collapses by 02 §14.
+- Over many seeds, no generated cave lies in a stratum that does not
+  anchor, and no tract has anything unsupported when first realised.
 - Sea fills to `sea_level` as uniform chunks.
 - Scatter respects spacing and density over many seeds.
 
@@ -261,6 +263,8 @@ Done when
   its routines and one incident.
 - No reference world requires another, or anything in the engine that
   names its genre.
+- `map check` reports a fixture map with an unsupported floor and one with
+  an overloaded pillar, each with its cell, and passes every bundled map.
 
 ### WG13 — Benchmarks and budget gate
 

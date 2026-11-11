@@ -703,8 +703,9 @@ Targets, unmeasured.
    melee as they are to shots.
 3. **Swinging in confined space.** A long weapon in a corridor is not
    hindered by the walls.
-4. **Gripping things that are not creatures.** Ledges, vehicles, subgrids.
-   Climbing a giant is a grip on a subgrid.
+4. **Gripping things that are not creatures.** Clinging to a subgrid,
+   including a creature made of cells, is settled in 06 §6.6. Gripping
+   ledges and other fixed parts of the world is still open.
 5. **Mass battles.** Bulk resolution from previews is sketched in
    section 15. Whether it gives believable results for scene S19 has to be
    tested. (09)

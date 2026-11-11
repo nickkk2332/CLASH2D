@@ -323,6 +323,7 @@ decided by the movement rules in the simulation, which know the mover.
     "heat":   { "threshold": "50 MPa", "factor": 0.1 }
   },
   "span": 4,
+  "bearing": "30 MPa",
   "flammable": false,
   "rubble": "rubble",
   "color": "gray",
@@ -337,6 +338,7 @@ decided by the movement rules in the simulation, which know the mover.
 | `resist.<type>.threshold` | Pa (equivalently J/m³) | Intensity below which this damage type does nothing. |
 | `resist.<type>.factor` | — | Multiplier on energy that gets through. Default 1. |
 | `span` | cells | How far an element of this material can reach sideways from support (section 14). |
+| `bearing` | Pa | The stress it can carry in compression before it is crushed (section 14.5). Absent means it is never crushed. |
 | `rubble` | fixture id | What destroyed elements of this material leave behind. |
 
 **Blocks, floors and fixtures**:
@@ -661,6 +663,7 @@ pub struct Area {
     pub shape: AreaShape,            // Box { min, max } | Cells(sorted Vec<CellPos>) | Radius(m)
     pub anchor: Option<AreaAnchor>,  // an entity or subgrid it moves with
     pub ambient: Option<AmbientOverride>,   // gravity inside it, as a scale or a vector
+    pub journal: Option<Dur>,        // keep cell changes made inside it for this long (08 §7.4)
     pub grid: GridId,
     pub tags: TagSet,
     pub vars: VarMap,
@@ -686,6 +689,10 @@ An **anchored** area moves with its anchor. When it moves, what it now
 covers and no longer covers is worked out, and the same enter and exit
 events are raised as when an occupant moves. Auras, carried fields and
 bubbles around a person are anchored areas (08 §7.2).
+
+An area with a **journal** keeps, for the stated span of local time, every
+cell change made inside it together with the state before the change. They
+can be undone in reverse order (08 §7.4). An area without one keeps nothing.
 
 An area's **ambient override** replaces the stratum's gravity inside it.
 `Cosmos::ambient` consults areas before strata. Where areas overlap, the
@@ -1097,9 +1104,10 @@ its budget, and when a process is force-resolved.
 
 ## 14. Structural support and collapse
 
-The model is deliberately simple: no stress analysis, no load paths. It
-answers one question, "is this element still held up?", cheaply and
-deterministically, and lets falling debris do the rest.
+The model is deliberately simple: no stress analysis. It answers two
+questions cheaply and deterministically: "is this element still held up?"
+(section 14.1) and "can what holds it up bear it?" (section 14.5). Falling
+debris does the rest.
 
 ### 14.1 Support rule
 
@@ -1152,6 +1160,52 @@ The collapse is a process. It holds a ticket over its extent and emits
 The same evaluation is run repeatedly to a fixed point with landings computed
 directly, capped at a fixed number of passes. Past the cap, everything above
 the lowest unsupported storey in the affected footprint becomes rubble.
+
+### 14.5 Load
+
+Being held up is not the same as being able to bear it. After the support
+pass of section 14.1, a second pass asks what each load-bearing block is
+carrying.
+
+- During the support pass each element records which element its support
+  came from: its **carrier**. A floor's carrier is the block it rests on, or
+  the neighbour its support came through. A block's carrier is the block
+  beneath it, the floor it stands on, or the neighbour it hangs from.
+- Working from the top storey down, an element's **load** is its own mass
+  plus the loads of everything it carries. Fixtures and rubble count with
+  the cell they are in.
+- A load-bearing block is **crushed** when
+
+```
+load × gravity / area  >  bearing × (1 − damage / 255)
+```
+
+  where `area = fill × 1 m²` and `bearing` is its material's strength in
+  compression. Blocks flagged `anchor` are not checked.
+- A crushed block is destroyed, with the collapse as its cause, and the
+  check runs again for what it was carrying.
+
+What follows from it:
+
+- **Damage matters before destruction.** A column damaged to half strength
+  carries half as much. Supports that survive a blow can still fail under
+  what is above them. This is the "damaged supports fail" of scene S2.
+- **Losing some supports overloads the rest.** What the missing ones carried
+  finds another carrier within span, or falls. Either way the survivors
+  carry more, and may go in turn.
+- **Weight is local.** `gravity` is the ambient value where the block is
+  (section 4.1; areas, section 8.3). Nothing is crushed in free fall. A
+  change of ambient gravity over an area queues a check for what stands in
+  it, so a field of heavy gravity can bring a building down.
+- **What is built must stand.** A tower on one mud pillar does not.
+
+With the illustrative values of section 5.4, a solid concrete pillar one
+metre square bears about 3,000 tonnes. A slab reaching four cells each way
+from it weighs about 39 tonnes a storey, so that pillar alone carries
+several dozen storeys of bare floor, and fewer of furnished ones. A wall
+cell, a fifth as thick, bears a fifth as much.
+
+Resolve mode (section 14.4) includes this pass.
 
 ## 15. Bodies
 
@@ -1460,6 +1514,7 @@ pub struct Portal {
     pub b: PortalEnd,
     pub two_way: bool,
     pub see_through: bool,
+    pub view_range: Real,             // m: how near a viewer must be to see through it
     pub filter: PortalFilter,         // plane mask, required tags
     pub vars: VarMap,
 }
@@ -1593,8 +1648,13 @@ impl Cosmos {
   1.5 m passes over a 1 m fence.
 - Field of view is symmetric shadowcasting per storey, extended downward
   through cells with no floor and upward through open sky.
-- All queries composite subgrids, respect wrap, and optionally continue
-  through see-through portals.
+- All queries composite subgrids and respect wrap. Sight, rays and signals
+  cross a subgrid's boundary without limit: a subgrid is part of the scene.
+- They pass a portal only if it is `see_through`, only for a viewer within
+  its `view_range`, and only `sight.portal_depth` portals deep (default 1).
+  While a see-through portal's near side is loaded and something that could
+  see through is within range, the portal holds a warm ticket on its far
+  side (section 10).
 - Results that are cached are keyed on chunk revisions.
 
 Illumination (`Cosmos::light`) is specified in 15 §3.3 and the medium of a
@@ -1683,23 +1743,22 @@ this table is revised and enforced.
 These do not block implementation. Each names the document expected to
 settle it.
 
-1. **Crush failure.** The support model has no load limit: a column carries
-   any weight. Add a compressive load check per column if collapses look
-   wrong without it. (This document, after the first collapse scenarios run.)
+1. **Crush failure.** Settled in section 14.5: load-bearing blocks have a
+   limit, reduced by damage.
 2. **Cave-ins.** Settled in 10 §5.2: whether ground anchors is chosen per
    stratum. Rock holds; loose ground needs support and can come down.
 3. **Turning subgrids.** Settled in 11 §5.5: motion is in any direction;
    the grid itself swings in quarter-turns.
-4. **Very large creatures.** Decide whether a creature tens of metres tall is
-   a multi-cell occupant or a subgrid with a body plan mapped onto its cells.
-   (06, 11)
-5. **Sight through portals and across subgrid boundaries** has a cost; decide
-   how far it is followed. (12)
-6. **Rewinding time.** Determinism makes restoring a snapshot of an area
-   possible in principle. Not designed. (03)
-7. **Scale of battle.** Scene S19 puts hundreds of active characters in a few
-   loaded tracts. Occupancy queries and tickets are designed for that; the
-   entity and AI budgets that make it affordable are set elsewhere. (06, 09)
+4. **Very large creatures.** Settled in 06 §6.6: a creature that can be
+   stood on, climbed or entered is a subgrid whose cells are its body;
+   anything smaller is an occupant filling several cells.
+5. **Sight through portals and across subgrid boundaries.** Settled in
+   section 22: always across subgrids; one portal deep, within range,
+   through portals that allow it.
+6. **Rewinding time.** Settled: snapshots, area journals and restoring a
+   place as generated in 08 §7.4; the whole world in 13 §9.3.
+7. **Scale of battle.** Settled in 09 §9.3 (a cap on fully simulated
+   characters, by attention) and 09 §5.5 (crowds that do not jam).
 
 Settled since first draft: there is no default planet. World size is a
 property of each realm definition (section 4.1), chosen by whoever writes

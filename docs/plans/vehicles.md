@@ -30,6 +30,7 @@ packages they depend on are done.
 | V11 | Routes and journeys | M | W21, V6a | todo |
 | V12 | Chart lanes | S | V11 | todo |
 | V13 | Benchmarks and budget gate | S | V1, then recurring | todo |
+| V14 | Bodies made of cells | L | V6b, V3, E5, C7 | todo |
 
 ## Order and parallelism
 
@@ -39,7 +40,7 @@ packages they depend on are done.
 | 2 | V3, V5, V8 |
 | 3 | V4, V6a, V7, V10 |
 | 4 | V6b, V9, V11 |
-| 5 | V12 |
+| 5 | V12, V14 |
 
 ## Milestones
 
@@ -247,6 +248,30 @@ Done when
 - Scenario `orbit_to_luna`: top edge of one realm, lane, arrival in another
   with the interior played throughout.
 
+### V14 — Bodies made of cells
+
+**Spec** 06 §6.6 · **Size** L
+
+Build
+- `cells` on body plans; parts owning cells; condition from the cells that
+  remain; functions, slots, leaks and signals driven by damage to cells.
+- The creature as a hull entity moved by a motion model and steered by its
+  own mind.
+- Strikes and releases originating at a part's cells.
+- Clinging: a held grip that keeps a climber in the body's grid beside a
+  solid cell, and falling out of the grid on release.
+- Severing by `detach`; what a stopped body becomes.
+
+Done when
+- Destroying half the cells of a limb halves its condition, and destroying
+  enough disables it and its channel slots.
+- A character standing on its back is carried without being updated, and
+  one clinging to its side is carried while the grip holds and falls when
+  it ends.
+- A severed limb is a subgrid of its own and the body's functions follow.
+- Scenario `the_colossus`: climb it, cut into it, be thrown off, and bring
+  it down by destroying what its vital function depends on.
+
 ### V13 — Benchmarks and budget gate
 
 **Spec** 11 §17 · **Size** S, recurring
@@ -265,3 +290,4 @@ Under `scenarios/vehicles/`.
 | `flying_building` | V10 | S11 | Vehicle from a detached subgrid |
 | `voyage` | V11 | S9 | Aboard against skipped |
 | `orbit_to_luna` | V12 | S9 | Edge exit, lane, arrival |
+| `the_colossus` | V14 | S11 | A creature that is a place |

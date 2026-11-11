@@ -235,6 +235,8 @@ quarter-turn (02 §18). When a vessel's heading crosses a diagonal, its grid
 The swept area is checked and anything in it is a contact. So a ship
 heading north-east is drawn pointing north or east. This is the cost of
 exact, shear-free interiors, and it settles open question 3 of 02 §26.
+Views that are zoomed out far enough to show a vessel as an outline may
+draw that outline at its true heading (12 §6.2).
 
 ## 6. Systems
 

@@ -597,8 +597,9 @@ agent):
 | Warm | In bulk. One stepper process per realm wakes every `WARM_STEP` (1 s local) and hands the AI layer each warm entity to advance by that interval. Warm entities finish actions already running but start no new ones and receive no windows. |
 | Cold | Not in the entity table. Stepped as agents and populations by region, at intervals of minutes, by the cold simulation (09). |
 
-An entity's level is its tract's activity level (02 §10). Giving an entity a
-hot ticket of its own promotes it. The kernel promotes a warm entity
+An entity's level is its tract's activity level (02 §10), lowered to warm
+for characters beyond the attention cap (09 §9.3). Giving an entity a hot
+ticket of its own promotes it. The kernel promotes a warm entity
 automatically when it is named as a participant, target or window candidate
 of a hot entity's action.
 
@@ -687,9 +688,9 @@ measured figures.
 
 ## 16. Open questions
 
-1. **Rewinding.** A deterministic input log makes "restore a snapshot and
-   replay differently" possible. Whether to expose it as an ability
-   mechanism is undecided. (08)
+1. **Rewinding.** Settled: snapshots, area journals and restoring a place
+   as generated (08 §7.4); the whole world by saving and loading with
+   memories carried (13 §9.3).
 2. **Windows without named candidates.** Bystanders reacting to something
    not aimed at them needs perception. (15)
 3. **Clash detection.** Settled in 07 §8: strikes at each other due within

@@ -366,6 +366,40 @@ Snapshots are what recall, undoing an injury, mending what was broken and
 turning back a room are made of. They are local. Turning back the whole
 world is not offered (section 15).
 
+A snapshot must be taken before it can be restored. Two further verbs go
+back without one.
+
+**Undoing the last moments.** An area with a **journal** (02 §8.3) keeps
+every cell change made inside it for a stated span, with the state before.
+
+```
+rewind_area { area, by, with_occupants }
+```
+
+undoes those changes, newest first, back to the moment `by` ago, through
+`WorldEdit`. Fields are restored from copies the journal takes each second.
+Collapses and releases that began inside the area within that span are
+ended. With `with_occupants`, characters and objects inside are put back
+from snapshots the journal took of them at the same interval. Minds are not
+touched: whoever watched a wall fall and stand up again remembers both.
+
+A journal costs memory in proportion to what changes inside it and nothing
+when nothing does. `rules.max_journal_changes` bounds it; past the bound
+the oldest are dropped and the span that can be undone shortens. An
+anchored area with a journal is "the last ten seconds, wherever I am".
+
+**Restoring a place as it was made.** Generation is pure (10 §6.1), so the
+cells a place was created with can always be computed again.
+
+```
+restore_as_generated { box }
+```
+
+realises the tracts concerned afresh, to one side, and writes the cells of
+the box from them through `WorldEdit`. It needs no snapshot and costs what
+generation costs. It restores what generation made, not what anyone built
+there since: a repaired street, and a cleared building site.
+
 ### 7.5 Senses at a distance, and knowing the truth
 
 Specified in 15 as amended.
@@ -454,6 +488,7 @@ exist. Section references are where the mechanism is specified.
 | Ageing, decay, ripening | A high clock rate on the target, so its own timers and pools run ahead |
 | Reflexes | Notice delay (03 §7.2) |
 | Recall, undoing | Snapshots (section 7.4) |
+| Undoing the last moments in a place | An area with a journal, and `rewind_area` (section 7.4) |
 | Sensing danger | A window kind's `noticed_if` and `notice` reading a trait |
 
 ### 8.4 Matter and elements
@@ -467,7 +502,7 @@ exist. Section references are where the mechanism is specified.
 | Throwing things by will | A grip at range (section 7.7), then `throw`; or `impulse` (02 §15) |
 | Transmutation | `set_material` on elements (16 §3.5), items and tissue |
 | Disintegration | A damage type few materials resist; or removal by edit |
-| Mending | `damage` reversed by rule; or a box snapshot restored |
+| Mending | `damage` reversed by rule; a box snapshot restored; or `restore_as_generated` (section 7.4) |
 | Gravity | Area ambient override (section 7.2) |
 | Light and darkness | Light sources, positive and negative (15 §3.3) |
 | Weather | Region values the cold simulation keeps (09) |
@@ -689,6 +724,7 @@ items and modules; `while` and `bound` on traits; `cost`, `cooldown`,
 **Effects**: `grant_ability`, `revoke_ability`, `set_rank`,
 `suppress_abilities`, `restore_abilities`, `start_mode`, `end_mode`,
 `summon`, `conjure`, `dispel`, `dismiss`, `snapshot`, `restore`,
+`rewind_area`, `restore_as_generated`,
 `create_area`, `move_area`, `relay_senses`, `appraise`, `move_field`.
 
 **Queries**: `abilities` (of an entity, by tag), `bindings` (of an ability
@@ -700,7 +736,7 @@ or owner), `modes`.
 
 **Functions**: `magnitude`.
 
-**Settings**: `max_snapshot_cells`, `max_bindings`.
+**Settings**: `max_snapshot_cells`, `max_journal_changes`, `max_bindings`.
 
 ## 13. Invariants
 

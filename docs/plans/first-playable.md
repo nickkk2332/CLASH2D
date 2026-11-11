@@ -221,11 +221,14 @@ Done when
 
 Build
 - `movement`; `move`, `sweep`, `leap`, `set_altitude`, `teleport`; the
-  occupancy rule; loss of footing into a world body and back.
+  occupancy rule; swapping places with a creature that yields, through
+  `passage_requested`; loss of footing into a world body and back.
 
 Done when
 - Step legality is tested against a table of geometry cases.
 - A leap lands where the analytic trajectory says.
+- A swap relocates both creatures in one step and is refused where the
+  hook does not grant it.
 - Scenario `dash_through_wall`: a sweep at high speed strikes a wall as a
   body impact.
 

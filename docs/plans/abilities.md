@@ -23,7 +23,7 @@ the rest of this plan. Build it early.
 | A5 | Dormancy, suppression, loss | M | A2, A1 | todo |
 | A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | todo |
 | A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | todo |
-| A8 | Snapshots | M | E8, W6, K7 | todo |
+| A8 | Snapshots, journals, restoring as generated | L | E8, W6, K7, W8 | todo |
 | A9 | Relays, appraisal, field movement, force at range, contest bias | M | S5, C7, W16 | todo |
 | A10 | Reference abilities | L | A4, A6, A7, A8, A9, C12 | todo |
 | A11 | Benchmarks and budget gate | S | A2, then recurring | todo |
@@ -169,19 +169,31 @@ Done when
   street restored; a cell that was since altered is left alone.
 - `release` leaves the thing in place, unbound.
 
-### A8 — Snapshots
+### A8 — Snapshots, journals, restoring as generated
 
-**Spec** 08 §7.4 · **Size** M
+**Spec** 08 §7.4; 02 §8.3 · **Size** L
 
 Build
 - Entity and box snapshots; storage on ability instances; caps, expiry,
   saving; restoration through component functions and `WorldEdit`.
+- Area journals: recording cell changes with their prior state for the
+  area's span, periodic copies of fields and of occupants, the bound, and
+  `rewind_area`.
+- `restore_as_generated`: realising afresh to one side and writing the box
+  through `WorldEdit`.
 
 Done when
 - Scenario `recall`: an entity restored to a snapshot matches it in place,
   body, pools and holdings.
 - A box restore emits ordinary change events with a cause (invariant A7).
 - A box over the cap is refused with a reason.
+- Scenario `undo_the_blast`: a wall destroyed inside a journalled area
+  stands again after `rewind_area`, a collapse begun in that span is ended,
+  and a character who watched remembers both.
+- An area with no journal records nothing, and one in which nothing changes
+  uses no memory beyond its own record.
+- `restore_as_generated` returns a wrecked street to the hash of the same
+  street freshly realised, and removes what was built there since.
 
 ### A9 — Relays, appraisal, field movement, force at range, contest bias
 
@@ -242,6 +254,7 @@ Under `scenarios/abilities/`.
 | `summon_expires` | A7 | S16 | Bound entity |
 | `conjured_wall` | A7 | — | Edit binding and restoration |
 | `recall` | A8 | — | Entity snapshot |
+| `undo_the_blast` | A8 | S10 | Area journal and rewinding |
 | `scrying_eye` | A9 | — | Sense relay |
 | `time_stop` | A10 | S10 | Anchored clock area, anchor, upkeep |
 | `reshaped` | A10 | S17 | Touch attack and body verbs |

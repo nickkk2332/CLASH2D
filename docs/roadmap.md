@@ -49,8 +49,16 @@ Document numbers are stable. Other documents refer to them by number.
 Nothing remains to design before building can start. The first package is
 F1 in [plans/world-model.md](plans/world-model.md).
 
-Each specification ends with its open questions. The ones most likely to
-change something once code exists:
+Each specification ends with its open questions. They are being reviewed
+with the project owner one document at a time, and the answers written back
+into the specifications.
+
+| Document | Open questions |
+|----------|----------------|
+| 02 World model | Reviewed and settled (decisions D-169 to D-178) |
+| All others | Awaiting review |
+
+The ones most likely to change something once code exists:
 
 | Risk | Where | Why it matters |
 |------|-------|----------------|

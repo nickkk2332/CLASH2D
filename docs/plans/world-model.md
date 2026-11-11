@@ -46,7 +46,7 @@ Section references such as "02 §14" point into those documents.
 | W16 | Fields | L | W12 | todo |
 | W17 | Coarse layer | L | W15, W10 | todo |
 | W18 | Queries | M | W7 | todo |
-| W19 | Portals, boundary links, realm transfer | M | W14 | todo |
+| W19 | Portals, boundary links, realm transfer | M | W14, W18 | todo |
 | W20a | Subgrids: storage, compositing, movement | L | W18, W14 | todo |
 | W20b | Subgrids: detach, merge, free flight | M | W20a | todo |
 | W21 | Travelers, carriers, charts | M | W19, W20b, W17 | todo |
@@ -403,7 +403,10 @@ Done when
 
 Build
 - The stability queue consumer with merging and bounded island discovery.
-- Storey-by-storey evaluation.
+- Storey-by-storey evaluation, recording each element's carrier.
+- The load pass of 02 §14.5: loads summed down carriers, crushing by
+  `bearing` reduced by damage, repeated until stable; checks queued when an
+  area's ambient gravity changes.
 - Falling masses on the timeline, landing impacts, cascades, rubble,
   `OccupantUnsupported`.
 - The collapse process, its ticket, and resolve mode.
@@ -416,7 +419,16 @@ Done when
 - An occupant relocated out from under a falling mass before it lands is not
   exposed.
 - A falling mass inside a rate-0 area hangs and resumes.
+- A pillar that bears its load whole is crushed when damaged to the
+  fraction 02 §14.5 predicts.
+- Removing every second ground-storey support of a tower overloads those
+  that remain, and the tower comes down without any further blow.
+- A structure that stands under normal gravity is crushed when its area's
+  gravity is raised enough, and nothing is crushed at zero gravity.
+- A material with no `bearing` is never crushed.
 - Scenario `tower_pancake`, including a save in mid-collapse.
+- Scenario `weakened_columns`: damage short of destruction brings a
+  building down by load alone.
 
 ### W14 — Bodies
 
@@ -523,6 +535,9 @@ Build
 - Edge behaviour: barrier, void, and realm and entry exits. The chart exit
   emits an event until W21.
 - The realm transfer function.
+- Sight, rays and signals through see-through portals by the rule of
+  02 §22: within `view_range`, to `sight.portal_depth`, with the far-side
+  ticket.
 
 Done when
 - An occupant walks between realms through a portal pair and its clock
@@ -530,6 +545,8 @@ Done when
 - A body keeps its speed through a portal, with direction rotated by facing.
 - A void edge removes with an event; a barrier edge stops a body with an
   impact.
+- A viewer within range sees one portal deep and no further; out of range,
+  not at all; and the far side is loaded only while someone could see it.
 
 ### W20a — Subgrids: storage, compositing, movement
 
@@ -612,6 +629,7 @@ Each scenario is a console script with a golden hash, run in all four modes.
 | `smoke_city` | W11 | — | Generate, browse, save, load |
 | `wall_punch` | W12 | S1 | Threshold, capacity, rubble |
 | `tower_pancake` | W13 | S2 | Support loss, cascade, mid-collapse save |
+| `weakened_columns` | W13 | S2 | Load on damaged supports |
 | `three_buildings` | W14 | S2 | Flight, wall-by-wall energy loss, landing |
 | `car_bomb_street` | W15 | S3, S5 | Shells over time, shadowing, exposure |
 | `beam_through_city` | W15 | S8 | Beam march and terminal release |

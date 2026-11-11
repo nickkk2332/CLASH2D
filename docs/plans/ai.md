@@ -84,12 +84,17 @@ Done when
 Build
 - Flow fields over an area for a goal region and profile, cached and
   shared; following by movement actions.
+- The crowd rules of 09 §5.5: waiting behind those going the same way,
+  swapping with those who yield, failing a step after no progress.
 - A waypoint-following controller for vehicles, where package V6a exists.
 
 Done when
 - Three hundred followers of one field each reach the goal, and one field
   was computed.
 - A field is invalidated by the same revisions that invalidate regions.
+- Scenario `through_the_gate`: a column of a hundred passes a doorway one
+  cell wide, and two columns meeting head-on in a corridor two cells wide
+  pass each other, without anyone stuck.
 
 ### I3 — Minds and goals
 
@@ -187,14 +192,21 @@ Build
 - Bulk exchanges between opposed warm characters from previews, applied to
   individuals by positional randomness.
 - Transitions between hot and warm.
+- The attention cap of 09 §9.3: ranking, the cap, dwell time, promotion
+  taking a place under the cap.
 
 Done when
 - A warm character promoted to hot thinks at once and continues its
   purpose.
 - Bulk exchange results over many runs match the mean of fully resolved
   exchanges for the same forces, within a stated tolerance.
-- Scenario `six_hundred`: a battle with one hundred hot and five hundred
-  warm within the budgets of 09 §19.
+- With more characters in hot tracts than the cap, exactly the cap are
+  hot, they are the highest ranked by 09 §9.3, and physics on those tracts
+  is unaffected.
+- A character at the boundary does not change level more often than the
+  dwell time allows.
+- Scenario `six_hundred`: a battle wholly inside the hot radius runs with
+  the cap's number hot and the rest warm, within the budgets of 09 §19.
 
 ### I9 — Explaining
 
@@ -358,7 +370,8 @@ Under `scenarios/ai/`.
 | `haul_and_build` | I6 | S24 | Jobs, claims, hauling |
 | `line_holds` | I7 | S19 | Collective, formation, orders |
 | `drum_falls_silent` | I7 | S19 | Orders must be heard |
-| `six_hundred` | I8 | S19 | Bulk exchanges at scale |
+| `through_the_gate` | I2 | S19 | Crowds that do not jam |
+| `six_hundred` | I8 | S19 | Attention cap and bulk exchanges at scale |
 | `routine_day` | L2 | S7 | Agents in the right place |
 | `pursuit_continues` | L2 | — | Purpose survives unloading |
 | `meanwhile` | L3 | S7 | Abstract incident and what it leaves |

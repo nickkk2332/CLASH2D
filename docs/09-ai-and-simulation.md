@@ -218,6 +218,19 @@ When many characters are going to the same place, one **flow field** is
 computed for it: for each cell in the area, which way to step. A formation
 of three hundred asks for one field, not three hundred paths.
 
+**Crowds.** One creature blocks a cell (06 §11), so a column at a doorway
+could jam. Three rules prevent it:
+
+- A mover blocked by someone going the same way waits. It does not reroute.
+- A mover blocked by someone standing who **yields** to it swaps places
+  with them in one step (06 §11). Members of one formation yield to each
+  other; rules decide who else does.
+- A mover that has made no progress for several steps fails its step, and
+  its mind thinks again (section 4).
+
+Warm characters do not block one another. Each bulk step places them by
+formation, or in the nearest free cell.
+
 ### 5.6 Vehicles
 
 A vehicle is steered toward waypoints by a controller that sets throttle
@@ -410,9 +423,10 @@ each side, times numbers and time, applied to individuals chosen by
 positional randomness. Bodies fall, the wounded are wounded, lines thin,
 and none of it is resolved blow by blow.
 
-A battle of six hundred is a hundred hot characters around the player and
-five hundred warm ones in formation, trading volleys by arithmetic.
-Wherever the player goes, those nearby become hot.
+A battle of six hundred is, by the cap of section 9.3, about a hundred and
+fifty hot characters around the player and the rest warm in formation,
+trading volleys by arithmetic. Wherever the player goes, those nearby
+become hot.
 
 ### 9.2 Moving between levels
 
@@ -422,6 +436,42 @@ Wherever the player goes, those nearby become hot.
 | Hot | Warm | Its tract becomes warm | Running action finishes; plan kept as a route and a purpose |
 | Loaded | Cold | Its tract unloads | Section 10.4 |
 | Cold | Loaded | Its tract loads | Section 10.4 |
+
+### 9.3 Attention
+
+A tract's level is set by distance (02 §10), and a whole battlefield can
+lie inside the radius that is hot. So the number of characters simulated
+in full is capped separately.
+
+`sim.max_hot_minds` (default 150) is the most characters that are hot at
+once. When more than that stand in hot tracts they are ranked by
+**attention**, and those beyond the cap are stepped as warm.
+
+Attention, highest first:
+
+1. Directly controlled characters, and any character holding a hot ticket
+   of its own.
+2. Characters sharing an action, a window or a grip with one of those.
+3. Notable characters (06 §12.2), nearest first.
+4. Anonymous characters, nearest first.
+
+Nearest means nearest to a directly controlled character, or failing that
+to the anchor of the nearest hot ticket. Within a class, characters the
+party currently perceives (15 §13) come before those it does not.
+
+- The ranking is redone at each warm step.
+- A character that changes level keeps it for a few seconds, so nobody
+  flickers at the boundary.
+- A character promoted by involvement (03 §10) takes a place under the cap,
+  and the lowest-ranked hot character is stepped down for it.
+
+The cap concerns minds and fine-grained actions only. Physics does not have
+levels: bodies in flight, collapses, fields and energy releases run in full
+on every loaded tract, whoever is standing in them.
+
+In a quiet town of eighty everyone is hot. In a duel both are. In a battle
+the hundred and fifty nearest and most involved are, and that set moves
+with the player.
 
 ## 10. Agents
 
@@ -765,6 +815,8 @@ and `value` on grants (08 §11).
 **Functions**: `weight`, `threat`, `standing`, `strength`, `severity`,
 `best_reaction`, `pick_position`, `path_cost`, `least_effort_that`,
 `price`.
+
+**Settings**: `max_hot_minds`.
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
 sites, `locals`, `stock(what)`, `population(kind)`; on regions,
