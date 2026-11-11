@@ -220,7 +220,8 @@ One iteration of `advance`:
 4. **Pump events.** Drain world events into the event queue, then deliver
    queued events in order to rules (05 §8). Rules may change state and emit
    more events; those join the back of the queue. Continue until the queue
-   is empty.
+   is empty. Then re-evaluate reactive expressions that have gone stale
+   (05 §7.5), and pump again if that raised anything.
 5. **Safe point.** If flagged: reconcile tickets (02 §10.2), run requested
    saves, apply a pending definition reload (04 §11).
 
@@ -302,7 +303,7 @@ pub struct PlanStep { action: ActionDefId, params: Params }
 `Act { how: Enqueue }` appends a step. When a foreground action ends, the
 next step whose channels are free starts automatically. If a step's
 `requires` fails when it is due, the plan is cleared and a free decision is
-requested with the reason.
+requested with the reason. A step whose channels are busy waits for them.
 
 The AI layer uses plans in the same way. Travelling along a path, repeating
 an attack, crafting for an hour and following an order are all plans.
@@ -416,7 +417,7 @@ happens to someone who goes ahead anyway is for the action's own effects.
 | `do` | Effects run when the phase starts. |
 | `on_exit` | Effects run when the phase ends normally. |
 | `tick` | Effects repeated at an interval while the phase lasts. |
-| `until`, `max` | For held phases: end when the condition is true (checked at ticks) or the maximum is reached. A `Cancel` command also ends a held phase and counts as release, not as cancellation. |
+| `until`, `max` | For held phases: end when the condition is true (checked at ticks) or the maximum is reached. A `Cancel` command also ends a held phase and counts as release, not as cancellation. `Cancel` with `abandon` gives it up instead, where the phase allows `cancel`. |
 | `cancel` | Whether the actor may abandon the action during this phase. Default false. A list of action tags instead of `true` allows abandoning it only to start an action with one of those tags: a recovery that can be cut short by a follow-up and nothing else. |
 | `uninterruptible` | The `interrupt` effect cannot end the action during this phase. |
 | `fixed` | Tempo does not apply to this phase. |
@@ -492,7 +493,8 @@ pub struct Window {
 
 A phase's `window` field opens one when the phase starts. `for` names
 those it is aimed at. `closes` names the later phase whose start is the
-deadline. The `open_window` effect opens one from any rule.
+deadline. The `open_window` effect opens one from any rule; having no
+phase to close it, it states how long it stays open.
 
 **Candidates.** A window is offered to:
 
@@ -587,6 +589,13 @@ A **joint action** is one action instance with several participants.
 - Interrupting or disabling any participant ends the action for all.
 - All participants are locked together for its duration, which is what lets
   presentation show it as one choreographed sequence (scene S6).
+- Each role is bound as a subject under its name (`$attacker`, `$victim`)
+  in every expression and effect of the action. `self` is whoever started
+  it. A rule the action calls is passed them with `with`.
+- A role that is not forced is **offered**: `RoleOffered` is raised for
+  that participant, and `accept_role` or `decline_role` answers it. A
+  rule answers for characters the player does not control. An offer not
+  answered by the end of the action's first phase is declined.
 
 Joint actions are also how grapples, carrying someone, mounting, rituals with
 several casters and handshakes work.
@@ -660,12 +669,32 @@ character could perceive (15).
 
 **Events**: `ActionStarted`, `PhaseEntered`, `PhaseExited`, `ActionFinished`,
 `ActionCancelled`, `ActionInterrupted`, `ActionAbandoned`, `PlanCleared`,
+`ActionRefused` (who, which action, and the reason: a failed `requires`,
+busy channels, a veto), `RoleOffered`,
 `WindowOpened`, `WindowNoticed`, `WindowClosed`, `DecisionRequested`,
 `ControlChanged`, `ClockRateChanged`, `EntityRelocated`,
 `EntityPromoted`, `EntityDemoted`.
 
 **Hooks** (events whose handlers may alter or cancel them, 05 §8.2):
-`ActionStarting` (parameters, veto), `PhaseTiming` (duration).
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `ActionStarting` | An action claims its channels and enters its first phase | Change its parameters; cancel, with a reason |
+| `PhaseTiming` | A phase is scheduled | Change its duration |
+
+Every event and hook is registered with its subjects and fields
+(05 §8.1), and the generated reference lists them (04 §13). Where this
+document names one without them, the package that builds it writes them
+here.
+
+**Settings**: `rules.max_cascade`, `rules.max_transitions` (zero-duration
+phase changes in one tick, default 1,000). `WARM_STEP` is a named
+constant.
+
+**Further action fields**: `tags` (free-form, queryable), `low_attention`
+(section 11), `on_abandon` (effects run when an action ends because its
+actor left the simulation, section 9), and `ready` on a reaction
+(section 7.3).
 
 **Effects**:
 
@@ -678,6 +707,7 @@ character could perceive (15).
 | `open_window`, `close_window` | Publish or withdraw an opportunity |
 | `react`, `ask_reaction` | Answer a noticed window |
 | `set_control` | Change who decides for an entity |
+| `accept_role`, `decline_role` | Answer an offered role in a joint action (section 8) |
 | `set_time_rate`, `anchor_clock` | Give an entity a personal clock rate; pin its clock |
 | `set_clock_rate` | Change the rate of an area's or realm's clock |
 | `wait` | Occupy an entity for a duration |

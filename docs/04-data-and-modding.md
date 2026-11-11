@@ -114,6 +114,7 @@ same definition are applied, and which mod's `override` wins.
 |-----|----------|
 | `core` | Definitions most worlds want: common damage types, materials, atmospheres, channels, basic elements. Used by the engine's tests and tools. |
 | `ui` | The default screens built with the toolkit (12). |
+| `tools` | The in-game development tools (14): console, inspector, traces, profiler, reference browser, map editor. A profile that lists it is a **development profile**. |
 | Reference mods | Small examples in different genres. |
 
 None is required by the engine. Placeholders for missing content
@@ -185,10 +186,16 @@ A data file is a JSON array of objects, or a single object.
 
 Keys are `snake_case`. Unknown keys are errors.
 
+The order of keys in an object is kept, and keys added by a patch come
+after those already there. Where order carries meaning (the roles of a
+joint action, the subjects of an event, the parameters of a function) the
+first is the first as written.
+
 Where a definition is expected inside another (an EOC inside an action, a
 map piece inside a tract), it may be written inline instead of by id. Inline
 definitions get the id `<parent id>#<path>` and cannot be referenced from
-elsewhere.
+elsewhere. An inline definition may be given an `id` of its own so that
+another mod can patch or remove it.
 
 ## 6. Inheritance, patching and overriding
 
@@ -216,6 +223,19 @@ Deleting something that is not there, or scaling something that is not a
 number, is an error. Lists of objects that carry an `id` field (phases of an
 action, states of an element) are matched by that `id` when merged, so one
 phase can be changed without restating the rest.
+
+- In such a list a new entry is appended, unless it says `"before": id` or
+  `"after": id`. `delete` takes entry ids. A dotted path may step through
+  an entry by its id: `"scale": { "phases.windup.time": 0.5 }`.
+- `scale` and `add` are kept pending while definitions are folded
+  together and applied once the final value is known, after inheritance:
+  `scale` first, then `add`. A value written with a unit is converted
+  before either. On a field the base left out, they act on the field's
+  default; on a field with no default they are an error.
+- `abstract` and `obsolete` are not inherited.
+- A bare id, and a bare name inside an expression, is looked up in the
+  namespace of the file that wrote it, wherever the value ends up after
+  patching and inheritance (section 4.3).
 
 ### 6.2 `copy_from`
 
@@ -293,8 +313,14 @@ knows the current path and source location at every point.
 | `Option<T>` | Absent or `null` |
 
 The unit list is fixed and documented: `us ms s min h d`; `mm cm m km`;
-`g kg t`; `J kJ MJ GJ`; `Pa kPa MPa GPa`; `K`; `m/s km/h`. A unit of the
-wrong dimension for the field is an error.
+`ml L`; `g kg t`; `J kJ MJ GJ`; `W kW MW`; `N kN`; `Pa kPa MPa GPa`;
+`K C`; `m/s km/h`. A field that holds a rate takes any unit of the right
+quantity followed by `/s`: `"0.012 kg/s"`, `"0.02 K/s"`. The rate of a
+resource whose unit is its own (16 §5.1) is a bare number, per second. A
+unit of the wrong dimension for the field is an error.
+
+Tags are free-form, so a misspelt one loads. The linter warns of a tag
+that is tested somewhere and given to nothing, or given and never tested.
 
 All player-facing strings use `Text`, so a translation layer can be added
 later without touching definitions. Translation itself is not in the first
@@ -428,6 +454,14 @@ replays stay exact. Kinds: `flag`, `choice`, `number` with a range.
 
 Preferences that affect only display and input belong to document 12 and
 are not visible to rules.
+
+**Engine settings.** The limits and thresholds the specifications name
+(`world.min_intensity`, `rules.max_cascade`, `sim.max_hot_minds` and the
+rest) are settings too, registered by the engine in reserved namespaces
+named after their subsystem and listed in each document's modding
+surface. A profile or a scenario may set them like any other setting. A
+mod may not define a setting in a reserved namespace. They are stored in
+the save, so a replay uses the values the game was played with.
 
 ## 11. Hot reload
 

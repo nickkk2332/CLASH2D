@@ -34,12 +34,7 @@ condition holds, *do* a list of effects.
   "if": "here.in_area('vault') and not here.site.var.alarm_raised",
   "do": [
     { "set": { "here.site.var.alarm_raised": true } },
-    { "message": "An alarm starts to wail." },
-    { "for_each": { "entities": { "in_site": "here.site", "where": "it.has_tag('guard')" } },
-      "as": "g",
-      "do": [
-        { "enqueue_action": { "entity": "$g", "action": "investigate", "params": { "at": "here" } } }
-      ] },
+    { "emit_signal": { "at": "here", "kind": "sound", "strength": 40, "about": "alarm" } },
     { "after": "90 s",
       "do": [ { "emit": { "event": "reinforcements_due", "here": "here" } } ] }
   ]
@@ -206,6 +201,13 @@ bundled for English. Translation (04 §20) would supply others.
 Subsystems add functions through the same registry that holds properties
 (section 5.3). Mods add functions as definitions (section 12).
 
+`xs[i]` reads a list element, counting from zero; out of range gives
+`null`. `m['key']` reads a map entry. A map is written `{'ash': 3}`.
+`without(xs, x)` and `without_key(m, k)` give copies with an element or a
+key removed. Inside an expression only simple units may follow a number
+(`ms`, `kg`, `kPa`); compound ones such as `m/s` are written in JSON unit
+strings.
+
 Random functions draw from the simulation's rule stream and are
 deterministic. They are not allowed in **pure** contexts (section 7.3).
 
@@ -368,6 +370,23 @@ and locals exist, and how pure it must be.
 
 Expressions never write. Only effects do.
 
+A context also says whether it reads **truth** or **belief**.
+
+| Reads | Allowed | Used by |
+|-------|---------|---------|
+| Truth | Anything | World rules, effects, hooks, debug screens |
+| Belief (the **mind context**) | The character's own state; what it has perceived (15 §7); static geometry (15 §7.3); and functions, properties and queries registered as safe for belief | Goals, methods, tactics and option scoring (09); an action's `requires`, defaults and `check` when they are previewed or gathered as a character's options; ordinary screens (12 §10.4); and every function or rule those reach |
+
+Every entry in the registry (section 5.3) says whether it is safe for
+belief. `dist` and `los` are, between places the character knows. Reading
+another entity's state is not; neither are queries over entities, contents
+or other minds. In a mind context an unsafe read is a load error. An
+action's `requires` is tested against truth only when the action is
+actually started; a failure then is a refusal, with its reason.
+
+A condition may also be `{ "exists": query }`, true when the query
+(section 11) has any result.
+
 ### 7.4 Value sources
 
 Where a value is wanted and an expression string cannot say it, a **value
@@ -401,7 +420,16 @@ device's output (16 §7), the `while` condition of a trait or ability
   owns the expression is told.
 
 Nothing is polled. An expression whose inputs do not change is never
-re-evaluated. Reactive expressions may not call random functions.
+re-evaluated. Reactive expressions may not call random functions or
+`now()`. They may use only properties, variables and functions that are
+registered with what makes them stale: `dist` and `los` by the relocation
+of either end, a variable by any write to it. Anything else in a reactive
+field is a load error.
+
+Re-evaluation is the last step of the pump (03 §4.3). If telling an owner
+makes others stale they are evaluated in turn, at most
+`rules.max_reactive_rounds` times (default 8). What is still stale then
+is reported, with its chain, and left for the next pump.
 
 ## 8. Events
 
@@ -421,7 +449,15 @@ Mods define their own:
 ```
 
 and raise them with `emit`. Custom events are how mods offer hooks to each
-other.
+other. An event with `"hook": true` is delivered at once and may list
+which fields handlers may change: `"mutable": ["power"]`. Used as a value
+source, `emit` gives back the fields as the handlers left them and a
+`cancelled` flag, so the mod that raised it can act on the answer:
+
+```json
+{ "let": { "r": { "emit": { "event": "ritual_completing", "caster": "self", "power": "$p" } } } },
+{ "if": "not $r.cancelled", "then": [ … ] }
+```
 
 ### 8.2 Notifications and hooks
 
@@ -519,7 +555,8 @@ Attached rules run only for events in which their owner takes part, so a
 thousand rules on a thousand creatures cost nothing until one of those
 creatures is involved in something.
 
-Rules are also attached at run time with the `attach` and `detach` effects.
+Rules are also attached at run time with the `attach_rule` and
+`detach_rule` effects.
 A curse is a rule attached to its victim.
 
 ### 9.4 Recurring rules
@@ -583,7 +620,7 @@ An effect is an object with one key, the verb, whose value is the
 arguments:
 
 ```json
-{ "damage_cell": { "at": "here", "layer": "block", "kind": "blast", "energy": 5000, "intensity": "20 kPa" } }
+{ "damage": { "at": "here", "layer": "block", "kind": "blast", "energy": 5000, "intensity": "20 kPa" } }
 ```
 
 Verbs with one obvious argument accept it directly: `{ "message": "…" }`,
@@ -629,15 +666,24 @@ the effect runs.
 (03 §9). The effects inside see the subjects and locals as they were when
 the timer was set.
 
+| Option | Values | Default |
+|--------|--------|---------|
+| `owner` | Any subject with a clock | The rule's `self`; for a global rule, the realm of `here`, or the simulation |
+| `while_unloaded` | `pause` (stop the clock), `elapse` (time passes; fire once if overdue), and for `every`, `all` (fire for each interval missed) | `pause` |
+| `name` | A name unique to the owner. Setting a timer with a name already in use replaces it. | None |
+
+`owner.timer(name)` gives the time a named timer has left, or `null`. An
+interval of zero is a load error.
+
 ### 10.5 Rules and events
 
 | Effect | Does |
 |--------|------|
 | `{ "run": { "eoc": id, "with": { … } } }` | Call a rule |
-| `{ "attach": { "to": subject, "eoc": id } }`, `detach` | Add or remove an attached rule |
+| `{ "attach_rule": { "to": subject, "eoc": id } }`, `detach_rule` | Add or remove an attached rule. Attaching one that is already there does nothing. |
 | `{ "emit": { "event": id, … } }` | Raise a custom event |
 | `{ "modify": { "event.energy": expr } }` | In a hook: change a mutable field |
-| `{ "cancel_event": {} }` | In a hook: prevent the operation |
+| `{ "cancel_event": { "reason": id, "values": { … } } }` | In a hook: prevent the operation. The reason (14 §5) is what whoever asked is told. It may be left out only where nobody is told. |
 | `{ "consume": {} }` | Mark the event handled |
 
 ### 10.6 The player
@@ -646,6 +692,11 @@ the timer was set.
 |--------|------|
 | `{ "message": { "text": …, "to": subject, "style": … } }` | Put a line in the message log of whoever controls `to`; default `self` |
 | `{ "ask": { "who": entity, "prompt": text, "options": [ { "label": …, "if": …, "do": […] } ] } }` | Stop and offer a choice (03 §5.2). Each option carries the effects to run if chosen. For entities not under direct control, the first available option is taken unless a rule says otherwise. |
+
+`options` may instead be an expression giving a list of maps, each with a
+`label`, the `eoc` to run if it is chosen and the values to run it `with`.
+That is how options gathered at run time are offered (15 §11). A `message`
+whose `to` is not bound in the rule's context is a load error.
 
 Opening screens and other interface effects belong to document 12. A rule
 asks for a screen with `show_screen` (12 §10.5).
@@ -742,6 +793,8 @@ A run evaluates `filter`, then `if`, then executes `do` or `else`.
 | Call depth | 32 | Call refused; error reported |
 | Hook nesting depth | 8 | Inner hook skipped; error reported |
 | Events per pump | 10,000 | 03 §4.3 |
+| Wake-ups handled at one tick | 100,000 | The rest are put off to the next tick; error reported |
+| Size of one value (a list, a map or a text) | 65,536 elements or characters | The effect fails; error reported |
 
 Exceeding a limit is always an error report with a trace, and never a hang
 or a crash.
@@ -813,12 +866,20 @@ Nothing in the engine or the bundled content may depend on it.
 
 ## 17. Modding surface
 
-**Definition types**: `eoc`, `function`, `variable`, `event`, `rule_group`.
+**Definition types**: `eoc`, `function`, `variable`, `event`, `rule_group`,
+`language`.
 
-**Core events**: `sim_started`, `entity_created`, `entity_destroyed`,
-`var_changed`, `setting_changed`, `rule_error`.
+**Core events**: `sim_started` (once, when a game begins), `entity_created`,
+`entity_destroyed`, `var_changed` (subject, name, old and new value; only
+for variables declared with `"watch": true`), `setting_changed` (id, old,
+new), `rule_error` (the rule, the reason, the trace).
 
-**Core effects**: sections 10.2 to 10.6.
+**Core effects**: sections 10.2 to 10.6, and `set_rule_group`.
+
+**Settings**: `rules.max_steps`, `rules.max_call_depth`,
+`rules.max_hook_depth`, `rules.max_cascade`, `rules.max_reactive_rounds`,
+`rules.max_wakeups_per_tick`, `rules.max_value_size`,
+`rules.max_query_cells`.
 
 **Core functions**: section 4.7.
 

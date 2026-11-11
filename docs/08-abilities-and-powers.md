@@ -342,7 +342,7 @@ pub struct Binding { pub what: Bound, pub ends: Option<WakeId>, pub on_end: OnEn
 | `add_trait` with `"bound": true` | A trait on someone: a curse, a blessing, a mark |
 | `summon` | An entity, created by `spawn` (06), with whatever relations are given (15 §9) |
 | `conjure` | An element placed in the world, remembering what was there |
-| `create_area`, `open_portal`, `attach` with `"bound": true` | As named |
+| `create_area`, `open_portal`, `attach_rule` with `"bound": true` | As named |
 
 A binding ends when its duration runs out, when it is dismissed, when the
 mode that made it ends, when the ability is suppressed or revoked, or
