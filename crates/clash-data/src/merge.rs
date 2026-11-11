@@ -168,6 +168,9 @@ pub(crate) struct MergeCx<'a> {
     pub(crate) mods: &'a ModTable,
     /// The JSON names of the registered definition types.
     pub(crate) type_names: &'a [&'static str],
+    /// Whether a definition of an unregistered type is passed over
+    /// instead of reported (`Loader::only_known_types`).
+    pub(crate) skip_unknown_types: bool,
     /// Each type's declared defaults, for `scale` and `add` on a field
     /// the definition leaves out.
     pub(crate) defaults: &'a BTreeMap<&'static str, Node>,
@@ -293,6 +296,9 @@ fn collect_one(object: &Node, mod_index: usize, cx: &mut MergeCx<'_>) -> Option<
         }
     };
     if !cx.type_names.contains(&type_name) {
+        if cx.skip_unknown_types {
+            return None;
+        }
         let suggestion = did_you_mean(closest(type_name, cx.type_names.iter().copied()));
         let span = object.get("type").map_or(object.span, |node| node.span);
         let diagnostic = Diagnostic::new(

@@ -32,7 +32,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use clash_data::{DefTypes, Diagnostics, Loader};
+use clash_data::{Diagnostics, Loader};
 use clash_front_term::{TermError, TermFrontend};
 use clash_scene::view::{WorldView, omniscient};
 use clash_scene::{Canvas, Frame, Frontend, InputEvent, KeyChord, KeyCode, NoHost, Scene, UiDefs};
@@ -263,9 +263,7 @@ impl Demo {
     /// Loads the default profile from `mods`, builds the test world and
     /// fills the view model from it.
     pub fn new(mods: &Path) -> Result<Demo, String> {
-        let mut types = DefTypes::new();
-        clash_world::register_defs(&mut types);
-        clash_scene::register_defs(&mut types);
+        let types = clash_scene::engine_types();
         let loaded = Loader::new(&types)
             .search_path(mods)
             .load_profile(PROFILE)

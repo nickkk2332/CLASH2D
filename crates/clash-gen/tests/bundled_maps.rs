@@ -39,6 +39,7 @@ fn bundled() -> (Arc<Defs>, Arc<MapDefs>) {
     clash_gen::register_defs(&mut types);
     let outcome = Loader::new(&types)
         .search_path(repo("mods"))
+        .only_known_types(true)
         .load_mod_with_requirements(MOD);
     assert!(
         outcome.diagnostics.is_empty(),

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use clash_data::{DefTypes, Diagnostics, Loader};
+use clash_data::{Diagnostics, Loader};
 use clash_front_term::{TermError, TermFrontend};
 use clash_scene::{Frame, NoHost, NullFrontend, RichText, Scene, UiDefs};
 
@@ -53,9 +53,7 @@ fn describe(diagnostics: Diagnostics) -> String {
 fn gallery() -> Result<Scene<NoHost>, String> {
     // The types of every crate whose definitions the mod, or a mod it
     // requires, may hold.
-    let mut types = DefTypes::new();
-    clash_world::register_defs(&mut types);
-    clash_scene::register_defs(&mut types);
+    let types = clash_scene::engine_types();
     let loaded = Loader::new(&types)
         .search_path(mods_dir())
         .load_mod_with_requirements(GALLERY_MOD)

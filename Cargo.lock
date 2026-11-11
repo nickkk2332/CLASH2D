@@ -120,6 +120,7 @@ dependencies = [
  "bitflags",
  "clash-core",
  "clash-data",
+ "clash-gen",
  "clash-sim",
  "clash-time",
  "clash-world",

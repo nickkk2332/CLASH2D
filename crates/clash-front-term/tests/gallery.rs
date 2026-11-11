@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use clash_data::{DefTypes, Diagnostics, Loader};
+use clash_data::{Diagnostics, Loader};
 use clash_front_term::Renderer;
 use clash_scene::{
     ColorDepth, Frame, Frontend, InputEvent, NoHost, NullFrontend, RichText, Scene, UiDefs,
@@ -28,9 +28,7 @@ fn golden(name: &str) -> PathBuf {
 
 fn gallery() -> Scene<NoHost> {
     let describe = |diagnostics: Diagnostics| diagnostics.render();
-    let mut types = DefTypes::new();
-    clash_world::register_defs(&mut types);
-    clash_scene::register_defs(&mut types);
+    let types = clash_scene::engine_types();
     let loaded = Loader::new(&types)
         .search_path(mods_dir())
         .load_mod_with_requirements("ui")

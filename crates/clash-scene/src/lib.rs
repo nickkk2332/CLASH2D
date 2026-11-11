@@ -56,7 +56,7 @@ pub mod view;
 pub use color::{Ansi16, Color, ColorDef, ColorError, ColorRef, Rgb, ansi256};
 pub use defs::{
     AmbienceId, ColorId, FigureId, KeymapId, OverlayId, ScreenId, ThemeId, UiDefs, check_defs,
-    register_defs,
+    engine_types, register_defs, register_engine_defs,
 };
 pub use frame::{
     Attrs, Borders, Canvas, CellStyle, Frame, FrameCell, FrameFx, Rect, Sprite, Wash,

@@ -681,9 +681,12 @@ definitions (section 4.4) and the experimental feature it is part of. Each
 crate offers one function that registers its types in a `DefTypes`, and may
 add whole-set checks and registry steps (section 7.3) to it. The data layer
 has such a function itself, for `function` and `variable`
-(`clash_data::expr::register_defs`). The application and the tools call each crate's
-function in turn and load with the result, so both read mods with the same
-types. A crate that keeps tables of its own, as the world does, builds
+(`clash_data::expr::register_defs`). The application, the tools and the examples load with
+`clash_scene::engine_types()`, which calls each crate's function in turn, so
+all of them read mods with the same types. An unknown type is an error;
+a loader may be told to pass such definitions over
+(`Loader::only_known_types`), which is for the tests and tools of a crate
+below the owner of some types a bundled mod holds (D-450). A crate that keeps tables of its own, as the world does, builds
 them from the `Defs` with the loader's dense ids (section 8.1, the build
 stage): an id means the same definition in the registry and in the
 crate's table. A registry also says whether a definition is a placeholder or

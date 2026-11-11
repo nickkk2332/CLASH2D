@@ -104,6 +104,7 @@ pub struct Loader<'t> {
     memory: Vec<MemoryMod>,
     memory_profiles: Vec<(String, String)>,
     lenient: bool,
+    only_known_types: bool,
     limits: Limits,
     registry: Option<Arc<ExprRegistry>>,
 }
@@ -127,6 +128,7 @@ impl<'t> Loader<'t> {
             memory: Vec::new(),
             memory_profiles: Vec::new(),
             lenient: false,
+            only_known_types: false,
             limits: Limits::default(),
             registry: None,
         }
@@ -185,6 +187,18 @@ impl<'t> Loader<'t> {
     /// carry on (04 §8.3). Off unless asked for.
     pub fn lenient(mut self, lenient: bool) -> Loader<'t> {
         self.lenient = lenient;
+        self
+    }
+
+    /// Whether to pass over, without a word, every definition whose type
+    /// is not registered. Off unless asked for: an unknown type is a
+    /// mistake in a mod. It is for the tests and tools of a crate that
+    /// sits below the owner of some of the types a bundled mod holds: the
+    /// world's tests read the world's definitions out of a mod that also
+    /// has screens and actions in it. A reference to a definition that
+    /// was passed over is reported as any unknown reference is.
+    pub fn only_known_types(mut self, only: bool) -> Loader<'t> {
+        self.only_known_types = only;
         self
     }
 
@@ -554,6 +568,7 @@ impl<'t> Loader<'t> {
             sources: &sources,
             mods: &table,
             type_names: &type_names,
+            skip_unknown_types: self.only_known_types,
             defaults: &defaults,
             diagnostics: &mut diagnostics,
         };

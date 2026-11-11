@@ -55,6 +55,7 @@ fn run() -> Result<(), String> {
     let wanted = std::env::var("CLASH_MOD").unwrap_or_else(|_| DEFAULT_MOD.to_owned());
     let defs = Loader::new(&types)
         .search_path(mods)
+        .only_known_types(true)
         .load_mod_with_requirements(&wanted)
         .into_result()
         .map_err(|diagnostics| diagnostics.render())?;

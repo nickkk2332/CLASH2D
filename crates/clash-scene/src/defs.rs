@@ -141,6 +141,28 @@ impl Def for OverlayDef {
         "Shading a map view draws over its cells where an expression over a cell holds (12 §6.2).";
 }
 
+/// Registers every definition type of the engine: this crate's and
+/// those of every crate below it (expressions, the world, generation,
+/// the simulation). The application, the tools, the examples and any
+/// test that loads whole mods call this, so that all of them read mods
+/// with the same types. A crate that gains definition types is added
+/// here once.
+pub fn register_engine_defs(types: &mut DefTypes) {
+    clash_data::expr::register_defs(types);
+    clash_world::register_defs(types);
+    clash_gen::register_defs(types);
+    clash_sim::register_defs(types);
+    register_defs(types);
+}
+
+/// Every definition type of the engine, registered
+/// ([`register_engine_defs`]).
+pub fn engine_types() -> DefTypes {
+    let mut types = DefTypes::new();
+    register_engine_defs(&mut types);
+    types
+}
+
 /// Registers this crate's definition types with the loader: `color`,
 /// `theme`, `keymap`, `figure`, `screen`, `ambience` and `overlay`.
 ///

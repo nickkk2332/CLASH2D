@@ -23,13 +23,7 @@ mod scenario;
 /// exactly the types the game does. A crate that gains definition types
 /// adds its line here.
 pub fn engine_types() -> DefTypes {
-    let mut types = DefTypes::new();
-    clash_data::expr::register_defs(&mut types);
-    clash_world::register_defs(&mut types);
-    clash_gen::register_defs(&mut types);
-    clash_sim::register_defs(&mut types);
-    clash_scene::register_defs(&mut types);
-    types
+    clash_scene::engine_types()
 }
 
 /// What each crate checks once the definitions have loaded: the mistakes
