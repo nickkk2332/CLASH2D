@@ -2,7 +2,8 @@
 //!
 //! The definition types of this crate (`color`, `theme`, `keymap`,
 //! `control`, `figure`, `screen`, `ui_part`, `preference`, `ambience`,
-//! `overlay` and `start`) are registered with `clash-data` by [`register_defs`],
+//! `overlay`, `start`, `show` and `anim`) are registered with `clash-data`
+//! by [`register_defs`],
 //! which also adds the step that puts `app` into the expression
 //! registry and the check that every `ui_part` has its slot.
 //! [`UiDefs`] is the one way from
@@ -78,7 +79,10 @@ use clash_world::WorldDefs;
 use crate::color::ColorDef;
 use crate::control::ControlDef;
 use crate::input::KeymapDef;
+use crate::playback::shows::named_color;
+use crate::playback::{Anim, AnimDef, Show, ShowDef, Shows};
 use crate::scene::{NoHost, Scene, SceneHost};
+use crate::text::tag_names;
 use crate::theme::{Theme, ThemeDef, ThemeError};
 use crate::ui::{
     FigureDef, NodeDef, NodeKind, PreferenceDef, Screen, ScreenDef, SlotParts, UiEffects, UiEnv,
@@ -232,7 +236,8 @@ pub fn engine_loader(types: &DefTypes) -> clash_data::Loader<'_> {
 
 /// Registers this crate's definition types with the loader: `color`,
 /// `theme`, `keymap`, `control`, `figure`, `screen`, `ui_part`,
-/// `preference`, `ambience`, `overlay` and `start`. It also adds the step that puts `app` and
+/// `preference`, `ambience`, `overlay`, `start`, `show` and `anim`. It
+/// also adds the step that puts `app` and
 /// what is read through it into the expression registry
 /// ([`crate::app::register_expr`]), so that bindings are checked against
 /// it, and the check that every `ui_part` is aimed at a slot some screen
@@ -252,9 +257,91 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<AmbienceDef>();
     types.register::<OverlayDef>();
     types.register::<crate::start::StartDef>();
+    types.register::<ShowDef>();
+    types.register::<AnimDef>();
     types.add_registry_step(register_app);
     types.add_cross_check(check_parts);
     types.add_cross_check(crate::start::check_starts);
+    types.add_cross_check(check_shows);
+}
+
+/// The id of the definition a bare or qualified name means, seen from
+/// a definition in `namespace`, among the names of one type: the name
+/// itself if it is qualified, or else the one of that bare name in
+/// `namespace`, or else the first of that name in order of qualified id
+/// (decision D-322).
+fn resolve_among<'a>(names: &'a [String], name: &str, namespace: &str) -> Option<&'a str> {
+    if name.contains(':') {
+        return names
+            .iter()
+            .find(|known| *known == name)
+            .map(String::as_str);
+    }
+    let own = format!("{namespace}:{name}");
+    names
+        .iter()
+        .find(|known| **known == own)
+        .or_else(|| {
+            names
+                .iter()
+                .find(|known| known.split_once(':').is_some_and(|(_, bare)| bare == name))
+        })
+        .map(String::as_str)
+}
+
+/// The cross check: the animation a `show` names must exist, and one
+/// that travels needs somewhere to travel to (12 §7.3).
+fn check_shows(cx: &mut CrossCx<'_>) {
+    let defs = cx.defs();
+    let mut anims: Vec<String> = Vec::new();
+    let mut travels: BTreeSet<String> = BTreeSet::new();
+    for (id, anim) in defs.iter::<AnimDef>() {
+        if let Some(name) = defs.name::<AnimDef>(id) {
+            anims.push(name.to_owned());
+            if anim.travel {
+                travels.insert(name.to_owned());
+            }
+        }
+    }
+    anims.sort();
+    let mut found = Vec::new();
+    for (id, show) in defs.iter::<ShowDef>() {
+        let (Some(name), Some(anim)) = (defs.name::<ShowDef>(id), &show.anim) else {
+            continue;
+        };
+        let label = DefLabel::new(ShowDef::TYPE, name);
+        match resolve_among(&anims, &anim.value, namespace_of(name)) {
+            None => {
+                let near = clash_data::diag::closest(&anim.value, anims.iter().map(String::as_str));
+                let mut diagnostic = Diagnostic::new(
+                    code::UNKNOWN_REFERENCE,
+                    format!("there is no anim `{}`", anim.value),
+                )
+                .in_def(Some(&label))
+                .with_path("anim");
+                if let Some(near) = near {
+                    diagnostic = diagnostic.suggest(format!("did you mean `{near}`?"));
+                }
+                found.push((diagnostic, anim.span));
+            }
+            Some(anim_id) if travels.contains(anim_id) && show.to.is_none() => {
+                let diagnostic = Diagnostic::new(
+                    code::VALIDATION,
+                    format!(
+                        "the anim `{anim_id}` travels from one place to another, and this show does not say where `to`"
+                    ),
+                )
+                .in_def(Some(&label))
+                .with_path("anim");
+                found.push((diagnostic, anim.span));
+            }
+            Some(_) => {}
+        }
+    }
+    for (diagnostic, span) in found {
+        let diagnostic = diagnostic.at(cx.sources(), span);
+        cx.report(diagnostic);
+    }
 }
 
 /// The registry step: `app` and its properties.
@@ -932,9 +1019,85 @@ impl UiDefs {
         })
     }
 
+    /// The `show` definitions made ready to play under a theme
+    /// (12 §7.3): each with its animation and its colours resolved, by
+    /// the name of its event. What cannot be resolved is reported at
+    /// the value that is wrong and left out, so that the rest still
+    /// plays: an animation that does not exist, a colour or a style the
+    /// theme does not know.
+    ///
+    /// A show that was loaded where no event is registered (a load
+    /// without the simulation) is checked and not played.
+    pub fn shows(&self, theme: &Theme) -> (Shows, Diagnostics) {
+        let defs = &*self.defs;
+        let mut shows = Shows::new();
+        let mut diagnostics = Diagnostics::new();
+        let Some(registry) = defs.try_registry::<ShowDef>() else {
+            return (shows, diagnostics);
+        };
+        let mut anims: BTreeMap<String, Option<Arc<Anim>>> = BTreeMap::new();
+        for (id, def) in registry.iter() {
+            let name = registry.name(id);
+            let mut show = Show::of(id, name, def);
+            if let Some(anim) = &def.anim
+                && let Some(anim_id) = self.resolve::<AnimDef>(&anim.value, namespace_of(name))
+            {
+                // What is wrong with an animation is reported once,
+                // whatever number of shows play it.
+                let made = anims.entry(anim_id.clone()).or_insert_with(|| {
+                    let anim_def = self.get::<AnimDef>(&anim_id)?;
+                    let (anim, errors) = Anim::compile(anim_def, theme);
+                    for error in &errors {
+                        diagnostics.push(mistake(
+                            defs,
+                            AnimDef::TYPE,
+                            &anim_id,
+                            &error.path(),
+                            error.to_string(),
+                        ));
+                    }
+                    Some(Arc::new(anim))
+                });
+                show.anim = made.clone();
+            }
+            if let Some(flash) = &def.flash {
+                show.flash = named_color(flash, theme);
+                if let (None, crate::color::ColorRef::Named(color)) = (show.flash, flash) {
+                    diagnostics.push(mistake(
+                        defs,
+                        ShowDef::TYPE,
+                        name,
+                        "flash",
+                        format!("unknown colour `{color}` in `flash`"),
+                    ));
+                }
+            }
+            for (text, path) in def.texts() {
+                // A tag that is malformed was reported when the show
+                // was read.
+                for tag in tag_names(text.raw()).unwrap_or_default() {
+                    if theme.style(&tag).is_none() {
+                        diagnostics.push(mistake(
+                            defs,
+                            ShowDef::TYPE,
+                            name,
+                            path,
+                            format!("unknown style or colour `{tag}` in a tag"),
+                        ));
+                    }
+                }
+            }
+            if def.is_compiled() {
+                shows.add(&def.on.value, show);
+            }
+        }
+        diagnostics.sort();
+        (shows, diagnostics)
+    }
+
     /// Makes every theme, and with every theme every screen, ambience
-    /// and overlay and the world's glyph tables, and returns what is
-    /// wrong with them. With no theme loaded they are made with the
+    /// and overlay, every show and the world's glyph tables, and
+    /// returns what is wrong with them. With no theme loaded they are made with the
     /// engine's plain one over the loaded colours. When no loaded theme
     /// can be built, screens are checked for everything but their
     /// styles, and what only names colours is not checked.
@@ -989,6 +1152,10 @@ impl UiDefs {
             for id in self.ids::<OverlayDef>() {
                 with_each_theme(&|theme| self.overlay(id, theme).err());
             }
+            with_each_theme(&|theme| {
+                let (_, found) = self.shows(theme);
+                (!found.is_empty()).then_some(found)
+            });
             // The world's own mistakes are the world's to report: its
             // glyphs are checked only when its tables build.
             if let Ok(world) = WorldDefs::from_defs(&self.defs) {
@@ -1104,6 +1271,7 @@ mod tests {
             types.names(),
             [
                 "ambience",
+                "anim",
                 "color",
                 "control",
                 "figure",
@@ -1111,6 +1279,7 @@ mod tests {
                 "overlay",
                 "preference",
                 "screen",
+                "show",
                 "start",
                 "theme",
                 "ui_part"

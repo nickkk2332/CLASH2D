@@ -12,6 +12,8 @@ use thiserror::Error;
 
 use crate::frame::{Attrs, Borders, Canvas, CellStyle, Rect};
 use crate::input::{CONTEXT_MENU, KeyChord};
+use crate::playback::log::Importance;
+pub use crate::playback::log::{LogLine, MessageLog};
 use crate::text::{RichText, TextError, tag_names};
 use crate::theme::{Style, Theme};
 
@@ -250,40 +252,18 @@ impl UiEvent {
     }
 }
 
-/// One line of the message log (12 §7.4).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LogLine {
-    /// The line's category, which a `log` widget's `filter` selects by.
-    pub category: String,
-    /// The text.
-    pub text: RichText,
-}
-
-/// The message log a `log` widget shows. Playback (package U5) fills it;
-/// this is the store and nothing more.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct MessageLog {
-    lines: Vec<LogLine>,
-}
-
-impl MessageLog {
-    /// An empty log.
-    pub fn new() -> MessageLog {
-        MessageLog::default()
-    }
-
-    /// Adds a line at the end.
-    pub fn push(&mut self, category: &str, text: RichText) {
-        self.lines.push(LogLine {
-            category: category.to_owned(),
-            text,
-        });
-    }
-
-    /// The lines, oldest first.
-    pub fn lines(&self) -> &[LogLine] {
-        &self.lines
-    }
+/// How a log's lines fall into rows in one `log` widget.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct LogRows {
+    /// The log's revision this was worked out for.
+    pub(super) revision: u64,
+    /// The widget's inner size it was worked out for.
+    pub(super) size: (i32, i32),
+    /// The width the lines are wrapped to: the widget's, less the
+    /// scrollbar's column when there are more rows than fit.
+    pub(super) width: usize,
+    /// How many rows the lines that pass the filter take.
+    pub(super) total: usize,
 }
 
 /// Which view of the world a widget is (12 §6.2).
@@ -711,8 +691,16 @@ pub(super) enum Kind {
         /// The expression giving the categories, if they are not written
         /// out.
         filter_from: Option<Binding>,
-        /// How many lines the view is scrolled back from the newest.
+        /// The least importance a line must have to be shown.
+        least: Importance,
+        /// How many rows the view is scrolled back from the newest.
         back: usize,
+        /// How many rows there were at the last drawing, so that a view
+        /// scrolled back stays on the lines it shows as lines arrive.
+        rows_seen: usize,
+        /// How the log's lines fall into rows, kept while the log, the
+        /// widget's size and its filter stay as they were.
+        rows_cache: Option<LogRows>,
     },
     View {
         kind: ViewKind,
@@ -1553,7 +1541,10 @@ impl Builder<'_> {
                     Some(Prop::Bound(binding)) => Some(binding.clone()),
                     _ => None,
                 },
+                least: w.importance.unwrap_or(Importance::Minor),
                 back: 0,
+                rows_seen: 0,
+                rows_cache: None,
             },
             NodeKind::MapView(v) => Kind::View {
                 kind: ViewKind::Map,

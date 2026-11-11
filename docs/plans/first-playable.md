@@ -45,7 +45,7 @@ actions that call `hit`.
 | U2 | Terminal frontend | S | U1 | done |
 | U3 | Window frontend | L | U1 | todo |
 | U4 | View model and world drawing | L | U1, S9 | beta |
-| U5 | Playback | L | U4 | todo |
+| U5 | Playback | L | U4 | beta |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
 | U7 | Input, controls, pickers | M | U6b, T5 | beta |
@@ -743,6 +743,45 @@ Done when
   (invariant V4).
 - Golden frames for `wall_punch` at fixed time steps.
 - Every shown event has a log line (invariant V5).
+
+Beta: built in `clash_scene::playback`. The application calls
+`Scene::push_events` with each drained batch, `Scene::advance` every
+frame, `Scene::playback_caught_up` to know whether input applies to the
+present and `Scene::skip_playback`; in debug builds
+`Scene::check_caught_up` with a fresh view model. The queue paces each
+stretch by 12 §7.1 (groups by tick, long waits cut to two seconds,
+`stretch_time`, `min_time`, the `playback_speed` preference with 0
+instant, catching up from any backlog, the `skip` key); the `show` and
+`anim` definition types say how each event changes the picture, what it
+animates, its line worded for the reader, what is shown if it was only
+heard, its importance and a sound cue (decisions D-600 to D-602); the
+host says what the party perceived and what it sees
+(`SceneHost::perceived`, `seen_cell`, `seen_sprite`, D-603); the
+message log folds
+repeated lines, keeps a scrollback and is wrapped, filtered by
+importance and kept at the newest line by the `log` widget (D-604);
+bindings are asked as of the moment playback has reached
+(`SceneHost::as_of`, D-605); glides with afterimages, animations at a
+cell or along a path, shake and flash are drawn over the picture
+(D-606); `mods/ui/data/playback.json` has shows for every kernel and
+world event and the preference `effects` (D-607); a decision's prompt
+waits for playback. Tested through the null frontend in
+`crates/clash-scene/tests/playback.rs`: golden frames of a wall broken
+three ticks after a step at fixed time steps, of a heard event and of a
+projectile, and a property test that caught-up playback equals a fresh
+view (D-608). Stubbed, each waiting for what it needs: perception
+answers through a stand-in in `clash_scene::testing` (S9); events carry
+no duration, so a glide lasts its show's `time`, and bodies in flight are
+drawn where they start, strike and land and not along their paths, which
+no event carries (W14); floating text, particles and effects
+shaped by an event's fields are not built; cutscenes cannot yet choose
+when the events of their span are played (U10); `message` effects reach
+the log only through `Scene::log_mut` until the simulation reports them
+(K9); no event is marked player-relevant, so the linter's V5 warning is
+not given and steps write no line; events of other packages (hits,
+wounds) have no bundled show; `stretch_time` is set from Rust until
+settings exist (P6); looks (12 §4.4) are not drawn, since no event
+reports one yet (E3, E10); no benchmark of ingesting events.
 
 ### U6a — Toolkit: layout and widgets
 
