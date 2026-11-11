@@ -1,0 +1,62 @@
+[
+  { "//": "The second gallery: widgets bound to expressions, effects that are run, a popup, a preference and a slot. The gallery opens it with F2 and hands it the active character as `who`. Its context is the ordinary one, so it may read only what the party knows; `who` is declared `any` so that the screen loads whatever the game's characters are made of.",
+    "type": "screen", "id": "gallery_more",
+    "title": "Bindings, effects and slots",
+    "min_size": [80, 24],
+    "params": { "who": "any" },
+    "vars": { "level": 3, "picked": "nothing yet" },
+    "layout": { "rows": [
+      { "id": "heading",
+        "text": "<title>Bindings, effects and slots</>  A grid of {app.size[0]} by {app.size[1]}. Esc goes back." },
+
+      { "cols": [
+        { "frame": "Bound to the game", "width": 38, "rows": [
+          { "text": "{$who.name} carries {len($who.items)} things." },
+          { "bar": { "label": "Blood ", "value": "$who.pool.blood.value", "max": "$who.pool.blood.max",
+                     "style": "blood", "tip": "bar: its value and its maximum are expressions over the character." } },
+          { "gauge": { "label": "Breath", "value": "$who.pool.breath.value", "max": "$who.pool.breath.max" } },
+          { "height": 4,
+            "list": { "id": "items", "rows": "$who.items", "item": "{it.name}, {it.weight:.1} kg",
+                      "empty": "Nothing.",
+                      "tip": "list: its rows are a list from an expression, and `it` is the row." } },
+          { "text": "{len(party)} in the party." } ] },
+
+        { "frame": "Bound to the screen and to app", "rows": [
+          { "number": { "id": "level", "bind": "level", "label": "Level", "min": 0, "max": 10,
+                        "tip": "number: Left and Right step it, or type a number and press Enter." } },
+          { "bar": { "label": "Level", "value": "screen.level", "max": 10 } },
+          { "if": "screen.level >= 8", "text": "<warn>High.</>" },
+          { "text": "{len(app.mods)} mods. Saving allowed: {app.can_save}." },
+          { "height": 3,
+            "list": { "id": "mods", "rows": "app.mods", "item": "{it.name} ({it.state})",
+                      "empty": "No mods are listed." } },
+          { "choice": { "id": "theme", "bind": "pref.theme", "label": "Theme",
+                        "options": [ { "value": "ui:default", "label": "Day" },
+                                     { "value": "ui:night", "label": "Night" } ],
+                        "tip": "choice: bound to the `theme` preference. Changing it restyles every screen." } },
+          { "text": "Picked: {screen.picked}." } ] } ] },
+
+      { "cols": [
+        { "button": { "id": "pick", "label": "Pick a thing",
+                      "tip": "button: `pick` opens a picker and the rest of its effects run with the choice.",
+                      "on_activate": [ { "pick": { "from": "$who.items", "item": "{it.name}", "title": "Which thing?" } },
+                                       { "set": { "screen.picked": "it.name" } } ] } },
+        { "width": 2, "height": 1, "spacer": {} },
+        { "button": { "id": "quit", "label": "Quit",
+                      "tip": "button: `confirm` asks in a popup, and only on yes does the rest run.",
+                      "on_activate": [ { "confirm": { "text": "Leave the gallery at level {screen.level}?",
+                                                      "yes": "Leave", "no": "Stay" } },
+                                       { "app": "quit" } ] } } ] },
+
+      { "frame": "slot gallery_more.extra", "slot": "gallery_more.extra" },
+
+      { "tooltip": { "value": "Nothing with a tip has the focus." } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "//": "Two parts for the slot of the second gallery. Any mod may add its own: they are shown in `order`, each while its `if` holds.",
+    "type": "ui_part", "id": "gallery_note", "into": "ui:gallery_more.extra", "order": 10,
+    "widget": { "text": "This line was put into the slot by a ui_part." } },
+  { "type": "ui_part", "id": "gallery_level", "into": "ui:gallery_more.extra", "order": 20,
+    "if": "screen.level >= 5",
+    "widget": { "text": "<good>And this one is shown while the level is 5 or more.</>" } }
+]

@@ -78,6 +78,10 @@ pub struct Column {
     /// it was loaded, and what a chunk height without storage counts as
     /// (02 §22). Zero until the column joins a grid.
     rev_base: u32,
+    /// Whether the column differs from what is stored or generated for
+    /// it, whatever its chunks say: set for a column that was read back
+    /// from a save in which it had changed (02 §11). Not state.
+    changed: bool,
 }
 
 impl Column {
@@ -101,6 +105,7 @@ impl Column {
             stray: BTreeMap::new(),
             occupants_rev: 0,
             rev_base: 0,
+            changed: false,
         };
         let chunk_base = column.z_lo << CHUNK_Z_BITS;
         if surface_z != chunk_base && below_fill != above_fill {
@@ -337,9 +342,10 @@ impl Column {
                 .sum::<usize>()
     }
 
-    /// Whether any chunk differs from what is on disk.
+    /// Whether the column differs from what is on disk, or from what
+    /// generation gives if it has never been stored.
     pub fn is_dirty(&self) -> bool {
-        self.chunks.iter().any(|chunk| chunk.is_dirty())
+        self.changed || self.chunks.iter().any(|chunk| chunk.is_dirty())
     }
 
     /// The chunk at a chunk height, created along with any chunks between
@@ -630,9 +636,16 @@ impl Column {
     /// Marks every chunk as matching what is on disk, or what generation
     /// gives.
     pub(crate) fn clear_dirty(&mut self) {
+        self.changed = false;
         for chunk in &mut self.chunks {
             chunk.clear_dirty();
         }
+    }
+
+    /// Marks the column as differing from what is stored or generated
+    /// for it, so that unloading it writes it.
+    pub(crate) fn mark_dirty(&mut self) {
+        self.changed = true;
     }
 
     /// The revision a chunk height without storage counts as: where the
@@ -699,6 +712,7 @@ impl Column {
             stray: BTreeMap::new(),
             occupants_rev: 0,
             rev_base: 0,
+            changed: false,
         };
         column.recompute_heightmap();
         column.clear_dirty();
@@ -740,6 +754,19 @@ pub(crate) struct ColumnImage {
     /// The chunk height of the first chunk.
     z_lo: i32,
     chunks: Vec<crate::chunk::ChunkImage>,
+}
+
+impl ColumnImage {
+    /// Replaces every element state the image holds by what `turn`
+    /// makes of it: how the ids of definitions are turned into save ids
+    /// and back (02 §11).
+    pub(crate) fn map_states(&mut self, turn: &mut dyn FnMut(Layer, ElementState) -> ElementState) {
+        self.below_fill = BlockState::from_raw(turn(Layer::Block, self.below_fill.raw()));
+        self.above_fill = BlockState::from_raw(turn(Layer::Block, self.above_fill.raw()));
+        for chunk in &mut self.chunks {
+            chunk.map_states(turn);
+        }
+    }
 }
 
 /// Hashes what the cells hold, not how much of it happens to be stored: a

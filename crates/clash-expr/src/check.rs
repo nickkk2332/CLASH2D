@@ -121,6 +121,16 @@ impl Checked {
     pub fn span(&self) -> Span {
         self.root.span
     }
+
+    /// Whether the expression's value is the character's own (05 §7.3):
+    /// it was reached from a subject or a local bound as own, through
+    /// properties registered as yielding something of the same owner and
+    /// through the elements of lists. Whoever binds this value by a name
+    /// in another context, as a screen binds a row to `it`, may bind it
+    /// as own there.
+    pub fn is_own(&self) -> bool {
+        self.root.own
+    }
 }
 
 /// A text template whose expressions are checked.
@@ -369,8 +379,10 @@ impl<'a> Checker<'a> {
     fn local(&mut self, name: &Name, span: Span) -> Box<Node> {
         let written = name.to_string();
         if let Some(slot) = self.context.local_slot(&written) {
-            let ty = self.context.locals()[usize::from(slot)].ty.clone();
-            return Node::new(NodeKind::Local(slot), ty, span);
+            let binding = &self.context.locals()[usize::from(slot)];
+            let mut node = Node::new(NodeKind::Local(slot), binding.ty.clone(), span);
+            node.own = binding.own;
+            return node;
         }
         let locals = self.context.locals().iter().map(|b| b.name.as_str());
         let hint = closest_name(&written, locals).map(|close| format!("did you mean `${close}`?"));
@@ -826,7 +838,11 @@ impl<'a> Checker<'a> {
                 return Self::broken(span);
             }
         };
-        Node::new(NodeKind::Index { object, index }, ty, span)
+        // An element of the character's own list is the character's own.
+        let own = object.own;
+        let mut node = Node::new(NodeKind::Index { object, index }, ty, span);
+        node.own = own;
+        node
     }
 
     // ---- lists and maps ------------------------------------------------------

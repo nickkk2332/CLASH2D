@@ -53,7 +53,7 @@ impl StateHash for RealmState {
 ///
 /// Region records, stamps, areas, sites, travelers and the realm plan
 /// join this struct with the packages that build them.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Realm {
     /// The realm's id.
     pub id: RealmId,
@@ -304,10 +304,16 @@ impl<'a> GridView<'a> {
             .and_then(|vars| vars.get(key)))
     }
 
-    /// The level of a field in a cell, 0 to 255. Fields are built by
-    /// package W16: until then every field reads as zero.
-    pub fn field(&self, cell: CellPos, _field: FieldId) -> Result<u8, WorldError> {
-        self.locate(cell).map(|_| 0)
+    /// The level of a field in a cell, 0 to 255 (02 §16). Zero where
+    /// the cell holds none of it.
+    pub fn field(&self, cell: CellPos, field: FieldId) -> Result<u8, WorldError> {
+        let (column, cell) = self.locate(cell)?;
+        Ok(crate::field::level_in(column, cell, field))
+    }
+
+    /// The definitions the grid's cosmos is made from.
+    pub(crate) fn defs(&self) -> &'a WorldDefs {
+        self.defs
     }
 
     /// The ambient conditions of a cell: its stratum's, with what the
@@ -371,6 +377,10 @@ pub struct Cosmos {
     /// The light worked out so far (15 §3.3). Derived: never saved or
     /// hashed, and empty in a clone.
     pub(crate) light: crate::light::LightSlot,
+    /// What the cosmos keeps for saving (02 §11): the save's tables of
+    /// ids, the entity sections waiting to be stored, and warnings. Not
+    /// hashed.
+    pub(crate) save: crate::save::SaveState,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -392,7 +402,6 @@ impl Cosmos {
     /// An empty cosmos over a set of definitions.
     pub fn new(defs: Arc<WorldDefs>) -> Cosmos {
         Cosmos {
-            defs,
             realms: BTreeMap::new(),
             grids: Vec::new(),
             next_realm: 0,
@@ -404,6 +413,8 @@ impl Cosmos {
             tickets: TicketTable::new(),
             activity: WorldActivity::new(),
             light: crate::light::LightSlot::new(),
+            save: crate::save::SaveState::new(&defs),
+            defs,
         }
     }
 
@@ -513,6 +524,18 @@ impl Cosmos {
         &self.vars
     }
 
+    /// Sets or clears a global variable and returns the value it had.
+    pub fn set_global_var(
+        &mut self,
+        key: clash_core::VarKey,
+        value: Option<Value>,
+    ) -> Option<Value> {
+        match value {
+            Some(value) => self.vars.set(key, value),
+            None => self.vars.remove(key.as_str()),
+        }
+    }
+
     /// A read-only handle on one grid, for reading many cells of it.
     #[inline]
     pub fn grid(&self, grid: GridId) -> Result<GridView<'_>, WorldError> {
@@ -610,7 +633,7 @@ impl Cosmos {
         self.grid(loc.grid)?.var(loc.cell, key)
     }
 
-    /// The level of a field in a cell. Zero until fields are built.
+    /// The level of a field in a cell, 0 to 255 (02 §16).
     pub fn field(&self, loc: Location, field: FieldId) -> Result<u8, WorldError> {
         self.grid(loc.grid)?.field(loc.cell, field)
     }
@@ -640,7 +663,73 @@ impl Cosmos {
         self.purge_occupants(grid, tract);
         self.light_tract_reloaded(grid, tract);
         let slot = self.slot_mut(grid).ok_or(WorldError::UnknownGrid(grid))?;
-        Ok(slot.grid.insert_column(tract, column))
+        let replaced = slot.grid.insert_column(tract, column);
+        self.fields_column_changed(grid, tract);
+        Ok(replaced)
+    }
+
+    /// The realm each grid belongs to, by grid id, with `None` where a
+    /// grid has gone: the shape of the grid table, for a save.
+    pub(crate) fn grid_realms(&self) -> Vec<Option<RealmId>> {
+        self.grids
+            .iter()
+            .map(|slot| slot.as_deref().map(|slot| slot.realm))
+            .collect()
+    }
+
+    /// The number the next realm will be given.
+    pub(crate) fn next_realm_number(&self) -> u32 {
+        self.next_realm
+    }
+
+    /// Puts back the realms, the grid table and the global variables
+    /// read from a save, into a cosmos that has none. Every grid comes
+    /// back with nothing loaded. Refused, changing nothing, if a grid
+    /// names a realm that is not among those given or a realm names a
+    /// definition that does not exist.
+    pub(crate) fn restore_realms(
+        &mut self,
+        next_realm: u32,
+        vars: VarMap,
+        realms: Vec<Realm>,
+        grids: Vec<Option<RealmId>>,
+    ) -> Result<(), &'static str> {
+        let realms: BTreeMap<RealmId, Realm> =
+            realms.into_iter().map(|realm| (realm.id, realm)).collect();
+        let mut slots = Vec::with_capacity(grids.len());
+        for owner in grids {
+            let Some(owner) = owner else {
+                slots.push(None);
+                continue;
+            };
+            let realm = realms
+                .get(&owner)
+                .ok_or("a grid belongs to a realm that was not saved")?;
+            let kind = self
+                .defs
+                .realms()
+                .get(realm.def)
+                .ok_or("a realm has a definition that does not exist")?;
+            slots.push(Some(Box::new(GridSlot {
+                grid: Grid::new(),
+                realm: owner,
+                realm_def: realm.def,
+                clock: realm.clock,
+                topology: kind.topology,
+            })));
+        }
+        if realms.values().any(|realm| {
+            slots
+                .get(realm.base_grid.index())
+                .is_none_or(Option::is_none)
+        }) {
+            return Err("a realm's base grid was not saved");
+        }
+        self.realms = realms;
+        self.grids = slots;
+        self.next_realm = next_realm;
+        self.vars = vars;
+        Ok(())
     }
 
     /// Unloads a tract of a grid and returns its column. Whoever stood
@@ -653,6 +742,7 @@ impl Cosmos {
         let column = slot.grid.remove_column(tract)?;
         // A tract that is gone is no longer one the tickets keep.
         self.tickets.forget(realm, tract);
+        self.fields_column_changed(grid, tract);
         Some(column)
     }
 }

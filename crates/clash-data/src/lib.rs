@@ -92,7 +92,7 @@ pub mod mods;
 pub mod source;
 pub mod units;
 
-pub use de::from_node;
+pub use de::{from_node, from_node_at};
 pub use defs::{
     CrossCheck, CrossCx, Def, DefTypes, Defs, DefsView, FinishCx, FinishedTree, LoadedModInfo,
     Registry, RegistryCx, RegistryStep, TagTable, TypeInfo, ValidateCx,
@@ -104,7 +104,7 @@ pub use expr::{CompileCx, Cond, Evaluator, Expr, ExprDefs, Runner, Scope, ValueS
 pub use fields::{
     Energy, Feature, Force, Frequency, FromKind, FromSite, Gated, HasRate, Inline, Kind, KindValue,
     Length, Located, Mass, Power, Pressure, Quantity, Rate, Ref, Seconds, Site, Speed, Tag, TagSet,
-    Temperature, Text, Time, Volume, by_kind, by_site, dur,
+    Temperature, Text, Time, Volume, by_kind, by_site, by_site_or_plain, dur,
 };
 pub use json::{COMMENT_KEY, Limits, Member, Node, NodeKind, Num, parse_json};
 pub use load::{LoadOutcome, Loader};

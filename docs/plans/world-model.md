@@ -37,13 +37,13 @@ Section references such as "02 §14" point into those documents.
 | W7 | Occupancy, planes, areas, sites | M | W6 | beta |
 | W8 | Tracts, regions, generation, loading | L | W7 | beta |
 | W9 | Tickets and activity | M | W8 | beta |
-| W10 | Persistence | M | W8 | todo |
+| W10 | Persistence | M | W8 | beta |
 | W11 | World viewer and scenario runner | M | W8 | todo |
 | W12 | Damage and destruction | M | W6 | beta |
 | W13 | Structural support and collapse | L | W12, W9 | beta |
 | W14 | Bodies | L | W12, W7, W9 | beta |
 | W15 | Energy releases | L | W13, W14 | beta |
-| W16 | Fields | L | W12 | todo |
+| W16 | Fields | L | W12 | beta |
 | W17 | Coarse layer | L | W15, W10 | todo |
 | W18 | Queries | M | W7 | beta |
 | W19 | Portals, boundary links, realm transfer | M | W14, W18 | todo |
@@ -350,7 +350,8 @@ world. Stubbed:
   read 10 ns through a `GridView` and 12 ns through `Cosmos` (target 10 ns),
   a read of all three states 18 ns (target 30 ns). A uniform chunk is 184
   bytes (target 200).
-- `FieldStore` and `OccupantIndex` are empty typed placeholders (W16, W7).
+- `FieldStore` and `OccupantIndex` were empty typed placeholders until
+  W16 and W7 built them.
 - Chunks and columns are not serialised: the tract blob codec is W10's.
 - The write primitives for damage, decals and cell variables exist and are
   tested, and nothing calls them until `WorldEdit` (W6).
@@ -502,8 +503,9 @@ Stubbed:
   `PortalSpec` and `SubgridSpec` are typed and carried and nothing reads
   them. `TractDefId` is a bare id: the `tract` definition type is
   document 10's. A generator's portals and subgrids are dropped.
-- The tract blob holds runtime ids, no entity section and no fingerprint:
-  the final layout, the save-id table and the `redb` store are W10's.
+- The tract blob held runtime ids, no entity section and no
+  fingerprint. W10 has since built the final layout, the save-id tables
+  and the `redb` store.
 - A mistake in a realm's `generator_params` names the definition and the
   parameter's path and is not yet a diagnostic with file and line: the
   linter does not bind generators (`clash-tools` was closed to this
@@ -570,6 +572,37 @@ Done when
   content.
 - A pristine tract writes no blob.
 - A corrupted blob produces an error, not a panic.
+
+Status `beta` (decisions D-480 to D-486). Built as 02 §11 now reads: the
+tract blob at version 2, with states by save id, an optional column and
+the simulation's entity section (`encode_tract`, `decode_tract`,
+`Cosmos::set_tract_entities`, `LoadedTract::entities`); `SaveIds` and
+`DefKind`, with placeholders added to the definitions when a save is
+loaded and `Cosmos::take_save_warnings`; named sections on `TractStore`,
+`MemoryStore`, and `RedbStore`, one database file for each save; the
+generator fingerprint in each tract's record, `LoadedTract::regenerated`
+and `Cosmos::set_store_pristine`; and `Cosmos::save_world` and
+`Cosmos::load_world`, with the sections listed in `WORLD_SECTIONS`. The
+save in the middle of `tower_pancake` is a real one. The tests are in
+`crates/clash-world/tests/save.rs` and `tests/store.rs`. A save of a
+world with nine loaded tracts, three of them changed, is about 1.5 KB;
+a stored `test_city` tract is about 1 KB. Stubbed:
+
+- Migration entries (04 §12.1) are not consulted: the `migration` type
+  is P7's. `SaveIds::bind` is where they go.
+- Region records are not blobs of their own: `world.cosmos` holds every
+  realm's records and is written whole at every save, about 37 KB a
+  surveyed region before compression and a few hundred bytes after.
+- Decal, conduit, site, tract, devastation kind, map, region kind and
+  path kind ids are written as numbers: their definition types are not
+  built. A named state is written as its position.
+- The columns of grids that are not a realm's base grid are not saved
+  (subgrids, W20a). Fields join the chunk's stored form and bodies a
+  section of their own with W16 and W14.
+- `save.store_pristine` is a function of the cosmos until settings are
+  bound (P6).
+- No test script (W11) and no benchmark (W23). An ignored test in
+  `tests/save.rs` prints the sizes of a save.
 
 ### W11 — World viewer and scenario runner
 
@@ -680,10 +713,9 @@ the kernel calls. Stubbed:
   force-resolving a collapse with it.
 - Floating floors (02 §14.1) are W25's, and the tremor's factors on
   span and bearing W24's.
-- The save in the middle of `tower_pancake` writes the timeline and
-  `Cosmos::processes` with the codec and copies the cells: tract blobs
-  and the cosmos's own serialisation are W10's, which must write
-  `activity` and the stability queue with the rest.
+- The save in the middle of `tower_pancake` was the timeline and
+  `Cosmos::processes` with copied cells. Since W10 it is a real save:
+  `Cosmos::save_world` and `load_world`.
 - The bodies of `tower_pancake` and `weakened_columns` are tests of
   those names in `crates/clash-world/tests/collapse.rs`. The scripts are
   owed to the script runner (W11).
@@ -741,6 +773,12 @@ elements and the W14 half of leaving loaded space. Stubbed:
   `over_the_horizon` are tests of those names in
   `crates/clash-world/tests/bodies.rs`. The scripts are owed to the
   script runner (W11).
+- Saved with the world (W10, D-499): a flight is a process in
+  `world.activity` and a waiting impact is in its tract's record, with
+  the material, damage type and planes they name written as save ids.
+  The save in mid-flight and the one in `over_the_horizon` are real
+  saves. The simulation places the entity a body carries again after
+  loading, as it does every occupant.
 - A timing test prints figures
   (`timing_of_a_projectile_across_thirty_metres`, ignored): about 13 µs
   for a flight of 30 m, 450 ns a step. The benchmark and its budget are
@@ -792,6 +830,17 @@ may burst where it ends; the budget, as a cut-off; `ReleaseStarted` and
   those names in `crates/clash-world/tests/releases.rs`, the first with
   a save while the front is spreading. The scripts are owed to the
   script runner (W11).
+- Saved with the world (W10, D-499): a release in progress is a process
+  in `world.activity`, with its damage type written as a save id. The
+  save in `car_bomb_street` is a real one, and
+  `what_is_in_the_air_keeps_what_it_names_when_the_mods_change` loads
+  one without the mod that defined a damage type, a material and a
+  plane, and with it again.
+- A release tells the fields of each cell it reaches (`conduct`, D-499).
+  A reaction to damage is the field's: with core's water and a shock,
+  every wet cell the front reaches passes a packet to every wet cell
+  within six steps, which over a large body of water is many packets
+  for each cell and is not bounded by `release.max_cells`.
 - A timing test prints figures (`timing_of_a_blast_in_a_city_block`,
   ignored): a 2 GJ blast among nine five-storey buildings visits 136,000
   cells in about 28 ms, 200 ns a cell, and what follows it (collapse and
@@ -818,6 +867,43 @@ Done when
 - Shuffling the visiting order of cells and chunks leaves the result
   unchanged.
 - Scenario `office_fire`.
+
+Status `beta` (decisions D-500 to D-509). Built as 02 §16 now reads: the
+`field` and `field_reaction` definition types; sparse storage per chunk
+and field with levels, activity and who is responsible, stored with the
+tract; `WorldEdit::add_field`, `set_field` and `conduct`; the stepper as
+a process of the world for each clock and step interval, with every rule
+(`decay`, `diffuse`, `flow`, `spread`, `emit`, `convert`, `damage`,
+`drift`, `expose`), reactions, sleeping and waking, the budget and
+catch-up at load; `FieldAppeared`, `FieldVanished`, `FieldContact`,
+`OccupantDosed`, `FieldBudgetExceeded`, and `OccupantExposed` from
+fields; `field_hides_sight` and `field_lights`; fire, smoke, steam and
+water in `mods/core/data/world/fields.json`. The review additions "Field
+reactions", "Drift on bodies and fields" (the fields half) and "Exposure
+from fields" are built with it. Stubbed:
+
+- No `heat` field in `core`, and `warms` and `changes` on a field are
+  stored only: temperature is V1's and change of state W25's, as is
+  `leave` on a reaction.
+- Sight is not blocked by fields in rays, lines of sight or fields of
+  view: `Cosmos::field_hides_sight` is the hook (02 §22).
+- Drift is what areas set. The region's wind and current come with the
+  weather.
+- `settle` keeps and wakes a liquid; it does not settle it in closed
+  form. Catch-up is tested by itself, and a tract's fields through its
+  blob; a test that unloads and reloads a burning tract through a store
+  belongs with the generators' tests in `clash-gen`.
+- Releases and bodies call `conduct` (W15, W14). Attacks must too, for a
+  reaction to damage to happen.
+- The bodies of `office_fire` and `quench` are tests of those names in
+  `crates/clash-world/tests/fields.rs`. The scripts are owed to the
+  script runner (W11).
+- A timing test prints figures (`timing_of_a_building_fire`, ignored):
+  about 0.75 microseconds for each active cell each step, so a fire of
+  23,600 active cells takes about 20 ms a step: well over the budget of
+  02 §25. The time goes in reading six neighbours through the sparse
+  layers and in summing a step's changes; a dense form for chunks that
+  are mostly full is the remedy. The benchmark and the budget are W23's.
 
 ### W17 — Coarse layer
 

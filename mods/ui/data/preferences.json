@@ -1,0 +1,16 @@
+[
+  { "//": "The player's choices about display and input. They are kept outside saves and no rule can read them. The engine acts on the ones named `theme` and `keymap` itself; playback reads `playback_speed` and `cutscenes`.",
+    "type": "preference", "id": "theme", "kind": "text", "default": "ui:default",
+    "name": "Theme",
+    "doc": "The theme every screen is drawn with: the qualified id of a `theme` definition. Changing it restyles every open screen." },
+  { "type": "preference", "id": "keymap", "kind": "text", "default": "ui:default",
+    "name": "Keys",
+    "doc": "What each key means: the qualified id of a `keymap` definition." },
+  { "type": "preference", "id": "playback_speed", "kind": "number", "default": 1, "min": 0, "max": 8,
+    "name": "Playback speed",
+    "doc": "How fast what happened is played back: 1 is the usual pace, 2 is twice as fast, and 0 shows everything at once." },
+  { "type": "preference", "id": "cutscenes", "kind": "choice", "default": "all",
+    "options": ["all", "major", "none"],
+    "name": "Cutscenes",
+    "doc": "How often cutscenes play: all of them, only those of tier `major`, or none." }
+]

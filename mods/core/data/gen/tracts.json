@@ -1,0 +1,28 @@
+[
+  { "//": "Open grass with the odd tree.",
+    "type": "tract", "id": "field", "tags": ["open", "rural"],
+    "ground": "lowland",
+    "params": { "trees": 0.003 },
+    "bands": ["overland"],
+    "glyph": { "ch": "\"", "fg": "green" } },
+
+  { "//": "A small wood: trees close together, with undergrowth.",
+    "type": "tract", "id": "wood", "tags": ["wooded", "rural"],
+    "ground": "lowland",
+    "params": { "trees": 0.12, "bushes": 0.04 },
+    "bands": ["overland"],
+    "glyph": { "ch": "Y", "fg": "green" } },
+
+  { "//": "A lane running east to west with houses on both sides, each turned so that its front faces the lane. Two of them are there only some of the time.",
+    "type": "tract", "id": "lane", "tags": ["settled"],
+    "ground": "lowland",
+    "params": { "trees": 0.004, "bushes": 0.004, "rocks": 0.0 },
+    "place": [
+      { "map": "lane_strip", "at": [0, 12] },
+      { "map": "house", "at": [3, 5], "facing": "south" },
+      { "map": "hut", "at": [16, 7], "facing": "south", "chance": 0.8 },
+      { "map": "corner_shop", "at": [4, 16], "facing": "north" },
+      { "map": "house", "at": [18, 16], "facing": "north", "chance": 0.7 } ],
+    "bands": ["overland"],
+    "glyph": { "ch": "=", "fg": "gray" } }
+]

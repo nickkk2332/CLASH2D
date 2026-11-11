@@ -1664,3 +1664,41 @@ fn the_built_in_registry_needs_no_host() {
     let outcome = check("clamp(1, 2, 3)", &Registry::new(), &context, &Type::Any);
     assert_eq!(outcome.diagnostics[0].code, codes::UNKNOWN_FUNCTION);
 }
+
+#[test]
+fn what_is_own_follows_locals_and_elements() {
+    let host = TestHost::new();
+    let entity = host.entity(1).kind;
+    let mut mind = Context::new()
+        .own_subject("party", Type::list(Type::Subject(entity)))
+        .subject("others", Type::list(Type::Subject(entity)))
+        .local("stranger", Type::Subject(entity))
+        .belief();
+    mind.add_own_local("member", Type::Subject(entity));
+
+    // An element of the character's own list is its own, and so is a
+    // local declared as own.
+    for source in ["party[0].mass", "$member.mass", "$member.part('arm').size"] {
+        assert_eq!(diagnostics_in(source, &mind, &host), [], "`{source}`");
+    }
+    // An element of any other list and an ordinary local are not.
+    for source in ["others[0].mass", "$stranger.mass"] {
+        let found = diagnostics_in(source, &mind, &host);
+        assert_eq!(found.len(), 1, "`{source}`: {found:#?}");
+        assert_eq!(found[0].code, codes::NOT_BELIEF_SAFE, "`{source}`");
+    }
+
+    // Whether a value is own can be asked, to bind it by another name.
+    let own = |source: &str| {
+        check(source, host.registry(), &mind, &Type::Any)
+            .value
+            .is_some_and(|checked| checked.is_own())
+    };
+    assert!(own("party"));
+    assert!(own("party[0]"));
+    assert!(own("$member"));
+    assert!(own("$member.part('arm')"));
+    assert!(!own("others"));
+    assert!(!own("$member.mass"), "a number belongs to nobody");
+    assert!(!own("$stranger"));
+}

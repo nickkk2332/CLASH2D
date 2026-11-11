@@ -572,6 +572,10 @@ fn link_on_destroy<I: DenseId>(
 pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
     let mut errors = Errors::default();
     let errors = &mut errors;
+    // What the tables are built from, as one number (02 §11). Tables
+    // built from loaded definitions take the loader's fingerprint
+    // instead, which also covers the types the world does not own.
+    let fingerprint = clash_core::Hash128::of(format!("{raw:?}").as_str());
 
     let damage_defs = sorted("damage_type", raw.damage_types, errors);
     let material_defs = sorted("material", raw.materials, errors);
@@ -1032,6 +1036,15 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         });
     }
 
+    // Fields and what they do to each other (02 §16).
+    let (fields, field_reactions) = crate::field::build_defs(
+        raw.fields,
+        raw.field_reactions,
+        &damage_types,
+        &materials,
+        &mut |kind, id, path, message| errors.push(kind, id, path, message),
+    );
+
     if !errors.list.is_empty() {
         return Err(core::mem::take(&mut errors.list));
     }
@@ -1049,6 +1062,10 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         skies,
         sky_reach,
         source_reach,
+        fingerprint,
+        placeholders: Default::default(),
+        fields,
+        field_reactions,
     })
 }
 

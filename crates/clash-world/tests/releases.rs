@@ -10,13 +10,14 @@ mod wreck;
 
 use std::sync::Arc;
 
-use clash_core::{EntityId, Hash128, Real, Tick, codec};
+use clash_core::{EntityId, Hash128, Real, Tick};
 use clash_time::Timeline;
 use clash_world::test_support::load_column;
 use clash_world::{
-    BlockState, BodyOwner, CauseKind, ColumnBuilder, Cosmos, DamageResult, EnergyRelease,
-    EventSink, Footprint, Layer, Location, Occupant, OccupantFlags, OccupantKind, ReleaseShape,
-    TractPos, WORLD_MIN_INTENSITY, WorldActivity, WorldDefs, WorldError, WorldEvent,
+    BlockState, Body, BodyOwner, CauseKind, ColumnBuilder, Cosmos, DamageResult, Debris, DefKind,
+    EnergyRelease, EventSink, Footprint, Layer, Location, MemoryStore, Occupant, OccupantFlags,
+    OccupantKind, PlaneId, PlaneMask, Projectile, ReleaseShape, TractPos, WORLD_MIN_INTENSITY,
+    WarnAt, WorldDefs, WorldError, WorldEvent,
 };
 use wreck::{World, at, build_tower, someone};
 
@@ -906,29 +907,377 @@ fn car_bomb_street() {
     first.run_until(Tick(12_000));
     assert_eq!(first.cosmos.releases().count(), 1);
     assert!(first.cosmos.bodies().count() > 0);
-    let saved_timeline = codec::to_bytes(&first.timeline).unwrap();
-    let saved_activity = codec::to_bytes(first.cosmos.processes()).unwrap();
-    let timeline: Timeline = codec::from_bytes(&saved_timeline).unwrap();
-    let activity: WorldActivity = codec::from_bytes(&saved_activity).unwrap();
-    assert_eq!(&activity, first.cosmos.processes());
-    // The cells are copied: tract blobs are the persistence package's.
-    let mut cosmos = first.cosmos.clone();
-    cosmos.restore_activity(WorldActivity::new());
-    assert_ne!(Hash128::of(&cosmos), Hash128::of(&first.cosmos));
-    cosmos.restore_activity(activity);
-    let mut second = World {
-        defs: Arc::clone(&first.defs),
-        timeline,
-        cosmos,
-        events: EventSink::new(),
-        grid: first.grid,
-    };
+    // A real save: the world into a store with the timeline beside it,
+    // a cosmos made of what the store holds, and everyone placed again
+    // (02 §11.4).
+    let mut second = first.saved_and_loaded();
+    assert_eq!(second.cosmos.processes(), first.cosmos.processes());
+    assert!(!second.cosmos.processes().is_idle());
     assert_eq!(second.state_hash(), first.state_hash());
     second.run_until(end);
     assert_eq!(second.state_hash(), straight.state_hash());
     let mut told = first.events.drain();
     told.extend(second.events.drain());
     assert_eq!(Hash128::of(&told), Hash128::of(&straight.events.drain()));
+}
+
+// ---- Fields ----------------------------------------------------------------------
+
+/// A run of water on the ground along a row, from one cell to another.
+fn flood(w: &mut World, x: (i32, i32), y: i32) {
+    let water = w.defs.fields().lookup("core:water").unwrap();
+    for cx in x.0..=x.1 {
+        let loc = w.loc(cx, y, 0);
+        w.ctx().edit(someone()).add_field(loc, water, 60).unwrap();
+    }
+}
+
+#[test]
+fn a_release_over_water_conducts() {
+    let defs = common::test_defs();
+    let energy = 1.0e5;
+    // The front reaches the cell it began in and those beside it, and
+    // no further.
+    let at_origin = open_intensity(energy, 0.0);
+    let beside = open_intensity(energy, 1.0);
+    assert!(beside > WORLD_MIN_INTENSITY.get());
+    assert!(open_intensity(energy, 2.0) < WORLD_MIN_INTENSITY.get());
+
+    let scene = |kind: &str| {
+        let mut w = world_of(&defs, 1, |_, _| {});
+        // Water from where it goes off, eleven cells east.
+        flood(&mut w, (10, 20), 10);
+        let who = [
+            // In the water, beyond the front.
+            stand(&mut w, 30, 14, 10, 0, 0.0),
+            // Further along it: six cells from the last wet cell the
+            // front reaches, seven from where it began.
+            stand(&mut w, 31, 17, 10, 0, 0.0),
+            // Further than the water passes anything on.
+            stand(&mut w, 32, 20, 10, 0, 0.0),
+            // On dry ground, as near as the first.
+            stand(&mut w, 33, 14, 12, 0, 0.0),
+        ];
+        let spec =
+            EnergyRelease::sphere(w.loc(10, 10, 0), w.damage_type(kind), r(energy), someone());
+        w.ctx().release(spec).unwrap();
+        w.run_until(Tick(100_000));
+        assert_eq!(summaries(&w).len(), 1);
+        (w, who)
+    };
+    let close = |found: f64, wanted: f64| (found - wanted).abs() <= wanted * 1.0e-9;
+
+    // Core's water passes a shock on: four fifths of it, six cells.
+    let (w, [wet, further, beyond, dry]) = scene("core:shock");
+    let shock = w.damage_type("core:shock");
+    let mut told = exposures(&w, wet);
+    told.sort_by(|a, b| b.1.total_cmp(&a.1));
+    assert_eq!(told.len(), 2, "{told:?}");
+    // From the cell it went off in: the intensity there, and the energy
+    // the wave carries through a cell, which is no more than was let go.
+    assert!(close(told[0].1, 0.8 * at_origin), "{told:?}");
+    assert!(close(told[0].2, 0.8 * energy), "{told:?}");
+    // From the wet cell beside it.
+    assert!(close(told[1].1, 0.8 * beside), "{told:?}");
+    assert!(close(told[1].2, 0.8 * beside * 3.0), "{told:?}");
+    let told = exposures(&w, further);
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(close(told[0].1, 0.8 * beside));
+    assert!(exposures(&w, beyond).is_empty());
+    assert!(exposures(&w, dry).is_empty());
+    // It is the release's doing, and its kind of damage.
+    assert!(w.events.events().iter().all(|event| match event {
+        WorldEvent::OccupantExposed { kind, cause, .. } =>
+            *kind == shock && cause.instigator == someone().instigator,
+        _ => true,
+    }));
+
+    // A kind of damage that water does not pass on stays where the
+    // front put it.
+    let (w, who) = scene("core:blast");
+    for one in who {
+        assert!(exposures(&w, one).is_empty());
+    }
+}
+
+// ---- Saving ------------------------------------------------------------------------
+
+/// The definitions of `mods/core` with a mod `z` that stays and, if
+/// asked for, a mod `a` that a save can come to be without: a kind of
+/// damage, a material and a plane. Its ids sort before every other, so
+/// that without it the dense ids of the rest are other numbers.
+fn defs_with(a: bool) -> Arc<WorldDefs> {
+    let mut raw = common::test_raw();
+    common::add_json(
+        &mut raw,
+        "z",
+        r#"[ { "type": "plane", "id": "mirror" } ]"#,
+        "the mod that stays",
+    );
+    if a {
+        common::add_json(
+            &mut raw,
+            "a",
+            r#"[
+                { "type": "damage_type", "id": "plasma",
+                  "default_resist": { "threshold": "50 kPa" } },
+                { "type": "material", "id": "alloy", "density": 4000, "toughness": 2.0e6,
+                  "rubble": "core:rubble" },
+                { "type": "plane", "id": "astral" }
+            ]"#,
+            "the mod that goes",
+        );
+    }
+    Arc::new(WorldDefs::build(raw).unwrap_or_else(|errors| panic!("{errors:?}")))
+}
+
+/// The tags of the two shots of [`in_the_air`].
+const PLASMA_SHOT: u64 = 1;
+const PIERCE_SHOT: u64 = 2;
+
+/// A wall with things in the air about it and two fronts spreading:
+/// someone thrown, a shot of the mod's kind of damage on the default
+/// plane and the mod's, a shot of core's on the plane of the mod that
+/// stays, a fragment of the mod's material, a release of the mod's kind
+/// of damage, and a blast beside the wall. Built over `defs_with(true)`.
+fn in_the_air(defs: &Arc<WorldDefs>) -> World {
+    let wall = defs.block_state("core:wall", None).unwrap();
+    let mut w = world_of(defs, 1, |_, builder| {
+        for y in 8..=14 {
+            builder.set_block(at(14, y, 0), wall);
+        }
+    });
+    let plane = |name: &str| PlaneMask::of(defs.planes().lookup(name).unwrap());
+    let plasma = w.damage_type("a:plasma");
+    let alloy = defs.materials().lookup("a:alloy").unwrap();
+    let v = |x: f64, y: f64, z: f64| [r(x), r(y), r(z)];
+
+    let who = stand(&mut w, 20, 4, 20, 0, 80.0);
+    let thrown = Body::of_mass(
+        BodyOwner::Entity(who),
+        w.grid,
+        v(4.5, 20.5, 1.5),
+        v(12.0, 0.0, 6.0),
+        r(80.0),
+        someone(),
+    );
+    w.ctx().launch(thrown).unwrap();
+
+    let shots = [
+        (
+            PLASMA_SHOT,
+            plasma,
+            PlaneMask::DEFAULT.union(plane("a:astral")),
+            24.5,
+        ),
+        (
+            PIERCE_SHOT,
+            w.damage_type("core:pierce"),
+            plane("z:mirror"),
+            26.5,
+        ),
+    ];
+    for (tag, kind, planes, south) in shots {
+        let surface = Projectile {
+            kind,
+            area: r(1.0e-4),
+            give: r(0.01),
+            tag,
+        };
+        let mut shot = Body::of_mass(
+            BodyOwner::Projectile(surface),
+            w.grid,
+            v(2.5, south, 1.5),
+            v(60.0, 0.0, 8.0),
+            r(0.05),
+            someone(),
+        );
+        shot.plane = planes;
+        w.ctx().launch(shot).unwrap();
+    }
+
+    let piece = Debris {
+        material: alloy,
+        volume: r(0.001),
+    };
+    let mut fragment = Body::of_mass(
+        BodyOwner::Debris(piece),
+        w.grid,
+        v(2.5, 28.5, 1.5),
+        v(10.0, 0.0, 10.0),
+        r(4.0),
+        someone(),
+    );
+    fragment.plane = PlaneMask::ALL;
+    w.ctx().launch(fragment).unwrap();
+
+    let flash = EnergyRelease::sphere(w.loc(24, 24, 0), plasma, r(1.0e7), someone());
+    w.ctx().release(flash).unwrap();
+    let charge = blast(&w, 12, 11, 0, 1.0e8);
+    w.ctx().release(charge).unwrap();
+    w
+}
+
+#[test]
+fn a_body_in_flight_and_a_release_in_progress_come_back_from_a_save() {
+    let defs = defs_with(true);
+    let end = Tick(3_000_000);
+    let mut straight = in_the_air(&defs);
+    straight.run_until(end);
+    // By then the fronts have gone as far as they go.
+    assert_eq!(summaries(&straight).len(), 2);
+
+    let mut first = in_the_air(&defs);
+    first.run_until(Tick(10_000));
+    // Both fronts are still spreading, what was set going is in the
+    // air, and so are fragments of the wall.
+    assert_eq!(first.cosmos.releases().count(), 2);
+    assert!(first.cosmos.bodies().count() > 4);
+    assert!(first.cosmos.debris_in_flight() > 1);
+
+    // The world into a store with the timeline beside it, a cosmos made
+    // of what the store holds, and everyone placed again (02 §11.4).
+    let mut second = first.saved_and_loaded();
+    assert_eq!(second.cosmos.processes(), first.cosmos.processes());
+    assert_eq!(
+        second.cosmos.releases().collect::<Vec<_>>(),
+        first.cosmos.releases().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        second.cosmos.bodies().collect::<Vec<_>>(),
+        first.cosmos.bodies().collect::<Vec<_>>()
+    );
+    assert_eq!(second.state_hash(), first.state_hash());
+
+    // And it goes on to the same end, telling the same.
+    second.run_until(end);
+    assert_eq!(second.state_hash(), straight.state_hash());
+    let mut told = first.events.drain();
+    told.extend(second.events.drain());
+    assert_eq!(Hash128::of(&told), Hash128::of(&straight.events.drain()));
+}
+
+#[test]
+fn what_is_in_the_air_keeps_what_it_names_when_the_mods_change() {
+    let with = defs_with(true);
+    let without = defs_with(false);
+    let mut first = in_the_air(&with);
+    first.run_until(Tick(10_000));
+    let original = first.state_hash();
+    let mut store = MemoryStore::new();
+    first.save(&mut store);
+
+    // ---- Without the mod ----
+    let mut second = World::load(&without, &mut store, first.grid);
+    let defs = Arc::clone(&second.defs);
+    let mut missing: Vec<(DefKind, String)> = defs
+        .placeholders()
+        .into_iter()
+        .map(|(kind, id)| (kind, id.to_owned()))
+        .collect();
+    missing.sort();
+    assert_eq!(
+        missing,
+        [
+            (DefKind::Material, "a:alloy".to_owned()),
+            (DefKind::DamageType, "a:plasma".to_owned()),
+            (DefKind::Plane, "a:astral".to_owned()),
+        ]
+    );
+    let warnings = second.cosmos.take_save_warnings();
+    for (kind, id) in &missing {
+        let here = WarnAt::Section("world.activity");
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.kind == *kind && w.id == *id && w.at == here),
+            "{kind} {id}"
+        );
+    }
+    let named = |kind: DefKind, id: u32| defs.def_name(kind, id).unwrap_or_default().to_owned();
+
+    // Core's kind of damage and the plane that stayed have other dense
+    // ids than they had, and the shot that names them names them still.
+    let pierce = |defs: &WorldDefs| defs.damage_types().lookup("core:pierce").unwrap();
+    let mirror = |defs: &WorldDefs| defs.planes().lookup("z:mirror").unwrap();
+    assert_ne!(pierce(&with), pierce(&without));
+    assert_ne!(mirror(&with), mirror(&without));
+    let shot = |w: &World, tag: u64| {
+        w.cosmos
+            .bodies()
+            .find_map(|flight| match flight.body.owner {
+                BodyOwner::Projectile(surface) if surface.tag == tag => {
+                    Some((surface.kind, flight.body.plane))
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert_eq!(
+        shot(&second, PIERCE_SHOT),
+        (pierce(&defs), PlaneMask::of(mirror(&defs)))
+    );
+    // What the mod defined is a placeholder that keeps its id.
+    let (kind, planes) = shot(&second, PLASMA_SHOT);
+    assert!(defs.is_placeholder(DefKind::DamageType, u32::from(kind.raw())));
+    assert_eq!(
+        named(DefKind::DamageType, u32::from(kind.raw())),
+        "a:plasma"
+    );
+    let astral = (0..PlaneMask::BITS)
+        .find(|bit| named(DefKind::Plane, *bit) == "a:astral")
+        .unwrap();
+    assert!(defs.is_placeholder(DefKind::Plane, astral));
+    assert_eq!(
+        planes,
+        PlaneMask::DEFAULT.with(PlaneId::new(u8::try_from(astral).unwrap()))
+    );
+    let kinds: Vec<String> = second
+        .cosmos
+        .releases()
+        .map(|release| named(DefKind::DamageType, u32::from(release.spec.kind.raw())))
+        .collect();
+    assert_eq!(kinds, ["a:plasma", "core:blast"]);
+    let fragments: Vec<(String, PlaneMask)> = second
+        .cosmos
+        .bodies()
+        .filter_map(|flight| match flight.body.owner {
+            BodyOwner::Debris(piece) => Some((
+                named(DefKind::Material, u32::from(piece.material.raw())),
+                flight.body.plane,
+            )),
+            _ => None,
+        })
+        .collect();
+    // The fragment of the mod's material, and those of the wall. Each
+    // is on every plane, as it was.
+    assert!(fragments.contains(&("a:alloy".to_owned(), PlaneMask::ALL)));
+    assert!(fragments.iter().any(|(material, _)| material != "a:alloy"));
+    assert!(
+        fragments
+            .iter()
+            .all(|(_, planes)| *planes == PlaneMask::ALL)
+    );
+
+    // ---- Saved without the mod, and loaded with it again ----
+    second.save(&mut store);
+    let third = World::load(&with, &mut store, first.grid);
+    assert!(third.defs.placeholders().is_empty());
+    assert_eq!(third.cosmos.processes(), first.cosmos.processes());
+    assert_eq!(third.state_hash(), original);
+
+    // Without the mod the world goes on. The kind of damage that went
+    // harms nothing more.
+    second.place_again(&first);
+    second.events.clear();
+    second.run_until(Tick(3_000_000));
+    assert_eq!(second.cosmos.releases().count(), 0);
+    assert_eq!(summaries(&second).len(), 2);
+    let gone = kind;
+    assert!(!second.events.events().iter().any(|event| {
+        matches!(event, WorldEvent::ElementDestroyed { how: clash_world::Destruction::Damage(by), .. }
+            if *by == gone)
+    }));
 }
 
 // ---- Cost ----------------------------------------------------------------------

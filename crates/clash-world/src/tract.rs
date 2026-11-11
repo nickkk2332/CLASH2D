@@ -16,8 +16,8 @@
 //! assert!(record.extra.is_none());
 //! ```
 
+use clash_core::{Hash128, Tick, Turn, VarMap, define_id, impl_state_hash};
 use clash_core::{StateHash, StateHasher};
-use clash_core::{Tick, Turn, VarMap, define_id, impl_state_hash};
 use serde::{Deserialize, Serialize};
 
 use crate::defs::{ElementState, Layer};
@@ -140,8 +140,8 @@ impl_state_hash!(SpawnRequest { what, at, params });
 /// A change to an unloaded tract, applied when the tract next loads
 /// (02 §17.3).
 ///
-/// Built so far: explicit cell changes and spawn requests. The other
-/// kinds of 02 §17.3 (a map, a liquid level, devastation, a rule to run)
+/// Built so far: explicit cell changes, spawn requests and maps. The
+/// other kinds of 02 §17.3 (a liquid level, devastation, a rule to run)
 /// join it with the packages that give them meaning.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -156,6 +156,12 @@ pub enum PendingEdit {
     /// Something for the simulation to put there. Handed over with the
     /// loaded tract.
     Spawn(SpawnRequest),
+    /// A map to write into the tract's cells (10 §4.3). The world cannot
+    /// resolve a map: the edit stays in the list when the tract loads,
+    /// until whoever holds the maps takes it with
+    /// [`Cosmos::take_pending_maps`](crate::Cosmos::take_pending_maps)
+    /// and applies it.
+    Map(PendingMap),
     /// A body that left loaded space and came down here (02 §15.4). Kept
     /// in the list until the coarse layer plays it out (package W17).
     Impact(crate::body::PendingImpact),
@@ -176,8 +182,12 @@ impl StateHash for PendingEdit {
                 hasher.write_u8(2);
                 spawn.state_hash(hasher);
             }
-            PendingEdit::Impact(impact) => {
+            PendingEdit::Map(map) => {
                 hasher.write_u8(3);
+                map.state_hash(hasher);
+            }
+            PendingEdit::Impact(impact) => {
+                hasher.write_u8(4);
                 impact.state_hash(hasher);
             }
         }
@@ -196,13 +206,19 @@ pub struct TractExtra {
     pub last_loaded: Tick,
     /// Tract-scope variables.
     pub vars: VarMap,
+    /// The fingerprint of the generator's inputs when the tract's cells
+    /// were last generated: the definitions' content, the generator and
+    /// its parameters, and the realm's seed (02 §11). `None` for a tract
+    /// that has never been generated.
+    pub generated: Option<Hash128>,
 }
 
 impl_state_hash!(TractExtra {
     pending,
     stamp_watermark,
     last_loaded,
-    vars
+    vars,
+    generated
 });
 
 /// What the engine knows about one tract, loaded or not (02 §9.1).
@@ -301,6 +317,46 @@ impl_state_hash!(Placement {
     order,
     site
 });
+
+/// How a map is written over what the world holds (10 §4.3).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MapMode {
+    /// Every layer the map states is written, emptying where it states
+    /// nothing.
+    #[default]
+    Replace,
+    /// A cell of the map is written only where the world's cell holds
+    /// nothing at all: no floor, no block and no fixture.
+    OnlyEmpty,
+    /// Each element the map states is put only where that layer of the
+    /// world's cell is empty. Nothing is ever cleared.
+    Add,
+}
+
+impl StateHash for MapMode {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        hasher.write_u8(match self {
+            MapMode::Replace => 0,
+            MapMode::OnlyEmpty => 1,
+            MapMode::Add => 2,
+        });
+    }
+}
+
+/// A map waiting to be written into a tract that is not loaded
+/// (02 §17.3; 10 §4.3): the placement, and how it is written over what
+/// is there. A map that covers several tracts waits in each of them, and
+/// each takes its own window of it when it loads.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct PendingMap {
+    /// The map, where, turned how, with which parameters and seed.
+    pub placement: Placement,
+    /// How it is written over what is there.
+    pub mode: MapMode,
+}
+
+impl_state_hash!(PendingMap { placement, mode });
 
 /// A road, river, wall or rail crossing a region (10 §8.3).
 ///
@@ -415,7 +471,7 @@ mod tract_table {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clash_core::{Hash128, codec};
+    use clash_core::codec;
 
     #[test]
     fn a_tract_record_is_small() {

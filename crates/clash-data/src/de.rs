@@ -72,6 +72,11 @@ pub(crate) const SITE_MAGIC: &str = "$clash_data::BySite";
 /// was written, its JSON path in the definition, what kind of value it
 /// is and the value itself.
 pub(crate) const SITE_FIELDS: &[&str] = &["file", "start", "end", "path", "kind", "value"];
+/// The reserved name [`by_site_or_plain`](crate::by_site_or_plain) asks
+/// under. It is asked for as a newtype struct, which every deserialiser
+/// answers: this one with what [`by_site`](crate::by_site) is fed, any
+/// other with itself.
+pub(crate) const SITE_OR_PLAIN_MAGIC: &str = "$clash_data::BySiteOrPlain";
 /// The reserved name a duration asks for itself under. It is answered in
 /// whole microseconds.
 pub(crate) const MICROS_MAGIC: &str = "$clash_data::quantity::micros";
@@ -393,6 +398,9 @@ pub(crate) struct DeCx<'a> {
     pub(crate) link: Option<&'a LinkShared<'a>>,
     diagnostics: RefCell<Vec<Diagnostic>>,
     path: RefCell<Vec<Seg>>,
+    /// The JSON path of the tree being read inside its definition, for a
+    /// tree that is part of one. Empty for a whole definition.
+    base: String,
     /// Missing fields to stand in for, by the path of their struct.
     inject: RefCell<BTreeMap<String, Vec<&'static str>>>,
     /// A missing field found in this attempt.
@@ -417,6 +425,7 @@ impl<'a> DeCx<'a> {
             link,
             diagnostics: RefCell::new(Vec::new()),
             path: RefCell::new(Vec::new()),
+            base: String::new(),
             inject: RefCell::new(BTreeMap::new()),
             new_inject: RefCell::new(None),
             failed: Cell::new(false),
@@ -431,7 +440,16 @@ impl<'a> DeCx<'a> {
     }
 
     fn path_string(&self) -> String {
-        render_path(&self.path.borrow())
+        let inner = render_path(&self.path.borrow());
+        if self.base.is_empty() {
+            inner
+        } else if inner.is_empty() {
+            self.base.clone()
+        } else if inner.starts_with('[') {
+            format!("{}{inner}", self.base)
+        } else {
+            format!("{}.{inner}", self.base)
+        }
     }
 
     /// Records a diagnostic at the current path.
@@ -628,6 +646,42 @@ pub fn from_node<T: DeserializeOwned>(
     label: Option<&DefLabel>,
 ) -> Option<T> {
     let cx = DeCx::new(sources, label.cloned(), None);
+    let outcome = read_def::<T>(node, &cx);
+    diagnostics.extend(outcome.diagnostics);
+    outcome.value
+}
+
+/// Reads a tree that is part of a definition as a `T`, as [`from_node`]
+/// does, given the JSON path of the tree inside its definition.
+///
+/// A definition type that keeps part of itself as a tree and reads it
+/// when it is compiled, as a list of effects is, reads each piece with
+/// this, so that a field read by [`by_site`](crate::by_site) inside it
+/// (an [`Expr`](crate::Expr), a [`Cond`](crate::Cond), a
+/// [`Text`](crate::Text)) knows its whole path, and a mistake is
+/// reported at it.
+///
+/// ```
+/// use clash_data::{from_node_at, parse_json, Cond, Diagnostics, Limits, SourceMap};
+///
+/// let mut sources = SourceMap::new();
+/// let file = sources.add("rule.json", r#"{ "if": "self.mass > 3" }"#);
+/// let (tree, _) = parse_json(file, sources.text(file), &Limits::default());
+/// let tree = tree.unwrap();
+/// let mut diagnostics = Diagnostics::new();
+/// let cond: Option<Cond> =
+///     from_node_at(tree.get("if").unwrap(), &sources, &mut diagnostics, None, "do[2].if");
+/// assert_eq!(cond.unwrap().site().path, "do[2].if");
+/// ```
+pub fn from_node_at<T: DeserializeOwned>(
+    node: &Node,
+    sources: &SourceMap,
+    diagnostics: &mut Diagnostics,
+    label: Option<&DefLabel>,
+    path: &str,
+) -> Option<T> {
+    let mut cx = DeCx::new(sources, label.cloned(), None);
+    path.clone_into(&mut cx.base);
     let outcome = read_def::<T>(node, &cx);
     diagnostics.extend(outcome.diagnostics);
     outcome.value
@@ -1175,6 +1229,14 @@ impl<'de, 'c> Deserializer<'de> for NodeDe<'c> {
         }
         if let Some(&(_, dim)) = QUANTITY_MAGICS.iter().find(|(magic, _)| *magic == name) {
             return self.quantity(dim, false, visitor);
+        }
+        if name == SITE_OR_PLAIN_MAGIC {
+            return visitor.visit_map(SiteDe {
+                node: self.node,
+                cx: self.cx,
+                root: self.root,
+                at: 0,
+            });
         }
         visitor.visit_newtype_struct(self)
     }
@@ -1836,6 +1898,9 @@ impl<'de> Deserializer<'de> for StandIn {
         }
         if QUANTITY_MAGICS.iter().any(|(magic, _)| *magic == name) {
             return visitor.visit_f64(0.0);
+        }
+        if name == SITE_OR_PLAIN_MAGIC {
+            return visitor.visit_map(SiteStandIn { at: 0 });
         }
         visitor.visit_newtype_struct(self)
     }

@@ -34,7 +34,7 @@ use serde::ser::{Serialize, Serializer};
 
 use crate::de::{
     GATED_MAGIC, INLINE_MAGIC, KIND_FIELDS, KIND_MAGIC, LOCATED_FIELDS, LOCATED_MAGIC,
-    MICROS_MAGIC, REF_MAGIC, SITE_FIELDS, SITE_MAGIC, TAG_MAGIC,
+    MICROS_MAGIC, REF_MAGIC, SITE_FIELDS, SITE_MAGIC, SITE_OR_PLAIN_MAGIC, TAG_MAGIC,
 };
 use crate::defs::Def;
 use crate::source::{FileId, Span};
@@ -867,6 +867,44 @@ pub fn by_site<'de, T: FromSite<'de>, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<T, D::Error> {
     deserializer.deserialize_struct(SITE_MAGIC, SITE_FIELDS, BySiteVisitor(PhantomData))
+}
+
+struct SiteOrPlainVisitor<T, P>(P, PhantomData<fn() -> T>);
+
+impl<'de, T: FromSite<'de>, P: Visitor<'de, Value = T>> Visitor<'de> for SiteOrPlainVisitor<T, P> {
+    type Value = T;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.expecting(f)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<T, A::Error> {
+        BySiteVisitor(PhantomData).visit_map(map)
+    }
+
+    fn visit_newtype_struct<D: Deserializer<'de>>(self, deserializer: D) -> Result<T, D::Error> {
+        deserializer.deserialize_any(self.0)
+    }
+}
+
+/// Reads a field with its [`Site`] under the mod loader, and with
+/// `plain` under any other deserialiser.
+///
+/// [`by_site`] reads only under the loader. A type that is also read
+/// from plain JSON, by a unit test or a tool with `serde_json`, uses
+/// this in its place: the loader hands [`FromSite::from_site`] the place,
+/// the JSON path and the kind of value as it does for `by_site`, and any
+/// other deserialiser hands the value itself to `plain`, which builds
+/// the type without a site. What was read without a site cannot be
+/// reported at a place, so such a value is for tests and tools only.
+pub fn by_site_or_plain<'de, T, D, P>(deserializer: D, plain: P) -> Result<T, D::Error>
+where
+    T: FromSite<'de>,
+    D: Deserializer<'de>,
+    P: Visitor<'de, Value = T>,
+{
+    deserializer
+        .deserialize_newtype_struct(SITE_OR_PLAIN_MAGIC, SiteOrPlainVisitor(plain, PhantomData))
 }
 
 /// Player-facing text (04 §7.1).

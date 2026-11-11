@@ -26,7 +26,8 @@
 //! | `presence` | [`Sim::set_presence`](crate::Sim::set_presence) |
 //! | `control` | [`Sim::set_control`](crate::Sim::set_control) |
 //! | `clock`, `anchor` | [`Sim::set_time_rate`](crate::Sim::set_time_rate), [`Sim::anchor_clock`](crate::Sim::anchor_clock) |
-//! | `tags`, `vars`, `channels`, `actions`, `plan`, `attached` | Whoever holds the entity mutably, until their packages give them owners |
+//! | `vars` | [`Sim::set_var`](crate::Sim::set_var), which holds a declared variable to its declaration and raises `var_changed` for a watched one. The field is open, for setting a scene up: a write that goes round `set_var` is checked by nothing and told to nobody |
+//! | `tags`, `channels`, `actions`, `plan`, `attached` | Whoever holds the entity mutably, until their packages give them owners |
 //!
 //! `place` is a private field of [`KernelEntity`]. The only code that can
 //! name it is this module and its one child module, `relocate`, which
@@ -64,7 +65,7 @@ use clash_time::ClockId;
 use clash_world::{Footprint, Location, Occupant, OccupantFlags, OccupantKind, PlaneMask};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::later::{ActionId, ChannelSet, EocId, Plan};
+use crate::later::{ActionId, ChannelSlots, EocId, Plan};
 
 /// How deeply things may be nested inside one another: a coin in a purse
 /// in a pack on a rider on a mount is five. Deeper nesting is refused, so
@@ -408,10 +409,13 @@ pub struct KernelEntity {
     pub(crate) time: OwnTime,
     /// Free-form strings that rules test.
     pub tags: Tags,
-    /// Variables that content stores on the entity (05 §6).
+    /// Variables that content stores on the entity (05 §6). Rules read
+    /// them with [`Sim::var`](crate::Sim::var), which knows the declared
+    /// defaults, and change them with
+    /// [`Sim::set_var`](crate::Sim::set_var).
     pub vars: VarMap,
     /// Its channel slots (03 §6.2).
-    pub channels: ChannelSet,
+    pub channels: ChannelSlots,
     /// Its running actions.
     pub actions: Vec<ActionId>,
     /// What it will do next (03 §5.3).
@@ -433,7 +437,7 @@ impl KernelEntity {
             time: OwnTime::default(),
             tags: spec.tags,
             vars: spec.vars,
-            channels: ChannelSet::default(),
+            channels: ChannelSlots::default(),
             actions: Vec::new(),
             plan: Plan::default(),
             attached: Vec::new(),

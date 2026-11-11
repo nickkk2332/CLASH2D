@@ -410,7 +410,11 @@ in one place:
   type's own is a `Located<String>` resolved in `finish`.
 - The source of an expression, and any other string that is checked or
   compiled after loading, is a `Located<String>`, so that the later
-  error can point into the file.
+  error can point into the file. A field type of a crate's own that is
+  compiled keeps its place and its JSON path, read with
+  `clash_data::by_site`; one that is also read from plain JSON, by a
+  test with `serde_json`, is read with `clash_data::by_site_or_plain`,
+  which gives it its place under the loader and none otherwise.
 - A field with a default that a mod might `scale` or `add` to is listed
   in `Def::DEFAULTS` (section 6.1).
 - What the engine itself supplies, such as the `none` of an element
@@ -524,6 +528,15 @@ loader adds to a copy of it what the mods define:
 4. `function` definitions (05 §12), by signature first so that bodies may
    call each other in any order.
 
+**Effects.** A list of effects is a field like the others: the type
+holds it in an `Effects`, hands it to `cx.compile` with the scope its
+effects run in, and in `validate` calls the list's own `validate`, which
+checks the rules it calls against what those rules need (05 §14). A
+piece of a definition that is kept as a tree and read when it is
+compiled, as an effect's arguments are, is read with `from_node_at`,
+which is given the JSON path of the piece so that what is found in it
+is reported at its whole path.
+
 `function` and `variable` are definition types of the data layer itself,
 registered with `clash_data::expr::register_defs`. The finished registry,
 the compiled functions and the variable declarations are part of `Defs`.
@@ -615,8 +628,9 @@ The compile stage has such a table. Each code of the expression compiler
 (05 §14) has a code in group `06`: `060` and `061` for syntax, `062` and
 `063` for names, `064` for types, `066` for purity and belief. `067` is
 what the stage finds itself (a bad type name, a function that always
-calls itself, a malformed function, variable or value source), and `069`
-stands for what goes wrong while an expression runs.
+calls itself, a malformed function, variable or value source), `068` is
+what the rule runtime finds in a list of effects or a rule (05 §10.1),
+and `069` stands for what goes wrong while an expression runs.
 
 ### 8.3 Outcome
 
@@ -786,9 +800,11 @@ obsolete definition from a non-obsolete one is a warning.
 ### 12.3 Placeholders
 
 An id with no definition and no migration becomes a placeholder of the right
-type from the `engine` namespace. The placeholder remembers the original id.
+type, supplied by the definition type as in section 8.3. The placeholder
+keeps the original id as its own, so it is written back under that id.
 If the definition returns in a later session, the content is restored.
-Placeholders are inert and visibly marked.
+Placeholders are inert and visibly marked. What the world's are like, and
+how a save reports them, is in 02 §11.2.
 
 ### 12.4 Format versions
 

@@ -41,6 +41,7 @@ use crate::collapse::{CollapseState, FallingMass};
 use crate::cosmos::Cosmos;
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
+use crate::field::{FieldState, FieldStep};
 use crate::pos::Location;
 use crate::release::{Release, ReleaseState};
 
@@ -65,6 +66,8 @@ pub enum WorldProcess {
     Settle(SettleCheck),
     /// A mass of debris on its way down (02 §14.3).
     Fall(FallingMass),
+    /// The fields of one clock and one step interval, stepped (02 §16).
+    FieldStep(FieldStep),
     /// A body in flight (02 §15).
     Body(BodyFlight),
     /// An energy release whose front is still spreading (02 §13).
@@ -78,9 +81,10 @@ impl WorldProcess {
         match self {
             WorldProcess::Fall(mass) => Some(mass.at),
             WorldProcess::Body(flight) => Some(flight.location()),
-            // A settle check keeps the clock it began on, and a release
-            // runs on the clock of its origin (02 §13.2).
-            WorldProcess::Settle(_) | WorldProcess::Release(_) => None,
+            // A settle check keeps the clock it began on, a release
+            // runs on the clock of its origin (02 §13.2), and the
+            // fields of a clock are stepped on that clock.
+            WorldProcess::Settle(_) | WorldProcess::Release(_) | WorldProcess::FieldStep(_) => None,
         }
     }
 }
@@ -96,12 +100,16 @@ impl StateHash for WorldProcess {
                 hasher.write_u8(1);
                 mass.state_hash(hasher);
             }
-            WorldProcess::Body(flight) => {
+            WorldProcess::FieldStep(step) => {
                 hasher.write_u8(2);
+                step.state_hash(hasher);
+            }
+            WorldProcess::Body(flight) => {
+                hasher.write_u8(3);
                 flight.state_hash(hasher);
             }
             WorldProcess::Release(release) => {
-                hasher.write_u8(3);
+                hasher.write_u8(4);
                 release.state_hash(hasher);
             }
         }
@@ -118,6 +126,8 @@ pub struct WorldActivity {
     pub(crate) processes: ProcessTable<WorldProcess>,
     /// The collapses in progress and the checks waiting.
     pub(crate) collapse: CollapseState,
+    /// Where the fields are and which processes step them (02 §16).
+    pub(crate) fields: FieldState,
     /// What is kept about the bodies in flight besides their processes.
     pub(crate) bodies: BodyState,
     /// What is kept about energy releases besides their processes.
@@ -130,6 +140,7 @@ impl WorldActivity {
         WorldActivity {
             processes: ProcessTable::new(WakeDomain::World),
             collapse: CollapseState::default(),
+            fields: FieldState::new(),
             bodies: BodyState::default(),
             releases: ReleaseState::default(),
         }
@@ -157,6 +168,7 @@ impl StateHash for WorldActivity {
     fn state_hash(&self, hasher: &mut StateHasher) {
         self.processes.state_hash(hasher);
         self.collapse.state_hash(hasher);
+        self.fields.state_hash(hasher);
         self.bodies.state_hash(hasher);
         self.releases.state_hash(hasher);
     }
@@ -201,6 +213,10 @@ impl WorldCtx<'_> {
             WorldProcess::Fall(mass) => {
                 let (mass, next) = self.run_fall(mass);
                 (WorldProcess::Fall(mass), next)
+            }
+            WorldProcess::FieldStep(step) => {
+                let next = self.run_field_step(step);
+                (WorldProcess::FieldStep(step), next)
             }
             WorldProcess::Body(flight) => {
                 let (flight, next) = self.run_body(flight);
@@ -253,5 +269,7 @@ impl WorldCtx<'_> {
         for (id, clock) in placed {
             self.keep_clock(id, clock);
         }
+        // Fields follow the clock of where they are too (02 §16).
+        self.resume_fields();
     }
 }

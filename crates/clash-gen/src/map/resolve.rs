@@ -974,16 +974,16 @@ impl Draft {
 /// What an expression in a map is evaluated against: the parameters of
 /// one placement, and a generator seeded by the placement and the cell.
 /// It has no world to answer from and no stream to draw from.
-struct GenHost {
+pub(crate) struct GenHost {
     /// The parameters, in the order the map declares them.
-    params: Vec<Value>,
+    pub(crate) params: Vec<Value>,
     /// The generator the random functions draw from, set anew from a
     /// positional hash before every evaluation.
-    rng: Rng,
+    pub(crate) rng: Rng,
     /// How many times an expression went wrong while this map was
     /// resolved. A faulting expression gives null, which every use here
     /// treats as "not given".
-    warnings: u32,
+    pub(crate) warnings: u32,
 }
 
 impl Host for GenHost {

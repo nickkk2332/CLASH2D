@@ -62,7 +62,7 @@ players may switch it off.
 release at @here energy=1e9 kind=blast
 spawn town_guard at @c:120,44,0 as=g1
 as @g1 act slash target=@self effort=0.2
-eval self.pool.blood.frac
+eval self.pool.frac('blood')
 do { "add_trait": { "to": "self", "trait": "adrenaline" } }
 select entities around=@self radius=10 where="it.has_tag('guard')"
 watch dist(self, @sel)
@@ -601,11 +601,24 @@ variables. They are saved, and a rule may read them.
 **Definition types**: `console_command`, `reason`.
 
 ```json
-{ "type": "reason", "id": "no_fuel", "text": "{the(target)} is out of fuel.", "doc": "Raised by engines with an empty tank." }
+{ "type": "reason", "id": "no_fuel", "text": "{the(target)} is out of fuel.",
+  "values": { "target": "entity" }, "doc": "Raised by engines with an empty tank." }
 ```
 
 A mod's own refusals carry reasons of its own. `cancel_event` names one
 (05 §10.5), and it is listed in the reference beside the engine's.
+
+| Field | Meaning |
+|-------|---------|
+| `text` | The sentence whoever asked is told: a text template (05 §4.6), pure, in which each value is read by its name. Required. |
+| `values` | The values the reason carries, by name, each with its type as 05 §3 writes types: `"values": { "target": "entity" }`. Default none. |
+| `doc` | When it is given, for the reference. |
+
+As built (decision D-478). The code of such a reason is its qualified
+id. The sentence is rendered when the reason is given, with the values
+`cancel_event` supplies; one it leaves out reads null. The reason then
+carries every value supplied, a truth value, a number or a text as it
+is, an id as its qualified id and anything else as it prints.
 
 The tools are the bundled `tools` mod (04 §3.5). A profile that lists it
 is a development profile: the console, breaks and rewind are available

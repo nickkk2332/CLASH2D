@@ -196,6 +196,20 @@ impl Context {
         slot
     }
 
+    /// Declares a local that is the character's own state (05 §7.3) and
+    /// returns its slot: in a mind context any property of it may be
+    /// read, as of an own subject. For a parameter that is known to be
+    /// one of the characters whose mind the context belongs to.
+    pub fn add_own_local(&mut self, name: impl Into<String>, ty: Type) -> u16 {
+        let slot = slot_for(self.locals.len());
+        self.locals.push(Binding {
+            name: name.into(),
+            ty,
+            own: true,
+        });
+        slot
+    }
+
     /// The bound subjects, in slot order.
     pub fn subjects(&self) -> &[Binding] {
         &self.subjects

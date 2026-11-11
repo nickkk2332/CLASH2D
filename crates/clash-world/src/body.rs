@@ -507,6 +507,19 @@ impl StateHash for BodyState {
     }
 }
 
+/// A set of planes without those that no definition names, where
+/// there are `count` planes. The set of every plane stays as it is.
+fn known_planes(count: usize, planes: PlaneMask) -> PlaneMask {
+    if planes == PlaneMask::ALL {
+        return planes;
+    }
+    let known = match u32::try_from(count) {
+        Ok(count) if count < PlaneMask::BITS => (1u32 << count) - 1,
+        _ => u32::MAX,
+    };
+    PlaneMask::from_bits(planes.bits() & known)
+}
+
 /// How long a body going at a speed sleeps: the time it takes to cross
 /// a cell, and at most [`BODY_MAX_STEP`].
 fn step_for(speed: Real) -> Dur {
@@ -811,9 +824,13 @@ impl WorldCtx<'_> {
     /// along, and reports each move as `OccupantDisplaced`.
     ///
     /// Refused for a mass that is not above zero, a number that is not
-    /// finite, a stopping depth or a restitution out of range, a place
-    /// that is not loaded, and an entity that is already in flight.
-    pub fn launch(&mut self, body: Body) -> Result<BodyId, WorldError> {
+    /// finite, a stopping depth or a restitution out of range, a
+    /// material or a kind of damage that does not exist, a place that
+    /// is not loaded, and an entity that is already in flight.
+    ///
+    /// A plane that no definition names has nothing on it: such a bit
+    /// of `plane` is dropped. [`PlaneMask::ALL`] stays every plane.
+    pub fn launch(&mut self, mut body: Body) -> Result<BodyId, WorldError> {
         let bad = |why: &'static str| WorldError::BadValue {
             what: "a body",
             why,
@@ -838,13 +855,26 @@ impl WorldCtx<'_> {
         if body.restitution < Real::ZERO || body.restitution > Real::ONE {
             return Err(bad("its restitution is from 0 to 1"));
         }
-        if let BodyOwner::Projectile(projectile) = body.owner
-            && (projectile.area < Real::ZERO || projectile.give <= Real::ZERO)
-        {
-            return Err(bad(
-                "a projectile's surface cannot be negative, and its give must be above zero",
-            ));
+        let defs = self.cosmos.defs();
+        match body.owner {
+            BodyOwner::Entity(_) => {}
+            BodyOwner::Debris(debris) => {
+                if defs.materials().get(debris.material).is_none() {
+                    return Err(bad("there is no such material"));
+                }
+            }
+            BodyOwner::Projectile(projectile) => {
+                if projectile.area < Real::ZERO || projectile.give <= Real::ZERO {
+                    return Err(bad(
+                        "a projectile's surface cannot be negative, and its give must be above zero",
+                    ));
+                }
+                if defs.damage_types().get(projectile.kind).is_none() {
+                    return Err(bad("there is no such kind of damage"));
+                }
+            }
         }
+        body.plane = known_planes(defs.planes().len(), body.plane);
         let at = self.cosmos.normalize(body.location())?;
         if !self.cosmos.is_loaded(at) {
             return Err(WorldError::NotLoaded(at));
@@ -1357,9 +1387,14 @@ impl WorldCtx<'_> {
         let intensity = surface.map_or(Real::ZERO, |(_, area, depth)| energy / (area * depth));
         let outcome = surface.and_then(|(kind, _, _)| {
             let packet = DamagePacket::new(kind, energy, intensity, cause);
-            self.edit(cause)
+            let mut edit = self.edit(cause);
+            let outcome = edit
                 .damage_along(hit.loc, layer, packet, unit(body.vel))
-                .ok()
+                .ok();
+            // The packet has arrived in the cell: the fields there that
+            // pass its kind of damage on do so (02 §16).
+            let _ = edit.conduct(hit.loc, packet);
+            outcome
         });
         let result = outcome.map_or(DamageResult::Unaffected, |outcome| outcome.result);
         let mut at = hit.point;
@@ -1457,6 +1492,7 @@ impl WorldCtx<'_> {
         let Some(kind) = kind else {
             return;
         };
+        let packet = DamagePacket::new(kind, energy, intensity, cause);
         self.events.emit(WorldEvent::BodyHitOccupant {
             tick: self.timeline.now(),
             body: flight.id,
@@ -1464,11 +1500,14 @@ impl WorldCtx<'_> {
             occupant,
             loc: hit.loc,
             pos: hit.point,
-            packet: DamagePacket::new(kind, energy, intensity, cause),
+            packet,
             vel: body.vel,
             push,
             cause,
         });
+        // The packet has arrived in the occupant's cell: the fields
+        // there that pass its kind of damage on do so (02 §16).
+        let _ = self.edit(cause).conduct(hit.loc, packet);
     }
 
     /// A body has come to an edge of its realm. A barrier turns it
@@ -1881,6 +1920,15 @@ mod tests {
             r(2.0),
             Cause::DEBUG,
         )
+    }
+
+    #[test]
+    fn a_plane_that_is_not_defined_is_dropped_and_every_plane_stays() {
+        let wild = PlaneMask::from_bits(0b1011);
+        assert_eq!(known_planes(2, wild), PlaneMask::from_bits(0b11));
+        assert_eq!(known_planes(1, wild), PlaneMask::DEFAULT);
+        assert_eq!(known_planes(40, wild), wild);
+        assert_eq!(known_planes(1, PlaneMask::ALL), PlaneMask::ALL);
     }
 
     #[test]

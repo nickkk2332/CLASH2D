@@ -6,9 +6,9 @@ use clash_data::{Cond, Expr, FromKind, Kind, KindValue, Located, Ref, Span, Tag,
 use serde::Deserialize;
 use serde::de::{Deserializer, MapAccess};
 
-use super::effects::EffectsSource;
 use super::window::WindowKindDef;
 use crate::action::ids::{PhaseIndex, WindowKindId};
+use crate::rule::Effects;
 
 /// What `time` is written as for a phase that lasts until it is let go.
 pub const HOLD: &str = "hold";
@@ -250,7 +250,7 @@ pub struct Tick {
     /// The effects run at each interval. May be left out, for a tick that
     /// only tests the phase's `until`.
     #[serde(default, rename = "do")]
-    pub effects: EffectsSource,
+    pub effects: Effects,
 }
 
 /// One phase of an action (03 §6.4).
@@ -276,10 +276,10 @@ pub struct Phase {
     pub until: Option<Cond>,
     /// Effects run when the phase starts.
     #[serde(default, rename = "do")]
-    pub on_enter: EffectsSource,
+    pub on_enter: Effects,
     /// Effects run when the phase ends normally.
     #[serde(default)]
-    pub on_exit: EffectsSource,
+    pub on_exit: Effects,
     /// Effects repeated at an interval while the phase lasts.
     #[serde(default)]
     pub tick: Option<Tick>,
@@ -361,8 +361,8 @@ impl Phase {
             time: PhaseTime::For(Expr::literal(0)),
             max: None,
             until: None,
-            on_enter: EffectsSource::empty(),
-            on_exit: EffectsSource::empty(),
+            on_enter: Effects::empty(),
+            on_exit: Effects::empty(),
             tick: None,
             cancel: CancelRule::Never,
             uninterruptible: false,

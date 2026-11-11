@@ -232,8 +232,12 @@ is its own.
 
 Not built yet: the weather's share of the sky's light is a number the
 caller gives; a realm's day comes from its sky until calendars exist;
-fields give no light until they are built (02 §16); glass that passes
-only part of the light; and `light(loc)` as a function for rules.
+and glass that passes only part of the light. `light(at)` is a function
+for rules (05 §17). A field's light (02 §16) is not in the cache:
+`Cosmos::field_lights(grid, box)` lists it as moving sources, one for
+each cell of a field that gives light, with the intensity its level
+gives, and whoever asks for light hands them in. A large fire is
+thousands of sources: the caller takes those that matter.
 
 **Coloured light (experimental).**
 
@@ -777,9 +781,10 @@ subject), `members`, `suspects`.
 on minds, the properties of section 7.2 and `rel`, `in_group`, `role_in`,
 `persona`, `presenting`, `facing`.
 
-**Reachable only from Rust** so far: light. `light(loc)` waits for the
-rule runtime to bind it, and until then a rule has no way to ask how
-bright a place is or to add a moving source; the constants of section 3.3
+**Reachable only from Rust** so far: adding a moving source of light.
+The light at a cell is the function `light(at)` and the property
+`loc.light` (02 §23), neither safe for belief, and neither counts moving
+sources, which the simulation does not hand in yet; the constants of section 3.3
 (the height light travels at, the level at which a source's light stops
 mattering, the count of sources a chunk takes) are named constants, not
 settings.

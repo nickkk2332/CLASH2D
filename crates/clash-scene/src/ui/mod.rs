@@ -13,19 +13,60 @@
 //! 4. Give input to [`Screen::input`] with the keymap in force. It
 //!    returns [`UiEvent`]s: effects to run and variables that changed.
 //!
-//! # Where bindings and effects plug in (package U6b)
+//! A screen is usually not driven by hand: the [`Scene`](crate::Scene)
+//! keeps a stack of them, opens them by id, evaluates their bindings
+//! and runs their effects.
+//!
+//! # Bindings (12 §10.4)
 //!
 //! Every property that can be an expression is a [`Prop`]: `Static` with
-//! its value, or `Bound` with its source unparsed. A screen shows a
-//! placeholder for a bound property (a text shows its source, a number is
-//! 0, a condition is true) until [`Screen::refresh`] is called with an
-//! [`Evaluator`], which is the one thing U6b has to supply for texts,
-//! numbers and conditions. Rows and options that come from a query
-//! ([`RowsDef::Bound`], [`OptionsDef::Bound`]) are held and shown as
-//! empty: filling them is U6b's.
+//! its value, or `Bound` with its [`Binding`]. The mod loader reads a
+//! binding with the place it was written at, and the `screen` definition
+//! compiles every one of its bindings when mods load
+//! ([`ScreenDef::compile_bindings`]), in a pure context that offers
+//! `view`, `party`, `app`, `screen.name`, `$name` and, in a row, `it`.
+//! A name that is not there, a type that does not fit and, outside a
+//! screen whose context is `debug`, a read of what the party has not
+//! perceived are load errors at the line and column inside the string.
+//! [`bind`] says what each name is and which slot its value has.
 //!
-//! Effects ([`UiEffects`]) are held as written and handed back in
-//! [`UiEvent`]s. Nothing here runs them.
+//! [`Screen::refresh`] evaluates the bindings of what is on show, with
+//! an [`Evaluator`]; the scene's is over the expression machine, its
+//! host and the application's state. Until then a bound property shows
+//! a placeholder: a text shows its source, a number is 0, a condition is
+//! true, rows from an expression are none. A binding read by anything
+//! but the loader (a `ScreenDef` parsed with `serde_json` in a test) is
+//! never compiled and stays a placeholder.
+//!
+//! Rows and options that come from an expression ([`RowsDef::Bound`],
+//! [`OptionsDef::Bound`]) are lists of values: each row is shown by the
+//! widget's `item` (or a table's column `value`) with the row as `it`,
+//! and a tree's `children` gives the rows beneath it. A row that is a
+//! map is shown by its `label` where nothing says how; an option that
+//! is a map holds its `value`. A query written as an object is kept
+//! and gives no rows until queries are built (05 §11).
+//!
+//! # Effects (12 §10.5)
+//!
+//! A list of effects ([`UiEffects`]) is read into typed [`UiEffect`]s
+//! when its definition loads, and its expressions are compiled with the
+//! screen's bindings. A screen hands the lists back in [`UiEvent`]s; the
+//! scene runs them. [`effect`] tables every effect and its arguments.
+//!
+//! # Slots (12 §10.6)
+//!
+//! A `slot` node is a place for the widgets of `ui_part` definitions
+//! ([`UiPartDef`]). A slot's qualified name is the namespace of the
+//! screen that places it, a colon and the name the screen gives it. The
+//! parts aimed at it are put into it when the screen is made
+//! ([`Screen::with_slots`]), in `order`, one below another, each shown
+//! while its `if` holds.
+//!
+//! # Popups (12 §10.1)
+//!
+//! A screen with a `popup` ([`PopupDef`]) does not fill the frame: it
+//! is laid out in a rectangle of its size at its place, draws only
+//! there, and leaves what is beneath on show.
 //!
 //! # Keys
 //!
@@ -34,7 +75,9 @@
 //! order, to:
 //!
 //! 1. the widget with the focus. A widget that edits text takes any key
-//!    that types a character before its name is considered;
+//!    that types a character before its name is considered, and a
+//!    `number` takes the keys that type a number: digits, a minus sign
+//!    first and, unless the number is whole, one point;
 //! 2. the options of every `menu` on show, by their hotkeys;
 //! 3. the screen's own `keys`, by name;
 //! 4. the toolkit itself: moving the focus and scrolling.
@@ -45,12 +88,18 @@
 //! |------|------|
 //! | `prev`, `next` | Move the selection up and down in a list, table, tree, menu or log; scroll a `scroll`. Unused, move the focus. |
 //! | `left`, `right` | Collapse and expand in a tree; choose the sort column of a table; step a `number`; change a `choice`; switch `tabs`; move the cursor in an `input`. Unused, move the focus. |
-//! | `accept` | Activate the selected row or the button; flip a `toggle`; open or close a tree row with children. |
+//! | `accept` | Activate the selected row or the button; flip a `toggle`; open or close a tree row with children; take the number typed into a `number`. |
 //! | `toggle` | Flip a `toggle`; reverse a table's sort; activate a button. |
 //! | `page_prev`, `page_next`, `first`, `last` | Move by a page or to an end. Unused, scroll the `scroll` around the focus. |
 //! | `focus_next`, `focus_prev` | Move the focus to the next or previous widget that can take it. |
-//! | `erase`, `delete` | Remove the character before or at the cursor of an `input`. |
+//! | `erase`, `delete` | Remove the character before or at the cursor of an `input`; `erase` takes back the last digit typed into a `number`. |
 //! | `back` | Nothing by itself: screens bind it in `keys`, usually to `close`. |
+//!
+//! A name that none of these used may be the name of a `control`
+//! (12 §9.2): [`Screen::input_with`] is given the controls, and offers
+//! them the name after the screen's `keys` and before the toolkit acts
+//! on it itself. A `map_view` with the focus and an `on_pick` takes
+//! `accept` as picking the place under the cursor.
 //!
 //! # Styles and marks the toolkit draws with
 //!
@@ -81,8 +130,10 @@
 //!
 //! # Not built yet
 //!
-//! - Bindings and effects: U6b, as above.
-//! - `slot` holds its name and nothing else; `ui_part` is U8.
+//! - A view's `centre` and an `inspect`'s `of` are compiled and not yet
+//!   used: the camera is moved by the `camera` effect, and listing a
+//!   subject's properties comes with the inspector. An `art` whose `value` is a
+//!   template draws nothing.
 //! - `map_view`, `section_view`, `region_map` and `chart_view` have their
 //!   place, focus and fields; a [`ViewPainter`] draws them. The scene's
 //!   is [`crate::view::WorldView`], which draws the first two from the
@@ -91,22 +142,117 @@
 //!   their content comes with the tooling packages.
 //! - `log` shows a [`MessageLog`]; playback (U5) fills it.
 
+/// Implements `Deserialize` for a type that may be written as a bare
+/// string, or as a list, or as an object. The type derives its object
+/// form with `#[serde(remote = "Self")]`.
+///
+/// Under the mod loader the string is read with its place, which the
+/// expression after `=>` is given as `Some(site)`; under any other
+/// deserialiser it is given `None`.
+macro_rules! string_or_object {
+    ($ty:ident, $expecting:literal, ($text:ident, $site:ident) => $from:expr $(, seq $seq:ident => $from_seq:expr)?) => {
+        const _: () = {
+            struct ShorthandVisitor;
+
+            impl<'de> ::serde::de::Visitor<'de> for ShorthandVisitor {
+                type Value = $ty;
+
+                fn expecting(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    f.write_str($expecting)
+                }
+
+                fn visit_str<E: ::serde::de::Error>(self, $text: &str) -> Result<$ty, E> {
+                    let $site: Option<::clash_data::Site> = None;
+                    let _ = &$site;
+                    Ok($from)
+                }
+
+                $(
+                fn visit_seq<A: ::serde::de::SeqAccess<'de>>(self, seq: A) -> Result<$ty, A::Error> {
+                    let $seq = ::serde::Deserialize::deserialize(
+                        ::serde::de::value::SeqAccessDeserializer::new(seq),
+                    )?;
+                    Ok($from_seq)
+                }
+                )?
+
+                fn visit_map<A: ::serde::de::MapAccess<'de>>(self, map: A) -> Result<$ty, A::Error> {
+                    $ty::deserialize(::serde::de::value::MapAccessDeserializer::new(map))
+                }
+            }
+
+            /// The object form, read as the derived struct.
+            struct Whole($ty);
+
+            impl<'de> ::serde::Deserialize<'de> for Whole {
+                fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<Whole, D::Error> {
+                    $ty::deserialize(deserializer).map(Whole)
+                }
+            }
+
+            impl<'de> ::clash_data::FromSite<'de> for $ty {
+                fn from_site<A: ::serde::de::MapAccess<'de>>(
+                    site: ::clash_data::Site,
+                    kind: ::clash_data::Kind,
+                    value: ::clash_data::KindValue<'_, A>,
+                ) -> Result<$ty, A::Error> {
+                    match kind {
+                        ::clash_data::Kind::String => {
+                            let text = value.read::<String>()?;
+                            let $text: &str = &text;
+                            let $site: Option<::clash_data::Site> = Some(site);
+                            let _ = &$site;
+                            Ok($from)
+                        }
+                        $(
+                        ::clash_data::Kind::List => {
+                            let $seq = value.read()?;
+                            Ok($from_seq)
+                        }
+                        )?
+                        _ => value.read::<Whole>().map(|whole| whole.0),
+                    }
+                }
+            }
+
+            impl<'de> ::serde::Deserialize<'de> for $ty {
+                fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<$ty, D::Error> {
+                    ::clash_data::by_site_or_plain(deserializer, ShorthandVisitor)
+                }
+            }
+        };
+    };
+}
+
+pub mod bind;
 pub mod def;
 mod draw;
+pub mod effect;
 mod input;
 mod layout;
+mod refresh;
 mod screen;
 
+pub use bind::{
+    Binding, KIND_APP, KIND_APP_ENTRY, KIND_ENTITY, SLOT_APP, SLOT_IT, SLOT_PARTY, SLOT_SCREEN,
+    SLOT_VIEW, TYPE_PARTY_MEMBER,
+};
 pub use def::{
     Align, ArtDef, BarDef, ButtonDef, ChoiceDef, ColumnDef, CommonDef, DebugDef, FigureDef,
     FigureWidgetDef, FrameDef, GridDef, InputDef, InspectDef, ListDef, Literal, LogDef, MenuDef,
-    NODE_FIELDS, NODE_KINDS, NodeDef, NodeKind, NumberDef, OptionDef, OptionsDef, Prop, RowDef,
-    RowsDef, ScreenDef, Size, SpacerDef, TabDef, TableDef, TabsDef, TextDef, TextProp, ToggleDef,
-    TooltipDef, TreeDef, UiEffects, ViewDef, text_prop,
+    NODE_FIELDS, NODE_KINDS, NodeDef, NodeKind, NumberDef, OptionDef, OptionsDef, Place, PopupDef,
+    PrefKind, PreferenceDef, Prop, RowDef, RowsDef, ScreenDef, Size, SpacerDef, TabDef, TableDef,
+    TabsDef, TextDef, TextProp, ToggleDef, TooltipDef, TreeDef, UiPartDef, ViewDef, text_prop,
 };
+pub use effect::{
+    AppEffect, AppService, Args, CameraEffect, Collect, CommandEffect, CommandKind, ConfirmEffect,
+    EFFECT_NAMES, OpenEffect, PickEffect, PickerEffect, UiEffect, UiEffects, ValueProp,
+};
+pub use input::ControlLookup;
+pub use refresh::{from_var, to_var};
 pub use screen::{
-    BindScope, CONTEXT_DEBUG, Evaluator, LogLine, MessageLog, Screen, UiData, UiEnv, UiError,
-    UiEvent, UiProblem, VarRef, ViewKind, ViewPainter, WidgetEvent,
+    BindScope, CONTEXT_DEBUG, Evaluator, LogLine, MessageLog, Screen, SlotParts, UiData, UiEnv,
+    UiError, UiEvent, UiProblem, VarRef, ViewKind, ViewPainter, WidgetEvent,
 };
 
 /// Navigation name: the previous row, or the line above.

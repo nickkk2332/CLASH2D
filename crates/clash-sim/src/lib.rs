@@ -6,8 +6,8 @@
 //! Specified in `docs/03-time-and-actions.md` and documents 05 to 09, 13,
 //! 15 and 16.
 //!
-//! What is built so far is the kernel (03 §4, §5.2, §3.4; 05 §8): the
-//! part every other package of the simulation stands on.
+//! What is built so far is the kernel (03 §4, §5.2, §3.4; 05 §5, §6,
+//! §8): the part every other package of the simulation stands on.
 //!
 //! # Where things are
 //!
@@ -28,7 +28,14 @@
 //! | Saving and loading | [`Sim::save`], [`Sim::load`], then [`Sim::reindex`] |
 //! | Replay | [`Sim::input_log`], [`Sim::replay`] |
 //! | Why something was refused | [`Reason`]; the kernel's are listed in [`KERNEL_REASONS`] |
+//! | Rules, effects and the interpreter | [`rule`]: [`rule::EocDef`], [`rule::Effects`], [`rule::RuleSet`], [`rule::RuleHost`] |
 //! | The definition types of this crate | [`register_defs`] |
+//! | Components | [`Sim::components`], [`Sim::components_mut`]; a `Physical` through [`Sim::set_shape`] and [`Sim::set_own_mass`]; see [`mass`] |
+//! | Tickets, loading and unloading | [`Sim::start_session`], [`Sim::hold_ticket`], [`Sim::reconcile_activity`]; generators and store with [`Sim::with_io`]; see [`activity`] |
+//! | What expressions can name | [`engine_registry`], given to the loader; kinds and handles in [`subject`]; the tables in [`registry`] |
+//! | To evaluate an expression | [`Sim::host`] or [`Sim::with_random`] with a [`Bound`], through `clash_data::Runner`; [`Sim::eval`] for one |
+//! | Variables | [`Sim::var`], [`Sim::set_var`]; see [`vars`] |
+//! | What `set` and `add` write | [`Sim::assign`], [`Sim::assign_to`], [`Sim::set_property`] |
 //!
 //! # Rules this crate keeps
 //!
@@ -39,10 +46,17 @@
 //! - Nothing iterates a hash map. Entities are visited in id order, and
 //!   all randomness comes from the named streams of `Sim::rng`.
 //! - Every refusal carries a [`Reason`].
-//! - What a character decides by never reads a [`Truth`].
+//! - What a character decides by never reads a [`Truth`]. Every property
+//!   and function this crate registers reads truth and is refused in a
+//!   mind context unless it is marked safe for belief ([`registry`]).
+//! - A variable changes only through [`Sim::set_var`], and a settable
+//!   property only through its registered setter, which calls the
+//!   function the engine itself uses.
 
 pub mod action;
+pub mod activity;
 pub mod advance;
+pub mod body;
 pub mod bus;
 pub mod clock;
 pub mod command;
@@ -51,10 +65,21 @@ pub mod console;
 pub mod decision;
 pub mod entity;
 pub mod event;
+pub mod host;
 pub mod later;
+pub mod mass;
+mod props;
 pub mod reason;
+pub mod registry;
+pub mod rule;
 mod sim;
+pub mod stats;
+pub mod subject;
+pub mod vars;
+pub mod verb;
 
+pub use action::{ActionDefId, ChannelId, ChannelSet};
+pub use activity::{Shelf, Shelved, SimStore, debug_ticket};
 pub use advance::{
     Advance, AdvanceLimit, AppRequest, DEFAULT_MAX_CASCADE, MAX_CASCADE_SETTING,
     MAX_WAKES_PER_TICK, WakeHandler,
@@ -73,13 +98,30 @@ pub use entity::{
 pub use event::{
     CAUSE_SUBJECTS, EventBody, EventInfo, KERNEL_EVENTS, SimEvent, Subject, WORLD_EVENTS, Where,
 };
-pub use later::{ActionId, ActionTable, ChannelSet, EocId, Plan, RuleState, WindowTable};
+pub use host::{Bound, MAX_HOST_WARNINGS, RULE_STREAM, SimHost};
+pub use later::{ActionId, ActionTable, ChannelSlots, EocId, Plan, RuleState, WindowTable};
 pub use reason::{KERNEL_REASONS, Reason, ReasonInfo, codes};
+pub use registry::{
+    ArgDef, Bindings, FunctionDef, PropertyDef, engine_functions, engine_properties,
+    engine_registry, register_engine,
+};
 pub use sim::{LoadError, SAVE_KIND, SAVE_VERSION, Sim, SimHashes, Truth};
+pub use subject::{Kinds, SUBJECT_KIND_DOCS};
+pub use vars::{Assign, MAX_VAR_NESTING};
 
-/// Registers every definition type the simulation owns with the loader.
-/// The application and the tools call this once (04 §9).
+/// Registers every definition type the simulation owns with the loader,
+/// and the step that enters in the expression registry what the engine
+/// offers and the events mods define ([`registry`]). The application
+/// and the tools call this once (04 §9), and give the loader
+/// [`engine_registry`].
 pub fn register_defs(types: &mut clash_data::DefTypes) {
     bus::register_defs(types);
+    // Before the rules: the kernel's step enters a mod's events into the
+    // expression registry with their cause subjects, and the rule
+    // runtime's step leaves alone what is already there.
+    registry::register_defs(types);
+    rule::register_defs(types);
     action::register_defs(types);
+    stats::register_defs(types);
+    body::register_defs(types);
 }

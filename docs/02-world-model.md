@@ -162,6 +162,7 @@ pub struct Cosmos {
     stability: StabilityQueue,                 // checks asked for and not yet made (section 14.2)
     activity: WorldActivity,                   // the world's processes: checks, falling masses, bodies in flight, releases (sections 13 to 15)
     vars: VarMap,                              // global variables
+    save: SaveState,                           // the save's id tables and entity sections waiting (section 11); not state
 }
 
 pub struct Realm {
@@ -377,6 +378,10 @@ decided by the movement rules in the simulation, which know the mover.
   "default_resist": { "threshold": "50 kPa", "factor": 1.0 } }
 ```
 
+A damage type may be flagged `severs`: across the whole width of a body
+part, a hit of that type takes the part off (06 §7.2). The world stores
+the flag and gives it no meaning.
+
 **Materials** are shared by terrain, items and body tissue (document 06).
 
 ```json
@@ -411,6 +416,9 @@ decided by the movement rules in the simulation, which know the mover.
 | `rubble` | fixture id | What destroyed elements of this material leave behind. May be given per damage type, and may be a field: ice destroyed by heat leaves water. |
 | `friction` | — | The coefficient of sliding friction of a surface of it (section 15.3). Absent, a half. |
 | `changes` | — | What it becomes by temperature. See below. |
+| `flammable` | — | Shorthand for the tag `flammable`, for a field rule or reaction that asks for a material tag (section 16). |
+| `tags` | — | Free-form tags. A field's `spread` and a field reaction name one to say what they act on. |
+| `leak`, `signal`, `heal` | — | What it does as the tissue of a body: drains a pool when breached, adds to a pool when damaged, and recovers by itself (06 §6.1). The world stores them and gives them no meaning. |
 
 **Change of state.** A material may say what it becomes when the
 temperature of its cell (11 §4.6) passes a threshold.
@@ -757,7 +765,9 @@ impl WorldEdit<'_> {
     pub fn set_damage(&mut self, loc: Location, layer: Layer, damage: u8) -> Result<u8, WorldError>;
     pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> Result<DamageOutcome, WorldError>;   // section 12
     pub fn damage_along(&mut self, loc: Location, layer: Layer, p: DamagePacket, dir: Option<[Real; 3]>) -> Result<DamageOutcome, WorldError>;
-    pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16);                       // section 16
+    pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16) -> Result<u8, WorldError>;   // section 16
+    pub fn set_field(&mut self, loc: Location, field: FieldId, level: u8) -> Result<u8, WorldError>;
+    pub fn conduct(&mut self, loc: Location, p: DamagePacket) -> Result<u32, WorldError>;         // a packet arrived in a cell: section 16
     pub fn lay_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;         // 16 §6
     pub fn cut_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;
     pub fn add_decal(&mut self, loc: Location, kind: DecalId, amount: u8) -> Result<(), WorldError>;
@@ -813,7 +823,9 @@ An edit is never refused because someone is standing there (section 23).
 
 Field value changes are too numerous to report per cell. They bump the field
 revision; events are emitted only when a field appears in or vanishes from a
-cell, and when it contacts an occupant.
+cell, and when it contacts an occupant. A structural edit also wakes the
+fields asleep in its cell and in the cells beside, above and below it
+(section 16).
 
 ### 7.3 Causes
 
@@ -873,7 +885,12 @@ whoever owns it drains. Rules name an event in snake case
 | `OccupantEntombed` | `occupant`, `loc` | An edit left an occupant no room and there was nowhere to go |
 | `ElementDestroyed` | `loc`, `layer`, `old`, `new` (states; `new` is the `on_destroy` state or nothing), `how` (`damage` with its type, `crushed` or `fell`), `absorbed`, `passed` (J; zero unless by damage) | A floor, block or fixture was destroyed (section 12.3). It follows the `ElementChanged` events of the change and of the rubble left |
 | `OccupantUnsupported` | `occupant`, `loc` (where it is) | What held an occupant up has gone (section 7.2) |
-| `OccupantExposed` | `occupant`, `loc` (the cell struck), `kind` (damage type), `energy` (J), `intensity` (Pa) | Something struck the cell an occupant is in: a mass that landed there (section 14.3), the front of a release, or what a closed space held of one (section 13.2) |
+| `OccupantExposed` | `occupant`, `loc` (the cell struck), `kind` (damage type), `energy` (J), `intensity` (Pa) | Something struck the cell an occupant is in: a mass that landed there (section 14.3), the front of a release or what a closed space held of one (section 13.2), a field's `damage` rule, once a step for the strongest cell of the field the occupant fills, or damage a field passed on (section 16) |
+| `FieldAppeared` | `loc`, `field`, `level` | A field came to be in a cell that held none of it (section 16). Other changes of level are not reported |
+| `FieldVanished` | `loc`, `field` | The last of a field left a cell |
+| `FieldContact` | `occupant`, `loc`, `field`, `level` | A field and an occupant came to share a cell: the field appeared where the occupant is, or the occupant was placed or moved into a cell it did not fill before that holds the field. Once for each field and cell, not at every step |
+| `OccupantDosed` | `occupant`, `loc` (the cell of the field), `field`, `level`, `pool` (as the rule writes it), `amount` (`level × per_level`), `route` (`breath`, `skin` or `any`) | An occupant is in a cell of a field with an `expose` rule: once for each step of the field, for the strongest cell the occupant fills. The world applies no route |
+| `FieldBudgetExceeded` | `loc` (the first cell of the step that found it), `active`, `max` | A step found more active field cells than `field.max_active_cells`, and the step before did not |
 | `CollapseStarted` | `collapse` (id), `loc` (the cell whose change started it) | A stability check found something giving way where no collapse was in progress |
 | `CollapseSettled` | `collapse`, `loc`, `bounds` (the box of cells it touched), `tallies` (by instigator: `elements` destroyed, `mass` brought down in kg, occupants `exposed`) | Nothing of a collapse is in flight and no check is waiting near it |
 | `TractLoaded` | `realm`, `tract`, `loc` (the tract's cell with the lowest coordinates, at storey 0), `first` (never loaded before) | A tract has been loaded, after the changes waiting for it were made (section 9.4) |
@@ -888,7 +905,9 @@ whoever owns it drains. Rules name an event in snake case
 | `BodyLeftLoaded` | `body`, `owner`, `loc` (the last loaded cell it was in), `lands` (where it comes down or back in, if it does), `at` (when), `returns` (it comes back in and flies on), `energy` (J as it arrives) | A body's flight took it out of loaded space and was finished by arithmetic (section 15.4) |
 
 The three tract events carry no cause of their own: `cause()` gives the
-coarse cause for them.
+coarse cause for them. What a field does of itself has the cause kind
+`Field` with, as instigator, whoever is responsible for the field in
+that cell (section 16).
 
 Events that sum many changes (`EnergyReleased`, `CollapseSettled`,
 `TractDevastated`) carry totals by instigator: elements destroyed, mass
@@ -1247,6 +1266,7 @@ pub struct TractExtra {
     pub stamp_watermark: u64,                 // stamps up to this sequence are already applied
     pub last_loaded: Tick,                    // when it was last unloaded, in the local time of its realm's clock
     pub vars: VarMap,
+    pub generated: Option<Hash128>,           // the generator fingerprint its cells were last generated with (section 11.3)
 }
 ```
 
@@ -1259,8 +1279,8 @@ What the records carry that later packages give meaning is typed and
 stored now: `RegionSurvey` (a kind and field values), `Placement` as 10 §4.1
 gives it, `PathLine` (a kind and the cells it runs through), and `Stamp`
 (a tick and a sequence number; its release joins it with section 17).
-`TractDefId` is a bare id until document 10's `tract` definition type is
-built, and 0 is a tract with no definition.
+`TractDefId` is the dense id of a `tract` definition (10 §6), and 0 is
+the engine's `engine:none`: a tract with no definition.
 
 ### 9.2 Lifecycle
 
@@ -1350,6 +1370,13 @@ be generated, not before: a world may hold realms that are never generated.
 Parameters are checked when the generators are bound;
 `Generators::param_errors` lists what is wrong.
 
+A generator built from definitions the world's tables do not hold (maps,
+grounds, tract definitions) registers a closure that owns them
+(`GeneratorRegistry::register_maker`), which takes the place of a plain
+factory of the same name. `clash_gen::generators_with(defs)` binds every
+generator of that crate this way, the `standard` one of 10 §6.2 among
+them.
+
 **In parallel.** `realize_batch(defs, runner, jobs)` realises a batch of
 tracts and returns the results in the order of the jobs. A `BatchRunner`
 decides on which threads: `SerialRunner` on the calling thread, and
@@ -1432,6 +1459,8 @@ pub struct LoadedTract {
     pub from_store: bool,                     // read, not generated
     pub spawns: Vec<SpawnRequest>,            // for the simulation
     pub areas: Vec<AreaId>,                   // made from what the generator asked for
+    pub entities: Vec<u8>,                    // the simulation's entity section, handed back once (section 11.1)
+    pub regenerated: bool,                    // generated again from other inputs: new content (section 11.3)
 }
 ```
 
@@ -1443,8 +1472,11 @@ As built:
   9.3). Then each tract is installed in the order given: its column joins
   the grid, the changes waiting for it are made, and `TractLoaded` is
   emitted.
-- A tract is read from the store when its record says `Realized { pristine:
-  false }` and generated otherwise (section 11).
+- A tract is read from the store when the store holds cells for it:
+  always when its record says `Realized { pristine: false }`, and for a
+  pristine tract when everything is stored. Otherwise it is generated
+  (section 11.3). The entity section the store holds for it is handed
+  over either way.
 - What a generator asks for besides cells is acted on once, the first time
   a tract is loaded: its areas are made (they are the cosmos's and outlive
   the loading) and its spawn requests are handed over. A pristine tract
@@ -1454,11 +1486,20 @@ As built:
   occupants like any edit, and they make the tract one that is stored. A
   pending spawn is handed over with the tract. Both are then gone from the
   record. A pending stamp stays until section 17 is built.
+- A pending map stays in the record too: the world cannot resolve a map
+  (01 §3). `Cosmos::take_pending_maps(realm, tract)` hands the maps
+  waiting for a tract to whoever holds the maps, and
+  `clash_gen::apply_pending_maps` writes them through `WorldEdit` with
+  the coarse cause (10 §4.3). Whoever loads tracts calls it for each
+  tract loaded, so a pending map is written after the pending cell
+  changes of the same load.
 - A tract that is loaded already, or named twice in one batch, is refused,
   as is one outside its realm. A refusal changes nothing and says why
   (`LoadError`).
-- Not built yet: stamps and total devastation (section 17), and step 4,
-  which is the fields' (section 16).
+- Step 4 runs for a tract read from the store, by each field's
+  `catch_up` (section 16), and the fields still active are stepped
+  again. A tract that is generated holds no field.
+- Not built yet: stamps and total devastation (section 17).
 
 `Cosmos::add_pending_edit(realm, tract, edit)` is how a change is left for
 a tract that is not loaded. It is refused for a tract that is loaded, a
@@ -1491,8 +1532,13 @@ three steps are not one call:
 
 A column that has changed since it was loaded is written whole, and its
 record becomes `Realized { pristine: false }`. One that has not is not
-written. The checks for bodies and processes come with them (sections 14
-and 15).
+written, unless everything is stored or the simulation handed in an
+entity section for the tract (section 11). The checks for bodies and
+processes come with them (sections 14 and 15).
+
+The simulation's side of this, and of `TractLoaded`, is 03 §4.3: it
+reconciles at every safe point, shelves the entities of a tract that is
+to go and puts them back when the tract is loaded again.
 
 ## 10. Activity
 
@@ -1635,7 +1681,7 @@ budget leaves room for about four more such areas.
 
 ## 11. Persistence
 
-- World data is stored per tract behind a trait:
+- A save is kept behind a trait:
 
 ```rust
 pub trait TractStore {
@@ -1643,12 +1689,18 @@ pub trait TractStore {
     fn put(&mut self, realm: RealmId, pos: TractPos, blob: &[u8]);
     fn delete(&mut self, realm: RealmId, pos: TractPos);
     fn commit(&mut self) -> Result<(), StoreError>;        // atomic
+    fn section(&self, name: &str) -> Result<Option<Vec<u8>>, StoreError>;
+    fn put_section(&mut self, name: &str, blob: &[u8]);
+    fn delete_section(&mut self, name: &str);
+    fn section_names(&self) -> Result<Vec<String>, StoreError>;   // in order
 }
 ```
 
-  The default implementation uses `redb`. Tests use an in-memory map
-  (`MemoryStore`). `put` and `delete` take effect for later `get`s at once;
-  `commit` makes what was done since the last commit durable.
+  It holds tract blobs by realm and tract, and named sections for
+  everything of a save that is not a tract. The default implementation
+  uses `redb` (`RedbStore`). Tests use an in-memory map (`MemoryStore`).
+  `put` and `delete` take effect for later reads at once; `commit` makes
+  what was done since the last commit durable, all of it or none.
 - A tract blob holds its column (chunks with compacted palettes, sparse
   layers, fields, fills) and an opaque entity section owned by the simulation.
   It is compressed with LZ4.
@@ -1671,17 +1723,212 @@ pub trait TractStore {
 Rule R7 (save/load is invisible) is tested for every world scenario,
 including saves taken in the middle of a collapse and a blast.
 
-Built so far, with tract loading: the trait, `MemoryStore`, and a column
-codec behind two functions, `encode_column(&Column)` and
-`decode_column(&WorldDefs, &[u8])`. A tract blob has kind `TRCT` and version
-1. Its body is the column's two fills, the chunk height of its first stored
-chunk and its chunks, without those at either end that hold only the fill;
-each chunk is its three element layers with compacted palettes and its four
-sparse layers. Equal columns give equal bodies. The pristine policy is the
-record's `pristine` flag alone. Left to the persistence package, which
-replaces the two functions: states by save id, the entity section, fields,
-the generator fingerprint, `save.store_pristine` and the `redb` store. Until
-then a blob holds runtime ids and is good for the mod set that wrote it.
+### 11.1 The tract blob
+
+Kind `TRCT`, version 2. `encode_tract(defs, ids, cells, entities)` writes
+one and `decode_tract(defs, ids, blob)` reads it. The body is two fields:
+
+| Field | Holds |
+|-------|-------|
+| `cells` | Optional. The column: its two fills, the chunk height of its first stored chunk, and its chunks without those at either end that hold only the fill; each chunk is its three element layers with compacted palettes and its four sparse layers. Absent for a tract whose cells are generated again |
+| `entities` | The simulation's entity section, as bytes |
+
+Equal columns written against equal tables give equal bodies. Version 1
+held dense ids and no entity section and was never written to disk; it
+is refused, with the version it states.
+
+**The entity section** is bytes the world neither reads nor drops. The
+simulation hands it in for a loaded tract with
+`Cosmos::set_tract_entities(realm, tract, bytes)`, when it answers
+`TractUnloading` by taking its entities out (section 9.5). The world
+writes it with the tract when the tract is unloaded or the world is
+saved, and hands it back in `LoadedTract::entities` when the tract is
+next loaded. It is handed over once: as it is, the section is taken out
+of the store, so that what the simulation then holds live is not also
+waiting in the tract. A tract that has never been changed and has an
+entity section is stored as that section alone.
+
+**Fields in the blob.** Each chunk also holds its fields (section 16): for
+each field, the cells that hold it with their level, whether they are
+active and who is responsible. A chunk that holds a field is never one
+that "holds only the fill", and a change to a field marks its tract as
+one to store.
+
+### 11.2 Save ids and placeholders
+
+A cosmos keeps the tables of its save (`SaveIds`): one for each kind of
+definition that saved state names (`DefKind`: `floor`, `block`,
+`fixture`, `material`, `area_kind`, `realm`, `damage_type`, `plane`),
+each the qualified ids in the order the save first named them. Save id 0
+of each element type and of materials is the built-in `engine:none`.
+
+- Writing turns dense ids into save ids and adds a definition to its
+  table the first time the save names it. The tables only grow.
+- Reading turns save ids into the dense ids of the definitions loaded
+  now. A save id its table does not hold is damage, and an error.
+- The tables are not state and are not hashed. They are written with
+  the world, in `world.ids`, each under the name of its definition
+  type, so that a build with more kinds reads the saves of one with
+  fewer and keeps the tables of kinds it does not know.
+- Everything the world saves is walked for the ids it holds: element
+  states in cells, fills and waiting changes, a realm's definition, an
+  area's kind, the materials of a falling mass, the material of a
+  fragment in flight, the damage type of a projectile and of a release
+  in progress, the planes a body is on, and what a body that came down
+  unseen was (a waiting impact, section 15.4).
+- A set of planes is a mask with a bit for each plane's id, and is
+  turned plane by plane. The mask of every plane names none of them and
+  is written as it is. A mask has thirty-two bits, so a save can name
+  thirty-two planes over its life, those that have gone included.
+- Written as they are, because their definition types are not built
+  and the world gives the numbers no meaning: decal, conduit, site,
+  tract, devastation kind, map, region kind and path kind ids. A named
+  state of an element is written as its position among the
+  definition's states.
+
+**Placeholders.** When a save is loaded, an id whose definition is no
+longer there (04 §12.3) is given a placeholder: a definition of the
+right type, added after every real one in a copy of the definitions,
+which keeps the id the save wrote as its own. `Cosmos::defs` of a loaded
+world holds them; every definition that was passed in keeps its dense
+id. A placeholder is written back under the id it keeps, so a save made
+without the mod loses nothing, and when the mod is loaded again the id
+finds its definition and the content is as it was. A placeholder is not
+found by name: a reference in data to something that does not exist
+stays a mistake. What a placeholder is like is the engine's, and the
+same for every id:
+
+| Type | The placeholder |
+|------|-----------------|
+| `floor` | No thickness. It can be stood on |
+| `block` | No volume; `load_bearing`, `anchor` and `passable`: it does not fall, holds up what stood on it, and is neither seen through nor walked into |
+| `fixture` | No volume |
+| `material` | No density, no toughness, the default resistance of every damage type, never crushed, and a span that reaches as far as a check looks |
+| `area_kind` | Nothing: an area keeps the tags, variables, clock and priority it was made with |
+| `realm` | No strata, no generator, barrier edges, and the extent the realm was saved with. Its stored tracts load; nothing more is generated |
+| `damage_type` | A default resistance that nothing gets past: it harms no element. It is not `kinetic` and leaves no devastation. A release or a projectile of it goes on, and what it does to an occupant is for the simulation |
+| `plane` | Nothing: a plane with nothing on it but what the save put there. It takes the next free bit, and a save that names more planes than a mask has bits is refused |
+
+Each element placeholder is drawn as `?` and carries the tag
+`placeholder`, as a placeholder material, damage type and plane do. An element that is a
+placeholder, or is made of one, has no capacity: the first blow that
+takes effect destroys it, and it leaves no rubble. Destroyed, it is
+gone for good.
+
+`Cosmos::take_save_warnings` lists each missing definition with where
+it was met: among the save's ids, in a section of the world, or in the
+cells of a tract, as the tract is read. Migration entries (04 §12.1)
+are consulted before a placeholder is made, once the `migration` type
+is built.
+
+### 11.3 The pristine policy
+
+- A tract's record says `Realized { pristine: true }` until the tract
+  is unloaded with cells that have changed since they were generated or
+  read. Such a tract writes no blob, when it is unloaded and when the
+  world is saved, unless it has an entity section.
+- **The fingerprint.** `Cosmos::generator_fingerprint(realm)` is a hash
+  of what a realm's tracts are generated from: the content fingerprint
+  of the definitions (04 §9; `WorldDefs::fingerprint`), the generator
+  the realm's definition names with its parameters, and the realm's
+  seed. A tract's record keeps the fingerprint its cells were last
+  generated with (`TractExtra::generated`). When a pristine tract is
+  generated again under another fingerprint, its cells are new content:
+  `LoadedTract::regenerated` says so, and the record takes the new
+  fingerprint. Only the cells are made again. The areas and spawn
+  requests of the first generation were acted on then and are not
+  repeated, and whatever the simulation kept for the tract may no
+  longer fit what stands there.
+- **`save.store_pristine`** (`Cosmos::set_store_pristine`, off by
+  default) stores every tract when it is unloaded and every loaded
+  tract when the world is saved. A tract stored this way stays
+  pristine in its record. Cells that are in a tract's blob are what the
+  tract loads with, whatever the setting is now and whatever the
+  fingerprint says: with everything stored, the world is kept as it
+  was seen, and content that has gone shows as placeholders.
+
+### 11.4 Saving and loading the world
+
+`Cosmos::save_world(store)` writes the whole world into a store, and
+`Cosmos::load_world(defs, io)` makes a cosmos of what a store holds. The
+cosmos that comes back hashes equal to the one that was saved, and the
+two go on alike (invariant W7).
+
+| Section | Kind | Holds |
+|---------|------|-------|
+| `world.cosmos` | `WCOS` | The realms with their region and tract records, the table of grids, the global variables, and `store_pristine` |
+| `world.areas` | `WARE` | Every area |
+| `world.sites` | `WSIT` | Every site |
+| `world.tickets` | `WTKT` | The tickets, which tracts they keep, and what the last reconciliation worked out |
+| `world.stability` | `WSTB` | The stability checks waiting |
+| `world.activity` | `WACT` | The world's processes (settle checks, falling masses, field steps, bodies in flight, releases whose fronts are spreading), the collapses in progress, and what is kept about fields, bodies and releases beside them |
+| `world.tracts` | `WTRC` | Which tracts are loaded, and for each whether its cells are stored and whether it had changed |
+| `world.ids` | `WIDS` | The tables of save ids |
+
+Each is a blob with a kind and a version of its own, at version 1.
+The sections are a list in the code (`WORLD_SECTIONS` in
+`clash_world::save`): a world subsystem that has state adds an entry
+there, with a function that writes it and one that puts it back. A
+section a save does not hold leaves its subsystem as it is in a new
+cosmos. Names that begin with `world.` are the world's: a section of
+that prefix which this build does not know is refused when loading,
+because loading would drop it, and one that a save does not write is
+deleted from the store. The simulation's sections go beside them under
+other names.
+
+The cells of loaded tracts go where the cells of unloaded tracts are. A
+loaded tract that has changed, or that no generator can make again, is
+written as its tract blob. A loaded tract that has not changed is not
+written: `load_world` generates it again, with the generators it is
+given, as any pristine tract is. Saving changes nothing that is hashed
+and unloads nothing.
+
+**Saving**, at a safe point:
+
+1. The simulation hands in the entity section of any tract it is about
+   to let go of.
+2. `cosmos.save_world(store)`.
+3. The simulation writes its own sections: the timeline with its
+   clocks, its entities and the rest.
+4. `store.commit()`.
+
+A store is committed only after `save_world`: tract blobs written
+between saves name definitions through tables that `save_world` writes.
+
+**Loading**, in this order:
+
+1. The mods are loaded and the world's definitions built.
+2. The generators are bound to them.
+3. `Cosmos::load_world(&defs, &mut TractIo)`. From here on the
+   definitions to use are `Cosmos::defs`, which may hold placeholders.
+4. The timeline is restored from the simulation's section. The world
+   does not touch the timeline while it loads: the clocks of realms and
+   areas and the wake-ups of its processes are in the timeline as it
+   was saved, and the cosmos holds their ids. The two must come from
+   the same save.
+5. The simulation places its entities again with `WorldCtx::place`, into
+   an event sink that is thrown away. Placing changes nothing that is
+   hashed.
+6. `Cosmos::take_save_warnings` says what has become a placeholder.
+
+Loading reads the store and changes nothing in it. Anything missing or
+damaged is a `SaveError` that names the section or the tract.
+
+### 11.5 The file
+
+`RedbStore::open(path)` opens a save file, or makes an empty one. The
+file is a `redb` database with two tables: tract blobs keyed by realm,
+row and column, and sections keyed by name. What is put and deleted is
+kept in memory until `commit`, which writes it in one transaction, so
+the file holds all of one save or all of the one before it, and a game
+that is not saved leaves its file as it was. The file is checked as it
+is opened: one that has been cut short or written over is an error, as
+is any blob in it that fails its own checksum. The store is read and
+written only at safe points (01 R5).
+
+Not built: region records as blobs of their own (`world.cosmos` is
+written whole at every save); migration entries; the columns of grids
+that are not a realm's base grid (section 18.5); benchmarks.
 
 ## 12. Damage
 
@@ -1994,8 +2241,21 @@ As built:
 - **Occupants.** Each occupant of a reached cell is exposed once by the
   front, the first time a cell it is in is reached: `OccupantExposed`
   with the cell's intensity and `energy = I × 3 m³`, what the wave
-  carries through a cell. An occupant whose cell the front has not
-  reached when it leaves is not exposed.
+  carries through a cell, and no more than was let go. An occupant
+  whose cell the front has not reached when it leaves is not exposed.
+- **Fields.** That same packet, the cell's intensity with what the wave
+  carries through a cell, is what arrives in each cell the front
+  reaches: the release calls `WorldEdit::conduct` for it once, however
+  many of the cell's elements it strikes, and a field there that reacts
+  to the kind of damage passes it on (section 16). A cell that holds
+  only a field is reached like any other. So does each cell a beam
+  passes through, and each cell of a closed space with what the space
+  held; the elements that bound the space are pressed on and their
+  cells are told nothing. What a field passes on is the field's doing
+  with the release's cause: it is not taken from the release's energy,
+  not counted in its totals or against `release.max_cells`, and every
+  wet cell the front reaches passes its own packet on, so a cell of a
+  pond is passed one from each wet cell within the reaction's reach.
 - **The push.** The wave gives a thing the energy it holds in a slab of
   the thing's cross-section, `release.push_depth` (1 cm) deep:
   `speed = √(2 · I · area · 0.01 m / mass)`, straight away from the
@@ -2234,7 +2494,7 @@ it crushes, drops or breaks carries that cause. `CollapseSettled`
 carries its totals by instigator.
 
 The world's processes are one table, saved and hashed with the cosmos
-(`Cosmos::processes`, `Cosmos::restore_activity`), and every one of their
+(`Cosmos::processes`; section 11.4 saves it), and every one of their
 wake-ups carries the world's domain. `WorldCtx::handle_wake(wake)` is
 the one entry point: the kernel calls it for each such wake-up it pops.
 A collapse in progress is nothing but that state and the timeline, so a
@@ -2379,8 +2639,11 @@ volume its mass has at 1000 kg/m³, the cross-section of a lump of that
 volume, drag 1, depth 0.1 m, no bounce.
 
 - `launch` is refused for a mass that is not above zero, a number that
-  is not finite, a depth or restitution out of range, a place that is not
-  loaded and an entity already in flight. `impulse`, `steer` and
+  is not finite, a depth or restitution out of range, a fragment's
+  material or a projectile's damage type that does not exist, a place
+  that is not loaded and an entity already in flight. A bit of `plane`
+  that names no plane is dropped, since nothing is on it; the mask of
+  every plane stays as it is. `impulse`, `steer` and
   `arrest` are refused for a body that is not in flight, and the first
   two for one that is beyond loaded space (section 15.4).
 - `impulse` and `steer` first bring the body up to now, then change it.
@@ -2516,6 +2779,11 @@ A colliding occupant is struck with conservation of momentum, emits
 - **`contact`.** `BodyImpact` carries the striking surface of the
   element struck, if it has one (section 5.4), for the simulation to
   strike the body with in place of the blunt impact (07 §6.5).
+- **Fields.** The packet of a blow arrives in the cell of the element
+  or the occupant struck: the body calls `WorldEdit::conduct` for it
+  once, and a field there that reacts to the kind of damage passes it
+  on (section 16). A dart that carries a shock into someone standing in
+  water reaches whoever else stands in it.
 - **An edge of the realm.** A barrier turns a body back like a wall
   nothing can break. By any other edge it leaves: `BodyLeftLoaded` with
   nowhere to land.
@@ -2583,64 +2851,152 @@ over the horizon and a person punched across a city both arrive.
 
 ## 16. Fields
 
-A field is a per-cell value from 0 to 255 that evolves by rule.
+A field is a per-cell value from 0 to 255 that evolves by rule. The
+engine knows what a field is and what each rule does. It never knows
+what fire or water is: every behaviour below comes from a definition.
 
 ```json
 {
   "type": "field",
   "id": "fire",
-  "step": "200 ms",
+  "step": "500 ms",
   "rules": [
-    { "rule": "decay", "amount": 2 },
-    { "rule": "spread", "needs": "fuel", "chance": 0.3 },
-    { "rule": "emit", "field": "smoke", "amount": 20 },
-    { "rule": "emit", "field": "heat", "amount": 40 },
-    { "rule": "damage", "kind": "heat", "energy_per_level": 2000, "intensity_per_level": "10 kPa" }
+    { "rule": "decay", "amount": 12 },
+    { "rule": "spread", "needs": "fuel", "chance": 0.3, "amount": 30, "from": 60 },
+    { "rule": "emit", "field": "smoke", "amount": 12 },
+    { "rule": "damage", "kind": "heat", "energy_per_level": 10, "intensity_per_level": "10 kPa" },
+    { "rule": "drift", "share": 0.0, "spread": 0.25 }
   ],
   "catch_up": "burn_out",
-  "glyph": { "ch": "^", "fg": ["yellow", "orange", "red"] },
+  "light": { "intensity": 1.5, "radius": "10 m", "from": 20 },
+  "glyph": { "ch": "^", "fg": ["red", "yellow", "white"] },
   "tags": ["light_source"]
 }
 ```
 
-Built-in rules, implemented natively and configured by data:
+| Field of `field` | Meaning |
+|------------------|---------|
+| `step` | How often the field is stepped, in the local time of where it is. Required; at least 1 ms. |
+| `rules` | Its rules, applied to each active cell each step, in the order written. |
+| `catch_up` | What becomes of it in a tract loaded after time has passed: `keep` (the default), `none`, `burn_out`, `disperse` or `settle`. See below. |
+| `warms` | The kelvin each level adds to the temperature of its cell (11 §4.6), negative to cool. Stored and reported; it does nothing until temperature is built. |
+| `changes` | What it becomes by temperature, like a material's (section 5.4): lava that cools leaves rock. Carried as written until change of state is built (package W25). |
+| `light` | The light it gives off: `intensity` is that of a cell at level 255, and a lower level gives in proportion; `radius` as for an element (15 §3.3); `from` is the least level that gives light, default 1. |
+| `opaque_from` | The level from which a cell of it hides what is behind it, as something opaque taller than the eye would. Absent: it never hides. |
+| `glyph` | How it is drawn: `ch`, and `fg` and `bg` as one colour or a list of colours spread evenly from the lowest level to the highest. Stored and reported only. |
+| `tags` | Free-form tags. |
 
-| Rule | Behaviour |
-|------|-----------|
-| `decay` | Lose value per step. |
-| `diffuse` | Even out with neighbours. Optional vertical bias for gases that rise or sink. |
-| `flow` | Liquid behaviour: fall, then spread sideways. |
-| `spread` | Ignite neighbours that have fuel (flammable materials in elements, fixtures or items). |
-| `emit` | Add to another field in the same cell. |
-| `convert` | React with another field: water and fire make steam. |
-| `damage` | Send packets to elements in the cell and exposure events to occupants. |
-| `drift` | Be carried by the movement of the medium (11 §4.7). Contents move downwind or downstream, and `spread` is likelier that way. |
-| `expose` | Add to a pool (06 §4.2) of each occupant, by a route. See below. |
+**Rules.** Implemented natively and configured by data. Each is an
+object with `rule` and that rule's parameters; a parameter the rule does
+not take is a load error. A rule that moves the field moves whole
+levels, rounded down, and only what the rules before it in the list
+left in the cell: `decay` then `drift` then `diffuse` is not the same
+field as the three in another order. Where a rule would move more than
+is left, each neighbour gets its share of what there is.
 
-A field may state `warms`: the kelvin each level adds to the temperature
-of its cell (11 §4.6), negative to cool. A field may have `changes` like a
-material's (section 5.4), tested on its active cells: lava that cools
-below its threshold leaves rock, and standing water that freezes leaves
-ice.
+| Rule | Parameters | Behaviour |
+|------|------------|-----------|
+| `decay` | `amount` (levels, required) | Lose `amount` each step. |
+| `diffuse` | `rate` (required, more than 0 to 0.25); `rise` or `sink` (a share, more than 0 to 1) | Where a neighbour's level is lower, `rate` of the difference moves to it: to the four cells beside and, with neither `rise` nor `sink`, to those above and below. With `rise`, that share of the level moves to the cell above each step, as far as there is room, and nothing goes down; `sink` is the mirror. |
+| `flow` | `rate` (more than 0 to 0.25; default 0.25) | Liquid behaviour. All that fits falls to the cell below. What cannot fall levels out sideways as `diffuse` does. |
+| `spread` | `needs` (a material tag); `chance` (0 to 1, default 1); `amount` (the level a neighbour gets, default 1); `from` (default 1) | A cell at `from` or more may ignite each of its six neighbours that holds none of the field, each with `chance` a step. With `needs`, only a neighbour that holds a floor, block or fixture of a material carrying that tag. |
+| `emit` | `field`, `amount` (both required); `from` | Add `amount` to another field in the same cell each step. |
+| `convert` | `with` (a field, required); `uses`, `gives`, `max` | React with another field: shorthand for a reaction between this field and `with` (below). |
+| `damage` | `kind` (a damage type), `energy_per_level` (J), `intensity_per_level` (Pa) (all required); `from` | Each step, send a packet of `level × energy_per_level` at `level × intensity_per_level` to the floor, the block and the fixture of the cell, and tell each occupant in it with `OccupantExposed`. |
+| `drift` | `share` (0 to 1, default 1); `spread` (0 or more, default 0) | Be carried by the movement of the medium (11 §4.7): each step the share of the level that the medium carries across the cell, `speed × step / size × share` and at most all of it, moves to the next cell that way, along each axis, as far as there is room. The chance of this field's `spread` to a neighbour is multiplied by `1 + spread × v`, `v` being the metres a second the medium moves toward that neighbour, negative when it moves away, and never below nothing. |
+| `expose` | `pool`, `per_level` (both required); `route` (`breath`, `skin` or `any`; default `any`); `from` | Tell each occupant in the cell of a dose for one of its pools. See below. |
 
-Anything more exotic subscribes an EOC to `FieldContact` or `FieldAppeared`.
+`from` is the least level at which a rule acts, default 1. A level never
+passes 255: what would take it further is lost.
 
-Fields cannot enter a cell whose block has `coverage` of 0.95 or more. They
-pass between storeys only where there is no floor or the floor is a `grate`.
+**Fuel is a tag.** `spread` ignites what carries the tag its `needs`
+names, and a material flagged `flammable` counts as carrying the tag
+`flammable`. What makes a fire grow where it has fuel is a reaction
+with that tag (below), and what consumes the fuel is the field's own
+`damage`: an element destroyed by it becomes its `on_destroy` state and
+leaves its rubble like any other (section 12.3), and the cause of that
+is the field, for whoever is responsible for it.
 
-Storage is sparse per chunk and per field, with a list of **active** cells.
-Only active cells are stepped. A chunk with no active cells costs nothing.
+**Where a field can go.** Fields cannot enter a cell whose block has
+`coverage` of 0.95 or more. They pass between storeys only where there
+is no floor or the floor is a `grate`: the floor in question is the
+upper cell's. An edge of the grid and space that is not loaded let
+nothing through. Fixtures and occupants stop nothing. The one
+exception is `spread` with `needs`: it reaches a neighbour that it
+could not otherwise when what stops it, the covering block or the floor
+between, is itself of a material it needs. So a fire burns its way into
+a wooden wall and through a wooden floor, and stops at stone. An edit
+may put a field into any loaded cell.
 
-Stepping is a process per realm and step interval. Each step reads the state
-at the start of the step and writes all changes at the end, so the result
-does not depend on the order cells are visited. Random choices use positional
-randomness keyed on field, cell and step number.
+**Storage and activity.** Storage is sparse per chunk and per field:
+for each cell that holds a field, its level, whether it is **active**,
+and who is responsible for it. Only active cells are stepped, and a
+chunk with no field costs one pointer. A cell is active while it is
+awake:
 
-`catch_up` names a closed-form rule applied when a tract is loaded after time
-has passed: fires burn out, gases disperse, liquids settle.
+- A cell that gains a field is awake, if anything steps the field: it
+  has a rule or takes part in a reaction.
+- A cell of a field whose rules only move it (`flow`, `diffuse`), and
+  which reacts with no material, goes to sleep at a step that moves
+  nothing into or out of it and changes nothing in it. Water that has
+  found its level lies still and costs nothing.
+- A sleeping cell wakes when the level of its field changes in a cell
+  beside, above or below it; when any field's level changes in its own
+  cell; and when an element changes in its cell or one beside, above or
+  below it.
+- A cell of any other field is awake for as long as it lasts.
 
-`field.max_active_cells` (default 200,000) bounds cost. Past it, the weakest
-cells decay faster and a diagnostic event is emitted.
+**Stepping.** One process of the world steps the active cells of one
+clock and one step interval. It wakes at whole multiples of the
+interval in the clock's local time, and the number of a step is that
+local time in intervals, so a field in stopped time does not burn, one
+in slowed time burns slowly, and nothing depends on when the process
+began. Cells inside an area with a clock of its own are stepped by the
+process of that clock.
+
+Each step has three parts. First everything is read and nothing
+changed: the reactions and then the rules of every active cell, in
+order of grid, tract, chunk from the lowest, field and cell, say what
+they would add and take, strike and dose. Then the changes of level
+are summed for each field in each cell and written in order of cell
+and field. Last the elements are struck, in the order the cells were
+read, and the occupants told, in order of id. So the result does not
+depend on the order cells are visited or were lit in, or on how the
+simulation's `advance` is sliced. The one random choice, whether a
+field spreads, is the positional hash (01 §4) of the realm's seed, the
+domain `world.field.spread`, the cell, and the step number with the
+field, the rule and the direction.
+
+**Responsibility.** The instigator of the edit that first puts a field
+in a cell is responsible for it there, and stays so while the cell
+holds any. What a field brings into another cell by any rule or
+reaction carries the instigator along, where that cell has none; of
+several, the lowest id. Everything a field then does (`ElementDamaged`,
+`ElementDestroyed`, `OccupantExposed`, `OccupantDosed`, `FieldAppeared`,
+`FieldVanished`) has the cause kind `Field` and that instigator: what
+burns down traces to whoever lit it.
+
+**Catch-up.** A tract's fields are stored with its cells. When it is
+read back, each field catches up on the local time that passed since it
+was unloaded, by its definition's `catch_up`:
+
+| `catch_up` | What happens |
+|------------|--------------|
+| `keep` | It is as it was. |
+| `none` | It does not outlast unloading: it is gone. |
+| `burn_out` | It is gone if as much as one of its steps has passed. What it would have burnt is not burnt. |
+| `disperse` | It loses its `decay` for each step that passed, and half of what is left for every 16 steps. |
+| `settle` | It is as it was, and every cell of it is awake, so that it goes on to find its level. A true closed-form settling is not built. |
+
+Changes made by catching up have the coarse cause.
+
+**The budget.** `field.max_active_cells` (default 200,000) bounds cost.
+At a step that finds more active cells than that in the cosmos, the
+weakest decay faster: with `n` cells too many, every active cell at or
+below the level of the `n`th weakest loses 16 levels in that step on
+top of its own rules. `FieldBudgetExceeded` is emitted at the first
+step that finds it so, and again only after the count has been back
+under.
 
 **Reactions.** What fields do to each other and to what they touch is
 written once, as **field reactions**, not separately in each field.
@@ -2650,26 +3006,46 @@ written once, as **field reactions**, not separately in each field.
   { "type": "field_reaction", "id": "quench",
     "when": ["water", "fire"],
     "uses": { "water": 1, "fire": 3 }, "gives": { "steam": 2 } },
-  { "type": "field_reaction", "id": "oil_feeds_fire",
-    "when": ["fire", { "material_tag": "oily" }],
-    "gives": { "fire": 30, "smoke": 20 } },
+  { "type": "field_reaction", "id": "burning",
+    "when": ["fire", { "material_tag": "fuel" }],
+    "gives": { "fire": 30 } },
   { "type": "field_reaction", "id": "current_through_water",
     "when": [ { "damage": "shock" }, "water" ],
     "spreads": { "share": 0.8, "reach": 6 } }
 ]
 ```
 
+| Field of `field_reaction` | Meaning |
+|---------------------------|---------|
+| `when` | The two things that react: each a field id, `{ "material_tag": … }` or `{ "damage": … }`. Required. |
+| `uses` | What one reaction takes of each field that takes part, by field. |
+| `gives` | What one reaction adds to the cell, by field. |
+| `max` | The most reactions in a cell in one step. Default: no limit. |
+| `spreads` | For a reaction to damage: `share`, 0 to 1, and `reach`, in cells. |
+
 | Form | Happens |
 |------|---------|
-| Two fields | Each step, in every cell where both are present |
-| A field and a material tag | Each step, where the field shares a cell with an element or item of a material so tagged |
-| A damage type and a field | When a packet of that type arrives in a cell holding the field. `spreads` passes a share of the packet to every connected cell of that field within reach. |
+| Two fields | Each step, in every cell where both are present, as many times as the levels there allow: the lesser of each field's level over what one reaction uses of it, and at most `max`. With no `uses`, once. It runs at the steps of the field named first where that one is awake, and at the other's where it is not. |
+| A field and a material tag | Each step of the field, where it shares a cell with a floor, block or fixture of a material so tagged: once, or with `uses` as many times as the field's level allows. |
+| A damage type and a field | When a packet of that type arrives in a cell holding the field. `spreads` passes a packet with `share` of the energy and of the intensity to every cell joined to that one through the field, by steps north, east, south, west, up and down through cells that hold it, at most `reach` steps away and 4096 cells: its elements are struck and its occupants told with `OccupantExposed`. The cell the packet arrived in gets nothing more. |
 
-A reaction may also `leave` an element in the cell: lava meeting water
-gives steam and leaves basalt.
+Ten of water and ninety of fire in a cell leave, after one step of the
+water, no water, sixty of fire and twenty of steam. A reaction uses only
+fields that take part in it; one to damage takes `spreads` and nothing
+else. Whoever delivers a packet to a cell calls
+`WorldEdit::conduct(loc, packet)` once for it: a release for each cell
+its front reaches (section 13.2), and a body for the cell of the element
+or the occupant it strikes, with the packet of the blow (section 15.2).
+A reaction that also `leave`s an element in the cell (lava meeting water
+gives steam and leaves basalt) comes with change of state (package W25).
 
-**Exposure.** Not all harm is a blow. The `expose` rule adds to a pool of
-each occupant in the cell, in proportion to the field's level, by a
+Reactions are compiled into the field stepper and follow its rules:
+buffered writes, and nothing used twice in one step. The `convert` rule
+in a field's own definition is shorthand for a reaction between two
+fields, with the field itself named first.
+
+**Exposure.** Not all harm is a blow. The `expose` rule adds to a pool
+of each occupant in the cell, in proportion to the field's level, by a
 **route**:
 
 ```json
@@ -2682,21 +3058,46 @@ each occupant in the cell, in proportion to the field's level, by a
 | `skin` | The share of the body not under a worn layer that guards against it |
 | `any` | Everyone in the cell |
 
-Worn items may state `guards`, the share they keep out by route (06 §9.1):
-a mask, a filter, a coat. The hook `exposure_incoming` lets rules change
-the amount. What the pool then does to its owner is content (06 §4.2): a
-poison, a sickness, a slow burn.
+The world applies no route and no guard. At each step of the field it
+emits `OccupantDosed` for each occupant in a cell of it, of whatever
+kind and plane, with the pool as written, the amount
+`level × per_level` and the route; an occupant that fills several cells
+of the field is told once, for the strongest. The simulation decides
+what reaches the pool: worn items may state `guards`, the share they
+keep out by route (06 §9.1), and the hook `exposure_incoming` lets rules
+change the amount. What the pool then does to its owner is content
+(06 §4.2): a poison, a sickness, a slow burn. `OccupantExposed` from a
+`damage` rule is reported the same way, once a step for the strongest
+cell.
 
 Harm that passes through walls is not a field. It is a signal that
 exposes (15 §3.1).
 
-Reactions are compiled into the field stepper and follow its rules:
-buffered writes and positional randomness. The `convert` rule in a field's
-own definition is shorthand for a reaction between two fields.
+**Sight and light.** `Cosmos::field_hides_sight(loc)` says whether a
+field in a cell is at or above its `opaque_from`.
+`Cosmos::field_lights(grid, box)` lists the light the fields in a box
+give off as moving sources, one for each cell, for whoever asks for
+light to hand in (15 §3.3): the world keeps no light for fields.
+
+**Reading and writing.** `WorldEdit::add_field(loc, field, amount)`
+adds to a level, or with a negative amount takes from it, and
+`set_field(loc, field, level)` sets it; each returns the level the cell
+had, and is refused for a cell outside its grid, not loaded or out of
+reach, and for a field no definition has. `Cosmos::field` reads a level,
+`fields_at` every field of a cell, `field_cell` the level with whether
+it is active and who is responsible, and `fields_in_box` every field in
+a box of cells, by cell and then by field. `Cosmos::field_drift` gives
+the velocity of the medium at a cell where an area sets one; the
+region's wind and current join it with the weather (09 §14.1), and a
+vortex turns from east toward south about the middle of its area.
+
+Anything more exotic subscribes an EOC to `FieldContact` or
+`FieldAppeared`.
 
 Still bodies of liquid (lakes, seas) are blocks flagged `liquid`, not fields.
 When an edit opens space beside one, cells along the opening are converted to
 the corresponding field so the liquid can move, within the same budget.
+This is not built: it follows once fields are stable.
 
 ## 17. The coarse layer
 
@@ -2789,6 +3190,12 @@ pub enum PendingEdit {
 
 The cold simulation and EOCs use these to change places nobody is looking at:
 board up a shop, leave a body in an alley, put a crater where the fight was.
+
+As built, the map is `PendingEdit::Map(PendingMap { placement, mode })`:
+a placement as 10 §4.1 gives it, seed included, so that every tract a
+map covers takes its own window of the same map, and a `MapMode` of
+`replace`, `only_empty` or `add` (10 §4.3). `Liquid`, `Devastation` and
+`Eoc` join the list with the packages that give them meaning.
 
 ### 17.4 Events for the cold simulation
 
@@ -3171,7 +3578,12 @@ Still to come, with the packages that build them:
   While a see-through portal's near side is loaded and something that could
   see through is within range, the portal holds a warm ticket on its far
   side (section 10).
-- Fields that hide, such as smoke, do not yet block sight.
+- Fields that hide, such as smoke, do not yet block rays, lines of sight
+  or fields of view. `Cosmos::field_hides_sight(loc)` says whether a
+  cell's fields hide what is behind it (section 16), and whoever needs
+  it asks cell by cell. Wiring it into the queries waits for a field of
+  view that light does not share: light's cache is keyed on structure
+  revisions alone (15 §3.3).
 
 Illumination (`Cosmos::light`) is specified in 15 §3.3 and the medium of a
 cell (`Cosmos::medium`) in 11 §4. Both are world queries with caches keyed
@@ -3221,6 +3633,68 @@ of sight; area and
 site membership; tract devastation; variables at cell, area, site, tract,
 region, realm and global scope.
 
+**The queries as properties** (05 §5.3; decision D-465). Null where
+the cell is not loaded or the thing does not exist. None is safe for
+belief except those marked.
+
+| Property | Gives |
+|----------|-------|
+| `loc.x`, `loc.y`, `loc.z`, `loc.grid` | `int`: the coordinates and the grid's id. Safe |
+| `loc.realm`, `loc.tract` | `realm?`, `tract?`. Safe |
+| `loc.site` | `site?`: the site its tract belongs to |
+| `loc.areas` | `list<area>`: the areas that cover it, in id order |
+| `loc.in_area(kind: id<area_kind>)`, `loc.in_area_tagged(tag: string)` | `bool`: whether an area of a kind, or one carrying a tag, covers it |
+| `loc.floor`, `loc.block`, `loc.fixture` | `element?`: null where the cell has none |
+| `loc.is_loaded` | `bool` |
+| `loc.standable`, `loc.is_open`, `loc.under_open_sky` | `bool?` (sections 5.2, 7.1) |
+| `loc.obstacle_height` | `real?`: metres |
+| `loc.has_flag(flag: string)` | `bool?`: one of `walk_blocked`, `opaque`, `has_floor`, `solid_top`, `fragile` (section 6.2) |
+| `loc.tags`, `loc.has_tag(tag: string)` | The tags of the definitions of its three elements |
+| `loc.light` | `real?`: how bright it is now (15 §3.3), without moving sources |
+| `loc.gravity` | `real?`: ambient gravity in m/s² |
+| `loc.atmosphere` | `id<atmosphere>?`: null is vacuum |
+| `loc.time_of_day` | `real?`: seconds since midnight by the sky of its stratum |
+| `loc.occupants` | `list<entity>`: who has a cell of their footprint there |
+| `loc.clock_rate`, `loc.local_time` | `real?`: the rate against universal time, and the local time in seconds, of the clock things there run on |
+| `element.layer`, `element.loc` | `string` (`floor`, `block`, `fixture`), `loc`. Safe |
+| `element.def`, `element.def_id` | Its definition: an id of `floor`, `block` or `fixture` by layer, typed `any`; and its qualified id as a `string?` |
+| `element.material` | `id<material>?` |
+| `element.state`, `element.state_name` | `int?`: the state's bits; `string?`: the name of a declared state |
+| `element.damage` | `int?`: 0 to 255 |
+| `element.height` | `real?`: metres |
+| `element.has_flag(flag: string)` | `bool?`: one of the engine flags of section 5.4 |
+| `element.tags`, `element.has_tag(tag: string)` | The tags of its definition |
+| `area.def` | `id<area_kind>?` |
+| `area.tags`, `area.has_tag(tag: string)` | Its tags |
+| `area.site`, `area.loc`, `area.grid`, `area.priority` | `site?`; `loc?`, its middle; `int?`; `int?` |
+| `area.contains(at: any)` | `bool?`: whether it covers a cell, or where something is |
+| `area.occupants` | `list<entity>` |
+| `area.breached` | `bool?` |
+| `area.clock_rate`, `area.local_time` | `real?`: the rate of its own clock and that clock's local time; null if it has none. `clock_rate` can be set: 03 §13 |
+| `site.name` | `string?`. Can be set |
+| `site.tags`, `site.has_tag(tag: string)` | Its tags |
+| `site.realm`, `site.loc`, `site.tracts` | `realm?`; `loc?`, its anchor; `list<tract>` |
+| `tract.realm`, `tract.x`, `tract.y`, `tract.loc` | `realm`, `int`, `int`, `loc?`: its corner at storey 0. Safe |
+| `tract.loaded`, `tract.surveyed` | `bool` |
+| `tract.activity` | `string?`: `hot`, `warm`, or null |
+| `tract.devastation` | `int?`: 0 to 255 |
+| `tract.site` | `site?` |
+| `realm.def`, `realm.grid` | `id<realm>?`, `int?` |
+| `realm.clock_rate`, `realm.local_time` | `real?`. `clock_rate` can be set: 03 §13 |
+
+Distance and line of sight are the functions `dist` and `los`, and
+`light(at)` reads the light (05 §17). Variables at cell, area, site,
+tract, realm and global scope are read and written as 05 §6 lays down.
+
+Not bound yet, each for a reason: a field's value (`loc.field(kind)`),
+because fields are being built and have no definition type an id could
+name; ambient temperature, because the world has no function that gives
+the temperature of a cell; drift, because it is a vector with a medium
+and there is no value for one; the marks in a cell (`decals`), which
+want a query; a region's kind, field values and variables, because the
+kind `region` is not served; and the properties of a definition reached
+through an id, such as a material's density (05 §17).
+
 **Verb names.** The effects above are written in data as: `set_floor`,
 `set_block`, `set_fixture`, `set_material`, `damage`, `release`, `tremor`,
 `devastate`, `add_field`, `add_decal`, `remove_decal`, `set_var`,
@@ -3266,6 +3740,13 @@ and variables, fields, decals, who is where, and anything about areas and
 sites the character has not perceived. The tag `hidden` is reserved: an
 element, area, site or mark that carries it is left out of even the
 shape until perceived.
+
+As registered so far (decision D-466), the shape is not marked safe
+either: nothing can honour `hidden` until perception is built, and a
+property that ignored it would tell a mind what it has not seen. Only
+what follows from a reference alone is safe: a cell's coordinates, grid,
+tract and realm, a tract's coordinates and realm, an element's layer and
+cell.
 
 **Content named by data, not by the engine.** A damage type flagged
 `"kinetic": true` is the one bodies and falling masses deliver; exactly
@@ -3327,7 +3808,14 @@ controlled character (`world.hot_radius`) and the vacuum default for a
 release's speed (`release.vacuum_speed`). Devastation is scaled between
 `world.min_intensity` and `devastation.max_intensity`. `spread` ignites
 materials carrying the tag its `needs` names. `catch_up` is one of
-`burn_out`, `disperse`, `settle`, `keep`, `none`.
+`burn_out`, `disperse`, `settle`, `keep`, `none`. For fields (section
+16): the levels the weakest cells lose over budget
+(`FIELD_OVER_BUDGET_DECAY`, 16), the steps in which a dispersing field
+halves (`DISPERSE_HALF_STEPS`, 16), the most cells one field passes a
+packet on to (`FIELD_CONDUCT_MAX_CELLS`, 4096), the shortest step
+(`FIELD_MIN_STEP`, 1 ms) and the largest `rate` (`FIELD_MAX_RATE`,
+0.25). `field.max_active_cells` is `Cosmos::set_field_max_active_cells`
+until settings are bound.
 
 **Settings**: `world.min_intensity`, `release.max_cells`,
 `field.max_active_cells`, `body.max_ticket_tracts`, `max_loaded_tracts`,
@@ -3348,8 +3836,17 @@ does not know is an error, not ignored.
 
 **Tickets and pending edits from Rust.** `hold_ticket`, `release_ticket`
 and `add_pending_edit` are functions of `Cosmos` with the arguments of
-sections 10.1 and 9.4. As verbs they are bound with the rule runtime, as
-are a tract's activity and its record's variables as queries.
+sections 10.1 and 9.4. As verbs they are bound with the rule runtime. A
+tract's activity and its record's variables are read as `tract.activity`
+and `tract.var`.
+
+**Variables of records.** `Cosmos::set_global_var(key, value)`,
+`set_realm_var(realm, key, value)`, `set_tract_var(realm, tract, key,
+value)` and `set_region_var(realm, region, key, value)` set a variable,
+or clear it with no value, and return what it held; `tract_var(realm,
+tract, key)` reads one. A tract or a region that has not been surveyed
+has no record and is refused. They emit nothing: the simulation raises
+`var_changed` for watched variables (05 §6).
 
 **Reachable only from Rust** so far, each wanting a verb or a property
 when the rule runtime binds this document: the queries of section 22 other
@@ -3368,9 +3865,19 @@ pile of rubble holds (`rubble_units`); the direction of a hit
 (`damage_along`); and the collapses in progress and masses in flight
 (`collapses`, `falling_masses`). An area's gravity is changed with a
 check through `WorldCtx::set_area_ambient`; the `Cosmos` function of
-that name asks for none. The light at a cell (`light`, `fill_light`,
-`add_moving_light`) is reachable only from Rust too; 15 §3.3 names
-`light(loc)` for rules.
+that name asks for none. Of the light at a cell, `fill_light` and
+`add_moving_light` are reachable only from Rust; the light itself is the
+property `loc.light` and the function `light(at)`. From fields (section 16): setting a level
+outright (`set_field`); telling the fields of a cell that a packet
+arrived (`conduct`), which whatever delivers damage to a cell must do
+for a reaction to damage to happen; every field of a cell or of a box
+(`fields_at`, `fields_in_box`); whether a cell's fields hide sight
+(`field_hides_sight`); the light fields give (`field_lights`); the
+drift at a cell (`field_drift`); who is responsible for a field in a
+cell and whether it is active (`field_cell`); and the count of active
+cells (`active_field_cells`). Items are not fuel to the world, which
+does not know them: a rule that wants a burning item to feed a fire adds
+to the field itself.
 
 ## 24. Invariants
 
@@ -3384,7 +3891,7 @@ that name asks for none. The light at a cell (`light`, `fill_light`,
 | W6 | No result depends on hash iteration order, chunk load order or thread count. |
 | W7 | Save, load and continue equals continue. |
 | W8 | Energy absorbed by a release or impact never exceeds energy delivered. |
-| W9 | No definition id appears in engine code. Fills, rubble and placeholders are named by data. |
+| W9 | No definition id appears in engine code. Fills and rubble are named by data, and a placeholder by the id the save wrote (section 11.2). |
 | W10 | Reading unloaded space returns an error value. It never loads and never panics. |
 | W11 | Temperature is never polled. A change of state happens only at the three moments of section 5.4. |
 | W12 | A tract's devastation and its kind are the same whether the cause was played out while it was loaded or applied when it next loaded. |

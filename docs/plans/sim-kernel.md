@@ -40,8 +40,8 @@ start while the world model is being built.
 | K1 | Simulation skeleton and kernel entities | M | W7, F3 | done |
 | K2 | Advance, commands, input log | M | K1, W9 | beta |
 | K3 | Events and hooks | M | K2, X2 | beta |
-| K4 | Subjects, properties, variable storage | L | K1, X3 | todo |
-| K5 | Rule runtime | L | K3, K4, X4 | todo |
+| K4 | Subjects, properties, variable storage | L | K1, X3 | beta |
+| K5 | Rule runtime | L | K3, K4, X4 | beta |
 | K6 | Queries and value sources | M | K5 | todo |
 | K7 | Timers, continuations, simulation saves | L | K5, W10 | todo |
 | K8 | World verbs | M | K5 | todo |
@@ -419,6 +419,18 @@ with their packages. Past 100,000 wake-ups at one tick `advance` reports
 and yields rather than putting the rest off to the next tick. The log
 does not carry state hashes at intervals.
 
+Joined since (decisions D-460 to D-462), tested in
+`crates/clash-sim/tests/handoffs.rs`: the `World` domain's handler calls
+the world's `handle_wake`, so a tower knocked out by debug commands comes
+down under `advance`, and a save in the middle with the world's process
+state in the blob ends in the same hash; the safe point reconciles
+tickets, shelves and restores the entities of tracts that unload and
+load, and reports spawn requests; `Sim::start_session` and the debug
+command of that name start a session at a place that is not loaded yet.
+Still stubbed: world scenarios as test scripts (W11); timers of a
+shelved entity (T7); the cosmos has no store of its own, so a test of
+saving copies it (W10).
+
 ### K3 — Events and hooks
 
 **Spec** 05 §8; 03 §4.3 step 4 · **Size** M
@@ -441,8 +453,8 @@ tested (`crates/clash-sim/tests/events.rs`), with handlers as Rust
 closures registered through `Sim::on` and `Sim::on_subject`, which the
 rule runtime (K5) will use for rules. Stubbed: `rule_cascade_limit` is a
 test of that name, not yet a test script, until the runner exists. Event
-types are kept by the simulation (`Sim::event_types`) and are not yet
-entered in the expression registry, which needs the subject kinds of K4.
+types are kept by the simulation (`Sim::event_types`); K4 enters them in
+the expression registry.
 A field's value is null, a plain value or a subject. `clash-tools` must
 call `clash_sim::register_defs` for the linter to know the `event` type.
 
@@ -461,6 +473,28 @@ Done when
 - Property chains across kinds work (`self.loc.tract.devastation`).
 - Setters go through the engine's mutation paths (shown by events emitted).
 - A watched variable raises `var_changed` with old and new values.
+
+As built (decisions D-463 to D-469). Beta: the kinds `entity`, `loc`,
+`element`, `area`, `site`, `tract`, `realm` and `global` with their
+handles; `clash_sim::engine_registry()` and the loader's registry step;
+about a hundred properties and nine functions, with `exists`, each
+documented, tested in
+`crates/clash-sim/tests/subjects.rs` and stated in 05 §5.3 and §17,
+02 §23, 03 §13 and 06 §13; eight settable properties, each through the
+engine's own function; the host (`Sim::host`, `Sim::with_random`); the
+write side for the rule runtime (`Sim::assign`, `Sim::set_var`,
+`Sim::set_property`); variables on every scope the kernel serves, with
+declared defaults, types and `watch`; belief marks; the kernel's, the
+world's and mods' events as event types of the expression registry.
+`clash-tools lint` loads with the real registry, and `mods/core` holds a
+variable and three functions that use real properties. Stubbed, each
+listed as a gap in its document: a field's value, ambient temperature,
+drift and decals (02 §23); the queries over actions, channels, plans and
+windows (03 §13); properties of a definition reached through an id, and
+the scopes `region`, `subgrid`, `action`, `scenario` and `legacy`
+(05 §17); `templates` and names taken from definitions (06 §13); the
+reader's text helpers, which answer in plain forms (K9). No test script,
+until expressions can be asserted from one (K10), and no benchmark.
 
 ### K5 — Rule runtime
 
@@ -481,6 +515,30 @@ Done when
   locals.
 - Each limit, when exceeded, reports and continues.
 - Scenario `rule_alarm`.
+
+As built (decisions D-470 to D-479), in `clash_sim::rule`. Beta: every
+item above is built and tested in `crates/clash-sim/tests/rules.rs`, with
+fixtures under `crates/clash-sim/tests/fixtures/rule/`, against a host
+trait, `RuleHost`, and a fake host, as the console was. Built: the `eoc`,
+`rule_group` and `reason` definition types; the `Effects` field type,
+which action definitions now use; compiled effect trees for every effect
+of 05 §10.2, §10.3 and §10.5, `queue` among them; verbs checked against
+their `VerbSpec`; rules with parameters as verbs; the interpreter with an
+explicit stack and the limits of 05 §13.2; `RuleState` (attachments, run
+records, switched groups) with save and hash; `RuleSet::deliver`, which
+runs what answers an event in the order of 05 §8.3. The review additions
+"Returning from rules", "Rule groups" and the attached half of "Rules at
+lower detail" are built; the bodies of the test scripts `rule_alarm` and
+`winter_rules` are tests of those names. Waits: binding to `Sim`, which
+is six steps listed in the module's documentation and needs the
+subjects and properties of K4 (the kernel must also raise its save
+version for the new `RuleState`); timers and continuations, `after`,
+`every`, `cancel_timer` and a rule's own `every`, which are read, kept
+and report when they run (K7); queries, so `for_each` over one reports
+and a value source over one gives null (K6); the world's verbs (K8);
+`message` and `ask` (K9); tracing (K10). The two test scripts become
+`.scn` files once the simulation implements the console's host. No
+benchmark.
 
 ### K6 — Queries and value sources
 
@@ -568,8 +626,10 @@ Done when
 As built (decision D-363). Beta: clock assignment, rehoming and the three
 operations are built and tested (`crates/clash-sim/tests/clocks.rs`).
 Stubbed: `set_time_rate`, `anchor_clock` and `set_clock_rate` are kernel
-functions; their effects are bound by the rule runtime (K5). Bodies in
-flight and world processes are rehomed by the world, when it has them.
+functions; their effects are bound by the rule runtime (K5). Since K4,
+an entity's `time_rate` and an area's and a realm's `clock_rate` are
+settable properties that call the first and the last. Bodies in flight
+and world processes are rehomed by the world, when it has them.
 
 ### T2 — Action definitions
 
@@ -593,10 +653,10 @@ action is read without a lookup by name: phases by index, channels as a
 `ChannelSet`, locals in one fixed order of slots that every expression was
 compiled against. The reasons for the refusals of 03 §6 to §8 are
 constants in `clash_sim::action::reason`. `clash_sim::action::register_defs`
-registers the three types and is called by `clash-tools`. Stubbed: effect
-lists are kept as the located JSON they were written as (`EffectsSource`)
-and nothing in them is checked until the rule runtime compiles effects
-(K5). Of the review additions, the definition halves are built: `footing`
+registers the three types and is called by `clash-tools`. Effect lists
+are `Effects` fields of the rule runtime (K5), compiled in
+`ActionDef::effect_scope` with the action's locals. Of the review
+additions, the definition halves are built: `footing`
 with its reason, and list parameters with their bounds, element type and
 indexing. The run-time halves are T3's: refusing an actor with nothing
 under it, holding a list to its bounds when a command gives it, and

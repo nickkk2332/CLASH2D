@@ -52,9 +52,11 @@ pub fn mods_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods")
 }
 
-/// The definition types of the world and of the simulation, registered.
+/// The definition types of the expression language, the world and the
+/// simulation, registered.
 pub fn types() -> DefTypes {
     let mut types = DefTypes::new();
+    clash_data::expr::register_defs(&mut types);
     clash_world::register_defs(&mut types);
     clash_sim::register_defs(&mut types);
     types
@@ -95,6 +97,7 @@ pub fn try_defs(extra: &str) -> Result<Arc<Defs>, String> {
         .map(|(path, text)| (path.as_str(), text.as_str()))
         .collect();
     Loader::new(&types)
+        .expr_registry(&clash_sim::engine_registry())
         .memory_mod("core", r#"{ "id": "core" }"#, &files)
         .load_mods(&["core"])
         .into_result()
@@ -121,7 +124,11 @@ pub fn on(x: i32, y: i32) -> Place {
 /// tracts (0, 0) to (1, 1): cells 0 to `SIDE - 1` each way, standing
 /// room on storey 0.
 pub fn sim(seed: u64) -> Sim {
-    let defs = defs();
+    sim_over(defs(), seed)
+}
+
+/// [`sim`] over definitions a test loaded itself.
+pub fn sim_over(defs: Arc<Defs>, seed: u64) -> Sim {
     let world = WorldDefs::from_defs(&defs)
         .unwrap_or_else(|diagnostics| panic!("{}", diagnostics.render()));
     let mut timeline = Timeline::new();

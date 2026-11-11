@@ -295,6 +295,31 @@ As built (decisions D-360, D-369):
   then places every entity in the world's occupant index again, which the
   world neither saves nor hashes (02 §8.1).
 
+As joined to the packages built beside it (decisions D-460 to D-462):
+
+- The simulation holds every component of every entity (06 §3) in one
+  `Components`, read with `Sim::components()`. It is saved in the blob and
+  hashed as a part of its own, `SimHashes::components`;
+  `Sim::component_hash(kind)` gives one store's hash.
+- The simulation owns what loading a tract needs besides the world: the
+  generators and a tract store (02 §9.4). Neither is state. A new
+  simulation has the generators of `clash-gen` bound to its world's
+  definitions and a store in memory; `Sim::with_io(generators, store)`
+  gives it others, and a loaded simulation is given the store it was
+  saved with. A store is anything that implements the world's
+  `TractStore` and can be copied and printed (`SimStore`).
+- The blob also carries what the world has under way: its processes and
+  the collapses they belong to (`Cosmos::processes`), because the
+  timeline that holds their wake-ups is the simulation's. `Sim::load`
+  puts it back into the cosmos it is given. It refuses a blob that holds
+  a component of an entity that does not exist.
+- The blob carries the entities shelved with unloaded tracts (section
+  4.3). They are hashed with the kernel's own queues.
+- After a load, what is not state is as a new simulation has it: the
+  default wake-up handlers and the event types of the definitions.
+  Handlers and event types registered on top, the generators and the
+  store are set up again by whoever set them up.
+
 ### 4.2 Kernel entities
 
 Document 06 specifies entities in full. The kernel fixes the part that time,
@@ -309,7 +334,7 @@ pub struct KernelEntity {
     pub control: Control,              // None | Direct | Delegated
     pub clock: Option<ClockId>,        // personal clock
     pub anchor: Option<ClockId>,
-    pub channels: ChannelSet,          // section 6.2
+    pub channels: ChannelSlots,        // section 6.2
     pub actions: SmallVec<[ActionId; 2]>,
     pub plan: Plan,                    // section 5.3
     pub attached: Vec<EocId>,          // 05 §9.3
@@ -337,12 +362,16 @@ As built (decisions D-361, D-362):
   accessors and changed only by `relocate`, `set_presence`, `set_control`,
   `set_time_rate` and `anchor_clock`. `place` is private to the module
   that holds `relocate`, and no owned kernel entity ever leaves the crate,
-  so nothing else can change it. The rest (`tags`, `vars`, `channels`,
-  `actions`, `plan`, `attached`) is open to whoever holds the entity
-  mutably until its packages give it owners.
-- `actions` is a plain list. `ChannelSet`, `Plan`, the action table, the
-  window table and the rule state are empty typed placeholders that
-  already serialise and hash.
+  so nothing else can change it. `vars` is changed by `Sim::set_var`
+  (05 §6), which holds a declared variable to its declaration and raises
+  `var_changed`; the field itself stays open for setting a scene up. The
+  rest (`tags`, `channels`, `actions`, `plan`, `attached`) is open to
+  whoever holds the entity mutably until its packages give it owners.
+- `actions` is a plain list. `ChannelSlots` (an entity's slots and who
+  holds each), `Plan`, the action table, the window table and the rule
+  state are empty typed placeholders that already serialise and hash. A
+  set of channel ids, which is what an action definition uses, is the
+  action module's `ChannelSet`.
 - Ids are generational. A freed slot is reused, lowest slot first, a
   generation on. The table visits entities in id order.
 - `create_entity` makes an entity that is `Stored` and emits
@@ -351,7 +380,8 @@ As built (decisions D-361, D-362):
   entity held where the entity was (what cannot stand there leaves the
   world), then takes the entity out of the world, cancels its wake-ups,
   destroys its personal clock, forgets any decision it was asked for, and
-  emits `entity_removed`. A component store follows those two events.
+  emits `entity_removed`. Its components are removed with it, before its
+  slot can be given out again.
 
 What `relocate` does, in full:
 
@@ -365,6 +395,12 @@ What `relocate` does, in full:
   separately.
 - The entity and everything inside it are put on the clocks that now
   apply (section 3.4), each wake-up keeping its remaining local time.
+- The container it left and the container it entered have their mass
+  worked out again, and so has every container round them (06 §3.1). Each
+  of those that stands in the world has the new mass written to the
+  world's occupant record.
+- An entity that is given a place is no longer waiting for an unloaded
+  tract (section 4.3).
 - An entity that leaves the world (`Stored`, or inside something that
   is), and everything inside it, has its wake-ups cancelled (invariant
   T9). Whoever stores an entity takes what should survive, such as
@@ -443,9 +479,41 @@ As built (decision D-364):
 - **The pump** also runs when a command is accepted, so events are never
   left waiting between calls. A cut-off cascade's report lists the last
   eight events delivered.
-- **The safe point** calls `reconcile_activity`, which does nothing until
-  tickets and activity (02 §10.2) are joined to the kernel. Requested
-  saves are returned to the application as `Advance::Request`.
+- **The safe point** reconciles tickets with what is loaded
+  (`Sim::reconcile_activity`, 02 §10.2) and then delivers whatever that
+  reported. It follows every wake-up, and every accepted command, so that
+  a ticket follows what a command moved. Requested saves are returned to
+  the application as `Advance::Request`.
+- **The world's wake-ups.** The handler of the `World` domain hands the
+  wake-up to `WorldCtx::handle_wake` inside `Sim::world`. A stability
+  check and every step of a collapse run under `advance` like anything
+  else, and what they report comes out of `drain_events`. A process the
+  world could not carry on is reported as a fault.
+
+What the safe point does about entities (decision D-461). The world
+cannot take entities out of a tract it wants to unload (02 §9.5): it
+says so, and the simulation answers.
+
+| The world says | The simulation |
+|----------------|----------------|
+| `tract_unloading` | Takes every entity with a cell in the tract out of the world. Its place becomes `Stored`, and where it stood is kept on the **shelf** under that tract. `entity_relocated` is emitted for each; what an entity holds stays inside it |
+| `tract_loaded` | Puts back the entities shelved under the tract, each where it stood, with `entity_relocated`. One whose footprint reaches into a tract that is not loaded goes back on the shelf, under that tract |
+| A loaded tract's spawn requests | Emits `spawn_requested` for each, for the package that makes entities from definitions |
+| A tract that could not be loaded or unloaded | Reports a fault with the reason `world.tract_failed` |
+
+A shelved entity keeps its id, its components and its contents. Its
+wake-ups are cancelled as for any entity that leaves the world (T9):
+taking timers off the timeline first and catching up on return is
+section 9's, and not built. One safe point reconciles up to four times,
+so that a tract announced as going is gone before anything else runs.
+
+`Sim::start_session(entity, at, cause)` starts a session at a place that
+may not be loaded: it holds a fixed ticket over the place, reconciles,
+puts the entity there, holds the ticket of a controlled character for it
+(`Ticket::player`) and releases the fixed one. An entity's ticket covers
+nothing until the entity has been seen in the world, which is why the
+fixed ticket comes first. `Sim::hold_ticket` and `Sim::release_ticket`
+hold and release any other.
 
 ### 4.4 Commands
 
@@ -476,7 +544,10 @@ As built (decision D-365):
 - `Command` and `DebugCommand` are open sets. The kernel honours the debug
   commands: `CreateEntity { spec, place }`, `MoveEntity { entity, to }`,
   `RemoveEntity { entity }`, `SetElement { loc, layer, state }`,
-  `SetControl { entity, control }` and `Schedule { entity, after, wake }`.
+  `SetControl { entity, control }`, `StartSession { entity, at }` and
+  `Schedule { entity, after, wake }`. `StartSession` is refused for an
+  unknown entity or a place outside its realm; once tracts have been
+  surveyed and loaded for it, a failure is a fault, not a refusal.
   The rest of the list above arrives with the packages that can honour
   each. A debug command is a command like any other: validated, logged
   and replayed.
@@ -639,6 +710,12 @@ a load error where it is read.
 `name` sees no locals: it is shown before any are chosen. `requires` is
 compiled in the mind context so that it can be previewed, and is tested
 against truth only when the action is started (05 §7.3).
+
+An effect list (05 §10) is compiled with the action's locals in their
+slots, so `set` and `add` change the running action's own values. What a
+list defines with `let` takes the slots after them and lasts until the
+list ends. `return` has no meaning in an action's list and is a load
+error; `stop` ends the list.
 
 ### 6.2 Channels
 
@@ -1067,36 +1144,80 @@ lists. A subject marked `?` is bound only when there is one.
 | `control_changed` | `self`: entity | `old`, `new`: `none`, `direct` or `delegated` | Who decides for an entity changed |
 | `clock_rate_changed` | `self?`: entity; `area?`: area | `clock`: int; `old`, `new`: real, or null where there was or is no such clock | The rate of a personal, area or realm clock changed, or a clock was given or taken away |
 | `decision_requested` | `self`: entity | `kind`: what is asked | A directly controlled entity must choose |
+| `entity_unsupported` | `self`: entity; `here`: loc | none | What held an entity up has gone (02 §14.3). It is where it was: what falling does is for the movement package. Follows the world's `occupant_unsupported` |
+| `entity_exposed` | `self`: entity; `here`: loc | `kind`: string, the qualified id of a damage type; `energy`: real, joules; `intensity`: real, pascals | Something struck the cell an entity is in (02 §14.3). What that does to it is for the body model. Follows the world's `occupant_exposed` |
+| `spawn_requested` | `here`: loc | `what`: string, the id the request names; `realm`: int | A tract that has just been loaded asks for something to be put at `here` (02 §9.4) |
+| `var_changed` | `self?`: entity; `here?`: loc; `area?`; `site?`; `tract?`; `realm?` | `name`, `scope`: string; `old`, `new`: any | A variable declared with `"watch": true` changed (05 §6). What it lives on is bound under the name of its kind |
 | `fault` | none | `code`, `message`: string | The engine contained a fault. Goes straight to the output; no handler receives it |
 | `event_cancelled` | none | `event`, `code`, `message`: string | A hook was cancelled (05 §8.2) |
 
 The world's events (02 §7.4) are passed on under their own names. Their
 subjects are: `here` for a cell; for `area_entered` and `area_exited`,
 `area`, then `target` (the occupant), then `here`; for `area_breached` and
-`area_closed`, `area` and `here`; for `occupant_displaced` and
-`occupant_entombed`, `target` and `here`. The fields a filter can test
-are `layer` on `element_changed` and `element_damaged`, `old` and `new`
-on `element_damaged`, `count` on `decals_removed`, and `key`, `old` and
-`new` on `cell_var_changed`.
+`area_closed`, `area` and `here`; for `occupant_displaced`,
+`occupant_entombed`, `occupant_unsupported` and `occupant_exposed`,
+`target` and `here`. For `tract_loaded`, `tract_unloading` and
+`ticket_refused`, `here` is the tract's cell with the lowest horizontal
+coordinates at storey 0; for `collapse_started` and `collapse_settled`,
+the cell whose change started the collapse. The fields a filter can test
+are `layer` on `element_changed`, `element_damaged` and
+`element_destroyed`; `old` and `new` on `element_damaged`; `how`
+(`damage`, `crushed` or `fell`), `absorbed` and `passed` on
+`element_destroyed`; `count` on `decals_removed`; `key`, `old` and `new`
+on `cell_var_changed`; `collapse` (int) on the two collapse events;
+`energy` and `intensity` on `occupant_exposed`; `realm` (int) on the
+tract and ticket events, with `first` (bool) on `tract_loaded` and
+`ticket` (int) on `ticket_refused`.
 
 **Reasons** (14 §5) of the kernel, by code: `entity.unknown`,
 `entity.stored`, `entity.ids_exhausted`, `relocate.inside_itself`,
 `relocate.too_deep`, `world.not_loaded`, `world.outside_realm`,
 `world.unknown_grid`, `world.unknown_area`, `world.unknown_realm`,
-`world.refused`, `clock.unknown`, `clock.bad_rate`, `clock.loop`,
+`world.refused`, `world.tract_failed`, `component.missing`,
+`physical.bad_measure`, `clock.unknown`, `clock.bad_rate`, `clock.loop`,
 `time.refused`, `advance.unhandled_wake`, `advance.tick_limit`,
 `events.cascade_limit`, `events.hook_depth`, `events.unknown_type`,
 `events.bad_payload`, `events.field_fixed`, `events.cancelled`,
-`decision.none_pending`, `replay.diverged`. Each is documented in the
-table the generated reference reads.
+`decision.none_pending`, `replay.diverged`; and, from writing variables
+and properties (05 §6, §10.3), `subject.gone`, `vars.wrong_scope`,
+`vars.wrong_type`, `vars.too_deep`, `write.not_settable`,
+`write.bad_value`, `write.bad_key`, `write.cannot_add`,
+`write.not_a_subject`. Each is documented in the table the generated
+reference reads.
+
+**The queries as properties** (05 §5.3). All read truth and none is safe
+for belief; a mind reads them of itself.
+
+| Property | Gives |
+|----------|-------|
+| `entity.loc` | `loc?`: the cell it is in, its own or that of what it is inside; null out of the world. **Settable**: relocates it to stand in the cell (`entity_relocated`, after the world's area events); null takes it out of the world |
+| `entity.container` | `entity?`: what it is directly inside. **Settable**: puts it inside another; null takes it out, to where its container is |
+| `entity.outermost` | `entity?`: itself, or the container everything it is nested in is inside |
+| `entity.contents` | `list<entity>`: what is directly inside it, in id order |
+| `entity.in_world` | `bool` |
+| `entity.altitude` | `real?`: metres above the base of its cell |
+| `entity.occupant_kind` | `string`: `creature`, `item`, `device` or `other` |
+| `entity.tags`, `entity.has_tag(tag: string)` | Its tags |
+| `entity.control` | `string`: `none`, `direct` or `delegated`. **Settable** (`control_changed`) |
+| `entity.time_rate` | `real?`: the rate of its personal clock, or null. **Settable**: a rate gives it a personal clock or changes it, null takes the clock away (`clock_rate_changed`) |
+| `entity.clock_rate` | `real?`: how fast time passes for it against universal time |
+| `entity.local_time` | `real?`: the local time of the clock it is on, in seconds |
+| `entity.own_time` | `real?`: its own time (section 3.4), in seconds |
+| `area.clock_rate`, `realm.clock_rate` | `real?`: the rate of the area's or the realm's own clock. **Settable** (`clock_rate_changed`); null takes an area's clock away and is refused for a realm |
+| `area.local_time`, `realm.local_time`, `loc.clock_rate`, `loc.local_time` | `real?`: 02 §23 |
+| `global.now` | `real`: universal time in seconds. Safe for belief |
+
+`now()` and `local_now(subject)` are functions (05 §17).
 
 **Not yet reachable from data.** The operations `set_time_rate`,
-`anchor_clock`, `set_clock_rate` and `set_control` are kernel functions;
-their effects are bound by the rule runtime. The queries of this section
-(`now`, local time and clock rate at a subject, control mode) are not
-registered as properties until subjects are. The debug commands are not
-yet console commands. A handler of an event can only be written in Rust
-until rules exist.
+`set_clock_rate` and `set_control` are reached by setting the properties
+above; as effects of their own names, and `anchor_clock` in any form,
+they are bound by the rule runtime. Not registered, because what they
+read is not built: an entity's running actions with their phase, tags
+and time remaining, whether a channel is free and the length of a plan
+(packages T3 and T4), and the time left on a window (T5). The debug
+commands are not yet console commands. A handler of an event can only be
+written in Rust until rules exist.
 
 **Settings**: `rules.max_cascade`, `rules.max_transitions` (zero-duration
 phase changes in one tick, default 1,000). `WARM_STEP` is a named

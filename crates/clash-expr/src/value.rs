@@ -319,14 +319,35 @@ impl<T: Into<Value>> From<Option<T>> for Value {
     }
 }
 
-/// Every value a variable could hold in the foundation is a value here.
+/// Every value a variable can hold is a value here.
 impl From<clash_core::Value> for Value {
     fn from(value: clash_core::Value) -> Value {
+        Value::from(&value)
+    }
+}
+
+/// Every value a variable can hold is a value here.
+impl From<&clash_core::Value> for Value {
+    fn from(value: &clash_core::Value) -> Value {
         match value {
-            clash_core::Value::Bool(value) => Value::Bool(value),
-            clash_core::Value::Int(value) => Value::Int(value),
-            clash_core::Value::Real(value) => Value::Real(value),
-            clash_core::Value::Str(value) => Value::Str(Arc::from(value)),
+            clash_core::Value::Bool(value) => Value::Bool(*value),
+            clash_core::Value::Int(value) => Value::Int(*value),
+            clash_core::Value::Real(value) => Value::Real(*value),
+            clash_core::Value::Str(value) => Value::Str(Arc::from(value.as_str())),
+            clash_core::Value::Null => Value::Null,
+            clash_core::Value::Id { ty, index } => {
+                Value::Id(DefRef::new(DefTypeId::new(*ty), *index))
+            }
+            clash_core::Value::Subject { kind, payload } => {
+                Value::Subject(Handle::new(KindId::new(*kind), *payload))
+            }
+            clash_core::Value::List(items) => Value::list(items.iter().map(Value::from)),
+            clash_core::Value::Map(entries) => Value::Map(Arc::new(
+                entries
+                    .iter()
+                    .map(|(key, value)| (Arc::from(key.as_str()), Value::from(value)))
+                    .collect(),
+            )),
             // `clash_core::Value` may grow. Until this type follows, a
             // kind it does not know reads as nothing.
             _ => Value::Null,
@@ -334,18 +355,49 @@ impl From<clash_core::Value> for Value {
     }
 }
 
-/// A boolean, an integer, a real or a text converts back. Anything else
-/// is handed back unchanged as the error.
+impl Value {
+    /// The value as a variable stores it (05 §6). Everything converts;
+    /// null does too, and it is for whoever stores the value to treat a
+    /// variable set to null as unset.
+    pub fn to_stored(&self) -> clash_core::Value {
+        match self {
+            Value::Null => clash_core::Value::Null,
+            Value::Bool(value) => clash_core::Value::Bool(*value),
+            Value::Int(value) => clash_core::Value::Int(*value),
+            Value::Real(value) => clash_core::Value::Real(*value),
+            Value::Str(value) => clash_core::Value::Str(value.as_ref().to_owned()),
+            Value::Id(id) => clash_core::Value::Id {
+                ty: id.ty.raw(),
+                index: id.index,
+            },
+            Value::Subject(handle) => clash_core::Value::Subject {
+                kind: handle.kind.raw(),
+                payload: handle.payload,
+            },
+            Value::List(items) => {
+                clash_core::Value::List(items.iter().map(Value::to_stored).collect())
+            }
+            Value::Map(entries) => clash_core::Value::Map(
+                entries
+                    .iter()
+                    .map(|(key, value)| (key.as_ref().to_owned(), value.to_stored()))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+/// A boolean, an integer, a real or a text converts back as it is, and
+/// so does an id, a subject, a list or a map: [`Value::to_stored`]. Null
+/// is handed back unchanged as the error, because a variable that holds
+/// nothing is not set.
 impl TryFrom<Value> for clash_core::Value {
     type Error = Value;
 
     fn try_from(value: Value) -> Result<clash_core::Value, Value> {
         match value {
-            Value::Bool(value) => Ok(clash_core::Value::Bool(value)),
-            Value::Int(value) => Ok(clash_core::Value::Int(value)),
-            Value::Real(value) => Ok(clash_core::Value::Real(value)),
-            Value::Str(value) => Ok(clash_core::Value::Str(value.as_ref().to_owned())),
-            other => Err(other),
+            Value::Null => Err(Value::Null),
+            other => Ok(other.to_stored()),
         }
     }
 }
@@ -544,14 +596,23 @@ mod tests {
             // What both can hold hashes the same in either.
             assert_eq!(Hash128::of(&core), Hash128::of(&value));
         }
+        // Null alone does not convert: a variable that holds nothing is
+        // not set.
+        assert_eq!(clash_core::Value::try_from(Value::Null), Err(Value::Null));
+        // Everything else a variable can hold goes there and back, and
+        // hashes the same in either form.
         for wider in [
-            Value::Null,
             Value::list([]),
-            Value::map([("a", Value::Null)]),
-            Value::from(Handle::new(KindId::new(0), 0)),
-            Value::from(DefRef::new(DefTypeId::new(0), 0)),
+            Value::list([Value::from(1), Value::Null, Value::from("x")]),
+            Value::map([("a", Value::Null), ("b", Value::list([Value::from(2)]))]),
+            Value::from(Handle::new(KindId::new(3), 77)),
+            Value::from(DefRef::new(DefTypeId::new(2), 9)),
         ] {
-            assert_eq!(clash_core::Value::try_from(wider.clone()), Err(wider));
+            let stored = clash_core::Value::try_from(wider.clone()).unwrap();
+            assert_eq!(stored, wider.to_stored());
+            assert_eq!(Value::from(&stored), wider);
+            assert_eq!(Value::from(stored.clone()), wider);
+            assert_eq!(Hash128::of(&stored), Hash128::of(&wider));
         }
     }
 

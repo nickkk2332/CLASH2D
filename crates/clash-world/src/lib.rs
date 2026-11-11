@@ -27,6 +27,7 @@
 //! | Who is where | [`WorldCtx::place`], [`WorldCtx::relocate`], [`WorldCtx::remove`]; [`Occupant`], [`Footprint`], [`PlaneMask`]; [`Cosmos::occupants_at`] and the other queries with an [`OccupantFilter`] |
 //! | Volumes that mean something | [`Area`], [`AreaSpec`], [`AreaShape`]; [`WorldCtx::create_area`], [`WorldCtx::enclose`]; [`Cosmos::areas_at`] |
 //! | Places with identity | [`Site`], [`Cosmos::create_site`], [`Cosmos::site_of`] |
+//! | Fire, smoke, water: values in cells that evolve by rule | [`field`]: [`WorldEdit::add_field`], [`Cosmos::field`], [`Cosmos::field_lights`], [`Cosmos::field_hides_sight`] |
 //! | Harm to an element, and its destruction | [`WorldEdit::damage`] with a [`DamagePacket`] gives a [`DamageOutcome`]; the rule alone is [`resolve_packet`] |
 //! | Whether a structure stands, and what carries what | [`Cosmos::assess_stability`] gives an [`Assessment`] |
 //! | Stability checks waiting | [`Cosmos::stability_requests`]; ask for one with [`WorldCtx::check_stability`] |
@@ -37,7 +38,8 @@
 //! | What is known of space that is not loaded | [`RegionRecord`], [`TractRecord`]; [`Cosmos::tract_record`], [`Cosmos::add_pending_edit`] |
 //! | Generating: the interfaces, and choosing a generator | [`RegionSurveyor`], [`TractRealizer`], [`GenCtx`]; [`GeneratorRegistry`], [`Generators`] |
 //! | Loading and unloading tracts | [`WorldCtx::load_tracts`], [`WorldCtx::unload_tract`], with a [`TractIo`] |
-//! | Where changed tracts are kept | [`TractStore`], [`MemoryStore`]; [`encode_column`], [`decode_column`] |
+//! | Where a save is kept | [`TractStore`], [`MemoryStore`], [`RedbStore`]; [`encode_tract`], [`decode_tract`]; [`SaveIds`] |
+//! | Saving and loading the world | [`Cosmos::save_world`], [`Cosmos::load_world`]; [`save`] |
 //! | Keeping tracts loaded | [`Ticket`], [`Cosmos::hold_ticket`], [`WorldCtx::reconcile_activity`] |
 //! | Why something could not be done | [`WorldError`] |
 //! | A world for a test | [`test_support`] |
@@ -67,6 +69,7 @@ pub mod dims;
 mod edit;
 mod error;
 mod event;
+pub mod field;
 mod generate;
 mod grid;
 pub mod iter;
@@ -77,7 +80,10 @@ mod occupancy;
 mod pos;
 mod process;
 pub mod query;
+mod redb_store;
 mod release;
+pub mod save;
+pub mod saveid;
 mod site;
 mod stability;
 pub mod storage;
@@ -86,6 +92,7 @@ pub mod test_support;
 mod ticket;
 mod topology;
 mod tract;
+mod vars;
 
 pub use area::{
     AREA_MAX_CELLS, AREA_MAX_TRACTS, AmbientOverride, Area, AreaAnchor, AreaDrift, AreaId,
@@ -113,13 +120,18 @@ pub use damage::{
     RUBBLE_CELL_UNITS, RUBBLE_UNITS_PER_M3, resolve_packet,
 };
 pub use defs::{
-    AreaKindId, AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
-    ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer, MaterialId,
-    PlaneId, RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
+    AreaKindId, AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, DefKind,
+    ElementFlags, ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer,
+    MaterialId, PlaneId, RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
 };
 pub use edit::{DISPLACE_RANGE_CELLS, StabilityQueue, StabilityRequest, WorldCtx, WorldEdit};
 pub use error::WorldError;
 pub use event::{EventSink, WorldEvent};
+pub use field::{
+    CatchUp, ExposureRoute, FIELD_MAX_ACTIVE_CELLS, FIELD_OVER_BUDGET_DECAY, Field, FieldCell,
+    FieldReaction, FieldReactionId, FieldRule, FieldSample, FieldState, FieldStep,
+};
+pub use generate::GeneratorMaker;
 pub use generate::{
     BatchRunner, GenCtx, GenError, GeneratorFactory, GeneratorRegistry, GeneratorRequest,
     Generators, PortalSpec, RealizeJob, RealizedTract, RealmInfo, RegionSurveyResult,
@@ -150,20 +162,23 @@ pub use query::{
     RayFilter, RayHit, RayHits, RayObstacles, RaySpan, RayTarget, RevParts, RevStamp, Step,
     StepKind,
 };
+pub use redb_store::RedbStore;
 pub use release::{
     EnergyRelease, RELEASE_DEFAULT_ALT_MM, RELEASE_FILL_MAX_CELLS, RELEASE_MAX_BINS,
     RELEASE_MAX_CELLS, RELEASE_MIN_RADIUS_M, RELEASE_PUSH_DEPTH_M, RELEASE_THROW_ALT_M,
     RELEASE_THROW_SPEED, RELEASE_VACUUM_SPEED, Release, ReleaseId, ReleaseShape, ReleaseState,
     ReleaseTally, WORLD_MIN_INTENSITY,
 };
+pub use save::{SaveError, SaveReport, SaveWarning, WarnAt};
+pub use saveid::{MissingDef, SaveIds, SaveIdsImage};
 pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};
 pub use stability::{
     Assessment, SUPPORT_MAX_ELEMENTS, SUPPORT_MAX_PASSES, SUPPORT_REACH_CELLS,
     SUPPORT_REACH_STOREYS,
 };
 pub use store::{
-    MemoryStore, StoreError, TRACT_BLOB_KIND, TRACT_BLOB_VERSION, TractStore, decode_column,
-    encode_column,
+    MemoryStore, StoreError, StoredTract, TRACT_BLOB_KIND, TRACT_BLOB_VERSION, TractStore,
+    decode_tract, encode_tract,
 };
 pub use ticket::{
     Activity, DEFAULT_MAX_LOADED_TRACTS, DEFAULT_PRIORITY, HOT_RADIUS, PINNED, Reconciled,
@@ -176,3 +191,4 @@ pub use tract::{
     RegionRecord, RegionSurvey, SiteIdx, SpawnRequest, Stamp, TractDefId, TractExtra, TractRecord,
     TractState,
 };
+pub use tract::{MapMode, PendingMap};

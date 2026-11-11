@@ -448,6 +448,8 @@ impl WorldEdit<'_> {
             let opened = (after.0 || !before.0) && (after.1 || !before.1);
             self.ctx.recheck_enclosures(loc, opened, cause);
         }
+        // A field asleep beside the change may now have somewhere to go.
+        self.ctx.fields_disturbed(loc);
         if crowded {
             self.make_room(loc);
         }

@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use clash_core::{EntityId, Hash128, Real, codec};
 use clash_data::{Length, Mass, Volume};
 use clash_expr::DefTypeId;
+use clash_time::ClockId;
 use clash_world::Footprint;
 use proptest::prelude::*;
 
@@ -19,6 +20,8 @@ use super::{
     Component, ComponentBundle, ComponentKind, ComponentKinds, ComponentStore, Components, DefKey,
     Identity, PAGE_SLOTS, Physical, TemplateId,
 };
+use crate::body::{Body, BodyPlanId};
+use crate::stats::Stats;
 
 // ---- The store against a model ---------------------------------------------
 
@@ -367,12 +370,18 @@ fn bundle(seed: u32) -> ComponentBundle {
     ComponentBundle {
         identity: Some(identity),
         physical: Some(Physical::new(shape(f64::from(seed))).expect("a valid shape")),
+        stats: Some(Stats::new(ClockId::new(seed))),
+        body: Some(Body::new(
+            BodyPlanId::new(seed as u16),
+            Real::ONE,
+            ClockId::new(seed),
+        )),
     }
 }
 
 #[test]
 fn kinds_have_distinct_names_in_order() {
-    assert_eq!(ComponentKind::ALL.len(), 2);
+    assert_eq!(ComponentKind::ALL.len(), 4);
     for (index, &kind) in ComponentKind::ALL.iter().enumerate() {
         assert_eq!(kind.index(), index);
         assert_eq!(ComponentKind::from_name(kind.name()), Some(kind));
@@ -380,14 +389,19 @@ fn kinds_have_distinct_names_in_order() {
     }
     assert_eq!(ComponentKind::Identity.name(), "identity");
     assert_eq!(ComponentKind::Physical.name(), "physical");
+    assert_eq!(ComponentKind::Stats.name(), "stats");
+    assert_eq!(ComponentKind::Body.name(), "body");
     assert_eq!(ComponentKind::from_name("hit_points"), None);
     assert_eq!(<Identity as Component>::KIND, ComponentKind::Identity);
     assert_eq!(<Physical as Component>::KIND, ComponentKind::Physical);
 
-    let both = ComponentKinds::of(ComponentKind::ALL);
-    assert_eq!(both.len(), 2);
-    assert_eq!(both.iter().collect::<Vec<_>>(), ComponentKind::ALL);
-    assert_eq!(format!("{both:?}"), r#"{"identity", "physical"}"#);
+    let all = ComponentKinds::of(ComponentKind::ALL);
+    assert_eq!(all.len(), 4);
+    assert_eq!(all.iter().collect::<Vec<_>>(), ComponentKind::ALL);
+    assert_eq!(
+        format!("{all:?}"),
+        r#"{"identity", "physical", "stats", "body"}"#
+    );
     assert!(ComponentKinds::NONE.is_empty());
 }
 
@@ -518,7 +532,9 @@ fn orphans_are_components_without_a_living_owner() {
         components.orphans(|id| id == alive),
         [
             (ComponentKind::Identity, dead),
-            (ComponentKind::Physical, dead)
+            (ComponentKind::Physical, dead),
+            (ComponentKind::Stats, dead),
+            (ComponentKind::Body, dead)
         ]
     );
 }

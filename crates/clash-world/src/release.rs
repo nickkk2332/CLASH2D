@@ -46,6 +46,7 @@ use crate::dims::{CELL_M, STOREY_M};
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
 use crate::event::WorldEvent;
+use crate::grid::Column;
 use crate::occupancy::{OccupantFilter, OccupantKind, distinct_ids};
 use crate::pos::{CellPos, Location};
 use crate::process::WorldProcess;
@@ -527,6 +528,12 @@ impl Release {
         self.settle(&mut cast);
     }
 
+    /// The energy the wave carries through a cell where it has an
+    /// intensity, in joules: no more than was let go.
+    fn through_cell(&self, intensity: Real) -> Real {
+        (intensity * cell_volume()).min(self.spec.energy)
+    }
+
     /// The height of the origin above the base of its cell, in metres.
     fn alt(&self) -> Real {
         Real::from(self.spec.origin_alt_mm) / Real::of(1000.0)
@@ -821,12 +828,13 @@ impl WorldCtx<'_> {
             return;
         };
         let held = column.cell(cell);
+        let fields = holds_field(column, cell);
         let loc = Location::new(origin.grid, cell);
         let occupied = self
             .cosmos
             .is_occupied(loc, &OccupantFilter::ANY)
             .unwrap_or(false);
-        if held.is_empty() && !occupied {
+        if held.is_empty() && !occupied && !fields {
             return;
         }
         let (low, high) = release.cell_box(offset);
@@ -889,6 +897,9 @@ impl WorldCtx<'_> {
         }
         if occupied {
             self.expose_cell(release, loc, intensity, middle);
+        }
+        if fields {
+            self.tell_fields(release, loc, intensity);
         }
         for (layer, state) in [
             (Layer::Block, held.block.raw()),
@@ -979,6 +990,23 @@ impl WorldCtx<'_> {
         })
     }
 
+    /// Tells the fields of a cell that a release's packet has arrived
+    /// in it (02 §16): the intensity there, with the energy the wave
+    /// carries through a cell, as an occupant of the cell is told. A
+    /// field that passes that kind of damage on does so. Once for each
+    /// cell a release reaches, however many of the cell's elements it
+    /// strikes.
+    fn tell_fields(&mut self, release: &Release, loc: Location, intensity: Real) {
+        let cause = release.spec.doing();
+        let packet = DamagePacket::new(
+            release.spec.kind,
+            release.through_cell(intensity),
+            intensity,
+            cause,
+        );
+        let _ = self.edit(cause).conduct(loc, packet);
+    }
+
     /// Tells every occupant of a cell the front has reached that it
     /// was exposed, once for each release, and throws those the wave
     /// moves fast enough (02 §13.2).
@@ -996,8 +1024,8 @@ impl WorldCtx<'_> {
     }
 
     /// Exposes one occupant: `OccupantExposed` with the intensity and
-    /// the energy the wave carries through a cell. With a direction,
-    /// the wave also pushes it.
+    /// the energy the wave carries through a cell, which is no more
+    /// than was let go. With a direction, the wave also pushes it.
     fn expose_one(
         &mut self,
         release: &mut Release,
@@ -1007,7 +1035,7 @@ impl WorldCtx<'_> {
         toward: Option<Vec3>,
     ) {
         let cause = release.spec.doing();
-        let energy = intensity * cell_volume();
+        let energy = release.through_cell(intensity);
         self.events.emit(WorldEvent::OccupantExposed {
             tick: self.timeline.now(),
             occupant,
@@ -1202,6 +1230,7 @@ impl WorldCtx<'_> {
                 continue;
             };
             let held = column.cell(cell);
+            let fields = holds_field(column, cell);
             let loc = Location::new(origin.grid, cell);
             let (low, high) = release.cell_box(offset);
             let point = [
@@ -1216,6 +1245,9 @@ impl WorldCtx<'_> {
                         self.expose_one(release, occupant, loc, intensity, Some(point));
                     }
                 }
+            }
+            if fields {
+                self.tell_fields(release, loc, intensity);
             }
             let defs = std::sync::Arc::clone(self.cosmos.defs());
             let elements = [
@@ -1363,6 +1395,8 @@ impl WorldCtx<'_> {
                     self.expose_one(release, occupant, loc, intensity, None);
                 }
             }
+            // What the space held arrives in each of its cells.
+            self.tell_fields(release, loc, intensity);
             // What stands in the space, and what bounds it on each
             // side, above and below.
             self.press(release, loc, Layer::Fixture, intensity, [Real::ZERO; 3]);
@@ -1447,6 +1481,12 @@ impl WorldCtx<'_> {
         release.blocked = blocked;
         true
     }
+}
+
+/// Whether a cell of a column holds any field at all.
+#[inline]
+fn holds_field(column: &Column, cell: CellPos) -> bool {
+    crate::field::store_at(column, cell).is_some_and(|store| store.at(cell.idx()).next().is_some())
 }
 
 /// Whether the element a beam struck is still the one that was there.

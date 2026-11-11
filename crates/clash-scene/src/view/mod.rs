@@ -68,7 +68,7 @@ pub use compose::{
     MEMORY_COLOR_KEEP, MEMORY_KEEP, OverlayDraw, Rank, Shown,
 };
 pub use glyphs::{
-    COLOR_OVERLAY_LIGHT, FieldLook, GlyphProblem, MARK_BACKDROP, MARK_HEARD, MARK_PILE,
+    COLOR_OVERLAY_LIGHT, FieldLook, GlyphProblem, MARK_BACKDROP, MARK_HEARD, MARK_LINE, MARK_PILE,
     MARK_SECTION_FLOOR, MARK_SUSPECTED, STYLE_CURSOR, ViewMarks, WorldGlyphs,
 };
 pub use model::{

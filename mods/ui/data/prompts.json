@@ -1,0 +1,26 @@
+[
+  { "//": "What the `confirm` effect opens: a question over whatever asked it, with the two answers. A profile names it for the role `confirm`. `answer` closes it and tells the effect that is waiting; Esc answers no.",
+    "type": "screen", "id": "confirm",
+    "title": "Confirm",
+    "params": { "text": "string", "yes": "string?", "no": "string?" },
+    "popup": { "width": 44, "place": "centre", "dim": true },
+    "layout": { "frame": true, "rows": [
+      { "text": "{$text}" },
+      { "height": 1, "spacer": {} },
+      { "cols": [
+        { "button": { "id": "yes", "label": "{$yes ?? 'Yes'}", "on_activate": [ { "answer": true } ] } },
+        { "width": 2, "height": 1, "spacer": {} },
+        { "button": { "id": "no", "label": "{$no ?? 'No'}", "on_activate": [ { "answer": false } ] } } ] } ] },
+    "keys": { "back": [ { "answer": false } ] } },
+
+  { "//": "What the `pick` effect opens for a list: one row for each entry, shown as the effect's `item` says. A profile names it for the role `picker.list`. Activating a row answers with that entry; Esc leaves without choosing. It is also the picker for a parameter chosen from a list, and then the selection starts on the value the parameter is filled in with.",
+    "type": "screen", "id": "pick_list",
+    "title": "Choose",
+    "params": { "options": "list<any>", "title": "string?" },
+    "popup": { "width": 44, "height": 12, "place": "centre", "dim": true },
+    "layout": { "frame": "{$title ?? 'Choose'}",
+                "list": { "id": "options", "rows": "$options", "item": "{it.label}",
+                          "empty": "There is nothing to choose from.",
+                          "on_activate": [ { "answer": "it.value" } ] } },
+    "keys": { "back": [ { "close": {} } ] } }
+]

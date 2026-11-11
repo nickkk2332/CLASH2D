@@ -88,11 +88,18 @@ A map's keys are texts. An id used as a key counts as its qualified id, so
 `m[here.block.material]` and `m['core:glass']` read the same entry. A map
 iterates, prints and hashes in order of key.
 
-The expression crate has its own `Value`, which holds all of these;
-`clash_core::Value` holds the four scalar kinds and converts into it. A
+The expression crate has its own `Value`, which holds all of these. A
 reference to a subject is a **handle**: its kind and 64 bits that mean
 something only to the simulation. An id is its definition type and the
 dense number of 04 §7.2.
+
+`clash_core::Value` is the value as a variable stores it (decision
+D-463). It holds the same things in a form that can be saved: the four
+plain kinds, a list, a map, an id as two numbers, a handle as a number
+and 64 bits, and null, which occurs only inside a list or a map because
+a variable that holds nothing is not set. The two convert into each
+other without loss (`Value::to_stored`, `Value::from`) and hash the
+same. A stored value nests lists and maps at most 32 deep.
 
 ## 4. The expression language
 
@@ -369,6 +376,30 @@ properties.
 | `window` | An open window (03 §7) |
 | `global` | The whole simulation |
 
+As built (decision D-464), the simulation serves these kinds; the rest
+are registered by the packages that build what they refer to. In Rust a
+subject is a `Subject`; in an expression it is a handle, and
+`Kinds::handle` and `Kinds::subject` convert between the two.
+
+| Kind | The 64 bits of its handle |
+|------|---------------------------|
+| `entity` | The entity's id: slot and generation |
+| `loc` | The location, packed from the top bit down: the grid's id in 10 bits; `x` and `y` in 21 bits each and `z` in 10, two's complement; two bits that are zero |
+| `element` | As `loc`, with the layer in the lowest two bits: 1 floor, 2 block, 3 fixture |
+| `area`, `site`, `realm` | The id |
+| `tract` | The realm's id in 16 bits, then the tract's `x` and `y` in 24 bits each, two's complement |
+| `global` | Zero |
+
+A handle is a value and may outlive what it names. Reading through one
+that names nothing any more gives null and never another thing: an
+entity's handle carries its generation, ids of areas, sites and realms
+are never reused, and a cell, a tract and the simulation always exist.
+`exists(x)` says whether what a handle names is still there. A cell
+beyond the first 1024 grids, more than 1,048,576 cells from the origin
+along `x` or `y`, or more than 512 storeys from it, has no handle and
+reads as null; so has a tract beyond 8,388,608 tracts from the origin or
+of a realm past the first 65,536.
+
 Each context binds some subjects by name. An event binds the ones it
 declares (section 8.1). By convention:
 
@@ -446,6 +477,52 @@ variable of a handle by qualified name; a registered function; the random
 stream; and where run-time warnings go. A name may be registered once;
 `var` and the reserved words cannot be names.
 
+How the simulation fills it (decision D-465):
+
+- `clash_sim::engine_registry()` gives the registry of everything the
+  simulation offers so far: the built-in functions, the kinds of section
+  5.1, every property and function, and the kernel's and the world's
+  events. Whoever loads mods gives it to the loader
+  (`clash_scene::engine_loader` does). The simulation's registry step
+  (04 §7.3) enters whatever of it a registry lacks and then the events
+  mods define, so a loader that was given no registry, or a test's own,
+  still ends with every entry.
+- Each property is a `PropertyDef`: the kind, the name, the arguments
+  and the type as the language writes types, the documentation, whether
+  it is safe for belief, the events that change it, a getter and, if it
+  can be set, a setter. Each function is a `FunctionDef`. A package adds
+  its table to `engine_properties` or `engine_functions`. A getter is
+  given the simulation to read, the subject and the arguments, and gives
+  null for whatever it cannot answer. A setter calls the function the
+  engine itself uses, so it emits what that function emits.
+- A simulation joins the registry its definitions were compiled against
+  to the tables by name (`Bindings`), so ids need not be the same from
+  one load to the next.
+- The host is `SimHost`. `Sim::host(bound)` reads only; inside
+  `Sim::with_random(bound, …)` random functions draw from the rule
+  stream. `bound` holds a value for each subject, local and event field
+  of the scope the expression was compiled in, in the order the scope
+  declared them. `Bindings::bind_event(event)` gives what an event
+  binds. A field is evaluated through the data layer's `Runner` over the
+  host; `Sim::eval(code, bound)` evaluates one compiled expression.
+- `exists` is answered from the simulation. The reader's helpers of
+  section 4.6 answer in plain forms (`the door`, `2 doors`) until the
+  message package gives a reader and a `language`.
+
+The core properties, on the kinds that have them:
+
+| Property | On | Gives |
+|----------|----|-------|
+| `kind` | Every kind | `string`: the kind's name |
+| `tags` | `entity`, `loc`, `element`, `area`, `site` | `list<string>?`: its tags in order; for a cell, those of the definitions of its three elements; null for what does not exist or is not loaded |
+| `has_tag(tag: string)` | The same | `bool` |
+| `def` | `entity`, `element`, `area`, `realm` | The definition it was made from: `any` for an entity or an element, whose type varies; `id<area_kind>?`; `id<realm>?` |
+| `loc` | `entity`, `element`, `area`, `site`, `tract` | `loc?`: where it is; for an area its middle, for a site its anchor, for a tract its corner at storey 0 |
+| `var` | Every kind but `element` | Section 6 |
+
+The rest are listed where their subsystem is specified: an entity's in
+03 §13 and 06 §13, the world's in 02 §23.
+
 ### 5.4 Truth and belief
 
 Properties read ground truth. That is right for rules of the world: physics,
@@ -456,6 +533,18 @@ character could not know (01 R11). Document 15 provides the belief-side
 vocabulary: what `self` has perceived, believes and remembers. A rule
 attached to a creature that reads `target.loc` directly, rather than where
 `self` believes `target` to be, is flagged by the linter.
+
+As registered (decision D-466), nothing is safe for belief unless it is
+marked, and what is marked is arithmetic on a reference: a subject's
+`kind`; a cell's `x`, `y`, `z`, `grid`, `tract` and `realm`; a tract's
+`x`, `y`, `realm` and `loc`; an element's `layer` and `loc`; `global.now`;
+and the functions `dist`, `dir`, `offset`, `now`, `setting` and
+`has_def`. Everything about an entity is truth, which a mind context
+reads of its own subject and of no other. Everything that reads a cell's
+contents is truth as well, the shape that 02 §23 allows included, and so
+are `los` and `light`: the tag `hidden` cannot be honoured until
+perception is built, and a read that ignored it would leak. They become
+safe when document 15 supplies the belief side.
 
 ## 6. Variables
 
@@ -507,6 +596,44 @@ A variable is declared at the top level of a data file, not in place
 inside another definition. `strict_vars` belongs to the mod that wrote
 the expression: a strict mod's rules are held to it wherever they end up,
 and another mod's are not.
+
+As stored (decision D-467):
+
+| Scope | Kept in | Written through |
+|-------|---------|-----------------|
+| `entity` | The kernel entity | `Sim::set_var` |
+| `cell` | The cell's sparse variables in its chunk | The world's `WorldEdit`, which emits `cell_var_changed` |
+| `area`, `site` | The area's or the site's record | `Cosmos::set_area_var`, `set_site_var` |
+| `tract` | The tract's record, loaded or not | `Cosmos::set_tract_var` |
+| `realm` | The realm's record | `Cosmos::set_realm_var` |
+| `global` | The cosmos | `Cosmos::set_global_var` |
+
+- `Sim::var(subject, name)` reads: what was set; for a variable that was
+  never set, its declared default if it is declared for that kind of
+  subject; otherwise null. Nothing is read of a subject that no longer
+  exists, a default included.
+- `Sim::set_var(subject, name, value, cause)` is the one way a variable
+  changes, and returns what it read as before. Setting null unsets. A
+  declared variable is held to its declaration: it is refused on a
+  subject of another kind (`vars.wrong_scope`) and with a value that is
+  not of its type (`vars.wrong_type`), where an int serves as a real. An
+  undeclared variable holds anything on anything. A value nested deeper
+  than 32 is refused (`vars.too_deep`), as is a subject that no longer
+  exists (`subject.gone`) and whatever the world refuses: a cell that is
+  not loaded, a tract whose region has not been surveyed. An element has
+  no variables of its own.
+- A watched variable raises `var_changed` when what it reads as changes,
+  with what it read as before and what it reads as now: for one that was
+  not set, its default. What it lives on is bound under the name of its
+  kind: an entity as `self`, a cell as `here`, an area, a site, a tract
+  or a realm under those names; a global variable binds nothing. The
+  fields are `name` (string), `scope` (string, the kind), `old` and `new`
+  (any).
+
+Not built: the scopes `region` and `subgrid` (their kinds are not
+served yet; the world keeps a region's variables and
+`Cosmos::set_region_var` writes them), `action`, `scenario` and
+`legacy`, which come with their packages.
 
 ## 7. Where expressions appear
 
@@ -590,6 +717,13 @@ belongs to the same owner, as a part of a body does: `self.part('arm').size`
 is the character's own, `self.loc.material` is the world's. Everything
 else must be registered safe. Naming a bound subject, a local or an event
 field is always allowed; it is reading from them that is checked.
+
+A context may bind more than one thing as own, and a local as well as a
+subject: an ordinary screen binds the party, a list, and a parameter
+that is one of its members (12 §10.4). An element of an own list is
+own. The compiler can be asked whether a whole expression's value is
+own, so that whoever binds that value by another name elsewhere, as a
+screen binds each row of a list to `it`, may bind it as own there.
 
 Who declares the context: the definition type that owns the field, in
 Rust, once for each field (04 §7.3). It lists the subjects with their
@@ -762,6 +896,17 @@ called for an event is settled before anyone is: a handler that registers
 or removes another does not change the delivery under way. Handlers are
 not state and are registered again after a load.
 
+Rules (decision D-470) are found by one function, which the simulation
+calls from one handler for each event type that some rule listens for.
+It runs the global rules of the event's type, then for each subject of
+the event, in the order the event declares them, the rules that subject
+carries through its definitions and those attached to it at run time
+whose `as` is that subject's place; within each group by `priority` and
+then by rule id, which is the order of the rules' qualified ids. Which
+rules run is settled before any does, so a rule attached or detached by
+one of them is not run or dropped for the event under way. An event
+type that no rule listens for costs nothing.
+
 ### 8.4 Filters
 
 `"filter"` on a rule is a cheap test on an event's discrete fields, applied
@@ -779,6 +924,13 @@ names a field the event has with that value; the rest of each filter is
 then tested. A thousand handlers filtered on other values cost an event
 nothing.
 
+A rule's filter names fields of its event, each with a constant of the
+field's type: a text, a number, a truth value, or the id of a definition
+where the field holds one, resolved at load. A field the event does not
+have, and a value that is not a constant, are load errors. Numbers are
+compared by value, so `12` matches a field that holds `12.0`. Global
+rules are indexed by the first entry as handlers are.
+
 ### 8.5 Perceived events
 
 For rules about how characters respond, document 15 provides the event
@@ -794,14 +946,18 @@ it.
 | Field | Meaning |
 |-------|---------|
 | `on` | Event type that triggers the rule. Omit for rules that are only called. |
+| `attached` | Whether the rule runs only for what it is attached to (section 9.3), which it binds as `self`. Default false for a rule at the top level of a file and true for one written in place inside another definition. |
 | `as` | For attached rules: which of the event's subjects the owner must be. Defaults to the event's first subject. |
-| `filter` | Section 8.4. |
-| `every` | Run repeatedly at this interval instead of on an event (section 9.4). |
+| `filter` | Section 8.4: fields of the event, each with the constant it must equal. |
+| `every` | Run repeatedly at this interval instead of on an event (section 9.4). Not beside `on`. |
+| `while_unloaded` | For a recurring rule: `skip`, `once` or `all` (section 9.4). Default `skip`. |
 | `if` | Condition. Default true. |
 | `do` | Effects when the condition holds. |
 | `else` | Effects when it does not. |
 | `params` | Typed parameters, for rules that are called (section 9.5). |
-| `priority` | Order among handlers. Default 0. |
+| `subjects` | The subjects a rule that is called is given by its caller: names with their kinds (section 9.5). |
+| `returns` | The type of what `return` gives. Default `any`. |
+| `priority` | Order among handlers: higher first. Default 0. |
 | `once` | Run at most once per owner. |
 | `cooldown` | Minimum local time between runs per owner. |
 | `skip_if_consumed` | Section 8.3. |
@@ -809,10 +965,30 @@ it.
 | `group` | A rule group this rule belongs to (section 9.6) |
 | `doc` | Shown in the reference and the trace. |
 
+As built (decisions D-472, D-474):
+
+- **What a rule may name.** The subjects of its event, in the event's
+  order; then `self`, for an attached rule; then those it declares in
+  `subjects`; then `global`. Its locals are its parameters, in the order
+  written, and after them whatever its effects define. `event.field`
+  reads a field of its event. A rule reads truth and may draw at random.
+- **`once` and `cooldown`** count the runs in which the condition held:
+  a run that took `else` does not use up a `once` or start a cooldown.
+  They are kept for each rule and owner. A global rule, and a rule that
+  is called, has no owner and one record; its cooldown is measured in
+  universal time.
+- A rule with neither `on` nor `every` runs only when it is called, and
+  cannot be `attached`. `as` is refused on a rule that is not attached,
+  and `filter` on a rule with no `on`.
+- A rule that does not load is replaced, in a lenient load, by one that
+  never runs.
+
 ### 9.2 Global rules
 
 A rule defined at the top level of a data file with an `on` is global: it
-runs for every event of that type, anywhere.
+runs for every event of that type, anywhere. One that says
+`"attached": true` is not: it is written at the top level so that it has
+a name, and runs only for what it is attached to.
 
 ### 9.3 Attached rules
 
@@ -834,6 +1010,17 @@ creatures is involved in something.
 Rules are also attached at run time with the `attach_rule` and
 `detach_rule` effects.
 A curse is a rule attached to its victim.
+
+As built. Only an attached rule can be attached, and only to a subject
+of the kind its owner is: the kind of the event's subject that `as`
+names. What is attached at run time is state, kept by owner, and so is
+when each rule last ran for each owner; `detach_rule` forgets both, so a
+rule attached again starts afresh, and both are forgotten when the owner
+is destroyed. An event looks, for each of its subjects in order, at the
+rules that subject's definitions carry and at those attached to it at
+run time, and runs the ones whose `as` is that subject's place in the
+event. The rules attached to a subject that is stored do not run
+(section 13.5).
 
 ### 9.4 Recurring rules
 
@@ -876,6 +1063,41 @@ with a value source: `{ "let": { "won": { "run": { "eoc": "arm_wrestle",
 expressions. Only functions are, because expressions must not change
 anything.
 
+As built (decisions D-472, D-473):
+
+- **Parameters.** `params` is written as a function's are (section 12): a
+  name and a type, or a name and an object with `type`, `default` and
+  `doc`. A default is a constant; parameters with one may be left out of
+  a call and come last. A call that gives a parameter the rule does not
+  have, leaves out one with no default, or gives a value of the wrong
+  type is a load error where the rule is named in the call, and is
+  refused when it runs where the rule's id is worked out.
+- **Subjects.** A called rule is given a subject for each one it binds,
+  from the subject its caller binds under the same name where the call
+  is written; one the caller does not bind is null. A rule says which
+  subjects it expects in `subjects`, by name and kind
+  (`"subjects": { "self": "entity" }`), and calling it where no subject
+  of that name is bound is a load error. A rule that listens for an
+  event may be called too; it is then given its event's subjects by
+  name and its event's fields read null.
+- **Locals.** A called rule has locals of its own: its parameters and
+  what its effects define. It cannot name its caller's, and what it
+  assigns to its own does not reach its caller.
+- **As a verb.** A rule with at least one parameter is entered in the
+  registry as a verb under its qualified id, with its parameters as the
+  verb's arguments, so it is listed in the reference with them. Where an
+  effect's key is the name of one of the engine's verbs, the verb is
+  meant; otherwise the key is looked up as a rule, in the mod's own
+  namespace and then its imports. A rule with no parameters is run with
+  `{ "run": "its_id" }`. A rule written in place has no name to be
+  called by.
+- **Returning.** `returns` is the type `return` must give, `any` if left
+  out. What a caller takes is typed `any`. `return` in a list of effects
+  that is not a rule's is a load error. `{ "run": … }` as a value is
+  written as the value of a `let`; anywhere else it is a load error.
+- **Once, cooldown and groups** govern a rule however it is run: a call
+  of a rule that may not run now does nothing and gives null.
+
 ### 9.6 Groups
 
 ```json
@@ -887,6 +1109,20 @@ do not run and cost nothing. A group's `enabled` is a reactive condition
 (section 7.5), so a setting can govern it. `set_rule_group` switches one
 from a rule. Optional rule sets, difficulty options and a scenario's
 special rules are groups.
+
+| Field | Meaning |
+|-------|---------|
+| `enabled` | Whether the group is on, unless `set_rule_group` has switched it: a pure condition that may read `global`. Default true. |
+| `doc` | Shown in the reference. |
+
+As built (decision D-474). A group is on if `set_rule_group` switched it
+on, off if it switched it off, and otherwise as `enabled` says.
+`{ "set_rule_group": { "group": id, "on": null } }` leaves it to
+`enabled` again. The switch is state and is saved. A group governs its
+rules however they are run, called ones included. Until reactive
+expressions are built (section 7.5), `enabled` is evaluated when a rule
+of the group is about to run and not kept current: a group that is off
+costs one condition for each of its rules an event reaches.
 
 ## 10. Effects
 
@@ -906,6 +1142,36 @@ suggestions.
 Effects in a list run in order. Arguments are `Expr` fields, evaluated when
 the effect runs.
 
+As built (decision D-471):
+
+- An effect is one object. The effects of section 10.2 that take more
+  than one key are told by the key that names them (`if`, `switch`,
+  `for_each`, `repeat`, `while`, `after`, `every`, and `as` beside
+  `do`); every other effect has exactly one key. A key that is not one
+  of the effects of sections 10.2 to 10.5 is a verb in the registry, or
+  else a rule with parameters (section 9.5).
+- A verb takes its arguments by name, in an object. One whose
+  registration names a direct argument also takes that argument alone:
+  any value that is not an object, or an object none of whose keys is
+  one of the verb's arguments, which is then a value source. Each
+  argument is an `Expr` of the type the verb declares, so where a text
+  is wanted a JSON string is the text itself (section 7.1). An argument
+  that may be left out and is, reaches the verb as null.
+- A verb that declines gives its reason, which is reported, and the
+  rule carries on with its next effect.
+- A list of effects is compiled in the scope its definition gives it:
+  the subjects and locals there, in slot order. What `let`, `for_each`
+  and `repeat` define takes the slots after those and goes out of scope
+  where the list it is written in ends. Lists nest at most 32 deep; one
+  more is a load error.
+- Mistakes are load errors of group `068` (04 §8.2), each at the key or
+  value that is wrong, with the closest name where a name is unknown:
+  an unknown effect, an effect that is not well formed (an unknown or a
+  missing argument, a body left out), an effect where it has no meaning
+  (`return` outside a rule, `modify` outside a hook), and a rule that is
+  not well formed. A value of the wrong type and a place that cannot be
+  assigned to are the expression compiler's errors.
+
 ### 10.2 Control flow
 
 | Effect | Does |
@@ -920,6 +1186,24 @@ the effect runs.
 | `{ "as": { "self": "$g" }, "do": […] }` | Rebind subjects for a block |
 | `{ "stop": {} }` | End this rule |
 | `{ "return": expr }` | End this rule and give a value to whoever called it |
+
+The arguments in detail (decision D-477):
+
+| Effect | Arguments |
+|--------|-----------|
+| `if` | `if`: a condition (section 7.2). `then`, `else`: lists of effects; either may be left out, not both. |
+| `first` | A list of entries, each with `do` and, unless it always holds, `if`. |
+| `switch` | `switch`: an expression. `cases`: an object whose keys are compared with the value as a text: a text as it is, a number as it is written, `true` or `false`, an id as its qualified id. Where the value is known to be an id, each key is resolved at load and a misspelling is an error. `default`, which may be left out, runs when no key matches; null matches none. |
+| `for_each` | `for_each`: an expression that gives a list, `{ "list": expr }`, or a query (section 11), which is kept as written until queries are built and reports `rule.queries_unavailable` when it runs. `as`: the name of the local each element is bound to. `do`. Null is gone through as an empty list. |
+| `repeat` | `repeat`: an int. `do`, which sees `$i`, an int from zero. A count of zero or less runs nothing. |
+| `while` | `while`: a condition, tested before each pass. `do`. |
+| `weighted` | A list of entries, each with `weight`, a number, and `do`. One draw is made from the rule stream; an entry is chosen with the chance its weight is of the total. Weights of zero or less are never chosen, and if all are, nothing runs and nothing is drawn. |
+| `as` | `as`: an object of names and the expressions each is bound to, all worked out before any is bound. `do`, in which those names are subjects; a rule called from inside is given them. |
+| `stop` | `{}`. Ends the rule, or the list of effects of another definition, from however deep inside it. |
+| `return` | An expression of the rule's `returns`, or `null`. A value of another type, where that could not be told at load, is reported and null is returned. |
+
+Each effect executed and each pass of a loop is one step of the run's
+budget (section 13.2).
 
 ### 10.3 Variables
 
@@ -936,6 +1220,64 @@ a settable property (`self.health`), optionally followed by keys
 (`self.var.tally['ash']`). Anything else is a load error. A place is
 written and checked like an expression, and the subject it lives on and
 its keys are evaluated when the effect runs.
+
+As built (decision D-477):
+
+- **`let`** defines its locals in the order written, each for the rest
+  of the list it is in; a later entry may read an earlier one, and a
+  name defined again shadows the first. A local's type is that of its
+  value, and a local that starts as `null` may be given anything. The
+  value is an expression, a value source of section 7.4, or one of two
+  that only a `let` takes: `{ "run": … }` for what a rule returns and
+  `{ "emit": … }` for what came of an event (section 10.5).
+- **`set`** takes a value of the place's type, or null. A field of an
+  event is a place only in a rule that listens for a hook, and only if
+  the hook declares it mutable; otherwise it is a load error.
+- **`add`** adds a number to a number, an int if both are, and appends
+  one element to a list. Something never set counts as nothing: adding
+  a number to null gives that number. Anything else is a load error
+  where the place's type is known and reported when it runs where it is
+  not.
+- **`unset`** takes a list of places written as strings. A variable is
+  removed and reads as its default again; an entry of a map or a list is
+  taken out; a local is made null. A property or a field of an event is
+  not unset.
+- **Keys.** A map is stepped into by a text or an id, a list by an
+  index. Assigning to an entry a map does not have adds it, and a null
+  where a map is needed becomes one, so a tally can be kept in a
+  variable that was never set. A list takes an index it has, or its
+  length, which appends; any other index is reported and nothing is
+  written.
+- **Limits.** What `let`, `set` and `add` write is held to
+  `rules.max_value_size` and `rules.max_value_depth` (section 13.2); a
+  value over either is not written.
+- A place whose subject turns out null when the effect runs is reported
+  and nothing is written. A write the simulation refuses is reported
+  with its reason.
+
+The write itself is the simulation's (decision D-468): what follows is
+how it is carried out once the rule runtime is bound to it.
+
+The write is the simulation's (decision D-468). `Sim::assign(place, how,
+value, bound, cause)` evaluates the place's subject and keys against
+what is bound and assigns; `Sim::assign_to` assigns where the caller has
+evaluated them. `how` is `Set` or `Add`.
+
+- A variable is written through `Sim::set_var` (section 6) and a
+  property through the setter registered for it
+  (`Sim::set_property`), which is the engine's own function: setting an
+  entity's `loc` relocates it and emits `entity_relocated`.
+- With keys, the value is read, changed at the end of the path and
+  written back whole. A key into nothing makes a map; a key of a map is
+  a text or an id; a key of a list is the position of an element that is
+  there. An entry set to null is removed.
+- `add` adds to a number, an int staying an int unless a real is added,
+  and appends to a list. A variable that was never set is added to from
+  its default.
+- A local and a field of the event are kept by whoever runs the rule
+  and are refused here (`write.not_a_subject`). The other reasons are
+  `subject.gone`, `write.not_settable`, `write.bad_value`,
+  `write.bad_key` and `write.cannot_add` (03 §13).
 
 ### 10.4 Time
 
@@ -958,6 +1300,11 @@ the timer was set.
 `owner.timer(name)` gives the time a named timer has left, or `null`. An
 interval of zero is a load error.
 
+As built. The three effects are read, checked and kept, the effects
+inside them compiled in the scope they stand in, so that a mistake is
+found at load. Timers themselves are a later package's: until then each
+reports `rule.timers_unavailable` when it runs and schedules nothing.
+
 ### 10.5 Rules and events
 
 | Effect | Does |
@@ -968,6 +1315,21 @@ interval of zero is a load error.
 | `{ "modify": { "event.energy": expr } }` | In a hook: change a mutable field |
 | `{ "cancel_event": { "reason": id, "values": { … } } }` | In a hook: prevent the operation. The reason (14 §5) is what whoever asked is told. It may be left out only where nobody is told. |
 | `{ "consume": {} }` | Mark the event handled |
+| `{ "queue": { "eoc": id, "with": { … } } }` | Call a rule once the rule that is running, and whatever called it, has finished |
+| `{ "set_rule_group": { "group": id, "on": bool } }` | Switch a rule group (section 9.6) |
+
+The arguments in detail (decisions D-473, D-476, D-477):
+
+| Effect | Arguments |
+|--------|-----------|
+| `run` | `eoc`: the id of a rule, or `{ "expr": … }` for one worked out when the effect runs. `with`: the rule's parameters by name. `{ "run": "id" }` runs a rule that needs none. As the value of a `let` it gives what the rule returned. |
+| `queue` | As `run`. The rule, its arguments and the subjects it is given are worked out when the effect runs; the rule itself runs when the outermost rule in progress has finished, before anything else happens. Queued rules run in the order they were queued, each with a step budget of its own, and one queued by a queued rule runs after it. At most `rules.max_queued` may wait at once. |
+| `attach_rule`, `detach_rule` | `to`: a subject. `eoc`: the id of an attached rule (section 9.3). |
+| `set_rule_group` | `group`: the id of a `rule_group`. `on`: true, false, or null to leave the group to its `enabled`. |
+| `emit` | `event`: the id of an event; every other key is one of the event's subjects or fields by name. Every subject is given; a field left out is null. A notification is delivered at the next pump and a hook at once. As the value of a `let` it gives a map: the event's fields by name, as the handlers left them; `cancelled`, a boolean; and `reason`, the code of the reason it was cancelled for, or null. An event the simulation will not raise is reported and gives null. |
+| `modify` | Places written `event.field`, each with a value. Only in a rule that listens for a hook, and only fields the hook declares mutable. `set` on such a field is the same. |
+| `cancel_event` | `reason`: the id of a `reason` definition (14 §15). `values`: what the reason carries, by name. Both may be left out; with no reason the engine's `events.cancelled` stands in. Only in a rule that listens for a hook. No later handler runs. |
+| `consume` | `{}`. Only in a rule that listens for an event. |
 
 ### 10.6 The player
 
@@ -1101,6 +1463,32 @@ pub struct Run<'a> {
 
 A run evaluates `filter`, then `if`, then executes `do` or `else`.
 
+As built (decisions D-470, D-475). The struct above is the idea. A run
+is a stack of frames, one for the rule or list that was started and one
+for each rule it has called, each with its subjects by slot, its locals
+and the rule's owner; and a stack of the lists and loops in progress.
+The interpreter does not recurse on what a mod wrote, so neither deep
+nesting nor rules that call rules can exhaust the machine's stack. Only
+a hook raised by `emit` re-enters, through the simulation.
+
+For an event, the rules that answer it are found first (section 8.3)
+and then run one after another, each a run of its own: the `filter`
+against the event as it then is; whether the rule may run (its group,
+`once`, its `cooldown`); `if`; then `do` or `else`. Nothing runs after a
+hook is cancelled.
+
+The rule runtime is written against an interface, the **rule host**,
+which the simulation implements: reading through the expression host
+(section 5.3); setting and removing a variable and setting a property;
+carrying out a verb, which is given one value for each argument it
+declared and what is running, and answers with a value or a reason;
+raising an event, which answers with the fields as handlers left them
+and the reason if one cancelled; the local time of an owner's clock;
+the rules a subject's definitions carry; whether a subject is being
+simulated; and where reports go. What is kept between runs is plain
+state: the rules attached at run time, when each rule with `once` or a
+`cooldown` last ran for each owner, and the groups a rule has switched.
+
 ### 13.2 Limits
 
 | Limit | Default | On exceeding |
@@ -1112,8 +1500,59 @@ A run evaluates `filter`, then `if`, then executes `do` or `else`.
 | Wake-ups handled at one tick | 100,000 | The rest are put off to the next tick; error reported. As built, `advance` reports the error and yields instead (03 §4.3) |
 | Size of one value (a list, a map or a text) | 65,536 elements, or bytes of text | In an effect: the effect fails; error reported. In an expression: the operation gives null, with a warning (section 4.5) |
 
+| Rules waiting in the queue (`queue`, section 10.5) | 1,000 | The rule is not queued; error reported |
+| Nesting of lists and maps in one value an effect writes | 32 | The effect fails; error reported |
+| Nesting of lists of effects | 32 | Load error |
+
 Exceeding a limit is always an error report with a trace, and never a hang
 or a crash.
+
+As built (decision D-475):
+
+- The step budget is one for the whole run: a rule that is called
+  spends its caller's steps, and at the limit the run ends, callers
+  included. What it had done stays done. Each rule that answers an
+  event, and each queued rule, is a run with a budget of its own.
+- A call that would nest deeper than the call depth is refused and
+  gives null; the caller carries on with its next effect. The same
+  setting bounds functions that call each other (section 12).
+- A value is measured when an effect writes it: by `let`, `set` and
+  `add`, and when a `let` takes what a rule returned. Nesting is
+  limited as well as size because a value that wraps itself in a loop
+  (`"$x": "[$x]"`) would otherwise grow deep enough to exhaust the
+  stack of whatever later compares, hashes or drops it.
+- The limits are the settings `rules.max_steps`, `rules.max_call_depth`,
+  `rules.max_hook_depth`, `rules.max_cascade`, `rules.max_queued`,
+  `rules.max_value_size` and `rules.max_value_depth`.
+- A report is a **fault**: a reason (14 §5) with the rule that was
+  running, the definition and JSON path of the effect, and the reason
+  the simulation gave if it refused something. Faults are thinned by
+  count as run-time warnings are (section 4.5): a site, which is one
+  effect and one kind of fault, reports its first three and then the
+  occurrences whose count is a power of two.
+
+| Reason | Reported when |
+|--------|---------------|
+| `rule.step_limit` | A run executed more steps than `rules.max_steps`. The run ended. |
+| `rule.call_depth` | Rules called each other deeper than `rules.max_call_depth`. The call was refused. |
+| `rule.queue_limit` | More rules were queued than `rules.max_queued`. The rule was not queued. |
+| `rule.value_too_large` | An effect would have written a value larger than `rules.max_value_size`. Nothing was written. |
+| `rule.value_too_deep` | An effect would have written a value nested deeper than `rules.max_value_depth`. Nothing was written. |
+| `rule.no_subject` | An effect needed a subject and was given null or something else. |
+| `rule.bad_key` | A key or an index of a place does not fit what is there. |
+| `rule.type_mismatch` | A value had a type the effect does not accept, where that could not be told at load. |
+| `rule.write_refused` | The simulation refused to set or remove a variable or a property. |
+| `rule.verb_refused` | A verb declined. |
+| `rule.emit_refused` | The simulation refused to raise an event. |
+| `rule.unknown_rule` | A computed rule id names no rule. |
+| `rule.bad_argument` | A rule whose id was computed was called with arguments that do not fit its parameters, or was given a subject of the wrong kind. |
+| `rule.not_attachable` | `attach_rule` was given a rule that is not an attached rule, or a subject of another kind than the rule attaches to. |
+| `rule.not_a_hook` | `modify` or `cancel_event` ran where no hook is being handled. |
+| `rule.no_random` | `weighted` had to choose and there is no stream to draw from. |
+| `rule.timers_unavailable` | A timer effect ran; timers are not built yet. |
+| `rule.queries_unavailable` | `for_each` was given a query; queries are not built yet. |
+
+In every case but the first the rule carries on with its next effect.
 
 ### 13.3 Determinism
 
@@ -1152,6 +1591,16 @@ At load, for every `Expr`, `Cond`, `Effects` and `Text` field:
 
 Compiled rules live in `Defs` and are immutable.
 
+A list of effects is a field type, `Effects`, that any definition struct
+may hold (04 §7.1). It keeps the list as the loader's own tree, with the
+place of every value, and is compiled with the other fields of its
+definition, in the scope the definition gives it; each argument inside
+is read from the tree as an expression field and compiled in that scope
+with whatever `let` has added by then. A definition type also asks each
+of its lists to check the rules it calls, once every definition is
+compiled, which is when a rule's own needs can be seen. A rule compiles
+its lists itself, saying what `return` must give.
+
 Notes on the steps:
 
 - A diagnostic from any step carries a stable code, a severity, a message,
@@ -1163,9 +1612,11 @@ Notes on the steps:
   sees and `explain` explains.
 - The field's context comes from its definition type, which states for
   each field what is in scope there (04 §7.3). The registry is the one
-  the simulation filled, with the ids of every definition type, the
-  variables mods declare and the functions mods define added before
-  anything is compiled.
+  the simulation filled (`clash_sim::engine_registry()`, section 5.3),
+  with the ids of every definition type, the variables mods declare, the
+  events mods define and the functions mods define added before anything
+  is compiled. `clash-tools lint` loads with it, so a mod's expressions
+  are checked against the real kinds and properties.
 - A compiled expression carries an origin number, from which a run-time
   warning is traced to its definition, its JSON path and the position in
   its string.
@@ -1183,6 +1634,11 @@ Notes on the steps:
   changes a value, a warning or a random draw.
 - Step 5 emits operations in which every jump goes forward, so evaluation
   ends. A call takes at most 255 arguments.
+- What the rule runtime finds in a list of effects or in a rule has
+  codes of its own in group `06`: `E0681` an effect that names nothing,
+  `E0682` an effect that is not well formed, `E0683` an effect where it
+  has no meaning, `E0684` a rule, a rule group or a reason that is not
+  well formed.
 - A direct evaluator that walks the checked tree is kept beside the stack
   machine. The two must agree on every expression, and a property test
   holds them to it.
@@ -1225,17 +1681,55 @@ Nothing in the engine or the bundled content may depend on it.
 for variables declared with `"watch": true`), `setting_changed` (id, old,
 new), `rule_error` (the rule, the reason, the trace).
 
-**Core effects**: sections 10.2 to 10.6, and `set_rule_group`.
+`var_changed` is built (section 6): subjects `self?`: entity, `here?`:
+loc, `area?`, `site?`, `tract?`, `realm?`, of which the one the variable
+lives on is bound; fields `name`: string, `scope`: string, `old`, `new`:
+any. Every event of the kernel and of the world (03 §13) is an event
+type of the expression registry, with `actor` and `instigator` after its
+own subjects, so that a definition's scope for an event and `event.field`
+type-check. A subject an event binds only sometimes is null when it is
+not bound. An event a mod defines is entered under its qualified id with
+its fields as declared; a subject of a kind the
+simulation does not serve yet (section 5.1) is delivered to handlers
+and is not bound in expressions.
+
+**Core effects**: sections 10.2 to 10.5: `if`, `first`, `switch`,
+`for_each`, `repeat`, `while`, `weighted`, `as`, `stop`, `return`, `let`,
+`set`, `add`, `unset`, `run`, `queue`, `attach_rule`, `detach_rule`,
+`set_rule_group`, `emit`, `modify`, `cancel_event`, `consume`, and, read
+and kept until timers are built, `after`, `every` and `cancel_timer`.
+`message` and `ask` (section 10.6) are verbs of the package that builds
+them.
+
+**Reasons**: the faults of section 13.2, `rule.step_limit` to
+`rule.queries_unavailable`.
 
 **Settings**: `rules.max_steps`, `rules.max_call_depth`,
 `rules.max_hook_depth`, `rules.max_cascade`, `rules.max_reactive_rounds`,
 `rules.max_wakeups_per_tick`, `rules.max_value_size`,
-`rules.max_query_cells`.
+`rules.max_value_depth`, `rules.max_queued`, `rules.max_query_cells`.
 
 **Core functions**: section 4.7.
 
 **Core properties**, available on every subject kind: `var`, `has_tag`,
-`tags`, `def`, `kind`, and for anything with a position, `loc`.
+`tags`, `def`, `kind`, and for anything with a position, `loc`. Which
+kind has which is in the table of section 5.3.
+
+**Core functions answered by the simulation** (section 4.7), with their
+arguments:
+
+| Function | Gives |
+|----------|-------|
+| `dist(a: any, b: any)` | `real?`: metres between two things, a storey counting three, the shorter way round on wrapped axes. Each is a cell, an element, an entity, an area (its middle) or a site (its anchor). Null if either is nowhere or they are in different grids. Safe for belief |
+| `dir(from: any, to: any)` | `list<int>?`: the signs of the shortest offset east, south and up, each -1, 0 or 1. Safe for belief |
+| `offset(at: loc, dx: int, dy: int, dz?: int)` | `loc?`: the cell so many cells east, south and up, wrapped; null beyond an edge. Safe for belief |
+| `los(a: any, b: any)` | `bool?`: whether terrain leaves a clear line, an entity seen from the height it stands at; null if either is nowhere or the line reaches space that is not loaded |
+| `light(at: any)` | `real?`: how bright a cell is now (15 §3.3) |
+| `now()` | `real`: universal time in seconds. Safe for belief |
+| `local_now(subject: any)` | `real?`: the local time, in seconds, of the clock an entity or a cell is on, or of an area's or a realm's own |
+| `setting(id: string)` | `any`: a setting's value, or null. Safe for belief |
+| `has_def(type: string, id: string)` | `bool`: whether a definition of a type with a qualified id is loaded. Safe for belief |
+| `exists(x)` | `bool`: whether what a handle names is still there; false for null |
 
 **Known limits.** Fixed in the engine and not reachable from data: the
 compiler's limits on nesting, tree depth, source length and arguments
@@ -1246,9 +1740,22 @@ nothing else (section 4.6); and the set of simple units (section 4.7).
 **Gaps.** Reachable only from Rust for now: what is in scope in a field,
 which its definition type states (04 §7.3) and a mod cannot widen; and
 whether a function is random or safe for belief, which is worked out and
-cannot be declared. Queries, and with them value sources over a query,
-`exists` in a condition and `run` as a source, are read and kept and
-give null with a warning until the rule runtime builds them.
+cannot be declared. A property of a definition reached through an id
+(`here.block.material.density`, `self.def.tags`) cannot be written yet:
+the registry holds properties of kinds of subject, and an id is not one;
+`element.def_id` gives the qualified id as a text meanwhile. `subject.var`
+on a `region`, a `subgrid`, an `action`, the scenario and the legacy
+waits for those kinds. Queries, and with them value sources over a query
+and `exists` in a condition, are read and kept and give null with a
+warning until they are built; `for_each` over a query reports and runs
+nothing. Timers (`after`, `every`, `cancel_timer`, a rule's own `every`)
+are read and kept, and schedule nothing. A `run` source is taken by a
+`let` in a list of effects and gives null anywhere else. A rule's limits
+are read from the rule host, which the simulation answers from its
+settings once it is bound to the rule runtime; until then they are the
+defaults. A verb's argument is an expression of a declared type: one
+that is a text template, or a list of effects, cannot be declared yet.
+What `run` gives a `let` is typed `any`, whatever the rule's `returns`.
 
 ## 18. Invariants
 
@@ -1282,6 +1789,15 @@ one of 19 operations with five reads from the host in about 200 ns. The
 figures come from the ignored test `time_per_evaluation` in
 `crates/clash-expr/tests/machine.rs`; the benchmark and its gate are
 package T8.
+
+Measured for the next three rows when package K5 was built, in a release
+build against the fake host: an event that no rule listens for is turned
+away in about 30 ns, most of it making the event; an event whose one
+rule the filter index turns away costs about 190 ns; an event that one
+rule answers, with its bindings, filter and condition and one `set` of a
+variable, about 430 ns; and one pass of a loop with one `add` to a
+local, about 90 ns. The figures come from the ignored test
+`time_per_run` in `crates/clash-sim/tests/rules.rs`.
 
 ## 20. Open questions
 

@@ -12,11 +12,12 @@ use serde::{Deserialize, Serialize};
 use crate::area::AreaId;
 use crate::body::{BodyId, BodyOwner};
 use crate::cause::{Cause, CauseKind};
-use crate::chunk::{Decal, DecalId};
+use crate::chunk::{Decal, DecalId, FieldId};
 use crate::collapse::{CollapseId, CollapseTally};
 use crate::cosmos::RealmId;
 use crate::damage::{DamagePacket, DamageResult, Destruction};
 use crate::defs::{Contact, DamageTypeId, ElementState, Layer};
+use crate::field::ExposureRoute;
 use crate::pos::{CellBox, Location, TractPos};
 use crate::release::{ReleaseId, ReleaseTally};
 use crate::ticket::{TicketId, TicketReason};
@@ -380,6 +381,89 @@ pub enum WorldEvent {
         /// Who and what is behind it.
         cause: Cause,
     },
+    /// A field came to be in a cell that held none of it (02 §16).
+    /// Other changes of a field's level are not reported: they bump
+    /// the chunk's field revision.
+    FieldAppeared {
+        /// When.
+        tick: Tick,
+        /// The cell.
+        loc: Location,
+        /// The field.
+        field: FieldId,
+        /// The level it has there.
+        level: u8,
+        /// Who and what brought it: an edit's cause, or the field
+        /// itself for whoever is responsible for it.
+        cause: Cause,
+    },
+    /// The last of a field left a cell (02 §16).
+    FieldVanished {
+        /// When.
+        tick: Tick,
+        /// The cell.
+        loc: Location,
+        /// The field.
+        field: FieldId,
+        /// Who and what took it: an edit's cause, or the field itself.
+        cause: Cause,
+    },
+    /// A field and an occupant came to share a cell: the field appeared
+    /// where the occupant is, or the occupant moved to where the field
+    /// is (02 §16). It is reported once, not at every step.
+    FieldContact {
+        /// When.
+        tick: Tick,
+        /// Who.
+        occupant: EntityId,
+        /// The cell they share.
+        loc: Location,
+        /// The field.
+        field: FieldId,
+        /// The level it has there.
+        level: u8,
+        /// Who and what brought them together.
+        cause: Cause,
+    },
+    /// An occupant stands in a field whose `expose` rule adds to a pool
+    /// (02 §16). Reported once for each step of the field, for the
+    /// strongest cell of it the occupant fills. The world applies no
+    /// route and no guard: what reaches the pool is for the simulation.
+    OccupantDosed {
+        /// When.
+        tick: Tick,
+        /// Who.
+        occupant: EntityId,
+        /// The cell of the field.
+        loc: Location,
+        /// The field.
+        field: FieldId,
+        /// The level it has there.
+        level: u8,
+        /// The pool the rule adds to, as the definition writes it.
+        pool: String,
+        /// The dose: the level times the rule's `per_level`.
+        amount: Real,
+        /// The route the dose takes.
+        route: ExposureRoute,
+        /// The field, for whoever is responsible for it.
+        cause: Cause,
+    },
+    /// There are more active field cells than the budget allows
+    /// (02 §16): until there are fewer, the weakest decay faster.
+    /// Reported when a step first finds it so.
+    FieldBudgetExceeded {
+        /// When.
+        tick: Tick,
+        /// The first cell of the step that found it.
+        loc: Location,
+        /// How many cells are active.
+        active: u64,
+        /// The most there may be.
+        max: u64,
+        /// The fields themselves.
+        cause: Cause,
+    },
     /// Something has been set flying (02 §15). From now on the world
     /// moves it.
     BodyLaunched {
@@ -580,6 +664,11 @@ impl WorldEvent {
             | WorldEvent::CollapseSettled { tick, .. }
             | WorldEvent::OccupantUnsupported { tick, .. }
             | WorldEvent::OccupantExposed { tick, .. }
+            | WorldEvent::FieldAppeared { tick, .. }
+            | WorldEvent::FieldVanished { tick, .. }
+            | WorldEvent::FieldContact { tick, .. }
+            | WorldEvent::OccupantDosed { tick, .. }
+            | WorldEvent::FieldBudgetExceeded { tick, .. }
             | WorldEvent::BodyLaunched { tick, .. }
             | WorldEvent::BodyImpact { tick, .. }
             | WorldEvent::BodyHitOccupant { tick, .. }
@@ -609,6 +698,11 @@ impl WorldEvent {
             | WorldEvent::CollapseSettled { cause, .. }
             | WorldEvent::OccupantUnsupported { cause, .. }
             | WorldEvent::OccupantExposed { cause, .. }
+            | WorldEvent::FieldAppeared { cause, .. }
+            | WorldEvent::FieldVanished { cause, .. }
+            | WorldEvent::FieldContact { cause, .. }
+            | WorldEvent::OccupantDosed { cause, .. }
+            | WorldEvent::FieldBudgetExceeded { cause, .. }
             | WorldEvent::BodyLaunched { cause, .. }
             | WorldEvent::BodyImpact { cause, .. }
             | WorldEvent::BodyHitOccupant { cause, .. }
@@ -644,6 +738,11 @@ impl WorldEvent {
             | WorldEvent::CollapseSettled { loc, .. }
             | WorldEvent::OccupantUnsupported { loc, .. }
             | WorldEvent::OccupantExposed { loc, .. }
+            | WorldEvent::FieldAppeared { loc, .. }
+            | WorldEvent::FieldVanished { loc, .. }
+            | WorldEvent::FieldContact { loc, .. }
+            | WorldEvent::OccupantDosed { loc, .. }
+            | WorldEvent::FieldBudgetExceeded { loc, .. }
             | WorldEvent::BodyLaunched { loc, .. }
             | WorldEvent::BodyImpact { loc, .. }
             | WorldEvent::BodyHitOccupant { loc, .. }
@@ -678,6 +777,11 @@ impl WorldEvent {
             WorldEvent::CollapseSettled { .. } => "collapse_settled",
             WorldEvent::OccupantUnsupported { .. } => "occupant_unsupported",
             WorldEvent::OccupantExposed { .. } => "occupant_exposed",
+            WorldEvent::FieldAppeared { .. } => "field_appeared",
+            WorldEvent::FieldVanished { .. } => "field_vanished",
+            WorldEvent::FieldContact { .. } => "field_contact",
+            WorldEvent::OccupantDosed { .. } => "occupant_dosed",
+            WorldEvent::FieldBudgetExceeded { .. } => "field_budget_exceeded",
             WorldEvent::BodyLaunched { .. } => "body_launched",
             WorldEvent::BodyImpact { .. } => "body_impact",
             WorldEvent::BodyHitOccupant { .. } => "body_hit_occupant",
@@ -929,6 +1033,79 @@ impl StateHash for WorldEvent {
                 kind.state_hash(hasher);
                 energy.state_hash(hasher);
                 intensity.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::FieldAppeared {
+                tick,
+                loc,
+                field,
+                level,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                loc.state_hash(hasher);
+                field.state_hash(hasher);
+                hasher.write_u8(*level);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::FieldVanished {
+                tick,
+                loc,
+                field,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                loc.state_hash(hasher);
+                field.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::FieldContact {
+                tick,
+                occupant,
+                loc,
+                field,
+                level,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                occupant.state_hash(hasher);
+                loc.state_hash(hasher);
+                field.state_hash(hasher);
+                hasher.write_u8(*level);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::OccupantDosed {
+                tick,
+                occupant,
+                loc,
+                field,
+                level,
+                pool,
+                amount,
+                route,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                occupant.state_hash(hasher);
+                loc.state_hash(hasher);
+                field.state_hash(hasher);
+                hasher.write_u8(*level);
+                hasher.write_str(pool);
+                amount.state_hash(hasher);
+                route.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::FieldBudgetExceeded {
+                tick,
+                loc,
+                active,
+                max,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                loc.state_hash(hasher);
+                active.state_hash(hasher);
+                max.state_hash(hasher);
                 cause.state_hash(hasher);
             }
             WorldEvent::BodyLaunched {

@@ -10,7 +10,7 @@ mod wreck;
 
 use std::sync::Arc;
 
-use clash_core::{Dur, EntityId, Hash128, Real, Tick, codec};
+use clash_core::{Dur, EntityId, Hash128, Real, Tick};
 use clash_time::Timeline;
 use clash_world::test_support::load_column;
 use clash_world::{
@@ -20,7 +20,7 @@ use clash_world::{
     Layer, MemoryStore, Occupant, OccupantFlags, OccupantKind, PendingEdit, PlaneId, PlaneMask,
     Projectile, REST_SPEED, RealizedTract, RealmInfo, RegionPos, RegionRecord, RegionSurvey,
     RegionSurveyResult, RegionSurveyor, TicketReason, TractIo, TractPos, TractRealizer,
-    TractRecord, TractRecords3x3, WorldActivity, WorldDefs, WorldError, WorldEvent, WorldGenerator,
+    TractRecord, TractRecords3x3, WorldDefs, WorldError, WorldEvent, WorldGenerator,
 };
 use wreck::{World, at, someone, world_from};
 
@@ -923,6 +923,42 @@ fn a_push_changes_a_bodys_motion_as_it_is_now() {
         w.ctx().launch(nowhere),
         Err(WorldError::NotLoaded(_))
     ));
+    // A projectile's kind of damage and a fragment's material must be
+    // ones that are defined: a save names them by their ids.
+    let mut shot = lump(&w, v(2.5, 16.5, 1.5), v(1.0, 0.0, 0.0), 2.0);
+    shot.owner = BodyOwner::Projectile(Projectile {
+        kind: clash_world::DamageTypeId::new(9_000),
+        area: r(1.0e-4),
+        give: r(0.01),
+        tag: 0,
+    });
+    assert!(matches!(
+        w.ctx().launch(shot),
+        Err(WorldError::BadValue { why, .. }) if why.contains("kind of damage")
+    ));
+    let mut piece = shot;
+    piece.owner = BodyOwner::Debris(clash_world::Debris {
+        material: clash_world::MaterialId::new(9_000),
+        volume: r(0.001),
+    });
+    assert!(matches!(
+        w.ctx().launch(piece),
+        Err(WorldError::BadValue { why, .. }) if why.contains("material")
+    ));
+    // A plane that no definition names has nothing on it: such a bit is
+    // dropped. Every plane stays every plane.
+    let mut ghost = lump(&w, v(2.5, 12.5, 480.5), v(1.0, 0.0, 0.0), 2.0);
+    ghost.owner = BodyOwner::Entity(EntityId::new(52, 0));
+    ghost.plane = PlaneMask::DEFAULT.with(PlaneId::new(9));
+    let ghost = w.ctx().launch(ghost).unwrap();
+    assert_eq!(w.cosmos.body(ghost).unwrap().plane, PlaneMask::DEFAULT);
+    let mut everywhere = lump(&w, v(2.5, 14.5, 480.5), v(1.0, 0.0, 0.0), 2.0);
+    everywhere.owner = BodyOwner::Entity(EntityId::new(53, 0));
+    everywhere.plane = PlaneMask::ALL;
+    let everywhere = w.ctx().launch(everywhere).unwrap();
+    assert_eq!(w.cosmos.body(everywhere).unwrap().plane, PlaneMask::ALL);
+    w.ctx().arrest(ghost).unwrap();
+    w.ctx().arrest(everywhere).unwrap();
 
     // Something hardly moving, where nothing pulls on it, has stopped.
     let mut adrift = lump(&w, v(2.5, 10.5, 480.5), v(0.1, 0.0, 0.0), 2.0);
@@ -932,6 +968,81 @@ fn a_push_changes_a_bodys_motion_as_it_is_now() {
     w.events.clear();
     w.run_for(Dur::from_millis(50));
     assert_eq!(landings(&w).len(), 1);
+}
+
+// ---- Fields ----------------------------------------------------------------
+
+#[test]
+fn what_a_body_delivers_into_water_is_passed_on_by_it() {
+    let defs = common::test_defs();
+    let mut w = world_from(Arc::clone(&defs), |_| {});
+    let water = defs.fields().lookup("core:water").unwrap();
+    for x in 12..=16 {
+        let loc = w.loc(x, 16, 0);
+        w.ctx().edit(someone()).add_field(loc, water, 60).unwrap();
+    }
+    // One stands in the water where the dart will strike, and one three
+    // cells along it.
+    let (struck, along) = (EntityId::new(30, 0), EntityId::new(31, 0));
+    for (id, x) in [(struck, 12), (along, 15)] {
+        let who = Occupant::new(id, OccupantKind::Creature)
+            .with_mass(r(80.0))
+            .with_flags(OccupantFlags::COLLIDES);
+        let loc = w.loc(x, 16, 0);
+        w.ctx()
+            .place(who, loc, Footprint::SINGLE, someone())
+            .unwrap();
+    }
+    w.events.clear();
+
+    let shock = w.damage_type("core:shock");
+    let mut dart = lump(&w, v(8.5, 16.5, 1.0), v(40.0, 0.0, 1.0), 0.05);
+    dart.owner = BodyOwner::Projectile(Projectile {
+        kind: shock,
+        area: r(1.0e-4),
+        give: r(0.01),
+        tag: 7,
+    });
+    w.ctx().launch(dart).unwrap();
+    w.run_until(Tick(200_000));
+
+    let hits = events_where(&w, |event| {
+        matches!(event, WorldEvent::BodyHitOccupant { .. })
+    });
+    assert_eq!(hits.len(), 1);
+    let WorldEvent::BodyHitOccupant {
+        occupant, packet, ..
+    } = hits[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!((*occupant, packet.kind), (struck, shock));
+    // Core's water passes four fifths of a shock on to whoever stands in
+    // it within six cells, and nothing more to the cell it arrived in.
+    let told: Vec<(EntityId, Real, Real)> = w
+        .events
+        .events()
+        .iter()
+        .filter_map(|event| match event {
+            WorldEvent::OccupantExposed {
+                occupant,
+                kind,
+                energy,
+                intensity,
+                ..
+            } => {
+                assert_eq!(*kind, shock);
+                Some((*occupant, *energy, *intensity))
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(!told.is_empty());
+    assert!(told.iter().all(|(who, _, _)| *who == along));
+    assert_eq!(
+        told[0],
+        (along, packet.energy * r(0.8), packet.intensity * r(0.8))
+    );
 }
 
 // ---- Saving ----------------------------------------------------------------
@@ -958,23 +1069,12 @@ fn a_save_in_mid_flight_changes_nothing() {
     assert!(first.cosmos.bodies().count() >= 4);
     assert!(first.cosmos.debris_in_flight() > 0);
 
-    let saved_timeline = codec::to_bytes(&first.timeline).unwrap();
-    let saved_activity = codec::to_bytes(first.cosmos.processes()).unwrap();
-    let timeline: Timeline = codec::from_bytes(&saved_timeline).unwrap();
-    let activity: WorldActivity = codec::from_bytes(&saved_activity).unwrap();
-    assert_eq!(&activity, first.cosmos.processes());
-    // The cells are copied: tract blobs are the persistence package's.
-    let mut cosmos = first.cosmos.clone();
-    cosmos.restore_activity(WorldActivity::new());
-    assert_ne!(Hash128::of(&cosmos), Hash128::of(&first.cosmos));
-    cosmos.restore_activity(activity);
-    let mut second = World {
-        defs: Arc::clone(&first.defs),
-        timeline,
-        cosmos,
-        events: EventSink::new(),
-        grid: first.grid,
-    };
+    // A real save: the world into a store with the timeline beside it,
+    // a cosmos made of what the store holds, and everyone placed again
+    // (02 §11.4).
+    let mut second = first.saved_and_loaded();
+    assert_eq!(second.cosmos.processes(), first.cosmos.processes());
+    assert!(!second.cosmos.processes().is_idle());
     assert_eq!(second.state_hash(), first.state_hash());
     second.run_until(end);
 
@@ -1134,6 +1234,17 @@ fn over_the_horizon() {
     assert_eq!(before[0].mass, r(20.0));
     assert!(matches!(before[0].owner, BodyOwner::Projectile(shell) if shell.tag == 1));
     assert_eq!(before[0].cause.instigator, someone().instigator);
+    // A save keeps it: the world written out and read back hashes the
+    // same, and the impact waits there as it did.
+    w.save(&mut store);
+    let saved = Cosmos::load_world(&defs, &mut TractIo::new(&generators, &mut store)).unwrap();
+    assert_eq!(Hash128::of(&saved), Hash128::of(&w.cosmos));
+    let kept = saved.tract_record(realm, TractPos::new(20, 0)).unwrap();
+    assert!(
+        kept.pending()
+            .iter()
+            .any(|edit| matches!(edit, PendingEdit::Impact(impact) if *impact == before[0]))
+    );
     load(&mut w, &mut store, &[(20, 0)]);
     assert_eq!(waiting(&w), before);
 

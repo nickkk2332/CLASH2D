@@ -121,5 +121,13 @@
       { "id": "finish", "time": "600 ms", "do": [ { "run": "takedown_result" } ] },
       { "id": "settle", "time": "300 ms" }
     ]
+  },
+
+  {
+    "//": "03 §8: what a takedown comes to is a rule, which combat will fill in.",
+    "type": "eoc",
+    "id": "takedown_result",
+    "doc": "Stands for the outcome of a takedown.",
+    "do": []
   }
 ]

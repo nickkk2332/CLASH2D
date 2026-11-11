@@ -18,6 +18,7 @@
 
 mod build;
 mod flags;
+mod placeholder;
 mod quantity;
 mod raw;
 mod state;
@@ -28,12 +29,14 @@ use std::collections::BTreeMap;
 use clash_core::{DenseId, Real, VarMap};
 
 pub use flags::{CellFlags, ElementFlags, EngineFlag};
+pub use placeholder::{DefKind, PLACEHOLDER_GLYPH, PLACEHOLDER_TAG};
 pub use quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temperature};
 pub use raw::{
     AreaKindDef, AtmosphereDef, BlockDef, BoundaryLinkSpec, ContactSpec, ContactSurfaceSpec,
     DamageTypeDef, DefRef, DerivedGeneratorSpec, EdgeKind, EdgeSpec, EdgesSpec, ExitKind, FillSpec,
-    FixtureDef, FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, LinkMapSpec, MaterialDef,
-    OrderedMap, PlaneDef, RawWorldDefs, RealmDef, ResistSpec, StateSpec, StratumSpec, WrapAxis,
+    FixtureDef, FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, LeakSpec, LinkMapSpec,
+    MaterialDef, OrderedMap, PlaneDef, RawWorldDefs, RealmDef, ResistSpec, SignalSpec, StateSpec,
+    StratumSpec, WrapAxis,
 };
 pub use state::{
     AreaKindId, AtmosphereId, BlockId, BlockState, DamageTypeId, ElementState, FixtureId,
@@ -41,6 +44,8 @@ pub use state::{
     StateRefError,
 };
 
+use crate::chunk::FieldId;
+use crate::field::{Field, FieldReaction, FieldReactionId};
 use crate::light::{LightSource, Sky, SkyId};
 use crate::topology::{Edge, Topology};
 
@@ -158,6 +163,22 @@ impl<I: DenseId, T> Table<I, T> {
     /// Whether there are no definitions at all.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// A table of definitions already in order of qualified id, numbered
+    /// in that order. A name past what the id type can count gets no
+    /// number.
+    pub(crate) fn from_sorted(names: Vec<String>, entries: Vec<T>) -> Table<I, T> {
+        let by_name = names
+            .iter()
+            .enumerate()
+            .filter_map(|(position, name)| Some((name.clone(), I::from_index(position)?)))
+            .collect();
+        Table {
+            names,
+            by_name,
+            entries,
+        }
     }
 }
 
@@ -499,6 +520,12 @@ pub struct WorldDefs {
     /// The furthest any element's light shines, in whole cells. `None`
     /// when no element gives light.
     source_reach: Option<i32>,
+    /// A fingerprint of the content the tables were built from.
+    fingerprint: clash_core::Hash128,
+    /// Where the placeholders of each kind begin (04 §12.3).
+    placeholders: placeholder::Placeholders,
+    fields: Table<FieldId, Field>,
+    field_reactions: Table<FieldReactionId, FieldReaction>,
 }
 
 // `WorldDefs` is shared between threads behind an `Arc`.
@@ -575,6 +602,18 @@ impl WorldDefs {
     /// The `sky` definitions.
     pub fn skies(&self) -> &Table<SkyId, Sky> {
         &self.skies
+    }
+
+    /// The `field` definitions (02 §16).
+    pub fn fields(&self) -> &Table<FieldId, Field> {
+        &self.fields
+    }
+
+    /// The `field_reaction` definitions (02 §16). What each means for
+    /// the stepper is compiled into the fields that take part:
+    /// [`Field::reacts`] and [`Field::conducts`].
+    pub fn field_reactions(&self) -> &Table<FieldReactionId, FieldReaction> {
+        &self.field_reactions
     }
 
     /// The light an element state gives off, if any (15 §3.3).

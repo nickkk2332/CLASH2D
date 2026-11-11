@@ -29,13 +29,13 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use clash_core::{EntityId, IVec2, Tick};
+use clash_core::{EntityId, Hash128, IVec2, StateHash, StateHasher, Tick};
 use thiserror::Error;
 
 use crate::area::AreaId;
 use crate::cause::{Cause, CauseKind};
 use crate::cosmos::{Cosmos, RealmId};
-use crate::defs::WorldDefs;
+use crate::defs::GeneratorSpec;
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
 use crate::event::WorldEvent;
@@ -45,10 +45,11 @@ use crate::generate::{
 };
 use crate::grid::Column;
 use crate::pos::{GridId, Location, RegionPos, TractPos};
-use crate::store::{StoreError, TractStore, decode_column, encode_column};
+use crate::save::{SaveWarning, WarnAt};
+use crate::store::{StoreError, TractStore, decode_tract, encode_image, without_entities};
 use crate::topology::{Edge, Topology};
 use crate::tract::{
-    CellEdit, PendingEdit, RegionRecord, SiteIdx, SpawnRequest, TractRecord, TractState,
+    CellEdit, PendingEdit, PendingMap, RegionRecord, SiteIdx, SpawnRequest, TractRecord, TractState,
 };
 
 /// What loading and unloading need besides the world: the generators,
@@ -154,6 +155,16 @@ pub struct LoadedTract {
     pub spawns: Vec<SpawnRequest>,
     /// The areas its generator asked for, made the first time.
     pub areas: Vec<AreaId>,
+    /// The simulation's entity section for the tract, as it was handed
+    /// in before the tract was last unloaded
+    /// ([`Cosmos::set_tract_entities`]). Empty if there was none. It is
+    /// handed over once: the store no longer holds it.
+    pub entities: Vec<u8>,
+    /// Whether the tract's cells were generated again from other inputs
+    /// than last time: the definitions, the generator's parameters or
+    /// the realm's seed have changed, and the cells are new content
+    /// (02 §11). What stood there before may no longer fit.
+    pub regenerated: bool,
 }
 
 /// A tract's position brought inside a grid's shape: wrapped on wrapped
@@ -201,6 +212,33 @@ impl Cosmos {
             below_fill: kind.below_fill,
             above_fill: kind.above_fill,
         })
+    }
+
+    /// The fingerprint of what a realm's generator makes its tracts
+    /// from: the content of the definitions, the generator the realm's
+    /// definition names with its parameters, and the realm's seed
+    /// (02 §11). A tract's record keeps the fingerprint its cells were
+    /// last generated with.
+    pub fn generator_fingerprint(&self, realm: RealmId) -> Result<Hash128, WorldError> {
+        let found = self.realm(realm).ok_or(WorldError::UnknownRealm(realm))?;
+        let kind = self
+            .defs()
+            .realms()
+            .get(found.def)
+            .ok_or(WorldError::UnknownRealmDef(found.def))?;
+        let generator = match &kind.generator {
+            None => String::new(),
+            Some(GeneratorSpec::Named(name)) => name.0.clone(),
+            Some(GeneratorSpec::Derived(derived)) => format!("{derived:?}"),
+        };
+        // A map of text to JSON values always serialises.
+        let params = serde_json::to_string(&kind.generator_params).unwrap_or_default();
+        let mut hasher = StateHasher::new();
+        self.defs().fingerprint().state_hash(&mut hasher);
+        generator.state_hash(&mut hasher);
+        params.state_hash(&mut hasher);
+        found.seed.state_hash(&mut hasher);
+        Ok(hasher.finish())
     }
 
     /// A tract's position brought inside its realm: wrapped on wrapped
@@ -295,6 +333,37 @@ impl Cosmos {
         Ok(true)
     }
 
+    /// What a realiser is given to make a tract's cells: the realm's
+    /// facts, and the records of the tract and of the eight around it,
+    /// as surveyed. The regions of all nine must have been surveyed; a
+    /// neighbour whose region has not been is shown as having no record.
+    pub(crate) fn realize_job(
+        &self,
+        generators: &Generators,
+        info: &RealmInfo,
+        tract: TractPos,
+    ) -> Result<RealizeJob, LoadError> {
+        let realm = info.id;
+        let rec = self
+            .tract_record(realm, tract)
+            .ok_or(WorldError::NotSurveyed { realm, tract })?
+            .as_surveyed();
+        let generator = Arc::clone(generators.of(info.def)?);
+        let mut around: [Option<TractRecord>; TractRecords3x3::COUNT] = Default::default();
+        for (slot, (dx, dy)) in around.iter_mut().zip(TractRecords3x3::OFFSETS) {
+            if let Ok(near) = tract_in(&info.topology, tract.offset(IVec2::new(dx, dy))) {
+                *slot = self.tract_record(realm, near).map(TractRecord::as_surveyed);
+            }
+        }
+        Ok(RealizeJob {
+            generator,
+            realm: *info,
+            pos: tract,
+            rec,
+            around: TractRecords3x3::new(around),
+        })
+    }
+
     /// Adds a change to a tract that is not loaded, to be applied when
     /// it next loads (02 §17.3).
     ///
@@ -338,12 +407,40 @@ impl Cosmos {
         record.extra_mut().pending.push(edit);
         Ok(())
     }
+
+    /// Takes the maps waiting for a tract out of its record, in the
+    /// order they were added (02 §17.3; 10 §4.3). The world cannot
+    /// resolve a map, so a pending map stays in the record when its
+    /// tract loads; whoever holds the maps calls this for each tract
+    /// that has loaded and writes them through `WorldEdit`. Empty for a
+    /// tract with none, and for one whose region is not surveyed.
+    pub fn take_pending_maps(&mut self, realm: RealmId, tract: TractPos) -> Vec<PendingMap> {
+        let Ok(tract) = self.normalize_tract(realm, tract) else {
+            return Vec::new();
+        };
+        let Some(extra) = self
+            .tract_record_mut(realm, tract)
+            .and_then(|record| record.extra.as_mut())
+        else {
+            return Vec::new();
+        };
+        let mut maps = Vec::new();
+        let mut rest = Vec::with_capacity(extra.pending.len());
+        for edit in core::mem::take(&mut extra.pending) {
+            match edit {
+                PendingEdit::Map(map) => maps.push(map),
+                other => rest.push(other),
+            }
+        }
+        extra.pending = rest;
+        maps
+    }
 }
 
 /// Where the cells of a tract being loaded come from.
 enum Source {
-    /// The tract store.
-    Stored,
+    /// The tract store: the column read from the tract's blob.
+    Stored(Box<Column>),
     /// The realiser: the result of the job at this position in the
     /// batch.
     Realized(usize),
@@ -355,6 +452,13 @@ struct Planned {
     grid: GridId,
     tract: TractPos,
     source: Source,
+    /// The simulation's entity section, out of the tract's blob.
+    entities: Vec<u8>,
+    /// The tract's blob, if it holds an entity section: the section is
+    /// taken out of the store as it is handed over.
+    blob: Option<Vec<u8>>,
+    /// The fingerprint of the generator's inputs as they are now.
+    fingerprint: Hash128,
 }
 
 impl WorldCtx<'_> {
@@ -398,7 +502,7 @@ impl WorldCtx<'_> {
                 .collect();
         plans
             .into_iter()
-            .map(|plan| self.install(io, &defs, plan?, &mut realised))
+            .map(|plan| self.install(io, plan?, &mut realised))
             .collect()
     }
 
@@ -423,31 +527,45 @@ impl WorldCtx<'_> {
             .cosmos
             .tract_record(realm, tract)
             .ok_or(WorldError::NotSurveyed { realm, tract })?;
-        let source = if record.state.is_stored() {
-            Source::Stored
-        } else {
-            let rec = record.as_surveyed();
-            let generator = Arc::clone(io.generators.of(info.def)?);
-            let mut around: [Option<TractRecord>; TractRecords3x3::COUNT] = Default::default();
-            for (slot, (dx, dy)) in around.iter_mut().zip(TractRecords3x3::OFFSETS) {
-                let near = tract.offset(IVec2::new(dx, dy));
-                let Ok(near) = tract_in(&info.topology, near) else {
-                    continue;
-                };
-                self.cosmos
-                    .survey_region(io.generators, realm, near.region())?;
-                *slot = self
-                    .cosmos
-                    .tract_record(realm, near)
-                    .map(TractRecord::as_surveyed);
+        let (realized, must_be_stored) = (record.state.is_realized(), record.state.is_stored());
+        let fingerprint = self.cosmos.generator_fingerprint(realm)?;
+        // What the store holds for the tract: its cells if it has been
+        // changed, or if everything is stored, and the simulation's
+        // entity section.
+        let blob = io.store.get(realm, tract)?;
+        let stored = match &blob {
+            Some(blob) => {
+                let defs = Arc::clone(self.cosmos.defs());
+                let found = decode_tract(&defs, self.cosmos.save_ids(), blob)?;
+                for missing in &found.missing {
+                    self.cosmos.warn(SaveWarning {
+                        kind: missing.kind,
+                        id: missing.id.clone(),
+                        at: WarnAt::Tract { realm, tract },
+                    });
+                }
+                Some(found)
             }
-            jobs.push(RealizeJob {
-                generator,
-                realm: info,
-                pos: tract,
-                rec,
-                around: TractRecords3x3::new(around),
-            });
+            None => None,
+        };
+        let (cells, entities) = match stored {
+            Some(found) => (found.cells.filter(|_| realized), found.entities),
+            None => (None, Vec::new()),
+        };
+        let blob = blob.filter(|_| !entities.is_empty());
+        let source = if let Some(column) = cells {
+            Source::Stored(Box::new(column))
+        } else if must_be_stored {
+            return Err(LoadError::NotStored { realm, tract });
+        } else {
+            // The realiser is shown the records of the tracts around.
+            for (dx, dy) in TractRecords3x3::OFFSETS {
+                if let Ok(near) = tract_in(&info.topology, tract.offset(IVec2::new(dx, dy))) {
+                    self.cosmos
+                        .survey_region(io.generators, realm, near.region())?;
+                }
+            }
+            jobs.push(self.cosmos.realize_job(io.generators, &info, tract)?);
             Source::Realized(jobs.len() - 1)
         };
         claimed.insert((realm, tract));
@@ -456,6 +574,9 @@ impl WorldCtx<'_> {
             grid: info.base_grid,
             tract,
             source,
+            entities,
+            blob,
+            fingerprint,
         })
     }
 
@@ -463,7 +584,6 @@ impl WorldCtx<'_> {
     fn install(
         &mut self,
         io: &mut TractIo<'_>,
-        defs: &WorldDefs,
         plan: Planned,
         realised: &mut [Option<RealizedTract>],
     ) -> Result<LoadedTract, LoadError> {
@@ -472,17 +592,20 @@ impl WorldCtx<'_> {
             grid,
             tract,
             source,
+            entities,
+            blob,
+            fingerprint,
         } = plan;
-        let from_store = matches!(source, Source::Stored);
+        let from_store = matches!(source, Source::Stored(_));
+        // The entity section is handed over once: what is left of the
+        // blob is worked out before anything changes.
+        let left = match &blob {
+            Some(blob) => Some(without_entities(blob)?),
+            None => None,
+        };
         let (column, fresh) =
             match source {
-                Source::Stored => {
-                    let blob = io
-                        .store
-                        .get(realm, tract)?
-                        .ok_or(LoadError::NotStored { realm, tract })?;
-                    (decode_column(defs, &blob)?, None)
-                }
+                Source::Stored(column) => (*column, None),
                 Source::Realized(at) => {
                     let made = realised.get_mut(at).and_then(Option::take).ok_or(
                         WorldError::BadValue {
@@ -502,6 +625,11 @@ impl WorldCtx<'_> {
         let tick = self.timeline.now();
         self.cosmos.insert_column(grid, tract, column)?;
         self.cosmos.tickets.note_loaded(realm, tract);
+        match left {
+            Some(Some(cells_only)) => io.store.put(realm, tract, &cells_only),
+            Some(None) => io.store.delete(realm, tract),
+            None => {}
+        }
         let mut loaded = LoadedTract {
             realm,
             tract,
@@ -509,12 +637,23 @@ impl WorldCtx<'_> {
             from_store,
             spawns: Vec::new(),
             areas: Vec::new(),
+            entities,
+            regenerated: false,
         };
         let mut pending = Vec::new();
         if let Some(record) = self.cosmos.tract_record_mut(realm, tract) {
             loaded.first = !record.state.is_realized();
             if loaded.first {
                 record.state = TractState::Realized { pristine: true };
+            }
+            if !from_store {
+                // The record keeps what its cells were generated from.
+                let before = record.extra.as_ref().and_then(|extra| extra.generated);
+                loaded.regenerated =
+                    !loaded.first && before.is_some_and(|before| before != fingerprint);
+                if before != Some(fingerprint) {
+                    record.extra_mut().generated = Some(fingerprint);
+                }
             }
             if let Some(extra) = record.extra.as_mut() {
                 pending = core::mem::take(&mut extra.pending);
@@ -546,6 +685,9 @@ impl WorldCtx<'_> {
                 PendingEdit::Spawn(spawn) => loaded.spawns.push(spawn),
                 // Stamps wait for the coarse layer (W17).
                 stamp @ PendingEdit::Stamp(_) => waiting.push(stamp),
+                // The world cannot resolve a map: it waits for whoever
+                // holds the maps (`Cosmos::take_pending_maps`).
+                map @ PendingEdit::Map(_) => waiting.push(map),
                 // So does a body that came down here unseen (02 §15.4):
                 // it stays on the record, where whoever loads finds it.
                 impact @ PendingEdit::Impact(_) => waiting.push(impact),
@@ -555,6 +697,11 @@ impl WorldCtx<'_> {
             && let Some(record) = self.cosmos.tract_record_mut(realm, tract)
         {
             record.extra_mut().pending = waiting;
+        }
+        // The fields a stored tract held catch up on the time that
+        // passed (02 §9.4 step 4).
+        if from_store {
+            self.fields_loaded(realm, grid, tract);
         }
         self.events.emit(WorldEvent::TractLoaded {
             tick,
@@ -604,11 +751,34 @@ impl WorldCtx<'_> {
                 occupant,
             });
         }
-        let surveyed = self.cosmos.tract_record(realm, tract).is_some();
-        let blob = if surveyed && column.is_dirty() {
-            Some(encode_column(column)?)
+        let record = self.cosmos.tract_record(realm, tract);
+        let surveyed = record.is_some();
+        let stored = record.is_some_and(|record| record.state.is_stored());
+        let dirty = surveyed && column.is_dirty();
+        let entities = self.cosmos.tract_entities(realm, tract).to_vec();
+        // The cells are kept if they have changed, were stored already,
+        // or everything is stored. What the store holds for a tract that
+        // was read from it and has not changed since is still right.
+        let keep_cells = dirty || stored || (surveyed && self.cosmos.store_pristine());
+        let image = if keep_cells && (dirty || !stored || !entities.is_empty()) {
+            Some(Some(column.image()))
+        } else if !keep_cells && !entities.is_empty() {
+            // Cells that are generated again, and entities that are not.
+            Some(None)
         } else {
             None
+        };
+        let blob = match image {
+            Some(cells) => {
+                let defs = Arc::clone(self.cosmos.defs());
+                Some(encode_image(
+                    &defs,
+                    self.cosmos.save_ids_mut(),
+                    cells,
+                    &entities,
+                )?)
+            }
+            None => None,
         };
         let clock = self
             .cosmos
@@ -628,8 +798,9 @@ impl WorldCtx<'_> {
         if let Some(blob) = &blob {
             io.store.put(realm, tract, blob);
         }
+        self.cosmos.drop_tract_entities(realm, tract);
         if let Some(record) = self.cosmos.tract_record_mut(realm, tract) {
-            if blob.is_some() {
+            if dirty {
                 record.state = TractState::Realized { pristine: false };
             }
             if record.state.is_realized() {

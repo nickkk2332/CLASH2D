@@ -13,11 +13,11 @@ define_id! {
     /// A running action of an entity (03 §6). Given out by the action
     /// table, which package T3 builds.
     pub struct ActionId;
-
-    /// A rule definition (05 §9): the dense id of an `eoc`. The
-    /// definition type is registered by package K5.
-    pub struct EocId;
 }
+
+/// A rule definition (05 §9): the dense id of an `eoc`. Built by
+/// package K5, in [`rule`](crate::rule).
+pub use crate::rule::EocId;
 
 /// Every running action (03 §6). Built by package T3.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
@@ -29,18 +29,20 @@ impl_state_hash!(ActionTable {});
 pub struct WindowTable {}
 impl_state_hash!(WindowTable {});
 
-/// What the rule runtime keeps between runs: attachments made at run
-/// time, continuations, cooldowns, rule groups (05 §9, §13.4). Built by
-/// packages K5 and K7.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct RuleState {}
-impl_state_hash!(RuleState {});
+/// What the rule runtime keeps between runs: rules attached at run
+/// time, when rules last ran, switched rule groups (05 §9). Built by
+/// package K5, in [`rule`](crate::rule); continuations (05 §13.4) are
+/// package K7's.
+pub use crate::rule::RuleState;
 
 /// An entity's channel slots and which action holds each (03 §6.2).
 /// Built by package T3; document 06 derives the slots from the body.
+///
+/// Not to be confused with [`ChannelSet`](crate::action::ChannelSet),
+/// which is a set of channel ids: what an action definition uses.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct ChannelSet {}
-impl_state_hash!(ChannelSet {});
+pub struct ChannelSlots {}
+impl_state_hash!(ChannelSlots {});
 
 /// The things an entity will do next (03 §5.3). Built by package T4.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]

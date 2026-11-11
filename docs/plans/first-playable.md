@@ -20,10 +20,10 @@ actions that call `hit`.
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | E1 | Component store and core components | M | K1, K7 | beta |
-| E2 | Attributes, pools, tracks | M | E1, K5 | todo |
+| E2 | Attributes, pools, tracks | M | E1, K5 | beta |
 | E3 | Traits | M | E2 | todo |
-| E4 | Bodies | L | E2, T3 | todo |
-| E5 | Hits and wounds | L | E4, W12 | todo |
+| E4 | Bodies | L | E2, T3 | beta |
+| E5 | Hits and wounds | L | E4, W12 | beta |
 | E6 | Body editing | M | E4 | todo |
 | E7 | Minds and vital state | M | E1, T4 | todo |
 | E8 | Items and holds | L | E5 | todo |
@@ -47,9 +47,9 @@ actions that call `hit`.
 | U4 | View model and world drawing | L | U1, S9 | beta |
 | U5 | Playback | L | U4 | todo |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |
-| U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | todo |
-| U7 | Input, controls, pickers | M | U6b, T5 | todo |
-| U8 | Slots and theming | S | U6b | todo |
+| U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
+| U7 | Input, controls, pickers | M | U6b, T5 | beta |
+| U8 | Slots and theming | S | U6b | done |
 | U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
 | U10 | Cutscenes | M | U5, T6 | todo |
 | U11 | Application | M | U3, U9, P3 | todo |
@@ -117,6 +117,14 @@ it (the body in E4, the item in E8) and is not derived here. No test
 script, since nothing here can be reached from the console until the
 kernel holds it, and no benchmark (Z1).
 
+Joined to the kernel since (decision D-460): the simulation holds the
+`Components`, saves them in its blob, hashes them as a part of its own,
+implements `Containment` over places, refreshes masses on relocation and
+removal and writes changed masses to the world's occupant records
+(`Sim::set_shape`, `Sim::set_own_mass`); the properties these components
+back are registered (06 §13). Still stubbed: definition ids in saved
+components go through no id table (K7); `templates` is not a property.
+
 ### E2 — Attributes, pools, tracks
 
 **Spec** 06 §4 · **Size** M
@@ -132,6 +140,32 @@ Done when
 - A pool crossing fires at the analytically correct tick, including across
   a clock rate change, and an idle pool schedules nothing.
 - `track_advanced` fires once per level.
+
+Beta: built ahead of the kernel, in `clash_sim::stats`, as functions that
+take the store of `Stats`, the definitions, the timeline and an expression
+host, and return what changed (decisions D-440 to D-449). Built: the
+`attribute`, `pool` and `track` definition types with their fields,
+scopes and checks, a dependency cycle being a load error at each `base`;
+`StatDefs`, the tables worked out after loading; the `Stats` component,
+the third in the component list, saved and hashed; modifiers and pool
+rates with sources, and `remove_source`; derived attributes worked out in
+dependency order with exact invalidation, and `refresh` from scratch;
+pools whose crossings are one scheduled wake-up, with `on_wake`,
+`set_clock`, `suspend` and `resume`; `pool_add` and all-or-nothing
+`pool_spend`; tracks with level curves; the kinds, properties and events
+of 06 §4.4 registered through a registry step, and `stats::property` to
+answer them; reasons for every refusal. Fixtures are under
+`crates/clash-sim/tests/fixtures/stats`. Stubbed, each waiting for the
+kernel or a later package: holding the store in the simulation and
+calling these functions (the module documentation lists when); raising
+`attr_changed`, `pool_crossed` and `track_advanced` from the changes
+returned, and the hook `pool_changing`; the host that forwards property
+reads; writing definition ids through the save's id table (K7);
+registering and running the six verbs and a track's `on_advance` (K5);
+calling `refresh` when a reactive input changes (05 §7.5); moving what is
+seated in a mind (E7); a pool that names a substance (G19). No test
+script, since nothing here can be reached from the console until the
+kernel holds it, so `gas_mask` waits with E8; and no benchmark (Z1).
 
 ### E3 — Traits
 
@@ -160,6 +194,32 @@ Done when
 - Doubling scale doubles thickness, quadruples area, multiplies mass by
   eight.
 
+Beta: built ahead of the kernel, in `clash_sim::body`, as functions that
+take the store of `Body`, the definitions, the store of `Physical`,
+containment and the stats' context, and return what changed (decisions
+D-520 to D-523). Built: the `body_part`, `body_plan` and `body_function`
+definition types with every field of 06 §6.1 to §6.3 and their checks,
+the tissue extras and `severs` as fields of the world's `material` and
+`damage_type`; `BodyDefs`, the tables worked out after loading; the
+`Body` component, the fourth in the component list, saved and hashed;
+`attach` from a plan at a scale; parts read by key, name, socket, tag and
+definition, what covers what, reach, bands and exposed area; condition
+and state; functions with their four combinations; channel slots by part
+and in total, with `SlotsLost` and `SlotsGained` naming what went and
+came back; mass and size handed to `Physical`; `disable`, `restore` and
+`detach`, which returns the subtree as data; the kinds, properties and
+events of 06 §6.7 registered through a registry step, and
+`body::property` to answer them; reasons for every refusal. Fixtures are
+under `crates/clash-sim/tests/fixtures/body`: a humanoid and a blob.
+Stubbed, each waiting for the kernel or a later package: holding the
+store in the simulation and calling these functions (the module
+documentation lists when); raising the events and interrupting the
+actions whose slots went (T3), which is how "disabling a part interrupts
+an action" is finished; `stats::refresh` after `function_changed`; the
+other verbs of 06 §6.5 (E6); postures, which call `set_height_factor`
+(E10); shared parts for unchanged bodies, so no benchmark of them (Z1);
+writing definition ids through the save's id table (K7).
+
 ### E5 — Hits and wounds
 
 **Spec** 06 §7 · **Size** L
@@ -178,6 +238,29 @@ Done when
   a pool, and the pool's threshold event fires.
 - Scenario `through_the_wall`: a hit launches a creature, the wall breaks by
   02 §12, and the creature's injuries come from the impact events.
+
+Beta: built ahead of the kernel, in `clash_sim::body::hit` and
+`body::wound` (decisions D-524 to D-529). Built: `Hit` with its four
+ways of arriving and the hook `hit_incoming` described with its fields;
+`apply_hit`, which resolves layers by the world's `resolve_packet` from
+the outside in, with worn layers handed in by the caller, organs inside
+parts, severing, destruction, exits and an account of all the energy;
+wounds with their leaks as rates on pools under the wound as source,
+signals into pools, closing and healing by one wake-up for each body
+(`on_wake`, `suspend`, `resume`, `set_clock`), `close_wound`,
+`reopen_wound` and `heal_part`; spread hits by exposed area and outright
+destruction; `exposure_hit`, `impact_hit` and `field_hit`, which turn
+what the world reports into hits; `Detached`, the part that came off as
+data for the item package. Stubbed, each waiting for the kernel or a
+later package: raising `hit_incoming` and the events, and handing on
+exits and detached parts; making items of what came off and applying
+`WornHit`s to worn items (E8); deciding when a body in pieces ends its
+creature (E7); which parts face a hit's direction; a pool that names a
+substance (G19). The scripts `one_bad_cut` and `through_the_wall` are
+integration tests in `crates/clash-sim/tests/body.rs` until the kernel
+holds bodies: the first in full against a timeline the test drives, the
+second only as far as impact reports becoming hits; both scripts under
+`scenarios/people/` are owed. No benchmark (Z1).
 
 ### E6 — Body editing
 
@@ -577,6 +660,13 @@ checked by the linter against every loaded theme; the figures and art a
 screen names are plain text, not references the loader resolves, until
 U6b (decision D-322).
 
+Since U6b and U8: bound properties are compiled and evaluated, rows and
+options come from expressions, effects are typed and run, slots are
+filled and a `number` can be typed into. Still stubbed: rows from a
+query (K6), the views beyond U4, the log's content (U5), the
+development widgets, rebuilding the stack on reload, and the figures
+and art a screen names, which are still plain text (D-322).
+
 ### U6b — Toolkit: binding and UI effects
 
 **Spec** 12 §10.4, §10.5 · **Size** M
@@ -591,6 +681,32 @@ Done when
   outside `debug` screens.
 - A `run` effect appears in the input log and replays.
 
+Beta: every bound property and every expression of an effect is
+compiled when mods load, by `ScreenDef` and `UiPartDef` in
+`Def::compile`, in a pure context with `view`, `party`, `app`,
+`screen.name`, `$name` and `it`, and outside `debug` screens in a mind
+context whose own are the party; mistakes are placed inside the string.
+The scene evaluates what is on show when it is told the simulation has
+advanced or a variable has changed, against a host it is given
+(`SceneHost::view`, `party`, `reader`) and the application's state
+(`AppState`). Effects are read into typed effects at load and run on a
+screen stack with popups; `confirm` and `pick` open the screens of the
+roles `confirm` and `picker.list` and go on when they answer; `act`,
+`command` and `run` hand the host a whole `UiCommand`; `app` services
+reach the application. Tested against the fake host and application of
+`clash_scene::testing`, since no simulation exists to run against.
+Stubbed, each waiting for what it needs: the `Ui` command itself,
+`ui_callable`, the input log and replay are the kernel's (K3, K7): the
+scene's part is that the command it hands over is complete and the
+same every time, which a test shows; `show_screen` from a rule waits
+for the event stream (K2, U5); `act` with `"needed"` or `"all"` only
+marks the command, and choosing an action with `pick` and the other
+pickers are U7; bindings show the simulation as it is, not the moment
+playback has reached (U5); rows cannot come from a query (K6); a
+view's `centre` and an `inspect`'s `of` are compiled and not used;
+`app.creation` is whatever the application says (U9, E9); no benchmark
+of re-evaluation. Decisions D-430 to D-436.
+
 ### U7 — Input, controls, pickers
 
 **Spec** 12 §9 · **Size** M
@@ -604,6 +720,30 @@ Done when
   twin asks for every parameter with defaults pre-filled.
 - Rebinding a key changes behaviour without touching controls.
 
+Beta: the `control` definition type, run after a screen's `keys` and
+before the toolkit; keymap contexts `play` and `targeting`; `rebind`
+at once, reported to the application, with `Scene::rebind` to give
+stored bindings back. `act` with `"needed"` and `"all"` reads the
+action's parameter list from `clash_sim::action::ActionDef`, works
+defaults out in the actor's mind through the host, opens one picker for
+each parameter asked for and submits one whole command; closing a
+picker abandons it. Pickers in `mods/ui` for an entity and a cell (a
+cursor over the map with reach, sight and the line), a direction, a
+number, a text, one of a list and several of a list; the `camera` and
+`picker` effects; clicks and the wheel on a map view; prompts for
+reactions and choices from a `PendingDecision` the host hands over; the
+play screen, look mode and placeholder screens; the default profile's
+roles. Tested through the null frontend with scripted input and golden
+frames against the fake host, with actions from a fixture mod, since
+the action runtime (T3, T4) does not exist. Stubbed: several characters
+at once (12 §9.6) and the route picker's numbered path with `check`
+beside each step (review additions; a list of cells is asked for with
+the cell picker, one step at a time); the inspection tooltip on the map
+(U9); the simulation's side of `pending_decision`, `candidates` and
+the `react`, `pass` and `choose` commands (T4, T5, K9); a keymap name
+that nothing uses and a control's missing action are not reported at
+load. Decisions D-530 to D-537.
+
 ### U8 — Slots and theming
 
 **Spec** 12 §10.6, §4.3 · **Size** S
@@ -611,6 +751,14 @@ Done when
 Done when
 - A `ui_part` from a second mod appears in a slot in order, subject to its
   condition; switching theme restyles every screen.
+
+Done: the `ui_part` and `preference` definition types; a slot is filled
+with the parts aimed at it, in order, each shown while its `if` holds,
+and a part aimed at a slot no screen places is a load error unless it
+says `"required": false`; the `theme` preference restyles every open
+screen, each keeping its state; the `ui` mod defines the built-in
+preferences and a second theme. A test loads a part from a second mod,
+and a golden frame shows the second gallery in each theme.
 
 ### U9 — Bundled screens
 

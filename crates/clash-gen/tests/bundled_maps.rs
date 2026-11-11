@@ -33,8 +33,11 @@ fn repo(path: &str) -> PathBuf {
 }
 
 fn bundled() -> (Arc<Defs>, Arc<MapDefs>) {
+    // The `function` and `variable` types are left out on purpose: the
+    // bundled ones name kinds of subject that only the simulation, which
+    // sits above this crate, registers. They are passed over with the
+    // other types this crate does not know (decision D-450).
     let mut types = DefTypes::new();
-    clash_data::expr::register_defs(&mut types);
     clash_world::register_defs(&mut types);
     clash_gen::register_defs(&mut types);
     let outcome = Loader::new(&types)

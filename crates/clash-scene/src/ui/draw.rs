@@ -63,8 +63,10 @@ fn aligned(align: Align, width: i32, len: i32) -> i32 {
 }
 
 impl Screen {
-    /// Draws the screen over the whole frame, laying it out first if the
-    /// frame's size or the screen has changed since the last layout.
+    /// Draws the screen into the frame, laying it out first if the
+    /// frame's size or the screen has changed since the last layout. A
+    /// screen fills the frame, unless it is a popup: that is drawn over
+    /// its own rectangle and leaves the rest of the frame as it was.
     ///
     /// On a grid smaller than the screen's `min_size` a notice is drawn
     /// instead, saying how large the window must be.
@@ -80,7 +82,11 @@ impl Screen {
 
         let base = self.chrome.base;
         let mut canvas = Canvas::new(frame);
-        let area = canvas.clip();
+        let area = if self.too_small() {
+            canvas.clip()
+        } else {
+            self.area
+        };
         canvas.fill(area, ' ', base);
         if self.too_small() {
             self.draw_notice(&mut canvas);
@@ -92,7 +98,7 @@ impl Screen {
     /// Keeps each log's scroll position within what the log holds.
     fn clamp_logs(&mut self, data: &UiData<'_>) {
         for node in &mut self.nodes {
-            if let Kind::Log { filter, back } = &mut node.kind {
+            if let Kind::Log { filter, back, .. } = &mut node.kind {
                 let total = data.log.map_or(0, |log| {
                     log.lines()
                         .iter()
@@ -243,7 +249,12 @@ impl Screen {
         // Containers hand the whole canvas on to their children, each of
         // which confines itself to its own rectangle.
         match &node.kind {
-            Kind::Rows | Kind::Cols | Kind::Stack | Kind::Grid { .. } | Kind::Scroll { .. } => {
+            Kind::Rows
+            | Kind::Cols
+            | Kind::Stack
+            | Kind::Grid { .. }
+            | Kind::Scroll { .. }
+            | Kind::Slot { .. } => {
                 for child in &node.children {
                     self.draw_node(*child, root, base, data);
                 }
@@ -406,12 +417,22 @@ impl Screen {
                     });
                 }
             }
-            Kind::Number { var, label, .. } => {
+            Kind::Number {
+                var, label, typing, ..
+            } => {
                 let x = inner.x
                     + self.draw_label(&mut canvas, label, (inner.x, inner.y), inner.w, base);
                 let mut text = Small::new();
                 let _ = write!(text, "{} ", chrome.choice_prev);
-                let _ = write_number(&mut text, self.number_of(var));
+                match typing {
+                    // What is being typed, and where the next digit goes.
+                    Some(typed) => {
+                        let _ = write!(text, "{typed}_");
+                    }
+                    None => {
+                        let _ = write_number(&mut text, self.number_of(var));
+                    }
+                }
                 let _ = write!(text, " {}", chrome.choice_next);
                 canvas.print(x, inner.y, text.as_str(), active);
             }
@@ -471,7 +492,7 @@ impl Screen {
                         .draw_line(&mut canvas, inner.x + 2, inner.y, inner.w - 4, style);
                 canvas.print(inner.x + 2 + len, inner.y, " ]", style);
             }
-            Kind::Log { filter, back } => {
+            Kind::Log { filter, back, .. } => {
                 if let Some(log) = data.log {
                     let visible = inner.h.max(0) as usize;
                     let total = log

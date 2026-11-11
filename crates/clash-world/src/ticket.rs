@@ -292,7 +292,7 @@ struct Held {
 clash_core::impl_state_hash!(Held { ticket, at });
 
 /// A tract of a realm.
-type TractKey = (RealmId, TractPos);
+pub(crate) type TractKey = (RealmId, TractPos);
 
 fn yes() -> bool {
     true
@@ -386,6 +386,26 @@ impl TicketTable {
     pub(crate) fn note_loaded(&mut self, realm: RealmId, tract: TractPos) {
         self.kept.insert((realm, tract));
         self.stale = true;
+    }
+
+    /// What the table has worked out from its tickets: the activity of
+    /// each kept tract, and whether the next reconciliation must look.
+    /// Not state, and left out of the table's own stored form; a saved
+    /// world writes it beside the table so that loading changes nothing
+    /// at all (01 R7).
+    pub(crate) fn derived(&self) -> (Vec<(TractKey, Activity)>, bool) {
+        let levels = self
+            .levels
+            .iter()
+            .map(|(key, level)| (*key, *level))
+            .collect();
+        (levels, self.stale)
+    }
+
+    /// Puts back what [`derived`](TicketTable::derived) gave.
+    pub(crate) fn restore_derived(&mut self, levels: Vec<(TractKey, Activity)>, stale: bool) {
+        self.levels = levels.into_iter().collect();
+        self.stale = stale;
     }
 
     /// Forgets a tract that is no longer loaded.

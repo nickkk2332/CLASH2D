@@ -1,0 +1,49 @@
+[
+  {
+    "//": "05 §10.3: let, set and add, on locals, variables, a property and entries.",
+    "type": "eoc", "id": "writes",
+    "subjects": { "self": "entity" },
+    "params": { "v": "int" },
+    "do": [
+      { "let": { "a": "$v + 1", "b": { "expr": "'text'" } } },
+      { "set": {
+          "self.var.n": "$a",
+          "self.var.tag": { "expr": "$b" },
+          "self.health": 50,
+          "$a": "$a * 2"
+      } },
+      { "set": { "self.var.tally['ash']": "$a" } },
+      { "add": {
+          "self.var.n": 1,
+          "self.var.x": 0.5,
+          "self.var.log": "one",
+          "self.var.tally['ash']": 1,
+          "self.var.tally['iron']": 2
+      } },
+      { "add": { "self.var.log": "two" } }
+    ]
+  },
+
+  {
+    "//": "05 §10.3: unset a variable and an entry.",
+    "type": "eoc", "id": "forgets",
+    "subjects": { "self": "entity" },
+    "do": [ { "unset": [ "self.var.n", "self.var.tally['ash']" ] } ]
+  },
+
+  {
+    "//": "A value source in a let: a function defined in data.",
+    "type": "function", "id": "twice",
+    "params": { "x": "int" }, "returns": "int",
+    "value": "$x * 2"
+  },
+  {
+    "type": "eoc", "id": "sourced",
+    "params": { "n": "int" },
+    "returns": "int",
+    "do": [
+      { "let": { "t": { "call": "twice", "args": { "x": "$n" } } } },
+      { "return": "$t + twice(1)" }
+    ]
+  }
+]

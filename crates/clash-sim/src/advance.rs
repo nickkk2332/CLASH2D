@@ -10,7 +10,9 @@
 //! 3. Dispatch it to the handler of its domain.
 //! 4. Pump events: pass on what the world reported, then deliver queued
 //!    events to their handlers until the queue is empty (05 §8).
-//! 5. Safe point: reconcile tickets (02 §10.2).
+//! 5. Safe point: reconcile tickets (02 §10.2), which loads and unloads
+//!    tracts and moves the entities in them out of and into the world
+//!    (see [`activity`](crate::activity)).
 //!
 //! Everything between two pops happens at one tick. `advance` never
 //! waits and always returns (01 R5, invariant T7).
@@ -146,15 +148,19 @@ impl Default for Handlers {
     }
 }
 
-/// Handles a wake-up of the world's: a collapse step, a body in flight,
-/// a field step.
+/// Handles a wake-up of the world's: a stability check, a step of a
+/// falling mass, and whatever other process the world has (02 §14).
 ///
-/// The world has no wake-ups of its own yet. The package that gives it
-/// its first process (W13) also gives it a function that takes a
-/// `WorldCtx` and a popped wake-up, and this hands it over:
-/// `sim.world(|ctx| ctx.wake(id, wake))`. What the process reports
-/// reaches the event queue as it returns.
-fn world_wake(_sim: &mut Sim, _id: WakeId, _wake: Wake) {}
+/// The world's one entry for them is `WorldCtx::handle_wake`. It is
+/// called inside [`Sim::world`], so what the process reports reaches
+/// the event queue as it returns and the kernel follows whatever it
+/// did to occupants. A process the world could not carry on is reported
+/// as a fault.
+fn world_wake(sim: &mut Sim, _id: WakeId, wake: Wake) {
+    if let Err(error) = sim.world(|ctx| ctx.handle_wake(&wake)) {
+        sim.fault(Reason::from_world(&error));
+    }
+}
 
 impl Sim {
     /// Registers the handler of a wake-up domain, replacing the one it
@@ -328,17 +334,15 @@ impl Sim {
     }
 
     /// The safe point between two wake-ups (03 §4.3 step 5): where
-    /// loading, unloading and saving are allowed.
-    fn safe_point(&mut self) {
+    /// loading, unloading and saving are allowed. Tickets are
+    /// reconciled with what is loaded (02 §10.2), and what that
+    /// reported is delivered before anything else runs.
+    pub(crate) fn safe_point(&mut self) {
         self.reconcile_activity();
+        if !self.events.is_empty() {
+            self.pump();
+        }
     }
-
-    /// Reconciles interest tickets with what is loaded and how active it
-    /// is (02 §10.2). **A stub for package W9**: tickets and activity are
-    /// being built in the world crate. When they land, this calls the
-    /// world's reconcile and stores or restores the entities of tracts
-    /// that unload or load (package T7).
-    fn reconcile_activity(&mut self) {}
 
     /// The events waiting to be delivered: empty between calls.
     pub fn queued_events(&self) -> impl Iterator<Item = &SimEvent> {

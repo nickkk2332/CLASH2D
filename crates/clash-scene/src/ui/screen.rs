@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use clash_core::{Real, Value, VarMap};
+use clash_expr::Value as ExprValue;
 use thiserror::Error;
 
 use crate::frame::{Attrs, Borders, Canvas, CellStyle, Rect};
@@ -14,10 +15,17 @@ use crate::input::{CONTEXT_MENU, KeyChord};
 use crate::text::{RichText, TextError, tag_names};
 use crate::theme::{Style, Theme};
 
+use super::bind::Binding;
 use super::def::{
-    Align, ColumnDef, FigureDef, FrameDef, Literal, NodeDef, NodeKind, OptionsDef, Prop, RowDef,
-    RowsDef, ScreenDef, Size, TextProp, UiEffects, ViewDef,
+    Align, ColumnDef, FigureDef, FrameDef, Literal, NodeDef, NodeKind, OptionsDef, PopupDef, Prop,
+    RowDef, RowsDef, ScreenDef, Size, TextProp, UiEffects, ViewDef,
 };
+
+/// The most rows a listing takes from an expression, so that nothing a
+/// mod writes can make a screen without end.
+pub(super) const MAX_BOUND_ROWS: usize = 10_000;
+/// How deep the rows of a tree that come from an expression may nest.
+pub(super) const MAX_BOUND_DEPTH: u16 = 16;
 
 /// The keymap context in which a screen sees truth and may use the
 /// development widgets.
@@ -152,10 +160,8 @@ pub enum WidgetEvent {
     Pick,
 }
 
-/// Something a screen asks of whoever runs it, in answer to input.
-///
-/// Running interface effects is package U6b. Until then the effects are
-/// handed back as written.
+/// Something a screen asks of whoever runs it, in answer to input. The
+/// [`Scene`](crate::Scene) runs the effects.
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiEvent {
     /// A key the screen handles in `keys` was pressed.
@@ -172,8 +178,12 @@ pub enum UiEvent {
         /// Which of its events.
         event: WidgetEvent,
         /// The row the event is about, counted from 0 in the order the
-        /// rows were given: `it` for the effects.
+        /// rows were given.
         row: Option<usize>,
+        /// What `it` is for the effects: the row's value where the rows
+        /// come from an expression, its label where they are written
+        /// out.
+        it: Option<ExprValue>,
         /// The effects to run.
         effects: UiEffects,
     },
@@ -183,14 +193,52 @@ pub enum UiEvent {
         /// What changed.
         var: VarRef,
     },
+    /// A key whose name no widget and no entry of the screen's `keys`
+    /// used is the name of a `control` (12 §9.2).
+    Control {
+        /// The control's qualified id.
+        id: String,
+        /// The control's `do`.
+        effects: UiEffects,
+    },
+    /// A place in a view of the world was picked: with the mouse, or
+    /// with `accept` while the view has the focus (12 §9.4). The scene
+    /// works out which cell that is and runs the effects with the place
+    /// as `it`.
+    ViewPick {
+        /// The view's `id`, if it has one.
+        id: Option<String>,
+        /// Which view.
+        kind: ViewKind,
+        /// The view's own `zoom`.
+        zoom: u32,
+        /// The view's rectangle in the frame.
+        area: Rect,
+        /// The cell of the frame that was clicked. `None` for the
+        /// keyboard: the place is where the cursor is.
+        at: Option<(i32, i32)>,
+        /// Whether it was the second mouse button.
+        second: bool,
+        /// The view's `on_pick`.
+        effects: UiEffects,
+    },
+    /// The wheel was turned over a view of the world: the scene zooms
+    /// it.
+    ViewWheel {
+        /// How far, in notches: positive zooms out.
+        notches: i16,
+    },
 }
 
 impl UiEvent {
     /// The effects the event asks to be run, if it carries any.
     pub fn effects(&self) -> Option<&UiEffects> {
         match self {
-            UiEvent::Key { effects, .. } | UiEvent::Widget { effects, .. } => Some(effects),
-            UiEvent::Changed { .. } => None,
+            UiEvent::Key { effects, .. }
+            | UiEvent::Widget { effects, .. }
+            | UiEvent::Control { effects, .. }
+            | UiEvent::ViewPick { effects, .. } => Some(effects),
+            UiEvent::Changed { .. } | UiEvent::ViewWheel { .. } => None,
         }
     }
 
@@ -298,56 +346,80 @@ impl core::fmt::Debug for UiData<'_> {
     }
 }
 
-/// What bound properties are evaluated against.
+/// What a screen's bindings are evaluated in: the values of the names
+/// that are the screen's own (12 §10.4).
 #[derive(Clone, Copy, Debug)]
 pub struct BindScope<'a> {
     /// The screen's id.
     pub screen: &'a str,
     /// The screen's variables: `screen.name` in a binding.
     pub vars: &'a VarMap,
-    /// The preferences the screen's widgets are bound to.
-    pub prefs: &'a VarMap,
+    /// The values the screen was opened with, in order of parameter
+    /// name: `$name` in a binding.
+    pub params: &'a [ExprValue],
+    /// The current row: `it` in a binding.
+    pub it: Option<&'a ExprValue>,
 }
 
-/// Evaluates bound properties. This is where package U6b plugs in: it
-/// implements this over the expression language and the names of
-/// 12 §10.4, and calls [`Screen::refresh`] whenever the simulation has
-/// advanced or a screen variable has changed.
+/// Evaluates bindings. The [`Scene`](crate::Scene) implements this over
+/// the expression language, its host and the application's state, and
+/// calls [`Screen::refresh`] when the simulation has advanced or a
+/// variable has changed.
 ///
-/// Each method is given a property's unparsed source and returns its
-/// value now, or `None` to leave the property as it was.
+/// Each method returns the binding's value now, or `None` to leave the
+/// property as it was: a binding that was never compiled has no value.
 pub trait Evaluator {
-    /// A text template, such as `"{name(view)} is here."`.
-    fn text(&mut self, source: &str, scope: &BindScope<'_>) -> Option<String>;
-    /// A numeric expression, such as `"view.pool.blood.frac"`.
-    fn number(&mut self, source: &str, scope: &BindScope<'_>) -> Option<f64>;
-    /// A condition, such as `"screen.tab == 1"`.
-    fn flag(&mut self, source: &str, scope: &BindScope<'_>) -> Option<bool>;
+    /// The value of an expression.
+    fn value(&mut self, binding: &Binding, scope: &BindScope<'_>) -> Option<ExprValue>;
+    /// A text template, filled in.
+    fn text(&mut self, binding: &Binding, scope: &BindScope<'_>) -> Option<String>;
 }
 
 // ---------------------------------------------------------------------
 // What a screen is made of.
 // ---------------------------------------------------------------------
 
-/// A text that may be bound: its source if so, and what it shows now.
+/// A text that may be bound: its binding if so, and what it shows now.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LiveText {
-    pub(super) source: Option<String>,
+    pub(super) bound: Option<Binding>,
     pub(super) text: RichText,
+}
+
+impl LiveText {
+    fn fixed(text: &str) -> LiveText {
+        LiveText {
+            bound: None,
+            text: RichText::plain_text(text),
+        }
+    }
 }
 
 /// A number that may be bound.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LiveNum {
-    pub(super) source: Option<String>,
+    pub(super) bound: Option<Binding>,
     pub(super) value: f64,
 }
 
 /// A flag that may be bound.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LiveFlag {
-    pub(super) source: Option<String>,
+    pub(super) bound: Option<Binding>,
     pub(super) value: bool,
+}
+
+/// Where the rows of a listing come from when they are not written out.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct RowSource {
+    /// The expression giving the rows.
+    pub(super) rows: Binding,
+    /// How a row is shown: a text over `it`.
+    pub(super) item: Option<LiveText>,
+    /// For a table: each column's text over `it`.
+    pub(super) cells: Vec<Option<LiveText>>,
+    /// For a tree: the expression giving the rows beneath `it`.
+    pub(super) children: Option<Binding>,
 }
 
 /// The styles and characters the toolkit draws its own parts with,
@@ -492,6 +564,11 @@ pub(super) struct Listing {
     pub(super) on_activate: UiEffects,
     /// The width of the hotkey column of a menu.
     pub(super) key_width: i32,
+    /// Where the rows come from, if from an expression.
+    pub(super) dynamic: Option<Box<RowSource>>,
+    /// The value of each row that came from an expression, beside
+    /// `rows`.
+    pub(super) values: Vec<ExprValue>,
 }
 
 impl Listing {
@@ -537,6 +614,17 @@ impl Listing {
     /// The selected row as an index into `rows`.
     pub(super) fn selected_row(&self) -> Option<usize> {
         self.shown.get(self.sel).copied()
+    }
+
+    /// What `it` is for a row: its value where the rows come from an
+    /// expression, its label where they are written out.
+    pub(super) fn it_of(&self, row: usize) -> ExprValue {
+        match self.values.get(row) {
+            Some(value) => value.clone(),
+            None => self.rows.get(row).map_or(ExprValue::Null, |row| {
+                ExprValue::text(row.label.text.plain())
+            }),
+        }
     }
 }
 
@@ -597,6 +685,8 @@ pub(super) enum Kind {
         max: Option<LiveNum>,
         step: LiveNum,
         on_change: UiEffects,
+        /// What has been typed and not yet taken as the value.
+        typing: Option<String>,
     },
     Toggle {
         var: VarRef,
@@ -607,6 +697,9 @@ pub(super) enum Kind {
         var: VarRef,
         label: Option<LiveText>,
         options: Vec<(Value, LiveText)>,
+        /// The expression giving the options, if they are not written
+        /// out.
+        from: Option<Binding>,
         on_change: UiEffects,
     },
     Button {
@@ -615,6 +708,9 @@ pub(super) enum Kind {
     },
     Log {
         filter: Option<Vec<String>>,
+        /// The expression giving the categories, if they are not written
+        /// out.
+        filter_from: Option<Binding>,
         /// How many lines the view is scrolled back from the newest.
         back: usize,
     },
@@ -628,6 +724,9 @@ pub(super) enum Kind {
         region_of: Vec<Vec<Option<u8>>>,
         region_names: Vec<String>,
         shades: Vec<Option<Style>>,
+        /// The expression giving each region its colour, if it is not
+        /// written out.
+        shade_from: Option<Binding>,
     },
     Tooltip {
         value: Option<LiveText>,
@@ -753,6 +852,14 @@ pub struct Screen {
     pub(super) min_size: (u16, u16),
     pub(super) vars: VarMap,
     pub(super) prefs: VarMap,
+    /// The names of the screen's parameters, in slot order.
+    pub(super) param_names: Vec<String>,
+    /// The values the screen was opened with, beside `param_names`.
+    pub(super) params: Vec<ExprValue>,
+    /// How the screen is placed, if it does not fill the frame.
+    pub(super) popup: Option<PopupDef>,
+    /// The part of the frame the screen was last laid out in.
+    pub(super) area: Rect,
     pub(super) keys: BTreeMap<String, UiEffects>,
     pub(super) nodes: Vec<Node>,
     pub(super) chrome: Chrome,
@@ -766,10 +873,25 @@ pub struct Screen {
     pub(super) size: (u16, u16),
     /// Whether something changed that the layout depends on.
     pub(super) stale: bool,
+    /// The row the first list with rows from an expression is to start
+    /// on, once its rows are known.
+    pub(super) start_row: Option<usize>,
+}
+
+/// The widgets other definitions put into a screen's slots (12 §10.6).
+#[derive(Clone, Copy, Debug)]
+pub struct SlotParts<'a> {
+    /// The namespace of the screen: a slot's qualified name is this, a
+    /// colon and the name the screen gives it.
+    pub namespace: &'a str,
+    /// For each slot, by qualified name, the nodes put into it, in the
+    /// order they are shown.
+    pub parts: &'a BTreeMap<String, Vec<NodeDef>>,
 }
 
 struct Builder<'a> {
     env: &'a UiEnv<'a>,
+    slots: Option<&'a SlotParts<'a>>,
     screen: &'a str,
     debug: bool,
     vars: &'a VarMap,
@@ -801,16 +923,14 @@ impl Builder<'_> {
     fn text(&mut self, prop: &TextProp, path: &str) -> LiveText {
         match prop {
             Prop::Static(source) => match RichText::parse(source, self.env.theme) {
-                Ok(text) => LiveText { source: None, text },
+                Ok(text) => LiveText { bound: None, text },
                 Err(error) => {
                     self.problem(path, error.into());
-                    LiveText {
-                        source: None,
-                        text: RichText::plain_text(source),
-                    }
+                    LiveText::fixed(source)
                 }
             },
-            Prop::Bound(source) => {
+            Prop::Bound(binding) => {
+                let source = binding.source();
                 // The template is filled in later; its tags can be
                 // checked now.
                 match tag_names(source) {
@@ -824,7 +944,7 @@ impl Builder<'_> {
                     Err(error) => self.problem(path, error.into()),
                 }
                 LiveText {
-                    source: Some(source.clone()),
+                    bound: Some(binding.clone()),
                     text: RichText::plain_text(source),
                 }
             }
@@ -838,11 +958,11 @@ impl Builder<'_> {
     fn num(prop: &Prop<f64>) -> LiveNum {
         match prop {
             Prop::Static(value) => LiveNum {
-                source: None,
+                bound: None,
                 value: *value,
             },
-            Prop::Bound(source) => LiveNum {
-                source: Some(source.clone()),
+            Prop::Bound(binding) => LiveNum {
+                bound: Some(binding.clone()),
                 value: 0.0,
             },
         }
@@ -969,6 +1089,8 @@ impl Builder<'_> {
         &mut self,
         flavour: Flavour,
         rows: &RowsDef,
+        item: &Option<TextProp>,
+        children: &Option<Binding>,
         columns: &[ColumnDef],
         empty: &Option<TextProp>,
         selected: &Option<String>,
@@ -976,6 +1098,21 @@ impl Builder<'_> {
         on_activate: &UiEffects,
         path: &str,
     ) -> Kind {
+        let dynamic = match rows {
+            RowsDef::Static(_) => None,
+            RowsDef::Bound(binding) => Some(Box::new(RowSource {
+                rows: binding.clone(),
+                item: self.opt_text(item, &format!("{path}.item")),
+                cells: columns
+                    .iter()
+                    .enumerate()
+                    .map(|(index, column)| {
+                        self.opt_text(&column.value, &format!("{path}.columns[{index}].value"))
+                    })
+                    .collect(),
+                children: children.clone(),
+            })),
+        };
         let rows = self.rows(rows, &format!("{path}.rows"));
         let columns: Vec<Column> = columns
             .iter()
@@ -1007,6 +1144,8 @@ impl Builder<'_> {
             on_select: on_select.clone(),
             on_activate: on_activate.clone(),
             key_width,
+            dynamic,
+            values: Vec::new(),
         };
         listing.reshow();
         Kind::Listing(Box::new(listing))
@@ -1023,6 +1162,7 @@ impl Builder<'_> {
             region_of: Vec::new(),
             region_names: Vec::new(),
             shades: Vec::new(),
+            shade_from: None,
         };
         let Some(def) = self.env.figures.get(name) else {
             self.problem(
@@ -1116,11 +1256,16 @@ impl Builder<'_> {
                     self.style(&Some(style_name.clone()), &format!("{path}.shade.{region}"));
             }
         }
+        let shade_from = match shade {
+            Some(Prop::Bound(binding)) => Some(binding.clone()),
+            _ => None,
+        };
         Kind::Figure {
             rows,
             region_of,
             region_names,
             shades,
+            shade_from,
         }
     }
 
@@ -1143,11 +1288,11 @@ impl Builder<'_> {
         }
         let show_if = def.common.show_if.as_ref().map(|prop| match prop {
             Prop::Static(value) => LiveFlag {
-                source: None,
+                bound: None,
                 value: *value,
             },
-            Prop::Bound(source) => LiveFlag {
-                source: Some(source.clone()),
+            Prop::Bound(binding) => LiveFlag {
+                bound: Some(binding.clone()),
                 value: true,
             },
         });
@@ -1231,7 +1376,16 @@ impl Builder<'_> {
                     own_focus: false,
                 }
             }
-            NodeKind::Slot(name) => Kind::Slot { name: name.clone() },
+            NodeKind::Slot(name) => {
+                // What other definitions put into the slot, in order.
+                if let Some(slots) = self.slots {
+                    let qualified = format!("{}:{name}", slots.namespace);
+                    if let Some(parts) = slots.parts.get(&qualified) {
+                        children = self.children(parts, index, &format!("{path}.parts"));
+                    }
+                }
+                Kind::Slot { name: name.clone() }
+            }
             NodeKind::Text(text) => Kind::Text {
                 value: self.text(&text.value, &format!("{path}.value")),
                 wrap: text.wrap,
@@ -1257,6 +1411,8 @@ impl Builder<'_> {
             NodeKind::List(w) => self.listing(
                 Flavour::List,
                 &w.rows,
+                &w.item,
+                &None,
                 &[],
                 &w.empty,
                 &w.selected,
@@ -1267,6 +1423,8 @@ impl Builder<'_> {
             NodeKind::Menu(w) => self.listing(
                 Flavour::Menu,
                 &w.rows,
+                &w.item,
+                &None,
                 &[],
                 &None,
                 &w.selected,
@@ -1277,6 +1435,8 @@ impl Builder<'_> {
             NodeKind::Tree(w) => self.listing(
                 Flavour::Tree,
                 &w.rows,
+                &w.item,
+                &w.children,
                 &[],
                 &w.empty,
                 &w.selected,
@@ -1287,6 +1447,8 @@ impl Builder<'_> {
             NodeKind::Table(w) => self.listing(
                 Flavour::Table,
                 &w.rows,
+                &None,
+                &None,
                 &w.columns,
                 &w.empty,
                 &w.selected,
@@ -1297,6 +1459,8 @@ impl Builder<'_> {
             NodeKind::Inspect(w) => self.listing(
                 Flavour::Inspect,
                 &w.rows,
+                &None,
+                &None,
                 &[],
                 &None,
                 &w.selected,
@@ -1334,6 +1498,7 @@ impl Builder<'_> {
                 max: w.max.as_ref().map(Builder::num),
                 step: Builder::num(&w.step),
                 on_change: w.on_change.clone(),
+                typing: None,
             },
             NodeKind::Toggle(w) => Kind::Toggle {
                 var: self.bind(
@@ -1355,10 +1520,7 @@ impl Builder<'_> {
                         let Literal(value) = &option.value;
                         let shown = match &option.label {
                             Some(text) => self.text(text, &format!("{path}.options[{o}].label")),
-                            None => LiveText {
-                                source: None,
-                                text: RichText::plain_text(&value.to_string()),
-                            },
+                            None => LiveText::fixed(&value.to_string()),
                         };
                         options.push((value.clone(), shown));
                     }
@@ -1366,10 +1528,15 @@ impl Builder<'_> {
                 let start = options
                     .first()
                     .map_or(Value::Int(0), |(value, _)| value.clone());
+                let from = match &w.options {
+                    OptionsDef::Bound(binding) => Some(binding.clone()),
+                    OptionsDef::Static(_) => None,
+                };
                 Kind::Choice {
                     var: self.bind(&w.bind, Want::Any, start, &format!("{path}.bind")),
                     label: label(self, &w.label),
                     options,
+                    from,
                     on_change: w.on_change.clone(),
                 }
             }
@@ -1380,6 +1547,10 @@ impl Builder<'_> {
             NodeKind::Log(w) => Kind::Log {
                 filter: match &w.filter {
                     Some(Prop::Static(names)) => Some(names.clone()),
+                    _ => None,
+                },
+                filter_from: match &w.filter {
+                    Some(Prop::Bound(binding)) => Some(binding.clone()),
                     _ => None,
                 },
                 back: 0,
@@ -1424,6 +1595,26 @@ impl Screen {
     /// variables their starting values. Every problem found is reported,
     /// not only the first.
     pub fn new(id: &str, def: &ScreenDef, env: &UiEnv<'_>) -> Result<Screen, Vec<UiError>> {
+        Screen::build(id, def, env, None)
+    }
+
+    /// Makes a screen as [`Screen::new`] does, with what other
+    /// definitions put into its slots (12 §10.6).
+    pub fn with_slots(
+        id: &str,
+        def: &ScreenDef,
+        env: &UiEnv<'_>,
+        slots: &SlotParts<'_>,
+    ) -> Result<Screen, Vec<UiError>> {
+        Screen::build(id, def, env, Some(slots))
+    }
+
+    fn build(
+        id: &str,
+        def: &ScreenDef,
+        env: &UiEnv<'_>,
+        slots: Option<&SlotParts<'_>>,
+    ) -> Result<Screen, Vec<UiError>> {
         let context = def
             .context
             .clone()
@@ -1435,6 +1626,7 @@ impl Screen {
             .collect();
         let mut builder = Builder {
             env,
+            slots,
             screen: id,
             debug: context == CONTEXT_DEBUG,
             vars: &vars,
@@ -1462,6 +1654,10 @@ impl Screen {
             min_size: (min_cols, min_rows),
             vars,
             prefs,
+            param_names: def.params.keys().cloned().collect(),
+            params: vec![ExprValue::Null; def.params.len()],
+            popup: def.popup,
+            area: Rect::default(),
             keys: def.keys.clone(),
             nodes,
             chrome: Chrome::new(env.theme),
@@ -1470,6 +1666,7 @@ impl Screen {
             hover: None,
             size: (0, 0),
             stale: true,
+            start_row: None,
         };
         screen.pull_vars();
         Ok(screen)
@@ -1488,6 +1685,32 @@ impl Screen {
     /// The keymap context the screen's keys are named in.
     pub fn context(&self) -> &str {
         &self.context
+    }
+
+    /// Makes the first `list`, `menu`, `tree` or `table` whose rows come
+    /// from an expression start with this row selected, once its rows
+    /// are known: a picker starts on the value it is filled in with.
+    pub fn start_on_row(&mut self, row: usize) {
+        self.start_row = Some(row);
+    }
+
+    /// Whether the screen declares a variable of this name.
+    pub fn has_var(&self, name: &str) -> bool {
+        self.vars.contains(name)
+    }
+
+    /// Whether the screen has a `map_view`: a picker with one has the
+    /// cursor to move in it.
+    pub fn has_map_view(&self) -> bool {
+        self.nodes.iter().any(|node| {
+            matches!(
+                node.kind,
+                Kind::View {
+                    kind: ViewKind::Map,
+                    ..
+                }
+            )
+        })
     }
 
     /// The smallest grid the screen can be shown on, in columns and rows.
@@ -1531,8 +1754,9 @@ impl Screen {
         self.stale = true;
     }
 
-    /// The names of the screen's slots (12 §10.6), in layout order.
-    /// Filling them is package U8.
+    /// The names of the screen's slots (12 §10.6), in layout order, as
+    /// the screen gives them: a slot's qualified name has the screen's
+    /// namespace in front.
     pub fn slots(&self) -> impl Iterator<Item = &str> {
         self.nodes.iter().filter_map(|node| match &node.kind {
             Kind::Slot { name } => Some(name.as_str()),
@@ -1645,96 +1869,6 @@ impl Screen {
                 _ => {}
             }
         }
-    }
-
-    /// Re-evaluates every bound property of the screen. Package U6b calls
-    /// this when the simulation has advanced or a variable has changed.
-    /// A text whose result has broken style tags is shown as written.
-    pub fn refresh(&mut self, evaluator: &mut dyn Evaluator, theme: &Theme) {
-        let scope = BindScope {
-            screen: &self.id,
-            vars: &self.vars,
-            prefs: &self.prefs,
-        };
-        let mut text = |live: &mut LiveText| {
-            if let Some(source) = &live.source
-                && let Some(result) = evaluator.text(source, &scope)
-            {
-                live.text = RichText::parse(&result, theme)
-                    .unwrap_or_else(|_| RichText::plain_text(&result));
-            }
-        };
-        if let Some(title) = &mut self.title {
-            text(title);
-        }
-        for node in &mut self.nodes {
-            if let Some(tip) = &mut node.tip {
-                text(tip);
-            }
-            if let Some(Some(title)) = &mut node.frame {
-                text(title);
-            }
-            match &mut node.kind {
-                Kind::Tabs { titles, .. } => titles.iter_mut().for_each(&mut text),
-                Kind::Text { value, .. } => text(value),
-                Kind::Listing(listing) => {
-                    for row in &mut listing.rows {
-                        text(&mut row.label);
-                        row.value.iter_mut().for_each(&mut text);
-                        row.cells.iter_mut().for_each(&mut text);
-                        row.tip.iter_mut().for_each(&mut text);
-                    }
-                    listing.empty.iter_mut().for_each(&mut text);
-                    for column in &mut listing.columns {
-                        text(&mut column.title);
-                    }
-                }
-                Kind::Bar { label, .. }
-                | Kind::Input { label, .. }
-                | Kind::Number { label, .. }
-                | Kind::Toggle { label, .. } => label.iter_mut().for_each(&mut text),
-                Kind::Choice { label, options, .. } => {
-                    label.iter_mut().for_each(&mut text);
-                    for (_, shown) in options {
-                        text(shown);
-                    }
-                }
-                Kind::Button { label, .. } => text(label),
-                Kind::Tooltip { value } => value.iter_mut().for_each(&mut text),
-                _ => {}
-            }
-        }
-        let mut number = |live: &mut LiveNum| {
-            if let Some(source) = &live.source
-                && let Some(result) = evaluator.number(source, &scope)
-                && !result.is_nan()
-            {
-                live.value = result;
-            }
-        };
-        for node in &mut self.nodes {
-            match &mut node.kind {
-                Kind::Bar { value, max, .. } => {
-                    number(value);
-                    number(max);
-                }
-                Kind::Number { min, max, step, .. } => {
-                    min.iter_mut().for_each(&mut number);
-                    max.iter_mut().for_each(&mut number);
-                    number(step);
-                }
-                _ => {}
-            }
-        }
-        for node in &mut self.nodes {
-            if let Some(flag) = &mut node.show_if
-                && let Some(source) = &flag.source
-                && let Some(result) = evaluator.flag(source, &scope)
-            {
-                flag.value = result;
-            }
-        }
-        self.stale = true;
     }
 
     /// The value a number widget's variable holds, as a float.
