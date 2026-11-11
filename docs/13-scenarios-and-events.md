@@ -108,6 +108,13 @@ moment that perhaps only the character remembers.
 A scenario's state (objectives, plot, director, cases) is part of the
 simulation and is saved with it.
 
+Until this type is built, a game begins from a `start` definition
+(12 §3.4): one realm, one place in its base grid, and a character drawn
+with a glyph. The application lists starts as `app.scenarios`, and the
+`new_game` service takes the id of one as its `scenario`. A start is a
+scenario with one world, one `at` and a ready-made character, and the
+type is deleted when this one lands.
+
 ## 4. Starting
 
 ### 4.1 Worlds

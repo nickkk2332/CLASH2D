@@ -111,9 +111,11 @@ display choices. The default profile is the one named `default` in
 
 A profile is a file `<name>.json`. Profiles live in `profiles/` beside the
 mods directory, or in the `profiles/` directory of a mod. The game starts a
-profile: named on the command line, by file or by name, or chosen on the
-launcher screen of the default profile. `boot_screen` names the screen
-definition (12) shown first.
+profile: named on the command line, by file or by name (12 §3.1), or
+chosen on the launcher screen of the default profile (not yet: the
+application cannot switch profiles while it runs). `boot_screen` names
+the screen definition (12) shown first, and is required of a profile
+the application starts.
 
 A profile is the whole list of what a game is made of. A mod that one of
 its mods requires must be listed too: it is never added silently, and
@@ -147,7 +149,9 @@ The bundled mods keep their definition files under `data/` like any
 other: the world content of `core` is in `mods/core/data/world/`, and it
 includes two small realms, `testland` and `training_room`, that the
 engine's tests and tools stand worlds in. The repository's default
-profile, `profiles/default.json`, lists `core` and `ui`.
+profile, `profiles/default.json`, lists `core` and `ui` and boots into
+`ui:title`; `profiles/dev.json` lists `tools` as well. So far `tools`
+holds the omniscient view of 12 §3.2.
 
 None is required by the engine. Placeholders for missing content
 (section 12.3) are synthesised by the engine in the reserved namespace
