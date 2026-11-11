@@ -71,8 +71,8 @@ Each of these keeps its typed stub and a note where the beta stops.
 | B0 | Foundation: F1, F2, F3 | done |
 | B1 | Data v0 and diagnostics (F4, P1); expressions (X1 to X3); world storage (W1 to W5); frames, themes, terminal frontend (U1, U2); binary codec; noise | done |
 | B2 | Edits, occupancy, queries (W6, W7, W18); data merging, profiles, typed loading (P2 to P4); expression fields (X4); toolkit layout and widgets (U6a); loader integration; console and test scripts (TL1, TL6 first form) | done |
-| B3 | Kernel (K1 to K4, T1); tracts, tickets, persistence (W8 to W10); damage and collapse (W12, W13); bodies and releases (W14, W15); fields (W16); view model and world drawing (U4); map format and placing (WG1, WG2); ground and tracts (WG3, WG4); world viewer (W11); settings (P6) | in progress |
-| B4 | Rules runtime (K5 to K9); actions and control (T1 to T4); components, attributes, traits (E1 to E3); movement, view model, application: the first walk (E10, U4, U11); toolkit binding and input (U6b, U7) | todo |
+| B3 | Kernel (K1 to K3, T1); tracts and tickets (W8, W9); damage and collapse (W12, W13); view model and world drawing (U4); map format (WG1); action definitions (T2); component store (E1); light (S1) | done |
+| B4 | Kernel wiring and subjects (K4); rule runtime (K5 to K9); persistence (W10); bodies and releases (W14, W15); fields (W16); placing maps, ground, tracts (WG2 to WG4); attributes and traits (E2, E3); actions and control (T3, T4); movement, application: the first walk (E10, U11); toolkit binding and input (U6b, U7, U8); world viewer (W11); settings (P6) | in progress |
 | B5 | Bodies, hits, minds, items, templates (E4 to E9); perception (S1 to S5); windows and joint actions (T5, T6); playback and bundled screens (U5, U8, U9); regions, settlements, sites (WG6 to WG9) | todo |
 | B6 | Combat (C1 to C11); AI (I1 to I7); interactions, devices, resources, recipes (G1 to G3, G6); personas, relations, speech (S6 to S8) | todo |
 | B7 | Abilities (A1 to A9); conduits, signals, construction, assemblies (G4, G5, G8, G9); scenarios, objectives, saving (SC1 to SC3, SC7); console and test scripts (TL1, TL6); the `core` mod | todo |
