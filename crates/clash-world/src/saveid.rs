@@ -37,6 +37,10 @@
 //! `RegionKindId` and `PathKindId`. A named state of an element is its
 //! position among the definition's states, and is written as that
 //! number.
+//!
+//! A set of planes is a mask with a bit for each plane's id, and each
+//! bit set is turned as an id is. The mask of every plane is left as it
+//! is: it names none of them.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -44,13 +48,17 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::area::AreaTable;
+use crate::body::{BodyFlight, BodyOwner, PendingImpact};
 use crate::collapse::FallingMass;
 use crate::cosmos::Realm;
 use crate::defs::{
-    AreaKindId, DefKind, ElementState, Layer, MaterialId, NONE_ID, RealmDefId, WorldDefs,
+    AreaKindId, DamageTypeId, DefKind, ElementState, Layer, MaterialId, NONE_ID, PlaneId,
+    RealmDefId, WorldDefs,
 };
 use crate::grid::ColumnImage;
+use crate::occupancy::PlaneMask;
 use crate::process::{WorldActivity, WorldProcess};
+use crate::release::Release;
 use crate::store::StoreError;
 use crate::topology::Topology;
 use crate::tract::{PendingEdit, RegionRecord};
@@ -311,6 +319,26 @@ pub(crate) fn map_state(map: &mut dyn IdMap, layer: Layer, state: ElementState) 
     }
 }
 
+/// A set of planes with the id of each plane in it turned. The set of
+/// every plane names none in particular, and stays as it is.
+pub(crate) fn map_planes(map: &mut dyn IdMap, planes: PlaneMask) -> PlaneMask {
+    if planes == PlaneMask::ALL {
+        return planes;
+    }
+    let mut turned = PlaneMask::NONE;
+    for bit in 0..PlaneMask::BITS {
+        if planes.bits() & (1 << bit) == 0 {
+            continue;
+        }
+        // A mask has room for so many planes and no more.
+        match u8::try_from(map.map(DefKind::Plane, bit)) {
+            Ok(to) if u32::from(to) < PlaneMask::BITS => turned = turned.with(PlaneId::new(to)),
+            _ => map.fail(),
+        }
+    }
+    turned
+}
+
 /// Dense ids into save ids, for writing. Adds to the tables.
 pub(crate) struct ToSave<'a> {
     defs: &'a WorldDefs,
@@ -438,10 +466,16 @@ impl MapIds for RegionRecord {
                 continue;
             };
             for edit in &mut extra.pending {
-                if let PendingEdit::Cells(cells) = edit {
-                    for change in cells {
-                        change.state = map_state(map, change.layer, change.state);
+                match edit {
+                    PendingEdit::Cells(cells) => {
+                        for change in cells {
+                            change.state = map_state(map, change.layer, change.state);
+                        }
                     }
+                    PendingEdit::Impact(impact) => impact.map_ids(map),
+                    // A stamp is a time and a number; a spawn request
+                    // and a map name what the world gives no meaning.
+                    PendingEdit::Stamp(_) | PendingEdit::Spawn(_) | PendingEdit::Map(_) => {}
                 }
             }
         }
@@ -473,6 +507,43 @@ impl MapIds for FallingMass {
     }
 }
 
+impl MapIds for BodyOwner {
+    // No wildcard arm: a new kind of body must say which definitions it
+    // names, or name none.
+    fn map_ids(&mut self, map: &mut dyn IdMap) {
+        match self {
+            BodyOwner::Entity(_) => {}
+            BodyOwner::Debris(debris) => {
+                debris.material =
+                    MaterialId::new(map16(map, DefKind::Material, debris.material.raw()));
+            }
+            BodyOwner::Projectile(projectile) => {
+                projectile.kind =
+                    DamageTypeId::new(map16(map, DefKind::DamageType, projectile.kind.raw()));
+            }
+        }
+    }
+}
+
+impl MapIds for BodyFlight {
+    fn map_ids(&mut self, map: &mut dyn IdMap) {
+        self.body.owner.map_ids(map);
+        self.body.plane = map_planes(map, self.body.plane);
+    }
+}
+
+impl MapIds for PendingImpact {
+    fn map_ids(&mut self, map: &mut dyn IdMap) {
+        self.owner.map_ids(map);
+    }
+}
+
+impl MapIds for Release {
+    fn map_ids(&mut self, map: &mut dyn IdMap) {
+        self.spec.kind = DamageTypeId::new(map16(map, DefKind::DamageType, self.spec.kind.raw()));
+    }
+}
+
 impl MapIds for WorldProcess {
     // No wildcard arm: a new kind of process must say which definitions
     // it names, or name none.
@@ -482,6 +553,8 @@ impl MapIds for WorldProcess {
             WorldProcess::Fall(mass) => mass.map_ids(map),
             // A field step names a clock and an interval, no definition.
             WorldProcess::FieldStep(_) => {}
+            WorldProcess::Body(flight) => flight.map_ids(map),
+            WorldProcess::Release(release) => release.map_ids(map),
         }
     }
 }
@@ -572,6 +645,41 @@ mod tests {
         let wild = ElementState { def: 900, ..state };
         map_state(&mut to_dense, Layer::Block, wild);
         assert!(to_dense.finish().is_err());
+    }
+
+    #[test]
+    fn a_set_of_planes_is_turned_plane_by_plane() {
+        let mut built =
+            WorldDefs::build(RawWorldDefs::default()).unwrap_or_else(|_| unreachable!());
+        // Two planes besides the built-in one.
+        for name in ["x:astral", "x:mirror"] {
+            assert!(built.add_placeholder(DefKind::Plane, name, None).is_some());
+        }
+        let mut ids = SaveIds::new(&built);
+        // The save names the last plane first: it takes save id 0.
+        let far = PlaneMask::of(PlaneId::new(2));
+        let both = PlaneMask::DEFAULT.with(PlaneId::new(2));
+        let mut to_save = ToSave::new(&built, &mut ids);
+        let saved_far = map_planes(&mut to_save, far);
+        let saved_both = map_planes(&mut to_save, both);
+        let saved_all = map_planes(&mut to_save, PlaneMask::ALL);
+        assert!(to_save.finish().is_ok());
+        assert_eq!(saved_far, PlaneMask::of(PlaneId::new(0)));
+        assert_eq!(saved_both, PlaneMask::from_bits(0b11));
+        assert_eq!(saved_all, PlaneMask::ALL);
+        assert_eq!(
+            ids.names(DefKind::Plane),
+            ["x:mirror", crate::defs::DEFAULT_PLANE_ID]
+        );
+        let mut to_dense = ToDense::new(&built, &ids);
+        assert_eq!(map_planes(&mut to_dense, saved_far), far);
+        assert_eq!(map_planes(&mut to_dense, saved_both), both);
+        assert_eq!(map_planes(&mut to_dense, PlaneMask::ALL), PlaneMask::ALL);
+        assert!(to_dense.finish().is_ok());
+        // A plane that no definition names cannot be written.
+        let mut to_save = ToSave::new(&built, &mut ids);
+        map_planes(&mut to_save, PlaneMask::of(PlaneId::new(9)));
+        assert!(to_save.finish().is_err());
     }
 
     #[test]

@@ -33,6 +33,8 @@
 //! | Stability checks waiting | [`Cosmos::stability_requests`]; ask for one with [`WorldCtx::check_stability`] |
 //! | The world's scheduled activity | [`WorldCtx::handle_wake`], for every wake-up of the world's domain; [`WorldProcess`], [`WorldActivity`] |
 //! | Collapses in progress and masses in flight | [`Cosmos::collapses`], [`Cosmos::falling_masses`]; [`Collapse`], [`FallingMass`] |
+//! | Explosions, shockwaves, blasts and beams | [`WorldCtx::release`] with an [`EnergyRelease`]; [`Cosmos::releases`] |
+//! | Throwing things, and what is in flight | [`WorldCtx::launch`] with a [`Body`]; [`WorldCtx::impulse`], [`WorldCtx::arrest`], [`WorldCtx::steer`]; [`Cosmos::bodies`] |
 //! | What is known of space that is not loaded | [`RegionRecord`], [`TractRecord`]; [`Cosmos::tract_record`], [`Cosmos::add_pending_edit`] |
 //! | Generating: the interfaces, and choosing a generator | [`RegionSurveyor`], [`TractRealizer`], [`GenCtx`]; [`GeneratorRegistry`], [`Generators`] |
 //! | Loading and unloading tracts | [`WorldCtx::load_tracts`], [`WorldCtx::unload_tract`], with a [`TractIo`] |
@@ -56,6 +58,7 @@
 //!   definitions say.
 
 mod area;
+mod body;
 mod cause;
 mod chunk;
 mod collapse;
@@ -78,6 +81,7 @@ mod pos;
 mod process;
 pub mod query;
 mod redb_store;
+mod release;
 pub mod save;
 pub mod saveid;
 mod site;
@@ -93,6 +97,13 @@ mod vars;
 pub use area::{
     AREA_MAX_CELLS, AREA_MAX_TRACTS, AmbientOverride, Area, AreaAnchor, AreaDrift, AreaId,
     AreaShape, AreaSpec, AreaTable, Drift, Enclosure, FIELD_BLOCK_COVERAGE, GravityOverride,
+};
+pub use body::{
+    BODY_ASSUMED_DENSITY, BODY_DEFAULT_DEPTH_M, BODY_DEFAULT_DRAG, BODY_DEFAULT_FRICTION,
+    BODY_MAX_STEP, BODY_MAX_TICKET_TRACTS, BODY_MIN_STEP, Body, BodyFlight, BodyId, BodyOwner,
+    BodyState, DEBRIS_DRAG, DEBRIS_ENERGY_SHARE, DEBRIS_MASS_SHARE, DEBRIS_MAX_BODIES,
+    DEBRIS_PER_ELEMENT, DEBRIS_RESTITUTION, DEBRIS_SCATTER, Debris, Drive, PendingImpact,
+    Projectile, REST_SPEED,
 };
 pub use cause::{Cause, CauseKind};
 pub use chunk::{
@@ -152,6 +163,12 @@ pub use query::{
     StepKind,
 };
 pub use redb_store::RedbStore;
+pub use release::{
+    EnergyRelease, RELEASE_DEFAULT_ALT_MM, RELEASE_FILL_MAX_CELLS, RELEASE_MAX_BINS,
+    RELEASE_MAX_CELLS, RELEASE_MIN_RADIUS_M, RELEASE_PUSH_DEPTH_M, RELEASE_THROW_ALT_M,
+    RELEASE_THROW_SPEED, RELEASE_VACUUM_SPEED, Release, ReleaseId, ReleaseShape, ReleaseState,
+    ReleaseTally, WORLD_MIN_INTENSITY,
+};
 pub use save::{SaveError, SaveReport, SaveWarning, WarnAt};
 pub use saveid::{MissingDef, SaveIds, SaveIdsImage};
 pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};

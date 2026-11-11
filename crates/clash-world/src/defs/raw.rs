@@ -194,6 +194,11 @@ pub struct MaterialDef {
     /// recovers each second, unaided. Read by the body model.
     #[serde(default)]
     pub heal: Option<clash_data::Frequency>,
+    /// How strongly a surface of this material holds back what slides
+    /// over it: the coefficient of sliding friction (02 §15.3). Absent,
+    /// a body slides over it by the engine's default.
+    #[serde(default)]
+    pub friction: Option<Real>,
 }
 
 /// An `atmosphere` definition (02 §4.1).
