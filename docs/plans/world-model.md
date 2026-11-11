@@ -296,23 +296,27 @@ Done when
 - Derived values for a concrete wall match 02 §12.2 (0.6 m³, 0.6 MJ).
 - Schemas are generated for every type.
 
-Status `beta` (decision D-283). Built: the definition types as plain
-`serde` structs that refuse unknown keys; `WorldDefs::build`, which sorts,
-numbers, resolves and derives, and reports every mistake; the state
-reference parser; the content, as definition files under `mods/core/world/`;
-`contact` on elements (review addition). Stubbed, because `clash-data` was
-being written at the same time:
+Status `beta` (decisions D-283, D-320, D-321). Built: the definition
+types as plain `serde` structs; `WorldDefs::build`, which sorts, numbers,
+resolves and derives, and reports every mistake; the state reference
+parser; the content, as definition files under `mods/core/data/world/`;
+`contact` on elements (review addition). The types are registered with
+the loader by `clash_world::register_defs`, and
+`WorldDefs::from_defs(&Defs)` builds the tables from loaded definitions
+with the loader's dense ids. A mistake found then is a diagnostic at the
+value in the file that wrote it. `clash-tools lint mods` passes, and runs
+that step. Stubbed:
 
-- The definitions are not registered with the loader. Its typed loading
-  feeds `WorldDefs::build` when package P4 lands, and the files move under
-  `mods/core/data/` with it. Until then a test-only reader loads them.
-- `clash-tools lint mods` and schema generation are the loader's, and are
-  not checked here.
-- Quantities with units are read by a private helper in `clash-world`,
-  to be replaced by the loader's quantity types. References are a newtype
-  around the id; a bare name is looked up in the definition's own
-  namespace, then in every namespace in sorted order, which stands in for
-  a mod's import list.
+- Schema generation is the loader's (P5), and is not checked here.
+- Quantities with units are still read by a private helper in
+  `clash-world`, which also reads densities and energies per volume. The
+  loader's quantity types replace it for the dimensions they have.
+- References are still a newtype around the id, resolved when the tables
+  are built and not by the loader: a bare name is looked up in the
+  definition's own namespace, then in every namespace in sorted order,
+  which stands in for the import list of the mod that wrote it. Making
+  them `clash_data::Ref`s moves the check into the loader.
+- No placeholder is supplied for lenient loading.
 - Not read yet, each left to the package that gives it meaning: `changes`,
   rubble by damage type or as a field (W25); `fluid` (vehicles V1);
   `friction` (W14); `load`, `when_supplied`, `conveys` (devices plan).
@@ -374,8 +378,9 @@ stratum only; areas are consulted from W7. Until tracts load through
 tickets (W8, W9), `clash_world::test_support` puts whole columns into a
 cosmos for tests. `Cause` and `Decal` were defined here, ahead of W6,
 because the decal layer stores them. Stubbed: the `realm` definition type is in
-the same state as those of W3. `WorldDefs::build` reads it, and it is
-registered with the loader when they are.
+the same state as those of W3: registered with the loader, with its
+references resolved when the tables are built. `mods/core` holds two small
+realms, `testland` and `training_room`, for tests and tools.
 
 ### W6 — Edits, causes, events
 

@@ -142,6 +142,12 @@ same definition are applied, and which mod's `override` wins.
 | `tools` | The in-game development tools (14): console, inspector, traces, profiler, reference browser, map editor. A profile that lists it is a **development profile**. |
 | Reference mods | Small examples in different genres. |
 
+The bundled mods keep their definition files under `data/` like any
+other: the world content of `core` is in `mods/core/data/world/`, and it
+includes two small realms, `testland` and `training_room`, that the
+engine's tests and tools stand worlds in. The repository's default
+profile, `profiles/default.json`, lists `core` and `ui`.
+
 None is required by the engine. Placeholders for missing content
 (section 12.3) are synthesised by the engine in the reserved namespace
 `engine`, so that rule R2 holds even with no mods loaded.
@@ -382,6 +388,41 @@ A duration in a definition is a `Time`, or a `Dur` field read through
 microseconds, which is right for saves and wrong for data. A whole number
 may be written with a zero fraction or an exponent (`2.0e4`).
 
+**Writing a definition type.** The rules a definition struct follows,
+in one place:
+
+- Derive `serde::Deserialize` on a plain struct and implement
+  `clash_data::Def` for it: the dense id type, made with
+  `clash_core::define_id!`, the JSON name, and a line of documentation.
+  Register it in the crate's `register_defs`.
+- No `flatten`, no `untagged`, no internal `tag`. A field of more than
+  one shape is read with `by_kind`, or by a visitor of its own that
+  takes each kind of value as the loader hands it over.
+- `deny_unknown_fields` is not needed and does no harm: the loader
+  reports an unknown key itself, with a suggestion, and goes on.
+- A quantity is one of the quantity types, never a bare `Real` where the
+  JSON may carry a unit, and a duration is a `Time` or goes through
+  `clash_data::dur`, never a bare `Dur`. A bare `Real` is for a number
+  with no unit: a fraction, a factor, a count.
+- A reference to another definition is a `Ref<T>`, or an `Inline<T>`
+  where it may be written in place. A reference in a syntax of the
+  type's own is a `Located<String>` resolved in `finish`.
+- The source of an expression, and any other string that is checked or
+  compiled after loading, is a `Located<String>`, so that the later
+  error can point into the file.
+- A field with a default that a mod might `scale` or `add` to is listed
+  in `Def::DEFAULTS` (section 6.1).
+- What the engine itself supplies, such as the `none` of an element
+  type, comes from `Def::builtins`, so that it takes the first dense id.
+- A check that needs only the definition goes in `validate`. A check
+  that needs tables built from many definitions goes in the crate's
+  build step (section 8.1).
+
+The world's and the interface's types do not yet follow all of these:
+their references are text resolved when their tables are built (02 §5.4,
+12 §4.3), and the world reads its own quantities, among them densities
+and energies per volume, which the unit list below does not have.
+
 The unit list is fixed and documented: `us ms s min h d`; `mm cm m km`;
 `ml L`; `g kg t`; `J kJ MJ GJ`; `W kW MW`; `N kN`; `Pa kPa MPa GPa`;
 `K C`; `m/s km/h`. A field that holds a rate takes any unit of the right
@@ -448,9 +489,20 @@ in play.
 | Compile | Expression syntax and type errors; unknown verbs, events, properties, variables |
 | Semantic | Each type's own `validate`: ranges, mutually exclusive fields, limits such as 65,536 states |
 | Cross | Whole-set checks: unreachable abstract definitions, references to obsolete definitions, shadowed imports, undeclared variables, disputed fields (section 6.3) |
+| Build | What a crate finds when it builds its own tables from the loaded definitions: the world's references and ranges, a theme's colours, a screen's styles, figures and art |
 
 A stage runs for every definition that survived the previous one. Loading
 never stops at the first error.
+
+The build stage is not the loader's. It runs over a finished `Defs`,
+so only once every earlier stage has passed without an error. Each crate
+that builds something from definitions offers one function that does it
+and returns the result or the diagnostics (`WorldDefs::from_defs`,
+`UiDefs::from_defs`), and one that only checks (`check_defs`). The game
+calls the first before it starts; the linter calls the second. A
+diagnostic of this stage is placed like any other, at the value in the
+file that last wrote it, found through the finished tree the loader keeps
+for every definition.
 
 ### 8.2 Form
 
@@ -555,7 +607,10 @@ a `validate`, a placeholder (section 8.3), the engine's own definitions
 offers one function that registers its types in a `DefTypes`, and may add
 whole-set checks to it. The application and the tools call each crate's
 function in turn and load with the result, so both read mods with the same
-types. A registry also says whether a definition is a placeholder or
+types. A crate that keeps tables of its own, as the world does, builds
+them from the `Defs` with the loader's dense ids (section 8.1, the build
+stage): an id means the same definition in the registry and in the
+crate's table. A registry also says whether a definition is a placeholder or
 obsolete, and `Defs` holds the tags, the mods in load order, the profile,
 the files it was read from and every finished tree.
 
@@ -667,7 +722,7 @@ All in `clash-tools`.
 
 | Command | Does |
 |---------|------|
-| `lint <profile or dir>` | Runs the pipeline and prints every diagnostic. Non-zero exit on errors. `--json` for machines. The directory is a directory of mods, all of which are loaded, or one mod's directory, which is loaded with what it requires. A profile is a file or a name. `--mods <dir>` names where mods are searched for, and `--lenient` is section 8.3. |
+| `lint <profile or dir>` | Runs the pipeline, then each crate's build check (section 8.1), and prints every diagnostic. Non-zero exit on errors. `--json` for machines. The directory is a directory of mods, all of which are loaded, or one mod's directory, which is loaded with what it requires. A profile is a file or a name. `--mods <dir>` names where mods are searched for, and `--lenient` is section 8.3. |
 | `schema --out <dir>` | Writes a JSON Schema per definition type and one for data files as a whole. `--profile <p> --with-ids` also lists every existing id per type, so editors can complete references. |
 | `docs --out <dir>` | Generates the modding reference: every definition type and field, unit, diagnostic code, event, effect, property and function, with their documentation. |
 | `init-mod <id>` | Creates a mod skeleton with editor settings that attach the schemas. |

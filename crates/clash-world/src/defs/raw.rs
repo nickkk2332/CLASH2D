@@ -13,7 +13,8 @@ use std::collections::BTreeMap;
 
 use clash_core::Real;
 use serde::Deserialize;
-use serde::de::{Deserializer, MapAccess, Visitor};
+use serde::de::value::MapAccessDeserializer;
+use serde::de::{Deserializer, IntoDeserializer, MapAccess, Visitor};
 
 use super::flags::EngineFlag;
 use super::quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temperature};
@@ -489,13 +490,39 @@ pub struct BoundaryLinkSpec {
 }
 
 /// One face of a realm: `"barrier"`, `"void"`, or a boundary link.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EdgeSpec {
     /// `"barrier"` or `"void"`.
     Kind(EdgeKind),
     /// A boundary link.
     Link(BoundaryLinkSpec),
+}
+
+// Read by the kind of value written, not as an untagged enum: `serde`
+// would buffer the value, and the loader would lose its positions
+// (04 §7.1).
+impl<'de> Deserialize<'de> for EdgeSpec {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<EdgeSpec, D::Error> {
+        struct EdgeVisitor;
+
+        impl<'de> Visitor<'de> for EdgeVisitor {
+            type Value = EdgeSpec;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("`\"barrier\"`, `\"void\"` or a boundary link")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, kind: &str) -> Result<EdgeSpec, E> {
+                EdgeKind::deserialize(kind.into_deserializer()).map(EdgeSpec::Kind)
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<EdgeSpec, A::Error> {
+                BoundaryLinkSpec::deserialize(MapAccessDeserializer::new(map)).map(EdgeSpec::Link)
+            }
+        }
+
+        deserializer.deserialize_any(EdgeVisitor)
+    }
 }
 
 /// The faces of a realm. A face not given is a barrier.
@@ -540,13 +567,38 @@ pub struct DerivedGeneratorSpec {
 
 /// Which world generator plans a realm. Stored as written; generation is
 /// document 10's.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GeneratorSpec {
     /// A generator by id.
     Named(DefRef),
     /// A generator that takes another realm as input.
     Derived(DerivedGeneratorSpec),
+}
+
+// Read by the kind of value written, as `EdgeSpec` is.
+impl<'de> Deserialize<'de> for GeneratorSpec {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<GeneratorSpec, D::Error> {
+        struct GeneratorVisitor;
+
+        impl<'de> Visitor<'de> for GeneratorVisitor {
+            type Value = GeneratorSpec;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("the id of a generator, or a generator that derives from a realm")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, id: &str) -> Result<GeneratorSpec, E> {
+                Ok(GeneratorSpec::Named(DefRef(id.to_owned())))
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<GeneratorSpec, A::Error> {
+                DerivedGeneratorSpec::deserialize(MapAccessDeserializer::new(map))
+                    .map(GeneratorSpec::Derived)
+            }
+        }
+
+        deserializer.deserialize_any(GeneratorVisitor)
+    }
 }
 
 /// A `realm` definition (02 §4.1).

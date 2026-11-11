@@ -8,11 +8,14 @@ publish.workspace = true
 
 [dependencies]
 clash-data.workspace = true
+clash-world.workspace = true
 clash-sim.workspace = true
 clash-save.workspace = true
+clash-scene.workspace = true
 
 [dev-dependencies]
 clash-core.workspace = true
+clash-time.workspace = true
 serde.workspace = true
 
 [lints]

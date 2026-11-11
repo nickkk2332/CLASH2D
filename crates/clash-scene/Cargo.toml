@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 clash-core.workspace = true
+clash-data.workspace = true
 clash-sim.workspace = true
 bitflags.workspace = true
 serde.workspace = true

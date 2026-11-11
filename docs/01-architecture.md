@@ -74,7 +74,7 @@ crates/
   clash-front-window → scene             window + GPU glyph renderer
   clash-front-term   → scene             terminal renderer
   clash-app       → front-*, save        the game binary
-  clash-tools     → sim, save            mod linter, schema dump, headless runner, world viewer, benches
+  clash-tools     → sim, save, scene     mod linter, schema dump, headless runner, world viewer, benches
 mods/
   core/                                  minimal definitions the tests and tools need
 docs/
@@ -84,6 +84,9 @@ An arrow carries what its target depends on: a crate may depend directly on
 any crate its arrows already reach, as `clash-gen` does on `clash-core` and
 `clash-tools`, through `clash-sim`, on `clash-data`. What stays forbidden is
 a dependency upward or sideways, on a crate the arrows do not lead to.
+
+`clash-tools` reaches `clash-scene` because the linter must load mods with
+every definition type the game has, and the interface's are the scene's.
 
 Definition *types* live in the crate that gives them meaning (`BlockDef` in
 `clash-world`, `ActionDef` in `clash-sim`). `clash-data` provides the loading

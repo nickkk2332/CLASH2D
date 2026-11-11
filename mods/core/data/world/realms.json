@@ -1,0 +1,27 @@
+[
+  { "//": "A small realm for the engine's tests and tools: two regions by one, wrapping east to west, with thin air high up and vacuum above that.",
+    "type": "realm", "id": "testland",
+    "size_regions": [2, 1],
+    "wrap": ["x"],
+    "z_range": [-16, 200],
+    "generator": "flat",
+    "fill": { "below": "solid@granite", "above": null },
+    "strata": [
+      { "from_z": -16, "gravity": 9.81, "atmosphere": "air", "sky": "day_night" },
+      { "from_z": 100, "gravity": 9.81, "atmosphere": "thin_air", "temp_offset": -40 },
+      { "from_z": 150, "gravity": 0.0, "atmosphere": null, "temp": "-120 C" }
+    ],
+    "time_rate": 1.0,
+    "edges": { "top": "void", "bottom": "barrier", "north": "barrier", "south": "void" } },
+
+  { "//": "A closed room where a year passes for each day outside, under ten times the gravity.",
+    "type": "realm", "id": "training_room",
+    "size_regions": [1, 1],
+    "wrap": [],
+    "z_range": [0, 64],
+    "generator": "white_void",
+    "strata": [ { "from_z": 0, "gravity": 98.1, "atmosphere": "air" } ],
+    "time_rate": 365.0,
+    "edges": { "top": "barrier", "bottom": "barrier", "north": "barrier",
+               "south": "barrier", "east": "barrier", "west": "barrier" } }
+]

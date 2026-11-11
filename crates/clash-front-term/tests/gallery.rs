@@ -6,17 +6,18 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use clash_data::{DefTypes, Diagnostics, Loader};
 use clash_front_term::Renderer;
-use clash_scene::defs::UiDefs;
 use clash_scene::{
-    ColorDepth, Frame, Frontend, InputEvent, NoHost, NullFrontend, RichText, Scene, assert_golden,
+    ColorDepth, Frame, Frontend, InputEvent, NoHost, NullFrontend, RichText, Scene, UiDefs,
+    assert_golden,
 };
 
 /// The fixed time step of scripted runs, in seconds.
 const STEP: f64 = 1.0 / 60.0;
 
-fn mod_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mods/ui")
+fn mods_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mods")
 }
 
 fn golden(name: &str) -> PathBuf {
@@ -26,16 +27,21 @@ fn golden(name: &str) -> PathBuf {
 }
 
 fn gallery() -> Scene<NoHost> {
-    let describe = |errors: Vec<clash_scene::defs::DefError>| {
-        let lines: Vec<String> = errors.iter().map(ToString::to_string).collect();
-        lines.join("\n")
-    };
-    let defs = UiDefs::load_mod(&mod_dir()).unwrap_or_else(|e| panic!("{}", describe(e)));
+    let describe = |diagnostics: Diagnostics| diagnostics.render();
+    let mut types = DefTypes::new();
+    clash_world::register_defs(&mut types);
+    clash_scene::register_defs(&mut types);
+    let loaded = Loader::new(&types)
+        .search_path(mods_dir())
+        .load_mod_with_requirements("ui")
+        .into_result()
+        .unwrap_or_else(|e| panic!("{}", describe(e)));
+    let defs = UiDefs::from_defs(&loaded).unwrap_or_else(|e| panic!("{}", describe(e)));
     let mut scene = defs
-        .scene("default", "default")
+        .scene("ui:default", "ui:default")
         .unwrap_or_else(|e| panic!("{}", describe(e)));
     let screen = defs
-        .screen("gallery", scene.theme())
+        .screen("ui:gallery", scene.theme())
         .unwrap_or_else(|e| panic!("{}", describe(e)));
     scene.open(screen);
     for n in 1..=12 {
@@ -285,7 +291,7 @@ fn the_example_exits_cleanly_without_a_terminal() {
         return;
     }
     let output = Command::new(&example)
-        .arg(mod_dir())
+        .arg(mods_dir())
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
@@ -303,14 +309,14 @@ fn the_example_exits_cleanly_without_a_terminal() {
     );
 
     let missing = Command::new(&example)
-        .arg(mod_dir().join("no-such-mod"))
+        .arg(mods_dir().join("no-such-directory"))
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
     assert!(!missing.status.success());
     let stderr = String::from_utf8_lossy(&missing.stderr);
     assert!(
-        stderr.contains("gallery: ") && stderr.contains("theme `default`: not defined"),
+        stderr.contains("gallery: ") && stderr.contains("mod \"ui\" was not found"),
         "{stderr}"
     );
 }
