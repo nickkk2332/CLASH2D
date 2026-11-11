@@ -57,6 +57,7 @@ use crate::defs::{
     FixtureId, FloorDef, FloorId, Length, MaterialDef, MaterialId, NONE_ID, OrderedMap, PlaneDef,
     PlaneId, RawWorldDefs, RealmDef, RealmDefId, Table, WorldDefs,
 };
+use crate::light::{SkyDef, SkyId};
 
 /// The name of the built-in "nothing here" within the engine's namespace.
 const NONE_NAME: &str = "none";
@@ -126,6 +127,7 @@ impl Def for FloorDef {
                 interactions: Vec::new(),
                 device: None,
                 glyph: None,
+                light: None,
             },
         )]
     }
@@ -153,6 +155,7 @@ impl Def for BlockDef {
                 interactions: Vec::new(),
                 device: None,
                 glyph: None,
+                light: None,
             },
         )]
     }
@@ -181,6 +184,7 @@ impl Def for FixtureDef {
                 interactions: Vec::new(),
                 device: None,
                 glyph: None,
+                light: None,
             },
         )]
     }
@@ -204,6 +208,12 @@ impl Def for AreaKindDef {
         "What every area of a kind starts with: tags, variables, clock, priority (02 §8.3).";
 }
 
+impl Def for SkyDef {
+    type Id = SkyId;
+    const TYPE: &'static str = "sky";
+    const DOC: &'static str = "The light a stratum's sky gives by time of day, how it spreads under cover, and a backdrop (15 §3.3).";
+}
+
 impl Def for RealmDef {
     type Id = RealmDefId;
     const TYPE: &'static str = "realm";
@@ -213,7 +223,8 @@ impl Def for RealmDef {
 }
 
 /// Registers the world's definition types with the loader: `damage_type`,
-/// `material`, `atmosphere`, `floor`, `block`, `fixture` and `realm`.
+/// `material`, `atmosphere`, `floor`, `block`, `fixture`, `realm`, `plane`,
+/// `area_kind` and `sky`.
 ///
 /// The application and the tools call this, with every other crate's
 /// function of the same name, before they load (04 §9).
@@ -227,6 +238,7 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<RealmDef>();
     types.register::<PlaneDef>();
     types.register::<AreaKindDef>();
+    types.register::<SkyDef>();
 }
 
 /// Whether a qualified id is one of the engine's own.
@@ -264,6 +276,7 @@ impl RawWorldDefs {
             realms: written(defs),
             planes: written(defs),
             area_kinds: written(defs),
+            skies: written(defs),
         }
     }
 }
@@ -393,7 +406,8 @@ impl WorldDefs {
             && ids_agree::<FixtureDef, _>(defs, world.fixtures())
             && ids_agree::<RealmDef, _>(defs, world.realms())
             && ids_agree::<PlaneDef, _>(defs, world.planes())
-            && ids_agree::<AreaKindDef, _>(defs, world.area_kinds());
+            && ids_agree::<AreaKindDef, _>(defs, world.area_kinds())
+            && ids_agree::<SkyDef, _>(defs, world.skies());
         if !agree {
             // Not a mistake in a mod: the two numberings are meant to be
             // the same by construction. Refuse to go on with ids that

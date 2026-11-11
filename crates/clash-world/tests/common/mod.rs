@@ -108,6 +108,7 @@ pub fn try_add_json(raw: &mut RawWorldDefs, namespace: &str, text: &str) -> Resu
     raw.realms.extend(more.realms);
     raw.planes.extend(more.planes);
     raw.area_kinds.extend(more.area_kinds);
+    raw.skies.extend(more.skies);
     Ok(())
 }
 

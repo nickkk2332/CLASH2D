@@ -368,6 +368,9 @@ pub struct Cosmos {
     pub(crate) tickets: TicketTable,
     /// The world's processes and the collapses in progress (02 §14.3).
     pub(crate) activity: WorldActivity,
+    /// The light worked out so far (15 §3.3). Derived: never saved or
+    /// hashed, and empty in a clone.
+    pub(crate) light: crate::light::LightSlot,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -400,6 +403,7 @@ impl Cosmos {
             stability: StabilityQueue::default(),
             tickets: TicketTable::new(),
             activity: WorldActivity::new(),
+            light: crate::light::LightSlot::new(),
         }
     }
 
@@ -634,6 +638,7 @@ impl Cosmos {
         column: Column,
     ) -> Result<Option<Column>, WorldError> {
         self.purge_occupants(grid, tract);
+        self.light_tract_reloaded(grid, tract);
         let slot = self.slot_mut(grid).ok_or(WorldError::UnknownGrid(grid))?;
         Ok(slot.grid.insert_column(tract, column))
     }
@@ -642,6 +647,7 @@ impl Cosmos {
     /// in it is taken out of the occupant index, without events.
     pub(crate) fn remove_column(&mut self, grid: GridId, tract: TractPos) -> Option<Column> {
         self.purge_occupants(grid, tract);
+        self.light_tract_reloaded(grid, tract);
         let slot = self.slot_mut(grid)?;
         let realm = slot.realm;
         let column = slot.grid.remove_column(tract)?;
