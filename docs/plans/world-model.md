@@ -43,7 +43,7 @@ Section references such as "02 §14" point into those documents.
 | W13 | Structural support and collapse | L | W12, W9 | beta |
 | W14 | Bodies | L | W12, W7, W9 | todo |
 | W15 | Energy releases | L | W13, W14 | todo |
-| W16 | Fields | L | W12 | todo |
+| W16 | Fields | L | W12 | beta |
 | W17 | Coarse layer | L | W15, W10 | todo |
 | W18 | Queries | M | W7 | beta |
 | W19 | Portals, boundary links, realm transfer | M | W14, W18 | todo |
@@ -349,7 +349,8 @@ world. Stubbed:
   read 10 ns through a `GridView` and 12 ns through `Cosmos` (target 10 ns),
   a read of all three states 18 ns (target 30 ns). A uniform chunk is 184
   bytes (target 200).
-- `FieldStore` and `OccupantIndex` are empty typed placeholders (W16, W7).
+- `FieldStore` and `OccupantIndex` were empty typed placeholders until
+  W16 and W7 built them.
 - Chunks and columns are not serialised: the tract blob codec is W10's.
 - The write primitives for damage, decals and cell variables exist and are
   tested, and nothing calls them until `WorldEdit` (W6).
@@ -745,6 +746,43 @@ Done when
 - Shuffling the visiting order of cells and chunks leaves the result
   unchanged.
 - Scenario `office_fire`.
+
+Status `beta` (decisions D-500 to D-509). Built as 02 §16 now reads: the
+`field` and `field_reaction` definition types; sparse storage per chunk
+and field with levels, activity and who is responsible, stored with the
+tract; `WorldEdit::add_field`, `set_field` and `conduct`; the stepper as
+a process of the world for each clock and step interval, with every rule
+(`decay`, `diffuse`, `flow`, `spread`, `emit`, `convert`, `damage`,
+`drift`, `expose`), reactions, sleeping and waking, the budget and
+catch-up at load; `FieldAppeared`, `FieldVanished`, `FieldContact`,
+`OccupantDosed`, `FieldBudgetExceeded`, and `OccupantExposed` from
+fields; `field_hides_sight` and `field_lights`; fire, smoke, steam and
+water in `mods/core/data/world/fields.json`. The review additions "Field
+reactions", "Drift on bodies and fields" (the fields half) and "Exposure
+from fields" are built with it. Stubbed:
+
+- No `heat` field in `core`, and `warms` and `changes` on a field are
+  stored only: temperature is V1's and change of state W25's, as is
+  `leave` on a reaction.
+- Sight is not blocked by fields in rays, lines of sight or fields of
+  view: `Cosmos::field_hides_sight` is the hook (02 §22).
+- Drift is what areas set. The region's wind and current come with the
+  weather.
+- `settle` keeps and wakes a liquid; it does not settle it in closed
+  form. Catch-up is tested by itself, and a tract's fields through its
+  blob; a test that unloads and reloads a burning tract through a store
+  belongs with the generators' tests in `clash-gen`.
+- Nothing calls `conduct` yet: releases (W15) and attacks must, for a
+  reaction to damage to happen.
+- The bodies of `office_fire` and `quench` are tests of those names in
+  `crates/clash-world/tests/fields.rs`. The scripts are owed to the
+  script runner (W11).
+- A timing test prints figures (`timing_of_a_building_fire`, ignored):
+  about 0.75 microseconds for each active cell each step, so a fire of
+  23,600 active cells takes about 20 ms a step: well over the budget of
+  02 §25. The time goes in reading six neighbours through the sparse
+  layers and in summing a step's changes; a dense form for chunks that
+  are mostly full is the remedy. The benchmark and the budget are W23's.
 
 ### W17 — Coarse layer
 

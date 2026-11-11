@@ -304,10 +304,16 @@ impl<'a> GridView<'a> {
             .and_then(|vars| vars.get(key)))
     }
 
-    /// The level of a field in a cell, 0 to 255. Fields are built by
-    /// package W16: until then every field reads as zero.
-    pub fn field(&self, cell: CellPos, _field: FieldId) -> Result<u8, WorldError> {
-        self.locate(cell).map(|_| 0)
+    /// The level of a field in a cell, 0 to 255 (02 §16). Zero where
+    /// the cell holds none of it.
+    pub fn field(&self, cell: CellPos, field: FieldId) -> Result<u8, WorldError> {
+        let (column, cell) = self.locate(cell)?;
+        Ok(crate::field::level_in(column, cell, field))
+    }
+
+    /// The definitions the grid's cosmos is made from.
+    pub(crate) fn defs(&self) -> &'a WorldDefs {
+        self.defs
     }
 
     /// The ambient conditions of a cell: its stratum's, with what the
@@ -610,7 +616,7 @@ impl Cosmos {
         self.grid(loc.grid)?.var(loc.cell, key)
     }
 
-    /// The level of a field in a cell. Zero until fields are built.
+    /// The level of a field in a cell, 0 to 255 (02 §16).
     pub fn field(&self, loc: Location, field: FieldId) -> Result<u8, WorldError> {
         self.grid(loc.grid)?.field(loc.cell, field)
     }
@@ -640,7 +646,9 @@ impl Cosmos {
         self.purge_occupants(grid, tract);
         self.light_tract_reloaded(grid, tract);
         let slot = self.slot_mut(grid).ok_or(WorldError::UnknownGrid(grid))?;
-        Ok(slot.grid.insert_column(tract, column))
+        let replaced = slot.grid.insert_column(tract, column);
+        self.fields_column_changed(grid, tract);
+        Ok(replaced)
     }
 
     /// Unloads a tract of a grid and returns its column. Whoever stood
@@ -653,6 +661,7 @@ impl Cosmos {
         let column = slot.grid.remove_column(tract)?;
         // A tract that is gone is no longer one the tickets keep.
         self.tickets.forget(realm, tract);
+        self.fields_column_changed(grid, tract);
         Some(column)
     }
 }

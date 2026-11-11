@@ -411,6 +411,8 @@ decided by the movement rules in the simulation, which know the mover.
 | `bearing` | Pa | The stress it can carry in compression before it is crushed (section 14.5). Absent means it is never crushed. |
 | `rubble` | fixture id | What destroyed elements of this material leave behind. May be given per damage type, and may be a field: ice destroyed by heat leaves water. |
 | `changes` | — | What it becomes by temperature. See below. |
+| `flammable` | — | Shorthand for the tag `flammable`, for a field rule or reaction that asks for a material tag (section 16). |
+| `tags` | — | Free-form tags. A field's `spread` and a field reaction name one to say what they act on. |
 
 **Change of state.** A material may say what it becomes when the
 temperature of its cell (11 §4.6) passes a threshold.
@@ -757,7 +759,9 @@ impl WorldEdit<'_> {
     pub fn set_damage(&mut self, loc: Location, layer: Layer, damage: u8) -> Result<u8, WorldError>;
     pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> Result<DamageOutcome, WorldError>;   // section 12
     pub fn damage_along(&mut self, loc: Location, layer: Layer, p: DamagePacket, dir: Option<[Real; 3]>) -> Result<DamageOutcome, WorldError>;
-    pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16);                       // section 16
+    pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16) -> Result<u8, WorldError>;   // section 16
+    pub fn set_field(&mut self, loc: Location, field: FieldId, level: u8) -> Result<u8, WorldError>;
+    pub fn conduct(&mut self, loc: Location, p: DamagePacket) -> Result<u32, WorldError>;         // a packet arrived in a cell: section 16
     pub fn lay_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;         // 16 §6
     pub fn cut_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;
     pub fn add_decal(&mut self, loc: Location, kind: DecalId, amount: u8) -> Result<(), WorldError>;
@@ -813,7 +817,9 @@ An edit is never refused because someone is standing there (section 23).
 
 Field value changes are too numerous to report per cell. They bump the field
 revision; events are emitted only when a field appears in or vanishes from a
-cell, and when it contacts an occupant.
+cell, and when it contacts an occupant. A structural edit also wakes the
+fields asleep in its cell and in the cells beside, above and below it
+(section 16).
 
 ### 7.3 Causes
 
@@ -873,7 +879,12 @@ whoever owns it drains. Rules name an event in snake case
 | `OccupantEntombed` | `occupant`, `loc` | An edit left an occupant no room and there was nowhere to go |
 | `ElementDestroyed` | `loc`, `layer`, `old`, `new` (states; `new` is the `on_destroy` state or nothing), `how` (`damage` with its type, `crushed` or `fell`), `absorbed`, `passed` (J; zero unless by damage) | A floor, block or fixture was destroyed (section 12.3). It follows the `ElementChanged` events of the change and of the rubble left |
 | `OccupantUnsupported` | `occupant`, `loc` (where it is) | What held an occupant up has gone (section 7.2) |
-| `OccupantExposed` | `occupant`, `loc` (the cell struck), `kind` (damage type), `energy` (J), `intensity` (Pa) | Something struck the cell an occupant is in: so far, a mass that landed there (section 14.3) |
+| `OccupantExposed` | `occupant`, `loc` (the cell struck), `kind` (damage type), `energy` (J), `intensity` (Pa) | Something struck the cell an occupant is in: a mass that landed there (section 14.3), a field's `damage` rule, once a step for the strongest cell of the field the occupant fills, or damage a field passed on (section 16) |
+| `FieldAppeared` | `loc`, `field`, `level` | A field came to be in a cell that held none of it (section 16). Other changes of level are not reported |
+| `FieldVanished` | `loc`, `field` | The last of a field left a cell |
+| `FieldContact` | `occupant`, `loc`, `field`, `level` | A field and an occupant came to share a cell: the field appeared where the occupant is, or the occupant was placed or moved into a cell it did not fill before that holds the field. Once for each field and cell, not at every step |
+| `OccupantDosed` | `occupant`, `loc` (the cell of the field), `field`, `level`, `pool` (as the rule writes it), `amount` (`level × per_level`), `route` (`breath`, `skin` or `any`) | An occupant is in a cell of a field with an `expose` rule: once for each step of the field, for the strongest cell the occupant fills. The world applies no route |
+| `FieldBudgetExceeded` | `loc` (the first cell of the step that found it), `active`, `max` | A step found more active field cells than `field.max_active_cells`, and the step before did not |
 | `CollapseStarted` | `collapse` (id), `loc` (the cell whose change started it) | A stability check found something giving way where no collapse was in progress |
 | `CollapseSettled` | `collapse`, `loc`, `bounds` (the box of cells it touched), `tallies` (by instigator: `elements` destroyed, `mass` brought down in kg, occupants `exposed`) | Nothing of a collapse is in flight and no check is waiting near it |
 | `TractLoaded` | `realm`, `tract`, `loc` (the tract's cell with the lowest coordinates, at storey 0), `first` (never loaded before) | A tract has been loaded, after the changes waiting for it were made (section 9.4) |
@@ -881,7 +892,9 @@ whoever owns it drains. Rules name an event in snake case
 | `TicketRefused` | `ticket` (the id it had), `realm`, `loc` (the tract it was centred on), `reason` (who held it) | The tickets wanted more tracts than may be loaded and this one was dropped (section 10.3) |
 
 The three tract events carry no cause of their own: `cause()` gives the
-coarse cause for them.
+coarse cause for them. What a field does of itself has the cause kind
+`Field` with, as instigator, whoever is responsible for the field in
+that cell (section 16).
 
 Events that sum many changes (`EnergyReleased`, `CollapseSettled`,
 `TractDevastated`) carry totals by instigator: elements destroyed, mass
@@ -1450,8 +1463,10 @@ As built:
 - A tract that is loaded already, or named twice in one batch, is refused,
   as is one outside its realm. A refusal changes nothing and says why
   (`LoadError`).
-- Not built yet: stamps and total devastation (section 17), and step 4,
-  which is the fields' (section 16).
+- Step 4 runs for a tract read from the store, by each field's
+  `catch_up` (section 16), and the fields still active are stepped
+  again. A tract that is generated holds no field.
+- Not built yet: stamps and total devastation (section 17).
 
 `Cosmos::add_pending_edit(realm, tract, edit)` is how a change is left for
 a tract that is not loaded. It is refused for a tract that is loaded, a
@@ -1667,13 +1682,16 @@ including saves taken in the middle of a collapse and a blast.
 Built so far, with tract loading: the trait, `MemoryStore`, and a column
 codec behind two functions, `encode_column(&Column)` and
 `decode_column(&WorldDefs, &[u8])`. A tract blob has kind `TRCT` and version
-1. Its body is the column's two fills, the chunk height of its first stored
+2. Its body is the column's two fills, the chunk height of its first stored
 chunk and its chunks, without those at either end that hold only the fill;
-each chunk is its three element layers with compacted palettes and its four
-sparse layers. Equal columns give equal bodies. The pristine policy is the
+each chunk is its three element layers with compacted palettes, its four
+sparse layers and its fields: for each field, the cells that hold it with
+their level, whether they are active and who is responsible. A chunk that
+holds a field is never one that "holds only the fill", and a change to a
+field marks its tract as one to store. Equal columns give equal bodies. The pristine policy is the
 record's `pristine` flag alone. Left to the persistence package, which
-replaces the two functions: states by save id, the entity section, fields,
-the generator fingerprint, `save.store_pristine` and the `redb` store. Until
+replaces the two functions: states and fields by save id, the entity
+section, the generator fingerprint, `save.store_pristine` and the `redb` store. Until
 then a blob holds runtime ids and is good for the mod set that wrote it.
 
 ## 12. Damage
@@ -2297,64 +2315,152 @@ over the horizon and a person punched across a city both arrive.
 
 ## 16. Fields
 
-A field is a per-cell value from 0 to 255 that evolves by rule.
+A field is a per-cell value from 0 to 255 that evolves by rule. The
+engine knows what a field is and what each rule does. It never knows
+what fire or water is: every behaviour below comes from a definition.
 
 ```json
 {
   "type": "field",
   "id": "fire",
-  "step": "200 ms",
+  "step": "500 ms",
   "rules": [
-    { "rule": "decay", "amount": 2 },
-    { "rule": "spread", "needs": "fuel", "chance": 0.3 },
-    { "rule": "emit", "field": "smoke", "amount": 20 },
-    { "rule": "emit", "field": "heat", "amount": 40 },
-    { "rule": "damage", "kind": "heat", "energy_per_level": 2000, "intensity_per_level": "10 kPa" }
+    { "rule": "decay", "amount": 12 },
+    { "rule": "spread", "needs": "fuel", "chance": 0.3, "amount": 30, "from": 60 },
+    { "rule": "emit", "field": "smoke", "amount": 12 },
+    { "rule": "damage", "kind": "heat", "energy_per_level": 10, "intensity_per_level": "10 kPa" },
+    { "rule": "drift", "share": 0.0, "spread": 0.25 }
   ],
   "catch_up": "burn_out",
-  "glyph": { "ch": "^", "fg": ["yellow", "orange", "red"] },
+  "light": { "intensity": 1.5, "radius": "10 m", "from": 20 },
+  "glyph": { "ch": "^", "fg": ["red", "yellow", "white"] },
   "tags": ["light_source"]
 }
 ```
 
-Built-in rules, implemented natively and configured by data:
+| Field of `field` | Meaning |
+|------------------|---------|
+| `step` | How often the field is stepped, in the local time of where it is. Required; at least 1 ms. |
+| `rules` | Its rules, applied to each active cell each step, in the order written. |
+| `catch_up` | What becomes of it in a tract loaded after time has passed: `keep` (the default), `none`, `burn_out`, `disperse` or `settle`. See below. |
+| `warms` | The kelvin each level adds to the temperature of its cell (11 §4.6), negative to cool. Stored and reported; it does nothing until temperature is built. |
+| `changes` | What it becomes by temperature, like a material's (section 5.4): lava that cools leaves rock. Carried as written until change of state is built (package W25). |
+| `light` | The light it gives off: `intensity` is that of a cell at level 255, and a lower level gives in proportion; `radius` as for an element (15 §3.3); `from` is the least level that gives light, default 1. |
+| `opaque_from` | The level from which a cell of it hides what is behind it, as something opaque taller than the eye would. Absent: it never hides. |
+| `glyph` | How it is drawn: `ch`, and `fg` and `bg` as one colour or a list of colours spread evenly from the lowest level to the highest. Stored and reported only. |
+| `tags` | Free-form tags. |
 
-| Rule | Behaviour |
-|------|-----------|
-| `decay` | Lose value per step. |
-| `diffuse` | Even out with neighbours. Optional vertical bias for gases that rise or sink. |
-| `flow` | Liquid behaviour: fall, then spread sideways. |
-| `spread` | Ignite neighbours that have fuel (flammable materials in elements, fixtures or items). |
-| `emit` | Add to another field in the same cell. |
-| `convert` | React with another field: water and fire make steam. |
-| `damage` | Send packets to elements in the cell and exposure events to occupants. |
-| `drift` | Be carried by the movement of the medium (11 §4.7). Contents move downwind or downstream, and `spread` is likelier that way. |
-| `expose` | Add to a pool (06 §4.2) of each occupant, by a route. See below. |
+**Rules.** Implemented natively and configured by data. Each is an
+object with `rule` and that rule's parameters; a parameter the rule does
+not take is a load error. A rule that moves the field moves whole
+levels, rounded down, and only what the rules before it in the list
+left in the cell: `decay` then `drift` then `diffuse` is not the same
+field as the three in another order. Where a rule would move more than
+is left, each neighbour gets its share of what there is.
 
-A field may state `warms`: the kelvin each level adds to the temperature
-of its cell (11 §4.6), negative to cool. A field may have `changes` like a
-material's (section 5.4), tested on its active cells: lava that cools
-below its threshold leaves rock, and standing water that freezes leaves
-ice.
+| Rule | Parameters | Behaviour |
+|------|------------|-----------|
+| `decay` | `amount` (levels, required) | Lose `amount` each step. |
+| `diffuse` | `rate` (required, more than 0 to 0.25); `rise` or `sink` (a share, more than 0 to 1) | Where a neighbour's level is lower, `rate` of the difference moves to it: to the four cells beside and, with neither `rise` nor `sink`, to those above and below. With `rise`, that share of the level moves to the cell above each step, as far as there is room, and nothing goes down; `sink` is the mirror. |
+| `flow` | `rate` (more than 0 to 0.25; default 0.25) | Liquid behaviour. All that fits falls to the cell below. What cannot fall levels out sideways as `diffuse` does. |
+| `spread` | `needs` (a material tag); `chance` (0 to 1, default 1); `amount` (the level a neighbour gets, default 1); `from` (default 1) | A cell at `from` or more may ignite each of its six neighbours that holds none of the field, each with `chance` a step. With `needs`, only a neighbour that holds a floor, block or fixture of a material carrying that tag. |
+| `emit` | `field`, `amount` (both required); `from` | Add `amount` to another field in the same cell each step. |
+| `convert` | `with` (a field, required); `uses`, `gives`, `max` | React with another field: shorthand for a reaction between this field and `with` (below). |
+| `damage` | `kind` (a damage type), `energy_per_level` (J), `intensity_per_level` (Pa) (all required); `from` | Each step, send a packet of `level × energy_per_level` at `level × intensity_per_level` to the floor, the block and the fixture of the cell, and tell each occupant in it with `OccupantExposed`. |
+| `drift` | `share` (0 to 1, default 1); `spread` (0 or more, default 0) | Be carried by the movement of the medium (11 §4.7): each step the share of the level that the medium carries across the cell, `speed × step / size × share` and at most all of it, moves to the next cell that way, along each axis, as far as there is room. The chance of this field's `spread` to a neighbour is multiplied by `1 + spread × v`, `v` being the metres a second the medium moves toward that neighbour, negative when it moves away, and never below nothing. |
+| `expose` | `pool`, `per_level` (both required); `route` (`breath`, `skin` or `any`; default `any`); `from` | Tell each occupant in the cell of a dose for one of its pools. See below. |
 
-Anything more exotic subscribes an EOC to `FieldContact` or `FieldAppeared`.
+`from` is the least level at which a rule acts, default 1. A level never
+passes 255: what would take it further is lost.
 
-Fields cannot enter a cell whose block has `coverage` of 0.95 or more. They
-pass between storeys only where there is no floor or the floor is a `grate`.
+**Fuel is a tag.** `spread` ignites what carries the tag its `needs`
+names, and a material flagged `flammable` counts as carrying the tag
+`flammable`. What makes a fire grow where it has fuel is a reaction
+with that tag (below), and what consumes the fuel is the field's own
+`damage`: an element destroyed by it becomes its `on_destroy` state and
+leaves its rubble like any other (section 12.3), and the cause of that
+is the field, for whoever is responsible for it.
 
-Storage is sparse per chunk and per field, with a list of **active** cells.
-Only active cells are stepped. A chunk with no active cells costs nothing.
+**Where a field can go.** Fields cannot enter a cell whose block has
+`coverage` of 0.95 or more. They pass between storeys only where there
+is no floor or the floor is a `grate`: the floor in question is the
+upper cell's. An edge of the grid and space that is not loaded let
+nothing through. Fixtures and occupants stop nothing. The one
+exception is `spread` with `needs`: it reaches a neighbour that it
+could not otherwise when what stops it, the covering block or the floor
+between, is itself of a material it needs. So a fire burns its way into
+a wooden wall and through a wooden floor, and stops at stone. An edit
+may put a field into any loaded cell.
 
-Stepping is a process per realm and step interval. Each step reads the state
-at the start of the step and writes all changes at the end, so the result
-does not depend on the order cells are visited. Random choices use positional
-randomness keyed on field, cell and step number.
+**Storage and activity.** Storage is sparse per chunk and per field:
+for each cell that holds a field, its level, whether it is **active**,
+and who is responsible for it. Only active cells are stepped, and a
+chunk with no field costs one pointer. A cell is active while it is
+awake:
 
-`catch_up` names a closed-form rule applied when a tract is loaded after time
-has passed: fires burn out, gases disperse, liquids settle.
+- A cell that gains a field is awake, if anything steps the field: it
+  has a rule or takes part in a reaction.
+- A cell of a field whose rules only move it (`flow`, `diffuse`), and
+  which reacts with no material, goes to sleep at a step that moves
+  nothing into or out of it and changes nothing in it. Water that has
+  found its level lies still and costs nothing.
+- A sleeping cell wakes when the level of its field changes in a cell
+  beside, above or below it; when any field's level changes in its own
+  cell; and when an element changes in its cell or one beside, above or
+  below it.
+- A cell of any other field is awake for as long as it lasts.
 
-`field.max_active_cells` (default 200,000) bounds cost. Past it, the weakest
-cells decay faster and a diagnostic event is emitted.
+**Stepping.** One process of the world steps the active cells of one
+clock and one step interval. It wakes at whole multiples of the
+interval in the clock's local time, and the number of a step is that
+local time in intervals, so a field in stopped time does not burn, one
+in slowed time burns slowly, and nothing depends on when the process
+began. Cells inside an area with a clock of its own are stepped by the
+process of that clock.
+
+Each step has three parts. First everything is read and nothing
+changed: the reactions and then the rules of every active cell, in
+order of grid, tract, chunk from the lowest, field and cell, say what
+they would add and take, strike and dose. Then the changes of level
+are summed for each field in each cell and written in order of cell
+and field. Last the elements are struck, in the order the cells were
+read, and the occupants told, in order of id. So the result does not
+depend on the order cells are visited or were lit in, or on how the
+simulation's `advance` is sliced. The one random choice, whether a
+field spreads, is the positional hash (01 §4) of the realm's seed, the
+domain `world.field.spread`, the cell, and the step number with the
+field, the rule and the direction.
+
+**Responsibility.** The instigator of the edit that first puts a field
+in a cell is responsible for it there, and stays so while the cell
+holds any. What a field brings into another cell by any rule or
+reaction carries the instigator along, where that cell has none; of
+several, the lowest id. Everything a field then does (`ElementDamaged`,
+`ElementDestroyed`, `OccupantExposed`, `OccupantDosed`, `FieldAppeared`,
+`FieldVanished`) has the cause kind `Field` and that instigator: what
+burns down traces to whoever lit it.
+
+**Catch-up.** A tract's fields are stored with its cells. When it is
+read back, each field catches up on the local time that passed since it
+was unloaded, by its definition's `catch_up`:
+
+| `catch_up` | What happens |
+|------------|--------------|
+| `keep` | It is as it was. |
+| `none` | It does not outlast unloading: it is gone. |
+| `burn_out` | It is gone if as much as one of its steps has passed. What it would have burnt is not burnt. |
+| `disperse` | It loses its `decay` for each step that passed, and half of what is left for every 16 steps. |
+| `settle` | It is as it was, and every cell of it is awake, so that it goes on to find its level. A true closed-form settling is not built. |
+
+Changes made by catching up have the coarse cause.
+
+**The budget.** `field.max_active_cells` (default 200,000) bounds cost.
+At a step that finds more active cells than that in the cosmos, the
+weakest decay faster: with `n` cells too many, every active cell at or
+below the level of the `n`th weakest loses 16 levels in that step on
+top of its own rules. `FieldBudgetExceeded` is emitted at the first
+step that finds it so, and again only after the count has been back
+under.
 
 **Reactions.** What fields do to each other and to what they touch is
 written once, as **field reactions**, not separately in each field.
@@ -2364,26 +2470,44 @@ written once, as **field reactions**, not separately in each field.
   { "type": "field_reaction", "id": "quench",
     "when": ["water", "fire"],
     "uses": { "water": 1, "fire": 3 }, "gives": { "steam": 2 } },
-  { "type": "field_reaction", "id": "oil_feeds_fire",
-    "when": ["fire", { "material_tag": "oily" }],
-    "gives": { "fire": 30, "smoke": 20 } },
+  { "type": "field_reaction", "id": "burning",
+    "when": ["fire", { "material_tag": "fuel" }],
+    "gives": { "fire": 30 } },
   { "type": "field_reaction", "id": "current_through_water",
     "when": [ { "damage": "shock" }, "water" ],
     "spreads": { "share": 0.8, "reach": 6 } }
 ]
 ```
 
+| Field of `field_reaction` | Meaning |
+|---------------------------|---------|
+| `when` | The two things that react: each a field id, `{ "material_tag": … }` or `{ "damage": … }`. Required. |
+| `uses` | What one reaction takes of each field that takes part, by field. |
+| `gives` | What one reaction adds to the cell, by field. |
+| `max` | The most reactions in a cell in one step. Default: no limit. |
+| `spreads` | For a reaction to damage: `share`, 0 to 1, and `reach`, in cells. |
+
 | Form | Happens |
 |------|---------|
-| Two fields | Each step, in every cell where both are present |
-| A field and a material tag | Each step, where the field shares a cell with an element or item of a material so tagged |
-| A damage type and a field | When a packet of that type arrives in a cell holding the field. `spreads` passes a share of the packet to every connected cell of that field within reach. |
+| Two fields | Each step, in every cell where both are present, as many times as the levels there allow: the lesser of each field's level over what one reaction uses of it, and at most `max`. With no `uses`, once. It runs at the steps of the field named first where that one is awake, and at the other's where it is not. |
+| A field and a material tag | Each step of the field, where it shares a cell with a floor, block or fixture of a material so tagged: once, or with `uses` as many times as the field's level allows. |
+| A damage type and a field | When a packet of that type arrives in a cell holding the field. `spreads` passes a packet with `share` of the energy and of the intensity to every cell joined to that one through the field, by steps north, east, south, west, up and down through cells that hold it, at most `reach` steps away and 4096 cells: its elements are struck and its occupants told with `OccupantExposed`. The cell the packet arrived in gets nothing more. |
 
-A reaction may also `leave` an element in the cell: lava meeting water
-gives steam and leaves basalt.
+Ten of water and ninety of fire in a cell leave, after one step of the
+water, no water, sixty of fire and twenty of steam. A reaction uses only
+fields that take part in it; one to damage takes `spreads` and nothing
+else. Whoever delivers a packet to a cell calls
+`WorldEdit::conduct(loc, packet)` once for it. A reaction that also
+`leave`s an element in the cell (lava meeting water gives steam and
+leaves basalt) comes with change of state (package W25).
 
-**Exposure.** Not all harm is a blow. The `expose` rule adds to a pool of
-each occupant in the cell, in proportion to the field's level, by a
+Reactions are compiled into the field stepper and follow its rules:
+buffered writes, and nothing used twice in one step. The `convert` rule
+in a field's own definition is shorthand for a reaction between two
+fields, with the field itself named first.
+
+**Exposure.** Not all harm is a blow. The `expose` rule adds to a pool
+of each occupant in the cell, in proportion to the field's level, by a
 **route**:
 
 ```json
@@ -2396,21 +2520,46 @@ each occupant in the cell, in proportion to the field's level, by a
 | `skin` | The share of the body not under a worn layer that guards against it |
 | `any` | Everyone in the cell |
 
-Worn items may state `guards`, the share they keep out by route (06 §9.1):
-a mask, a filter, a coat. The hook `exposure_incoming` lets rules change
-the amount. What the pool then does to its owner is content (06 §4.2): a
-poison, a sickness, a slow burn.
+The world applies no route and no guard. At each step of the field it
+emits `OccupantDosed` for each occupant in a cell of it, of whatever
+kind and plane, with the pool as written, the amount
+`level × per_level` and the route; an occupant that fills several cells
+of the field is told once, for the strongest. The simulation decides
+what reaches the pool: worn items may state `guards`, the share they
+keep out by route (06 §9.1), and the hook `exposure_incoming` lets rules
+change the amount. What the pool then does to its owner is content
+(06 §4.2): a poison, a sickness, a slow burn. `OccupantExposed` from a
+`damage` rule is reported the same way, once a step for the strongest
+cell.
 
 Harm that passes through walls is not a field. It is a signal that
 exposes (15 §3.1).
 
-Reactions are compiled into the field stepper and follow its rules:
-buffered writes and positional randomness. The `convert` rule in a field's
-own definition is shorthand for a reaction between two fields.
+**Sight and light.** `Cosmos::field_hides_sight(loc)` says whether a
+field in a cell is at or above its `opaque_from`.
+`Cosmos::field_lights(grid, box)` lists the light the fields in a box
+give off as moving sources, one for each cell, for whoever asks for
+light to hand in (15 §3.3): the world keeps no light for fields.
+
+**Reading and writing.** `WorldEdit::add_field(loc, field, amount)`
+adds to a level, or with a negative amount takes from it, and
+`set_field(loc, field, level)` sets it; each returns the level the cell
+had, and is refused for a cell outside its grid, not loaded or out of
+reach, and for a field no definition has. `Cosmos::field` reads a level,
+`fields_at` every field of a cell, `field_cell` the level with whether
+it is active and who is responsible, and `fields_in_box` every field in
+a box of cells, by cell and then by field. `Cosmos::field_drift` gives
+the velocity of the medium at a cell where an area sets one; the
+region's wind and current join it with the weather (09 §14.1), and a
+vortex turns from east toward south about the middle of its area.
+
+Anything more exotic subscribes an EOC to `FieldContact` or
+`FieldAppeared`.
 
 Still bodies of liquid (lakes, seas) are blocks flagged `liquid`, not fields.
 When an edit opens space beside one, cells along the opening are converted to
 the corresponding field so the liquid can move, within the same budget.
+This is not built: it follows once fields are stable.
 
 ## 17. The coarse layer
 
@@ -2884,7 +3033,12 @@ Still to come, with the packages that build them:
   While a see-through portal's near side is loaded and something that could
   see through is within range, the portal holds a warm ticket on its far
   side (section 10).
-- Fields that hide, such as smoke, do not yet block sight.
+- Fields that hide, such as smoke, do not yet block rays, lines of sight
+  or fields of view. `Cosmos::field_hides_sight(loc)` says whether a
+  cell's fields hide what is behind it (section 16), and whoever needs
+  it asks cell by cell. Wiring it into the queries waits for a field of
+  view that light does not share: light's cache is keyed on structure
+  revisions alone (15 §3.3).
 
 Illumination (`Cosmos::light`) is specified in 15 §3.3 and the medium of a
 cell (`Cosmos::medium`) in 11 §4. Both are world queries with caches keyed
@@ -3010,7 +3164,14 @@ controlled character (`world.hot_radius`) and the vacuum default for a
 release's speed (`release.vacuum_speed`). Devastation is scaled between
 `world.min_intensity` and `devastation.max_intensity`. `spread` ignites
 materials carrying the tag its `needs` names. `catch_up` is one of
-`burn_out`, `disperse`, `settle`, `keep`, `none`.
+`burn_out`, `disperse`, `settle`, `keep`, `none`. For fields (section
+16): the levels the weakest cells lose over budget
+(`FIELD_OVER_BUDGET_DECAY`, 16), the steps in which a dispersing field
+halves (`DISPERSE_HALF_STEPS`, 16), the most cells one field passes a
+packet on to (`FIELD_CONDUCT_MAX_CELLS`, 4096), the shortest step
+(`FIELD_MIN_STEP`, 1 ms) and the largest `rate` (`FIELD_MAX_RATE`,
+0.25). `field.max_active_cells` is `Cosmos::set_field_max_active_cells`
+until settings are bound.
 
 **Settings**: `world.min_intensity`, `release.max_cells`,
 `field.max_active_cells`, `body.max_ticket_tracts`, `max_loaded_tracts`,
@@ -3053,7 +3214,17 @@ pile of rubble holds (`rubble_units`); the direction of a hit
 check through `WorldCtx::set_area_ambient`; the `Cosmos` function of
 that name asks for none. The light at a cell (`light`, `fill_light`,
 `add_moving_light`) is reachable only from Rust too; 15 §3.3 names
-`light(loc)` for rules.
+`light(loc)` for rules. From fields (section 16): setting a level
+outright (`set_field`); telling the fields of a cell that a packet
+arrived (`conduct`), which whatever delivers damage to a cell must do
+for a reaction to damage to happen; every field of a cell or of a box
+(`fields_at`, `fields_in_box`); whether a cell's fields hide sight
+(`field_hides_sight`); the light fields give (`field_lights`); the
+drift at a cell (`field_drift`); who is responsible for a field in a
+cell and whether it is active (`field_cell`); and the count of active
+cells (`active_field_cells`). Items are not fuel to the world, which
+does not know them: a rule that wants a burning item to feed a fire adds
+to the field itself.
 
 ## 24. Invariants
 

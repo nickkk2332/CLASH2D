@@ -284,7 +284,7 @@ impl Cosmos {
             .iter()
             .filter_map(|(_, process)| match process {
                 WorldProcess::Fall(mass) => Some(mass),
-                WorldProcess::Settle(_) => None,
+                _ => None,
             })
     }
 }

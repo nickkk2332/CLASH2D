@@ -134,7 +134,7 @@ impl TractStore for MemoryStore {
 pub const TRACT_BLOB_KIND: [u8; 4] = *b"TRCT";
 
 /// The version of a tract blob's body this build writes and reads.
-pub const TRACT_BLOB_VERSION: u32 = 1;
+pub const TRACT_BLOB_VERSION: u32 = 2;
 
 /// Writes a column as a tract blob: its fills and the chunks that say
 /// something the fills do not, with compacted palettes and the sparse

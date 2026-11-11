@@ -1028,6 +1028,15 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         });
     }
 
+    // Fields and what they do to each other (02 §16).
+    let (fields, field_reactions) = crate::field::build_defs(
+        raw.fields,
+        raw.field_reactions,
+        &damage_types,
+        &materials,
+        &mut |kind, id, path, message| errors.push(kind, id, path, message),
+    );
+
     if !errors.list.is_empty() {
         return Err(core::mem::take(&mut errors.list));
     }
@@ -1045,6 +1054,8 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         skies,
         sky_reach,
         source_reach,
+        fields,
+        field_reactions,
     })
 }
 

@@ -1063,6 +1063,8 @@ impl WorldCtx<'_> {
                 areas,
             },
         );
+        // Whatever fields it now stands in have met it (02 §16).
+        self.fields_met(occupant.id, at.grid, &cells, None, cause);
         Ok(())
     }
 
@@ -1109,6 +1111,7 @@ impl WorldCtx<'_> {
             .ok_or(WorldError::UnknownOccupant(id))?;
         let from = record.loc;
         let occupant = record.occupant;
+        let filled = record.footprint;
         let footprint = footprint.check()?;
         let view = self.cosmos.grid(to.grid)?;
         let cells = footprint_cells(&view, to.cell, footprint)?;
@@ -1166,6 +1169,8 @@ impl WorldCtx<'_> {
                 cause,
             });
         }
+        // Whatever fields it has moved into have met it (02 §16).
+        self.fields_met(id, to.grid, &cells, Some((from, filled)), cause);
         Ok(from)
     }
 

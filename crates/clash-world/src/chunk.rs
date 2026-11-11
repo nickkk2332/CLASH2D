@@ -12,7 +12,7 @@ use crate::pos::CellIdx;
 use crate::storage::{CellBits, Paletted, SparseCells};
 
 define_id! {
-    /// A `field` definition (02 §16). Fields are built by package W16.
+    /// A `field` definition (02 §16).
     pub struct FieldId(u16);
     /// A `conduit` definition (16 §6). Conduits are built by the devices
     /// plan.
@@ -61,15 +61,7 @@ impl StateHash for Decal {
 /// The marks in one cell, oldest first.
 pub type DecalList = Vec<Decal>;
 
-/// A chunk's fields. A typed placeholder: package W16 builds field
-/// storage. It holds nothing and every field reads as zero.
-#[derive(Clone, PartialEq, Eq, Default, Debug)]
-pub struct FieldStore {}
-
-impl StateHash for FieldStore {
-    fn state_hash(&self, _hasher: &mut StateHasher) {}
-}
-
+pub use crate::field::FieldStore;
 pub use crate::occupancy::OccupantIndex;
 
 /// Counters that tell every cache outside a chunk whether it is stale.
@@ -358,6 +350,16 @@ impl Chunk {
             + self.derived.heap_bytes()
             + self.occupants.heap_bytes()
             + sparse
+            + self.fields.heap_bytes()
+    }
+
+    /// The chunk's fields, to change. Bumps the field revision and
+    /// marks the chunk dirty: whoever asks for this is about to change
+    /// a field.
+    pub(crate) fn fields_mut(&mut self) -> &mut FieldStore {
+        self.rev.fields = self.rev.fields.wrapping_add(1);
+        self.dirty = true;
+        &mut self.fields
     }
 
     /// The chunk's occupant index, to change. Bumps the occupant
@@ -378,6 +380,7 @@ impl Chunk {
     /// nothing else: what an implicit chunk of that fill would hold.
     pub(crate) fn is_pure(&self, block: BlockState) -> bool {
         self.sparse.as_ref().is_none_or(|sparse| sparse.is_empty())
+            && self.fields.is_empty()
             && self.floors == Paletted::uniform(FloorState::NONE)
             && self.fixtures == Paletted::uniform(FixtureState::NONE)
             && self.blocks == Paletted::uniform(block)
@@ -591,6 +594,7 @@ impl Chunk {
             conduits: sparse.conduits,
             decals: sparse.decals,
             vars: sparse.vars,
+            fields: self.fields.clone(),
         }
     }
 
@@ -608,7 +612,7 @@ impl Chunk {
             blocks: image.blocks,
             fixtures: image.fixtures,
             sparse: (!sparse.is_empty()).then(|| Box::new(sparse)),
-            fields: FieldStore::default(),
+            fields: image.fields,
             occupants: OccupantIndex::default(),
             derived: DerivedCache::Uniform(CellFlags::NONE),
             rev: ChunkRev::default(),
@@ -620,9 +624,9 @@ impl Chunk {
 }
 
 /// What a chunk holds, in the form a tract is stored in (02 §11): the
-/// three element layers with compacted palettes and the sparse layers.
-/// Occupants, caches, revisions and the dirty flag are not stored.
-/// Fields join it with package W16.
+/// three element layers with compacted palettes, the sparse layers and
+/// the fields. Occupants, caches, revisions and the dirty flag are not
+/// stored.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct ChunkImage {
     floors: Paletted<FloorState>,
@@ -632,6 +636,7 @@ pub(crate) struct ChunkImage {
     conduits: SparseCells<ConduitSet>,
     decals: SparseCells<DecalList>,
     vars: SparseCells<VarMap>,
+    fields: FieldStore,
 }
 
 /// Hashes what the cells hold: the three element layers, the sparse

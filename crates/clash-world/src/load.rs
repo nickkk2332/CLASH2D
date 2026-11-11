@@ -57,6 +57,7 @@ use crate::defs::{
     FixtureId, FloorDef, FloorId, Length, MaterialDef, MaterialId, NONE_ID, OrderedMap, PlaneDef,
     PlaneId, RawWorldDefs, RealmDef, RealmDefId, Table, WorldDefs,
 };
+use crate::field::{FieldDef, FieldReactionDef};
 use crate::light::{SkyDef, SkyId};
 
 /// The name of the built-in "nothing here" within the engine's namespace.
@@ -224,7 +225,7 @@ impl Def for RealmDef {
 
 /// Registers the world's definition types with the loader: `damage_type`,
 /// `material`, `atmosphere`, `floor`, `block`, `fixture`, `realm`, `plane`,
-/// `area_kind` and `sky`.
+/// `area_kind`, `sky`, `field` and `field_reaction`.
 ///
 /// The application and the tools call this, with every other crate's
 /// function of the same name, before they load (04 §9).
@@ -239,6 +240,8 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<PlaneDef>();
     types.register::<AreaKindDef>();
     types.register::<SkyDef>();
+    types.register::<FieldDef>();
+    types.register::<FieldReactionDef>();
 }
 
 /// Whether a qualified id is one of the engine's own.
@@ -277,6 +280,8 @@ impl RawWorldDefs {
             planes: written(defs),
             area_kinds: written(defs),
             skies: written(defs),
+            fields: written(defs),
+            field_reactions: written(defs),
         }
     }
 }
@@ -407,7 +412,9 @@ impl WorldDefs {
             && ids_agree::<RealmDef, _>(defs, world.realms())
             && ids_agree::<PlaneDef, _>(defs, world.planes())
             && ids_agree::<AreaKindDef, _>(defs, world.area_kinds())
-            && ids_agree::<SkyDef, _>(defs, world.skies());
+            && ids_agree::<SkyDef, _>(defs, world.skies())
+            && ids_agree::<FieldDef, _>(defs, world.fields())
+            && ids_agree::<FieldReactionDef, _>(defs, world.field_reactions());
         if !agree {
             // Not a mistake in a mod: the two numberings are meant to be
             // the same by construction. Refuse to go on with ids that
