@@ -49,8 +49,9 @@ use crate::dims::CHUNK_Z_BITS;
 use crate::error::WorldError;
 use crate::event::{EventSink, WorldEvent};
 use crate::iter::shell;
-use crate::occupancy::{OccupantFilter, OccupantFlags, OccupantKind, distinct_ids};
+use crate::occupancy::{Footprint, OccupantFilter, OccupantFlags, OccupantKind, distinct_ids};
 use crate::pos::{CellPos, Location};
+use crate::query::Footing;
 
 /// How far, in cells, an occupant is moved out of the way of an edit
 /// that fills its cell (02 §23). The default of the setting
@@ -107,9 +108,14 @@ impl StabilityQueue {
     }
 
     /// Asks for a check at a cell. A cell already waiting keeps the
-    /// request it has.
-    pub(crate) fn request(&mut self, loc: Location, tick: Tick, cause: Cause) {
-        self.pending.entry(loc).or_insert((tick, cause));
+    /// request it has. Returns whether the cell was not waiting before.
+    pub(crate) fn request(&mut self, loc: Location, tick: Tick, cause: Cause) -> bool {
+        let mut new = false;
+        self.pending.entry(loc).or_insert_with(|| {
+            new = true;
+            (tick, cause)
+        });
+        new
     }
 
     /// Takes every request out, by grid and then by cell.
@@ -160,6 +166,50 @@ pub struct WorldCtx<'a> {
     pub events: &'a mut EventSink<WorldEvent>,
 }
 
+impl WorldCtx<'_> {
+    /// Tells whoever stood on an element that has gone, or no longer
+    /// holds anyone up, that nothing is under them: `OccupantUnsupported`
+    /// for each occupant standing there whose footing is gone
+    /// (02 §14.3). An occupant that fills several cells is held up while
+    /// any cell of its lowest storey is.
+    pub(crate) fn footing_went(&mut self, loc: Location, layer: Layer, cause: Cause) {
+        let over = match layer {
+            Layer::Floor => loc,
+            Layer::Block | Layer::Fixture => Location::new(loc.grid, loc.cell.above()),
+        };
+        if !self
+            .cosmos
+            .is_occupied(over, &OccupantFilter::ANY)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let Ok(found) = self.cosmos.occupants_at(over, &OccupantFilter::ANY) else {
+            return;
+        };
+        let tick = self.timeline.now();
+        for id in distinct_ids(&found) {
+            let Some(record) = self.cosmos.occupant(id) else {
+                continue;
+            };
+            let stands_at = record.loc;
+            let feet = Footprint::new(record.footprint.x, record.footprint.y, 1);
+            let held = feet.cells(stands_at.cell).cells().any(|cell| {
+                let footing = self.cosmos.footing(Location::new(stands_at.grid, cell));
+                !matches!(footing, Ok(Footing::None))
+            });
+            if !held {
+                self.events.emit(WorldEvent::OccupantUnsupported {
+                    tick,
+                    occupant: id,
+                    loc: stands_at,
+                    cause,
+                });
+            }
+        }
+    }
+}
+
 impl<'a> WorldCtx<'a> {
     /// A context over a cosmos, a timeline and a sink.
     pub fn new(
@@ -198,8 +248,25 @@ impl<'a> WorldCtx<'a> {
 /// someone is standing there.
 #[derive(Debug)]
 pub struct WorldEdit<'a> {
-    ctx: WorldCtx<'a>,
-    cause: Cause,
+    pub(crate) ctx: WorldCtx<'a>,
+    pub(crate) cause: Cause,
+}
+
+/// Whether an element holds up whoever is over it: a floor holds up
+/// those in its own cell, and a block or fixture with a solid top or a
+/// way up holds up those in the cell above (02 §5.2).
+fn holds_up(defs: &WorldDefs, layer: Layer, state: ElementState) -> bool {
+    if state.is_none() {
+        return false;
+    }
+    if layer == Layer::Floor {
+        return true;
+    }
+    let info = defs.info(layer, state);
+    info.cell.contains(CellFlags::SOLID_TOP)
+        || info.flags.has(EngineFlag::Ramp)
+        || info.flags.has(EngineFlag::Stairs)
+        || info.flags.has(EngineFlag::Ladder)
 }
 
 /// Whether a change to a block or floor removed or weakened something
@@ -353,9 +420,10 @@ impl WorldEdit<'_> {
             damage[layer.index()] = 0;
             column.set_damage(defs, cell, damage);
         }
-        if layer != Layer::Fixture && weakened(defs, layer, old, new) {
-            parts.stability.request(loc, tick, cause);
-        }
+        let asked = layer != Layer::Fixture
+            && weakened(defs, layer, old, new)
+            && parts.stability.request(loc, tick, cause);
+        let let_go = holds_up(defs, layer, old) && !holds_up(defs, layer, new);
         let passage_after = enclosures.then(|| passage(defs, column, cell));
         let newly_blocked = !blocked_before && column.flags(cell).contains(CellFlags::WALK_BLOCKED);
         let crowded = newly_blocked
@@ -382,6 +450,12 @@ impl WorldEdit<'_> {
         }
         if crowded {
             self.make_room(loc);
+        }
+        if asked {
+            self.ctx.stability_asked(loc);
+        }
+        if let_go {
+            self.ctx.footing_went(loc, layer, cause);
         }
         Ok(old)
     }
@@ -493,9 +567,8 @@ impl WorldEdit<'_> {
         }
         all[layer.index()] = new;
         column.set_damage(parts.defs, cell, all);
-        if layer != Layer::Fixture && new > old {
-            parts.stability.request(loc, tick, cause);
-        }
+        let asked =
+            layer != Layer::Fixture && new > old && parts.stability.request(loc, tick, cause);
         self.ctx.events.emit(WorldEvent::ElementDamaged {
             tick,
             loc,
@@ -505,6 +578,9 @@ impl WorldEdit<'_> {
             new,
             cause,
         });
+        if asked {
+            self.ctx.stability_asked(loc);
+        }
         Ok(old)
     }
 

@@ -5,16 +5,18 @@
 //! event, and the simulation above forwards events to rules and to the
 //! presentation stream.
 
-use clash_core::{EntityId, StateHash, StateHasher, Tick, Value, VarKey};
+use clash_core::{EntityId, Real, StateHash, StateHasher, Tick, Value, VarKey};
 use clash_time::ClockId;
 use serde::{Deserialize, Serialize};
 
 use crate::area::AreaId;
 use crate::cause::{Cause, CauseKind};
 use crate::chunk::{Decal, DecalId};
+use crate::collapse::{CollapseId, CollapseTally};
 use crate::cosmos::RealmId;
-use crate::defs::{ElementState, Layer};
-use crate::pos::{Location, TractPos};
+use crate::damage::Destruction;
+use crate::defs::{DamageTypeId, ElementState, Layer};
+use crate::pos::{CellBox, Location, TractPos};
 use crate::ticket::{TicketId, TicketReason};
 
 /// Where events go: a list, in the order they were emitted.
@@ -291,6 +293,91 @@ pub enum WorldEvent {
         /// Who held it.
         reason: TicketReason,
     },
+    /// A floor, block or fixture was destroyed (02 §12.3): by damage, by
+    /// the load on it, or by falling. It follows the `ElementChanged`
+    /// events of the change itself and of the rubble left.
+    ElementDestroyed {
+        /// When.
+        tick: Tick,
+        /// The cell.
+        loc: Location,
+        /// Which of the cell's elements.
+        layer: Layer,
+        /// The element that was destroyed.
+        old: ElementState,
+        /// What it became: its `on_destroy` state, or nothing.
+        new: ElementState,
+        /// How it was destroyed.
+        how: Destruction,
+        /// The joules it took from the packet that destroyed it. Zero
+        /// for one that was crushed or fell.
+        absorbed: Real,
+        /// The joules of that packet that carried on beyond it.
+        passed: Real,
+        /// Who and what destroyed it.
+        cause: Cause,
+    },
+    /// A stability check found something giving way, where no collapse
+    /// was in progress (02 §14.3).
+    CollapseStarted {
+        /// When.
+        tick: Tick,
+        /// The collapse.
+        collapse: CollapseId,
+        /// The cell whose change started it.
+        loc: Location,
+        /// Who and what started it: the instigator of that change.
+        cause: Cause,
+    },
+    /// A collapse has ended: nothing of it is in flight and no check is
+    /// waiting near it.
+    CollapseSettled {
+        /// When.
+        tick: Tick,
+        /// The collapse.
+        collapse: CollapseId,
+        /// The cell whose change started it.
+        loc: Location,
+        /// The box of cells it touched.
+        bounds: CellBox,
+        /// What it came to, by instigator in order: elements destroyed,
+        /// mass brought down, occupants exposed.
+        tallies: Vec<CollapseTally>,
+        /// Who and what started it.
+        cause: Cause,
+    },
+    /// What held an occupant up has gone: the floor it stood on, the
+    /// solid top below it or the stairs it was at the top of. It is
+    /// where it was; what falling does to it is for the simulation.
+    OccupantUnsupported {
+        /// When.
+        tick: Tick,
+        /// Who has nothing under them.
+        occupant: EntityId,
+        /// Where it is.
+        loc: Location,
+        /// Who and what took its footing away.
+        cause: Cause,
+    },
+    /// Something struck the cell an occupant is in: a mass that landed
+    /// there (02 §14.3). The occupant receives the same packet the cell
+    /// did. What that does to it is for the simulation.
+    OccupantExposed {
+        /// When.
+        tick: Tick,
+        /// Who was there.
+        occupant: EntityId,
+        /// The cell that was struck.
+        loc: Location,
+        /// The kind of damage.
+        kind: DamageTypeId,
+        /// Joules delivered to the cell.
+        energy: Real,
+        /// How concentrated the delivery was, in pascals.
+        intensity: Real,
+        /// Who and what is behind it.
+        cause: Cause,
+    },
 }
 
 /// The cause of what the world does of itself when it loads and unloads
@@ -314,7 +401,12 @@ impl WorldEvent {
             | WorldEvent::OccupantEntombed { tick, .. }
             | WorldEvent::TractLoaded { tick, .. }
             | WorldEvent::TractUnloading { tick, .. }
-            | WorldEvent::TicketRefused { tick, .. } => *tick,
+            | WorldEvent::TicketRefused { tick, .. }
+            | WorldEvent::ElementDestroyed { tick, .. }
+            | WorldEvent::CollapseStarted { tick, .. }
+            | WorldEvent::CollapseSettled { tick, .. }
+            | WorldEvent::OccupantUnsupported { tick, .. }
+            | WorldEvent::OccupantExposed { tick, .. } => *tick,
         }
     }
 
@@ -331,7 +423,12 @@ impl WorldEvent {
             | WorldEvent::AreaBreached { cause, .. }
             | WorldEvent::AreaClosed { cause, .. }
             | WorldEvent::OccupantDisplaced { cause, .. }
-            | WorldEvent::OccupantEntombed { cause, .. } => *cause,
+            | WorldEvent::OccupantEntombed { cause, .. }
+            | WorldEvent::ElementDestroyed { cause, .. }
+            | WorldEvent::CollapseStarted { cause, .. }
+            | WorldEvent::CollapseSettled { cause, .. }
+            | WorldEvent::OccupantUnsupported { cause, .. }
+            | WorldEvent::OccupantExposed { cause, .. } => *cause,
             WorldEvent::TractLoaded { .. }
             | WorldEvent::TractUnloading { .. }
             | WorldEvent::TicketRefused { .. } => ACTIVITY_CAUSE,
@@ -339,7 +436,8 @@ impl WorldEvent {
     }
 
     /// Where it happened. For an occupant that was moved, where it is
-    /// now; for a breach, the cell it leaks through.
+    /// now; for a breach, the cell it leaks through; for a collapse, the
+    /// cell whose change started it.
     pub fn location(&self) -> Location {
         match self {
             WorldEvent::ElementChanged { loc, .. }
@@ -353,7 +451,12 @@ impl WorldEvent {
             | WorldEvent::OccupantEntombed { loc, .. }
             | WorldEvent::TractLoaded { loc, .. }
             | WorldEvent::TractUnloading { loc, .. }
-            | WorldEvent::TicketRefused { loc, .. } => *loc,
+            | WorldEvent::TicketRefused { loc, .. }
+            | WorldEvent::ElementDestroyed { loc, .. }
+            | WorldEvent::CollapseStarted { loc, .. }
+            | WorldEvent::CollapseSettled { loc, .. }
+            | WorldEvent::OccupantUnsupported { loc, .. }
+            | WorldEvent::OccupantExposed { loc, .. } => *loc,
             WorldEvent::AreaBreached { leak, .. } => *leak,
             WorldEvent::OccupantDisplaced { to, .. } => *to,
         }
@@ -376,6 +479,11 @@ impl WorldEvent {
             WorldEvent::TractLoaded { .. } => "tract_loaded",
             WorldEvent::TractUnloading { .. } => "tract_unloading",
             WorldEvent::TicketRefused { .. } => "ticket_refused",
+            WorldEvent::ElementDestroyed { .. } => "element_destroyed",
+            WorldEvent::CollapseStarted { .. } => "collapse_started",
+            WorldEvent::CollapseSettled { .. } => "collapse_settled",
+            WorldEvent::OccupantUnsupported { .. } => "occupant_unsupported",
+            WorldEvent::OccupantExposed { .. } => "occupant_exposed",
         }
     }
 }
@@ -509,6 +617,12 @@ impl StateHash for WorldEvent {
                 occupant,
                 loc,
                 cause,
+            }
+            | WorldEvent::OccupantUnsupported {
+                tick,
+                occupant,
+                loc,
+                cause,
             } => {
                 tick.state_hash(hasher);
                 occupant.state_hash(hasher);
@@ -551,6 +665,70 @@ impl StateHash for WorldEvent {
                 realm.state_hash(hasher);
                 loc.state_hash(hasher);
                 reason.state_hash(hasher);
+            }
+            WorldEvent::ElementDestroyed {
+                tick,
+                loc,
+                layer,
+                old,
+                new,
+                how,
+                absorbed,
+                passed,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                loc.state_hash(hasher);
+                layer.state_hash(hasher);
+                old.state_hash(hasher);
+                new.state_hash(hasher);
+                how.state_hash(hasher);
+                absorbed.state_hash(hasher);
+                passed.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::CollapseStarted {
+                tick,
+                collapse,
+                loc,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                collapse.state_hash(hasher);
+                loc.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::CollapseSettled {
+                tick,
+                collapse,
+                loc,
+                bounds,
+                tallies,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                collapse.state_hash(hasher);
+                loc.state_hash(hasher);
+                bounds.state_hash(hasher);
+                tallies.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::OccupantExposed {
+                tick,
+                occupant,
+                loc,
+                kind,
+                energy,
+                intensity,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                occupant.state_hash(hasher);
+                loc.state_hash(hasher);
+                kind.state_hash(hasher);
+                energy.state_hash(hasher);
+                intensity.state_hash(hasher);
+                cause.state_hash(hasher);
             }
         }
     }

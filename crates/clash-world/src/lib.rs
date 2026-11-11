@@ -26,7 +26,11 @@
 //! | Who is where | [`WorldCtx::place`], [`WorldCtx::relocate`], [`WorldCtx::remove`]; [`Occupant`], [`Footprint`], [`PlaneMask`]; [`Cosmos::occupants_at`] and the other queries with an [`OccupantFilter`] |
 //! | Volumes that mean something | [`Area`], [`AreaSpec`], [`AreaShape`]; [`WorldCtx::create_area`], [`WorldCtx::enclose`]; [`Cosmos::areas_at`] |
 //! | Places with identity | [`Site`], [`Cosmos::create_site`], [`Cosmos::site_of`] |
-//! | Stability checks waiting | [`Cosmos::stability_requests`] |
+//! | Harm to an element, and its destruction | [`WorldEdit::damage`] with a [`DamagePacket`] gives a [`DamageOutcome`]; the rule alone is [`resolve_packet`] |
+//! | Whether a structure stands, and what carries what | [`Cosmos::assess_stability`] gives an [`Assessment`] |
+//! | Stability checks waiting | [`Cosmos::stability_requests`]; ask for one with [`WorldCtx::check_stability`] |
+//! | The world's scheduled activity | [`WorldCtx::handle_wake`], for every wake-up of the world's domain; [`WorldProcess`], [`WorldActivity`] |
+//! | Collapses in progress and masses in flight | [`Cosmos::collapses`], [`Cosmos::falling_masses`]; [`Collapse`], [`FallingMass`] |
 //! | What is known of space that is not loaded | [`RegionRecord`], [`TractRecord`]; [`Cosmos::tract_record`], [`Cosmos::add_pending_edit`] |
 //! | Generating: the interfaces, and choosing a generator | [`RegionSurveyor`], [`TractRealizer`], [`GenCtx`]; [`GeneratorRegistry`], [`Generators`] |
 //! | Loading and unloading tracts | [`WorldCtx::load_tracts`], [`WorldCtx::unload_tract`], with a [`TractIo`] |
@@ -51,7 +55,9 @@
 mod area;
 mod cause;
 mod chunk;
+mod collapse;
 mod cosmos;
+mod damage;
 pub mod defs;
 pub mod dims;
 mod edit;
@@ -64,8 +70,10 @@ pub mod load;
 mod loading;
 mod occupancy;
 mod pos;
+mod process;
 pub mod query;
 mod site;
+mod stability;
 pub mod storage;
 mod store;
 pub mod test_support;
@@ -82,7 +90,15 @@ pub use chunk::{
     Chunk, ChunkRev, ConduitId, ConduitSet, DAMAGE_MAX, Decal, DecalId, DecalList, FieldId,
     FieldStore, OccupantIndex,
 };
+pub use collapse::{
+    Collapse, CollapseId, CollapseState, CollapseTally, DebrisPart, FALL_IMPACT_DEPTH_M,
+    FallingMass, SETTLE_DELAY,
+};
 pub use cosmos::{Ambient, Cosmos, GridView, Realm, RealmId, RealmState};
+pub use damage::{
+    DAMAGE_PARTS, DamageOutcome, DamagePacket, DamageResult, DebrisSpec, Destruction,
+    RUBBLE_CELL_UNITS, RUBBLE_UNITS_PER_M3, resolve_packet,
+};
 pub use defs::{
     AreaKindId, AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
     ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer, MaterialId,
@@ -111,6 +127,7 @@ pub use pos::{
     CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,
     distance_sq_cells,
 };
+pub use process::{SettleCheck, WorldActivity, WorldProcess};
 pub use query::{
     CellGeometry, Connection, Footing, FovSet, Freshness, MoveProfile, MoveRules,
     NeighbourGeometry, NoObstacles, Path, PathFail, PathFinder, PathLimits, RayBlocks, RayEnd,
@@ -118,6 +135,10 @@ pub use query::{
     StepKind,
 };
 pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};
+pub use stability::{
+    Assessment, SUPPORT_MAX_ELEMENTS, SUPPORT_MAX_PASSES, SUPPORT_REACH_CELLS,
+    SUPPORT_REACH_STOREYS,
+};
 pub use store::{
     MemoryStore, StoreError, TRACT_BLOB_KIND, TRACT_BLOB_VERSION, TractStore, decode_column,
     encode_column,

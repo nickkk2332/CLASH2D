@@ -22,6 +22,7 @@ use crate::error::WorldError;
 use crate::grid::{CellView, Column, Grid};
 use crate::occupancy::OccupantRecord;
 use crate::pos::{CellPos, GridId, Location, RegionPos, TractPos};
+use crate::process::WorldActivity;
 use crate::site::SiteTable;
 use crate::ticket::TicketTable;
 use crate::topology::Topology;
@@ -365,6 +366,8 @@ pub struct Cosmos {
     /// The requests to keep tracts loaded, and which tracts they keep
     /// (02 §10).
     pub(crate) tickets: TicketTable,
+    /// The world's processes and the collapses in progress (02 §14.3).
+    pub(crate) activity: WorldActivity,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -396,6 +399,7 @@ impl Cosmos {
             occupants: LookupMap::new(),
             stability: StabilityQueue::default(),
             tickets: TicketTable::new(),
+            activity: WorldActivity::new(),
         }
     }
 
@@ -649,9 +653,9 @@ impl Cosmos {
 
 /// Hashes the realms in id order with their region records, then the
 /// grids in id order with their loaded columns in tract order, then the
-/// global variables, the areas, the sites, the stability checks waiting
-/// and the tickets. Who occupies which cell is not hashed: the simulation
-/// above owns the entities.
+/// global variables, the areas, the sites, the stability checks waiting,
+/// the tickets and what the world has under way. Who occupies which cell
+/// is not hashed: the simulation above owns the entities.
 impl StateHash for Cosmos {
     fn state_hash(&self, hasher: &mut StateHasher) {
         self.realms.state_hash(hasher);
@@ -665,5 +669,6 @@ impl StateHash for Cosmos {
         self.sites.state_hash(hasher);
         self.stability.state_hash(hasher);
         self.tickets.state_hash(hasher);
+        self.activity.state_hash(hasher);
     }
 }

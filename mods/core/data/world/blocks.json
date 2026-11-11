@@ -32,6 +32,12 @@
     "flags": ["load_bearing"],
     "glyph": { "ch": "O", "fg": "material" } },
 
+  { "//": "A solid pier one metre square: it bears the whole of what its material can.",
+    "type": "block", "id": "column", "material": "concrete",
+    "height": 3.0, "fill": 1.0,
+    "flags": ["opaque", "load_bearing"],
+    "glyph": { "ch": "I", "fg": "material" } },
+
   { "type": "block", "id": "ramp", "material": "concrete",
     "height": 3.0, "fill": 0.5,
     "flags": ["ramp", "load_bearing"],

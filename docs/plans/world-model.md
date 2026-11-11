@@ -39,8 +39,8 @@ Section references such as "02 §14" point into those documents.
 | W9 | Tickets and activity | M | W8 | beta |
 | W10 | Persistence | M | W8 | todo |
 | W11 | World viewer and scenario runner | M | W8 | todo |
-| W12 | Damage and destruction | M | W6 | todo |
-| W13 | Structural support and collapse | L | W12, W9 | todo |
+| W12 | Damage and destruction | M | W6 | beta |
+| W13 | Structural support and collapse | L | W12, W9 | beta |
 | W14 | Bodies | L | W12, W7, W9 | todo |
 | W15 | Energy releases | L | W13, W14 | todo |
 | W16 | Fields | L | W12 | todo |
@@ -448,8 +448,8 @@ review additions, drift in areas and `enclose`. Stubbed:
 - `area_kind` and `plane` are in the same state as the definitions of W3:
   built by `WorldDefs::build`, not registered with the loader. The `site`
   definition type is document 10's: a site holds a bare `SiteDefId`.
-- A change of ambient gravity over an area asks for no stability check
-  yet (02 §14.5; W13).
+- A change of ambient gravity over an area asked for no stability check.
+  It does since W13: see that package.
 - No benchmarks (W23).
 
 ### W8 — Tracts, regions, generation, loading
@@ -613,6 +613,22 @@ Done when
 - Repeated above-threshold packets destroy at the predicted count.
 - Scenario `wall_punch`.
 
+Status `beta` (decisions D-380 to D-382, D-386). Built as 02 §12 now
+reads: `DamagePacket`, `DamageOutcome`, the rule as `resolve_packet`,
+`WorldEdit::damage` and `damage_along`; destruction with `on_destroy`,
+rubble that keeps matter, piles up and becomes a heap, and
+`ElementDestroyed`; `OccupantUnsupported` from any edit that takes an
+occupant's footing away. Stubbed:
+
+- The debris hook throws nothing: `WorldCtx::throw_debris` is where W14
+  launches bodies, within `debris.max_bodies`.
+- A material names one rubble fixture. Rubble by damage type and rubble
+  that is a field are W25's.
+- The body of `wall_punch` is the test `a_wall_is_punched_through` in
+  `crates/clash-world/tests/damage.rs`. The script is owed to the
+  script runner (W11).
+- No benchmark (W23).
+
 ### W13 — Structural support and collapse
 
 **Spec** 02 §14 · **Size** L
@@ -645,6 +661,32 @@ Done when
 - Scenario `tower_pancake`, including a save in mid-collapse.
 - Scenario `weakened_columns`: damage short of destruction brings a
   building down by load alone.
+
+Status `beta` (decisions D-383 to D-386). Built as 02 §14.1 to §14.3
+and §14.5 now read: the consumer of the stability queue with the settle
+delay on the clock of the change; `Cosmos::assess_stability` with island
+discovery, the support pass with carriers and the load pass; crushing;
+falling masses as processes of the world, with landing blows, cascades,
+rubble and `OccupantExposed`; collapses with `CollapseStarted` and
+`CollapseSettled`; checks when gravity changes over an area; and
+`WorldCtx::handle_wake`, the world's one entry point for wake-ups, which
+the kernel calls. Stubbed:
+
+- No ticket is held (W9): the place is marked `W9:` in
+  `collapse.rs`. A mass that arrives where nothing is loaded is dropped.
+- Resolve mode (02 §14.4) is not built. W15 and W17 need it, and
+  force-resolving a collapse with it.
+- Floating floors (02 §14.1) are W25's, and the tremor's factors on
+  span and bearing W24's.
+- The save in the middle of `tower_pancake` writes the timeline and
+  `Cosmos::processes` with the codec and copies the cells: tract blobs
+  and the cosmos's own serialisation are W10's, which must write
+  `activity` and the stability queue with the rest.
+- The bodies of `tower_pancake` and `weakened_columns` are tests of
+  those names in `crates/clash-world/tests/collapse.rs`. The scripts are
+  owed to the script runner (W11).
+- A timing test prints figures (`timing_of_a_check_and_of_a_collapse`,
+  ignored); the benchmark and its budget are W23's.
 
 ### W14 — Bodies
 
