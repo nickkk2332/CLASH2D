@@ -5,6 +5,12 @@ genre-neutral kit for ASCII immersive sims, with all content in JSON mods. It
 is built by agents working from written specifications. You have no memory of
 earlier sessions; the documents are the memory.
 
+## The beta is being built
+
+Read [docs/plans/beta.md](docs/plans/beta.md) first. It says what is being
+built now, in what order, and the working rules for agents, which take
+precedence over the reading order below where they differ.
+
 ## Before you write anything
 
 Read, in this order:

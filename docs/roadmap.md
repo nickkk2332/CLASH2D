@@ -43,6 +43,7 @@ Document numbers are stable. Other documents refer to them by number.
 | [scenarios](plans/scenarios.md) | 13 | M5 |
 | [vehicles](plans/vehicles.md) | 11 | M6 |
 | [tooling](plans/tooling.md) | 14 | Alongside every stage |
+| [beta](plans/beta.md) | The order in which the above is being built first | Now |
 
 ## What remains
 
