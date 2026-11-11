@@ -70,6 +70,7 @@ pub mod item;
 pub mod kernel_verbs;
 pub mod later;
 pub mod mass;
+pub mod movement;
 mod props;
 pub mod reader;
 pub mod reason;
@@ -130,4 +131,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     stats::register_defs(types);
     body::register_defs(types);
     item::register_defs(types);
+    movement::register_defs(types);
 }

@@ -3,7 +3,7 @@
   "name": "Interface",
   "version": "0.1.0",
   "engine": ">=0.1",
-  "description": "The default screens built with the toolkit, with the default theme, colours, keymap and controls. So far: two themes, the keymap, the controls of play, the play screen and look mode, the pickers, the prompts for decisions, placeholders for the other screens, and a gallery of every widget.",
+  "description": "The default screens built with the toolkit, with the default theme, colours, keymap and controls. So far: two themes, the keymap, the controls of play, the play screen and look mode, the pickers, the prompts for decisions, how the simulation's events are played back, placeholders for the other screens, and a gallery of every widget.",
   "authors": ["CLASH2D contributors"],
   "requires": []
 }

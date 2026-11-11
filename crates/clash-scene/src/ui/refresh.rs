@@ -302,6 +302,7 @@ impl Refresher<'_> {
             Kind::Log {
                 filter,
                 filter_from,
+                rows_cache,
                 ..
             } => {
                 if let Some(binding) = filter_from
@@ -313,6 +314,8 @@ impl Refresher<'_> {
                             .filter_map(|name| name.as_str().map(str::to_owned))
                             .collect()
                     });
+                    // Other lines may pass now.
+                    *rows_cache = None;
                 }
             }
             Kind::Figure {
@@ -477,7 +480,19 @@ impl Screen {
                     (Kind::Input { cursor, .. }, Kind::Input { cursor: was, .. }) => {
                         *cursor = *was;
                     }
-                    (Kind::Log { back, .. }, Kind::Log { back: was, .. }) => *back = *was,
+                    (
+                        Kind::Log {
+                            back, rows_seen, ..
+                        },
+                        Kind::Log {
+                            back: was,
+                            rows_seen: seen,
+                            ..
+                        },
+                    ) => {
+                        *back = *was;
+                        *rows_seen = *seen;
+                    }
                     _ => {}
                 }
             }

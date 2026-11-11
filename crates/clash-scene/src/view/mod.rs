@@ -73,9 +73,10 @@ pub use glyphs::{
 };
 pub use model::{
     CellContents, DecalSeen, EntitySprite, FieldSeen, GridReader, HeardId, HeardMarker, KnownCell,
-    LIGHT_FULL, SpriteId, SpriteKind, ViewModel,
+    LIGHT_FULL, SpriteId, SpriteKind, ViewDifference, ViewModel,
 };
 pub use overlay::{BuiltinOverlay, Overlay, OverlayDef, OverlayError, OverlayValues};
 pub use paint::{
-    PORTALS_DRAWN, SUBGRIDS_COMPOSITED, WorldView, paint_chart_view, paint_region_map,
+    CellFx, PORTALS_DRAWN, SUBGRIDS_COMPOSITED, ViewFx, WorldSprite, WorldView, paint_chart_view,
+    paint_region_map,
 };

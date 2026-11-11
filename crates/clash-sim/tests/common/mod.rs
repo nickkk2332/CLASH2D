@@ -104,6 +104,24 @@ pub fn try_defs(extra: &str) -> Result<Arc<Defs>, String> {
         .map_err(|diagnostics| diagnostics.render())
 }
 
+/// Loads `mods/core`'s world content with more files of definitions,
+/// each a path within the mod and its text, or renders why not.
+pub fn try_defs_with(extra: &[(&str, &str)]) -> Result<Arc<Defs>, String> {
+    let types = types();
+    let core = core_files();
+    let files: Vec<(&str, &str)> = core
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .chain(extra.iter().copied())
+        .collect();
+    Loader::new(&types)
+        .expr_registry(&clash_sim::engine_registry())
+        .memory_mod("core", r#"{ "id": "core" }"#, &files)
+        .load_mods(&["core"])
+        .into_result()
+        .map_err(|diagnostics| diagnostics.render())
+}
+
 /// The definitions every test here runs on.
 pub fn defs() -> Arc<Defs> {
     try_defs(EXTRA_DEFS)
