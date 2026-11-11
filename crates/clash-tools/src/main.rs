@@ -78,7 +78,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    use clash_data::{Defs, Loader};
+    use clash_data::Defs;
     use clash_scene::UiDefs;
     use clash_time::Timeline;
     use clash_world::defs::{BlockDef, RealmDef};
@@ -95,7 +95,7 @@ mod tests {
     /// Loads the default profile of the repository, as the game will.
     fn default_profile() -> Arc<Defs> {
         let types = engine_types();
-        let outcome = Loader::new(&types)
+        let outcome = clash_scene::engine_loader(&types)
             .search_path(mods_dir())
             .load_profile("default");
         assert!(
@@ -170,6 +170,42 @@ mod tests {
             let diagnostics = check(&defs);
             assert!(diagnostics.is_empty(), "{}", diagnostics.render());
         }
+    }
+
+    #[test]
+    fn mods_are_checked_against_the_simulations_own_registry() {
+        // The bundled content names real kinds and properties, and a
+        // variable of its own at the end of a chain.
+        let defs = default_profile();
+        let registry = defs.expr_registry();
+        for kind in ["entity", "loc", "tract", "global"] {
+            assert!(registry.kind_id(kind).is_some(), "{kind}");
+        }
+        assert!(registry.function_id("core:well_trodden").is_some());
+        assert!(defs.variables().get("core:visits").is_some());
+        let well_trodden = defs
+            .functions()
+            .iter()
+            .find(|(_, function)| function.name == "core:well_trodden")
+            .map(|(_, function)| function)
+            .expect("the function is loaded");
+        assert!(well_trodden.is_compiled());
+        assert!(!well_trodden.belief_safe, "it reads truth about someone");
+
+        // A property that does not exist is a located load error.
+        let types = engine_types();
+        let files = [(
+            "data/broken.json",
+            r#"[ { "type": "function", "id": "lost", "params": { "who": "entity" },
+                   "returns": "bool", "value": "$who.locc.standable" } ]"#,
+        )];
+        let outcome = clash_scene::engine_loader(&types)
+            .memory_mod("broken", r#"{ "id": "broken" }"#, &files)
+            .load_mods(&["broken"]);
+        assert!(outcome.has_errors());
+        let rendered = outcome.diagnostics.render();
+        assert!(rendered.contains("locc"), "{rendered}");
+        assert!(rendered.contains("data/broken.json"), "{rendered}");
     }
 
     #[test]

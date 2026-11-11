@@ -125,8 +125,12 @@ pub fn run(
     })
 }
 
+/// A loader that checks expressions against the engine's registry: the
+/// kinds, properties, functions and events the simulation offers
+/// (05 §5.3), so that a mod's expressions are held to what the game
+/// will hold them to.
 fn loader<'t>(types: &'t DefTypes, options: &Options) -> Loader<'t> {
-    let mut loader = Loader::new(types).lenient(options.lenient);
+    let mut loader = clash_scene::engine_loader(types).lenient(options.lenient);
     for dir in &options.mods {
         loader = loader.search_path(dir.clone());
     }

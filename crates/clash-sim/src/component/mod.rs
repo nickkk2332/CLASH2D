@@ -86,7 +86,8 @@
 //!
 //! # What the kernel holds and calls
 //!
-//! The simulation holds one [`Components`] beside its entity table.
+//! The simulation holds one [`Components`] beside its entity table, and
+//! does what this table asks: see [`mass`](crate::mass).
 //!
 //! | When | The kernel |
 //! |------|-----------|
@@ -108,12 +109,13 @@
 //!
 //! # What is not built here
 //!
-//! - **Properties and events.** The expression registry is the kernel's.
-//!   The functions that will back the properties of 06 §13 are here to
-//!   be registered: `mass` ([`Physical::mass`]), `carried_mass`,
-//!   `volume`, `height`, `name` ([`Identity::name`], falling back to the
-//!   definition's) and `templates`. A generic "has this component" is
-//!   [`Components::has`].
+//! - **Properties and events.** The expression registry is the kernel's
+//!   ([`registry`](crate::registry)), and it registers what these
+//!   components back: `mass` ([`Physical::mass`]), `own_mass`,
+//!   `carried_mass`, `volume`, `height`, `name` ([`Identity::name`]),
+//!   `description`, `def` and `has_component` ([`Components::has`]).
+//!   `templates`, and a name that falls back to the definition's, are
+//!   not registered yet (06 §13).
 //! - **Definition ids in saves.** [`DefKey`] and [`TemplateId`] hold
 //!   runtime ids. Writing them by qualified id through the save's id
 //!   table (01 §7) belongs to the simulation's save path.

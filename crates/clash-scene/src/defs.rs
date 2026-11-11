@@ -163,6 +163,21 @@ pub fn engine_types() -> DefTypes {
     types
 }
 
+/// The expression registry of the engine: every kind of subject,
+/// property, function and event the simulation offers (05 §5.3). It is
+/// what a mod's expressions are checked against.
+pub fn engine_registry() -> clash_data::expr::ExprRegistry {
+    clash_sim::engine_registry()
+}
+
+/// A loader over definition types that checks every expression against
+/// the engine's registry ([`engine_registry`]). The application, the
+/// tools and the examples start from this, so that all of them read
+/// mods with the same types and the same kinds and properties.
+pub fn engine_loader(types: &DefTypes) -> clash_data::Loader<'_> {
+    clash_data::Loader::new(types).expr_registry(&engine_registry())
+}
+
 /// Registers this crate's definition types with the loader: `color`,
 /// `theme`, `keymap`, `figure`, `screen`, `ambience` and `overlay`.
 ///
