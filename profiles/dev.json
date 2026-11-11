@@ -1,0 +1,23 @@
+{
+  "id": "dev",
+  "name": "CLASH2D (development)",
+  "mods": ["core", "ui"],
+  "boot_screen": "ui:title",
+  "screens": {
+    "play": "ui:play",
+    "decision.free": "ui:play",
+    "decision.reaction": "ui:reaction",
+    "decision.choice": "ui:choice",
+    "confirm": "ui:confirm",
+    "error": "ui:error",
+    "picker.list": "ui:pick_list",
+    "picker.entity": "ui:pick_entity",
+    "picker.cell": "ui:pick_cell",
+    "picker.direction": "ui:pick_direction",
+    "picker.number": "ui:pick_number",
+    "picker.text": "ui:pick_text",
+    "picker.multi": "ui:pick_multi",
+    "context_menu": "ui:context_menu"
+  },
+  "preferences": { "ui:development": true }
+}
