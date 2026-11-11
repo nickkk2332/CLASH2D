@@ -19,14 +19,12 @@ use std::sync::Arc;
 use clash_data::{DefTypes, Defs, Diagnostics, Loader};
 use clash_expr::Value;
 use clash_scene::control::{
-    COMMAND_CHOOSE, COMMAND_PASS, COMMAND_REACT, ROLE_PLAY, ControlDef, DecisionAsk,
-    PendingDecision, ReactionOption,
+    COMMAND_CHOOSE, COMMAND_PASS, COMMAND_REACT, ControlDef, DecisionAsk, PendingDecision,
+    ROLE_PLAY, ReactionOption,
 };
 use clash_scene::testing::{FakeApp, FakeHost};
 use clash_scene::ui::{AppService, Collect, CommandKind};
-use clash_scene::view::{
-    CellContents, EntitySprite, LIGHT_FULL, SpriteId, SpriteKind, WorldView,
-};
+use clash_scene::view::{CellContents, EntitySprite, LIGHT_FULL, SpriteId, SpriteKind, WorldView};
 use clash_scene::{
     Frame, GlyphPart, InputEvent, Mods, MouseButton, MouseEvent, MouseKind, NullFrontend, Scene,
     UiCommand, UiDefs, UiOutcome, assert_golden, check_defs,
@@ -136,7 +134,11 @@ impl Run {
                 let edge = x == 0 || y == 0 || x == 10 || y == 6;
                 let contents = CellContents {
                     floor,
-                    block: if edge && x <= 10 { wall } else { BlockState::NONE },
+                    block: if edge && x <= 10 {
+                        wall
+                    } else {
+                        BlockState::NONE
+                    },
                     light: LIGHT_FULL,
                     ..CellContents::EMPTY
                 };
@@ -159,7 +161,8 @@ impl Run {
                 facing: None,
                 suspected: false,
             };
-            view.model_mut().upsert_sprite(SpriteId::new(number), sprite);
+            view.model_mut()
+                .upsert_sprite(SpriteId::new(number), sprite);
             host.place(host.entity(number), x, y, 0);
         }
         scene.set_world(view);
@@ -283,11 +286,7 @@ fn the_play_screen_shows_the_map_the_log_and_a_status_column_with_slots() {
     // The fixture's part is in the play screen's slot.
     assert!(run.row_with("Blood").contains("████"), "{text}");
     assert_eq!(
-        run.scene
-            .top()
-            .unwrap()
-            .slots()
-            .collect::<Vec<_>>(),
+        run.scene.top().unwrap().slots().collect::<Vec<_>>(),
         ["play.bars", "play.side"]
     );
     assert_golden(golden("play_first"), run.shown());
@@ -315,7 +314,10 @@ fn the_play_screen_shows_the_map_the_log_and_a_status_column_with_slots() {
     // Waiting is a command of the simulation, not an action.
     let outcomes = run.press(&["."]);
     let wait = submitted(&outcomes);
-    assert_eq!((wait.kind, wait.name.as_str()), (CommandKind::Command, "wait"));
+    assert_eq!(
+        (wait.kind, wait.name.as_str()),
+        (CommandKind::Command, "wait")
+    );
     assert_eq!(wait.args, args([("dur", Value::Int(1))]));
     // A control that only runs effects, bound by its qualified name.
     let outcomes = run.press(&["s"]);
@@ -478,7 +480,9 @@ fn the_precise_twin_asks_for_every_parameter_filled_in_with_its_default() {
     assert_golden(golden("pick_entity"), run.shown());
     let mut walked = vec![run.top().to_owned()];
     let mut outcomes = Vec::new();
-    for key in ["enter", "enter", "enter", "enter", "enter", "enter", "enter"] {
+    for key in [
+        "enter", "enter", "enter", "enter", "enter", "enter", "enter",
+    ] {
         outcomes = run.press(&[key]);
         walked.push(run.top().to_owned());
     }
@@ -697,7 +701,10 @@ fn an_answer_the_parameter_cannot_hold_is_refused_and_the_picker_stays() {
     // One cell west of the stranger nobody stands: there is nothing to
     // choose there.
     run.press(&["h"]);
-    assert!(run.row_with("Strike: target").contains("Nobody there (0 of 2)"));
+    assert!(
+        run.row_with("Strike: target")
+            .contains("Nobody there (0 of 2)")
+    );
     let outcomes = run.press(&["enter"]);
     assert_eq!(
         outcomes,
@@ -897,10 +904,7 @@ fn a_choice_is_answered_with_its_number_and_a_free_decision_is_the_play_screens(
         },
     };
     run.host.ask(Some(choice));
-    assert_eq!(
-        run.press(&[]),
-        [UiOutcome::Opened("ui:choice".to_owned())]
-    );
+    assert_eq!(run.press(&[]), [UiOutcome::Opened("ui:choice".to_owned())]);
     assert!(run.shown().text().contains("The door is locked."));
     // A choice must be made: Esc does nothing.
     assert_eq!(run.press(&["escape"]), []);

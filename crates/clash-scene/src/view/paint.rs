@@ -14,7 +14,7 @@
 //! rectangle (the cell left of and above the middle where the size is
 //! even), east to the right and south down. Zoomed out by a factor `n`,
 //! each glyph stands for a block of `n` by `n` cells and shows its most
-//! significant cell ([`Rank`](super::Rank)); blocks are aligned to
+//! significant cell ([`Rank`]); blocks are aligned to
 //! multiples of `n`, so the picture does not shimmer as the cursor
 //! moves. The factor is the camera's times the view's own `zoom`.
 //!
@@ -306,9 +306,8 @@ impl WorldView {
             if self.line {
                 // What stands in a cell is not drawn over: the line
                 // shows through open ground only.
-                let mut open = |cell: CellPos| {
-                    composer.plan_with(&mut reader, cell).rank <= Rank::Field
-                };
+                let mut open =
+                    |cell: CellPos| composer.plan_with(&mut reader, cell).rank <= Rank::Field;
                 self.paint_line(canvas, cursor, &place, &mut open);
             }
             self.paint_cursor(canvas, place(cursor));

@@ -40,7 +40,9 @@
 //! # What is not here yet
 //!
 //! Playback, cutscenes and the link to the simulation come with packages
-//! U5, U10 and U11 of `docs/plans/first-playable.md`. Until perception
+//! U5, U10 and U11 of `docs/plans/first-playable.md`. Several
+//! characters cannot yet be given one command (12 §9.6), and a route is
+//! asked for one step at a time with the cell picker. Until perception
 //! and playback exist, nothing but a test or the omniscient fill of
 //! [`view::omniscient`] puts anything into the view model. Nothing
 //! implements [`SceneHost`] but tests and the fake of [`testing`]: the
@@ -69,8 +71,8 @@ pub use app::{AppCurrent, AppEntry, AppList, AppRequest, AppState, NoApp};
 pub use color::{Ansi16, Color, ColorDef, ColorError, ColorRef, Rgb, ansi256};
 pub use control::{ControlDef, DecisionAsk, ParamAsk, PendingDecision, ReactionOption};
 pub use defs::{
-    AmbienceId, ColorId, ControlId, FigureId, KeymapId, OverlayId, PreferenceId, ScreenId,
-    ThemeId, UiDefs, UiPartId, check_defs, engine_types, register_defs, register_engine_defs,
+    AmbienceId, ColorId, ControlId, FigureId, KeymapId, OverlayId, PreferenceId, ScreenId, ThemeId,
+    UiDefs, UiPartId, check_defs, engine_types, register_defs, register_engine_defs,
 };
 pub use frame::{
     Attrs, Borders, Canvas, CellStyle, Frame, FrameCell, FrameFx, Rect, Sprite, Wash,

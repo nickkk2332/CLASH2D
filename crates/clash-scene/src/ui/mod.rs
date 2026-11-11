@@ -131,8 +131,8 @@
 //! # Not built yet
 //!
 //! - A view's `centre` and an `inspect`'s `of` are compiled and not yet
-//!   used: the camera is the scene's (U7) and listing a subject's
-//!   properties comes with the inspector. An `art` whose `value` is a
+//!   used: the camera is moved by the `camera` effect, and listing a
+//!   subject's properties comes with the inspector. An `art` whose `value` is a
 //!   template draws nothing.
 //! - `map_view`, `section_view`, `region_map` and `chart_view` have their
 //!   place, focus and fields; a [`ViewPainter`] draws them. The scene's

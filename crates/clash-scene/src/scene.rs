@@ -17,7 +17,10 @@
 //!
 //! The simulation's own command type is not known here. An effect builds
 //! a [`UiCommand`], the generic form of `act`, `command` and `run`: a
-//! name and arguments as values. A host whose command can be made from
+//! name and arguments as values. An `act` that asks for its parameters
+//! is put together with pickers first ([`crate::control`]), and a
+//! decision the simulation is waiting for is answered with one
+//! ([`Scene::sync_decision`]). A host whose command can be made from
 //! one (`H::Command: From<UiCommand>`) is submitted to, and refuses what
 //! it does not accept, with its reason.
 //!
@@ -62,9 +65,9 @@ use crate::input::{InputEvent, KeyChord, KeymapDef};
 use crate::theme::Theme;
 use crate::ui::{
     AppService, Args, BindScope, Binding, CameraEffect, Collect, CommandKind, Evaluator,
-    MessageLog, PreferenceDef, Prop, SLOT_APP, SLOT_IT, SLOT_PARTY, SLOT_SCREEN, SLOT_VIEW,
-    Screen, ScreenDef, TextProp, UiData, UiEffect, UiEffects, UiEvent, ValueProp, VarRef,
-    ViewPainter, from_var, to_var,
+    MessageLog, PreferenceDef, Prop, SLOT_APP, SLOT_IT, SLOT_PARTY, SLOT_SCREEN, SLOT_VIEW, Screen,
+    ScreenDef, TextProp, UiData, UiEffect, UiEffects, UiEvent, ValueProp, VarRef, ViewPainter,
+    from_var, to_var,
 };
 use crate::view::{SpriteId, WorldView};
 
@@ -93,8 +96,11 @@ pub struct UiCommand {
     pub name: String,
     /// The arguments, by name, as the effect's expressions gave them.
     pub args: BTreeMap<String, ExprValue>,
-    /// For an action: whether the player is to be asked for its
-    /// parameters (12 §9.3).
+    /// For an action: whether the player was still to be asked for its
+    /// parameters (12 §9.3). The scene asks before it submits, so this
+    /// is [`Collect::Given`] in every command it has put together; it
+    /// is anything else only where the scene had no definition of the
+    /// action to read, and hands the command over as it was written.
     pub collect: Collect,
 }
 
@@ -1028,8 +1034,7 @@ impl<H: SceneHost> Scene<H> {
         match screens.last_mut() {
             Some(screen) => {
                 // A name nothing on the screen used may be a control's.
-                let controls =
-                    |name: &str| ui.as_ref().and_then(|ui| ui.control(name, keymap_ns));
+                let controls = |name: &str| ui.as_ref().and_then(|ui| ui.control(name, keymap_ns));
                 let events = screen.input_with(event, keymap, &controls);
                 if !events.is_empty() {
                     *stale = true;
@@ -1149,6 +1154,10 @@ impl<H: SceneHost> Scene<H> {
         if self.size != (frame.cols, frame.rows) {
             self.size = (frame.cols, frame.rows);
             self.stale = true;
+        }
+        if self.stale {
+            // The simulation may have moved what the cursor is over.
+            self.push_status();
         }
         self.refresh();
         frame.clear(FrameCell::blank(self.theme.base()));

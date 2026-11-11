@@ -23,9 +23,7 @@ use clash_world::CellPos;
 
 use crate::defs::namespace_of;
 use crate::scene::{Pending, ROLE_PICK_LIST, Scene, SceneHost, UiCommand, UiOutcome, Wait};
-use crate::ui::{
-    Binding, Collect, CommandEffect, CommandKind, PickerEffect, UiEffect, to_var,
-};
+use crate::ui::{Binding, Collect, CommandEffect, CommandKind, PickerEffect, UiEffect, to_var};
 use crate::view::Camera;
 
 /// What the roles of pickers start with: the picker for a parameter is
@@ -223,7 +221,9 @@ pub(crate) fn fits(ty: &Type, value: &ExprValue) -> bool {
         Type::Id(def_type) => {
             value.as_id().is_some_and(|id| id.ty == *def_type) || value.as_str().is_some()
         }
-        Type::Subject(kind) => value.as_subject().is_some_and(|handle| handle.kind == *kind),
+        Type::Subject(kind) => value
+            .as_subject()
+            .is_some_and(|handle| handle.kind == *kind),
         Type::List(entry) => value
             .as_list()
             .is_some_and(|items| items.iter().all(|item| fits(entry, item))),
@@ -1024,9 +1024,7 @@ where
             },
         };
         if self.submit_command(command, out) && !collecting.rest.is_empty() {
-            let origin = collecting
-                .origin
-                .filter(|at| *at < self.screens.len());
+            let origin = collecting.origin.filter(|at| *at < self.screens.len());
             self.run_list(&collecting.rest, collecting.it, origin, out);
         }
     }

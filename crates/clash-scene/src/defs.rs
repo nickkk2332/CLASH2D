@@ -131,8 +131,7 @@ impl Def for KeymapDef {
 impl Def for ControlDef {
     type Id = ControlId;
     const TYPE: &'static str = "control";
-    const DOC: &'static str =
-        "Something the player can do, by a name a keymap gives to a key: interface effects to run (12 §9.2).";
+    const DOC: &'static str = "Something the player can do, by a name a keymap gives to a key: interface effects to run (12 §9.2).";
 
     fn compile(&mut self, cx: &mut CompileCx<'_>) {
         self.compile_bindings(cx);

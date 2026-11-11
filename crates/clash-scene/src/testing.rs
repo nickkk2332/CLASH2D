@@ -439,9 +439,8 @@ impl SceneHost for FakeHost {
         let world = lock(&self.world);
         let handle = value.as_subject()?;
         // The fake world has one grid.
-        (handle.kind == world.kinds?.loc).then(|| {
-            Location::new(clash_world::GridId::new(0), unpack(handle.payload))
-        })
+        (handle.kind == world.kinds?.loc)
+            .then(|| Location::new(clash_world::GridId::new(0), unpack(handle.payload)))
     }
 
     fn sprite_value(&mut self, sprite: SpriteId) -> Value {

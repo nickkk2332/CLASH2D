@@ -671,7 +671,10 @@ impl Screen {
                 let scrolls = |kind: &Kind| {
                     matches!(
                         kind,
-                        Kind::Listing(_) | Kind::Log { .. } | Kind::Scroll { .. } | Kind::View { .. }
+                        Kind::Listing(_)
+                            | Kind::Log { .. }
+                            | Kind::Scroll { .. }
+                            | Kind::View { .. }
                     )
                 };
                 let Some(index) = up_from(self, hit, &scrolls) else {

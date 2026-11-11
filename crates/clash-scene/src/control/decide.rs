@@ -155,7 +155,9 @@ where
                     ])
                 });
                 let real = |seconds: f64| {
-                    ExprValue::Real(clash_core::Real::new(seconds).unwrap_or(clash_core::Real::ZERO))
+                    ExprValue::Real(
+                        clash_core::Real::new(seconds).unwrap_or(clash_core::Real::ZERO),
+                    )
                 };
                 let with = BTreeMap::from([
                     who,
@@ -207,7 +209,9 @@ where
         let Some(decision) = self.deciding.clone() else {
             return;
         };
-        let option = answer.as_int().and_then(|index| usize::try_from(index).ok());
+        let option = answer
+            .as_int()
+            .and_then(|index| usize::try_from(index).ok());
         let entity = decision.entity.clone();
         let command = |name: &str, args: BTreeMap<String, ExprValue>| UiCommand {
             kind: CommandKind::Command,

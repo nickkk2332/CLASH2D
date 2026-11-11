@@ -312,7 +312,9 @@ impl<H: SceneHost> Scene<H> {
                     let mut cells: Vec<CellPos> = world
                         .model()
                         .sprites()
-                        .filter(|(_, sprite)| sprite.loc.grid == grid && sprite.loc.cell.z == storey)
+                        .filter(|(_, sprite)| {
+                            sprite.loc.grid == grid && sprite.loc.cell.z == storey
+                        })
                         .map(|(_, sprite)| sprite.loc.cell)
                         .filter(|cell| *cell != subject)
                         .collect();

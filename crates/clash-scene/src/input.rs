@@ -350,8 +350,11 @@ pub const CONTEXT_MENU: &str = "menu";
 ///   "menu": { "up": "prev", "down": "next", "enter": "accept", "escape": "back" } }
 /// ```
 ///
-/// Controls, rebinding and the `skip` name are package U7; this is the
-/// definition and its lookup, which the toolkit's navigation needs.
+/// A context is whatever a screen names as its own; a key a context
+/// does not name is looked up in `menu`. What a name does is said by
+/// the screen on top, by a `control` ([`crate::ControlDef`]) or by the
+/// toolkit, in that order. [`Scene::rebind`](crate::Scene::rebind)
+/// changes the keymap in force. The `skip` name comes with playback.
 #[derive(Clone, Debug, PartialEq, Eq, Default, Deserialize)]
 #[serde(transparent)]
 pub struct KeymapDef {

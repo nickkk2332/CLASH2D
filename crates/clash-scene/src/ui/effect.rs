@@ -766,8 +766,8 @@ impl UiEffects {
                     }
                 }
                 UiEffect::App(app) => compile_args(&mut app.args, bx),
-                UiEffect::Camera(_)
-                | UiEffect::Picker(PickerEffect::Done | PickerEffect::Undo) => {}
+                UiEffect::Camera(_) | UiEffect::Picker(PickerEffect::Done | PickerEffect::Undo) => {
+                }
                 UiEffect::Picker(PickerEffect::Toggle(value)) => compile_value(value, bx),
             }
         }
