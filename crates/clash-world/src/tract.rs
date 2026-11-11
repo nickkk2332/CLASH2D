@@ -16,8 +16,8 @@
 //! assert!(record.extra.is_none());
 //! ```
 
+use clash_core::{Hash128, Tick, Turn, VarMap, define_id, impl_state_hash};
 use clash_core::{StateHash, StateHasher};
-use clash_core::{Tick, Turn, VarMap, define_id, impl_state_hash};
 use serde::{Deserialize, Serialize};
 
 use crate::defs::{ElementState, Layer};
@@ -189,13 +189,19 @@ pub struct TractExtra {
     pub last_loaded: Tick,
     /// Tract-scope variables.
     pub vars: VarMap,
+    /// The fingerprint of the generator's inputs when the tract's cells
+    /// were last generated: the definitions' content, the generator and
+    /// its parameters, and the realm's seed (02 §11). `None` for a tract
+    /// that has never been generated.
+    pub generated: Option<Hash128>,
 }
 
 impl_state_hash!(TractExtra {
     pending,
     stamp_watermark,
     last_loaded,
-    vars
+    vars,
+    generated
 });
 
 /// What the engine knows about one tract, loaded or not (02 §9.1).
@@ -408,7 +414,7 @@ mod tract_table {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clash_core::{Hash128, codec};
+    use clash_core::codec;
 
     #[test]
     fn a_tract_record_is_small() {

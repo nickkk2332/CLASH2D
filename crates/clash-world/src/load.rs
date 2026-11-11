@@ -390,7 +390,7 @@ impl WorldDefs {
     /// the definitions hold.
     pub fn from_defs(defs: &Defs) -> Result<Arc<WorldDefs>, Diagnostics> {
         let mut diagnostics = Diagnostics::new();
-        let world = match WorldDefs::build(RawWorldDefs::from_defs(defs)) {
+        let mut world = match WorldDefs::build(RawWorldDefs::from_defs(defs)) {
             Ok(world) => world,
             Err(errors) => {
                 diagnostics.extend(errors.iter().map(|error| diagnostic_of(defs, error)));
@@ -419,6 +419,7 @@ impl WorldDefs {
             ));
             return Err(diagnostics);
         }
+        world.set_fingerprint(defs.fingerprint());
         Ok(Arc::new(world))
     }
 }

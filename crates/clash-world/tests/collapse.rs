@@ -14,9 +14,9 @@ use clash_core::{Dur, EntityId, Hash128, Real, Tick, codec};
 use clash_time::{Timeline, Wake, WakeDomain};
 use clash_world::{
     AmbientOverride, AreaShape, AreaSpec, BlockState, Cause, CauseKind, CellBox, CellPos,
-    ColumnBuilder, DamagePacket, DamageResult, Destruction, EventSink, FixtureState, FloorState,
-    Footprint, GravityOverride, Layer, Occupant, OccupantKind, SETTLE_DELAY, WorldActivity,
-    WorldDefs, WorldEvent,
+    ColumnBuilder, Cosmos, DamagePacket, DamageResult, Destruction, EventSink, FixtureState,
+    FloorState, Footprint, Generators, GravityOverride, Layer, MemoryStore, Occupant, OccupantKind,
+    SETTLE_DELAY, TractIo, TractStore, WorldDefs, WorldEvent,
 };
 use wreck::{World, at, build_tower, edge_cells, someone, world_from};
 
@@ -875,16 +875,20 @@ fn tower_pancake() {
     assert!(first.cosmos.falling_masses().count() > 0);
     assert!(first.cosmos.collapses().count() > 0);
 
-    let saved_timeline = codec::to_bytes(&first.timeline).unwrap();
-    let saved_activity = codec::to_bytes(first.cosmos.processes()).unwrap();
+    // A real save: the world into a store, and the timeline beside it
+    // as the simulation's own section (02 §11).
+    let mut store = MemoryStore::new();
+    let report = first.cosmos.save_world(&mut store).unwrap();
+    assert_eq!((report.loaded_tracts, report.tract_blobs), (2, 2));
+    store.put_section("sim.timeline", &codec::to_bytes(&first.timeline).unwrap());
+    store.commit().unwrap();
+    let saved_timeline = store.section("sim.timeline").unwrap().unwrap();
     let timeline: Timeline = codec::from_bytes(&saved_timeline).unwrap();
-    let activity: WorldActivity = codec::from_bytes(&saved_activity).unwrap();
-    assert_eq!(&activity, first.cosmos.processes());
-    // The cells are copied: tract blobs are the persistence package's.
-    let mut cosmos = first.cosmos.clone();
-    cosmos.restore_activity(WorldActivity::new());
-    assert_ne!(Hash128::of(&cosmos), Hash128::of(&first.cosmos));
-    cosmos.restore_activity(activity);
+    let generators = Generators::none(&first.defs);
+    let cosmos =
+        Cosmos::load_world(&first.defs, &mut TractIo::new(&generators, &mut store)).unwrap();
+    assert_eq!(cosmos.processes(), first.cosmos.processes());
+    assert!(!cosmos.processes().is_idle());
     let mut second = World {
         defs: Arc::clone(&first.defs),
         timeline,

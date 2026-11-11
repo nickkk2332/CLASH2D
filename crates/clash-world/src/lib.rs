@@ -74,6 +74,9 @@ mod occupancy;
 mod pos;
 mod process;
 pub mod query;
+mod redb_store;
+pub mod save;
+pub mod saveid;
 mod site;
 mod stability;
 pub mod storage;
@@ -102,9 +105,9 @@ pub use damage::{
     RUBBLE_CELL_UNITS, RUBBLE_UNITS_PER_M3, resolve_packet,
 };
 pub use defs::{
-    AreaKindId, AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
-    ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer, MaterialId,
-    PlaneId, RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
+    AreaKindId, AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, DefKind,
+    ElementFlags, ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer,
+    MaterialId, PlaneId, RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
 };
 pub use edit::{DISPLACE_RANGE_CELLS, StabilityQueue, StabilityRequest, WorldCtx, WorldEdit};
 pub use error::WorldError;
@@ -139,14 +142,17 @@ pub use query::{
     RayFilter, RayHit, RayHits, RayObstacles, RaySpan, RayTarget, RevParts, RevStamp, Step,
     StepKind,
 };
+pub use redb_store::RedbStore;
+pub use save::{SaveError, SaveReport, SaveWarning, WarnAt};
+pub use saveid::{MissingDef, SaveIds, SaveIdsImage};
 pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};
 pub use stability::{
     Assessment, SUPPORT_MAX_ELEMENTS, SUPPORT_MAX_PASSES, SUPPORT_REACH_CELLS,
     SUPPORT_REACH_STOREYS,
 };
 pub use store::{
-    MemoryStore, StoreError, TRACT_BLOB_KIND, TRACT_BLOB_VERSION, TractStore, decode_column,
-    encode_column,
+    MemoryStore, StoreError, StoredTract, TRACT_BLOB_KIND, TRACT_BLOB_VERSION, TractStore,
+    decode_tract, encode_tract,
 };
 pub use ticket::{
     Activity, DEFAULT_MAX_LOADED_TRACTS, DEFAULT_PRIORITY, HOT_RADIUS, PINNED, Reconciled,

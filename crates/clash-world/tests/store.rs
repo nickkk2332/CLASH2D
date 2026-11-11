@@ -1,6 +1,7 @@
-//! Tests for the tract store and the two functions that turn a column
+//! Tests for the tract store and the two functions that turn a tract
 //! into a blob and back (02 §11). Loading and unloading through them is
-//! tested with the generators, in `clash-gen`.
+//! tested with the generators, in `clash-gen`; saving a whole world, the
+//! file store and what a change of mods does are in `save.rs`.
 
 mod common;
 
@@ -11,8 +12,9 @@ use clash_time::Timeline;
 use clash_world::test_support::load_column;
 use clash_world::{
     BlockState, Cause, CellPos, Column, ColumnBuilder, Cosmos, DecalId, EventSink, FixtureState,
-    FloorState, GridId, Layer, Location, MemoryStore, RealmId, StoreError, TRACT_BLOB_KIND,
-    TRACT_BLOB_VERSION, TractPos, TractStore, WorldCtx, WorldDefs, decode_column, encode_column,
+    FloorState, GridId, Layer, Location, MemoryStore, RealmId, SaveIds, StoreError,
+    TRACT_BLOB_KIND, TRACT_BLOB_VERSION, TractPos, TractStore, WorldCtx, WorldDefs, decode_tract,
+    encode_tract,
 };
 use proptest::prelude::*;
 
@@ -66,6 +68,19 @@ fn build(defs: &WorldDefs, surface_z: i32, writes: &[Write]) -> Column {
     column.build()
 }
 
+/// A column as a tract blob with no entity section, against tables
+/// of ids that have named nothing yet.
+fn encode_column(defs: &WorldDefs, column: &Column) -> (Vec<u8>, SaveIds) {
+    let mut ids = SaveIds::new(defs);
+    let blob = encode_tract(defs, &mut ids, Some(column), &[]).unwrap();
+    (blob, ids)
+}
+
+/// The cells out of a tract blob.
+fn decode_column(defs: &WorldDefs, ids: &SaveIds, blob: &[u8]) -> Result<Column, StoreError> {
+    decode_tract(defs, ids, blob).map(|tract| tract.cells.expect("the blob holds cells"))
+}
+
 fn same_cells(a: &Column, b: &Column, writes: &[Write]) {
     assert_eq!(Hash128::of(a), Hash128::of(b));
     assert_eq!(a.below_fill(), b.below_fill());
@@ -96,12 +111,38 @@ proptest! {
     ) {
         let defs = common::test_defs();
         let column = build(&defs, surface_z, &writes);
-        let blob = encode_column(&column).unwrap();
-        let back = decode_column(&defs, &blob).unwrap();
+        let (blob, ids) = encode_column(&defs, &column);
+        let back = decode_column(&defs, &ids, &blob).unwrap();
         same_cells(&column, &back, &writes);
         prop_assert!(!back.is_dirty());
-        // Equal cells give equal bodies, and so the same blob again.
-        prop_assert_eq!(encode_column(&back).unwrap(), blob);
+        // Equal cells give equal bodies, and so the same blob again:
+        // against the same tables, and against new ones, which name the
+        // definitions in the order the cells first hold them.
+        let mut same = ids.clone();
+        prop_assert_eq!(&encode_tract(&defs, &mut same, Some(&back), &[]).unwrap(), &blob);
+        prop_assert_eq!(&same, &ids);
+        prop_assert_eq!(encode_column(&defs, &back).0, blob);
+    }
+
+    /// The entity section comes back byte for byte, with cells and
+    /// without, and the world never looks inside it.
+    #[test]
+    fn the_entity_section_is_kept_as_it_was_given(
+        entities in prop::collection::vec(any::<u8>(), 0..300),
+        with_cells in any::<bool>(),
+    ) {
+        let defs = common::test_defs();
+        let column = build(&defs, 0, &[(1, (3, 3, 0), 1)]);
+        let mut ids = SaveIds::new(&defs);
+        let cells = with_cells.then_some(&column);
+        let blob = encode_tract(&defs, &mut ids, cells, &entities).unwrap();
+        let back = decode_tract(&defs, &ids, &blob).unwrap();
+        prop_assert_eq!(&back.entities, &entities);
+        prop_assert_eq!(back.cells.is_some(), with_cells);
+        prop_assert!(back.missing.is_empty());
+        if let Some(cells) = &back.cells {
+            prop_assert_eq!(Hash128::of(cells), Hash128::of(&column));
+        }
     }
 }
 
@@ -129,8 +170,8 @@ fn damage_marks_and_variables_are_stored_with_the_cells() {
     let view = cosmos.grid(grid).unwrap();
     let column = view.column(tract).unwrap();
     assert!(column.is_dirty());
-    let blob = encode_column(column).unwrap();
-    let back = decode_column(&defs, &blob).unwrap();
+    let (blob, ids) = encode_column(&defs, column);
+    let back = decode_column(&defs, &ids, &blob).unwrap();
     same_cells(column, &back, &writes);
     assert_eq!(back.damage(at.cell), [0, 40, 0]);
     assert_eq!(back.var(at.cell, "core:mark"), Some(&Value::from(12)));
@@ -148,15 +189,16 @@ fn a_column_that_is_all_fill_is_a_small_blob() {
     let defs = common::test_defs();
     let ground = build(&defs, 0, &[]);
     assert_eq!(ground.stored_range(), None);
-    let blob = encode_column(&ground).unwrap();
+    let (blob, ids) = encode_column(&defs, &ground);
     assert!(blob.len() < 64, "{} bytes", blob.len());
-    let back = decode_column(&defs, &blob).unwrap();
+    let back = decode_column(&defs, &ids, &blob).unwrap();
     assert_eq!(Hash128::of(&back), Hash128::of(&ground));
     assert!(back.standable(CellPos::new(5, 5, 0)));
     assert!(!back.standable(CellPos::new(5, 5, 1)));
     // A surface that is not at the base of a chunk stores that chunk.
     let split = build(&defs, 3, &[]);
-    let back = decode_column(&defs, &encode_column(&split).unwrap()).unwrap();
+    let (blob, ids) = encode_column(&defs, &split);
+    let back = decode_column(&defs, &ids, &blob).unwrap();
     assert_eq!(Hash128::of(&back), Hash128::of(&split));
     assert!(back.standable(CellPos::new(0, 0, 3)));
     assert_ne!(Hash128::of(&back), Hash128::of(&ground));
@@ -169,11 +211,14 @@ fn a_damaged_blob_is_an_error_and_never_a_panic() {
         .map(|i| (i as u8, (i, 31 - i % 32, i % 9), i as usize))
         .collect();
     let column = build(&defs, 0, &writes);
-    let blob = encode_column(&column).unwrap();
-    assert!(decode_column(&defs, &blob).is_ok());
+    let (blob, ids) = encode_column(&defs, &column);
+    assert!(decode_column(&defs, &ids, &blob).is_ok());
     // Cut short anywhere.
     for len in 0..blob.len() {
-        assert!(decode_column(&defs, &blob[..len]).is_err(), "cut to {len}");
+        assert!(
+            decode_tract(&defs, &ids, &blob[..len]).is_err(),
+            "cut to {len}"
+        );
     }
     // Any one byte changed: the frame or the checksum catches it. A
     // change the compression happens to absorb leaves the cells as they
@@ -182,7 +227,7 @@ fn a_damaged_blob_is_an_error_and_never_a_panic() {
     for at in 0..blob.len() {
         let mut damaged = blob.clone();
         damaged[at] ^= 0x41;
-        match decode_column(&defs, &damaged) {
+        match decode_column(&defs, &ids, &damaged) {
             Err(_) => caught += 1,
             Ok(back) => assert_eq!(Hash128::of(&back), Hash128::of(&column), "byte {at}"),
         }
@@ -191,26 +236,36 @@ fn a_damaged_blob_is_an_error_and_never_a_panic() {
     // Something that is not a tract at all, and a tract of a layout
     // this build does not read.
     assert!(matches!(
-        decode_column(&defs, b"cells"),
+        decode_tract(&defs, &ids, b"cells"),
         Err(StoreError::Codec(_))
     ));
     let other = clash_core::codec::seal_blob(*b"SAVE", 1, &[1, 2, 3]).unwrap();
     assert!(matches!(
-        decode_column(&defs, &other),
+        decode_tract(&defs, &ids, &other),
         Err(StoreError::Codec(_))
     ));
-    let later =
-        clash_core::codec::seal_blob(TRACT_BLOB_KIND, TRACT_BLOB_VERSION + 1, &[0]).unwrap();
-    assert_eq!(
-        decode_column(&defs, &later).err(),
-        Some(StoreError::Version {
-            found: TRACT_BLOB_VERSION + 1,
-            expected: TRACT_BLOB_VERSION
-        })
-    );
+    // A tract of a layout this build does not read: a later one, and
+    // the first one, which held dense ids and was never written to disk.
+    for version in [TRACT_BLOB_VERSION + 1, 1] {
+        let blob = clash_core::codec::seal_blob(TRACT_BLOB_KIND, version, &[0]).unwrap();
+        assert_eq!(
+            decode_tract(&defs, &ids, &blob).err(),
+            Some(StoreError::Version {
+                found: version,
+                expected: TRACT_BLOB_VERSION
+            })
+        );
+    }
     // A body that reads as something else is refused by the decoder.
     let wrong = clash_core::codec::seal_blob(TRACT_BLOB_KIND, TRACT_BLOB_VERSION, &[9; 5]).unwrap();
-    assert!(decode_column(&defs, &wrong).is_err());
+    assert!(decode_tract(&defs, &ids, &wrong).is_err());
+    // Cells that name a definition the tables do not hold: the blob is
+    // sound and was written against other tables.
+    let fresh = SaveIds::new(&defs);
+    assert!(matches!(
+        decode_tract(&defs, &fresh, &blob),
+        Err(StoreError::Malformed(_))
+    ));
 }
 
 #[test]
@@ -239,4 +294,19 @@ fn the_memory_store_keeps_blobs_by_realm_and_tract() {
     assert_eq!(store.commit(), Ok(()));
     assert_eq!(store.commits(), 1);
     assert_eq!(store.len(), 2);
+    // Sections are kept by name, beside the tracts.
+    assert_eq!(store.section("sim.clock"), Ok(None));
+    store.put_section("sim.clock", b"noon");
+    store.put_section("a", b"first");
+    store.put_section("sim.clock", b"dusk");
+    assert_eq!(store.section("sim.clock"), Ok(Some(b"dusk".to_vec())));
+    assert_eq!(
+        store.section_names(),
+        Ok(vec!["a".to_owned(), "sim.clock".to_owned()])
+    );
+    store.delete_section("a");
+    store.delete_section("a");
+    assert_eq!(store.section_names(), Ok(vec!["sim.clock".to_owned()]));
+    assert_eq!(store.len(), 2);
+    assert_eq!(store.stored_bytes(), 3 + 5 + 4);
 }

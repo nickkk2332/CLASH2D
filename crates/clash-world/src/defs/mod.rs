@@ -18,6 +18,7 @@
 
 mod build;
 mod flags;
+mod placeholder;
 mod quantity;
 mod raw;
 mod state;
@@ -28,6 +29,7 @@ use std::collections::BTreeMap;
 use clash_core::{DenseId, Real, VarMap};
 
 pub use flags::{CellFlags, ElementFlags, EngineFlag};
+pub use placeholder::{DefKind, PLACEHOLDER_GLYPH, PLACEHOLDER_TAG};
 pub use quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temperature};
 pub use raw::{
     AreaKindDef, AtmosphereDef, BlockDef, BoundaryLinkSpec, ContactSpec, ContactSurfaceSpec,
@@ -488,6 +490,10 @@ pub struct WorldDefs {
     /// The furthest any element's light shines, in whole cells. `None`
     /// when no element gives light.
     source_reach: Option<i32>,
+    /// A fingerprint of the content the tables were built from.
+    fingerprint: clash_core::Hash128,
+    /// Where the placeholders of each kind begin (04 §12.3).
+    placeholders: placeholder::Placeholders,
 }
 
 // `WorldDefs` is shared between threads behind an `Arc`.
