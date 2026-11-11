@@ -1,0 +1,48 @@
+[
+  { "//": "Colours. Each has the word text uses for it and the terminal colour shown where 24-bit colour is not available.",
+    "type": "color", "id": "bone", "rgb": "#c8c8c8", "word": "white", "fallback": "white" },
+  { "type": "color", "id": "ink", "rgb": "#101010", "word": "black", "fallback": "black" },
+  { "type": "color", "id": "ash", "rgb": "#707070", "word": "grey", "fallback": "bright_black" },
+  { "type": "color", "id": "amber", "rgb": "#e0b040", "word": "yellow", "fallback": "yellow" },
+  { "type": "color", "id": "crimson", "rgb": "#a01828", "word": "red", "fallback": "red" },
+  { "type": "color", "id": "moss", "rgb": "#609040", "word": "green", "fallback": "green" },
+  { "type": "color", "id": "sky", "rgb": "#5090d0", "word": "blue", "fallback": "bright_blue" },
+
+  { "//": "The default theme. The style names from `title` to `notice` are the ones the toolkit draws its own parts with.",
+    "type": "theme", "id": "default",
+    "colors": {
+      "text": "bone", "background": "ink", "dim": "ash",
+      "accent": "amber", "blood": "crimson", "good": "moss", "info": "sky"
+    },
+    "styles": {
+      "title": { "fg": "accent", "bold": true },
+      "border": { "fg": "dim" },
+      "border_focus": { "fg": "accent" },
+      "selected": { "fg": "ink", "bg": "accent" },
+      "selected_idle": { "fg": "accent", "underline": true },
+      "header": { "fg": "info", "bold": true },
+      "bar": { "fg": "good" },
+      "bar_empty": { "fg": "dim" },
+      "field": { "underline": true },
+      "button": { "fg": "info" },
+      "hotkey": { "fg": "accent", "bold": true },
+      "tip": { "fg": "dim", "italic": true },
+      "notice": { "fg": "accent", "bold": true },
+      "warn": { "fg": "blood", "bold": true },
+      "sfx": { "fg": "accent", "italic": true }
+    },
+    "borders": { "h": "─", "v": "│", "tl": "┌", "tr": "┐", "bl": "└", "br": "┘" }
+  },
+
+  { "//": "What each key means. Screens in a context this does not list use `menu`.",
+    "type": "keymap", "id": "default",
+    "menu": {
+      "up": "prev", "down": "next", "left": "left", "right": "right",
+      "enter": "accept", "space": "toggle",
+      "escape": "back", "q": "back",
+      "tab": "focus_next", "shift+tab": "focus_prev",
+      "page_up": "page_prev", "page_down": "page_next", "home": "first", "end": "last",
+      "backspace": "erase", "delete": "delete"
+    }
+  }
+]

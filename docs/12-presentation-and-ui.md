@@ -97,7 +97,11 @@ Anything drawable carries a `glyph`:
   particular thing carries (06 §9.1), or `"dress"`, which takes the colour
   of what a creature is seen to be wearing.
 - `by_state` and `by_level` vary the glyph by element state or by field or
-  damage level.
+  damage level. Each entry gives only the parts it changes (`ch`, `fg`,
+  `bg`, `bold`). Entry 0 of `by_level` is level 0; a level past the end
+  uses the last entry.
+- A glyph must give `ch` or a `shape`. A colour the thing does not carry
+  (`"own"` on something with no colour of its own) leaves what is beneath.
 - A thing that fills several cells may give a `shape`: rows of characters,
   one per cell of its footprint, for a facing. Other facings are turned
   from it unless given. Without a shape every cell shows `ch`.
@@ -116,8 +120,12 @@ pub struct Frame {
     pub fx: FrameFx,                  // shake, flash, zoom, letterbox bars, tint
 }
 
-pub struct Sprite { pub ch: char, pub fg: Rgb, pub x: f32, pub y: f32,
+pub struct FrameCell { pub ch: char, pub fg: Color, pub bg: Color, pub attrs: Attrs }
+
+pub struct Sprite { pub ch: char, pub fg: Color, pub x: f32, pub y: f32,
                     pub scale: f32, pub alpha: f32, pub layer: u8 }
+
+pub struct Color { pub rgb: Rgb, pub fallback: Ansi16 }
 ```
 
 The grid is what a terminal can show. **Sprites** are how the window
@@ -125,6 +133,14 @@ frontend goes further: a character gliding between cells, fragments flying,
 floating text, afterimages. The terminal frontend draws each sprite in the
 nearest cell and ignores scale, alpha and `fx`. Nothing essential may be
 conveyed only by something a terminal cannot draw.
+
+Every colour in a frame carries both the exact colour and its
+sixteen-colour fallback (section 4.3), so a frontend chooses by its colour
+depth and looks nothing up. The attributes are bold, dim, italic,
+underline and reverse. A sprite's `x` and `y` are in cells, and whole
+numbers put it exactly on a cell; sprites are drawn lowest `layer` first,
+and within a layer in the order given. A frame is reused from one
+turn to the next and building one allocates nothing per cell.
 
 ### 4.3 Themes
 
@@ -140,6 +156,25 @@ Colour names used by glyphs and widgets resolve through the active theme.
 The terminal frontend maps colours to what the terminal supports and
 ignores `font`.
 
+| Part | Is |
+|------|----|
+| `colors` | Colours by name. Each value is `#rrggbb` or the name of another colour. |
+| `styles` | Styles by name. A style may set `fg`, `bg`, and turn `bold`, `dim`, `italic`, `underline` and `reverse` on or off. Whatever it leaves out stays as it was beneath. |
+| `borders` | The six characters frames are drawn with. Any left out keeps the engine's line-drawing character. |
+| `font` | The font file and glyph size for the window frontend. |
+| `marks` | Glyphs the engine draws for itself, by name: those of the world view (section 13) and the parts of widgets (section 10.3). |
+
+A colour name is looked up among the theme's `colors`, then the `color`
+definitions, then the sixteen terminal colours, which always exist:
+`black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and
+each with `bright_` in front. A style name is one of the theme's `styles`,
+or else a colour name, which colours the characters.
+
+The colours `text` and `background` are what an empty cell is drawn in.
+The toolkit draws its own parts with styles of fixed names (section 10.3).
+A theme that leaves any of these out gets a plain default, never an
+error.
+
 **Colours.** A colour is a definition:
 
 ```json
@@ -148,8 +183,12 @@ ignores `font`.
 
 `word` is how text names it, so that what a witness describes and what is
 drawn agree (15 §8.4). `fallback` is one of the sixteen terminal colours,
-used when the frontend cannot show `rgb`. A theme may override `rgb`. A
-bare `#rrggbb` is mapped to the nearest of the sixteen.
+used when the frontend cannot show `rgb`. A theme may override `rgb`, by
+giving a colour of the same name in its `colors`; the definition's `word`
+and `fallback` stay. A bare `#rrggbb` is mapped to the nearest of the
+sixteen. `word` left out is the definition's id; `fallback` left out is
+the nearest of the sixteen. With 256 colours the terminal frontend shows
+the nearest entry of that palette to `rgb`.
 
 Colour must not be the only thing that tells two things apart. The linter
 warns when two states or levels of one glyph, or two entries of one
@@ -157,7 +196,9 @@ legend, differ in colour alone.
 
 **Inline styles.** In any `Text`, `<name>…</>` applies a theme style or a
 colour to what it encloses: `"<blood>You are bleeding.</>"`. `<<` is a
-literal angle bracket. An unknown name is a load error.
+literal angle bracket. An unknown name is a load error, and so is a tag
+that is never closed. Tags nest, and the inner style is laid over the
+outer. A text is styled after its templates are filled in.
 
 ### 4.4 Looks
 
@@ -426,6 +467,19 @@ animations at cell resolution.
 Frontends deliver keys with modifiers, text, mouse movement, buttons and
 wheel with the cell under the pointer, resize and close.
 
+A key press is always delivered as a key, including one that types a
+character. Text is delivered only for what did not arrive as key presses:
+a paste, or the result of an input method. The terminal frontend
+delivers Control-C as close, because in a terminal it would otherwise
+interrupt the program and a player must always be able to leave.
+
+In data a key is written as its character (`"h"`, `"?"`) or one of
+`enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`,
+`right`, `home`, `end`, `page_up`, `page_down`, `insert`, `delete` and
+`f1` to `f12`, with any of `shift+`, `ctrl+` and `alt+` in front. A letter
+is written in lower case and `shift+a` is the capital. For any other
+character the shift key is not named.
+
 ### 9.2 Keymaps and controls
 
 Input is resolved in two steps.
@@ -516,19 +570,30 @@ acts as one.
   "context": "menu",
   "params": { "who": "entity" },
   "vars": { "tab": 0 },
+  "min_size": [60, 20],
   "layout": { "cols": [
     { "width": 34, "frame": "Wounds",
-      "list": { "of": { "wounds": { "of": "$who" } },
+      "list": { "rows": { "wounds": { "of": "$who" } },
                 "item": "{it.part.name}: {it.kind.name}", "empty": "Unhurt." } },
     { "fill": 1, "rows": [
       { "bar": { "label": "Blood", "value": "$who.pool.blood.frac", "style": "blood" } },
-      { "figure": { "of": "$who" } },
+      { "figure": { "figure": "body", "shade": "part_shade($who, it)" } },
       { "slot": "condition.extra" } ] } ] },
   "keys": { "back": [ { "close": {} } ],
             "tab":  [ { "set": { "screen.tab": "(screen.tab + 1) % 3" } } ] } }
 ```
 
 A screen has parameters, local variables, a layout tree, and key handlers.
+
+| Field | Is |
+|-------|----|
+| `title` | The screen's title, a text |
+| `context` | The keymap context (section 9.2) its keys are named in. Left out, `menu`. `debug` also lets it see truth and use the development widgets. A key the context does not name is looked up in `menu`. |
+| `params` | The values it is opened with: each name and its type. Read as `$name`. |
+| `vars` | Its own variables and their starting values: `true`, a number or a text. Read as `screen.name`. |
+| `min_size` | The smallest grid it can be shown on, as `[columns, rows]` |
+| `layout` | The layout tree: one node (section 10.2) |
+| `keys` | For a key name, the UI effects run when that key is pressed and no widget used it |
 
 ### 10.2 Layout
 
@@ -544,6 +609,35 @@ A screen has parameters, local variables, a layout tree, and key handlers.
 
 Layout is computed on the character grid. A screen states a minimum size
 and is told the actual one.
+
+**Nodes.** A layout node is a JSON object with exactly one key that says
+what it is, a container above or a widget of section 10.3, whose value
+holds that kind's own fields. Beside it the node may carry:
+
+| Key | Is |
+|-----|----|
+| `id`, `style`, `if`, `tip` | The fields every widget has (section 10.3). For a widget they may be written inside the widget's own object instead; in both places is an error. |
+| `width`, `height` | A number of cells; `"50%"` of the space its container has; `"fit"`, as large as its content; or `"fill"` or `{ "fill": weight }`, a share of what is left over |
+| `fill` | Among `rows` or `cols`: a share by weight of the space left over along the container's direction |
+| `fit` | Among `rows` or `cols`: `true` for as large as its content along the container's direction |
+| `frame` | A border around the node: a text for a border with that title, or `true` for one without. The node's `width` and `height` include it. |
+
+A node that says nothing about its size fits its content, unless it is of
+a kind that is useful at any size, which fills: `list`, `table`, `tree`,
+`inspect`, `log`, the views, `scroll`, `spacer`, the width of a `bar`, an
+`input` and a `tooltip`. A container fills if anything in it does. Across
+its container's direction a node takes all the space unless it gives a
+size. Space left over is shared by weight, and cells lost to rounding go
+to the first to fill. When there is too little room, later children get
+what is left, then nothing.
+
+| Container | Its value |
+|-----------|-----------|
+| `rows`, `cols`, `stack` | A list of nodes. A child of a `stack` with a `width` or `height` smaller than the stack is centred in it. |
+| `grid` | `columns`: the width of each column, written as `width` is. `rows`: the height of each row; left out, a row fits its tallest child. `cells`: the nodes, row by row. |
+| `tabs` | `pages`: a list of `{ "title", "content" }`, the content being one node. `selected`: the screen variable holding the shown page's number, from 0. A strip of titles is drawn above the page. |
+| `scroll` | One node. It is laid out at its own size and shown through the scroll's space, with a scrollbar when it is taller. Moving the focus to something inside scrolls it into view. |
+| `slot` | The slot's name |
 
 ### 10.3 Widgets
 
@@ -569,18 +663,91 @@ The set is fixed. Widgets are composed and styled, not programmed.
 | Widgets | Fields |
 |---------|--------|
 | All | `id`, `style`, `if` (shown when true), `tip` (a tooltip) |
-| `text`, `art` | `value` |
+| `text` | `value`; `wrap` (true unless given); `align`: `left`, `centre` or `right`. May be written as a bare string. |
+| `art` | `value`: the asset file, relative to its mod, drawn as written without inline styles |
 | `list`, `table`, `tree`, `menu` | `rows` (a query or a list), how each row is shown, `on_select` and `on_activate` (UI effects, with the row as `it`), `selected` (a screen variable to keep the choice in) |
+| `list`, `tree`, `menu` | `item`: how a row from a query is shown, a text over `it`. `list` and `tree`: `empty`, shown when there are no rows. `tree`: `children`, an expression giving the rows beneath `it`. |
+| `table` | `columns`: each with `title`, `value` (a text over `it`, for rows from a query), `width` and `align`; `empty` |
 | `button` | `label`, `on_activate` |
-| `input`, `number`, `toggle`, `choice` | `bind` (the screen variable or preference it edits), `on_change` |
-| `bar`, `gauge` | `value`, `max`, `label` |
+| `input`, `number`, `toggle`, `choice` | `bind` (the screen variable or preference it edits), `on_change`, `label` |
+| `input` | `max_len` |
+| `number` | `min`, `max`, `step` (1 unless given). A whole number stays whole. |
+| `choice` | `options`: a list, each a text or `{ "value", "label" }`, or an expression. The variable holds the chosen `value`. |
+| `bar`, `gauge` | `value`, `max` (1 unless given), `label`. A `bar` draws the share filled, and its `style` colours the filled part; a `gauge` writes the two numbers. |
 | `map_view` and the other views | `centre`, `zoom`, `overlay`, `on_pick` |
-| `figure` | `figure` (a definition: rows of character art with named regions) and `shade`, an expression giving each region its colour |
-| `log` | `filter` |
+| `figure` | `figure` (a definition: rows of character art with named regions) and `shade`, an expression giving each region its colour, or an object from region name to colour |
+| `inspect` | `of`: the subject. Or `rows` written out, each with `label`, `value` and `children`. `selected`, `on_select`, `on_activate` as for a list. |
+| `log` | `filter`: a list of categories, or an expression |
+| `tooltip` | `value`: shown when nothing with a `tip` has the focus or the pointer |
 | `console`, `canvas`, `trace_view` | Debug context only: a command line, a paintable grid of cells, and a stream of trace records. The development screens of document 14 are built from these. |
 
 Widgets write only to screen variables and preferences. Anything that
-changes the game is a UI effect that submits a command.
+changes the game is a UI effect that submits a command. `bind` names a
+screen variable as `screen.name` or just `name`, and a preference as
+`pref.id`. A widget bound to a variable of the wrong kind, or to one the
+screen does not declare, is a load error.
+
+**Rows written out.** Where `rows` is a list, each row is a text, a list
+of texts (a table row's cells), or an object:
+
+| Field | Is |
+|-------|----|
+| `label` | What the row shows |
+| `value` | In an `inspect`, the value beside the label |
+| `cells` | In a `table`, the row's cells, one per column |
+| `key` | In a `menu`, the option's hotkey, written as in a keymap |
+| `children`, `open` | In a `tree` or `inspect`, the rows beneath, and whether they start shown |
+| `tip` | A tooltip for the row |
+| `on_activate` | UI effects run when this row is activated, before the widget's own |
+
+`selected` holds the row's number from 0 in the order written, counted
+through the whole of a tree, and unchanged by a table's sorting.
+
+**A figure** is a definition:
+
+```json
+{ "type": "figure", "id": "body",
+  "rows": [ " O ", "/|\\", "/ \\" ],
+  "map":  [ " h ", "ata", "l l" ],
+  "regions": { "h": "head", "t": "torso", "a": "arms", "l": "legs" } }
+```
+
+`rows` is the drawing. `map` has the same shape and says, by a character
+that `regions` names, which region each cell belongs to; a space is none.
+
+**Focus and keys.** One widget has the focus. A key press is named by the
+keymap in the screen's context and then offered, in order, to the widget
+with the focus (a widget that edits text takes any key that types a
+character before its name is considered); to the options of every `menu`
+on show, by their hotkeys; to the screen's `keys`; and last to the toolkit
+itself. The names the toolkit and its widgets understand:
+
+| Name | Does |
+|------|------|
+| `prev`, `next` | Move the selection in a list, table, tree, menu or log; scroll a `scroll`. Unused, move the focus. |
+| `left`, `right` | Close and open a branch of a tree; choose the column a table is sorted by; step a `number`; change a `choice`; switch `tabs`; move the cursor of an `input`. Unused, move the focus. |
+| `accept` | Activate the selected row or the button; flip a `toggle`; open or close a branch |
+| `toggle` | Flip a `toggle`; reverse a table's sorting; activate a button |
+| `page_prev`, `page_next`, `first`, `last` | Move by a page or to an end. Unused, scroll the `scroll` around the focus. |
+| `focus_next`, `focus_prev` | Move the focus to the next or previous widget that can take it |
+| `erase`, `delete` | Remove the character before or at the cursor of an `input` |
+| `back` | Nothing by itself. Screens bind it in `keys`. |
+
+With no keymap, the keys a keyboard has for these mean them: the arrows,
+Enter, Escape, Tab, Page Up and Down, Home and End, Space, Backspace and
+Delete. A click gives a widget the focus and acts on it; the wheel
+scrolls.
+
+**What the toolkit draws with.** Its own parts use theme styles of fixed
+names: `title`, `border`, `border_focus`, `selected`, `selected_idle`
+(the selection of a widget without the focus), `header`, `dim`, `bar`,
+`bar_empty`, `field`, `button`, `hotkey`, `tip` and `notice`. And theme
+`marks` of fixed names, of which the character is used: `bar_full`,
+`bar_empty`, `scroll_thumb`, `scroll_track`, `tree_open`, `tree_closed`,
+`toggle_on`, `toggle_off`, `choice_prev`, `choice_next`, `sort_up`,
+`sort_down`, `view_empty`. A theme that leaves one out gets a plain
+default: bold, underline, reverse or dim, and a line-drawing or ASCII
+character.
 
 A screen states a `min_size`. On a smaller grid it is replaced by a plain
 notice saying how large the window must be. The smallest grid the bundled
@@ -773,7 +940,12 @@ A third, **null** frontend records frames for tests.
 - The scene is driven with a fixed time step and scripted input.
 - **Golden frames**: a frame is written as text (characters plus colour
   indices) and compared with a stored one. Bundled screens and playback of
-  the world and kernel scenarios have golden frames.
+  the world and kernel scenarios have golden frames. The text holds the
+  grid of characters, each cell's foreground and background as indices
+  into a palette listed with it, each cell's attributes, the sprites and
+  the frame's effects. Running the tests with `BLESS=1` in the environment
+  writes the stored frames instead of comparing with them; a change that
+  alters one says which and why.
 - The check of section 5 (view model equals fresh initialisation) runs after
   every scripted playback.
 - A test asserts that the scene's only route to the simulation is `submit`.
@@ -796,7 +968,13 @@ and worn items. The `cutscene` field on actions.
 for playback speed and how often cutscenes play.
 
 **Widgets**: section 10.3. **UI effects**: section 10.5.
-**Binding names**: section 10.4.
+**Binding names**: section 10.4. **Navigation names**, and the theme
+styles and marks the toolkit draws with: section 10.3. **Key names**:
+section 9.1.
+
+**Gaps.** The notice shown on a grid smaller than a screen's `min_size`
+is the engine's own text and cannot be changed by a mod. The set of
+widgets, and how each is drawn beyond its styles and marks, is fixed.
 
 ## 14. Invariants
 

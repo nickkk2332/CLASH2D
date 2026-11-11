@@ -57,7 +57,8 @@ These apply to all code in the simulation (`clash-core`, `clash-time`,
 
 ## 3. Workspace layout
 
-A Cargo workspace. Arrows mean "may depend on".
+A Cargo workspace. Arrows mean "may depend on". A crate may also name
+directly any crate its arrows reach: `clash-scene` uses `clash-core`.
 
 ```
 crates/

@@ -1,0 +1,104 @@
+[
+  { "//": "A figure for the gallery: a drawing whose regions the figure widget colours.",
+    "type": "figure", "id": "gallery_body",
+    "rows": [ "  O  ", " /|\\ ", "/ | \\", " / \\ ", "/   \\" ],
+    "map":  [ "  h  ", " ata ", "a t a", " l l ", "l   l" ],
+    "regions": { "h": "head", "t": "torso", "a": "arms", "l": "legs" } },
+
+  { "//": "Every container and every widget of the toolkit, for looking at and for testing. Its context is `debug` so that it may show the development widgets too.",
+    "type": "screen", "id": "gallery",
+    "title": "Widget gallery",
+    "context": "debug",
+    "min_size": [80, 24],
+    "vars": { "page": 0, "row": 0, "name": "Mara", "level": 5, "sound": true, "speed": "normal" },
+    "layout": { "rows": [
+      { "id": "heading",
+        "text": "<title>Widget gallery</>  Tab moves the focus, arrows act on it, q or Esc quits." },
+
+      { "id": "pages", "tip": "Left and Right change the page.",
+        "tabs": { "selected": "page", "pages": [
+
+        { "title": "Lists", "content": { "rows": [
+          { "cols": [
+            { "frame": "list",
+              "list": { "id": "list", "selected": "row",
+                        "tip": "list: Up and Down move the selection; it scrolls to keep it in view.",
+                        "rows": [ "Bandage", "Bottle of water", "Brass key", "Candle", "Chalk",
+                                  "Coil of rope", "Crowbar", "Flint and steel", "Lantern",
+                                  "Map of the docks", "Notebook", "Oil flask", "Tin of biscuits", "Whistle" ] } },
+            { "frame": "menu", "width": 22,
+              "menu": { "id": "menu", "tip": "menu: each option has a hotkey that works from anywhere.",
+                        "rows": [ { "label": "New game", "key": "n" },
+                                  { "label": "Load", "key": "l" },
+                                  { "label": "Options", "key": "o" } ] } },
+            { "frame": "tree", "width": 26,
+              "tree": { "id": "tree", "tip": "tree: Right opens a branch, Left closes it or goes to its parent.",
+                        "rows": [
+                          { "label": "Body", "open": true, "children": [
+                            { "label": "Head", "children": [ "Left eye", "Right eye" ] },
+                            "Torso",
+                            { "label": "Left arm", "children": [ "Hand" ] } ] },
+                          { "label": "Pack", "children": [ "Rope", "Lantern" ] } ] } } ] },
+          { "frame": "table", "height": 8,
+            "table": { "id": "table", "tip": "table: Left and Right choose the column to sort by, Space reverses it.",
+                       "columns": [ { "title": "Item", "width": "fill" },
+                                    { "title": "Count", "align": "right" },
+                                    { "title": "Mass", "align": "right" } ],
+                       "rows": [ [ "Arrow", "24", "1.2" ], [ "Bandage", "3", "0.1" ], [ "Crowbar", "1", "2.5" ],
+                                 [ "Lantern", "1", "0.9" ], [ "Oil flask", "2", "0.6" ], [ "Rope", "1", "3.0" ],
+                                 [ "Whistle", "1", "0.05" ] ] } } ] } },
+
+        { "title": "Controls", "content": { "id": "controls", "scroll": { "rows": [
+          { "id": "prose",
+            "text": "text: wraps to its width and carries inline styles, such as <warn>a warning</>, <good>good news</> and <sfx>KSSH!</>. A doubled bracket is a literal one: 2 << 3." },
+          { "frame": "bar and gauge", "rows": [
+            { "bar": { "label": "Blood ", "value": 0.62, "style": "blood" } },
+            { "bar": { "label": "Breath", "value": 9, "max": 10 } },
+            { "gauge": { "label": "Charge", "value": 37, "max": 120 } } ] },
+          { "frame": "editing", "rows": [
+            { "input": { "id": "name", "label": "Name ", "bind": "name", "max_len": 24,
+                         "tip": "input: type to edit; Left, Right, Home and End move the cursor." } },
+            { "number": { "id": "level", "label": "Level", "bind": "level", "min": 1, "max": 10,
+                          "tip": "number: Left and Right step it between 1 and 10." } },
+            { "toggle": { "id": "sound", "label": "Sound", "bind": "sound",
+                          "tip": "toggle: Enter or Space flips it." } },
+            { "choice": { "id": "speed", "label": "Speed", "bind": "speed", "options": [ "slow", "normal", "fast" ],
+                          "tip": "choice: Left and Right go through the options." } },
+            { "button": { "id": "apply", "label": "Apply", "tip": "button: Enter activates it." } } ] },
+          { "frame": "figure, art, spacer and slot", "cols": [
+            { "figure": { "figure": "gallery_body",
+                          "shade": { "head": "blood", "arms": "good", "legs": "info" } } },
+            { "spacer": {}, "width": 4 },
+            { "art": { "value": "assets/gallery.txt" }, "style": "accent" },
+            { "spacer": {} },
+            { "slot": "gallery.extra" } ] },
+          { "text": "A scroll holds a child larger than its space. Moving the focus scrolls to it; Page Up and Page Down scroll by a page.", "style": "dim" },
+          { "button": { "id": "bottom", "label": "The last thing on the page", "tip": "button: the focus brought this into view." } } ] } } },
+
+        { "title": "Views", "content": { "cols": [
+          { "fill": 2, "grid": { "columns": [ "fill", "fill" ], "rows": [ "fill", "fill" ], "cells": [
+            { "frame": "map_view", "stack": [
+              { "map_view": { "id": "map", "tip": "map_view: one storey from above. Drawn by the view model, which is not built yet." } },
+              { "text": { "value": "<accent>stacked text</>", "wrap": false }, "width": "fit", "height": 1 } ] },
+            { "frame": "section_view", "section_view": { "id": "section", "tip": "section_view: a vertical slice." } },
+            { "frame": "region_map", "region_map": { "id": "region", "tip": "region_map: one glyph per tract." } },
+            { "frame": "chart_view", "chart_view": { "id": "chart", "tip": "chart_view: a chart and travelers on it." } } ] } },
+          { "fill": 1, "rows": [
+            { "frame": "log", "fill": 1,
+              "log": { "id": "log", "tip": "log: the message log. Up and Down scroll back through it." } },
+            { "frame": "inspect", "fill": 1,
+              "inspect": { "id": "inspect", "tip": "inspect: a browsable list of properties.",
+                           "rows": [ { "label": "name", "value": "Mara" },
+                                     { "label": "pools", "open": true, "children": [
+                                       { "label": "blood", "value": "0.62" },
+                                       { "label": "breath", "value": "0.9" } ] },
+                                     { "label": "traits", "children": [ { "label": "attuned", "value": "true" } ] } ] } } ] } ] } },
+
+        { "title": "Debug", "content": { "cols": [
+          { "frame": "console", "console": { "id": "console", "tip": "console: a command line. Built with the tooling packages." } },
+          { "frame": "canvas", "canvas": { "id": "canvas", "tip": "canvas: a paintable grid of cells." } },
+          { "frame": "trace_view", "trace_view": { "id": "trace", "tip": "trace_view: a stream of trace records." } } ] } } ] } },
+
+      { "tooltip": { "value": "Nothing with a tip has the focus." } } ] },
+    "keys": { "back": [ { "close": {} } ] } }
+]
