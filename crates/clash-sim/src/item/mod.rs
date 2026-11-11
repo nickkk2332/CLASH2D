@@ -416,6 +416,21 @@ pub(crate) fn item_of(sim: &Sim, entity: EntityId) -> Result<&Item, Reason> {
         .ok_or_else(|| not_an_item(entity))
 }
 
+/// The `item` definition with a qualified id, or the refusal that there
+/// is none (`item.unknown_def`).
+pub fn def_named(sim: &Sim, name: &str) -> Result<ItemId, Reason> {
+    sim.defs
+        .try_registry::<ItemDef>()
+        .and_then(|registry| registry.lookup(name))
+        .ok_or_else(|| {
+            refuse(
+                reason::UNKNOWN_DEF,
+                format!("there is no item definition `{name}`"),
+            )
+            .with("def", name)
+        })
+}
+
 /// The definition an item was made from, if it was made from one.
 pub fn def_of<'a>(defs: &'a Defs, item: &Item) -> Option<&'a ItemDef> {
     defs.try_registry::<ItemDef>()?.try_get(item.def?)
