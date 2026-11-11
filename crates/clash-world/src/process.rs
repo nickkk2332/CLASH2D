@@ -42,6 +42,7 @@ use crate::cosmos::Cosmos;
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
 use crate::pos::Location;
+use crate::release::{Release, ReleaseState};
 
 /// A stability check that is waiting out the settle delay on a clock
 /// (02 §14.2). When it wakes, the checks asked for where that clock
@@ -66,6 +67,8 @@ pub enum WorldProcess {
     Fall(FallingMass),
     /// A body in flight (02 §15).
     Body(BodyFlight),
+    /// An energy release whose front is still spreading (02 §13).
+    Release(Box<Release>),
 }
 
 impl WorldProcess {
@@ -75,8 +78,9 @@ impl WorldProcess {
         match self {
             WorldProcess::Fall(mass) => Some(mass.at),
             WorldProcess::Body(flight) => Some(flight.location()),
-            // A settle check keeps the clock it began on.
-            WorldProcess::Settle(_) => None,
+            // A settle check keeps the clock it began on, and a release
+            // runs on the clock of its origin (02 §13.2).
+            WorldProcess::Settle(_) | WorldProcess::Release(_) => None,
         }
     }
 }
@@ -96,6 +100,10 @@ impl StateHash for WorldProcess {
                 hasher.write_u8(2);
                 flight.state_hash(hasher);
             }
+            WorldProcess::Release(release) => {
+                hasher.write_u8(3);
+                release.state_hash(hasher);
+            }
         }
     }
 }
@@ -112,6 +120,8 @@ pub struct WorldActivity {
     pub(crate) collapse: CollapseState,
     /// What is kept about the bodies in flight besides their processes.
     pub(crate) bodies: BodyState,
+    /// What is kept about energy releases besides their processes.
+    pub(crate) releases: ReleaseState,
 }
 
 impl WorldActivity {
@@ -121,6 +131,7 @@ impl WorldActivity {
             processes: ProcessTable::new(WakeDomain::World),
             collapse: CollapseState::default(),
             bodies: BodyState::default(),
+            releases: ReleaseState::default(),
         }
     }
 
@@ -147,6 +158,7 @@ impl StateHash for WorldActivity {
         self.processes.state_hash(hasher);
         self.collapse.state_hash(hasher);
         self.bodies.state_hash(hasher);
+        self.releases.state_hash(hasher);
     }
 }
 
@@ -193,6 +205,10 @@ impl WorldCtx<'_> {
             WorldProcess::Body(flight) => {
                 let (flight, next) = self.run_body(flight);
                 (WorldProcess::Body(flight), next)
+            }
+            WorldProcess::Release(mut release) => {
+                let next = self.run_release(&mut release);
+                (WorldProcess::Release(release), next)
             }
         };
         if let (Some(at), Next::Sleep(_)) = (process.place(), next) {

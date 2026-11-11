@@ -42,7 +42,7 @@ Section references such as "02 §14" point into those documents.
 | W12 | Damage and destruction | M | W6 | beta |
 | W13 | Structural support and collapse | L | W12, W9 | beta |
 | W14 | Bodies | L | W12, W7, W9 | beta |
-| W15 | Energy releases | L | W13, W14 | in progress |
+| W15 | Energy releases | L | W13, W14 | beta |
 | W16 | Fields | L | W12 | todo |
 | W17 | Coarse layer | L | W15, W10 | todo |
 | W18 | Queries | M | W7 | beta |
@@ -742,8 +742,8 @@ elements and the W14 half of leaving loaded space. Stubbed:
   `crates/clash-world/tests/bodies.rs`. The scripts are owed to the
   script runner (W11).
 - A timing test prints figures
-  (`timing_of_a_projectile_across_thirty_metres`, ignored): about 12 µs
-  for a flight of 30 m, 430 ns a step. The benchmark and its budget are
+  (`timing_of_a_projectile_across_thirty_metres`, ignored): about 13 µs
+  for a flight of 30 m, 450 ns a step. The benchmark and its budget are
   W23's.
 
 ### W15 — Energy releases
@@ -762,6 +762,40 @@ Done when
 - An occupant relocated beyond the front before it arrives is not exposed.
 - Scenarios `car_bomb_street` and `beam_through_city`, including a save
   mid-release.
+
+Status `beta` (decisions D-495 to D-498). Built as 02 §13 to §13.2 now
+read: `release` for a sphere, a cone and a beam, of any damage type; the
+front as a process that handles a shell a wake on the clock of its
+origin; the transmission map, with shade that falls when a shell is
+done; packets to floors, blocks and fixtures within what the release has
+left, so that no more is absorbed than was released; `OccupantExposed`
+once for each occupant the front reaches, the push on bodies and
+occupants and the throwing of occupants the wave moves fast enough;
+confinement, by which a charge in a closed space does more than in the
+open and an opening lets it out; a beam that pays for what it breaks and
+may burst where it ends; the budget, as a cut-off; `ReleaseStarted` and
+`EnergyReleased` with totals by instigator. Stubbed:
+
+- The three tiers: every non-empty cell in reach is handled with
+  shadowing, and nothing is cleared in bulk. A megaton is cut off by the
+  budget long before its reach.
+- Resolve mode (02 §13.4) and force-resolve: a release over
+  `release.max_cells` is cut off at the shell that would pass it and
+  says so (contract point 4 is tested as that). Coarse mode (02 §13.3):
+  cells that are not loaded are passed over, with no stamp (W17).
+- No ticket is held (W9), so a release does not keep its tracts loaded.
+- Fronts (02 §13.5) are W24's.
+- "Wall destruction radii match the table" is tested as the radius out
+  to which walls are marked: the table gives the radius at the wall's
+  threshold, where a wall is affected and far from destroyed.
+- The bodies of `car_bomb_street` and `beam_through_city` are tests of
+  those names in `crates/clash-world/tests/releases.rs`, the first with
+  a save while the front is spreading. The scripts are owed to the
+  script runner (W11).
+- A timing test prints figures (`timing_of_a_blast_in_a_city_block`,
+  ignored): a 2 GJ blast among nine five-storey buildings visits 136,000
+  cells in about 28 ms, 200 ns a cell, and what follows it (collapse and
+  debris) takes about 15 ms. The benchmark and its budget are W23's.
 
 ### W16 — Fields
 

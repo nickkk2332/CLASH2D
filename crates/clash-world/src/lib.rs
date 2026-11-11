@@ -32,6 +32,7 @@
 //! | Stability checks waiting | [`Cosmos::stability_requests`]; ask for one with [`WorldCtx::check_stability`] |
 //! | The world's scheduled activity | [`WorldCtx::handle_wake`], for every wake-up of the world's domain; [`WorldProcess`], [`WorldActivity`] |
 //! | Collapses in progress and masses in flight | [`Cosmos::collapses`], [`Cosmos::falling_masses`]; [`Collapse`], [`FallingMass`] |
+//! | Explosions, shockwaves, blasts and beams | [`WorldCtx::release`] with an [`EnergyRelease`]; [`Cosmos::releases`] |
 //! | Throwing things, and what is in flight | [`WorldCtx::launch`] with a [`Body`]; [`WorldCtx::impulse`], [`WorldCtx::arrest`], [`WorldCtx::steer`]; [`Cosmos::bodies`] |
 //! | What is known of space that is not loaded | [`RegionRecord`], [`TractRecord`]; [`Cosmos::tract_record`], [`Cosmos::add_pending_edit`] |
 //! | Generating: the interfaces, and choosing a generator | [`RegionSurveyor`], [`TractRealizer`], [`GenCtx`]; [`GeneratorRegistry`], [`Generators`] |
@@ -76,6 +77,7 @@ mod occupancy;
 mod pos;
 mod process;
 pub mod query;
+mod release;
 mod site;
 mod stability;
 pub mod storage;
@@ -147,6 +149,12 @@ pub use query::{
     NeighbourGeometry, NoObstacles, Path, PathFail, PathFinder, PathLimits, RayBlocks, RayEnd,
     RayFilter, RayHit, RayHits, RayObstacles, RaySpan, RayTarget, RevParts, RevStamp, Step,
     StepKind,
+};
+pub use release::{
+    EnergyRelease, RELEASE_DEFAULT_ALT_MM, RELEASE_FILL_MAX_CELLS, RELEASE_MAX_BINS,
+    RELEASE_MAX_CELLS, RELEASE_MIN_RADIUS_M, RELEASE_PUSH_DEPTH_M, RELEASE_THROW_ALT_M,
+    RELEASE_THROW_SPEED, RELEASE_VACUUM_SPEED, Release, ReleaseId, ReleaseShape, ReleaseState,
+    ReleaseTally, WORLD_MIN_INTENSITY,
 };
 pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};
 pub use stability::{

@@ -107,7 +107,7 @@ pub const DEBRIS_MASS_SHARE: Real = Real::of(0.25);
 
 /// The share of the energy a packet had left over that its fragments
 /// carry off as motion. It is taken out of what passes.
-pub const DEBRIS_ENERGY_SHARE: Real = Real::of(0.1);
+pub const DEBRIS_ENERGY_SHARE: Real = Real::of(0.01);
 
 /// How far a fragment's direction strays from the direction of the
 /// blow: each of its three parts by up to this much of a unit.
@@ -1269,15 +1269,18 @@ impl WorldCtx<'_> {
                         passed_last = true;
                         continue;
                     }
-                    self.hit_occupant(flight, hit, axis, occupant);
+                    let way = moved[axis].signum();
+                    self.hit_occupant(flight, hit, axis, way, occupant);
                     self.carry(flight);
                     return Fate::Flying;
                 }
                 RayTarget::Element { layer, state } => {
-                    if flight.body.vel[axis] == Real::ZERO || !self.strikes(flight, hit, layer) {
+                    // Which way along the axis the path went into it.
+                    let way = moved[axis].signum();
+                    if way == Real::ZERO || !self.strikes(flight, hit, layer) {
                         continue;
                     }
-                    self.hit_element(flight, hit, axis, layer, state);
+                    self.hit_element(flight, hit, axis, way, layer, state);
                     self.carry(flight);
                     return Fate::Flying;
                 }
@@ -1328,18 +1331,27 @@ impl WorldCtx<'_> {
         }
     }
 
-    /// A body strikes an element (02 §15.2).
+    /// A body strikes an element (02 §15.2): its path went into the
+    /// element's cell along `axis`, toward `way` (1 or −1).
     fn hit_element(
         &mut self,
         flight: &mut BodyFlight,
         hit: &RayHit,
         axis: usize,
+        way: Real,
         layer: Layer,
         state: ElementState,
     ) {
         let cause = flight.body.doing();
         let body = flight.body;
-        let entering = body.vel[axis];
+        // How fast it is closing on the thing. A body that turned back
+        // within the stretch is already leaving: it only touches.
+        let entering = body.vel[axis] * way;
+        if entering <= Real::ZERO {
+            flight.body.pos = hit.point;
+            flight.body.pos[axis] -= way * BODY_SKIN_M;
+            return;
+        }
         let energy = Real::of(0.5) * body.mass * entering * entering;
         let surface = self.surface(&body);
         let intensity = surface.map_or(Real::ZERO, |(_, area, depth)| energy / (area * depth));
@@ -1350,7 +1362,6 @@ impl WorldCtx<'_> {
                 .ok()
         });
         let result = outcome.map_or(DamageResult::Unaffected, |outcome| outcome.result);
-        let way = entering.signum();
         let mut at = hit.point;
         let kept = match (result, outcome) {
             (DamageResult::Destroyed, Some(outcome)) => {
@@ -1367,17 +1378,17 @@ impl WorldCtx<'_> {
             }
             _ => {
                 at[axis] -= way * BODY_SKIN_M;
-                let back = -body.restitution * entering;
-                if back.abs() < REST_SPEED {
+                let back = body.restitution * entering;
+                if back < REST_SPEED {
                     Real::ZERO
                 } else {
-                    back
+                    -way * back
                 }
             }
         };
         flight.body.pos = at;
         flight.body.vel[axis] = kept;
-        if axis == 2 && entering < Real::ZERO && kept == Real::ZERO {
+        if axis == 2 && way < Real::ZERO && kept == Real::ZERO {
             // It has come down onto something that holds.
             flight.resting = true;
         }
@@ -1402,14 +1413,16 @@ impl WorldCtx<'_> {
         });
     }
 
-    /// A body strikes an occupant (02 §15.2). The two share their
-    /// momentum along the body's path; what the blow does to the
-    /// occupant is for the simulation.
+    /// A body strikes an occupant (02 §15.2): its path went into the
+    /// occupant's cell along `axis`, toward `way` (1 or −1). The two
+    /// share their momentum along the body's path; what the blow does
+    /// to the occupant is for the simulation.
     fn hit_occupant(
         &mut self,
         flight: &mut BodyFlight,
         hit: &RayHit,
         axis: usize,
+        way: Real,
         occupant: EntityId,
     ) {
         let cause = flight.body.doing();
@@ -1436,7 +1449,6 @@ impl WorldCtx<'_> {
             (body.vel, ZERO3)
         };
         let mut at = hit.point;
-        let way = body.vel[axis].signum();
         let onward = dot(kept, body.vel) > Real::ZERO;
         at[axis] += if onward { way } else { -way } * BODY_SKIN_M;
         flight.body.pos = at;
@@ -1480,20 +1492,25 @@ impl WorldCtx<'_> {
             Edge::North | Edge::South => 1,
             Edge::Bottom | Edge::Top => 2,
         };
-        let entering = flight.body.vel[axis];
-        let way = entering.signum();
+        let way = match edge {
+            Edge::West | Edge::North | Edge::Bottom => -Real::ONE,
+            Edge::East | Edge::South | Edge::Top => Real::ONE,
+        };
         let mut at = at;
         at[axis] -= way * BODY_SKIN_M;
-        let back = -flight.body.restitution * entering;
-        let kept = if back.abs() < REST_SPEED {
-            Real::ZERO
-        } else {
-            back
-        };
         flight.body.pos = at;
-        flight.body.vel[axis] = kept;
-        if axis == 2 && entering < Real::ZERO && kept == Real::ZERO {
-            flight.resting = true;
+        let entering = flight.body.vel[axis] * way;
+        if entering > Real::ZERO {
+            let back = flight.body.restitution * entering;
+            let kept = if back < REST_SPEED {
+                Real::ZERO
+            } else {
+                -way * back
+            };
+            flight.body.vel[axis] = kept;
+            if axis == 2 && way < Real::ZERO && kept == Real::ZERO {
+                flight.resting = true;
+            }
         }
         self.carry(flight);
         Fate::Flying

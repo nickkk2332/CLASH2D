@@ -18,6 +18,7 @@ use crate::cosmos::RealmId;
 use crate::damage::{DamagePacket, DamageResult, Destruction};
 use crate::defs::{Contact, DamageTypeId, ElementState, Layer};
 use crate::pos::{CellBox, Location, TractPos};
+use crate::release::{ReleaseId, ReleaseTally};
 use crate::ticket::{TicketId, TicketReason};
 
 /// Where events go: a list, in the order they were emitted.
@@ -502,6 +503,54 @@ pub enum WorldEvent {
         /// The body's doing.
         cause: Cause,
     },
+    /// Energy has been let go at a point (02 §13): its front starts to
+    /// spread from here now.
+    ReleaseStarted {
+        /// When.
+        tick: Tick,
+        /// The release.
+        release: ReleaseId,
+        /// The cell it is in.
+        loc: Location,
+        /// The kind of damage it does.
+        kind: DamageTypeId,
+        /// How much, in joules.
+        energy: Real,
+        /// How far it will reach with nothing in its way, in metres.
+        reach: Real,
+        /// Who and what let it go.
+        cause: Cause,
+    },
+    /// A release has gone as far as it goes (02 §13). It sums what the
+    /// release did: rules that keep account of what someone has broken
+    /// listen to this, not to every element.
+    EnergyReleased {
+        /// When.
+        tick: Tick,
+        /// The release.
+        release: ReleaseId,
+        /// The cell it was let go in.
+        loc: Location,
+        /// The kind of damage it did.
+        kind: DamageTypeId,
+        /// How much was let go, in joules.
+        energy: Real,
+        /// The joules that elements took from it. Never more than was
+        /// let go.
+        absorbed: Real,
+        /// How far its front got, in metres.
+        reach: Real,
+        /// How many cells its front visited.
+        cells: u32,
+        /// Whether it was cut off before its reach because it would
+        /// have visited more cells than `release.max_cells`.
+        cut_off: bool,
+        /// What it came to, by instigator in order: elements destroyed
+        /// and their mass, occupants exposed and thrown, energy taken.
+        tallies: Vec<ReleaseTally>,
+        /// The release's doing: a process, for whoever let it go.
+        cause: Cause,
+    },
 }
 
 /// The cause of what the world does of itself when it loads and unloads
@@ -535,7 +584,9 @@ impl WorldEvent {
             | WorldEvent::BodyImpact { tick, .. }
             | WorldEvent::BodyHitOccupant { tick, .. }
             | WorldEvent::BodyLanded { tick, .. }
-            | WorldEvent::BodyLeftLoaded { tick, .. } => *tick,
+            | WorldEvent::BodyLeftLoaded { tick, .. }
+            | WorldEvent::ReleaseStarted { tick, .. }
+            | WorldEvent::EnergyReleased { tick, .. } => *tick,
         }
     }
 
@@ -562,7 +613,9 @@ impl WorldEvent {
             | WorldEvent::BodyImpact { cause, .. }
             | WorldEvent::BodyHitOccupant { cause, .. }
             | WorldEvent::BodyLanded { cause, .. }
-            | WorldEvent::BodyLeftLoaded { cause, .. } => *cause,
+            | WorldEvent::BodyLeftLoaded { cause, .. }
+            | WorldEvent::ReleaseStarted { cause, .. }
+            | WorldEvent::EnergyReleased { cause, .. } => *cause,
             WorldEvent::TractLoaded { .. }
             | WorldEvent::TractUnloading { .. }
             | WorldEvent::TicketRefused { .. } => ACTIVITY_CAUSE,
@@ -595,7 +648,9 @@ impl WorldEvent {
             | WorldEvent::BodyImpact { loc, .. }
             | WorldEvent::BodyHitOccupant { loc, .. }
             | WorldEvent::BodyLanded { loc, .. }
-            | WorldEvent::BodyLeftLoaded { loc, .. } => *loc,
+            | WorldEvent::BodyLeftLoaded { loc, .. }
+            | WorldEvent::ReleaseStarted { loc, .. }
+            | WorldEvent::EnergyReleased { loc, .. } => *loc,
             WorldEvent::AreaBreached { leak, .. } => *leak,
             WorldEvent::OccupantDisplaced { to, .. } => *to,
         }
@@ -628,6 +683,8 @@ impl WorldEvent {
             WorldEvent::BodyHitOccupant { .. } => "body_hit_occupant",
             WorldEvent::BodyLanded { .. } => "body_landed",
             WorldEvent::BodyLeftLoaded { .. } => "body_left_loaded",
+            WorldEvent::ReleaseStarted { .. } => "release_started",
+            WorldEvent::EnergyReleased { .. } => "energy_released",
         }
     }
 }
@@ -977,6 +1034,48 @@ impl StateHash for WorldEvent {
                 at.state_hash(hasher);
                 returns.state_hash(hasher);
                 energy.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::ReleaseStarted {
+                tick,
+                release,
+                loc,
+                kind,
+                energy,
+                reach,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                release.state_hash(hasher);
+                loc.state_hash(hasher);
+                kind.state_hash(hasher);
+                energy.state_hash(hasher);
+                reach.state_hash(hasher);
+                cause.state_hash(hasher);
+            }
+            WorldEvent::EnergyReleased {
+                tick,
+                release,
+                loc,
+                kind,
+                energy,
+                absorbed,
+                reach,
+                cells,
+                cut_off,
+                tallies,
+                cause,
+            } => {
+                tick.state_hash(hasher);
+                release.state_hash(hasher);
+                loc.state_hash(hasher);
+                kind.state_hash(hasher);
+                energy.state_hash(hasher);
+                absorbed.state_hash(hasher);
+                reach.state_hash(hasher);
+                hasher.write_u32(*cells);
+                cut_off.state_hash(hasher);
+                tallies.state_hash(hasher);
                 cause.state_hash(hasher);
             }
         }

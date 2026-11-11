@@ -331,8 +331,8 @@ fn three_buildings() {
         let delivered = (absorbed + passed).get();
         assert!(delivered <= last, "{delivered} after {last}");
         assert!(((*energy + passed).get() - delivered).abs() < 1.0e-6 * delivered);
-        // The wall's 0.6 MJ, and a tenth of the rest in its fragments.
-        assert!((absorbed.get() - (0.6e6 + 0.1 * (delivered - 0.6e6))).abs() < 1.0);
+        // The wall's 0.6 MJ, and a hundredth of the rest in its fragments.
+        assert!((absorbed.get() - (0.6e6 + 0.01 * (delivered - 0.6e6))).abs() < 1.0);
         taken += absorbed.get();
         last = passed.get();
     }
@@ -340,8 +340,8 @@ fn three_buildings() {
     assert!(flying.pos[0] > r(18.0));
     assert!(flying.kinetic_energy().get() <= last);
     assert!(flying.kinetic_energy().get() + taken <= start);
-    // 14.4 MJ less three walls and their fragments leaves about 9 MJ.
-    assert!(flying.speed() > r(440.0) && flying.speed() < r(480.0));
+    // 14.4 MJ less three walls and their fragments leaves about 12 MJ.
+    assert!(flying.speed() > r(500.0) && flying.speed() < r(560.0));
     // They are carried along: where the body is, they are.
     assert_eq!(w.cosmos.body_of(thrown()), Some(id));
     let carried = w.cosmos.occupant(thrown()).unwrap().loc;
@@ -406,7 +406,7 @@ fn a_body_through_a_window_breaks_it_and_goes_on_with_what_passed() {
     // A little less than it was thrown with: the air took some.
     assert!(delivered < 4000.0 && delivered > 3900.0, "{delivered}");
     assert!(
-        (passed - 0.9 * (delivered - 3000.0)).abs() < 1.0e-6,
+        (passed - 0.99 * (delivered - 3000.0)).abs() < 1.0e-6,
         "{passed}"
     );
     let WorldEvent::BodyImpact { energy, .. } = impacts(&w)[0] else {
@@ -607,16 +607,16 @@ fn debris_from_a_destroyed_wall_flies_away_from_the_blow() {
     });
     let impact = w.damage_type("core:impact");
     let (target, east) = (w.loc(10, 16, 0), v(1.0, 0.0, 0.0));
-    // 0.7 MJ, concentrated: the wall takes its 0.6 MJ and 0.1 MJ is over.
-    let packet = DamagePacket::new(impact, r(0.7e6), r(100.0e6), someone());
+    // 1.6 MJ, concentrated: the wall takes its 0.6 MJ and 1 MJ is over.
+    let packet = DamagePacket::new(impact, r(1.6e6), r(100.0e6), someone());
     let outcome = w
         .ctx()
         .edit(someone())
         .damage_along(target, Layer::Block, packet, Some(east))
         .unwrap();
     assert_eq!(outcome.result, DamageResult::Destroyed);
-    // A tenth of what was over went into the fragments.
-    assert!(close(outcome.passed, 0.09e6, 1.0e-6));
+    // A hundredth of what was over went into the fragments.
+    assert!(close(outcome.passed, 0.99e6, 1.0e-6));
     assert!(close(outcome.absorbed, 0.61e6, 1.0e-6));
 
     let thrown: Vec<(Real, [Real; 3])> = w
@@ -677,7 +677,7 @@ fn debris_from_a_destroyed_wall_flies_away_from_the_blow() {
         .edit(someone())
         .damage(target, Layer::Block, packet)
         .unwrap();
-    assert!(close(outcome.passed, 0.1e6, 1.0e-6));
+    assert!(close(outcome.passed, 1.0e6, 1.0e-6));
     assert_eq!(w.cosmos.bodies().count(), 0);
     assert_eq!(w.defs.rubble_units(w.fixture_at(10, 16, 0)), Some(600));
 }

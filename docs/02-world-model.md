@@ -873,12 +873,14 @@ whoever owns it drains. Rules name an event in snake case
 | `OccupantEntombed` | `occupant`, `loc` | An edit left an occupant no room and there was nowhere to go |
 | `ElementDestroyed` | `loc`, `layer`, `old`, `new` (states; `new` is the `on_destroy` state or nothing), `how` (`damage` with its type, `crushed` or `fell`), `absorbed`, `passed` (J; zero unless by damage) | A floor, block or fixture was destroyed (section 12.3). It follows the `ElementChanged` events of the change and of the rubble left |
 | `OccupantUnsupported` | `occupant`, `loc` (where it is) | What held an occupant up has gone (section 7.2) |
-| `OccupantExposed` | `occupant`, `loc` (the cell struck), `kind` (damage type), `energy` (J), `intensity` (Pa) | Something struck the cell an occupant is in: so far, a mass that landed there (section 14.3) |
+| `OccupantExposed` | `occupant`, `loc` (the cell struck), `kind` (damage type), `energy` (J), `intensity` (Pa) | Something struck the cell an occupant is in: a mass that landed there (section 14.3), the front of a release, or what a closed space held of one (section 13.2) |
 | `CollapseStarted` | `collapse` (id), `loc` (the cell whose change started it) | A stability check found something giving way where no collapse was in progress |
 | `CollapseSettled` | `collapse`, `loc`, `bounds` (the box of cells it touched), `tallies` (by instigator: `elements` destroyed, `mass` brought down in kg, occupants `exposed`) | Nothing of a collapse is in flight and no check is waiting near it |
 | `TractLoaded` | `realm`, `tract`, `loc` (the tract's cell with the lowest coordinates, at storey 0), `first` (never loaded before) | A tract has been loaded, after the changes waiting for it were made (section 9.4) |
 | `TractUnloading` | `realm`, `tract`, `loc` | A tract is about to be unloaded, or is to be and still holds occupants (section 9.5) |
 | `TicketRefused` | `ticket` (the id it had), `realm`, `loc` (the tract it was centred on), `reason` (who held it) | The tickets wanted more tracts than may be loaded and this one was dropped (section 10.3) |
+| `ReleaseStarted` | `release` (id), `loc` (the origin), `kind` (damage type), `energy` (J), `reach` (m, with nothing in the way) | Energy was let go (section 13); its cause is what let it go |
+| `EnergyReleased` | `release`, `loc`, `kind`, `energy`, `absorbed` (J elements took), `reach` (m the front got to), `cells` (visited), `cut_off` (stopped for the budget), `tallies` (by instigator: `elements` destroyed, their `mass` in kg, occupants `exposed` and `thrown`, J `absorbed`) | A release's front has gone as far as it goes (section 13.2). Its cause is the release's doing |
 | `BodyLaunched` | `body` (id), `owner` (what it is), `loc`, `pos` (m), `vel` (m/s), `mass` (kg) | Something was set flying (section 15); its cause is what launched it |
 | `BodyImpact` | `body`, `owner`, `loc` (the cell struck), `layer`, `state` (the element as it was), `pos`, `energy` (J the body lost), `intensity` (Pa), `result` (unaffected, damaged, destroyed), `contact` (the element's striking surface, if it has one) | A body struck a floor, block or fixture (section 15.2). Its cause, and that of the three below, is the body's doing |
 | `BodyHitOccupant` | `body`, `owner`, `occupant`, `loc`, `pos`, `packet` (kind, energy, intensity, cause), `vel` (the body's as it struck), `push` (m/s the occupant takes if free to move) | A body struck an occupant (section 15.2) |
@@ -1817,7 +1819,7 @@ fixture.
   flight at once, and past that what is destroyed is left whole;
 - a quarter of the mass the element lost between them
   (`DEBRIS_MASS_SHARE`), the rest left as rubble where it stood;
-- a tenth of the energy the packet had left over between them
+- a hundredth of the energy the packet had left over between them
   (`DEBRIS_ENERGY_SHARE`), as the energy of their motion. It is taken
   out of what passes and counted as absorbed, so that `absorbed + passed`
   is still the packet's energy (W8). Whatever the packet goes on to, a
@@ -1844,19 +1846,37 @@ pub struct EnergyRelease {
     pub origin_alt_mm: u16,
     pub energy: Real,                 // J
     pub kind: DamageTypeId,
-    pub shape: ReleaseShape,          // Sphere | Cone { dir, half_angle } | Beam { dir, radius, range } | Front { … } (section 13.5)
-    pub speed: Real,                  // m/s of the front; defaults to the local sound speed
+    pub shape: ReleaseShape,          // Sphere | Cone { dir, half_angle } | Beam { dir, radius, range, burst } | Front { … } (section 13.5)
+    pub speed: Option<Real>,          // m/s of the front; none takes the local sound speed
     pub cause: Cause,
 }
 
 impl WorldCtx<'_> {
-    pub fn release(&mut self, r: EnergyRelease);
+    pub fn release(&mut self, r: EnergyRelease) -> Result<ReleaseId, WorldError>;
 }
 ```
 
 `release` is the single entry point for explosions, shockwaves from clashes,
 energy blasts and beams at every scale. It decides, per tract, whether to act
 in detail or coarsely.
+
+- A release's `kind` is any damage type: a blast, heat, cold, whatever the
+  definitions hold. The kind decides which threshold each thing meets it
+  with, and nothing else. There is no definition type for releases.
+- `EnergyRelease::sphere(origin, kind, energy, cause)` is a release in
+  every direction from the middle of a cell, 1.5 m up.
+- With no `speed` the front moves at the speed of sound of the atmosphere
+  at its origin, and in vacuum at `release.vacuum_speed` (1000 m/s).
+- Refused: energy that is not above zero and finite, a kind that does not
+  exist, an origin that is not loaded, a speed that is not above zero, a
+  cone with no direction or a half angle not above zero and at most π, a
+  beam with no direction, radius or range.
+- `ReleaseStarted` is emitted at once, with the origin, the kind, the
+  energy and how far it will reach with nothing in the way.
+  `EnergyReleased` is emitted when the front has gone as far as it goes,
+  with what the release came to (section 7.4).
+- What a release does carries its doing as cause: a process, with the
+  actor and instigator of what let it go.
 
 ### 13.1 Intensity law
 
@@ -1926,6 +1946,99 @@ Contract, whatever the implementation details:
    order.
 4. A release whose work exceeds `release.max_cells` falls back to resolve
    mode for its outer shells.
+
+As built:
+
+- **Shells.** Shell `k` is the cells whose centres lie from `k` up to
+  `k + 1` metres from the origin point, a storey counting three. The
+  process wakes for shell 0 at once and for each further shell `1 m /
+  speed` of local time later, on the clock of its origin, and handles
+  the cells of a shell storey by storey, row by row. Intensity is taken
+  at the distance of the cell's centre.
+- **The map** has six faces of `n × n` bins, with `n` chosen so that a
+  bin at the reach is about a cell across: `⌈R · π / 2⌉`, at least 16 and
+  at most 48. A box, of a cell or of an element, covers the bins whose
+  middles lie in the rectangle that bounds it on each face, or else the
+  one bin its own middle lies in. So things side by side share no bin
+  and leave none between them, and whatever lies wholly behind a thing
+  covers no bin the thing does not. `T` of a cell is the mean over the
+  bins its box covers.
+- **Shade falls when the shell is done.** Everything of one shell reads
+  the map as the shells before left it: things at one distance stand
+  side by side and do not shelter one another.
+- **What an element covers.** A block or fixture covers its cell's
+  footprint from the base up to its height, and closes
+  `coverage × 3 / height` of the bins it covers, at most all (the share
+  a ray meets, section 22). A floor covers a slab of its thickness at
+  the base of its cell, and closes all of it.
+- **Packets.** A block or fixture receives `energy = I × 3 m³ ×
+  coverage`. A floor receives `I × 3 m³` times how squarely the wave
+  meets it: the upward part of the direction from the origin to the
+  middle of the floor. No element is offered more than the part of the
+  release that is going its way (its energy times the share of all bins
+  the element covers), nor more than the release has left. Each packet
+  has the direction away from the origin, so that what it destroys
+  throws its fragments outward (section 12.3).
+- **A floor above the origin** is struck before the rest of its cell,
+  and shelters it: what is in the cell receives what the floor let
+  through. A floor at or below the origin is struck after.
+- **Unaffected, damaged, destroyed.** An element that is not affected
+  closes its bins and turns the packet back (see confinement). One that
+  is damaged closes its bins and has taken the packet. One that is
+  destroyed lets through the share of the packet that passed.
+- **The account.** The release keeps what it has left: its energy less
+  everything elements have absorbed, fragments' share included. A
+  packet never offers more than that, and the release ends when nothing
+  is left. So contract 1 holds exactly, and `EnergyReleased.absorbed` is
+  the energy less what was left.
+- **Occupants.** Each occupant of a reached cell is exposed once by the
+  front, the first time a cell it is in is reached: `OccupantExposed`
+  with the cell's intensity and `energy = I × 3 m³`, what the wave
+  carries through a cell. An occupant whose cell the front has not
+  reached when it leaves is not exposed.
+- **The push.** The wave gives a thing the energy it holds in a slab of
+  the thing's cross-section, `release.push_depth` (1 cm) deep:
+  `speed = √(2 · I · area · 0.01 m / mass)`, straight away from the
+  origin. A body in flight takes it as an impulse. An occupant has the
+  cross-section of a lump of its mass (as `Body::of_mass`); if the speed
+  is at least `release.throw_speed` (3 m/s, the `launch_at` of 07 §7)
+  the world throws it: it becomes a body in flight (section 15) from a
+  metre above the base of its cell, with `BodyLaunched`. Slower, it is
+  left where it is: staggering is the simulation's. An occupant the
+  world was told no mass for, and a device, are never moved. The
+  simulation must not launch for the same exposure again.
+- **Confinement.** What the front could not mark turned it back. When
+  the front is done, if the space round the origin closes (the fill of
+  section 8.3, within 4000 cells), the energy turned back, and no more
+  than is left, is held in it: `I = held / (cells × 3 m³)`. If that is
+  at least `world.min_intensity`, every occupant in the space is exposed
+  to it once more, and every fixture in it, every block that bounds it
+  and every floor over and under it receives a packet at that intensity.
+  A space that does not close holds nothing: the wave has left through
+  the opening. So a charge in a closed room does more than the same
+  charge in the open, and an open door or a wall that fails lets it out.
+- **Unloaded and beyond.** Cells that are not loaded or lie beyond an
+  edge are passed over. Their stamps are the coarse layer's (section
+  17).
+- **The budget.** Before each shell, the cells it will visit (its volume
+  over 3 m³) are added to those visited. If that passes
+  `release.max_cells` (2,000,000) the release is **cut off**: that shell
+  and those beyond are not played out, `EnergyReleased` says so with
+  `cut_off` and the reach it got to, and confinement is still settled.
+  Resolve mode for the shells left out comes with the coarse layer.
+- **The tiers** are not built: every non-empty cell within reach is
+  handled with shadowing, and the budget bounds the work.
+- **A cone** reaches the cells whose centres lie within its half angle
+  of its axis, and the cell of its origin.
+- **A beam** handles each wake the cells whose centres lie within
+  `radius` of its axis in the next metre of it. Each occupant there is
+  exposed, each block and fixture receives `I × 3 m³ × coverage` and
+  each floor that much times how steeply the beam climbs or dives, never
+  more than the beam has left; what they absorb is taken from it. It
+  ends where something that closes its whole cell stands after being
+  struck, at the edge of loaded space, at its range or when nothing is
+  left. With `burst`, what is left is let go there as a sphere, a
+  release of its own.
 
 ### 13.3 Coarse mode
 
@@ -2364,7 +2477,10 @@ A colliding occupant is struck with conservation of momentum, emits
 - **The direction of entry** is the axis along which the path entered
   the cell: east–west, north–south or up–down. A floor is met from above
   or below, and so is anything the path comes down onto inside its cell.
-  Only the motion along that axis counts and only it is changed.
+  Only the motion along that axis counts and only it is changed. A body
+  that turned back within the stretch, and is already leaving what its
+  path ran into, only touches it: nothing is struck and nothing is
+  reported.
 - **What closes part of a cell** (section 22) is struck by its share
   widened by the body's own width, `share + √area / 1 m`, on a roll
   drawn from the body's own seed and the cell: the same body meets the
@@ -3168,6 +3284,20 @@ definitions (07 §11.1), and of items and templates for when they are
 thrown. Sliding friction is the `friction` of the material a body lies
 on, a half (`BODY_DEFAULT_FRICTION`) where the material states none.
 `REST_SPEED` is a named constant, 0.5 m/s.
+
+**Releases, for whoever binds them.** `release { at, kind, energy,
+shape, speed }` takes the fields of `EnergyRelease` (section 13): a
+location with a height, a damage type, joules, one of `sphere`,
+`{ cone: { dir, half_angle } }` and `{ beam: { dir, radius, range,
+burst } }`, and optionally a speed. Reachable only from Rust so far: the
+releases still spreading (`releases`), `intensity_at` and `reach` of a
+release, and the settings, which are constants until settings are
+bound: `world.min_intensity` (`WORLD_MIN_INTENSITY`, 5 kPa),
+`release.max_cells` (2,000,000; `Cosmos::set_release_max_cells`),
+`release.vacuum_speed` (1000 m/s), `release.push_depth` (1 cm) and
+`release.throw_speed` (3 m/s). The least distance (0.5 m), the height a
+thrown occupant starts at (1 m), the bins of the map (16 to 48 a side)
+and the cells a confining space may hold (4000) are named constants.
 
 **Bodies, for whoever binds them.** `launch { body }` takes the fields
 of `Body` (section 15); `impulse { body, j }` an impulse in kg·m/s;
