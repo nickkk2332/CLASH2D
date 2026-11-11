@@ -376,6 +376,8 @@ fn bundle(seed: u32) -> ComponentBundle {
             Real::ONE,
             ClockId::new(seed),
         )),
+        item: Some(crate::item::Item::sample(seed)),
+        holds: Some(crate::item::Holds::default()),
         mind: Some(crate::mind::Mind::new(Some(format!("profile {seed}")))),
         driver: Some(crate::mind::Driver {
             by: EntityId::new(seed + 1, 0),
@@ -385,7 +387,7 @@ fn bundle(seed: u32) -> ComponentBundle {
 
 #[test]
 fn kinds_have_distinct_names_in_order() {
-    assert_eq!(ComponentKind::ALL.len(), 6);
+    assert_eq!(ComponentKind::ALL.len(), 8);
     for (index, &kind) in ComponentKind::ALL.iter().enumerate() {
         assert_eq!(kind.index(), index);
         assert_eq!(ComponentKind::from_name(kind.name()), Some(kind));
@@ -400,11 +402,11 @@ fn kinds_have_distinct_names_in_order() {
     assert_eq!(<Physical as Component>::KIND, ComponentKind::Physical);
 
     let all = ComponentKinds::of(ComponentKind::ALL);
-    assert_eq!(all.len(), 6);
+    assert_eq!(all.len(), 8);
     assert_eq!(all.iter().collect::<Vec<_>>(), ComponentKind::ALL);
     assert_eq!(
         format!("{all:?}"),
-        r#"{"identity", "physical", "stats", "body", "mind", "driver"}"#
+        r#"{"identity", "physical", "stats", "body", "item", "holds", "mind", "driver"}"#
     );
     assert!(ComponentKinds::NONE.is_empty());
 }
@@ -539,6 +541,8 @@ fn orphans_are_components_without_a_living_owner() {
             (ComponentKind::Physical, dead),
             (ComponentKind::Stats, dead),
             (ComponentKind::Body, dead),
+            (ComponentKind::Item, dead),
+            (ComponentKind::Holds, dead),
             (ComponentKind::Mind, dead),
             (ComponentKind::Driver, dead)
         ]

@@ -39,12 +39,15 @@
 //! rule (02 §12.2) first; what stands behind in that cell is combat's
 //! to resolve (07 §6.3).
 //!
-//! # Seams
+//! # Items
 //!
-//! Worn layers are handed to [`Sim::hit_with`] by whoever holds the
-//! items, and what each took comes back in [`HitOutcome::report`];
-//! [`Sim::hit`] is `hit_with` over [`Sim::worn_layers`], which answers
-//! with none until the item package fills it in.
+//! [`Sim::hit`] is [`Sim::hit_with`] over [`Sim::worn_layers`], what the
+//! item package says the target wears. What each worn layer took is
+//! damage to its item (`item::apply_worn_hits`); a part that came off is
+//! made an item, or nothing, by `item::part_item`, with what was worn
+//! on it; and what a part that stopped working or came off was
+//! grasping is let go (`item::on_body_changes`), after the events of
+//! the body's changes.
 
 use clash_core::{EntityId, Real, Value};
 use clash_data::Def;
@@ -151,7 +154,8 @@ impl Sim {
         let changes = self
             .with_body(|cx, _| change(cx))?
             .map_err(|error| body_reason(&error))?;
-        self.raise_body_changes(entity, changes, cause);
+        self.raise_body_changes(entity, changes.clone(), cause);
+        self.items_follow(&changes, &[], cause);
         Ok(())
     }
 
@@ -222,11 +226,24 @@ impl Sim {
     }
 
     /// The layers worn over an entity's parts, outermost first for each
-    /// part, for a hit to go through (06 §7.2, §9.2).
-    ///
-    /// A seam for the item package: nothing is worn until it answers.
-    pub fn worn_layers(&self, _entity: EntityId) -> Vec<WornLayer> {
-        Vec::new()
+    /// part, for a hit to go through (06 §7.2, §9.2): what the item
+    /// package says it wears.
+    pub fn worn_layers(&self, entity: EntityId) -> Vec<WornLayer> {
+        crate::item::worn_layers_of(self, entity)
+    }
+
+    /// What a body's changes do to what it holds and wears (06 §7.5,
+    /// §9.2), as the item package asks of whoever changes a body: each
+    /// part that came off becomes an item, or nothing, with what was
+    /// worn on it, and what a part that no longer holds was grasping is
+    /// dropped. A refusal is reported as a fault.
+    fn items_follow(&mut self, changes: &Changes, detached: &[Detached], cause: Cause) {
+        for part in detached {
+            if let Err(reason) = crate::item::part_item(self, part, cause) {
+                self.fault(reason);
+            }
+        }
+        crate::item::on_body_changes(self, changes, cause);
     }
 
     /// Applies a hit to a body (06 §7): [`hit_with`](Sim::hit_with)
@@ -328,10 +345,15 @@ impl Sim {
         let mut report = self
             .with_body(|cx, rng| body::apply_hit(cx, &hit, worn, rng, &settings))?
             .map_err(|error| body_reason(&error))?;
-        self.raise_body_changes(target, core::mem::take(&mut report.changes), cause);
+        let changes = core::mem::take(&mut report.changes);
+        self.raise_body_changes(target, changes.clone(), cause);
         for detached in &report.detached {
             self.report_detached(detached.clone());
         }
+        // What the worn layers took is damage to the items, and what
+        // came off and was let go is the item package's (06 §9.2).
+        crate::item::apply_worn_hits(self, &report.worn, hit.packet.kind, cause);
+        self.items_follow(&changes, &report.detached, cause);
         for exit in &report.exits {
             self.carry_exit(target, exit);
         }
@@ -484,8 +506,9 @@ impl Sim {
         let (detached, changes) = self
             .with_body(|cx, _| body::detach(cx, entity, part, how, cause))?
             .map_err(|error| body_reason(&error))?;
-        self.raise_body_changes(entity, changes, cause);
+        self.raise_body_changes(entity, changes.clone(), cause);
         self.report_detached(detached.clone());
+        self.items_follow(&changes, core::slice::from_ref(&detached), cause);
         Ok(detached)
     }
 

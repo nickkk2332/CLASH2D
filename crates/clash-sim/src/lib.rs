@@ -66,6 +66,7 @@ pub mod decision;
 pub mod entity;
 pub mod event;
 pub mod host;
+pub mod item;
 pub mod later;
 pub mod life;
 pub mod mass;
@@ -128,6 +129,7 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     stats::register_defs(types);
     body::register_defs(types);
     template::register_defs(types);
+    item::register_defs(types);
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);
