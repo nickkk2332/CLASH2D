@@ -21,6 +21,7 @@ use super::{
     Identity, PAGE_SLOTS, Physical, TemplateId,
 };
 use crate::body::{Body, BodyPlanId};
+use crate::movement::Mover;
 use crate::stats::Stats;
 
 // ---- The store against a model ---------------------------------------------
@@ -378,6 +379,7 @@ fn bundle(seed: u32) -> ComponentBundle {
         )),
         item: Some(crate::item::Item::sample(seed)),
         holds: Some(crate::item::Holds::default()),
+        mover: Some(Mover::default()),
         mind: Some(crate::mind::Mind::new(Some(format!("profile {seed}")))),
         driver: Some(crate::mind::Driver {
             by: EntityId::new(seed + 1, 0),
@@ -387,7 +389,7 @@ fn bundle(seed: u32) -> ComponentBundle {
 
 #[test]
 fn kinds_have_distinct_names_in_order() {
-    assert_eq!(ComponentKind::ALL.len(), 8);
+    assert_eq!(ComponentKind::ALL.len(), 9);
     for (index, &kind) in ComponentKind::ALL.iter().enumerate() {
         assert_eq!(kind.index(), index);
         assert_eq!(ComponentKind::from_name(kind.name()), Some(kind));
@@ -397,16 +399,17 @@ fn kinds_have_distinct_names_in_order() {
     assert_eq!(ComponentKind::Physical.name(), "physical");
     assert_eq!(ComponentKind::Stats.name(), "stats");
     assert_eq!(ComponentKind::Body.name(), "body");
+    assert_eq!(ComponentKind::Mover.name(), "mover");
     assert_eq!(ComponentKind::from_name("hit_points"), None);
     assert_eq!(<Identity as Component>::KIND, ComponentKind::Identity);
     assert_eq!(<Physical as Component>::KIND, ComponentKind::Physical);
 
     let all = ComponentKinds::of(ComponentKind::ALL);
-    assert_eq!(all.len(), 8);
+    assert_eq!(all.len(), 9);
     assert_eq!(all.iter().collect::<Vec<_>>(), ComponentKind::ALL);
     assert_eq!(
         format!("{all:?}"),
-        r#"{"identity", "physical", "stats", "body", "item", "holds", "mind", "driver"}"#
+        r#"{"identity", "physical", "stats", "body", "item", "holds", "mover", "mind", "driver"}"#
     );
     assert!(ComponentKinds::NONE.is_empty());
 }
@@ -543,6 +546,7 @@ fn orphans_are_components_without_a_living_owner() {
             (ComponentKind::Body, dead),
             (ComponentKind::Item, dead),
             (ComponentKind::Holds, dead),
+            (ComponentKind::Mover, dead),
             (ComponentKind::Mind, dead),
             (ComponentKind::Driver, dead)
         ]

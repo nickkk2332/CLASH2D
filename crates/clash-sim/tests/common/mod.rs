@@ -110,34 +110,41 @@ pub fn try_defs(extra: &str) -> Result<Arc<Defs>, String> {
         .map_err(|diagnostics| diagnostics.render())
 }
 
-/// Loads `mods/core`'s world content and its living things (bodies,
-/// stats, templates), with one more file of definitions.
-pub fn life_defs(extra: &str) -> Arc<Defs> {
+/// Loads `mods/core`'s world content with more files of definitions,
+/// each a path within the mod and its text, or renders why not.
+pub fn try_defs_with(extra: &[(&str, &str)]) -> Result<Arc<Defs>, String> {
     let types = types();
-    let mut files = core_files();
-    files.extend(core_dir_files("life"));
-    // The channel arms supply is defined with `mods/core`'s items,
-    // which need the interface's colours: here it is on its own.
-    files.push((
-        "data/test/channels.json".to_owned(),
-        r#"[{ "type": "channel", "id": "arm", "name": "arm" }]"#.to_owned(),
-    ));
-    files.push(("data/test/extra.json".to_owned(), extra.to_owned()));
-    let files: Vec<(&str, &str)> = files
+    let core = core_files();
+    let files: Vec<(&str, &str)> = core
         .iter()
         .map(|(path, text)| (path.as_str(), text.as_str()))
+        .chain(extra.iter().copied())
         .collect();
     Loader::new(&types)
         .expr_registry(&clash_sim::engine_registry())
         .memory_mod("core", r#"{ "id": "core" }"#, &files)
         .load_mods(&["core"])
         .into_result()
-        .unwrap_or_else(|diagnostics| {
-            panic!(
-                "the test definitions do not load:\n{}",
-                diagnostics.render()
-            )
-        })
+        .map_err(|diagnostics| diagnostics.render())
+}
+
+/// Loads `mods/core`'s world content and its living things (bodies,
+/// stats, templates), with one more file of definitions.
+pub fn life_defs(extra: &str) -> Arc<Defs> {
+    let life = core_dir_files("life");
+    let mut files: Vec<(&str, &str)> = life
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect();
+    // The channel arms supply is defined with `mods/core`'s items,
+    // which need the interface's colours: here it is on its own.
+    files.push((
+        "data/test/channels.json",
+        r#"[{ "type": "channel", "id": "arm", "name": "arm" }]"#,
+    ));
+    files.push(("data/test/extra.json", extra));
+    try_defs_with(&files)
+        .unwrap_or_else(|error| panic!("the test definitions do not load:\n{error}"))
 }
 
 /// The definitions every test here runs on.
