@@ -5,8 +5,8 @@
 //! chunk:
 //!
 //! - A [`Shape`] is what one chunk looks like to light: for each cell
-//!   whether it stops light, has a floor and is open to the sky, and the
-//!   sources in it. It is read from the cells again when the chunk's
+//!   whether it stops light, holds anything opaque at all, has a floor
+//!   and is open to the sky, and the sources in it. It is read from the cells again when the chunk's
 //!   structure revision moves, or that of any chunk of its column (a
 //!   roof far above changes what is open to the sky). When what it reads
 //!   differs from what it had, it notes the box of cells that changed.
@@ -39,6 +39,11 @@ pub(super) const S_BLOCKS: u8 = 1;
 pub(super) const S_FLOOR: u8 = 1 << 1;
 /// A shape bit: the cell is open to the sky.
 pub(super) const S_SKY: u8 = 1 << 2;
+/// A shape bit: something `opaque` stands in the cell, however low. A
+/// source's light does not go down or up through such a cell
+/// (02 §22), so a change to this is a change light cares about, though
+/// the spread of sky light does not read it.
+pub(super) const S_SHADE: u8 = 1 << 3;
 
 /// Chunks along one side of the block an answer is worked out from: the
 /// chunk and its neighbours.
@@ -489,10 +494,11 @@ fn read_shape(
     let taller = |info: &StateInfo| info.flags.has(EngineFlag::Opaque) && info.height > eye_m;
     let bits_of = |flags: CellFlags, block: BlockState, fixture: FixtureState| {
         let mut bits = 0;
-        if flags.contains(CellFlags::OPAQUE)
-            && (taller(defs.block_info(block)) || taller(defs.fixture_info(fixture)))
-        {
-            bits |= S_BLOCKS;
+        if flags.contains(CellFlags::OPAQUE) {
+            bits |= S_SHADE;
+            if taller(defs.block_info(block)) || taller(defs.fixture_info(fixture)) {
+                bits |= S_BLOCKS;
+            }
         }
         if flags.contains(CellFlags::HAS_FLOOR) {
             bits |= S_FLOOR;

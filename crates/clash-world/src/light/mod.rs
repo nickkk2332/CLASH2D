@@ -6,7 +6,8 @@
 //! | The light of every cell of a box: a screen, a field of view | [`Cosmos::fill_light`] |
 //! | Carried lamps, flashes and other sources that move | a list of [`MovingLight`] handed to either, or [`Cosmos::add_moving_light`] over a level already read |
 //! | The parts that do not change with the time of day | [`Cosmos::static_light`], a [`StaticLight`] |
-//! | The moment light is read at | [`SkyTime`] |
+//! | The moment light is read at | [`SkyTime`]; [`SkyTime::now`] reads it from the timeline |
+//! | The sky over a cell: its levels, its backdrop | [`Cosmos::sky`], a [`Sky`] |
 //! | What gives light | `light` on a floor, block or fixture or one of its states ([`LightSpec`]); a `sky` definition ([`SkyDef`]) named by a stratum |
 //! | What the cache has done | [`Cosmos::light_stats`] |
 //!
@@ -79,6 +80,7 @@ mod tests;
 use std::sync::{Mutex, MutexGuard};
 
 use clash_core::{Dur, IVec3, Real};
+use clash_time::Timeline;
 
 pub(crate) use cache::LightCache;
 pub use cache::{LIGHT_CACHE_MAX_CHUNKS, LIGHT_SOURCES_MAX_PER_CHUNK};
@@ -170,6 +172,13 @@ impl SkyTime {
             share: share.max(Real::ZERO),
             ..self
         }
+    }
+
+    /// Now, under a clear sky, in the realm a grid belongs to: the
+    /// local time of that realm's clock, read from the timeline.
+    pub fn now(cosmos: &Cosmos, timeline: &Timeline, grid: GridId) -> Result<SkyTime, WorldError> {
+        let clock = cosmos.grid(grid)?.clock();
+        Ok(SkyTime::at(timeline.local_now(clock)?))
     }
 }
 
@@ -284,6 +293,15 @@ fn sky_level(sky: Option<&Sky>, time: SkyTime) -> Real {
 }
 
 impl Cosmos {
+    /// The sky over a cell: the `sky` definition its stratum names, if
+    /// it names one. The cell must be inside its grid; its tract need
+    /// not be loaded.
+    pub fn sky(&self, loc: Location) -> Result<Option<&Sky>, WorldError> {
+        let view = self.grid(loc.grid)?;
+        let cell = view.normalize(loc.cell)?;
+        Ok(sky_of(self, self.realm_kind(view.realm()), cell.z))
+    }
+
     /// The light at a cell (15 §3.3): what the sky gives it at this
     /// moment and what the fixed sources give it, never below zero. See
     /// the [module](crate::light) for the scale and the rules.

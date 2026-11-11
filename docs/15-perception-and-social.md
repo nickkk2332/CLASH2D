@@ -102,6 +102,7 @@ impl Cosmos {
     pub fn fill_light(&self, grid: GridId, cells: CellBox, time: SkyTime,
                       moving: &[MovingLight], out: &mut Vec<Real>) -> Result<(), WorldError>;
     pub fn static_light(&self, loc: Location) -> Result<StaticLight, WorldError>;
+    pub fn sky(&self, loc: Location) -> Result<Option<&Sky>, WorldError>;
 }
 ```
 
@@ -113,8 +114,9 @@ sources that see it give it, and is never below zero.
 **The moment.** The world does not hold the timeline, so the moment is
 given: a `SkyTime` carries the local time of the realm's clock
 (`Timeline::local_now(realm.clock)`) and the share of the sky's light
-that gets through, 1 unless the weather says less (09 §14.1). The scene
-may ask for the light of the moment it is playing back.
+that gets through, 1 unless the weather says less (09 §14.1).
+`SkyTime::now(cosmos, timeline, grid)` reads the present moment. The
+scene may ask for the light of the moment it is playing back.
 
 **Sky.** A stratum names a `sky` definition, which gives ambient light by
 local time.
@@ -172,7 +174,8 @@ it may give off another or none:
 - A source sees what an eye in its cell would at 1.5 m: the field of
   view of 02 §22, with its walls that are seen and its sight down and up
   through cells that nothing closes. Something opaque no taller than
-  1.5 m casts no shadow.
+  1.5 m casts no shadow on its own storey, though as for sight it
+  closes a hole between storeys.
 - `radius` is at most 16 m. Left out, it is where the source's light
   falls to 0.01: `√(|intensity| / 0.01 − 1)`, and never more than 16 m.
 - The sources that reach a cell are added in a fixed order: chunk by
@@ -195,8 +198,8 @@ They are kept for each chunk asked about, in a table beside the chunks
 keyed by grid and chunk position, and `static_light` reads them.
 
 - For each chunk the cache keeps its **shape**: per cell, whether it
-  stops light, has a floor and is open to the sky, and the sources in
-  it. A shape is read from the cells again when the chunk's structure
+  stops light, holds anything opaque at all, has a floor and is open to
+  the sky, and the sources in it. A shape is read from the cells again when the chunk's structure
   revision moves, or that of any chunk of its tract, since a roof far
   above changes what is open to the sky. When what is read differs from
   what was kept, the box of cells that changed is noted.

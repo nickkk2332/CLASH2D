@@ -288,6 +288,32 @@ fn noon_is_bright_and_midnight_dark_under_the_open_sky() {
 }
 
 #[test]
+fn the_moment_is_read_from_the_realms_clock() {
+    let mut scene = scene(&[TractPos::new(0, 0)], |_, _| {});
+    // The clock of `core:testland` starts at eight in the morning.
+    let now = SkyTime::now(&scene.cosmos, &scene.timeline, scene.grid).unwrap();
+    assert_eq!(now, SkyTime::at(Dur::ZERO));
+    assert_eq!(scene.light(10, 10, 0, now), Real::ONE);
+    // Twelve hours on it is eight in the evening, and dark.
+    scene
+        .timeline
+        .advance_to(clash_core::Tick(Dur::from_secs(12 * 3600).as_micros()));
+    let later = SkyTime::now(&scene.cosmos, &scene.timeline, scene.grid).unwrap();
+    assert_eq!(later.local, Dur::from_secs(12 * 3600));
+    assert_eq!(scene.light(10, 10, 0, later), Real::of(NIGHT));
+    assert_eq!(
+        SkyTime::now(&scene.cosmos, &scene.timeline, GridId::new(40)),
+        Err(WorldError::UnknownGrid(GridId::new(40)))
+    );
+    // The sky over a cell is its stratum's, loaded or not.
+    let sky = scene.cosmos.sky(scene.loc(500, 500, 3)).unwrap().unwrap();
+    assert_eq!(sky.level_at(later.local), Real::of(NIGHT));
+    assert!(sky.backdrop.is_some());
+    assert!(scene.cosmos.sky(scene.loc(5, 5, 120)).unwrap().is_none());
+    assert!(scene.cosmos.sky(scene.loc(5, -5, 0)).is_err());
+}
+
+#[test]
 fn a_stratum_that_names_no_sky_is_dark() {
     let scene = scene(&[TractPos::new(0, 0)], |kit, paint| {
         // A roof high up, where the sky of `core:testland` gives way to
@@ -713,6 +739,30 @@ fn lamps_add_up_and_a_source_of_darkness_takes_away() {
 }
 
 #[test]
+fn a_lamp_shines_down_a_hole_until_something_opaque_stands_in_it() {
+    let mut scene = scene(&[TractPos::new(0, 0)], |kit, paint| {
+        paint.room(kit, (8, 8), (18, 16), 0);
+        paint.room(kit, (8, 8), (18, 16), 1);
+        paint.fixture(CellPos::new(12, 12, 1), kit.lamp);
+        paint.floor(CellPos::new(14, 12, 1), FloorState::NONE);
+    });
+    // Two cells along and a storey down: d² = 4 + 9.
+    let below = Real::ONE / Real::of(14.0);
+    assert_eq!(scene.fixed(14, 12, 0), below);
+    assert_eq!(scene.fixed(13, 12, 0), Real::ZERO);
+    // A hedge in the hole is too low to cast a shadow on its own
+    // storey, and closes the hole all the same.
+    scene.set_block(14, 12, 1, scene.kit.hedge);
+    assert_eq!(scene.fixed(15, 12, 1), Real::ONE / Real::of(10.0));
+    assert_eq!(scene.fixed(14, 12, 0), Real::ZERO);
+    scene.set_block(14, 12, 1, BlockState::NONE);
+    assert_eq!(scene.fixed(14, 12, 0), below);
+    // So does a floor laid over it.
+    scene.set_floor(14, 12, 1, scene.kit.slab);
+    assert_eq!(scene.fixed(14, 12, 0), Real::ZERO);
+}
+
+#[test]
 fn a_lamp_lights_across_the_line_between_chunks() {
     let scene = scene(&four_tracts(), |kit, paint| {
         paint.room(kit, (24, 24), (40, 40), 0);
@@ -1034,6 +1084,7 @@ enum Change {
     NoRoof,
     Glow,
     HighRoof,
+    Hedge,
 }
 
 fn change() -> impl Strategy<Value = Change> {
@@ -1056,6 +1107,8 @@ fn change() -> impl Strategy<Value = Change> {
         Change::NoRoof,
         Change::Glow,
         Change::HighRoof,
+        Change::Hedge,
+        Change::Hedge,
     ])
 }
 
@@ -1076,6 +1129,7 @@ fn apply(scene: &mut Scene, change: Change, x: i32, y: i32, z: i32) {
         Change::NoRoof => scene.set_floor(x, y, z + 1, FloorState::NONE),
         Change::Glow => scene.set_block(x, y, z, scene.kit.glow_block),
         Change::HighRoof => scene.set_floor(x, y, 12, scene.kit.slab),
+        Change::Hedge => scene.set_block(x, y, z, scene.kit.hedge),
     }
 }
 
