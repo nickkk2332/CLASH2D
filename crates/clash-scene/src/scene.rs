@@ -23,7 +23,8 @@ use crate::frame::{Frame, FrameCell};
 use crate::frontend::Frontend;
 use crate::input::{InputEvent, KeymapDef};
 use crate::theme::Theme;
-use crate::ui::{MessageLog, Screen, UiData, UiEvent};
+use crate::ui::{MessageLog, Screen, UiData, UiEvent, ViewPainter};
+use crate::view::WorldView;
 
 /// The scene's handle on the simulation: it can submit a command, and
 /// that is all (12 invariant V1).
@@ -143,6 +144,7 @@ pub struct Scene<H: SceneHost = NoHost> {
     log: MessageLog,
     rng: Rng,
     elapsed: f64,
+    world: Option<WorldView>,
 }
 
 impl<H: SceneHost> Scene<H> {
@@ -156,7 +158,36 @@ impl<H: SceneHost> Scene<H> {
             log: MessageLog::new(),
             rng: Rng::from_seed(SCENE_SEED),
             elapsed: 0.0,
+            world: None,
         }
+    }
+
+    /// Gives the scene its view of the world: the view model, the camera
+    /// and the glyph tables. From then on the `map_view` and
+    /// `section_view` nodes of the top screen draw it. Returns the view
+    /// the scene had before.
+    ///
+    /// The view holds what was put into it and cannot read the
+    /// simulation: see [`crate::view`].
+    pub fn set_world(&mut self, world: WorldView) -> Option<WorldView> {
+        self.world.replace(world)
+    }
+
+    /// Takes the scene's view of the world away. The views of a screen
+    /// are then drawn as empty areas with their names.
+    pub fn take_world(&mut self) -> Option<WorldView> {
+        self.world.take()
+    }
+
+    /// The scene's view of the world, if it has one.
+    pub fn world(&self) -> Option<&WorldView> {
+        self.world.as_ref()
+    }
+
+    /// The scene's view of the world, to put what was perceived into its
+    /// view model and to move its camera.
+    pub fn world_mut(&mut self) -> Option<&mut WorldView> {
+        self.world.as_mut()
     }
 
     /// Submits a command to the simulation: the scene's only way to
@@ -266,7 +297,7 @@ impl<H: SceneHost> Scene<H> {
         frame.clear(FrameCell::blank(self.theme.base()));
         let data = UiData {
             log: Some(&self.log),
-            views: None,
+            views: self.world.as_ref().map(|world| world as &dyn ViewPainter),
         };
         if let Some(screen) = self.screens.last_mut() {
             screen.draw(frame, &data);

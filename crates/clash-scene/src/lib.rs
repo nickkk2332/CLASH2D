@@ -20,6 +20,8 @@
 //! | Screens and widgets | [`ui`]: [`ui::ScreenDef`], [`ui::Screen`] |
 //! | The scene itself | [`Scene`], over a [`SceneHost`] |
 //! | Definitions from mods | [`register_defs`], then [`UiDefs`]; see [`defs`] |
+//! | The picture of the world | [`view`]: [`ViewModel`], [`WorldView`], [`Camera`], [`WorldGlyphs`] |
+//! | How a condition looks; shading over a map | the `ambience` and `overlay` definitions: [`AmbienceDef`], [`OverlayDef`] |
 //!
 //! # Outside the simulation
 //!
@@ -32,10 +34,11 @@
 //!
 //! # What is not here yet
 //!
-//! The view model, playback, the camera, cutscenes and the link to the
-//! simulation come with packages U4, U5, U10 and U11 of
-//! `docs/plans/first-playable.md`. Bindings and interface effects come
-//! with U6b; [`ui`] says where they plug in.
+//! Playback, cutscenes and the link to the simulation come with packages
+//! U5, U10 and U11 of `docs/plans/first-playable.md`. Until perception
+//! and playback exist, nothing but a test or the omniscient fill of
+//! [`view::omniscient`] puts anything into the view model. Bindings and
+//! interface effects come with U6b; [`ui`] says where they plug in.
 
 pub mod color;
 pub mod defs;
@@ -48,9 +51,13 @@ pub mod scene;
 pub mod text;
 pub mod theme;
 pub mod ui;
+pub mod view;
 
 pub use color::{Ansi16, Color, ColorDef, ColorError, ColorRef, Rgb, ansi256};
-pub use defs::{ColorId, FigureId, KeymapId, ScreenId, ThemeId, UiDefs, check_defs, register_defs};
+pub use defs::{
+    AmbienceId, ColorId, FigureId, KeymapId, OverlayId, ScreenId, ThemeId, UiDefs, check_defs,
+    register_defs,
+};
 pub use frame::{
     Attrs, Borders, Canvas, CellStyle, Frame, FrameCell, FrameFx, Rect, Sprite, Wash,
     is_single_width,
@@ -65,3 +72,7 @@ pub use input::{
 pub use scene::{NoHost, Scene, SceneHost, Turn};
 pub use text::{RichText, TextError};
 pub use theme::{BordersDef, FontDef, Style, StyleDef, Theme, ThemeDef, ThemeError};
+pub use view::{
+    Ambience, AmbienceDef, Camera, CellContents, EntitySprite, HeardMarker, KnownCell, Overlay,
+    OverlayDef, SectionAxis, SpriteId, SpriteKind, ViewModel, WorldGlyphs, WorldView,
+};

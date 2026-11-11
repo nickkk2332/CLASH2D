@@ -76,6 +76,7 @@ version = "0.1.0"
 dependencies = [
  "clash-data",
  "clash-scene",
+ "clash-time",
  "clash-world",
  "crossterm",
  "serde_json",
@@ -114,6 +115,8 @@ dependencies = [
  "clash-core",
  "clash-data",
  "clash-sim",
+ "clash-time",
+ "clash-world",
  "serde",
  "serde_json",
  "thiserror",

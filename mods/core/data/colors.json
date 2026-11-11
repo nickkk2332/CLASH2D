@@ -1,0 +1,7 @@
+[
+  { "//": "The colours the materials and glyphs of this mod name that are not among the sixteen terminal colours. Each has the word text uses for it and the terminal colour shown where 24-bit colour is not available.",
+    "type": "color", "id": "gray", "rgb": "#909090", "word": "grey", "fallback": "white" },
+  { "type": "color", "id": "dark_gray", "rgb": "#585858", "word": "grey", "fallback": "bright_black" },
+  { "type": "color", "id": "light_gray", "rgb": "#c0c0c0", "word": "grey", "fallback": "white" },
+  { "type": "color", "id": "brown", "rgb": "#8a5a2b", "word": "brown", "fallback": "yellow" }
+]

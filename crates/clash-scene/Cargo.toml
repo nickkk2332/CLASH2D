@@ -10,10 +10,14 @@ publish.workspace = true
 clash-core.workspace = true
 clash-data.workspace = true
 clash-sim.workspace = true
+clash-world.workspace = true
 bitflags.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+clash-time.workspace = true
 
 [lints]
 workspace = true
