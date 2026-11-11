@@ -245,10 +245,11 @@ fn settle<H: Host + ?Sized>(
     }
     let pools: Vec<_> = stats_of(cx.stats, entity)?.pools().collect();
     for id in pools {
-        let reads_changed = defs
-            .pool(id)
-            .is_some_and(|def| def.reads().iter().any(|read| changed[read.index()]));
-        if all_pools || reads_changed {
+        // A pool whose definition is gone stays as it is.
+        let Some(def) = defs.pool(id) else {
+            continue;
+        };
+        if all_pools || def.reads().iter().any(|read| changed[read.index()]) {
             pool::rework(cx, entity, id, out)?;
         }
     }

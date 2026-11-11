@@ -62,7 +62,7 @@ players may switch it off.
 release at @here energy=1e9 kind=blast
 spawn town_guard at @c:120,44,0 as=g1
 as @g1 act slash target=@self effort=0.2
-eval self.pool.blood.frac
+eval self.pool.frac('blood')
 do { "add_trait": { "to": "self", "trait": "adrenaline" } }
 select entities around=@self radius=10 where="it.has_tag('guard')"
 watch dist(self, @sel)

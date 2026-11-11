@@ -137,7 +137,8 @@ with the component. Containment deeper than 64 levels is refused.
 ## 4. Attributes, pools and tracks
 
 Three numeric primitives. Every stat, resource and progression scheme in any
-content is built from them.
+content is built from them. An entity that has them carries a `Stats`
+component, and everything about them is saved and hashed with it.
 
 ### 4.1 Attributes
 
@@ -148,16 +149,43 @@ content is built from them.
 
 An attribute is a number with a base and a stack of **modifiers**.
 
-- `base` is a literal or an expression (a derived attribute:
-  `"base": "self.attr.strength * 0.5 + self.fn.locomotion * 4"`).
-- Modifiers come from traits, held items and rules: `add`, then `mul`,
-  applied in that order. Each remembers its source and is removed with it.
-- `seat` is `body` or `mind`. It decides which goes where when the two are
-  separated (section 8). Strength stays with the body; knowledge leaves with
-  the mind.
-- Values are cached and recomputed when a dependency changes.
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls it. |
+| `seat` | `body` (the default) or `mind`. It decides which goes where when the two are separated (section 8). Strength stays with the body; knowledge leaves with the mind. |
+| `base` | The value before modifiers: a literal, or an expression about the owner, bound as `self` (a **derived** attribute: `"base": "self.attr.strength * 0.5 + self.fn.locomotion * 4"`). Pure. Zero if left out. |
+| `min`, `max` | The least and the most the value can be after modifiers. Each may be left out. |
 
-Read as `self.attr.strength`.
+- The value is `bound((base + Σ add) × Π mul)`: every addition, then every
+  multiplication, then `min` and `max`. A base that comes to null counts as
+  zero.
+- Modifiers come from traits, held items, wounds, abilities, templates and
+  rules. A modifier has an `add`, a `mul` or both. Each remembers its
+  **source** and is removed with it: removing a source removes exactly what
+  it added, and a source may add several to one attribute. They are applied
+  in order of source, and those of one source in the order they were added,
+  so that a sum of the same modifiers is always the same number.
+- An entity may be given a base of its own (`set_attr_base`; a template's
+  `attributes`). It stands in for the definition's, an expression included,
+  until it is taken back.
+- An entity with stats has every attribute that is defined. One it was never
+  given a base or a modifier for has its definition's base.
+- A derived attribute **depends on** the attributes its `base` reads
+  directly, as `self.attr.<id>`. That is known when mods load, and an
+  attribute that depends on itself, directly or through others, is a load
+  error at its `base`. When an attribute's value changes, exactly those that
+  depend on it are worked out again, each after what it reads, and then the
+  pools whose `max` or `regen` read one that changed. Nothing else is
+  touched.
+- A `base` may read more than attributes: `self.mass`, a body function, a
+  variable. Whatever changes one of those has every attribute and pool of
+  the entity worked out again (section 6.5 does). An attribute of the owner
+  read inside a function, where loading cannot see it, is null with a
+  warning, so that no value can go stale unnoticed.
+- Values are cached, and the cache is bit for bit what working everything
+  out from scratch gives (invariant B3).
+
+Read as `self.attr.strength`. A change is the event `attr_changed`.
 
 ### 4.2 Pools
 
@@ -169,16 +197,50 @@ Read as `self.attr.strength`.
 
 A pool is a bounded quantity that fills, drains and regenerates.
 
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls it. |
+| `seat` | `body` (the default) or `mind`, as for an attribute. |
+| `max` | The most it holds: an expression about the owner, `self`. Pure. Required. Null, a negative number and anything not finite count as zero. |
+| `start` | What it holds when its owner is given it. May name `max`. Zero if left out. |
+| `regen` | What it gains in a second of its owner's time with nothing else acting on it; negative to decay. May name `max`. Zero if left out. |
+| `thresholds` | Fractions of `max`, from 0 to 1, in any order, none twice; at most 256. |
+
+- An entity has the pools it was given and no others.
 - A pool has a current level and a net rate, the sum of its `regen` and
   every drain and feed currently applied. Between changes the level is a
-  straight line, so nothing runs per tick: when a rate changes the level is
-  brought up to date, and the next threshold crossing is scheduled as a
-  single wake-up.
-- Crossing a threshold (a fraction of `max`) emits `pool_crossed`. What
+  straight line, kept between zero and `max`, so nothing runs per tick:
+  when a rate changes the level is brought up to date, and the next
+  threshold crossing is scheduled as a single wake-up.
+- A rate is applied under a source, as a modifier is, and goes with it. One
+  source has one rate on a pool; applying another replaces it.
+- `max` and `regen` are worked out when the pool is given, when an attribute
+  they read directly changes, and whenever the entity's attributes are
+  worked out from scratch (section 4.1). A level above a new `max` comes
+  down to it.
+- Crossing a threshold emits `pool_crossed`, whatever moved the level: a
+  rate, a verb, or a change of `max`. A level that rises to a threshold
+  exactly has crossed it upward, and one that falls to it exactly has
+  crossed it downward. One change that passes several reports each, in the
+  order they were passed. A pool is not said to cross the thresholds it
+  starts beyond, and one whose `max` is zero is below them all. What
   happens at 40 % blood is a rule.
+- The wake-up is for the moment the line meets the next threshold in its
+  way, rounded up to a whole tick, on the owner's clock. A pool with no net
+  rate, or with no threshold ahead of it, schedules nothing. When the
+  clock's rate changes the timeline moves the wake-up and keeps its
+  remaining local time (03 §3.3), so the crossing still falls when the
+  owner's own time says it should.
+- Adding to a pool stops at its bounds, and says how much was added. A cost
+  (08 §5.2) is taken in full or refused with the reason `pool_too_low`.
+- When the owner leaves the simulation (03 §9) its pools are brought up to
+  date and their wake-ups cancelled. When it returns, the local time that
+  passed for them is applied in one step: none if they were paused. The
+  thresholds passed are reported once each, in order.
 - Verbs add, drain, and add or remove named rates.
 
-Read as `self.pool.blood` and `self.pool.blood.frac`.
+Read as `self.pool.blood`, the level, and `self.pool.frac('blood')`, the
+level as a fraction of `max`.
 
 ### 4.3 Tracks
 
@@ -187,13 +249,86 @@ Read as `self.pool.blood` and `self.pool.blood.frac`.
   "seat": "mind", "levels": "100 * $level ^ 1.6" }
 ```
 
-A track is an accumulating counter with levels. `levels` gives the amount
-needed for each level. Reaching one emits `track_advanced`.
+A track is an accumulating counter with levels.
+
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls it. |
+| `seat` | `body` (the default) or `mind`, as for an attribute. |
+| `levels` | The total the counter must reach for the track to be at level `$level`. An expression about the owner, `self`, asked for each level in turn from 1. Pure. Required. |
+| `max_level` | The highest level, if there is one. No track passes level 10,000. |
+| `on_advance` | Effects run for each level reached, after `track_advanced`, with the owner as `self` and the level as `$level`. |
+
+The track is at the highest level whose total it has reached. Reaching one
+emits `track_advanced`, once for that level; an advance that passes several
+emits one for each, lowest first. A level reached is kept, and a track never
+advanced is at level 0 with nothing accumulated. The counter only grows.
 
 How a track gains is entirely rules: on use, from training actions, from
 points spent, from a quest, never. Use-based skills, experience levels,
 training and cheat skills are all tracks with different rules feeding them,
 and a mod may mix them freely (decision D-038).
+
+Read as `self.track.swordsmanship`, the level.
+
+### 4.4 Reading and changing them
+
+`attr`, `pool` and `track` are properties of an entity that give its
+attributes, pools and tracks: subjects of the kinds `attrs`, `pools` and
+`tracks`. Each definition is a property of its kind, under its qualified
+id (`self.attr.core:strength`) and, where no other definition of the type
+and no property of the kind has the same name, under its bare id. A
+misspelt name is a load error.
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.attr`, `entity.pool`, `entity.track` | `attrs`, `pools`, `tracks` | The entity's stats of that sort |
+| `attrs.<id>` | `real` | An attribute's value |
+| `attrs.value(attribute)` | `real` | The same, for an attribute chosen at run time |
+| `pools.<id>`, `pools.level(pool)` | `real` | A pool's level now |
+| `pools.frac(pool)` | `real` | The level as a fraction of `max`; 0 for a pool that holds nothing |
+| `pools.max(pool)` | `real` | The most it holds |
+| `pools.rate(pool)` | `real` | Its net rate, per second of its owner's time |
+| `tracks.<id>`, `tracks.level(track)` | `int` | A track's level |
+| `tracks.amount(track)` | `real` | What it has accumulated |
+
+None is settable: stats change through the verbs, so that hooks run and
+crossings are reported. None is safe for belief: a character reads its own
+and no one else's (05 §7.3). Anything read of an entity with no stats, of a
+pool it does not have, or by an id that names nothing is null. An
+attribute's value and a track's level name the events that change them, so
+they may be read in reactive expressions (05 §7.5). A pool's level moves
+all the time and may not: react to its thresholds.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `attr_changed` | `self` | `attr` (`id<attribute>`), `old`, `new` (`real`) |
+| `pool_crossed` | `self` | `pool` (`id<pool>`); `threshold` (`real`), the fraction listed; `rising` (`bool`), true if the level rose to it or past it; `level` (`real`), the level afterwards |
+| `track_advanced` | `self` | `track` (`id<track>`), `level` (`int`), the level reached |
+| `pool_changing` (hook) | `self` | `pool` (`id<pool>`), `amount` (`real`), which a handler may change |
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `set_attr_base` | `who`, `attr`, `base` | Gives the entity a base of its own; `null` gives the definition's back |
+| `add_modifier` | `who`, `attr`, `add`, `mul`, `key` | Adds a modifier under the rule's source and `key` |
+| `remove_modifier` | `who`, `key`, `attr` | Removes what was added under `key`, to one attribute or to all |
+| `pool_add` | `who`, `pool`, `amount` | Adds to a pool, negative to drain, after the hook `pool_changing` |
+| `pool_rate` | `who`, `pool`, `rate`, `key` | Applies a rate under `key`; `null` removes it |
+| `advance_track` | `who`, `track`, `amount` | Adds to a track's counter |
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `no_stats` | The entity has no stats | `entity` |
+| `has_stats` | It is given stats and has them | `entity` |
+| `unknown_stat` | The id is not an attribute, pool or track | `what` |
+| `no_such_pool` | It does not have the pool | `entity`, `pool` |
+| `has_pool` | It is given a pool it has | `entity`, `pool` |
+| `pool_too_low` | A cost is more than the pool holds | `entity`, `pool`, `wanted`, `have` |
+| `bad_amount` | An amount is not finite, or negative where it may not be: a cost, an advance | `amount` |
+| `no_clock` | The clock the pools run on is gone | — |
+| `stats_not_registered` | The definitions were loaded without the stats' definition types and properties | — |
 
 ## 5. Traits
 
@@ -883,7 +1018,7 @@ Body flags on `damage_type` (`severs`).
 `entity_revived`, `mind_released`, `mind_transferred`, `hit_landed`,
 `wound_inflicted`, `wound_healed`, `part_disabled`, `part_restored`,
 `part_severed`, `part_destroyed`, `body_changed`, `body_cells_damaged`,
-`wound_closed`, `function_changed`,
+`wound_closed`, `function_changed`, `attr_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
 `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
 `item_broken`, `item_stage_reached`, `item_turned`, `posture_changed`,
@@ -892,7 +1027,8 @@ Body flags on `damage_type` (`severs`).
 **Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
 `trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
 `item_leaving`, `body_changing`, `mind_transferring`, `posture_changing`,
-`passage_requested`. Each is described in the table below.
+`passage_requested`. Each is described in the table below, and
+`pool_changing` with its fields in section 4.4.
 
 **Effects**: the verbs of sections 6.5, 8.2, 8.3, 9.2 and 11, and:
 `hit`, `add_trait`, `remove_trait`, `set_attr_base`, `add_modifier`,
@@ -906,7 +1042,7 @@ Body flags on `damage_type` (`severs`).
 | `exposure_incoming` | A dose reaches a body by any route (02 §16; 16 §9.5) | Change the amount; cancel |
 | `entity_dying` | An entity stops for good (section 8.3) | Cancel |
 | `trait_adding`, `trait_removing` | A trait is added or removed | Cancel |
-| `pool_changing` | A verb changes a pool's level | Change the amount; cancel |
+| `pool_changing` | A verb changes a pool's level (section 4.4). Rates and regeneration do not raise it. | Change the amount; cancel |
 | `item_taking`, `item_leaving` | An item enters or leaves a hold | Cancel: a thing that will not be picked up, or will not come off |
 | `body_changing` | Any body verb of section 6.5 | Cancel: a body that cannot be reshaped |
 | `mind_transferring` | `transfer_mind`, `set_driver` | Cancel: a mind that cannot be moved or ridden |
@@ -918,13 +1054,14 @@ Body flags on `damage_type` (`severs`).
 in something that has a mind; `transfer_mind` into something that has a
 mind, unless it says `"swap": true`, in which case the two change places.
 Parts of an old plan that `set_body_plan` cannot map are dropped as items.
+The refusals of attributes, pools and tracks are tabled in section 4.4.
 
 **Settings**: `hit.overkill_factor` (how many times what a whole body could
 absorb destroys it outright, section 7.4).
 
 **Queries** (05 §11): `parts`, `wounds`, `traits`, `held`.
 
-**Properties**: `attr.*`, `pool.*`, `track.*`, `fn.*`, `mass`, `height`,
+**Properties**: `attr.*`, `pool.*`, `track.*` (section 4.4), `fn.*`, `mass`, `height`,
 `volume`, `scale`, `part(key)` and its `condition`, `state`, `layers`,
 `exposed`; `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
@@ -935,6 +1072,11 @@ stores, `Identity` and `Physical` are built, and the properties they back
 (`mass`, `carried_mass`, `volume`, `height`, `name`, `templates`) are
 registered when the kernel's subjects are. Whether an entity has a
 component of a given kind can be asked in Rust and is not a property.
+Attributes, pools and tracks are built with their definition types,
+properties and events; the verbs of section 4.4 are functions in Rust
+until the rule runtime registers them, a track's `on_advance` is kept
+and not yet run, and what is seated in a mind does not yet move with
+it. A pool cannot yet name a substance (16 §9.5).
 
 ## 14. Invariants
 

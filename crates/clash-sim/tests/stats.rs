@@ -1192,6 +1192,11 @@ fn moving_to_another_clock_keeps_the_local_time_left() {
     let dose = rig.pool_id("dose");
     let refused = stats::pool_add(&mut rig.cx(), HERO, dose, Real::ONE).unwrap_err();
     assert_eq!(refused.code(), reason::NO_CLOCK);
+    // Leaving is never refused, even then, and the pool is as it was
+    // when it returns on a clock that exists.
+    assert_eq!(stats::suspend(&mut rig.cx(), HERO).unwrap(), []);
+    stats::resume(&mut rig.cx(), HERO, ClockId::UNIVERSAL, Dur::ZERO).unwrap();
+    assert_eq!(rig.level("dose"), 50.0);
 }
 
 #[test]
@@ -1580,4 +1585,20 @@ fn definitions_loaded_without_the_registrations_are_refused() {
     );
     let refused = StatDefs::new(&defs).unwrap_err();
     assert_eq!(refused.code(), reason::NOT_REGISTERED);
+}
+
+#[test]
+fn mods_that_define_no_stats_still_load_and_run() {
+    let defs = clean(load_text("bare", "[]"));
+    let mut rig = Rig::over(Arc::new(StatDefs::new(&defs).unwrap()));
+    assert_eq!(rig.defs.attribute_count(), 0);
+    stats::attach(&mut rig.cx(), HERO, ClockId::UNIVERSAL).unwrap();
+    assert_eq!(stats::refresh(&mut rig.cx(), HERO).unwrap(), []);
+    assert_eq!(stats::suspend(&mut rig.cx(), HERO).unwrap(), []);
+    // The accessors are there even so: a rule that reads a stat nobody
+    // defined is told at load.
+    let registry = rig.defs.defs().expr_registry();
+    let unknown =
+        clash_expr::compile("self.attr.might", registry, &context(&rig), &Type::Any).diagnostics;
+    assert_eq!(unknown[0].message, "`attrs` has no property `might`");
 }

@@ -205,7 +205,9 @@ impl PoolInst {
             return None;
         }
         let net = self.net();
-        let band = self.band();
+        // A save made under other definitions may count more thresholds
+        // than there are now.
+        let band = self.band().min(def.thresholds.len());
         if net < Real::ZERO && band > 0 {
             Some((band - 1, Dir::Falling))
         } else if net > Real::ZERO && band < def.thresholds.len() {
@@ -238,6 +240,11 @@ impl PoolInst {
             rising,
             level: inst.level,
         };
+        if self.band() > def.thresholds.len() {
+            // A save made under other definitions: there are fewer
+            // thresholds now than the pool had counted.
+            self.band = u16::try_from(def.thresholds.len()).unwrap_or(u16::MAX);
+        }
         if self.max <= Real::ZERO {
             // A pool that holds nothing is below every threshold.
             while self.band > 0 {
@@ -702,13 +709,17 @@ pub fn suspend<H: Host + ?Sized>(
     entity: EntityId,
 ) -> Result<Changes, StatsError> {
     let mut changes = Changes::new();
-    let pools: Vec<PoolId> = stats_of(cx.stats, entity)?.pools().collect();
-    for pool in pools {
-        with_pool(cx, entity, pool, false, &mut changes, |_, _, _| Ok(()))?;
-    }
+    let defs = cx.defs;
     let stats = stats_mut(cx.stats, entity)?;
+    // A clock that is gone cannot say what time it is: the pools are
+    // then left as they were last brought up to date. Leaving must not
+    // fail, or nothing could be taken out of the simulation.
+    let now = stats.local_now(cx.timeline);
     stats.suspended = true;
     for inst in &mut stats.pools {
+        if let (Some(now), Some(def)) = (now, defs.pool(inst.pool)) {
+            inst.advance(def, now, false, entity, &mut changes);
+        }
         if let Some(wake) = inst.wake.take() {
             cx.timeline.cancel(wake);
         }
@@ -728,6 +739,12 @@ pub fn resume<H: Host + ?Sized>(
     elapsed: Dur,
 ) -> Result<Changes, StatsError> {
     let now = cx.timeline.local_now(clock)?;
+    // Pools still in time are brought up to date where they are first.
+    let mut changes = if stats_of(cx.stats, entity)?.suspended {
+        Changes::new()
+    } else {
+        suspend(cx, entity)?
+    };
     let stats = stats_mut(cx.stats, entity)?;
     stats.clock = clock;
     stats.suspended = false;
@@ -736,9 +753,11 @@ pub fn resume<H: Host + ?Sized>(
         inst.synced = since;
     }
     let pools: Vec<PoolId> = stats.pools().collect();
-    let mut changes = Changes::new();
     for pool in pools {
-        with_pool(cx, entity, pool, false, &mut changes, |_, _, _| Ok(()))?;
+        // A pool whose definition is gone stays as it is.
+        if cx.defs.pool(pool).is_some() {
+            with_pool(cx, entity, pool, false, &mut changes, |_, _, _| Ok(()))?;
+        }
     }
     Ok(changes)
 }
@@ -753,12 +772,10 @@ pub fn set_clock<H: Host + ?Sized>(
     clock: ClockId,
 ) -> Result<Changes, StatsError> {
     cx.timeline.local_now(clock)?;
-    let was_suspended = stats_of(cx.stats, entity)?.suspended;
-    if was_suspended {
+    if stats_of(cx.stats, entity)?.suspended {
+        // Out of time: it will be on the new clock when it returns.
         stats_mut(cx.stats, entity)?.clock = clock;
         return Ok(Changes::new());
     }
-    let mut changes = suspend(cx, entity)?;
-    changes.extend(resume(cx, entity, clock, Dur::ZERO)?);
-    Ok(changes)
+    resume(cx, entity, clock, Dur::ZERO)
 }

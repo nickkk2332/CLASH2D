@@ -25,14 +25,13 @@
 //! # What the kernel holds and calls
 //!
 //! The simulation holds a [`StatDefs`] beside its definitions, made with
-//! [`StatDefs::new`] after loading, and a
-//! [`Runner`](clash_data::Runner). The [`Stats`] are in
-//! `components.stats`.
+//! [`StatDefs::new`] after loading, and a [`Runner`]. The [`Stats`] are
+//! in `components.stats`.
 //!
 //! | When | The kernel |
 //! |------|-----------|
-//! | Building its definition types | Calls the crate's `register_defs`, which registers the three types, the cycle check and the [registry step](props::registry_step). |
-//! | A creature or an item with stats is made | Calls [`attach`] with the entity's clock, then [`set_base`], [`add_pool`] and [`advance_track`] for what its templates give it. |
+//! | Building its definition types | Calls the crate's `register_defs`, which registers the three types, the cycle check and the [registry step](props::registry_step). It registers the kind `entity` in the registry it hands the loader. |
+//! | A creature or an item with stats is made | Calls [`attach`] with the entity's clock, then [`set_base`], [`add_pool`] and [`advance_track`] for what its templates give it. If the rest of the entity (its body, its mass) is built afterwards, calls [`refresh`] once it is. |
 //! | A trait, an item, a wound or a rule confers a modifier or a rate | Calls [`add_modifier`] or [`set_rate`] with a [`Source`] naming it, and [`remove_source`] when it goes. |
 //! | A verb changes a pool | Raises the hook `pool_changing` itself, then calls [`pool_add`], or [`pool_spend`] for a cost that is paid in full or not at all. |
 //! | Something else about the entity changed that a stat's expression may read (its body, its mass, what it holds) | Calls [`refresh`]. |
@@ -69,8 +68,14 @@
 //! - **Seats.** A definition's `seat` is read and kept. Moving what is
 //!   seated in a mind to another entity belongs with minds (06 §8.2).
 //! - **A pool that names a substance** (16 §9.5) waits for substances.
-//! - **Effects.** A track's `on_advance` is kept as written for the rule
-//!   runtime.
+//! - **Verbs and effects.** The verbs of 06 §4.4 (`set_attr_base`,
+//!   `add_modifier`, `remove_modifier`, `pool_add`, `pool_rate`,
+//!   `advance_track`) are the functions here until the rule runtime
+//!   registers them, and a track's `on_advance` is kept as written for
+//!   it to compile and run.
+//! - **What a stat's expression reads besides attributes** is not
+//!   followed; reactive expressions (05 §7.5) will follow it. Until then
+//!   the kernel calls [`refresh`].
 //!
 //! [`WakeDomain::Timer`]: clash_time::WakeDomain::Timer
 
