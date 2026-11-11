@@ -77,6 +77,23 @@ checked at load wherever they can be known and at run time otherwise.
 There is no duration type. Time in expressions is a `real` number of
 seconds; the unit literals `300ms` and `2h` are numbers.
 
+Two more types exist for the checker's benefit. `number` is "an `int` or a
+`real`, not known until run time": what arithmetic on `any` gives, and what
+a parameter that takes either is declared as. `T?` is "a `T`, or null":
+the type of a property that can be missing, of a map entry and of a list
+element. An `int` is accepted wherever a `real` is wanted and stays an
+`int`; whoever needs a real converts it.
+
+A map's keys are texts. An id used as a key counts as its qualified id, so
+`m[here.block.material]` and `m['core:glass']` read the same entry. A map
+iterates, prints and hashes in order of key.
+
+The expression crate has its own `Value`, which holds all of these;
+`clash_core::Value` holds the four scalar kinds and converts into it. A
+reference to a subject is a **handle**: its kind and 64 bits that mean
+something only to the simulation. An id is its definition type and the
+dense number of 04 §7.2.
+
 ## 4. The expression language
 
 Expressions are written as strings inside JSON.
@@ -137,18 +154,34 @@ source string is at most 65,536 bytes. Exceeding one is a load error.
 | `global` | The global scope |
 | `clamp(…)`, `ashlands:fall_damage(…)` | A function call (section 4.7, section 12) |
 
-Bare function names resolve like ids (04 §4.3).
+Bare function names resolve like ids (04 §4.3), except that an engine
+function, whose name has no namespace, is found first: `clamp` is always
+the engine's. A name is a function only where it is called; a bare name
+that is not called is a bound subject. `subject.var` is not a property: it
+is followed by a variable's name (section 6).
 
 ### 4.3 Operators
 
 - Arithmetic on `int` and `real`; an `int` meeting a `real` becomes `real`.
-  `/` always gives `real`. `div(a, b)` and `%` are integer operations.
-- `+` also joins strings and concatenates lists.
+  `/` always gives `real`, and so does `^`: a whole exponent is repeated
+  multiplication, so `x ^ 2` is exactly `x * x`. `div(a, b)` and `%` are
+  integer operations that round toward minus infinity, so that
+  `div(a, b) * b + a % b == a` and `-7 % 2` is `1`.
+- `+` also joins strings and concatenates lists. A text is not joined with
+  anything else: use `str`.
 - `and`, `or`, `not` take and give `bool`. `and` and `or` short-circuit.
-- `in` tests membership in a list or tag set.
+  Null counts as false in all three, as it does in a condition.
+- `==` and `!=` compare numbers by value (`1 == 1.0`), an id with an id of
+  the same type or with a text (its qualified id), lists and maps by their
+  contents, and subjects by identity. Comparing types that can never be
+  equal is a load error. `<`, `<=`, `>`, `>=` order two numbers or two
+  texts.
+- `in` tests membership in a list or tag set, or among the keys of a map.
 - `a ?? b` is `a` unless `a` is `null`, then `b`.
-- `m['key']` reads a map entry, `null` if absent. `set` and `add`
-  (section 10.3) may address one: `"self.var.tally['ash']"`.
+- `m['key']` reads a map entry, `null` if absent, and `m.key` is the same
+  where `m` is a map. `set` and `add` (section 10.3) may address one:
+  `"self.var.tally['ash']"`.
+- Operands are evaluated left to right, an object before its arguments.
 
 ### 4.4 Null
 
@@ -165,11 +198,46 @@ A rule never crashes because something was missing. Where the compiler can
 see that a value may be `null` and is used arithmetically, it warns and
 suggests `??`.
 
+The rows in detail:
+
+- An element or an entry read from `null`, and a variable of `null`, are
+  `null` as a property is. The host is not asked.
+- "Arithmetic" covers the arithmetic operators, unary minus and a function
+  that needs a value (`sqrt(null)`). `is_null`, `str` and `??` take null as
+  it is. Each operation that meets a null warns, so a null that passes
+  through three operations is reported at three positions; the first is
+  where it came from.
+- `== null` and `!= null` are recognised where they are written: one side
+  is the word `null` or something the compiler knows is always null. Any
+  other comparison in which a side turns out null at run time is false,
+  `!=` included, and membership (`in`) counts as a comparison.
+- Null counts as false wherever a `bool` is wanted: a condition, the
+  operands of `and`, `or` and `not`, and the test of `if`.
+
 ### 4.5 Numbers and errors
 
 Division by zero, the square root of a negative number and similar produce
 `null` and a run-time warning. Run-time warnings are rate-limited per site
 and always name the rule, the JSON path and the position in the string.
+
+"Similar" is: the logarithm of a number that is not positive; a power with
+no real value; a result that is not a number (infinity minus infinity);
+`int` arithmetic that leaves the range of a 64-bit integer; a random
+function with no stream to draw from; a list, map or text that would pass
+`rules.max_value_size`; and a value whose type the operation does not
+accept, which can only happen where the type was `any` at load. A
+comparison or a condition that faults is false rather than null. Infinity
+is a number and passes through.
+
+A **site** is one operation of one expression and one kind of fault. Its
+first three warnings are reported, and after that those whose count is a
+power of two, with the count: a site that warns a million times is
+reported twenty-one times. The limit counts occurrences, not seconds,
+because the simulation has no wall clock and the same run must report the
+same warnings.
+
+An operation on constants that would fail every time (`1 / 0`) is a
+warning at load and is left to fail, and warn, when it runs.
 
 ### 4.6 Text
 
@@ -241,6 +309,40 @@ units.
 
 Random functions draw from the simulation's rule stream and are
 deterministic. They are not allowed in **pure** contexts (section 7.3).
+
+The functions that belong to no subsystem, with their arguments. `number`
+is an `int` or a `real`. All are safe for belief except `exists`. Given
+null where a value is needed, each gives null with a warning.
+
+| Function | Gives |
+|----------|-------|
+| `min(a: number, b: number, …)`, `max(…)` | The smallest or largest of two or more numbers; an `int` if all are |
+| `clamp(x: number, low: number, high: number)` | `x` limited to the range; `high` if `low` is above it; an `int` if all three are |
+| `abs(x: number)` | The magnitude, of the type of `x` |
+| `sign(x: number)` | `int`: `1`, `-1` or `0` |
+| `floor(x: number)`, `ceil(x)`, `round(x)` | `int`. `round` takes halves away from zero. Null for an infinity |
+| `sqrt(x: real)`, `ln(x)`, `log10(x)` | `real`. Null for a negative number, or for `ln` and `log10` of zero or less |
+| `exp(x: real)`, `sin(x)`, `cos(x)`, `atan2(y: real, x: real)` | `real`. Angles are in radians |
+| `lerp(a: real, b: real, t: real)` | `real`: `a + (b - a) * t` |
+| `div(a: int, b: int)` | `int`, rounded toward minus infinity. Null for a zero divisor |
+| `rand(a: real, b: real)` | A random `real` from `a` up to but not including `b` |
+| `rand_int(a: int, b: int)` | A random `int` from `a` to `b` inclusive; `a` if `b` is less |
+| `chance(p: real)` | `bool`: true with probability `p` |
+| `pick(list: list<T>)` | `T?`: one element, each equally likely; null, with no draw, for an empty list |
+| `len(x)` | `int`: the elements of a list, the entries of a map or the characters of a text |
+| `contains(xs, x)` | `bool`: whether a list has an element equal to `x`, or a text contains the text `x` |
+| `first(xs: list<T>)`, `last(xs)` | `T?`: null for an empty list |
+| `sum(xs: list<number>)` | The total; an `int` if all are; `0` for an empty list |
+| `str(x)` | `string`: a number as written, an id as its qualified id, `null` for null |
+| `keys(m: map<T>)`, `values(m)` | `list<string>` and `list<T>`, in order of key |
+| `has(m: map<T>, key)` | `bool`: whether there is an entry for a text or an id |
+| `without(xs: list<T>, x)` | `list<T>`: a copy without every element equal to `x` |
+| `without_key(m: map<T>, key)` | `map<T>`: a copy without that entry |
+| `cap(text: string)` | `string` with a capital first letter |
+| `is_null(x)` | `bool` |
+| `exists(x)` | `bool`: whether what a reference points at still exists. Answered by the simulation; not safe for belief |
+| `name(x)`, `the(x)`, `a(x)`, `they(x)`, `them(x)`, `their(x)`, `themself(x)` | `string`, as section 4.6. Answered by the simulation for the reader |
+| `verb(x, word: string)`, `count(n: number, word: string)`, `plural(word: string)`, `list(xs: list)` | `string`, as section 4.6 |
 
 ## 5. Subjects and properties
 
@@ -320,6 +422,29 @@ what reactive expressions (section 7.5) subscribe to.
 
 Getters take a read-only view. Setters go through the same functions the
 engine uses, so rule R3 holds for rules too.
+
+The struct above is the idea. As built, the registry lives in the
+expression crate, which sits below the simulation and cannot name its
+types, so it is split in two. The **registry** is plain data, filled in at
+start-up and read back, in order of name, by the generated reference:
+
+| Entry | States |
+|-------|--------|
+| Kind of subject | Name; documentation |
+| Property | Kind; name; arguments; type (nullable if it can be missing); documentation; whether it is safe for belief; whether its value belongs to the same owner (section 7.3); whether it is settable; the events that change it |
+| Function | Name (bare for the engine's, qualified for a mod's); parameters, which may be optional or, for the last, repeated; result type; documentation; the heading it is listed under; whether it is random; whether it is safe for belief; the events that change its result, if it may be used reactively |
+| Event | Name; subjects in delivery order; fields with types; whether it is a hook and which fields a handler may change; documentation |
+| Verb | Name; arguments with types and whether each is required; the argument that may be given directly; documentation |
+| Variable | Qualified name; the kind it lives on; type; documentation; whether it is safe for belief |
+| Definition type | Name; documentation; the qualified ids of that type with their dense numbers, set when mods are linked |
+
+Each registration returns a dense id. The **getters, setters and function
+bodies** stay in the simulation, keyed by those ids, and are reached while
+an expression runs through one interface, the host: the value of a bound
+subject, a local or an event field by slot; a property of a handle; a
+variable of a handle by qualified name; a registered function; the random
+stream; and where run-time warnings go. A name may be registered once;
+`var` and the reserved words cannot be names.
 
 ### 5.4 Truth and belief
 
@@ -416,6 +541,15 @@ another entity's state is not; neither are queries over entities, contents
 or other minds. In a mind context an unsafe read is a load error. An
 action's `requires` is tested against truth only when the action is
 actually started; a failure then is a refusal, with its reason.
+
+How the compiler knows "the character's own state": a mind context binds
+the character as its **own** subject, usually `self`. Any property or
+variable of an own subject may be read, safe or not. The value read is
+itself own only if the property is registered as yielding something that
+belongs to the same owner, as a part of a body does: `self.part('arm').size`
+is the character's own, `self.loc.material` is the world's. Everything
+else must be registered safe. Naming a bound subject, a local or an event
+field is always allowed; it is reading from them that is checked.
 
 A condition may also be `{ "exists": query }`, true when the query
 (section 11) has any result.
@@ -687,6 +821,13 @@ the effect runs.
 | `{ "add": { "self.var.kills": 1 } }` | Add to numbers; append to lists |
 | `{ "unset": [ "self.var.marked" ] }` | Remove variables |
 
+What is assigned to is a **place**: a local (`$x`), a field of the event
+(`event.energy`), a variable (`self.var.kills`, `self.var('mod:name')`) or
+a settable property (`self.health`), optionally followed by keys
+(`self.var.tally['ash']`). Anything else is a load error. A place is
+written and checked like an expression, and the subject it lives on and
+its keys are evaluated when the effect runs.
+
 ### 10.4 Time
 
 | Effect | Does |
@@ -827,7 +968,7 @@ A run evaluates `filter`, then `if`, then executes `do` or `else`.
 | Hook nesting depth | 8 | Inner hook skipped; error reported |
 | Events per pump | 10,000 | 03 §4.3 |
 | Wake-ups handled at one tick | 100,000 | The rest are put off to the next tick; error reported |
-| Size of one value (a list, a map or a text) | 65,536 elements or characters | The effect fails; error reported |
+| Size of one value (a list, a map or a text) | 65,536 elements, or bytes of text | In an effect: the effect fails; error reported. In an expression: the operation gives null, with a warning (section 4.5) |
 
 Exceeding a limit is always an error report with a trace, and never a hang
 or a crash.
@@ -868,6 +1009,28 @@ At load, for every `Expr`, `Cond`, `Effects` and `Text` field:
    explicit stack, so any position in it can be named by a path.
 
 Compiled rules live in `Defs` and are immutable.
+
+Notes on the steps:
+
+- A diagnostic from any step carries a stable code, a severity, a message,
+  the range of bytes of the source string it is about, and a suggestion
+  where there is one. Codes are `X1..` for syntax, `X2..` for names, `X3..`
+  for types, `X4..` for purity and belief, and `X9..` for run-time
+  warnings. The data layer adds the file, line and JSON path.
+- Step 2 gives every bound subject, local and event field a **slot**, its
+  position in its context, which is how the machine asks for it. A text
+  where an `id<T>` is wanted, compared with one, or listed against one, is
+  resolved against the definitions of type `T`; one that names nothing is
+  an error with the closest id. A bare name found in the mod's namespace
+  and again in an import is a warning.
+- Step 4 folds only what cannot fail and needs nothing from the
+  simulation. A branch that can never be taken is dropped. Folding never
+  changes a value, a warning or a random draw.
+- Step 5 emits operations in which every jump goes forward, so evaluation
+  ends. A call takes at most 255 arguments.
+- A direct evaluator that walks the checked tree is kept beside the stack
+  machine. The two must agree on every expression, and a property test
+  holds them to it.
 
 ## 15. Tracing and debugging
 
@@ -919,6 +1082,12 @@ new), `rule_error` (the rule, the reason, the trace).
 **Core properties**, available on every subject kind: `var`, `has_tag`,
 `tags`, `def`, `kind`, and for anything with a position, `loc`.
 
+**Known limits.** Fixed in the engine and not reachable from data: the
+compiler's limits on nesting, tree depth, source length and arguments
+(section 4.1, section 14); how many warnings a site may raise before they
+are thinned (section 4.5); the number format of a text, which is `.N` and
+nothing else (section 4.6); and the set of simple units (section 4.7).
+
 ## 18. Invariants
 
 | # | Invariant |
@@ -944,6 +1113,13 @@ Targets, unmeasured.
 | Simple effect (set a variable) | under 200 ns plus its expressions |
 | Compile 20,000 rules | under 1 s |
 | Tracing disabled | no measurable cost |
+
+Measured for the first row when package X3 was built, in a release build:
+a condition of 17 operations over locals evaluates in about 130 ns, and
+one of 19 operations with five reads from the host in about 200 ns. The
+figures come from the ignored test `time_per_evaluation` in
+`crates/clash-expr/tests/machine.rs`; the benchmark and its gate are
+package T8.
 
 ## 20. Open questions
 

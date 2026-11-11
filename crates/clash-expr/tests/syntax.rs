@@ -947,8 +947,21 @@ fn random_template(rng: &mut Rng) -> Template {
     Template { parts }
 }
 
+/// How many random trees to try. `CLASH_EXPR_CASES` asks for more, for a
+/// long run by hand.
+fn cases() -> u32 {
+    std::env::var("CLASH_EXPR_CASES")
+        .ok()
+        .and_then(|text| text.parse().ok())
+        .unwrap_or(2000)
+}
+
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(2000))]
+    #![proptest_config(ProptestConfig {
+        cases: cases(),
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    })]
 
     /// Printing a tree and parsing it again gives the same tree.
     #[test]

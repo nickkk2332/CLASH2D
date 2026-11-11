@@ -34,8 +34,8 @@ start while the world model is being built.
 | P7 | Migration and obsoletion | M | P4, W10 | todo |
 | P8 | Hot reload | M | K7, P7 | todo |
 | X1 | Expression parser | M | F2 | done |
-| X2 | Registry, contexts, type checking | L | X1, F4 | in progress |
-| X3 | Bytecode and evaluation | M | X2 | todo |
+| X2 | Registry, contexts, type checking | L | X1, F4 | done |
+| X3 | Bytecode and evaluation | M | X2 | beta |
 | X4 | Expression fields, functions, variables | M | X3, P4 | todo |
 | K1 | Simulation skeleton and kernel entities | M | W7, F3 | todo |
 | K2 | Advance, commands, input log | M | K1, W9 | todo |
@@ -236,6 +236,11 @@ Done when
   test).
 - A syntax error inside a JSON string reports the right column of the file.
 
+Built: `clash-expr` reports a span of bytes inside the source string and
+offers `offset_in_json_string` to carry it into a file; turning that into
+a file, line and column in a diagnostic is the data layer's (P1). Inline
+style tags (12 §4.3) pass through the template parser as text.
+
 ### X2 — Registry, contexts, type checking
 
 **Spec** 05 §3, §5.3, §7.3, §14 steps 2–3 · **Size** L
@@ -253,6 +258,15 @@ Done when
 - A random function in a pure context is rejected.
 - `x == 'glas'` against a material is a load error suggesting `glass`.
 
+Built with it: the mind context of 05 §7.3 (decision D-273), declared
+variables in the registry with the undeclared-variable warning that X4
+switches by `strict_vars`, places for `set` and `add` (decision D-275),
+the map type of the review addition, and a test host under
+`clash_expr::testing`. Left for others: the registry holds what makes a
+property or function stale, and the check that a reactive expression uses
+only such entries is abilities package A1; the space, time and data
+functions of 05 §4.7 are registered by the simulation (K4).
+
 ### X3 — Bytecode and evaluation
 
 **Spec** 05 §4.3–4.7, §14 steps 4–5 · **Size** M
@@ -268,6 +282,13 @@ Done when
   expressions (property test).
 - Every row of 05 §4.4 is tested.
 - Benchmarks exist for the first row of 05 §19.
+
+Beta: everything above is built except the benchmark. In its place the
+ignored test `time_per_evaluation` in `crates/clash-expr/tests/machine.rs`
+prints the time per evaluation, and the figures are written into 05 §19;
+the criterion benchmark and its gate are T8. The reader's text helpers of
+05 §4.6 and `exists` are registered with their signatures and answered by
+the host, so they do nothing until the simulation supplies them (K9, K4).
 
 ### X4 — Expression fields, functions, variables
 

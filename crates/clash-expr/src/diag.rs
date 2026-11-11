@@ -144,7 +144,7 @@ pub mod codes {
     pub const UNBALANCED_BRACE: Code = Code("X108");
     /// A format after the colon in a text template that is not `.N`.
     pub const BAD_FORMAT: Code = Code("X109");
-    /// An expression nested more deeply than the compiler allows.
+    /// An expression that is too long or nested too deeply.
     pub const TOO_DEEP: Code = Code("X110");
     /// An expression with nothing in it.
     pub const EMPTY_EXPRESSION: Code = Code("X111");
@@ -171,6 +171,9 @@ pub mod codes {
     pub const VARIABLE_SCOPE: Code = Code("X209");
     /// A bare name found in more than one imported namespace.
     pub const AMBIGUOUS_NAME: Code = Code("X210");
+    /// The target of an assignment that is not a local, an event field,
+    /// a variable or a settable property.
+    pub const NOT_ASSIGNABLE: Code = Code("X211");
 
     /// Operands whose types the operator does not accept.
     pub const OPERAND_TYPE: Code = Code("X301");
@@ -184,7 +187,7 @@ pub mod codes {
     pub const RESULT_TYPE: Code = Code("X305");
     /// A comparison between types that can never be equal or ordered.
     pub const UNRELATED_COMPARISON: Code = Code("X306");
-    /// An index into something that is not a list, a map or a text.
+    /// An index into something that is not a list or a map.
     pub const NOT_INDEXABLE: Code = Code("X307");
     /// A property read on a value that is not a subject or a map.
     pub const NO_PROPERTIES: Code = Code("X308");
@@ -241,7 +244,10 @@ pub mod codes {
             BAD_FORMAT,
             "a number format in a text template that is not `.N`",
         ),
-        (TOO_DEEP, "an expression nested too deeply"),
+        (
+            TOO_DEEP,
+            "an expression that is too long or nested too deeply",
+        ),
         (EMPTY_EXPRESSION, "an expression with nothing in it"),
         (
             UNKNOWN_NAME,
@@ -281,6 +287,10 @@ pub mod codes {
             "a bare name found in more than one imported namespace",
         ),
         (
+            NOT_ASSIGNABLE,
+            "the target of an assignment that cannot be assigned to",
+        ),
+        (
             OPERAND_TYPE,
             "operands whose types the operator does not accept",
         ),
@@ -300,7 +310,7 @@ pub mod codes {
         ),
         (
             NOT_INDEXABLE,
-            "an index into something that is not a list, a map or a text",
+            "an index into something that is not a list or a map",
         ),
         (
             NO_PROPERTIES,
