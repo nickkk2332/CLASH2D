@@ -1,0 +1,28 @@
+[
+  { "//": "The world viewer: one storey of the world from above. Its context is `debug` because it is shown truth. The program that opens it moves the camera and writes where the cursor is on the last row, which is left empty for it; the keys are in the heading.",
+    "type": "screen", "id": "worldview",
+    "title": "World viewer",
+    "context": "debug",
+    "min_size": [40, 12],
+    "layout": { "rows": [
+      { "id": "heading",
+        "text": { "value": "<title>World viewer</>  arrows move, << > storey, - + zoom, s section, m memory, q quits", "wrap": false },
+        "height": 1 },
+      { "frame": "map", "map_view": { "id": "map" } },
+      { "id": "status", "spacer": {}, "height": 1 } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "//": "The world viewer with a vertical slice beneath the map, along the line through the middle of the view.",
+    "type": "screen", "id": "worldview_section",
+    "title": "World viewer",
+    "context": "debug",
+    "min_size": [40, 18],
+    "layout": { "rows": [
+      { "id": "heading",
+        "text": { "value": "<title>World viewer</>  arrows move, << > storey, - + zoom, s section, m memory, q quits", "wrap": false },
+        "height": 1 },
+      { "frame": "map", "map_view": { "id": "map" } },
+      { "frame": "section", "height": 9, "section_view": { "id": "section" } },
+      { "id": "status", "spacer": {}, "height": 1 } ] },
+    "keys": { "back": [ { "close": {} } ] } }
+]

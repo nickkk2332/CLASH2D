@@ -264,8 +264,8 @@ impl ViewKind {
 }
 
 /// Draws the views of the world into the places the toolkit gives them.
-/// The view model (package U4) implements it; without one, a view is
-/// drawn as an empty area with its name.
+/// [`crate::view::WorldView`] implements it over the view model; without
+/// a painter, a view is drawn as an empty area with its name.
 pub trait ViewPainter {
     /// Draws one view into `area` of the canvas, which is already clipped
     /// to it.

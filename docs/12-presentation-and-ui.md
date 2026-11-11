@@ -162,7 +162,7 @@ ignores `font`.
 | `styles` | Styles by name. A style may set `fg`, `bg`, and turn `bold`, `dim`, `italic`, `underline` and `reverse` on or off. Whatever it leaves out stays as it was beneath. |
 | `borders` | The six characters frames are drawn with. Any left out keeps the engine's line-drawing character. |
 | `font` | The font file and glyph size for the window frontend. |
-| `marks` | Glyphs the engine draws for itself, by name: those of the world view (section 13) and the parts of widgets (section 10.3). |
+| `marks` | Glyphs the engine draws for itself, by name: those of the world view (section 6.5) and the parts of widgets (section 10.3). |
 
 A colour name is looked up among the theme's `colors`, then the `color`
 definitions, then the sixteen terminal colours, which always exist:
@@ -252,6 +252,41 @@ object, where it is and how it looks.
 
 An omniscient mode for debugging builds the view model from truth.
 
+**What it holds.** The view model is plain data owned by the scene. It
+is not a copy of the world: it holds what has been put into it and
+nothing else.
+
+| For | It holds |
+|-----|----------|
+| Each cell ever seen | The floor, block and fixture as last seen, as the world's own states; the strongest field; the most marked decal; whether several items lie there; whether it is known to be open to the sky; how well lit it was, from 0 to 255; and whether it is seen now or only remembered |
+| Each perceived character or object | A **sprite**: where it is, whether it is a creature or an object, its glyph for the state it is in, the colours it carries (own and dress), which way it faces, and whether it is only a suspected presence |
+| What was only heard | A marker: where it seemed to come from, and optionally the character to mark it with |
+| Each grid | Its shape, so that a view can draw across a wrapped edge and stop at the realm's |
+
+A single item lying in a cell is a sprite. Where several lie, the cell
+says so and the pile marker is drawn.
+
+**How it is filled.** Only by being told, one cell or one sprite at a
+time, so that playing the destruction of a wall changes one cell:
+
+| Call | Means |
+|------|-------|
+| `observe_cell` | This cell is seen now, and this is in it |
+| `observe_light` | The light on a known cell changed |
+| `unsee_cell`, `unsee_box`, `unsee_all` | No longer in view; what was there is kept as remembered |
+| `forget_cell`, `forget_grid`, `clear` | Map memory lost |
+| `upsert_sprite`, `move_sprite`, `remove_sprite` | A perceived character or object appeared, changed, moved or is gone |
+| `add_heard`, `remove_heard`, `clear_heard` | Something was only heard, and its marker has been shown long enough |
+| `set_grid_shape` | Where a grid ends and whether it wraps |
+
+The perception layer (15 §13) and playback make these calls. The view
+model has no way to read the world. The omniscient mode is a separate
+function that is given the world and fills a box of cells with what is
+really there; it is the one place in the scene that reads the world, and
+no screen, widget or binding leads to it. Two view models that hold the
+same knowledge are equal, however they came by it, which is what the
+check above compares.
+
 ## 6. Drawing the world
 
 ### 6.1 What a cell shows
@@ -274,6 +309,33 @@ experimental coloured light (15 §3.3) tints toward the light's colour;
 ambience (section 6.4) tints the whole view; cells remembered but not
 currently seen are desaturated and dimmed. Subgrids are composited as
 the world does (02 §18.1).
+
+The list decides the character and its colour. The background is that of
+the highest entry that gives one: a glyph whose `bg` is left out shows
+what is beneath it, so a creature on a carpet stands on the carpet's
+colour. An element whose glyph gives no `ch` is not drawn and the list
+goes on past it.
+
+A cell that was never seen shows nothing. Neither does a known open cell
+over one that was never seen: what is down a hole nobody has looked into
+is not known. If any cell looked through is only remembered, what shows
+is drawn as remembered.
+
+| Step | Rule |
+|------|------|
+| The cell below | Each storey down keeps 70% of the brightness of the one above |
+| Decals | The character of a floor, block or fixture, or of what shows from below, moves toward the decal's colour by up to 70% of the way, in proportion to the decal's amount. A creature or an item is not tinted. |
+| A field too weak for its glyph | The background moves toward the field's tint by up to half the way, in proportion to its level |
+| Light | Brightness runs in a straight line from 25% at no light to the whole at full light: a cell that is seen is never black |
+| Ambience | Section 6.4 |
+| Remembered | Colour keeps a quarter of its saturation, the rest going to the grey of the same lightness, and 55% of its brightness |
+
+Brightness is carried by the exact colour, which a terminal with sixteen
+colours cannot show, so the fallback (section 4.2) changes as well: the
+character of a remembered cell falls back to dark grey, and that of a
+cell at less than half its brightness to the darker of its colour's
+pair, a bright colour to its plain one and light grey to dark grey.
+Backgrounds keep their fallback. No attribute is used for this.
 
 A creature is drawn as the persona the viewer perceives.
 
@@ -300,6 +362,31 @@ A `map_view` can zoom out by whole factors, showing the most significant
 glyph of each block of cells. The window frontend can also change glyph
 size.
 
+**The map view.** The camera's centre (section 6.3) is the middle cell
+of the view, the one left of and above the middle where the size is
+even; east is to the right and south is down. Zoomed out by a factor
+`n`, from 1 to 16, each glyph stands for a block of `n` by `n` cells,
+aligned to multiples of `n` so that the picture does not shimmer as the
+centre moves. The factor is the camera's times the view's own `zoom`.
+The block shows the most significant of its cells: significance is the
+order of section 6.1, a creature first, with what shows from a storey
+below under a floor, the backdrop under that and a cell not known at all
+last. Of equals, the first row by row.
+
+**The section view.** A vertical slice along a line through the camera's
+centre: one column per metre along the line, one row per storey, higher
+storeys above, the camera's storey on the middle row. The line runs west
+to east with east to the right, or north to south with south to the
+right; the camera says which. Each cell shows what section 6.1 gives
+without looking down: a cell holding nothing is air and blank. A floor
+is seen edge on and is drawn with the theme mark `section_floor` in the
+floor's own colours. A section is not zoomed.
+
+A marker for something only heard is drawn in a map view on the viewed
+storey, and in a section view where it lies on the line. It keeps the
+background of its cell. The cell under a free cursor is drawn in the
+theme style `cursor`.
+
 A `map_view` may draw an **overlay** on top of the cells:
 
 | Overlay | Draws |
@@ -318,6 +405,21 @@ truth. Mods add overlays as definitions:
   "cell": "known_field(it, 'fire') > 0", "shade": "red", "legend": "Fire" }
 ```
 
+| Field | Is |
+|-------|----|
+| `name` | What the overlay is called where the player chooses one |
+| `cell` | An expression over a cell, as `it`: a condition, or a number from 0 to 1 for how strongly the cell is shaded. Required. |
+| `shade` | The colour cells are shaded with: a colour name or `#rrggbb`. Required. |
+| `legend` | What the shading means |
+
+A view's `overlay` field names an overlay by its qualified id, or one of
+the engine's own by its bare name. An overlay shades the background of
+each known cell and leaves its character: `light` from black at no light
+to the theme colour `overlay_light` (yellow unless the theme gives one)
+at full light; a definition's from black to its `shade` by the value of
+its `cell`. The expression is given the cell as the view model holds it
+and nothing else.
+
 The view model holds, for the party: each cell they have seen and what
 was there; for each tract, its glyph, devastation and the sites they know
 of; and the travelers they have perceived on a chart. Overlays, the
@@ -328,6 +430,10 @@ region map and the chart draw from that and nothing else.
 The camera follows the active controlled character, or a free cursor in
 look and targeting modes. The viewed storey follows the character and can
 be shifted up and down. Cutscenes move the camera (section 8).
+
+The cursor moves on the viewed storey. A shift of the storey stays as
+the character climbs or descends, and is dropped, with the cursor, when
+the character moves to another grid.
 
 ### 6.4 Ambience
 
@@ -346,6 +452,28 @@ sky.
 Ambience is presentation only. What rain and dusk do to perception is
 already in the simulation, as light and signals (15). On a terminal it is
 the tint and the dimming.
+
+| Field | Is |
+|-------|----|
+| `tint` | A colour name or `#rrggbb`. The tint is a coloured filter: each channel of a cell's colours is multiplied by the tint's channel over 255, so black stays black and white becomes the tint. |
+| `dim` | The share of brightness taken away after the tint, from 0 to 1 |
+| `particles` | `ch`: the characters a particle may be drawn as, at least one. `density`: the share of cells holding a particle at any moment, from 0 to 1. `dir`: `wind`, `down`, or left out for no drift. `speed`: cells per second, zero or more. |
+
+### 6.5 What the views draw with
+
+The views draw their own parts with theme `marks` of fixed names. A
+theme that leaves one out gets the default.
+
+| Mark | Drawn | Default |
+|------|-------|---------|
+| `pile` | Where several items lie | `&` |
+| `suspected` | A presence suspected and not detected | `?`, bold |
+| `heard` | Something only heard, unless its marker brings a character | `!`, bold |
+| `backdrop` | Where a view has looked down `look_down` storeys of open cells and found nothing. The stratum's backdrop, once `sky` definitions (02 §23) supply one. | A space |
+| `section_floor` | A floor in a section view. Only its character is used. | `_` |
+
+And with the theme style `cursor` (reverse unless given) and the theme
+colour `overlay_light` (yellow unless given).
 
 ## 7. Playback
 
@@ -987,11 +1115,18 @@ for playback speed and how often cutscenes play.
 **Widgets**: section 10.3. **UI effects**: section 10.5.
 **Binding names**: section 10.4. **Navigation names**, and the theme
 styles and marks the toolkit draws with: section 10.3. **Key names**:
-section 9.1.
+section 9.1. The fields of `ambience` and `overlay`, the built-in
+overlay names, and the theme marks, style and colour the views draw
+with: sections 6.2, 6.4 and 6.5.
 
 **Gaps.** The notice shown on a grid smaller than a screen's `min_size`
 is the engine's own text and cannot be changed by a mod. The set of
 widgets, and how each is drawn beyond its styles and marks, is fixed.
+The shares by which a cell is dimmed for depth, light and memory
+(section 6.1) are the engine's constants, not settings. A mod cannot
+choose which line a section view cuts along or put a camera anywhere:
+those are the scene's until controls and UI effects reach the camera
+(packages U6b, U7).
 
 ## 14. Invariants
 

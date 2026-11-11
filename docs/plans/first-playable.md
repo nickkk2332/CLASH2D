@@ -44,7 +44,7 @@ actions that call `hit`.
 | U1 | Scene skeleton, frames, themes | M | K2 | beta |
 | U2 | Terminal frontend | S | U1 | done |
 | U3 | Window frontend | L | U1 | todo |
-| U4 | View model and world drawing | L | U1, S9 | todo |
+| U4 | View model and world drawing | L | U1, S9 | beta |
 | U5 | Playback | L | U4 | todo |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | todo |
@@ -449,7 +449,8 @@ Definitions come from the mod loader (decision D-322):
 `figure` and `screen`, and `UiDefs::from_defs` makes themes and scenes
 from what loaded, by qualified id. The linter's warning for glyph states
 that differ in colour alone (invariant V10) waits for the linter. A
-glyph's `shape` is checked and can be read by facing; drawing by it is U4.
+glyph's `shape` is checked and can be read by facing; nothing draws by
+it yet (see U4).
 
 ### U2 — Terminal frontend
 
@@ -489,6 +490,39 @@ Build
 Done when
 - Golden frames for the test city at several storeys and in section.
 - Unperceived changes do not appear; the omniscient mode shows them.
+
+Beta: built ahead of perception (S9) and playback (U5), which will feed
+it. Built, in `clash_scene::view`: the view model as plain data with its
+observe calls and the omniscient fill from a `Cosmos` (decision D-350);
+the glyph tables compiled once per theme from the world's definitions
+(`WorldGlyphs`); cell composition by 12 §6.1 with look-down, light,
+ambience and memory; the camera; `map_view` with zoom, cursor, heard
+markers and overlays, and `section_view`, both drawn by `WorldView`,
+which is the toolkit's `ViewPainter` once `Scene::set_world` has given
+it to the scene; the `ambience` and `overlay` definition types, loaded
+and checked. `cargo run -p clash-front-term --example worldview` shows a
+small test world; its golden frames are the test town at each storey, in
+section both ways, zoomed out, half remembered, looking down a hole and
+in low light, and its tests show that what is put into the world shows
+only once observed or after an omniscient refill. Stubbed, each waiting
+for what it needs: nothing but tests and the omniscient fill puts
+anything into the view model, and the check that caught-up playback
+equals a fresh initialisation has only the equality it will use (S9,
+U5); `region_map` and `chart_view` draw an empty area with their name
+(W8 to W10, W21); subgrids are not composited and nothing is drawn
+through portals (the world has neither); shapes of several cells,
+`by_level` and `layer` are not in the world's `GlyphSpec` and are not
+drawn for elements; fields and decals have no definitions, so their
+looks are set on the glyph tables by hand (W16); the omniscient fill
+records no fields, occupants or items and takes light to be full (W7,
+W16, S1); an ambience's particles are kept and not drawn (U5); looks
+(12 §4.4) and coloured light are not drawn (U5, S10); an overlay's
+`cell` is evaluated through the `OverlayValues` interface, which only a
+test implements (U6b), and `networks`, `areas`, `jobs` and `temperature`
+draw nothing; the camera is moved by the program, not by controls (U7).
+No benchmark: a 200 by 60 view of known cells measured once at 0.5 ms,
+and 0.9 ms looking down six storeys everywhere, against the 1.5 ms of
+12 §15.
 
 ### U5 — Playback
 

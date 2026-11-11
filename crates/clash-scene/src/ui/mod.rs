@@ -84,7 +84,9 @@
 //! - Bindings and effects: U6b, as above.
 //! - `slot` holds its name and nothing else; `ui_part` is U8.
 //! - `map_view`, `section_view`, `region_map` and `chart_view` have their
-//!   place, focus and fields; a [`ViewPainter`] (U4) draws them.
+//!   place, focus and fields; a [`ViewPainter`] draws them. The scene's
+//!   is [`crate::view::WorldView`], which draws the first two from the
+//!   view model and the other two as empty areas with their names.
 //! - `console`, `canvas` and `trace_view` have their place and focus;
 //!   their content comes with the tooling packages.
 //! - `log` shows a [`MessageLog`]; playback (U5) fills it.

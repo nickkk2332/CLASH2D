@@ -1,9 +1,11 @@
 //! Joining this crate's definitions to the mod loader (04 §7 to §9).
 //!
 //! The definition types of this crate (`color`, `theme`, `keymap`,
-//! `figure` and `screen`) are registered with `clash-data` by
-//! [`register_defs`], and [`UiDefs`] is the one way from loaded
-//! definitions to a [`Theme`], a [`Scene`] and a [`Screen`]:
+//! `figure`, `screen`, `ambience` and `overlay`) are registered with
+//! `clash-data` by [`register_defs`], and [`UiDefs`] is the one way from
+//! loaded definitions to a [`Theme`], a [`Scene`], a [`Screen`], the
+//! glyph tables a view of the world is drawn with ([`WorldGlyphs`]), an
+//! [`Ambience`] and an [`Overlay`]:
 //!
 //! ```no_run
 //! use clash_data::{DefTypes, Loader};
@@ -37,11 +39,14 @@
 //! types and keys that are not keys are its diagnostics. What needs more
 //! than one definition is checked when a theme or a screen is made: a
 //! colour a theme names, a style, a figure or an art asset a screen
-//! names. A mistake found then is a [`Diagnostic`] at the value in the
-//! file that wrote it, found through the finished tree the loader keeps
-//! for every definition. [`check_defs`] makes every theme, and every
-//! screen with every theme, for a tool that only wants the mistakes: the
-//! linter runs it after a load that had no errors.
+//! names, the tint of an ambience, the shade of an overlay, and the
+//! colours the world's glyphs and materials name. A mistake found then
+//! is a [`Diagnostic`] at the value in the file that wrote it, found
+//! through the finished tree the loader keeps for every definition.
+//! [`check_defs`] makes every theme, and with every theme every screen,
+//! ambience and overlay and the world's glyph tables, for a tool that
+//! only wants the mistakes: the linter runs it after a load that had no
+//! errors.
 //!
 //! # Bare names
 //!
@@ -63,12 +68,14 @@ use std::sync::Arc;
 
 use clash_core::define_id;
 use clash_data::{Def, DefLabel, DefTypes, Defs, Diagnostic, Diagnostics, Span, code};
+use clash_world::WorldDefs;
 
 use crate::color::ColorDef;
 use crate::input::KeymapDef;
 use crate::scene::{NoHost, Scene};
 use crate::theme::{Theme, ThemeDef, ThemeError};
 use crate::ui::{FigureDef, Screen, ScreenDef, UiEnv, UiError, UiProblem};
+use crate::view::{Ambience, AmbienceDef, GlyphProblem, Overlay, OverlayDef, WorldGlyphs};
 
 define_id! {
     /// A `color` definition.
@@ -81,6 +88,10 @@ define_id! {
     pub struct FigureId(u16);
     /// A `screen` definition.
     pub struct ScreenId(u16);
+    /// An `ambience` definition.
+    pub struct AmbienceId(u16);
+    /// An `overlay` definition.
+    pub struct OverlayId(u16);
 }
 
 impl Def for ColorDef {
@@ -116,8 +127,22 @@ impl Def for ScreenDef {
         "A screen of the interface: its variables, its layout tree and its keys (12 §10.1).";
 }
 
+impl Def for AmbienceDef {
+    type Id = AmbienceId;
+    const TYPE: &'static str = "ambience";
+    const DOC: &'static str =
+        "How a condition looks: a tint, a dimming and particles that fall or drift (12 §6.4).";
+}
+
+impl Def for OverlayDef {
+    type Id = OverlayId;
+    const TYPE: &'static str = "overlay";
+    const DOC: &'static str =
+        "Shading a map view draws over its cells where an expression over a cell holds (12 §6.2).";
+}
+
 /// Registers this crate's definition types with the loader: `color`,
-/// `theme`, `keymap`, `figure` and `screen`.
+/// `theme`, `keymap`, `figure`, `screen`, `ambience` and `overlay`.
 ///
 /// The application and the tools call this, with every other crate's
 /// function of the same name, before they load (04 §9).
@@ -127,6 +152,8 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<KeymapDef>();
     types.register::<FigureDef>();
     types.register::<ScreenDef>();
+    types.register::<AmbienceDef>();
+    types.register::<OverlayDef>();
 }
 
 /// The directory of a mod that holds its assets.
@@ -470,14 +497,128 @@ impl UiDefs {
         })
     }
 
-    /// Makes every theme, and every screen with every theme, and returns
-    /// what is wrong with them. With no theme loaded, screens are made
-    /// with the engine's plain one. When no loaded theme can be built,
-    /// screens are checked for everything but their styles.
+    /// The glyph tables a view of the world is drawn with: the look of
+    /// every element state and material of `world` under `theme`.
     ///
-    /// A screen must stand with every loaded theme, because the player
-    /// may choose any of them: a style one theme lacks is reported with
-    /// that theme named.
+    /// A glyph or a material that names a colour the theme does not
+    /// know, or a glyph whose `ch` is not one character, is an error at
+    /// the value that is wrong. [`WorldGlyphs::build`] is the lenient
+    /// form, which draws what it can.
+    pub fn world_glyphs(
+        &self,
+        world: &WorldDefs,
+        theme: &Theme,
+    ) -> Result<WorldGlyphs, Diagnostics> {
+        let (glyphs, problems) = WorldGlyphs::build(world, theme);
+        if problems.is_empty() {
+            return Ok(glyphs);
+        }
+        let mut diagnostics = Diagnostics::new();
+        for problem in &problems {
+            diagnostics.push(self.glyph_mistake(problem));
+        }
+        diagnostics.sort();
+        Err(diagnostics)
+    }
+
+    /// A problem with the look of a world definition, as a diagnostic at
+    /// the value that is wrong: in the state that wrote it, or else in
+    /// the definition's own glyph.
+    fn glyph_mistake(&self, problem: &GlyphProblem) -> Diagnostic {
+        const MATERIAL: &str = "material";
+        let defs = &*self.defs;
+        let path = if problem.kind == MATERIAL {
+            problem.field.to_owned()
+        } else {
+            let written_by_state = problem.state.as_deref().filter(|state| {
+                defs.tree(problem.kind, &problem.id)
+                    .and_then(|tree| {
+                        tree.tree
+                            .get("states")?
+                            .get(state)?
+                            .get("glyph")?
+                            .get(problem.field)
+                    })
+                    .is_some()
+            });
+            match written_by_state {
+                Some(state) => format!("states.{state}.glyph.{}", problem.field),
+                None => format!("glyph.{}", problem.field),
+            }
+        };
+        mistake(
+            defs,
+            problem.kind,
+            &problem.id,
+            &path,
+            problem.message.clone(),
+        )
+    }
+
+    /// Makes the ambience with this qualified id, its tint resolved by
+    /// `theme`.
+    pub fn ambience(&self, id: &str, theme: &Theme) -> Result<Ambience, Diagnostics> {
+        let defs = &*self.defs;
+        let mut diagnostics = Diagnostics::new();
+        let Some(def) = defs
+            .lookup::<AmbienceDef>(id)
+            .map(|found| defs.get::<AmbienceDef>(found))
+        else {
+            diagnostics.push(unknown::<AmbienceDef>(defs, id));
+            return Err(diagnostics);
+        };
+        Ambience::compile(def, theme).map_err(|errors| {
+            for error in &errors {
+                diagnostics.push(mistake(
+                    defs,
+                    AmbienceDef::TYPE,
+                    id,
+                    error.path(),
+                    error.to_string(),
+                ));
+            }
+            diagnostics.sort();
+            diagnostics
+        })
+    }
+
+    /// Makes the overlay with this qualified id, its shade resolved by
+    /// `theme`.
+    pub fn overlay(&self, id: &str, theme: &Theme) -> Result<Overlay, Diagnostics> {
+        let defs = &*self.defs;
+        let mut diagnostics = Diagnostics::new();
+        let Some(def) = defs
+            .lookup::<OverlayDef>(id)
+            .map(|found| defs.get::<OverlayDef>(found))
+        else {
+            diagnostics.push(unknown::<OverlayDef>(defs, id));
+            return Err(diagnostics);
+        };
+        Overlay::compile(id, def, theme).map_err(|errors| {
+            for error in &errors {
+                diagnostics.push(mistake(
+                    defs,
+                    OverlayDef::TYPE,
+                    id,
+                    error.path(),
+                    error.to_string(),
+                ));
+            }
+            diagnostics.sort();
+            diagnostics
+        })
+    }
+
+    /// Makes every theme, and with every theme every screen, ambience
+    /// and overlay and the world's glyph tables, and returns what is
+    /// wrong with them. With no theme loaded they are made with the
+    /// engine's plain one over the loaded colours. When no loaded theme
+    /// can be built, screens are checked for everything but their
+    /// styles, and what only names colours is not checked.
+    ///
+    /// Everything must stand with every loaded theme, because the player
+    /// may choose any of them: a style or a colour one theme lacks is
+    /// reported with that theme named.
     pub fn check(&self) -> Diagnostics {
         let mut diagnostics = Diagnostics::new();
         let mut themes: Vec<(&str, Theme)> = Vec::new();
@@ -489,13 +630,17 @@ impl UiDefs {
         }
         let styled = !themes.is_empty() || self.ids::<ThemeDef>().is_empty();
         if themes.is_empty() {
-            themes.push(("", Theme::default()));
+            let colors = seen_from::<ColorDef>(&self.defs, "");
+            let plain = Theme::build(&ThemeDef::default(), &colors).unwrap_or_default();
+            themes.push(("", plain));
         }
         let several = themes.len() > 1;
-        for id in self.ids::<ScreenDef>() {
+        // Makes one thing with every theme and reports each mistake
+        // once, naming the theme it showed with where there are several.
+        let mut with_each_theme = |make: &dyn Fn(&Theme) -> Option<Diagnostics>| {
             let mut found: Vec<Diagnostic> = Vec::new();
             for (theme_id, theme) in &themes {
-                let Err(errors) = self.make_screen(id, theme, styled) else {
+                let Some(errors) = make(theme) else {
                     continue;
                 };
                 for error in errors.iter() {
@@ -509,6 +654,22 @@ impl UiDefs {
                         error.clone()
                     });
                 }
+            }
+        };
+        for id in self.ids::<ScreenDef>() {
+            with_each_theme(&|theme| self.make_screen(id, theme, styled).err());
+        }
+        if styled {
+            for id in self.ids::<AmbienceDef>() {
+                with_each_theme(&|theme| self.ambience(id, theme).err());
+            }
+            for id in self.ids::<OverlayDef>() {
+                with_each_theme(&|theme| self.overlay(id, theme).err());
+            }
+            // The world's own mistakes are the world's to report: its
+            // glyphs are checked only when its tables build.
+            if let Ok(world) = WorldDefs::from_defs(&self.defs) {
+                with_each_theme(&|theme| self.world_glyphs(&world, theme).err());
             }
         }
         diagnostics.sort();
@@ -571,7 +732,9 @@ mod tests {
         let types = types();
         assert_eq!(
             types.names(),
-            ["color", "figure", "keymap", "screen", "theme"]
+            [
+                "ambience", "color", "figure", "keymap", "overlay", "screen", "theme"
+            ]
         );
         for info in types.infos() {
             assert!(!info.doc.is_empty(), "`{}` has no documentation", info.name);
