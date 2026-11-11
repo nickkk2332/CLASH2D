@@ -45,7 +45,7 @@ Section references such as "02 §14" point into those documents.
 | W15 | Energy releases | L | W13, W14 | todo |
 | W16 | Fields | L | W12 | todo |
 | W17 | Coarse layer | L | W15, W10 | todo |
-| W18 | Queries | M | W7 | todo |
+| W18 | Queries | M | W7 | beta |
 | W19 | Portals, boundary links, realm transfer | M | W14, W18 | todo |
 | W20a | Subgrids: storage, compositing, movement | L | W18, W14 | todo |
 | W20b | Subgrids: detach, merge, free flight | M | W20a | todo |
@@ -643,6 +643,32 @@ Done when
 - Field of view is symmetric on random maps (property test).
 - A ray at 1.5 m passes a 1 m fence and stops at a wall.
 - Cached results are invalidated by an edit and by nothing else.
+
+Status `beta` (decisions D-310 to D-316). Built in
+`clash_world::query` as 02 §22 now reads: rays with heights and three
+kinds of filter, lines of sight, field of view into a `FovSet` kept by
+the caller, `neighbours` and `footing`, `RevStamp` and the caches on it.
+Added beyond the list: a search over cells, `find_path`, with the mover's
+rules as a trait (D-315). Built alongside W7, not after it. Stubbed:
+
+- Occupants along a ray. The ray takes a `RayObstacles`; the occupant
+  index (W7) implements it. Until then rays, lines of sight and views are
+  terrain only.
+- Subgrids and portals in queries, which are W20a's and W19's own items,
+  and fields that hide (W16).
+- Benchmarks (W23). Two ignored timing tests in
+  `crates/clash-world/tests/query.rs` print rough figures instead. On the
+  build machine: a field of view of radius 30 takes about 70 µs in an
+  open field under open sky, 45 µs on one open storey under a ceiling,
+  3 µs inside a building of small rooms, and 0.1 µs when asked again of
+  an unchanged world; a line of sight over 30 m 0.2 to 0.4 µs; a path of
+  60 steps about 50 µs in the open and 60 µs through a building.
+- No test script: the runner is W11's. The queries change no state, so
+  there is no golden hash to keep.
+- Nothing is registered with the expression runtime, which does not
+  exist yet. `line of sight` (02 §23) is bound when it does.
+- A tract unloaded and loaded again can look unchanged to a cache. W8
+  owes the rule in 02 §22 that prevents it.
 
 ### W19 — Portals, boundary links, realm transfer
 

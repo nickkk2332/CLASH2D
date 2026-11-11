@@ -329,6 +329,11 @@ definition 0 of each element type, is the built-in `engine:none`.
   over it. Destroying a floor over solid ground exposes the ground; destroying
   the ground below that makes a hole.
 - Ramps, stairs and ladders are elements flagged as vertical connections.
+  Each joins its cell to the cell directly above it. Whoever is in that
+  upper cell stands at the top of the connection, which holds them up as
+  a floor would: they are not unsupported, though the cell has no floor
+  and is not standable in the sense above. `Cosmos::footing` says what
+  holds up someone in a cell (section 22).
 
 ### 5.3 Geometry
 
@@ -621,7 +626,8 @@ cache, not palettes.
 Revision counters are how every cache outside the chunk (paths, field of view,
 light, rendering) knows whether it is stale. A write that changes nothing
 bumps nothing. Revisions, caches and the dirty flag are not state: they are
-not hashed and not saved.
+not hashed and not saved. A cache keeps the revisions it was read from in a
+`RevStamp` (section 22).
 
 ### 6.3 Grids
 
@@ -1999,32 +2005,157 @@ which interpret the answers, are specified in later documents.
 ```rust
 impl Cosmos {
     pub fn raycast(&self, from: PointM, dir: [Real; 3], max_m: Real, filter: RayFilter) -> RayHits;
-    pub fn line_of_sight(&self, a: PointM, b: PointM, planes: PlaneMask) -> bool;
-    pub fn field_of_view(&self, origin: Location, eye_alt_mm: u16, radius_m: Real, out: &mut FovSet);
-    pub fn neighbours(&self, loc: Location) -> NeighbourGeometry;   // raw data for movement rules
+    pub fn raycast_into(&self, from: PointM, dir: [Real; 3], max_m: Real, filter: RayFilter,
+                        obstacles: &mut dyn RayObstacles, out: &mut RayHits);
+    pub fn line_of_sight(&self, a: PointM, b: PointM) -> Result<bool, WorldError>;
+    pub fn field_of_view(&self, origin: Location, eye_alt_mm: u16, radius_m: Real,
+                         out: &mut FovSet) -> Result<Freshness, WorldError>;
+    pub fn neighbours(&self, loc: Location) -> Result<NeighbourGeometry, WorldError>;   // raw data for movement rules
+    pub fn footing(&self, loc: Location) -> Result<Footing, WorldError>;
+    pub fn find_path<R: MoveRules + ?Sized>(&self, from: Location, to: Location, rules: &R,
+                                            limits: PathLimits) -> Result<Path, PathFail>;
 }
 ```
 
-- Rays step through 1 × 1 × 3 m cells and respect element heights: a ray at
-  1.5 m passes over a 1 m fence.
-- Field of view is symmetric shadowcasting per storey, extended downward
-  through cells with no floor and upward through open sky.
-- All queries composite subgrids and respect wrap. Sight, rays and signals
-  cross a subgrid's boundary without limit: a subgrid is part of the scene.
+All of them read truth. What a character decides by comes from what it
+has perceived (01 R11): a mind's rules wrap these and never hand them to
+a mind. None loads a tract or panics on one that is missing, and each
+says what it does at the end of loaded space. On a wrapped axis each
+carries on round. Results come in a defined order: hits nearest first,
+cells storey by storey and row by row, steps clockwise from north, then
+up, then down.
+
+**Rays.** A ray steps through 1 × 1 × 3 m cells in the order of the
+segment walk of section 3.3 and respects element heights: a block or
+fixture fills the footprint of its cell from the base up to its height,
+and a ray that stays at or above that height passes over it. A ray at
+1.5 m passes over a 1 m fence.
+
+| Ray | Stopped by | Also reports |
+|-----|------------|--------------|
+| Sight | A block or fixture flagged `opaque`; a floor | — |
+| Movement | A block or fixture that is not `passable`; a floor | — |
+| Projectile | A block or fixture that closes the whole width of its cell below its top; a floor | One that closes part of it, with its share |
+
+- A hit says which cell, which element in what state, how far along the
+  ray, the point, the share of the ray's path the thing closes, and
+  whether the ray ended there. `RayHits` lists them nearest first and
+  says how the ray ended: it went its whole length, something stopped
+  it, or it was refused, with the reason.
+- The share a projectile is given is the chance that a thin projectile
+  at that height strikes the thing. The world rolls no dice in a query:
+  whoever fires does. An element's `coverage` is the share of its cell's
+  whole cross-section that it closes (section 5.3), and a ray that meets
+  it is already known to be below its top, so the share is
+  `coverage × 3 / height`, at most 1. A 1 m fence with the default
+  coverage closes everything below 1 m and nothing above; a pillar of
+  full height with coverage 0.5 is struck half the time; an open door,
+  with coverage 0, is not met.
+- A floor is met where a ray passes between two storeys. It is the floor
+  of the upper cell, and it stops every kind of ray.
+- The block and fixture of the cell a ray starts in never stop it:
+  whoever casts it is taken to be clear of what shares its cell.
+- A ray is followed for at most 10 km (`RAY_MAX_M`). Where it comes to
+  space that is not loaded, or to an edge of the realm, it ends, keeps
+  what it met, and is marked refused with the error of section 7.1.
+- Terrain exists on every plane (section 8.2), so a ray takes no plane
+  mask. Occupants join a ray through `RayObstacles`, which is asked for
+  each cell the ray passes, with the stretch of the ray inside it. The
+  occupant index answers it with its own plane and kind filters, so that
+  one ray meets walls and bodies in the order they stand along it.
+
+**Line of sight** between two points is clear when nothing `opaque`
+stands in a cell strictly between them taller than the line passes, and
+the line passes through no floor. What is in the two cells that hold the
+points does not block: one sees out of one's own cell, and one sees the
+thing one looks at, a wall included. The answer is the same whichever
+point is given first. Through space that is not loaded it is an error,
+not a guess; between grids, and beyond the length of a ray, it is false.
+
+**Field of view** fills a `FovSet`, a buffer the caller keeps: the cells
+seen from a cell by an eye at a height, out to a radius, held as offsets
+from the viewer.
+
+- *On the viewer's storey* it is symmetric shadowcasting over whole
+  numbers. A cell blocks sight when something `opaque` in it stands
+  taller than the eye. A cell that blocks is seen if any of it is in
+  view. A cell that does not is seen if the line from the middle of the
+  viewer's cell to its own middle is clear.
+- *Down.* Under every seen cell of that storey that has no floor and
+  holds nothing opaque, the cell below is seen, and so on down while the
+  same holds of each. The last is what the eye rests on: the ground, a
+  floor, a roof. Under its own cell the viewer looks past whatever
+  shares that cell.
+- *Up.* While the cell over the viewer's head has no floor, the storey
+  above is seen as from that cell, and the next in the same way, as long
+  as the cells passed through hold nothing opaque. Under open sky that is
+  every storey within the radius; indoors it is whatever shows through a
+  hole in the ceiling.
+- Looking up is the mirror of looking down, so sight is symmetric
+  between storeys as on one: of two cells that do not block sight, with
+  eyes at one height, each sees the other or neither does.
+- Distance is between cell centres with a storey counting 3 m, and a
+  cell at exactly the radius is seen. Cells that are not loaded are not
+  seen and hide what is behind them. The radius is cut to 255 cells.
+- A view counts a cell by its middle and a line of sight by every cell
+  it passes through, so the two can differ by a cell at a corner.
+
+**Neighbours** is raw geometry for movement rules: the cell, the eight
+round it, the one above and the one below, each with its derived flags,
+its **footing**, the height of what stands in the way of walking, any
+vertical connection, and whether it is liquid or rough. A neighbour that
+is not loaded or lies beyond an edge is absent.
+
+- A ramp, stairs or ladder joins its cell to the cell directly above
+  it. The step up starts in the cell that holds it and the step down
+  ends there (section 5.2).
+- Footing is what holds up someone in a cell: its floor, the solid top
+  of the block below, or a vertical connection in the cell below.
+- A cell also says whether what is in its way `opens`: every element in
+  the way has a declared state in which it is not. A closed door has
+  one; a wall has not.
+- Which steps a mover can make, and at what cost, is for a `MoveRules`.
+  `MoveProfile` is a plain walker: it needs footing, steps over what
+  `walk_blocked` allows or a height of its own, goes between storeys
+  only by a connection, and never takes a diagonal step past a cell
+  that is in the way. A step costs its length in metres (section 3.3),
+  doubled into a rough cell.
+
+**Paths.** `find_path` is a search over cells (A*) on those steps. It
+returns a cheapest path, or the reason there is none: no route, the goal
+cannot be occupied, too dear, or the budget of cells was spent (20,000
+unless the caller says). Where paths cost the same the choice is fixed:
+cells are settled in order of the estimated cost of the whole path, then
+of what is left, then of position, and steps are tried in their listed
+order. The hierarchy of document 09 is built over this search and decides
+which cells it is let loose on. The world's other obligations to
+path-finding are revision counters and change events precise enough to
+update a hierarchical path graph incrementally.
+
+**Caches.** A kept answer carries a `RevStamp`: the structure revisions
+of the chunks its reads were confined to. It is stale when one of them
+has moved, or when one of their tracts has been loaded or unloaded, and
+for no other reason. A chunk that holds only its tract's fill has never
+been written and counts as revision zero. A `FovSet` asked the same
+question of an unchanged world returns at once; a `Path` says whether it
+`is_current`. A tract that is unloaded and loaded again must not come
+back looking unchanged: loading starts its chunks' revisions where no
+earlier loading of that tract left them.
+
+Still to come, with the packages that build them:
+
+- All queries composite subgrids. Sight, rays and signals cross a
+  subgrid's boundary without limit: a subgrid is part of the scene.
 - They pass a portal only if it is `see_through`, only for a viewer within
   its `view_range`, and only `sight.portal_depth` portals deep (default 1).
   While a see-through portal's near side is loaded and something that could
   see through is within range, the portal holds a warm ticket on its far
   side (section 10).
-- Results that are cached are keyed on chunk revisions.
+- Fields that hide, such as smoke, do not yet block sight.
 
 Illumination (`Cosmos::light`) is specified in 15 §3.3 and the medium of a
 cell (`Cosmos::medium`) in 11 §4. Both are world queries with caches keyed
 on chunk revisions.
-
-Path-finding is specified in document 09. The world's obligations are the
-`neighbours` query, revision counters, and change events precise enough to
-update a hierarchical path graph incrementally.
 
 ## 23. Modding surface
 
@@ -2131,7 +2262,11 @@ materials carrying the tag its `needs` names. `catch_up` is one of
 `sight.portal_depth`, and the debris budget of section 12.3
 (`debris.max_bodies`).
 
-Nothing in this document is reachable only from Rust.
+**Reachable only from Rust**: the queries of section 22 other than
+line of sight. A rule that needs what a ray met, the cells a viewer
+sees or the geometry round a cell has no expression for it; `path_cost`
+(09 §6.4) reaches paths. Nothing else in this document is reachable only
+from Rust.
 
 ## 24. Invariants
 
