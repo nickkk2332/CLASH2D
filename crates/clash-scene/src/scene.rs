@@ -1843,8 +1843,9 @@ where
     /// ([`Scene::running_effects`]), what they came to.
     pub fn turn(&mut self, front: &mut dyn Frontend, frame: &mut Frame, seconds: f64) -> Turn {
         let mut turn = Turn::default();
-        if self.run_effects {
-            // A decision the simulation is waiting for gets its screen.
+        if self.run_effects && self.playback.is_caught_up() {
+            // A decision the simulation is waiting for gets its screen
+            // once playback has reached it (12 §9.5).
             turn.outcomes.extend(self.sync_decision());
         }
         for event in front.poll() {

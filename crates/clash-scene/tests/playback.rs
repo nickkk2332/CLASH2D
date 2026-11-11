@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use clash_core::{Dur, EntityId, Real, Tick, Value};
 use clash_data::{DefTypes, Defs, Diagnostics, Loader};
+use clash_scene::control::{DecisionAsk, PendingDecision};
 use clash_scene::playback::{Importance, check_caught_up};
 use clash_scene::testing::FakeHost;
 use clash_scene::view::{
@@ -625,6 +626,26 @@ fn bindings_show_the_moment_playback_has_reached() {
     run.until_idle();
     assert_eq!(run.scene.playback_moment(), None);
     assert_eq!(run.host.moments().last(), Some(&None));
+}
+
+#[test]
+fn a_decision_is_asked_for_once_playback_reaches_it() {
+    let mut run = Run::new();
+    let batch = wall_punch(&mut run);
+    run.scene.push_events(batch);
+    run.host.ask(Some(PendingDecision {
+        entity: clash_expr::Value::Subject(run.host.entity(MARA)),
+        kind: DecisionAsk::Choice {
+            choice: clash_expr::Value::Int(4),
+            prompt: "The way north is open.".to_owned(),
+            options: vec!["Go through".to_owned(), "Wait".to_owned()],
+        },
+    }));
+    run.turns(1);
+    assert_eq!(run.scene.top().unwrap().id(), "ui:play", "not yet");
+    run.until_idle();
+    assert_eq!(run.scene.top().unwrap().id(), "ui:choice");
+    assert!(run.shown().text().contains("The way north is open."));
 }
 
 #[test]
