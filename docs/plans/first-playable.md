@@ -52,7 +52,7 @@ actions that call `hit`.
 | U8 | Slots and theming | S | U6b | done |
 | U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
 | U10 | Cutscenes | M | U5, T6 | todo |
-| U11 | Application | M | U3, U9, P3 | todo |
+| U11 | Application | M | U3, U9, P3 | beta |
 | Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
 
 ## Order and parallelism
@@ -796,6 +796,22 @@ Build
 Done when
 - Launching with a profile shows its boot screen; a session can be saved,
   quit and resumed.
+
+Beta (the first walk): `clash` loads a profile, shows located load errors
+and leaves with failure, opens the boot screen, offers the `start`
+definitions on `ui:new_game`, makes a world and a character, and runs the
+frame loop in a terminal or headless from a script (12 §3). Preferences
+and key bindings are kept in the user's data directory. Golden frames
+cover the title, the new-game screen, the first play frame, inside a
+house and at a wall; a total conversion and a broken mod are tested.
+Stubbed behind named seams: actions (`shim`: `step`, `go_to`, `wait` as
+debug moves), perception (`perception_shim`: sight from the character's
+cell), playback (`present::present_events`), saving (`saves::SaveBackend`
+with nothing built in, so saving, loading and resuming are not done),
+characters from templates (`session::make_player`) and game scenarios
+(the `start` type). Not built: the window frontend and frontend choice,
+switching profiles or reloading mods while running, a benchmark of the
+loop.
 
 ### Z1 — Benchmarks and budget gate
 

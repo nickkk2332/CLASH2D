@@ -1,0 +1,9 @@
+{
+  "id": "bad",
+  "name": "A broken mod",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "A mod with a mistake in it, for the application's tests.",
+  "authors": ["CLASH2D contributors"],
+  "requires": []
+}

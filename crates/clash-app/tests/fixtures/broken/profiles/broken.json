@@ -1,0 +1,6 @@
+{
+  "id": "broken",
+  "name": "A broken profile",
+  "mods": ["bad"],
+  "boot_screen": "bad:front_door"
+}
