@@ -83,7 +83,8 @@
       "<": "up", ">": "down",
       ".": "wait", "x": "look",
       "i": "inventory", "c": "condition", "a": "abilities", "m": "map", "shift+j": "journal",
-      "o": "options"
+      "o": "options",
+      "escape": "pause"
     },
     "targeting": {
       "h": "west", "j": "south", "k": "north", "l": "east",

@@ -1,0 +1,9 @@
+{
+  "id": "tools",
+  "name": "Development tools",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "The in-game development tools. A profile that lists this mod is a development profile. So far: a view of the world as it really is.",
+  "authors": ["CLASH2D contributors"],
+  "requires": ["ui"]
+}
