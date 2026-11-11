@@ -688,6 +688,9 @@ impl WorldCtx<'_> {
                 // The world cannot resolve a map: it waits for whoever
                 // holds the maps (`Cosmos::take_pending_maps`).
                 map @ PendingEdit::Map(_) => waiting.push(map),
+                // So does a body that came down here unseen (02 §15.4):
+                // it stays on the record, where whoever loads finds it.
+                impact @ PendingEdit::Impact(_) => waiting.push(impact),
             }
         }
         if !waiting.is_empty()

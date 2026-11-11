@@ -41,8 +41,8 @@ Section references such as "02 §14" point into those documents.
 | W11 | World viewer and scenario runner | M | W8 | todo |
 | W12 | Damage and destruction | M | W6 | beta |
 | W13 | Structural support and collapse | L | W12, W9 | beta |
-| W14 | Bodies | L | W12, W7, W9 | todo |
-| W15 | Energy releases | L | W13, W14 | todo |
+| W14 | Bodies | L | W12, W7, W9 | beta |
+| W15 | Energy releases | L | W13, W14 | beta |
 | W16 | Fields | L | W12 | beta |
 | W17 | Coarse layer | L | W15, W10 | todo |
 | W18 | Queries | M | W7 | beta |
@@ -319,7 +319,8 @@ that step. Stubbed:
 - No placeholder is supplied for lenient loading.
 - Not read yet, each left to the package that gives it meaning: `changes`,
   rubble by damage type or as a field (W25); `fluid` (vehicles V1);
-  `friction` (W14); `load`, `when_supplied`, `conveys` (devices plan).
+  `load`, `when_supplied`, `conveys` (devices plan). A material's
+  `friction` is read since W14.
 
 ### W4 — Chunks and grids
 
@@ -653,8 +654,9 @@ rubble that keeps matter, piles up and becomes a heap, and
 `ElementDestroyed`; `OccupantUnsupported` from any edit that takes an
 occupant's footing away. Stubbed:
 
-- The debris hook throws nothing: `WorldCtx::throw_debris` is where W14
-  launches bodies, within `debris.max_bodies`.
+- The debris hook threw nothing until W14 filled it in: a destruction
+  with a direction now throws fragments, within `debris.max_bodies`
+  (02 §12.3, D-493).
 - A material names one rubble fixture. Rubble by damage type and rubble
   that is a field are W25's.
 - The body of `wall_punch` is the test `a_wall_is_punched_through` in
@@ -739,6 +741,49 @@ Done when
 - A body inside a rate-0 area hangs and resumes.
 - Scenarios `three_buildings` and `time_stop_street`.
 
+Status `beta` (decisions D-490 to D-494). Built as 02 §15 and the
+debris paragraph of §12.3 now read: `Body` with its three kinds of
+owner, `launch`, `impulse`, `steer` and `arrest`; flight as a process on
+the clock of where the body is, exact in vacuum, with drag against the
+moving medium and a drive; impacts along the projectile ray with the
+roll for what closes part of a cell, on elements through
+`WorldEdit::damage_along` and on occupants as `BodyHitOccupant`; rest,
+sliding by the `friction` of materials, and landing; occupants carried
+cell by cell; debris from the hook of W12 within `debris.max_bodies`;
+the ticket ahead; and flights that leave loaded space finished by
+arithmetic, with `PendingEdit::Impact` for those that come down unseen.
+With the review additions drift on bodies, driven bodies, contact on
+elements and the W14 half of leaving loaded space. Stubbed:
+
+- A body that is a subgrid (W20b), portals and boundary links in a
+  body's way, and `LeftRealm` at a void edge (W19): a body that leaves
+  by an edge is reported by `BodyLeftLoaded` with nowhere to land.
+- The ticket has a fixed anchor that the body moves: `TicketAnchor`
+  gained no `Body` variant. A body whose ticket is refused is not told:
+  it is finished by arithmetic when it comes to unloaded space, which
+  is what refusal asks for.
+- The tract records keep no ground heights, so the arithmetic takes the
+  ground to lie where it did under the last loaded cell. Applying a
+  pending impact when its tract loads is the coarse layer's (W17), as
+  is leaving the entity there (06 §12).
+- The world knows no occupant's shape: whoever is in a cell a body
+  enters is struck. `volume` is stored for buoyancy (11 §4.4) and not
+  used.
+- The bodies of `three_buildings`, `time_stop_street` and
+  `over_the_horizon` are tests of those names in
+  `crates/clash-world/tests/bodies.rs`. The scripts are owed to the
+  script runner (W11).
+- Saved with the world (W10, D-499): a flight is a process in
+  `world.activity` and a waiting impact is in its tract's record, with
+  the material, damage type and planes they name written as save ids.
+  The save in mid-flight and the one in `over_the_horizon` are real
+  saves. The simulation places the entity a body carries again after
+  loading, as it does every occupant.
+- A timing test prints figures
+  (`timing_of_a_projectile_across_thirty_metres`, ignored): about 13 µs
+  for a flight of 30 m, 450 ns a step. The benchmark and its budget are
+  W23's.
+
 ### W15 — Energy releases
 
 **Spec** 02 §13.1, §13.2, §13.4 · **Size** L
@@ -755,6 +800,51 @@ Done when
 - An occupant relocated beyond the front before it arrives is not exposed.
 - Scenarios `car_bomb_street` and `beam_through_city`, including a save
   mid-release.
+
+Status `beta` (decisions D-495 to D-498). Built as 02 §13 to §13.2 now
+read: `release` for a sphere, a cone and a beam, of any damage type; the
+front as a process that handles a shell a wake on the clock of its
+origin; the transmission map, with shade that falls when a shell is
+done; packets to floors, blocks and fixtures within what the release has
+left, so that no more is absorbed than was released; `OccupantExposed`
+once for each occupant the front reaches, the push on bodies and
+occupants and the throwing of occupants the wave moves fast enough;
+confinement, by which a charge in a closed space does more than in the
+open and an opening lets it out; a beam that pays for what it breaks and
+may burst where it ends; the budget, as a cut-off; `ReleaseStarted` and
+`EnergyReleased` with totals by instigator. Stubbed:
+
+- The three tiers: every non-empty cell in reach is handled with
+  shadowing, and nothing is cleared in bulk. A megaton is cut off by the
+  budget long before its reach.
+- Resolve mode (02 §13.4) and force-resolve: a release over
+  `release.max_cells` is cut off at the shell that would pass it and
+  says so (contract point 4 is tested as that). Coarse mode (02 §13.3):
+  cells that are not loaded are passed over, with no stamp (W17).
+- No ticket is held (W9), so a release does not keep its tracts loaded.
+- Fronts (02 §13.5) are W24's.
+- "Wall destruction radii match the table" is tested as the radius out
+  to which walls are marked: the table gives the radius at the wall's
+  threshold, where a wall is affected and far from destroyed.
+- The bodies of `car_bomb_street` and `beam_through_city` are tests of
+  those names in `crates/clash-world/tests/releases.rs`, the first with
+  a save while the front is spreading. The scripts are owed to the
+  script runner (W11).
+- Saved with the world (W10, D-499): a release in progress is a process
+  in `world.activity`, with its damage type written as a save id. The
+  save in `car_bomb_street` is a real one, and
+  `what_is_in_the_air_keeps_what_it_names_when_the_mods_change` loads
+  one without the mod that defined a damage type, a material and a
+  plane, and with it again.
+- A release tells the fields of each cell it reaches (`conduct`, D-499).
+  A reaction to damage is the field's: with core's water and a shock,
+  every wet cell the front reaches passes a packet to every wet cell
+  within six steps, which over a large body of water is many packets
+  for each cell and is not bounded by `release.max_cells`.
+- A timing test prints figures (`timing_of_a_blast_in_a_city_block`,
+  ignored): a 2 GJ blast among nine five-storey buildings visits 136,000
+  cells in about 28 ms, 200 ns a cell, and what follows it (collapse and
+  debris) takes about 15 ms. The benchmark and its budget are W23's.
 
 ### W16 — Fields
 
@@ -803,7 +893,7 @@ from fields" are built with it. Stubbed:
   form. Catch-up is tested by itself, and a tract's fields through its
   blob; a test that unloads and reloads a burning tract through a store
   belongs with the generators' tests in `clash-gen`.
-- Nothing calls `conduct` yet: releases (W15) and attacks must, for a
+- Releases and bodies call `conduct` (W15, W14). Attacks must too, for a
   reaction to damage to happen.
 - The bodies of `office_fire` and `quench` are tests of those names in
   `crates/clash-world/tests/fields.rs`. The scripts are owed to the

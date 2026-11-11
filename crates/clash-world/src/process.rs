@@ -36,11 +36,14 @@ use clash_core::{StateHash, StateHasher};
 use clash_time::{ClockId, Next, ProcessId, ProcessTable, Wake, WakeDomain};
 use serde::{Deserialize, Serialize};
 
+use crate::body::{BodyFlight, BodyState};
 use crate::collapse::{CollapseState, FallingMass};
 use crate::cosmos::Cosmos;
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
 use crate::field::{FieldState, FieldStep};
+use crate::pos::Location;
+use crate::release::{Release, ReleaseState};
 
 /// A stability check that is waiting out the settle delay on a clock
 /// (02 §14.2). When it wakes, the checks asked for where that clock
@@ -65,6 +68,25 @@ pub enum WorldProcess {
     Fall(FallingMass),
     /// The fields of one clock and one step interval, stepped (02 §16).
     FieldStep(FieldStep),
+    /// A body in flight (02 §15).
+    Body(BodyFlight),
+    /// An energy release whose front is still spreading (02 §13).
+    Release(Box<Release>),
+}
+
+impl WorldProcess {
+    /// The cell a process is at, for one that is somewhere and goes
+    /// onto the clock of where it is.
+    fn place(&self) -> Option<Location> {
+        match self {
+            WorldProcess::Fall(mass) => Some(mass.at),
+            WorldProcess::Body(flight) => Some(flight.location()),
+            // A settle check keeps the clock it began on, a release
+            // runs on the clock of its origin (02 §13.2), and the
+            // fields of a clock are stepped on that clock.
+            WorldProcess::Settle(_) | WorldProcess::Release(_) | WorldProcess::FieldStep(_) => None,
+        }
+    }
 }
 
 impl StateHash for WorldProcess {
@@ -82,6 +104,14 @@ impl StateHash for WorldProcess {
                 hasher.write_u8(2);
                 step.state_hash(hasher);
             }
+            WorldProcess::Body(flight) => {
+                hasher.write_u8(3);
+                flight.state_hash(hasher);
+            }
+            WorldProcess::Release(release) => {
+                hasher.write_u8(4);
+                release.state_hash(hasher);
+            }
         }
     }
 }
@@ -98,6 +128,10 @@ pub struct WorldActivity {
     pub(crate) collapse: CollapseState,
     /// Where the fields are and which processes step them (02 §16).
     pub(crate) fields: FieldState,
+    /// What is kept about the bodies in flight besides their processes.
+    pub(crate) bodies: BodyState,
+    /// What is kept about energy releases besides their processes.
+    pub(crate) releases: ReleaseState,
 }
 
 impl WorldActivity {
@@ -107,6 +141,8 @@ impl WorldActivity {
             processes: ProcessTable::new(WakeDomain::World),
             collapse: CollapseState::default(),
             fields: FieldState::new(),
+            bodies: BodyState::default(),
+            releases: ReleaseState::default(),
         }
     }
 
@@ -133,6 +169,8 @@ impl StateHash for WorldActivity {
         self.processes.state_hash(hasher);
         self.collapse.state_hash(hasher);
         self.fields.state_hash(hasher);
+        self.bodies.state_hash(hasher);
+        self.releases.state_hash(hasher);
     }
 }
 
@@ -180,10 +218,18 @@ impl WorldCtx<'_> {
                 let next = self.run_field_step(step);
                 (WorldProcess::FieldStep(step), next)
             }
+            WorldProcess::Body(flight) => {
+                let (flight, next) = self.run_body(flight);
+                (WorldProcess::Body(flight), next)
+            }
+            WorldProcess::Release(mut release) => {
+                let next = self.run_release(&mut release);
+                (WorldProcess::Release(release), next)
+            }
         };
-        if let (WorldProcess::Fall(mass), Next::Sleep(_)) = (&process, next) {
-            // It goes on falling, on the clock of where it now is.
-            let clock = self.cosmos.ambient(mass.at).map(|ambient| ambient.clock);
+        if let (Some(at), Next::Sleep(_)) = (process.place(), next) {
+            // It goes on, on the clock of where it now is.
+            let clock = self.cosmos.ambient(at).map(|ambient| ambient.clock);
             if let Ok(clock) = clock {
                 self.keep_clock(id, clock);
             }
@@ -196,7 +242,7 @@ impl WorldCtx<'_> {
     }
 
     /// Moves a process to a clock, if it is not on it already.
-    fn keep_clock(&mut self, id: ProcessId, clock: ClockId) {
+    pub(crate) fn keep_clock(&mut self, id: ProcessId, clock: ClockId) {
         let table = &mut self.cosmos.activity.processes;
         if table.clock_of(id) != Some(clock) {
             // A clock that has gone leaves the process where it is.
@@ -217,10 +263,7 @@ impl WorldCtx<'_> {
             .activity
             .processes
             .iter()
-            .filter_map(|(id, process)| match process {
-                WorldProcess::Fall(mass) => Some((id, mass.at)),
-                _ => None,
-            })
+            .filter_map(|(id, process)| Some((id, process.place()?)))
             .filter_map(|(id, at)| Some((id, self.cosmos.ambient(at).ok()?.clock)))
             .collect();
         for (id, clock) in placed {
