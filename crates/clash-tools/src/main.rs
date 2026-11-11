@@ -14,6 +14,7 @@ use std::process::ExitCode;
 use clash_data::DefTypes;
 
 mod data;
+mod replay;
 mod save;
 mod scenario;
 mod worldview;
@@ -40,10 +41,11 @@ pub const ENGINE_CHECKS: &[data::BuildCheck] = &[
 
 fn usage() -> String {
     format!(
-        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}\n{}",
+        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}\n{}\n{}",
         data::USAGE,
         scenario::USAGE,
         save::USAGE,
+        replay::USAGE,
         worldview::USAGE
     )
 }
@@ -62,6 +64,7 @@ fn main() -> ExitCode {
         "scenario" => Some(scenario::run(rest)),
         "save" => Some(save::run(rest)),
         "worldview" => Some(worldview::run(rest)),
+        "replay" => Some(replay::run(rest)),
         _ => None,
     };
     if let Some(output) = own {

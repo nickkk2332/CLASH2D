@@ -1354,18 +1354,7 @@ impl Game {
     }
 
     fn hash(&self, command: &BoundCommand) -> HostResult<Output> {
-        let hashes = self.sim.hashes();
-        let parts = [
-            ("world", hashes.cosmos),
-            ("timeline", hashes.timeline),
-            ("entities", hashes.entities),
-            ("components", hashes.components),
-            ("rules", hashes.rules),
-            ("settings", hashes.settings),
-            ("rng", hashes.rng),
-            ("kernel", hashes.kernel),
-            ("total", hashes.total),
-        ];
+        let parts = crate::subsystem_hashes(&self.sim);
         let wanted = command.word("subsystem").unwrap_or("all");
         if wanted == "all" {
             let lines: Vec<String> = parts

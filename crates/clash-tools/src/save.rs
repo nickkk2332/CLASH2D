@@ -40,7 +40,7 @@ fn usage(message: &str) -> Output {
     }
 }
 
-fn failed(message: impl core::fmt::Display) -> Output {
+pub(crate) fn failed(message: impl core::fmt::Display) -> Output {
     Output {
         out: String::new(),
         err: format!("clash-tools: {message}\n"),
@@ -81,6 +81,29 @@ fn describe(meta: &SaveMeta) -> String {
     out
 }
 
+/// The definitions a save names, loaded from the mods directory, with
+/// the generators bound to them: what loading the save needs.
+pub(crate) fn profile_of(
+    meta: &SaveMeta,
+    mods: Option<&str>,
+    file: &str,
+) -> Result<(Arc<clash_data::Defs>, clash_gen::Generators), Output> {
+    let dir = mods_dir(mods, Path::new(file).parent().unwrap_or(Path::new("")));
+    let types = crate::engine_types();
+    let outcome = clash_scene::engine_loader(&types)
+        .search_path(dir)
+        .load_profile(&meta.profile);
+    let defs = outcome.into_result().map_err(|diagnostics| {
+        failed(format!(
+            "the save's profile `{}` does not load:\n{}",
+            meta.profile,
+            diagnostics.render()
+        ))
+    })?;
+    let generators = generators_for(&defs).map_err(failed)?;
+    Ok((defs, generators))
+}
+
 /// Runs the `save` subcommand with the arguments after its name.
 pub fn run(args: &[String]) -> Output {
     let mut positional: Vec<&str> = Vec::new();
@@ -112,24 +135,9 @@ pub fn run(args: &[String]) -> Output {
                 Ok(meta) => meta,
                 Err(error) => return failed(error),
             };
-            let dir = mods_dir(mods, Path::new(file).parent().unwrap_or(Path::new("")));
-            let types = crate::engine_types();
-            let outcome = clash_scene::engine_loader(&types)
-                .search_path(dir)
-                .load_profile(&meta.profile);
-            let defs = match outcome.into_result() {
-                Ok(defs) => defs,
-                Err(diagnostics) => {
-                    return failed(format!(
-                        "the save's profile `{}` does not load:\n{}",
-                        meta.profile,
-                        diagnostics.render()
-                    ));
-                }
-            };
-            let generators = match generators_for(&defs) {
-                Ok(generators) => generators,
-                Err(error) => return failed(error),
+            let (defs, generators) = match profile_of(&meta, mods, file) {
+                Ok(found) => found,
+                Err(output) => return output,
             };
             match verify(file, Arc::clone(&defs), generators) {
                 Ok(verified) => {

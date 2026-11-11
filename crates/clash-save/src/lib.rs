@@ -18,6 +18,7 @@
 //! | The same against any store | [`save_game_into`], [`load_game_from`], [`read_meta_from`] |
 //! | The same as bytes, in memory | [`save_game_bytes`], [`load_game_bytes`], [`read_meta_bytes`] |
 //! | To check a save | [`verify`], [`verify_store`] |
+//! | To replay the commands between two saves | [`replay_between`] |
 //!
 //! ```no_run
 //! use clash_save::{SaveMeta, generators_for, load_game, save_game};
@@ -56,6 +57,7 @@ mod game;
 pub mod host;
 mod meta;
 mod pack;
+mod replay;
 mod tools;
 
 pub use game::{
@@ -68,4 +70,5 @@ pub use pack::{
     PACK_BLOB_KIND, PACK_BLOB_VERSION, load_game_bytes, pack_store, read_meta_bytes,
     save_game_bytes, unpack_store,
 };
+pub use replay::{ReplayError, Replayed, replay_between, subsystem_hashes};
 pub use tools::{SaveEntry, Verified, list_saves, verify, verify_store};
