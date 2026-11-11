@@ -91,22 +91,34 @@
 //!   their content comes with the tooling packages.
 //! - `log` shows a [`MessageLog`]; playback (U5) fills it.
 
+pub mod bind;
 pub mod def;
 mod draw;
+pub mod effect;
 mod input;
 mod layout;
+mod refresh;
 mod screen;
 
+pub use bind::{
+    Binding, KIND_APP, KIND_APP_ENTRY, KIND_ENTITY, SLOT_APP, SLOT_IT, SLOT_PARTY, SLOT_SCREEN,
+    SLOT_VIEW, TYPE_PARTY_MEMBER,
+};
 pub use def::{
     Align, ArtDef, BarDef, ButtonDef, ChoiceDef, ColumnDef, CommonDef, DebugDef, FigureDef,
     FigureWidgetDef, FrameDef, GridDef, InputDef, InspectDef, ListDef, Literal, LogDef, MenuDef,
-    NODE_FIELDS, NODE_KINDS, NodeDef, NodeKind, NumberDef, OptionDef, OptionsDef, Prop, RowDef,
-    RowsDef, ScreenDef, Size, SpacerDef, TabDef, TableDef, TabsDef, TextDef, TextProp, ToggleDef,
-    TooltipDef, TreeDef, UiEffects, ViewDef, text_prop,
+    NODE_FIELDS, NODE_KINDS, NodeDef, NodeKind, NumberDef, OptionDef, OptionsDef, Place, PopupDef,
+    PrefKind, PreferenceDef, Prop, RowDef, RowsDef, ScreenDef, Size, SpacerDef, TabDef, TableDef,
+    TabsDef, TextDef, TextProp, ToggleDef, TooltipDef, TreeDef, UiPartDef, ViewDef, text_prop,
 };
+pub use effect::{
+    AppEffect, AppService, Args, Collect, CommandEffect, CommandKind, ConfirmEffect, EFFECT_NAMES,
+    OpenEffect, PickEffect, UiEffect, UiEffects, ValueProp,
+};
+pub use refresh::{from_var, to_var};
 pub use screen::{
-    BindScope, CONTEXT_DEBUG, Evaluator, LogLine, MessageLog, Screen, UiData, UiEnv, UiError,
-    UiEvent, UiProblem, VarRef, ViewKind, ViewPainter, WidgetEvent,
+    BindScope, CONTEXT_DEBUG, Evaluator, LogLine, MessageLog, Screen, SlotParts, UiData, UiEnv,
+    UiError, UiEvent, UiProblem, VarRef, ViewKind, ViewPainter, WidgetEvent,
 };
 
 /// Navigation name: the previous row, or the line above.

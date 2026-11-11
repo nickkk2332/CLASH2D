@@ -72,6 +72,11 @@ pub(crate) const SITE_MAGIC: &str = "$clash_data::BySite";
 /// was written, its JSON path in the definition, what kind of value it
 /// is and the value itself.
 pub(crate) const SITE_FIELDS: &[&str] = &["file", "start", "end", "path", "kind", "value"];
+/// The reserved name [`by_site_or_plain`](crate::by_site_or_plain) asks
+/// under. It is asked for as a newtype struct, which every deserialiser
+/// answers: this one with what [`by_site`](crate::by_site) is fed, any
+/// other with itself.
+pub(crate) const SITE_OR_PLAIN_MAGIC: &str = "$clash_data::BySiteOrPlain";
 /// The reserved name a duration asks for itself under. It is answered in
 /// whole microseconds.
 pub(crate) const MICROS_MAGIC: &str = "$clash_data::quantity::micros";
@@ -1176,6 +1181,14 @@ impl<'de, 'c> Deserializer<'de> for NodeDe<'c> {
         if let Some(&(_, dim)) = QUANTITY_MAGICS.iter().find(|(magic, _)| *magic == name) {
             return self.quantity(dim, false, visitor);
         }
+        if name == SITE_OR_PLAIN_MAGIC {
+            return visitor.visit_map(SiteDe {
+                node: self.node,
+                cx: self.cx,
+                root: self.root,
+                at: 0,
+            });
+        }
         visitor.visit_newtype_struct(self)
     }
 
@@ -1836,6 +1849,9 @@ impl<'de> Deserializer<'de> for StandIn {
         }
         if QUANTITY_MAGICS.iter().any(|(magic, _)| *magic == name) {
             return visitor.visit_f64(0.0);
+        }
+        if name == SITE_OR_PLAIN_MAGIC {
+            return visitor.visit_map(SiteStandIn { at: 0 });
         }
         visitor.visit_newtype_struct(self)
     }

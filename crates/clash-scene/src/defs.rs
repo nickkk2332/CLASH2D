@@ -1,8 +1,11 @@
 //! Joining this crate's definitions to the mod loader (04 §7 to §9).
 //!
 //! The definition types of this crate (`color`, `theme`, `keymap`,
-//! `figure`, `screen`, `ambience` and `overlay`) are registered with
-//! `clash-data` by [`register_defs`], and [`UiDefs`] is the one way from
+//! `figure`, `screen`, `ui_part`, `preference`, `ambience` and
+//! `overlay`) are registered with `clash-data` by [`register_defs`],
+//! which also adds the step that puts `app` into the expression
+//! registry and the check that every `ui_part` has its slot.
+//! [`UiDefs`] is the one way from
 //! loaded definitions to a [`Theme`], a [`Scene`], a [`Screen`], the
 //! glyph tables a view of the world is drawn with ([`WorldGlyphs`]), an
 //! [`Ambience`] and an [`Overlay`]:
@@ -23,10 +26,7 @@
 //! let mut scene = ui
 //!     .scene("mymod:night", "mymod:keys")
 //!     .map_err(|diagnostics| diagnostics.render())?;
-//! let screen = ui
-//!     .screen("mymod:title", scene.theme())
-//!     .map_err(|diagnostics| diagnostics.render())?;
-//! scene.open(screen);
+//! scene.open_screen("mymod:title", Default::default())?;
 //! # Ok::<(), String>(())
 //! ```
 //!
@@ -62,19 +62,26 @@
 //!   `assets/title.txt`. Every file under a mod's `assets/` whose name
 //!   ends in `.txt` is read as art when a [`UiDefs`] is made.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 
-use clash_core::define_id;
-use clash_data::{Def, DefLabel, DefTypes, Defs, Diagnostic, Diagnostics, Span, code};
+use clash_core::{VarMap, define_id};
+use clash_data::defs::{CrossCx, RegistryCx, ValidateCx};
+use clash_data::{
+    CompileCx, Def, DefLabel, DefTypes, Defs, Diagnostic, Diagnostics, NodeKind as JsonKind, Span,
+    code,
+};
 use clash_world::WorldDefs;
 
 use crate::color::ColorDef;
 use crate::input::KeymapDef;
-use crate::scene::{NoHost, Scene};
+use crate::scene::{NoHost, Scene, SceneHost};
 use crate::theme::{Theme, ThemeDef, ThemeError};
-use crate::ui::{FigureDef, Screen, ScreenDef, UiEnv, UiError, UiProblem};
+use crate::ui::{
+    FigureDef, NodeDef, NodeKind, PreferenceDef, Screen, ScreenDef, SlotParts, UiEnv, UiError,
+    UiPartDef, UiProblem,
+};
 use crate::view::{Ambience, AmbienceDef, GlyphProblem, Overlay, OverlayDef, WorldGlyphs};
 
 define_id! {
@@ -88,6 +95,10 @@ define_id! {
     pub struct FigureId(u16);
     /// A `screen` definition.
     pub struct ScreenId(u16);
+    /// A `ui_part` definition.
+    pub struct UiPartId(u16);
+    /// A `preference` definition.
+    pub struct PreferenceId(u16);
     /// An `ambience` definition.
     pub struct AmbienceId(u16);
     /// An `overlay` definition.
@@ -125,6 +136,33 @@ impl Def for ScreenDef {
     const TYPE: &'static str = "screen";
     const DOC: &'static str =
         "A screen of the interface: its variables, its layout tree and its keys (12 §10.1).";
+
+    fn compile(&mut self, cx: &mut CompileCx<'_>) {
+        self.compile_bindings(cx);
+    }
+}
+
+impl Def for UiPartDef {
+    type Id = UiPartId;
+    const TYPE: &'static str = "ui_part";
+    const DOC: &'static str =
+        "A widget put into a slot of a screen, in `order`, shown while its `if` holds (12 §10.6).";
+
+    fn compile(&mut self, cx: &mut CompileCx<'_>) {
+        self.compile_bindings(cx);
+    }
+}
+
+impl Def for PreferenceDef {
+    type Id = PreferenceId;
+    const TYPE: &'static str = "preference";
+    const DOC: &'static str = "A player's choice about display and input, kept outside saves and invisible to rules (12 §10.4).";
+
+    fn validate(&self, cx: &mut ValidateCx<'_>) {
+        if let Some(problem) = self.problem() {
+            cx.error(problem);
+        }
+    }
 }
 
 impl Def for AmbienceDef {
@@ -142,7 +180,12 @@ impl Def for OverlayDef {
 }
 
 /// Registers this crate's definition types with the loader: `color`,
-/// `theme`, `keymap`, `figure`, `screen`, `ambience` and `overlay`.
+/// `theme`, `keymap`, `figure`, `screen`, `ui_part`, `preference`,
+/// `ambience` and `overlay`. It also adds the step that puts `app` and
+/// what is read through it into the expression registry
+/// ([`crate::app::register_expr`]), so that bindings are checked against
+/// it, and the check that every `ui_part` is aimed at a slot some screen
+/// places.
 ///
 /// The application and the tools call this, with every other crate's
 /// function of the same name, before they load (04 §9).
@@ -152,8 +195,77 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<KeymapDef>();
     types.register::<FigureDef>();
     types.register::<ScreenDef>();
+    types.register::<UiPartDef>();
+    types.register::<PreferenceDef>();
     types.register::<AmbienceDef>();
     types.register::<OverlayDef>();
+    types.add_registry_step(register_app);
+    types.add_cross_check(check_parts);
+}
+
+/// The registry step: `app` and its properties.
+fn register_app(cx: &mut RegistryCx<'_>) {
+    crate::app::register_expr(cx.registry());
+}
+
+/// Calls `f` with the name of every slot a layout places.
+fn each_slot(node: &NodeDef, f: &mut impl FnMut(&str)) {
+    match &node.kind {
+        NodeKind::Slot(name) => f(name),
+        NodeKind::Rows(children) | NodeKind::Cols(children) | NodeKind::Stack(children) => {
+            children.iter().for_each(|child| each_slot(child, f));
+        }
+        NodeKind::Grid(grid) => grid.cells.iter().for_each(|child| each_slot(child, f)),
+        NodeKind::Tabs(tabs) => tabs
+            .pages
+            .iter()
+            .for_each(|page| each_slot(&page.content, f)),
+        NodeKind::Scroll(child) => each_slot(child, f),
+        _ => {}
+    }
+}
+
+/// The cross check: a part aimed at a slot that no screen places is an
+/// error, unless the part says it is optional (12 §10.6).
+fn check_parts(cx: &mut CrossCx<'_>) {
+    let defs = cx.defs();
+    let mut slots = BTreeSet::new();
+    for (id, screen) in defs.iter::<ScreenDef>() {
+        let Some(name) = defs.name::<ScreenDef>(id) else {
+            continue;
+        };
+        let namespace = namespace_of(name);
+        each_slot(&screen.layout, &mut |slot| {
+            slots.insert(format!("{namespace}:{slot}"));
+        });
+    }
+    let mut missing = Vec::new();
+    for (id, part) in defs.iter::<UiPartDef>() {
+        let Some(name) = defs.name::<UiPartDef>(id) else {
+            continue;
+        };
+        let slot = part.slot(namespace_of(name));
+        if !part.optional && !slots.contains(&slot) {
+            missing.push((name.to_owned(), slot, part.into.span));
+        }
+    }
+    for (part, slot, span) in missing {
+        let near = clash_data::diag::closest(&slot, slots.iter().map(String::as_str));
+        let mut diagnostic = Diagnostic::new(
+            code::UNKNOWN_REFERENCE,
+            format!("no screen places a slot `{slot}`"),
+        )
+        .in_def(Some(&DefLabel::new(UiPartDef::TYPE, part)))
+        .with_path("into")
+        .at(cx.sources(), span);
+        diagnostic = match near {
+            Some(near) => diagnostic.suggest(format!("did you mean `{near}`?")),
+            None => diagnostic.suggest(
+                "a slot is named by its screen's namespace and its own name, `namespace:name`; add `\"optional\": true` if the screen may be missing",
+            ),
+        };
+        cx.report(diagnostic);
+    }
 }
 
 /// The directory of a mod that holds its assets.
@@ -162,7 +274,7 @@ const ASSETS_DIR: &str = "assets";
 const ART_EXTENSION: &str = "txt";
 
 /// The namespace of a qualified id, or `""` if it has none.
-fn namespace_of(id: &str) -> &str {
+pub(crate) fn namespace_of(id: &str) -> &str {
     id.split_once(':').map_or("", |(namespace, _)| namespace)
 }
 
@@ -296,6 +408,27 @@ pub struct UiDefs {
     /// The text of each art asset, by the id of its mod and then by its
     /// path within the mod, such as `assets/title.txt`.
     art: BTreeMap<String, BTreeMap<String, String>>,
+    /// What `ui_part` definitions put into each slot, by the slot's
+    /// qualified name, in the order they are shown.
+    parts: Arc<BTreeMap<String, Vec<NodeDef>>>,
+}
+
+/// What every `ui_part` puts into its slot: by order, and among equals
+/// by qualified id.
+fn slot_parts(defs: &Defs) -> BTreeMap<String, Vec<NodeDef>> {
+    let mut found: Vec<(String, i32, &str, &UiPartDef)> = Vec::new();
+    if let Some(registry) = defs.try_registry::<UiPartDef>() {
+        for (id, part) in registry.iter() {
+            let name = registry.name(id);
+            found.push((part.slot(namespace_of(name)), part.order, name, part));
+        }
+    }
+    found.sort_by(|a, b| (&a.0, a.1, a.2).cmp(&(&b.0, b.1, b.2)));
+    let mut parts: BTreeMap<String, Vec<NodeDef>> = BTreeMap::new();
+    for (slot, _, _, part) in found {
+        parts.entry(slot).or_default().push(part.node());
+    }
+    parts
 }
 
 /// Collects the art files under a directory, in sorted order, as paths
@@ -371,7 +504,114 @@ impl UiDefs {
         Ok(UiDefs {
             defs: Arc::clone(defs),
             art,
+            parts: Arc::new(slot_parts(defs)),
         })
+    }
+
+    /// The definition of one of this crate's types with this qualified
+    /// id.
+    pub fn get<T: Def>(&self, id: &str) -> Option<&T> {
+        let found = self.defs.try_registry::<T>()?.lookup(id)?;
+        Some(self.defs.get::<T>(found))
+    }
+
+    /// The qualified id a name means, seen from a definition in
+    /// `namespace`: the name itself if it is a qualified id, or else the
+    /// definition of that bare name in `namespace`, or else the first of
+    /// that name in order of qualified id (decision D-322).
+    pub fn resolve<T: Def>(&self, name: &str, namespace: &str) -> Option<String> {
+        let registry = self.defs.try_registry::<T>()?;
+        if name.contains(':') {
+            return registry.lookup(name).map(|_| name.to_owned());
+        }
+        let own = format!("{namespace}:{name}");
+        if registry.lookup(&own).is_some() {
+            return Some(own);
+        }
+        registry
+            .names()
+            .iter()
+            .find(|known| known.split_once(':').is_some_and(|(_, bare)| bare == name))
+            .cloned()
+    }
+
+    /// Every preference at its default, by qualified id, and then at
+    /// what the profile's `preferences` set. A profile's value for a
+    /// preference that does not exist, or one the preference cannot
+    /// hold, is passed over: the profile is checked by
+    /// [`UiDefs::check`].
+    pub fn pref_defaults(&self) -> VarMap {
+        let mut prefs = VarMap::new();
+        if let Some(registry) = self.defs.try_registry::<PreferenceDef>() {
+            for (id, def) in registry.iter() {
+                prefs.set(registry.name(id), def.default.0.clone());
+            }
+        }
+        for (id, value, _) in self.profile_prefs() {
+            if self
+                .get::<PreferenceDef>(&id)
+                .is_some_and(|def| def.refuses(&value).is_none())
+            {
+                prefs.set(id.as_str(), value);
+            }
+        }
+        prefs
+    }
+
+    /// What the profile's `preferences` say: each id, value and place.
+    fn profile_prefs(&self) -> Vec<(String, clash_core::Value, Span)> {
+        let mut out = Vec::new();
+        let Some(members) = self
+            .defs
+            .profile()
+            .and_then(|profile| profile.preferences.as_ref())
+            .and_then(|node| node.as_object())
+        else {
+            return out;
+        };
+        for member in members {
+            let value = match &member.value.kind {
+                JsonKind::Bool(flag) => clash_core::Value::Bool(*flag),
+                JsonKind::String(text) => clash_core::Value::Str(text.clone()),
+                JsonKind::Number(number) => {
+                    let number = number.as_f64();
+                    if number.fract() == 0.0 && number.abs() < 9.0e15 {
+                        clash_core::Value::Int(number as i64)
+                    } else {
+                        match clash_core::Real::new(number) {
+                            Ok(real) => clash_core::Value::Real(real),
+                            Err(_) => continue,
+                        }
+                    }
+                }
+                _ => continue,
+            };
+            let id = self
+                .resolve::<PreferenceDef>(&member.key, "")
+                .unwrap_or_else(|| member.key.clone());
+            out.push((id, value, member.value.span));
+        }
+        out
+    }
+
+    /// The screen the profile names for each role (12 §10.7), by
+    /// qualified id.
+    pub fn profile_roles(&self) -> BTreeMap<String, String> {
+        let mut roles = BTreeMap::new();
+        let Some(members) = self
+            .defs
+            .profile()
+            .and_then(|profile| profile.screens.as_ref())
+            .and_then(|node| node.as_object())
+        else {
+            return roles;
+        };
+        for member in members {
+            if let Some(screen) = member.value.as_str() {
+                roles.insert(member.key.clone(), screen.to_owned());
+            }
+        }
+        roles
     }
 
     /// The loaded definitions these were taken from.
@@ -433,12 +673,26 @@ impl UiDefs {
     }
 
     /// A scene with no simulation behind it, using the theme and the
-    /// keymap with these qualified ids.
+    /// keymap with these qualified ids. It holds these definitions, so
+    /// it can open screens by id, evaluate bindings and run effects.
     pub fn scene(&self, theme: &str, keymap: &str) -> Result<Scene<NoHost>, Diagnostics> {
+        self.scene_over(NoHost, theme, keymap)
+    }
+
+    /// A scene over a host, using the theme and the keymap with these
+    /// qualified ids, holding these definitions.
+    pub fn scene_over<H: SceneHost>(
+        &self,
+        host: H,
+        theme: &str,
+        keymap: &str,
+    ) -> Result<Scene<H>, Diagnostics> {
         let built = self.theme(theme);
         let found = self.keymap(keymap);
         match (built, found) {
-            (Ok(theme), Ok(keymap)) => Ok(Scene::new(NoHost, theme, keymap.clone())),
+            (Ok(theme), Ok(keymap)) => {
+                Ok(Scene::new(host, theme, keymap.clone()).with_defs(self.clone()))
+            }
             (theme, keymap) => {
                 let mut diagnostics = Diagnostics::new();
                 if let Err(errors) = theme {
@@ -477,7 +731,11 @@ impl UiDefs {
             figures: &figures,
             art: self.art.get(namespace).unwrap_or(&no_art),
         };
-        Screen::new(id, def, &env).map_err(|errors| {
+        let slots = SlotParts {
+            namespace,
+            parts: &self.parts,
+        };
+        Screen::with_slots(id, def, &env, &slots).map_err(|errors| {
             for UiError { path, problem, .. } in &errors {
                 let of_theme =
                     matches!(problem, UiProblem::UnknownStyle { .. } | UiProblem::Text(_));
@@ -672,8 +930,55 @@ impl UiDefs {
                 with_each_theme(&|theme| self.world_glyphs(&world, theme).err());
             }
         }
+        self.check_profile(&mut diagnostics);
         diagnostics.sort();
         diagnostics
+    }
+}
+
+impl UiDefs {
+    /// What the profile says about the interface: a role must name a
+    /// screen, and a preference must exist and be able to hold what the
+    /// profile sets it to.
+    fn check_profile(&self, diagnostics: &mut Diagnostics) {
+        let defs = &*self.defs;
+        let members = defs
+            .profile()
+            .and_then(|profile| profile.screens.as_ref())
+            .and_then(|node| node.as_object())
+            .unwrap_or(&[]);
+        for member in members {
+            let found = member
+                .value
+                .as_str()
+                .and_then(|screen| self.get::<ScreenDef>(screen));
+            if found.is_none() {
+                let written = member.value.as_str().unwrap_or("");
+                diagnostics.push(
+                    unknown::<ScreenDef>(defs, written)
+                        .with_path(format!("screens.{}", member.key))
+                        .at(defs.sources(), member.value.span),
+                );
+            }
+        }
+        for (id, value, span) in self.profile_prefs() {
+            let problem = match self.get::<PreferenceDef>(&id) {
+                None => Some(unknown::<PreferenceDef>(defs, &id)),
+                Some(def) => def.refuses(&value).map(|reason| {
+                    Diagnostic::new(
+                        code::VALIDATION,
+                        format!("the preference `{id}` cannot be {value}: {reason}"),
+                    )
+                }),
+            };
+            if let Some(problem) = problem {
+                diagnostics.push(
+                    problem
+                        .with_path(format!("preferences.{id}"))
+                        .at(defs.sources(), span),
+                );
+            }
+        }
     }
 }
 
@@ -733,7 +1038,15 @@ mod tests {
         assert_eq!(
             types.names(),
             [
-                "ambience", "color", "figure", "keymap", "overlay", "screen", "theme"
+                "ambience",
+                "color",
+                "figure",
+                "keymap",
+                "overlay",
+                "preference",
+                "screen",
+                "theme",
+                "ui_part"
             ]
         );
         for info in types.infos() {
@@ -753,8 +1066,8 @@ mod tests {
         assert_eq!(theme.color("crimson"), theme.color("demo:crimson"));
         assert_eq!(theme.color_word("crimson"), Some("red"));
         let mut scene = ui.scene("demo:plain", "demo:keys").unwrap();
-        let screen = ui.screen("demo:hello", scene.theme()).unwrap();
-        scene.open(screen);
+        scene.open_screen("demo:hello", BTreeMap::new()).unwrap();
+        assert_eq!(scene.top().unwrap().id(), "demo:hello");
         assert!(ui.check().is_empty(), "{}", ui.check().render());
         assert!(check_defs(&defs).is_empty());
     }

@@ -1,31 +1,47 @@
 //! The definition types of the interface toolkit: `screen`, its layout
-//! nodes and every widget's fields (12 §10.1 to §10.3), and `figure`.
+//! nodes and every widget's fields (12 §10.1 to §10.3), `figure`,
+//! `ui_part` and `preference`.
 //!
 //! These are what a mod writes, read with `serde`. Field names are the
 //! JSON keys. Nothing here is checked against a theme or laid out; that
 //! happens when a [`Screen`](super::Screen) is made from a definition.
+//!
+//! A property that may be computed is a [`Prop`]. Read by the mod
+//! loader, a bound one knows where it was written, and its screen
+//! compiles it with the loader's other expression fields
+//! ([`ScreenDef::compile_bindings`]). Read by anything else, with
+//! `serde_json` in a test, it is held as written and never compiled.
 
 use core::fmt;
 use std::collections::BTreeMap;
 
 use clash_core::{Real, Value};
+use clash_data::{CompileCx, FromSite, Kind, KindValue, Located, Site, by_site_or_plain};
+use clash_expr::Type;
 use serde::Deserialize;
 use serde::de::value::{MapAccessDeserializer, SeqAccessDeserializer};
-use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 
 use crate::input::KeyChord;
 
+use super::bind::{
+    BindCx, Binding, ExprObject, ItType, ParamType, TYPE_PARTY_MEMBER, element_type,
+};
+pub use super::effect::UiEffects;
+use super::screen::CONTEXT_DEBUG;
+
 /// A widget property that is either written outright or computed.
 ///
-/// Bindings are package U6b. Until then a `Bound` property holds its
-/// source unparsed and the toolkit shows a placeholder for it; see
-/// [`Evaluator`](super::Evaluator).
+/// A `Bound` property holds its [`Binding`]: the source of an expression
+/// or a text template and, once the screen's definition has been
+/// compiled, the compiled form. A screen shows a placeholder for one
+/// that was never compiled or never evaluated.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Prop<T> {
     /// A value written in the definition.
     Static(T),
-    /// The source of an expression or template, not yet parsed.
-    Bound(String),
+    /// An expression or a text template.
+    Bound(Binding),
 }
 
 impl<T: Default> Default for Prop<T> {
@@ -52,6 +68,11 @@ pub type TextProp = Prop<String>;
 
 /// Reads a text field's string: bound if it has a template in braces.
 pub fn text_prop(source: &str) -> TextProp {
+    text_prop_at(source, None)
+}
+
+/// Reads a text field's string written at `site`.
+fn text_prop_at(source: &str, site: Option<Site>) -> TextProp {
     let mut chars = source.chars().peekable();
     let mut plain = String::with_capacity(source.len());
     while let Some(ch) = chars.next() {
@@ -60,125 +81,297 @@ pub fn text_prop(source: &str) -> TextProp {
                 chars.next();
                 plain.push(ch);
             }
-            '{' => return Prop::Bound(source.to_owned()),
+            '{' => {
+                return Prop::Bound(match site {
+                    Some(site) => Binding::sited(source, site),
+                    None => Binding::unsited(source),
+                });
+            }
             other => plain.push(other),
         }
     }
     Prop::Static(plain)
 }
 
-/// `{ "expr": "…" }`, the long way to write an expression (04 §7.1).
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ExprObject {
-    expr: String,
-}
-
-impl<'de> Deserialize<'de> for Prop<String> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct TextVisitor;
-        impl Visitor<'_> for TextVisitor {
-            type Value = Prop<String>;
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("a text")
-            }
-            fn visit_str<E: de::Error>(self, text: &str) -> Result<Prop<String>, E> {
-                Ok(text_prop(text))
-            }
+impl Prop<String> {
+    /// Compiles the text's template, if it has one.
+    pub(crate) fn compile(&mut self, bx: &mut BindCx<'_, '_>) {
+        if let Prop::Bound(binding) = self {
+            binding.compile_text(bx);
         }
-        deserializer.deserialize_str(TextVisitor)
     }
 }
 
-impl<'de> Deserialize<'de> for Prop<bool> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct FlagVisitor;
-        impl<'de> Visitor<'de> for FlagVisitor {
-            type Value = Prop<bool>;
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("true, false, or a condition as a string or `{ \"expr\": … }`")
-            }
-            fn visit_bool<E: de::Error>(self, value: bool) -> Result<Prop<bool>, E> {
-                Ok(Prop::Static(value))
-            }
-            fn visit_str<E: de::Error>(self, source: &str) -> Result<Prop<bool>, E> {
-                Ok(Prop::Bound(source.to_owned()))
-            }
-            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Prop<bool>, A::Error> {
-                ExprObject::deserialize(MapAccessDeserializer::new(map))
-                    .map(|e| Prop::Bound(e.expr))
-            }
+impl Prop<f64> {
+    /// Compiles the number's expression, if it is one.
+    pub(crate) fn compile(&mut self, bx: &mut BindCx<'_, '_>) {
+        if let Prop::Bound(binding) = self {
+            binding.compile_expr(bx, &Type::Real.nullable());
         }
-        deserializer.deserialize_any(FlagVisitor)
     }
 }
 
-impl<'de> Deserialize<'de> for Prop<f64> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct NumberVisitor;
-        impl<'de> Visitor<'de> for NumberVisitor {
-            type Value = Prop<f64>;
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("a number, or an expression as a string or `{ \"expr\": … }`")
-            }
-            fn visit_i64<E: de::Error>(self, value: i64) -> Result<Prop<f64>, E> {
-                Ok(Prop::Static(value as f64))
-            }
-            fn visit_u64<E: de::Error>(self, value: u64) -> Result<Prop<f64>, E> {
-                Ok(Prop::Static(value as f64))
-            }
-            fn visit_f64<E: de::Error>(self, value: f64) -> Result<Prop<f64>, E> {
-                Ok(Prop::Static(value))
-            }
-            fn visit_str<E: de::Error>(self, source: &str) -> Result<Prop<f64>, E> {
-                Ok(Prop::Bound(source.to_owned()))
-            }
-            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Prop<f64>, A::Error> {
-                ExprObject::deserialize(MapAccessDeserializer::new(map))
-                    .map(|e| Prop::Bound(e.expr))
-            }
+impl Prop<bool> {
+    /// Compiles the condition, if it is an expression.
+    pub(crate) fn compile(&mut self, bx: &mut BindCx<'_, '_>) {
+        if let Prop::Bound(binding) = self {
+            binding.compile_expr(bx, &Type::Bool.nullable());
         }
-        deserializer.deserialize_any(NumberVisitor)
     }
 }
 
-impl<'de> Deserialize<'de> for Prop<Vec<String>> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct NamesVisitor;
-        impl<'de> Visitor<'de> for NamesVisitor {
-            type Value = Prop<Vec<String>>;
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("a list of names, or an expression as a string")
-            }
-            fn visit_str<E: de::Error>(self, source: &str) -> Result<Prop<Vec<String>>, E> {
-                Ok(Prop::Bound(source.to_owned()))
-            }
-            fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Prop<Vec<String>>, A::Error> {
-                Vec::deserialize(SeqAccessDeserializer::new(seq)).map(Prop::Static)
+/// Implements `Deserialize` for a property: with its place under the
+/// mod loader, through `FromSite`, and with a plain visitor otherwise.
+macro_rules! dual_mode {
+    ($ty:ty, $plain:ident) => {
+        impl<'de> Deserialize<'de> for $ty {
+            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                by_site_or_plain(deserializer, $plain)
             }
         }
-        deserializer.deserialize_any(NamesVisitor)
+    };
+}
+
+/// A bound property written as `{ "expr": "…" }`, outside the loader.
+fn plain_expr<'de, T, A: MapAccess<'de>>(map: A) -> Result<Prop<T>, A::Error> {
+    ExprObject::deserialize(MapAccessDeserializer::new(map)).map(|e| Prop::Bound(e.expr))
+}
+
+/// A bound property written as a string or `{ "expr": "…" }`, under
+/// the loader.
+fn sited_expr<'de, T, A: MapAccess<'de>>(
+    site: Site,
+    kind: Kind,
+    value: KindValue<'_, A>,
+) -> Result<Prop<T>, A::Error> {
+    match kind {
+        Kind::Object => value.read::<ExprObject>().map(|e| Prop::Bound(e.expr)),
+        _ => Ok(Prop::Bound(Binding::sited(value.read::<String>()?, site))),
     }
 }
 
-impl<'de> Deserialize<'de> for Prop<BTreeMap<String, String>> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct ShadeVisitor;
-        impl<'de> Visitor<'de> for ShadeVisitor {
-            type Value = Prop<BTreeMap<String, String>>;
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("an object of names, or an expression as a string")
-            }
-            fn visit_str<E: de::Error>(self, source: &str) -> Result<Self::Value, E> {
-                Ok(Prop::Bound(source.to_owned()))
-            }
-            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
-                BTreeMap::deserialize(MapAccessDeserializer::new(map)).map(Prop::Static)
-            }
-        }
-        deserializer.deserialize_any(ShadeVisitor)
+struct TextVisitor;
+
+impl Visitor<'_> for TextVisitor {
+    type Value = Prop<String>;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a text")
+    }
+    fn visit_str<E: de::Error>(self, text: &str) -> Result<Prop<String>, E> {
+        Ok(text_prop(text))
     }
 }
+
+impl<'de> FromSite<'de> for Prop<String> {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        _kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        // Whatever the kind, it is read as a string, so that a value of
+        // another kind is reported as any wrong value is.
+        let text = value.read::<String>()?;
+        Ok(text_prop_at(&text, Some(site)))
+    }
+}
+
+dual_mode!(Prop<String>, TextVisitor);
+
+struct FlagVisitor;
+
+impl<'de> Visitor<'de> for FlagVisitor {
+    type Value = Prop<bool>;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("true, false, or a condition as a string or `{ \"expr\": … }`")
+    }
+    fn visit_bool<E: de::Error>(self, value: bool) -> Result<Prop<bool>, E> {
+        Ok(Prop::Static(value))
+    }
+    fn visit_str<E: de::Error>(self, source: &str) -> Result<Prop<bool>, E> {
+        Ok(Prop::Bound(Binding::unsited(source)))
+    }
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Prop<bool>, A::Error> {
+        plain_expr(map)
+    }
+}
+
+impl<'de> FromSite<'de> for Prop<bool> {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        match kind {
+            Kind::Bool => value.read::<bool>().map(Prop::Static),
+            Kind::Null => value.read::<IgnoredAny>().map(|_| Prop::Static(true)),
+            Kind::String | Kind::Object => sited_expr(site, kind, value),
+            other => Err(other.unexpected(
+                "true, false, or a condition as a string or `{ \"expr\": … }`",
+            )),
+        }
+    }
+}
+
+dual_mode!(Prop<bool>, FlagVisitor);
+
+struct NumberVisitor;
+
+impl<'de> Visitor<'de> for NumberVisitor {
+    type Value = Prop<f64>;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a number, or an expression as a string or `{ \"expr\": … }`")
+    }
+    fn visit_i64<E: de::Error>(self, value: i64) -> Result<Prop<f64>, E> {
+        Ok(Prop::Static(value as f64))
+    }
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<Prop<f64>, E> {
+        Ok(Prop::Static(value as f64))
+    }
+    fn visit_f64<E: de::Error>(self, value: f64) -> Result<Prop<f64>, E> {
+        Ok(Prop::Static(value))
+    }
+    fn visit_str<E: de::Error>(self, source: &str) -> Result<Prop<f64>, E> {
+        Ok(Prop::Bound(Binding::unsited(source)))
+    }
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Prop<f64>, A::Error> {
+        plain_expr(map)
+    }
+}
+
+impl<'de> FromSite<'de> for Prop<f64> {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        match kind {
+            Kind::Number => value.read::<f64>().map(Prop::Static),
+            Kind::Null => value.read::<IgnoredAny>().map(|_| Prop::Static(0.0)),
+            Kind::String | Kind::Object => sited_expr(site, kind, value),
+            other => Err(other
+                .unexpected("a number, or an expression as a string or `{ \"expr\": … }`")),
+        }
+    }
+}
+
+dual_mode!(Prop<f64>, NumberVisitor);
+
+struct NamesVisitor;
+
+impl<'de> Visitor<'de> for NamesVisitor {
+    type Value = Prop<Vec<String>>;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a list of names, or an expression as a string")
+    }
+    fn visit_str<E: de::Error>(self, source: &str) -> Result<Prop<Vec<String>>, E> {
+        Ok(Prop::Bound(Binding::unsited(source)))
+    }
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Prop<Vec<String>>, A::Error> {
+        Vec::deserialize(SeqAccessDeserializer::new(seq)).map(Prop::Static)
+    }
+}
+
+impl<'de> FromSite<'de> for Prop<Vec<String>> {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        match kind {
+            Kind::List => value.read::<Vec<String>>().map(Prop::Static),
+            Kind::Null => value.read::<IgnoredAny>().map(|_| Prop::Static(Vec::new())),
+            Kind::String | Kind::Object => sited_expr(site, kind, value),
+            other => Err(other.unexpected("a list of names, or an expression as a string")),
+        }
+    }
+}
+
+dual_mode!(Prop<Vec<String>>, NamesVisitor);
+
+struct ShadeVisitor;
+
+impl<'de> Visitor<'de> for ShadeVisitor {
+    type Value = Prop<BTreeMap<String, String>>;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("an object of names, or an expression as a string")
+    }
+    fn visit_str<E: de::Error>(self, source: &str) -> Result<Self::Value, E> {
+        Ok(Prop::Bound(Binding::unsited(source)))
+    }
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+        BTreeMap::deserialize(MapAccessDeserializer::new(map)).map(Prop::Static)
+    }
+}
+
+impl<'de> FromSite<'de> for Prop<BTreeMap<String, String>> {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        match kind {
+            Kind::Object => value
+                .read::<BTreeMap<String, String>>()
+                .map(Prop::Static),
+            Kind::Null => value
+                .read::<IgnoredAny>()
+                .map(|_| Prop::Static(BTreeMap::new())),
+            Kind::String => sited_expr(site, kind, value),
+            other => Err(other.unexpected("an object of names, or an expression as a string")),
+        }
+    }
+}
+
+dual_mode!(Prop<BTreeMap<String, String>>, ShadeVisitor);
+
+struct ValueVisitor;
+
+impl<'de> Visitor<'de> for ValueVisitor {
+    type Value = Prop<Literal>;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("true, false, a number, or an expression as a string")
+    }
+    fn visit_bool<E: de::Error>(self, value: bool) -> Result<Prop<Literal>, E> {
+        Ok(Prop::Static(Literal(Value::Bool(value))))
+    }
+    fn visit_i64<E: de::Error>(self, value: i64) -> Result<Prop<Literal>, E> {
+        Ok(Prop::Static(Literal(Value::Int(value))))
+    }
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<Prop<Literal>, E> {
+        i64::try_from(value)
+            .map(|v| Prop::Static(Literal(Value::Int(v))))
+            .map_err(|_| E::custom(format!("{value} is too large for an integer")))
+    }
+    fn visit_f64<E: de::Error>(self, value: f64) -> Result<Prop<Literal>, E> {
+        Real::new(value)
+            .map(|v| Prop::Static(Literal(Value::Real(v))))
+            .map_err(E::custom)
+    }
+    fn visit_str<E: de::Error>(self, source: &str) -> Result<Prop<Literal>, E> {
+        Ok(Prop::Bound(Binding::unsited(source)))
+    }
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Prop<Literal>, A::Error> {
+        plain_expr(map)
+    }
+}
+
+impl<'de> FromSite<'de> for Prop<Literal> {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        match kind {
+            Kind::Bool | Kind::Number => value.read::<Literal>().map(Prop::Static),
+            Kind::String | Kind::Object => sited_expr(site, kind, value),
+            other => {
+                Err(other.unexpected("true, false, a number, or an expression as a string"))
+            }
+        }
+    }
+}
+
+dual_mode!(Prop<Literal>, ValueVisitor);
 
 /// A literal value in a definition: `true`, `3`, `0.5` or `"text"`.
 #[derive(Clone, Debug, PartialEq)]
@@ -213,30 +406,6 @@ impl<'de> Deserialize<'de> for Literal {
             }
         }
         deserializer.deserialize_any(LiteralVisitor)
-    }
-}
-
-/// A list of interface effects (12 §10.5), held as written.
-///
-/// Effects are package U6b: until then they are kept unparsed, and the
-/// toolkit hands them back in a [`UiEvent`](super::UiEvent) when the key
-/// is pressed or the widget activated.
-#[derive(Clone, Debug, PartialEq, Default, Deserialize)]
-#[serde(transparent)]
-pub struct UiEffects(pub Vec<serde_json::Value>);
-
-impl UiEffects {
-    /// Whether the list has no effects.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// The name of each effect in the list: the one key of each object,
-    /// such as `close` in `{ "close": {} }`.
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.0
-            .iter()
-            .filter_map(|effect| effect.as_object()?.keys().next().map(String::as_str))
     }
 }
 
@@ -390,9 +559,10 @@ string_or_object!(RowDef, "a row: a text, a list of cell texts, or an object",
 pub enum RowsDef {
     /// Rows written in the definition, as a JSON list.
     Static(Vec<RowDef>),
-    /// A query or an expression giving a list, held unparsed: a string as
-    /// written, or a query object as compact JSON.
-    Bound(String),
+    /// An expression giving a list, or a query. A query written as an
+    /// object is kept as compact JSON until queries are built (05 §11),
+    /// and gives no rows.
+    Bound(Binding),
 }
 
 impl Default for RowsDef {
@@ -401,28 +571,49 @@ impl Default for RowsDef {
     }
 }
 
-impl<'de> Deserialize<'de> for RowsDef {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct RowsVisitor;
-        impl<'de> Visitor<'de> for RowsVisitor {
-            type Value = RowsDef;
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("a list of rows, or a query as a string or an object")
-            }
-            fn visit_str<E: de::Error>(self, source: &str) -> Result<RowsDef, E> {
-                Ok(RowsDef::Bound(source.to_owned()))
-            }
-            fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<RowsDef, A::Error> {
-                Vec::deserialize(SeqAccessDeserializer::new(seq)).map(RowsDef::Static)
-            }
-            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<RowsDef, A::Error> {
-                serde_json::Value::deserialize(MapAccessDeserializer::new(map))
-                    .map(|query| RowsDef::Bound(query.to_string()))
-            }
-        }
-        deserializer.deserialize_any(RowsVisitor)
+struct RowsVisitor;
+
+impl<'de> Visitor<'de> for RowsVisitor {
+    type Value = RowsDef;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a list of rows, or a query as a string or an object")
+    }
+    fn visit_str<E: de::Error>(self, source: &str) -> Result<RowsDef, E> {
+        Ok(RowsDef::Bound(Binding::unsited(source)))
+    }
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<RowsDef, A::Error> {
+        Vec::deserialize(SeqAccessDeserializer::new(seq)).map(RowsDef::Static)
+    }
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<RowsDef, A::Error> {
+        serde_json::Value::deserialize(MapAccessDeserializer::new(map))
+            .map(|query| RowsDef::Bound(Binding::query(query.to_string(), Site::default())))
     }
 }
+
+impl<'de> FromSite<'de> for RowsDef {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        match kind {
+            Kind::List => value.read::<Vec<RowDef>>().map(RowsDef::Static),
+            Kind::Null => value.read::<IgnoredAny>().map(|_| RowsDef::default()),
+            Kind::String => Ok(RowsDef::Bound(Binding::sited(
+                value.read::<String>()?,
+                site,
+            ))),
+            Kind::Object => value
+                .read::<serde_json::Value>()
+                .map(|query| RowsDef::Bound(Binding::query(query.to_string(), site))),
+            other => {
+                Err(other.unexpected("a list of rows, or a query as a string or an object"))
+            }
+        }
+    }
+}
+
+dual_mode!(RowsDef, RowsVisitor);
 
 /// One column of a `table`.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -463,28 +654,47 @@ string_or_object!(OptionDef, "an option: a text, or an object with `value` and `
 pub enum OptionsDef {
     /// Options written in the definition.
     Static(Vec<OptionDef>),
-    /// An expression giving the options, held unparsed.
-    Bound(String),
+    /// An expression giving the options: a list of values, each shown as
+    /// text, or of maps with `value` and `label`.
+    Bound(Binding),
 }
 
-impl<'de> Deserialize<'de> for OptionsDef {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct OptionsVisitor;
-        impl<'de> Visitor<'de> for OptionsVisitor {
-            type Value = OptionsDef;
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("a list of options, or an expression as a string")
-            }
-            fn visit_str<E: de::Error>(self, source: &str) -> Result<OptionsDef, E> {
-                Ok(OptionsDef::Bound(source.to_owned()))
-            }
-            fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<OptionsDef, A::Error> {
-                Vec::deserialize(SeqAccessDeserializer::new(seq)).map(OptionsDef::Static)
-            }
-        }
-        deserializer.deserialize_any(OptionsVisitor)
+struct OptionsVisitor;
+
+impl<'de> Visitor<'de> for OptionsVisitor {
+    type Value = OptionsDef;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a list of options, or an expression as a string")
+    }
+    fn visit_str<E: de::Error>(self, source: &str) -> Result<OptionsDef, E> {
+        Ok(OptionsDef::Bound(Binding::unsited(source)))
+    }
+    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<OptionsDef, A::Error> {
+        Vec::deserialize(SeqAccessDeserializer::new(seq)).map(OptionsDef::Static)
     }
 }
+
+impl<'de> FromSite<'de> for OptionsDef {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error> {
+        match kind {
+            Kind::List => value.read::<Vec<OptionDef>>().map(OptionsDef::Static),
+            Kind::Null => value
+                .read::<IgnoredAny>()
+                .map(|_| OptionsDef::Static(Vec::new())),
+            Kind::String => Ok(OptionsDef::Bound(Binding::sited(
+                value.read::<String>()?,
+                site,
+            ))),
+            other => Err(other.unexpected("a list of options, or an expression as a string")),
+        }
+    }
+}
+
+dual_mode!(OptionsDef, OptionsVisitor);
 
 /// The fields every widget has (12 §10.3), and every layout node may
 /// carry.
@@ -650,9 +860,9 @@ widget_def! {
         #[serde(default)]
         pub item: Option<TextProp>,
         /// For rows from a query: an expression giving the rows beneath a
-        /// row, `it`. Held unparsed until bindings are built.
+        /// row, `it`.
         #[serde(default)]
-        pub children: Option<String>,
+        pub children: Option<Binding>,
         /// What is shown when there are no rows.
         #[serde(default)]
         pub empty: Option<TextProp>,
@@ -813,7 +1023,7 @@ widget_def! {
         /// An expression giving what the view is centred on. Left out,
         /// the camera's subject.
         #[serde(default)]
-        pub centre: Option<String>,
+        pub centre: Option<Binding>,
         /// How far the view is zoomed out: 1 shows one cell per cell.
         #[serde(default = "one")]
         pub zoom: Prop<f64>,
@@ -845,9 +1055,10 @@ widget_def! {
     /// `inspect`: a browsable list of a subject's properties.
     pub struct InspectDef {
         /// An expression giving the subject whose properties are listed.
-        /// Held unparsed until bindings are built.
+        /// It is compiled; listing a subject's properties comes with the
+        /// inspector (tooling plan).
         #[serde(default)]
-        pub of: Option<String>,
+        pub of: Option<Binding>,
         /// Properties written out instead: rows with `label`, `value` and
         /// `children`.
         #[serde(default)]
@@ -1374,6 +1585,509 @@ pub struct ScreenDef {
     /// is pressed and no widget used it: each a list of effects.
     #[serde(default)]
     pub keys: BTreeMap<String, UiEffects>,
+    /// `popup`: the screen does not fill the frame. It is drawn over the
+    /// screens beneath it, which stay on show.
+    #[serde(default)]
+    pub popup: Option<PopupDef>,
+}
+
+/// Where a popup sits in the frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Place {
+    /// In the middle.
+    #[default]
+    #[serde(alias = "center")]
+    Centre,
+    /// Against the top edge, in the middle of it.
+    Top,
+    /// Against the bottom edge.
+    Bottom,
+    /// Against the left edge.
+    Left,
+    /// Against the right edge.
+    Right,
+    /// In the top left corner.
+    TopLeft,
+    /// In the top right corner.
+    TopRight,
+    /// In the bottom left corner.
+    BottomLeft,
+    /// In the bottom right corner.
+    BottomRight,
+}
+
+/// `popup`: the size and place of a screen that does not fill the frame
+/// (12 §10.1).
+///
+/// ```json
+/// "popup": { "width": 40, "height": "fit", "place": "centre", "dim": true }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PopupDef {
+    /// The popup's width: cells, a percentage of the frame, or `"fit"`.
+    /// Left out, it fits its content.
+    #[serde(default)]
+    pub width: Option<Size>,
+    /// The popup's height, likewise.
+    #[serde(default)]
+    pub height: Option<Size>,
+    /// Where it sits in the frame. Left out, in the middle.
+    #[serde(default)]
+    pub place: Place,
+    /// Whether everything beneath it is drawn dimmed.
+    #[serde(default)]
+    pub dim: bool,
+}
+
+/// A `ui_part` definition (12 §10.6): a widget another mod puts into a
+/// slot of a screen.
+///
+/// ```json
+/// { "type": "ui_part", "id": "mana_bar", "into": "ui:hud.bars", "order": 20,
+///   "if": "view.has_trait('attuned')",
+///   "widget": { "bar": { "label": "Mana", "value": "view.pool('mana').frac" } } }
+/// ```
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UiPartDef {
+    /// The slot, by its qualified name: the namespace of the screen that
+    /// places it, a colon, and the slot's name, as in `ui:hud.bars`. A
+    /// bare name means a slot of the part's own mod.
+    pub into: Located<String>,
+    /// Where the part comes among the others in the slot: lower first,
+    /// and parts of equal order by qualified id. Left out, 0.
+    #[serde(default)]
+    pub order: i32,
+    /// `if`: the part is shown, and takes space, only while this holds.
+    #[serde(default, rename = "if")]
+    pub show_if: Option<Prop<bool>>,
+    /// Whether the slot may be missing. Left out, a part aimed at a slot
+    /// that does not exist is a load error.
+    #[serde(default)]
+    pub optional: bool,
+    /// The widget, or any layout node.
+    pub widget: NodeDef,
+}
+
+impl UiPartDef {
+    /// The qualified name of the slot the part goes into, for a part
+    /// defined in `namespace`.
+    pub fn slot(&self, namespace: &str) -> String {
+        if self.into.value.contains(':') {
+            self.into.value.clone()
+        } else {
+            format!("{namespace}:{}", self.into.value)
+        }
+    }
+
+    /// The part as the node that is put into its slot: its widget, shown
+    /// only while the part's `if` holds.
+    pub(crate) fn node(&self) -> NodeDef {
+        let Some(condition) = &self.show_if else {
+            return self.widget.clone();
+        };
+        if self.widget.common.show_if.is_none() {
+            let mut node = self.widget.clone();
+            node.common.show_if = Some(condition.clone());
+            return node;
+        }
+        // Both must hold: the part's condition goes on a node around the
+        // widget, which keeps its own.
+        NodeDef {
+            common: CommonDef {
+                show_if: Some(condition.clone()),
+                ..CommonDef::default()
+            },
+            width: None,
+            height: None,
+            fill: self.widget.fill,
+            fit: self.widget.fit,
+            frame: None,
+            kind: NodeKind::Rows(vec![self.widget.clone()]),
+        }
+    }
+
+    /// Compiles the part's bindings. A part may be placed in any screen,
+    /// so it sees `view`, `party`, `app` and the screen's variables, not
+    /// its parameters, and is held to what an ordinary screen may know.
+    pub fn compile_bindings(&mut self, cx: &mut CompileCx<'_>) {
+        let mut bx = BindCx {
+            cx,
+            debug: false,
+            params: Vec::new(),
+            vars: None,
+            it: None,
+        };
+        if let Some(condition) = &mut self.show_if {
+            condition.compile(&mut bx);
+        }
+        self.widget.compile(&mut bx);
+    }
+}
+
+/// What kind of value a preference holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrefKind {
+    /// True or false.
+    Flag,
+    /// A number, within `min` and `max` if they are given.
+    Number,
+    /// A text.
+    Text,
+    /// One of the texts in `options`.
+    Choice,
+}
+
+/// A `preference` definition (12 §10.4): a player's choice about display
+/// and input, kept outside saves and invisible to rules.
+///
+/// ```json
+/// { "type": "preference", "id": "damage_numbers", "kind": "flag", "default": false,
+///   "name": "Show damage numbers", "doc": "Float the energy of each hit over its target." }
+/// ```
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PreferenceDef {
+    /// What kind of value it holds: `flag`, `number`, `text` or
+    /// `choice`.
+    pub kind: PrefKind,
+    /// The value it has until the player or a profile sets one.
+    pub default: Literal,
+    /// For a `choice`: the texts it may hold.
+    #[serde(default)]
+    pub options: Vec<String>,
+    /// For a `number`: the least value it may hold.
+    #[serde(default)]
+    pub min: Option<f64>,
+    /// For a `number`: the greatest value it may hold.
+    #[serde(default)]
+    pub max: Option<f64>,
+    /// What the preference is called where the player sets it.
+    #[serde(default)]
+    pub name: String,
+    /// What it does, for the options screen and the reference.
+    #[serde(default)]
+    pub doc: String,
+}
+
+impl PreferenceDef {
+    /// Why `value` cannot be this preference's value, if it cannot.
+    pub fn refuses(&self, value: &Value) -> Option<String> {
+        match (self.kind, value) {
+            (PrefKind::Flag, Value::Bool(_)) | (PrefKind::Text, Value::Str(_)) => None,
+            (PrefKind::Number, Value::Int(_) | Value::Real(_)) => {
+                let number = match value {
+                    Value::Int(n) => *n as f64,
+                    Value::Real(r) => r.get(),
+                    _ => 0.0,
+                };
+                if self.min.is_some_and(|min| number < min) {
+                    Some(format!("{value} is below the least it may be"))
+                } else if self.max.is_some_and(|max| number > max) {
+                    Some(format!("{value} is above the most it may be"))
+                } else {
+                    None
+                }
+            }
+            (PrefKind::Choice, Value::Str(text)) => (!self.options.contains(text)).then(|| {
+                format!(
+                    "`{text}` is not one of its options ({})",
+                    self.options.join(", ")
+                )
+            }),
+            (kind, other) => Some(format!(
+                "it holds {}, not {}",
+                match kind {
+                    PrefKind::Flag => "true or false",
+                    PrefKind::Number => "a number",
+                    PrefKind::Text | PrefKind::Choice => "a text",
+                },
+                other.type_name()
+            )),
+        }
+    }
+
+    /// What is wrong with the definition itself, if anything.
+    pub fn problem(&self) -> Option<String> {
+        if self.kind == PrefKind::Choice && self.options.is_empty() {
+            return Some("a `choice` needs `options`".to_owned());
+        }
+        if self.kind != PrefKind::Choice && !self.options.is_empty() {
+            return Some("`options` belongs with the kind `choice`".to_owned());
+        }
+        if let (Some(min), Some(max)) = (self.min, self.max)
+            && min > max
+        {
+            return Some("`min` is above `max`".to_owned());
+        }
+        self.refuses(&self.default.0)
+            .map(|reason| format!("the default cannot be its value: {reason}"))
+    }
+}
+
+/// What `it` is for the rows of a listing written out: the row's label.
+fn label_it() -> ItType {
+    ItType {
+        ty: Type::Str,
+        own: false,
+    }
+}
+
+impl RowDef {
+    fn compile(&mut self, bx: &mut BindCx<'_, '_>) {
+        self.label.compile(bx);
+        if let Some(value) = &mut self.value {
+            value.compile(bx);
+        }
+        for cell in &mut self.cells {
+            cell.compile(bx);
+        }
+        if let Some(tip) = &mut self.tip {
+            tip.compile(bx);
+        }
+        for child in &mut self.children {
+            child.compile(bx);
+        }
+        bx.with_it(Some(label_it()), |bx| self.on_activate.compile(bx));
+    }
+}
+
+/// Compiles the rows of a listing and says what `it` is for each.
+fn compile_rows(rows: &mut RowsDef, bx: &mut BindCx<'_, '_>) -> ItType {
+    match rows {
+        RowsDef::Static(defs) => {
+            for row in defs {
+                row.compile(bx);
+            }
+            label_it()
+        }
+        RowsDef::Bound(binding) => {
+            binding.compile_expr(bx, &Type::list(Type::Any).nullable());
+            ItType {
+                ty: element_type(binding.ty()),
+                own: binding.is_own(),
+            }
+        }
+    }
+}
+
+fn compile_opt(text: &mut Option<TextProp>, bx: &mut BindCx<'_, '_>) {
+    if let Some(text) = text {
+        text.compile(bx);
+    }
+}
+
+impl NodeDef {
+    /// Compiles every binding of the node and of what is inside it.
+    pub(crate) fn compile(&mut self, bx: &mut BindCx<'_, '_>) {
+        if let Some(condition) = &mut self.common.show_if {
+            condition.compile(bx);
+        }
+        compile_opt(&mut self.common.tip, bx);
+        if let Some(FrameDef::Titled(title)) = &mut self.frame {
+            title.compile(bx);
+        }
+        match &mut self.kind {
+            NodeKind::Rows(children) | NodeKind::Cols(children) | NodeKind::Stack(children) => {
+                for child in children {
+                    child.compile(bx);
+                }
+            }
+            NodeKind::Grid(grid) => {
+                for child in &mut grid.cells {
+                    child.compile(bx);
+                }
+            }
+            NodeKind::Tabs(tabs) => {
+                for page in &mut tabs.pages {
+                    page.title.compile(bx);
+                    page.content.compile(bx);
+                }
+            }
+            NodeKind::Scroll(child) => child.compile(bx),
+            NodeKind::Slot(_) | NodeKind::Spacer(_) => {}
+            NodeKind::Console(_) | NodeKind::Canvas(_) | NodeKind::TraceView(_) => {}
+            NodeKind::Text(text) => text.value.compile(bx),
+            NodeKind::Art(art) => art.value.compile(bx),
+            NodeKind::List(w) => {
+                let it = compile_rows(&mut w.rows, bx);
+                compile_opt(&mut w.empty, bx);
+                bx.with_it(Some(it), |bx| {
+                    compile_opt(&mut w.item, bx);
+                    w.on_select.compile(bx);
+                    w.on_activate.compile(bx);
+                });
+            }
+            NodeKind::Menu(w) => {
+                let it = compile_rows(&mut w.rows, bx);
+                bx.with_it(Some(it), |bx| {
+                    compile_opt(&mut w.item, bx);
+                    w.on_select.compile(bx);
+                    w.on_activate.compile(bx);
+                });
+            }
+            NodeKind::Tree(w) => {
+                let it = compile_rows(&mut w.rows, bx);
+                compile_opt(&mut w.empty, bx);
+                bx.with_it(Some(it), |bx| {
+                    compile_opt(&mut w.item, bx);
+                    if let Some(children) = &mut w.children {
+                        children.compile_expr(bx, &Type::list(Type::Any).nullable());
+                    }
+                    w.on_select.compile(bx);
+                    w.on_activate.compile(bx);
+                });
+            }
+            NodeKind::Table(w) => {
+                let it = compile_rows(&mut w.rows, bx);
+                compile_opt(&mut w.empty, bx);
+                for column in &mut w.columns {
+                    column.title.compile(bx);
+                }
+                bx.with_it(Some(it), |bx| {
+                    for column in &mut w.columns {
+                        compile_opt(&mut column.value, bx);
+                    }
+                    w.on_select.compile(bx);
+                    w.on_activate.compile(bx);
+                });
+            }
+            NodeKind::Inspect(w) => {
+                if let Some(of) = &mut w.of {
+                    of.compile_expr(bx, &Type::Any);
+                }
+                let it = compile_rows(&mut w.rows, bx);
+                bx.with_it(Some(it), |bx| {
+                    w.on_select.compile(bx);
+                    w.on_activate.compile(bx);
+                });
+            }
+            NodeKind::Bar(bar) | NodeKind::Gauge(bar) => {
+                bar.value.compile(bx);
+                bar.max.compile(bx);
+                compile_opt(&mut bar.label, bx);
+            }
+            NodeKind::Input(w) => {
+                compile_opt(&mut w.label, bx);
+                w.on_change.compile(bx);
+            }
+            NodeKind::Number(w) => {
+                compile_opt(&mut w.label, bx);
+                if let Some(min) = &mut w.min {
+                    min.compile(bx);
+                }
+                if let Some(max) = &mut w.max {
+                    max.compile(bx);
+                }
+                w.step.compile(bx);
+                w.on_change.compile(bx);
+            }
+            NodeKind::Toggle(w) => {
+                compile_opt(&mut w.label, bx);
+                w.on_change.compile(bx);
+            }
+            NodeKind::Choice(w) => {
+                compile_opt(&mut w.label, bx);
+                match &mut w.options {
+                    OptionsDef::Static(options) => {
+                        for option in options {
+                            compile_opt(&mut option.label, bx);
+                        }
+                    }
+                    OptionsDef::Bound(binding) => {
+                        binding.compile_expr(bx, &Type::list(Type::Any).nullable());
+                    }
+                }
+                w.on_change.compile(bx);
+            }
+            NodeKind::Button(w) => {
+                w.label.compile(bx);
+                w.on_activate.compile(bx);
+            }
+            NodeKind::Log(w) => {
+                if let Some(Prop::Bound(binding)) = &mut w.filter {
+                    binding.compile_expr(bx, &Type::list(Type::Str).nullable());
+                }
+            }
+            NodeKind::MapView(v)
+            | NodeKind::SectionView(v)
+            | NodeKind::RegionMap(v)
+            | NodeKind::ChartView(v) => {
+                if let Some(centre) = &mut v.centre {
+                    centre.compile_expr(bx, &Type::Any);
+                }
+                v.zoom.compile(bx);
+                // The place that was picked, whatever a view picks.
+                let it = ItType {
+                    ty: Type::Any,
+                    own: false,
+                };
+                bx.with_it(Some(it), |bx| v.on_pick.compile(bx));
+            }
+            NodeKind::Figure(w) => {
+                if let Some(Prop::Bound(binding)) = &mut w.shade {
+                    // The region's name.
+                    bx.with_it(Some(label_it()), |bx| {
+                        binding.compile_expr(bx, &Type::Str.nullable());
+                    });
+                }
+            }
+            NodeKind::Tooltip(w) => compile_opt(&mut w.value, bx),
+        }
+    }
+}
+
+impl ScreenDef {
+    /// Whether the screen's context is `debug`: it may see truth.
+    pub fn is_debug(&self) -> bool {
+        self.context.as_deref() == Some(CONTEXT_DEBUG)
+    }
+
+    /// Compiles every binding of the screen (12 §10.4): each bound
+    /// property and each expression of its effects, in a pure context
+    /// that offers `view`, `party`, `app`, the screen's variables as
+    /// `screen.name`, its parameters as `$name` and, in a row, `it`.
+    /// Unless the screen's context is `debug`, it is a mind context:
+    /// only the party's own characters are read in full.
+    ///
+    /// The loader calls this through `Def::compile`. What is wrong is
+    /// reported at the file, line and column inside the string.
+    pub fn compile_bindings(&mut self, cx: &mut CompileCx<'_>) {
+        let debug = self.is_debug();
+        let entity = cx
+            .registry()
+            .kind_id(super::bind::KIND_ENTITY)
+            .map_or(Type::Any, Type::Subject);
+        let mut params = Vec::with_capacity(self.params.len());
+        for (name, written) in &self.params {
+            let (ty, own) = if written == TYPE_PARTY_MEMBER {
+                (entity.clone(), true)
+            } else {
+                let path = format!("params.{name}");
+                (cx.parse_type(written, None, &path).unwrap_or(Type::Any), false)
+            };
+            params.push(ParamType {
+                name: name.clone(),
+                ty,
+                own,
+            });
+        }
+        let mut bx = BindCx {
+            cx,
+            debug,
+            params,
+            vars: Some(self.vars.clone()),
+            it: None,
+        };
+        compile_opt(&mut self.title, &mut bx);
+        self.layout.compile(&mut bx);
+        for effects in self.keys.values_mut() {
+            effects.compile(&mut bx);
+        }
+    }
 }
 
 /// A `figure` definition: rows of character art with named regions, drawn

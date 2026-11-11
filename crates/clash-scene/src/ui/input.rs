@@ -199,6 +199,7 @@ impl Screen {
                 id: self.nodes[index].id.clone(),
                 event: WidgetEvent::Select,
                 row,
+                it: row.map(|row| listing.it_of(row)),
                 effects: listing.on_select.clone(),
             });
         }
@@ -219,6 +220,7 @@ impl Screen {
                     id: self.nodes[index].id.clone(),
                     event: WidgetEvent::Activate,
                     row: Some(row),
+                    it: Some(listing.it_of(row)),
                     effects: effects.clone(),
                 });
             }
@@ -238,6 +240,7 @@ impl Screen {
                 id: self.nodes[index].id.clone(),
                 event: WidgetEvent::Change,
                 row: None,
+                it: None,
                 effects: effects.clone(),
             });
         }
@@ -504,6 +507,7 @@ impl Screen {
                     id: self.nodes[index].id.clone(),
                     event: WidgetEvent::Activate,
                     row: None,
+                    it: None,
                     effects: on_activate.clone(),
                 });
                 true
