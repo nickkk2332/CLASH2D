@@ -69,6 +69,8 @@ pub use compile::{
     MAX_MAP_CELLS, MAX_MAP_LEVELS, MAX_MAP_SIDE, MapDefs, MapDevice, MapLimits, PRESET_ROOF,
     PRESETS, ParamType, PatternMatch, PortalTo, Sit, SpawnWho,
 };
+pub(crate) use compile::{nested_origin, turned_size};
+pub(crate) use def::GenCompiler;
 pub use def::{
     AREA_PREFIX, AltDef, AreaDef, Base, BerthDef, CountDef, DeviceDef, EntryDef, ItemsDef,
     JointDef, LevelDef, LevelsDef, LinkDef, Lit, MARK_PREFIX, MapDef, MapId, MapPickDef, MarkDef,
@@ -76,6 +78,7 @@ pub use def::{
     PointDef, PortalDef, SetDef, Sited, SpawnWhoDef, SpecDef, TurnDef, VehicleDef, WiringDef,
 };
 pub use facing::{direction_name, facing_of};
+pub(crate) use resolve::GenHost;
 pub use resolve::{
     BerthCell, EvalOrder, MapLink, MapPortal, MapShape, MapVehicle, ResolveError, ResolvedArea,
     ResolvedCell, ResolvedItems, ResolvedJoint, ResolvedLevel, ResolvedMap, ResolvedSpawn,

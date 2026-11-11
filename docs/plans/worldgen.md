@@ -19,9 +19,9 @@ plan's scenarios. The test generators stay, as fixtures.
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | WG1 | Map format | L | W3, X4 | beta |
-| WG2 | Placing and applying maps | L | WG1, W8, W17 | todo |
-| WG3 | Ground | M | WG1 | todo |
-| WG4 | Tract definitions and realisation | M | WG2, WG3 | todo |
+| WG2 | Placing and applying maps | L | WG1, W8, W17 | beta |
+| WG3 | Ground | M | WG1 | beta |
+| WG4 | Tract definitions and realisation | M | WG2, WG3 | beta |
 | WG5 | Transforms and ruin | M | WG4, W22 | todo |
 | WG6 | World generators and realm plans | L | WG4 | todo |
 | WG7 | Region kinds and surveys | L | WG6 | todo |
@@ -112,6 +112,23 @@ Done when
 - Scenario `aftermath_edit`: a pending map is present when its tract loads.
 - A map on a slope is levelled, founded or followed as it asks.
 
+Built (beta), in `clash_gen::place`: `placement_box` and the overlap
+test, `PlacedMap` (a placement resolved: cells, marks, areas and spawn
+requests in world coordinates), windows of a map per tract, `order`,
+the four ways of sitting both when a tract is realised and in the world
+as it is, `apply_map` with its three modes, `place_map` and
+`apply_pending_maps` for tracts that are not loaded
+(`PendingEdit::Map` in the world, decision D-513). Every "Done when"
+above has a test in `crates/clash-gen/tests/place.rs`. Stubbed: portals
+and subgrids are not handed on (the world's types are placeholders);
+items, conduits, fields, devices and the rest stay carried in the
+placed map for the packages that own them; the simulation raises
+`map_applied` and binds the `apply_map` verb (K5); `plan_from_map` is
+WG11's; `aftermath_edit` is an integration test, since test scripts
+have no world to run in yet; an overlapping placement is dropped,
+never moved; a placement does not go round a wrapped edge; levelling
+in the world as it is makes no ramps.
+
 ### WG3 — Ground
 
 **Spec** 10 §5 · **Size** M
@@ -128,6 +145,19 @@ Done when
 - Sea fills to `sea_level` as uniform chunks.
 - Scatter respects spacing and density over many seeds.
 
+Built (beta), in `clash_gen::ground`: the `ground` type with its
+parameters, and the steps `strata`, `surface` (with ramps), `liquid`,
+`veins`, `pockets`, `caves` and `scatter` of elements and of maps; the
+rules of 10 §5.2 that keep what is generated standing (decision D-516).
+Every "Done when" above has a test in `crates/clash-gen/tests/ground.rs`.
+Stubbed: `float` is not built and a ground that uses it fails to load;
+`paths` draws nothing until surveys record paths (WG7); `liquid` with
+`to: plan` fills nothing until lakes are planned (WG6, the review
+addition "Lakes"); the surface height is the realm generator's `height`
+parameter, not a realm plan's field (WG6); a ground's parameters are
+plain defaults, and `region.*` is not offered (WG7); density with
+`apart` is capped (10 §13).
+
 ### WG4 — Tract definitions and realisation
 
 **Spec** 10 §6 · **Size** M
@@ -142,6 +172,24 @@ Done when
   shuffled and multi-threaded test as world package W8.
 - Precedence is ground, placements in order, transforms (invariant X5).
 - The budget for a settled tract is benchmarked.
+
+Built (beta), in `clash_gen::tractdef` and `clash_gen::realize`: the
+`tract` type; `GenDefs`, the build stage of maps, grounds and tract
+definitions; the generator `standard` (10 §6.2), which a realm
+definition names and which surveys regions and realises tracts in the
+order of 10 §6.1; placements kept in region records; the realm
+`core:countryside` with a ground, three tract definitions and a lane
+map in `mods/core`; `cargo run -p clash-gen --example tract_ascii`.
+The first two "Done when" items have tests in
+`crates/clash-gen/tests/standard.rs`, with golden pictures of two
+tracts that must also stand. Stubbed: transforms are a function that
+does nothing (WG5); the budget is not benchmarked (WG13); the surveyor
+gives tracts their definitions by an authored layout or a weighted
+choice, with no region kinds, sites or settlements, and writes no
+paths (WG6 to WG8: the seam is `StandardGenerator::tract_def` and
+`placements_of`, decision D-511); a tract definition's placements lie
+inside their tract; `ruin`, `bands` and `glyph` are carried; a
+record's `rot` and `variant` are not used.
 
 ### WG5 — Transforms and ruin
 

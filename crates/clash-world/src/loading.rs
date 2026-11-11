@@ -49,7 +49,7 @@ use crate::save::{SaveWarning, WarnAt};
 use crate::store::{StoreError, TractStore, decode_tract, encode_image, without_entities};
 use crate::topology::{Edge, Topology};
 use crate::tract::{
-    CellEdit, PendingEdit, RegionRecord, SiteIdx, SpawnRequest, TractRecord, TractState,
+    CellEdit, PendingEdit, PendingMap, RegionRecord, SiteIdx, SpawnRequest, TractRecord, TractState,
 };
 
 /// What loading and unloading need besides the world: the generators,
@@ -407,6 +407,34 @@ impl Cosmos {
         record.extra_mut().pending.push(edit);
         Ok(())
     }
+
+    /// Takes the maps waiting for a tract out of its record, in the
+    /// order they were added (02 §17.3; 10 §4.3). The world cannot
+    /// resolve a map, so a pending map stays in the record when its
+    /// tract loads; whoever holds the maps calls this for each tract
+    /// that has loaded and writes them through `WorldEdit`. Empty for a
+    /// tract with none, and for one whose region is not surveyed.
+    pub fn take_pending_maps(&mut self, realm: RealmId, tract: TractPos) -> Vec<PendingMap> {
+        let Ok(tract) = self.normalize_tract(realm, tract) else {
+            return Vec::new();
+        };
+        let Some(extra) = self
+            .tract_record_mut(realm, tract)
+            .and_then(|record| record.extra.as_mut())
+        else {
+            return Vec::new();
+        };
+        let mut maps = Vec::new();
+        let mut rest = Vec::with_capacity(extra.pending.len());
+        for edit in core::mem::take(&mut extra.pending) {
+            match edit {
+                PendingEdit::Map(map) => maps.push(map),
+                other => rest.push(other),
+            }
+        }
+        extra.pending = rest;
+        maps
+    }
 }
 
 /// Where the cells of a tract being loaded come from.
@@ -657,6 +685,9 @@ impl WorldCtx<'_> {
                 PendingEdit::Spawn(spawn) => loaded.spawns.push(spawn),
                 // Stamps wait for the coarse layer (W17).
                 stamp @ PendingEdit::Stamp(_) => waiting.push(stamp),
+                // The world cannot resolve a map: it waits for whoever
+                // holds the maps (`Cosmos::take_pending_maps`).
+                map @ PendingEdit::Map(_) => waiting.push(map),
             }
         }
         if !waiting.is_empty()

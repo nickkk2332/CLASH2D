@@ -113,6 +113,7 @@ pub use defs::{
 pub use edit::{DISPLACE_RANGE_CELLS, StabilityQueue, StabilityRequest, WorldCtx, WorldEdit};
 pub use error::WorldError;
 pub use event::{EventSink, WorldEvent};
+pub use generate::GeneratorMaker;
 pub use generate::{
     BatchRunner, GenCtx, GenError, GeneratorFactory, GeneratorRegistry, GeneratorRequest,
     Generators, PortalSpec, RealizeJob, RealizedTract, RealmInfo, RegionSurveyResult,
@@ -166,3 +167,4 @@ pub use tract::{
     RegionRecord, RegionSurvey, SiteIdx, SpawnRequest, Stamp, TractDefId, TractExtra, TractRecord,
     TractState,
 };
+pub use tract::{MapMode, PendingMap};

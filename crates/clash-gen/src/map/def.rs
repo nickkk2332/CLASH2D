@@ -1190,13 +1190,13 @@ impl ParamDef {
 
 /// Compiles the expression fields of maps in the generation context
 /// (10 §3.4) and refuses what a map may not read.
-struct GenCompiler<'a, 'b> {
-    cx: &'a mut CompileCx<'b>,
-    scope: Scope,
+pub(crate) struct GenCompiler<'a, 'b> {
+    pub(crate) cx: &'a mut CompileCx<'b>,
+    pub(crate) scope: Scope,
 }
 
 impl GenCompiler<'_, '_> {
-    fn expr<T: ExprType>(&mut self, field: &mut Expr<T>) {
+    pub(crate) fn expr<T: ExprType>(&mut self, field: &mut Expr<T>) {
         self.cx.compile(field, &self.scope);
         let reads_world = field.compiled().is_some_and(|code| {
             !code.properties_read().is_empty() || !code.variables_read().is_empty()
@@ -1216,7 +1216,7 @@ impl GenCompiler<'_, '_> {
         }
     }
 
-    fn cond(&mut self, field: &mut Cond) {
+    pub(crate) fn cond(&mut self, field: &mut Cond) {
         self.cx.compile(field, &self.scope);
         if let Some(source) = field.source() {
             let source = source.to_owned();
