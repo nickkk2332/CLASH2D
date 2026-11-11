@@ -79,6 +79,9 @@ mods/
 docs/
 ```
 
+An arrow carries what its target depends on: a crate may depend directly on
+any crate its arrows already reach, as `clash-gen` does on `clash-core`.
+
 Definition *types* live in the crate that gives them meaning (`BlockDef` in
 `clash-world`, `ActionDef` in `clash-sim`). `clash-data` provides the loading
 framework and knows nothing about what a block or an action is.
@@ -369,6 +372,78 @@ Full specification: document 12.
   so the cost of a save is proportional to what changed.
 - The format is versioned. Each version bump ships a migration.
 
+### 11.1 The binary encoding
+
+State is written to disk in the engine's own binary encoding,
+`clash_core::codec`. JSON remains the format of mods and of anything a
+person reads. Every state type implements serde, and the codec is a serde
+format, so one implementation serves both.
+
+The encoding does not describe itself. The bytes hold values only, and the
+type being read says what they mean:
+
+| Value | Bytes |
+|-------|-------|
+| `bool` | One byte, `0` or `1` |
+| `u8`, `i8` | One byte |
+| `u16` to `u128`, lengths, `char` | LEB128: seven bits a byte, lowest first, the top bit set on every byte but the last, in the fewest bytes |
+| `i16` to `i128` | Zig-zag (`0, -1, 1, -2` become `0, 1, 2, 3`), then LEB128 |
+| `f32`, `f64`, so `Real` | The IEEE bits, little-endian: exact |
+| Text, bytes | The length in bytes, then the bytes |
+| `Option` | A byte `0` for none; a byte `1` and the value for some |
+| Unit | Nothing |
+| Struct, tuple, array | Each field in order, with no names and no count |
+| Sequence, set | The number of items, then each item |
+| Map | The number of entries, then each key and value |
+| Enum | The variant's index as LEB128, then the variant's fields |
+
+A value has exactly one encoding, so equal values give equal bytes on every
+platform.
+
+Decoding never panics, never reserves more than a small multiple of its
+input and never does more work than its input is long (R6). Every length
+is checked against the bytes that remain, every item of a sequence or map
+must take at least one byte, nesting is limited to 128 levels, and bytes
+left over are an error. What cannot be read back safely is refused when
+writing, with a reason:
+
+- a sequence or map that does not state its length first;
+- a sequence or map with an item that takes no bytes, such as a list of
+  units;
+- a struct that leaves a field out (`skip_serializing_if`);
+- a value nested deeper than the limit.
+
+Anything that reads through serde's self-describing calls is refused when
+reading: `flatten`, untagged and internally tagged enums. State types do
+not use them.
+
+Reordering, adding or removing a field or a variant changes the bytes.
+That is what a blob's version is for.
+
+**Blobs.** Whatever is stored (a tract, a region record, the main save's
+sections) is framed as a blob:
+
+| Offset | Size | Holds |
+|--------|------|-------|
+| 0 | 4 | The magic, `C2DB` |
+| 4 | 4 | The kind: four bytes chosen by the owner of the data |
+| 8 | 4 | The version of the body's layout, `u32` little-endian |
+| 12 | 4 | The length of the body before compression, `u32` little-endian |
+| 16 | 16 | The checksum, `u128` little-endian |
+| 32 | … | The body, compressed as one LZ4 block |
+
+The checksum is the state hasher of section 4 (MurmurHash3 `x64_128`,
+seed 0) over the kind, the version as four little-endian bytes and the
+uncompressed body. It catches damage and does not resist tampering. A
+blob that is too short, has the wrong magic, the wrong kind, a body of
+the wrong length, a body that does not decompress or a checksum that does
+not match is refused, each with its own error. A reader that supports
+several versions opens the frame first, then reads the body by the
+version it found.
+
+The compressed bytes are not a contract: a later compressor may pack the
+same body differently. Bodies are compared and hashed, never blobs.
+
 ## 12. Testing and performance gates
 
 | Kind | Purpose |
@@ -392,7 +467,7 @@ Provisional choices. Adding a dependency requires an entry in
 | Deterministic maths | `libm` |
 | Small collections, flags | `smallvec`, `bitflags`, `indexmap`, `rustc-hash` |
 | Errors | `thiserror` |
-| Compression | `lz4_flex` (pure Rust) |
+| Compression | `lz4_flex` (pure Rust, with its default features: the block codec then contains no `unsafe`) |
 | Save storage | `redb` behind a `TractStore` trait |
 | Parallel generation | `rayon` |
 | Tests and benches | `proptest`, `criterion` |

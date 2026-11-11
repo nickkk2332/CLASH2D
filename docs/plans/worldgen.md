@@ -150,7 +150,11 @@ Done when
 **Spec** 10 §9 · **Size** L
 
 Build
-- The `worldgen` type; fields from noise and expressions; `kinds`.
+- The `worldgen` type; fields from noise and expressions; `kinds`. The
+  noise and the description of a noise field are already built, in
+  `clash_gen::noise` (10 §9.1, D-252): this package reads a `FieldSpec`,
+  checks it, gives it the realm's extent in tracts and a domain made from
+  the field's name, and samples it.
 - The realm plan: placing settlements and sites by rule, routes, rivers,
   holdings; stored with the realm.
 - Authored layouts; realms created on demand from chart nodes.
