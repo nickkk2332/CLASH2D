@@ -95,6 +95,12 @@
 //! | `erase`, `delete` | Remove the character before or at the cursor of an `input`; `erase` takes back the last digit typed into a `number`. |
 //! | `back` | Nothing by itself: screens bind it in `keys`, usually to `close`. |
 //!
+//! A name that none of these used may be the name of a `control`
+//! (12 §9.2): [`Screen::input_with`] is given the controls, and offers
+//! them the name after the screen's `keys` and before the toolkit acts
+//! on it itself. A `map_view` with the focus and an `on_pick` takes
+//! `accept` as picking the place under the cursor.
+//!
 //! # Styles and marks the toolkit draws with
 //!
 //! The toolkit draws its own parts with theme styles of fixed names. A
@@ -239,9 +245,10 @@ pub use def::{
     TabsDef, TextDef, TextProp, ToggleDef, TooltipDef, TreeDef, UiPartDef, ViewDef, text_prop,
 };
 pub use effect::{
-    AppEffect, AppService, Args, Collect, CommandEffect, CommandKind, ConfirmEffect, EFFECT_NAMES,
-    OpenEffect, PickEffect, UiEffect, UiEffects, ValueProp,
+    AppEffect, AppService, Args, CameraEffect, Collect, CommandEffect, CommandKind, ConfirmEffect,
+    EFFECT_NAMES, OpenEffect, PickEffect, PickerEffect, UiEffect, UiEffects, ValueProp,
 };
+pub use input::ControlLookup;
 pub use refresh::{from_var, to_var};
 pub use screen::{
     BindScope, CONTEXT_DEBUG, Evaluator, LogLine, MessageLog, Screen, SlotParts, UiData, UiEnv,

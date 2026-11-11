@@ -15,6 +15,8 @@
 //! | A drawable thing's `glyph` | [`GlyphDef`], compiled to a [`Glyph`] |
 //! | Text with `<name>…</>` tags | [`RichText`] |
 //! | Input | [`InputEvent`], [`KeyChord`], the `keymap` definition [`KeymapDef`] |
+//! | What a key does | [`control`]: the `control` definition [`ControlDef`], commands put together with pickers, decision prompts |
+//! | The cursor over the map | [`picker`]: the `camera` effect, clicks on a view, what a screen is told of the place under the cursor |
 //! | A window, a terminal or nothing | the [`Frontend`] trait; [`NullFrontend`] for tests |
 //! | Golden frames | [`golden`] |
 //! | Screens and widgets | [`ui`]: [`ui::ScreenDef`], [`ui::Screen`] |
@@ -47,12 +49,14 @@
 
 pub mod app;
 pub mod color;
+pub mod control;
 pub mod defs;
 pub mod frame;
 pub mod frontend;
 pub mod glyph;
 pub mod golden;
 pub mod input;
+pub mod picker;
 pub mod scene;
 pub mod testing;
 pub mod text;
@@ -63,9 +67,10 @@ pub mod view;
 pub use app::{AppCurrent, AppEntry, AppList, AppRequest, AppState, NoApp};
 
 pub use color::{Ansi16, Color, ColorDef, ColorError, ColorRef, Rgb, ansi256};
+pub use control::{ControlDef, DecisionAsk, ParamAsk, PendingDecision, ReactionOption};
 pub use defs::{
-    AmbienceId, ColorId, FigureId, KeymapId, OverlayId, PreferenceId, ScreenId, ThemeId, UiDefs,
-    UiPartId, check_defs, engine_types, register_defs, register_engine_defs,
+    AmbienceId, ColorId, ControlId, FigureId, KeymapId, OverlayId, PreferenceId, ScreenId,
+    ThemeId, UiDefs, UiPartId, check_defs, engine_types, register_defs, register_engine_defs,
 };
 pub use frame::{
     Attrs, Borders, Canvas, CellStyle, Frame, FrameCell, FrameFx, Rect, Sprite, Wash,

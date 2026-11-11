@@ -14,10 +14,12 @@
 //! | `confirm` | `"text"`, or `{ "text", "yes", "no" }` | Asks; the rest of the list runs only on yes |
 //! | `pick` | `{ "from", "item", "into", "title" }` | Opens a picker; the rest of the list runs with the choice as `it` |
 //! | `answer` | value | Closes a screen opened by `confirm` or `pick`, giving its answer |
-//! | `act` | `{ "action", "params" }` | Submits an action for the active character |
+//! | `act` | `{ "action", "params", "pick", "from" }` | Submits an action for the active character, asking for its parameters if told to |
 //! | `command` | `"name"`, or `{ "name", "args" }` | Submits a simulation command |
 //! | `run` | `"rule"`, or `{ "rule", "args" }` | Runs a `ui_callable` rule through the `Ui` command |
 //! | `app` | `"service"`, or `{ "service": { args } }` | An engine service: see [`AppService`] |
+//! | `camera` | `"release"`, `"turn"`, or `{ "move", "storey", "zoom", "cycle", "release", "turn" }` | Moves the cursor and the view of the world: see [`CameraEffect`] |
+//! | `picker` | `"done"`, `"undo"`, or `{ "toggle": value }` | Works on the list a picker is building: see [`PickerEffect`] |
 //!
 //! A value is `true`, `false`, a number, or a string holding an
 //! expression: a text is written `"'like this'"`.
@@ -133,6 +135,34 @@ pub struct CommandEffect {
     pub args: Args,
     /// For `act`: how its parameters are gathered.
     pub collect: Collect,
+    /// For `act`: an expression giving the actions to choose from, where
+    /// the action is written `{ "pick": "…" }` and not as an id. The
+    /// player picks one with the list picker before anything else is
+    /// asked.
+    pub choose: Option<Binding>,
+    /// For `act` with `"needed"` or `"all"`: for a parameter by name,
+    /// the picker that asks for it, in place of the one its type has
+    /// (12 §9.3). `"direction"` means the screen of the role
+    /// `picker.direction`.
+    pub pickers: BTreeMap<String, String>,
+    /// For `act` with `"needed"` or `"all"`: for a parameter by name, an
+    /// expression giving the values it may be chosen from.
+    pub from: BTreeMap<String, Binding>,
+}
+
+impl CommandEffect {
+    /// A command with a name and arguments, and nothing asked for.
+    pub fn plain(kind: CommandKind, name: String, args: Args) -> CommandEffect {
+        CommandEffect {
+            kind,
+            name,
+            args,
+            collect: Collect::Given,
+            choose: None,
+            pickers: BTreeMap::new(),
+            from: BTreeMap::new(),
+        }
+    }
 }
 
 /// An engine service (12 §10.5), asked for with the `app` effect. The
@@ -229,6 +259,113 @@ pub struct AppEffect {
     pub args: Args,
 }
 
+/// `camera`: moves the free cursor and changes what a view of the world
+/// shows (12 §6.3). A field left out does nothing.
+///
+/// ```json
+/// { "camera": { "move": [1, 0] } }
+/// { "camera": { "cycle": 1 } }
+/// { "camera": "release" }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Deserialize)]
+#[serde(remote = "Self", deny_unknown_fields)]
+pub struct CameraEffect {
+    /// `[east, south]`: moves the free cursor by that many cells,
+    /// starting it at the followed character if there is none.
+    #[serde(default, rename = "move")]
+    pub by: Option<[i32; 2]>,
+    /// Shifts the viewed storey up by this many, or down if negative.
+    #[serde(default)]
+    pub storey: i32,
+    /// Zooms out by this many factors, or in if negative.
+    #[serde(default)]
+    pub zoom: i32,
+    /// Puts the cursor on the next (`1`) or the previous (`-1`) thing
+    /// that could be chosen: in a picker its candidates, anywhere else
+    /// what the party perceives on the viewed storey, nearest first.
+    #[serde(default)]
+    pub cycle: i32,
+    /// Drops the cursor and the storey shift: the view follows the
+    /// character again.
+    #[serde(default)]
+    pub release: bool,
+    /// Turns the line a section view cuts along.
+    #[serde(default)]
+    pub turn: bool,
+}
+
+/// What a `camera` written as a word means. A word that is neither is
+/// an effect that does nothing, which the screen's check reports.
+fn camera_word(word: &str) -> CameraEffect {
+    CameraEffect {
+        release: word == "release",
+        turn: word == "turn",
+        ..CameraEffect::default()
+    }
+}
+
+impl CameraEffect {
+    /// Whether the effect does nothing at all: a word that is not one of
+    /// the camera's, or an empty object.
+    pub fn is_idle(&self) -> bool {
+        *self == CameraEffect::default()
+    }
+}
+
+string_or_object!(CameraEffect, "`\"release\"`, `\"turn\"`, or an object with `move`, `storey`, `zoom`, `cycle`, `release` and `turn`",
+    (text, site) => camera_word(text));
+
+/// `picker`: works on the list a picker is building for a list
+/// parameter (12 §9.3).
+#[derive(Clone, Debug, PartialEq)]
+pub enum PickerEffect {
+    /// `"done"`: the list has all its entries. Refused, with the reason,
+    /// while it has fewer than its least count.
+    Done,
+    /// `"undo"`: takes the last entry back.
+    Undo,
+    /// `{ "toggle": value }`: adds the value to the list, or takes it
+    /// out if it is there.
+    Toggle(ValueProp),
+}
+
+impl<'de> Deserialize<'de> for PickerEffect {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<PickerEffect, D::Error> {
+        struct PickerVisitor;
+        impl<'de> Visitor<'de> for PickerVisitor {
+            type Value = PickerEffect;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("`\"done\"`, `\"undo\"`, or an object with `toggle`")
+            }
+            fn visit_str<E: de::Error>(self, text: &str) -> Result<PickerEffect, E> {
+                match text {
+                    "done" => Ok(PickerEffect::Done),
+                    "undo" => Ok(PickerEffect::Undo),
+                    other => Err(E::invalid_value(de::Unexpected::Str(other), &self)),
+                }
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<PickerEffect, A::Error> {
+                let Some(key) = map.next_key::<String>()? else {
+                    return Err(de::Error::custom("`picker` needs `toggle` and its value"));
+                };
+                if key != "toggle" {
+                    return Err(de::Error::custom(format!(
+                        "`picker` takes `toggle`, not `{key}`"
+                    )));
+                }
+                let value = map.next_value::<ValueProp>()?;
+                if map.next_key::<IgnoredAny>()?.is_some() {
+                    return Err(de::Error::custom(
+                        "`picker` takes `toggle` and nothing else",
+                    ));
+                }
+                Ok(PickerEffect::Toggle(value))
+            }
+        }
+        deserializer.deserialize_any(PickerVisitor)
+    }
+}
+
 /// One interface effect (12 §10.5). In JSON it is an object with one
 /// key, the effect's name.
 #[derive(Clone, Debug, PartialEq)]
@@ -253,12 +390,16 @@ pub enum UiEffect {
     Submit(CommandEffect),
     /// `app`.
     App(AppEffect),
+    /// `camera`.
+    Camera(CameraEffect),
+    /// `picker`.
+    Picker(PickerEffect),
 }
 
 /// The names of the effects, in the order of 12 §10.5.
 pub const EFFECT_NAMES: &[&str] = &[
     "open", "close", "replace", "set", "focus", "pick", "act", "command", "run", "confirm",
-    "answer", "app",
+    "answer", "app", "camera", "picker",
 ];
 
 impl UiEffect {
@@ -275,6 +416,8 @@ impl UiEffect {
             UiEffect::Answer(_) => "answer",
             UiEffect::Submit(command) => command.kind.effect(),
             UiEffect::App(_) => "app",
+            UiEffect::Camera(_) => "camera",
+            UiEffect::Picker(_) => "picker",
         }
     }
 }
@@ -319,12 +462,51 @@ impl<'de> Deserialize<'de> for ActParams {
     }
 }
 
+/// `{ "pick": "…" }`: the action is chosen from a list.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ActionPick {
+    pick: Binding,
+}
+
+/// The action of an `act`: its id, or a list to pick it from.
+enum ActionSource {
+    Named(String),
+    Picked(Binding),
+}
+
+impl<'de> Deserialize<'de> for ActionSource {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<ActionSource, D::Error> {
+        struct SourceVisitor;
+        impl<'de> Visitor<'de> for SourceVisitor {
+            type Value = ActionSource;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(
+                    "an action's id, or an object with `pick`, an expression giving the actions to choose from",
+                )
+            }
+            fn visit_str<E: de::Error>(self, text: &str) -> Result<ActionSource, E> {
+                Ok(ActionSource::Named(text.to_owned()))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<ActionSource, A::Error> {
+                ActionPick::deserialize(MapAccessDeserializer::new(map))
+                    .map(|body| ActionSource::Picked(body.pick))
+            }
+        }
+        deserializer.deserialize_any(SourceVisitor)
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ActBody {
-    action: String,
+    action: ActionSource,
     #[serde(default)]
     params: Option<ActParams>,
+    #[serde(default)]
+    pick: BTreeMap<String, String>,
+    #[serde(default)]
+    from: BTreeMap<String, Binding>,
 }
 
 #[derive(Deserialize)]
@@ -446,32 +628,46 @@ impl<'de> Deserialize<'de> for UiEffect {
                             Some(ActParams::Given(args)) => (args, Collect::Given),
                             Some(ActParams::Ask(collect)) => (Args::new(), collect),
                         };
+                        if collect == Collect::Given
+                            && !(body.pick.is_empty() && body.from.is_empty())
+                        {
+                            return Err(de::Error::custom(
+                                "`pick` and `from` say how parameters are asked for, and this `act` asks for none: give `params` as `needed` or `all`",
+                            ));
+                        }
+                        let (name, choose) = match body.action {
+                            ActionSource::Named(name) => (name, None),
+                            ActionSource::Picked(from) => (String::new(), Some(from)),
+                        };
                         UiEffect::Submit(CommandEffect {
                             kind: CommandKind::Act,
-                            name: body.action,
+                            name,
                             args,
                             collect,
+                            choose,
+                            pickers: body.pick,
+                            from: body.from,
                         })
                     }
                     "command" => {
                         let body = map.next_value::<CommandBody>()?;
-                        UiEffect::Submit(CommandEffect {
-                            kind: CommandKind::Command,
-                            name: body.name,
-                            args: body.args,
-                            collect: Collect::Given,
-                        })
+                        UiEffect::Submit(CommandEffect::plain(
+                            CommandKind::Command,
+                            body.name,
+                            body.args,
+                        ))
                     }
                     "run" => {
                         let body = map.next_value::<RunBody>()?;
-                        UiEffect::Submit(CommandEffect {
-                            kind: CommandKind::Rule,
-                            name: body.rule,
-                            args: body.args,
-                            collect: Collect::Given,
-                        })
+                        UiEffect::Submit(CommandEffect::plain(
+                            CommandKind::Rule,
+                            body.rule,
+                            body.args,
+                        ))
                     }
                     "app" => UiEffect::App(map.next_value()?),
+                    "camera" => UiEffect::Camera(map.next_value()?),
+                    "picker" => UiEffect::Picker(map.next_value()?),
                     other => {
                         return Err(de::Error::custom(format!(
                             "unknown effect `{other}` (known: {})",
@@ -559,8 +755,20 @@ impl UiEffects {
                     bx.it = Some(it);
                 }
                 UiEffect::Answer(value) => compile_value(value, bx),
-                UiEffect::Submit(command) => compile_args(&mut command.args, bx),
+                UiEffect::Submit(command) => {
+                    compile_args(&mut command.args, bx);
+                    let list = Type::list(Type::Any).nullable();
+                    if let Some(choose) = &mut command.choose {
+                        choose.compile_expr(bx, &list);
+                    }
+                    for from in command.from.values_mut() {
+                        from.compile_expr(bx, &list);
+                    }
+                }
                 UiEffect::App(app) => compile_args(&mut app.args, bx),
+                UiEffect::Camera(_)
+                | UiEffect::Picker(PickerEffect::Done | PickerEffect::Undo) => {}
+                UiEffect::Picker(PickerEffect::Toggle(value)) => compile_value(value, bx),
             }
         }
         bx.it = before;

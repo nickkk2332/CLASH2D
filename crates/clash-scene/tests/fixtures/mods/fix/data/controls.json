@@ -1,0 +1,36 @@
+[
+  { "//": "The quick strike: every parameter has a default, so one key press submits it.",
+    "type": "control", "id": "strike", "name": "Strike",
+    "do": { "act": { "action": "strike", "params": "needed" } } },
+
+  { "//": "Its precise twin: every parameter is asked for, filled in with its default. The direction is a text, so the control says which picker asks for it; the style and the things are chosen from lists the control gives.",
+    "type": "control", "id": "strike_precise", "name": "Strike with care",
+    "do": { "act": { "action": "strike", "params": "all",
+                     "pick": { "dir": "direction" },
+                     "from": { "style": "['high', 'low']", "with": "view.items", "extra": "view.items" } } } },
+
+  { "type": "control", "id": "throw", "name": "Throw",
+    "do": { "act": { "action": "throw", "params": "needed", "from": { "what": "view.items" } } } },
+
+  { "//": "The action itself is picked first.",
+    "type": "control", "id": "attack", "name": "Attack",
+    "do": { "act": { "action": { "pick": "['fix:strike', 'fix:throw']" }, "params": "needed",
+                     "from": { "what": "view.items" } } } },
+
+  { "//": "A control that only runs interface effects.",
+    "type": "control", "id": "shout", "name": "Shout",
+    "do": [ { "command": { "name": "shout", "args": { "words": "'Hey!'" } } } ] },
+
+  { "//": "A control that rebinds a key through the `app` service: `g` comes to mean `strike` in play.",
+    "type": "control", "id": "rebind_strike", "name": "Strike with G",
+    "do": { "app": { "rebind": { "context": "'play'", "key": "'g'", "name": "'strike'" } } } },
+
+  { "//": "The keys for them, added to the bundled keymap's play context.",
+    "type": "keymap", "id": "ui:default", "patch": true,
+    "play": { "f": "strike", "shift+f": "strike_precise", "t": "throw", "shift+a": "attack", "s": "fix:shout",
+              "f5": "rebind_strike" } },
+
+  { "//": "A bar for the play screen's slot: content adds its own reserves.",
+    "type": "ui_part", "id": "blood_bar", "into": "ui:play.bars", "order": 10,
+    "widget": { "bar": { "label": "Blood ", "value": "view.pool('blood').frac", "style": "blood" } } }
+]

@@ -64,7 +64,7 @@
     "borders": { "h": "═", "v": "║", "tl": "╔", "tr": "╗", "bl": "╚", "br": "╝" }
   },
 
-  { "//": "What each key means. Screens in a context this does not list use `menu`.",
+  { "//": "What each key means, by context. A screen names its context; a key its context does not name is looked up in `menu`. `menu` holds the names the toolkit navigates by. `play` is the play screen's: its names are controls (controls.json). `targeting` is that of look mode and of the pickers that move a cursor or take a direction: there the direction keys keep their names and the screens say what they do.",
     "type": "keymap", "id": "default",
     "menu": {
       "up": "prev", "down": "next", "left": "left", "right": "right",
@@ -73,7 +73,25 @@
       "tab": "focus_next", "shift+tab": "focus_prev",
       "page_up": "page_prev", "page_down": "page_next", "home": "first", "end": "last",
       "backspace": "erase", "delete": "delete",
+      "ctrl+d": "done",
       "f2": "more"
+    },
+    "play": {
+      "h": "west", "j": "south", "k": "north", "l": "east",
+      "y": "north_west", "u": "north_east", "b": "south_west", "n": "south_east",
+      "left": "west", "down": "south", "up": "north", "right": "east",
+      "<": "up", ">": "down",
+      ".": "wait", "x": "look",
+      "i": "inventory", "c": "condition", "a": "abilities", "m": "map", "shift+j": "journal",
+      "o": "options"
+    },
+    "targeting": {
+      "h": "west", "j": "south", "k": "north", "l": "east",
+      "y": "north_west", "u": "north_east", "b": "south_west", "n": "south_east",
+      "left": "west", "down": "south", "up": "north", "right": "east",
+      "<": "up", ">": "down",
+      "tab": "next_target", "shift+tab": "prev_target",
+      "+": "zoom_in", "-": "zoom_out"
     }
   }
 ]

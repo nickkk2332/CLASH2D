@@ -42,7 +42,7 @@ use clash_world::{CellPos, Location};
 
 use super::ambience::Ambience;
 use super::camera::{Camera, MAX_ZOOM, SectionAxis};
-use super::compose::{Composer, LOOK_DOWN_DEFAULT, OverlayDraw};
+use super::compose::{Composer, LOOK_DOWN_DEFAULT, OverlayDraw, Rank};
 use super::glyphs::WorldGlyphs;
 use super::model::ViewModel;
 use super::overlay::{BuiltinOverlay, Overlay, OverlayValues};
@@ -69,6 +69,33 @@ pub struct WorldView {
     overlays: BTreeMap<String, Overlay>,
     overlay_values: Option<Box<dyn OverlayValues>>,
     look_down: u8,
+    /// Whether the line from the followed position to the cursor is
+    /// drawn.
+    line: bool,
+}
+
+/// The cells strictly between two cells of one storey, along the
+/// straight line from one to the other.
+fn line_between(from: (i32, i32), to: (i32, i32)) -> Vec<(i32, i32)> {
+    let (dx, dy) = (
+        i64::from(to.0) - i64::from(from.0),
+        i64::from(to.1) - i64::from(from.1),
+    );
+    let steps = dx.abs().max(dy.abs());
+    // A line across more of the world than a view can show is not drawn.
+    if !(2..=4096).contains(&steps) {
+        return Vec::new();
+    }
+    (1..steps)
+        .map(|step| {
+            // Rounded to the nearest cell, halves away from the start.
+            let along = |delta: i64| (2 * delta * step + steps * delta.signum()) / (2 * steps);
+            (
+                (i64::from(from.0) + along(dx)) as i32,
+                (i64::from(from.1) + along(dy)) as i32,
+            )
+        })
+        .collect()
 }
 
 impl WorldView {
@@ -83,7 +110,40 @@ impl WorldView {
             overlays: BTreeMap::new(),
             overlay_values: None,
             look_down: LOOK_DOWN_DEFAULT,
+            line: false,
         }
+    }
+
+    /// Draws, or stops drawing, the line from the followed position to
+    /// the free cursor in map views: what a picker shows while something
+    /// is aimed (12 §9.3). It is drawn with the theme mark `line`.
+    pub fn show_line(&mut self, on: bool) {
+        self.line = on;
+    }
+
+    /// Whether the line to the cursor is drawn.
+    pub fn line_shown(&self) -> bool {
+        self.line
+    }
+
+    /// The cell a place in a map view stands for: `x` and `y` are a
+    /// cell of the frame inside `area`, the view's rectangle, and `zoom`
+    /// is the view's own. Zoomed out, it is the first cell of the block.
+    /// `None` outside the view.
+    pub fn map_cell_at(&self, zoom: u32, area: Rect, x: i32, y: i32) -> Option<CellPos> {
+        if !area.contains(x, y) {
+            return None;
+        }
+        let zoom = self.zoom_with(zoom);
+        let centre = self.camera.centre();
+        let (mid_col, mid_row) = ((area.w - 1) / 2, (area.h - 1) / 2);
+        let first_x = (centre.x.div_euclid(zoom) - mid_col).wrapping_mul(zoom);
+        let first_y = (centre.y.div_euclid(zoom) - mid_row).wrapping_mul(zoom);
+        Some(CellPos::new(
+            first_x.wrapping_add((x - area.x).wrapping_mul(zoom)),
+            first_y.wrapping_add((y - area.y).wrapping_mul(zoom)),
+            centre.z,
+        ))
     }
 
     /// The view model.
@@ -192,7 +252,15 @@ impl WorldView {
             .copied()
             .filter(|zoom| zoom.is_finite() && *zoom >= 1.0)
             .map_or(1, |zoom| zoom.round() as u32);
-        self.camera.zoom().saturating_mul(own).clamp(1, MAX_ZOOM) as i32
+        self.zoom_with(own)
+    }
+
+    /// The camera's factor times a view's own, within the limits.
+    fn zoom_with(&self, own: u32) -> i32 {
+        self.camera
+            .zoom()
+            .saturating_mul(own.max(1))
+            .clamp(1, MAX_ZOOM) as i32
     }
 
     /// Draws one storey from above into `area`.
@@ -235,7 +303,51 @@ impl WorldView {
         };
         self.paint_heard(canvas, &place);
         if let Some(cursor) = self.camera.cursor() {
+            if self.line {
+                // What stands in a cell is not drawn over: the line
+                // shows through open ground only.
+                let mut open = |cell: CellPos| {
+                    composer.plan_with(&mut reader, cell).rank <= Rank::Field
+                };
+                self.paint_line(canvas, cursor, &place, &mut open);
+            }
             self.paint_cursor(canvas, place(cursor));
+        }
+    }
+
+    /// Draws the line from the followed position to the cursor: the
+    /// cells between the two that show nothing but ground, each keeping
+    /// its background. A wall or a creature on the line stays as it is
+    /// drawn. Only on the followed position's own storey, where the two
+    /// are on one plane.
+    fn paint_line(
+        &self,
+        canvas: &mut Canvas<'_>,
+        cursor: CellPos,
+        place: &dyn Fn(CellPos) -> Option<(i32, i32)>,
+        open: &mut dyn FnMut(CellPos) -> bool,
+    ) {
+        let from = self.camera.subject();
+        if from.z != cursor.z {
+            return;
+        }
+        let mark = self.glyphs.marks().line;
+        let base = self.glyphs.base();
+        for (x, y) in line_between((from.x, from.y), (cursor.x, cursor.y)) {
+            let cell = CellPos::new(x, y, cursor.z);
+            let Some((col, row)) = place(cell) else {
+                continue;
+            };
+            if !open(cell) {
+                continue;
+            }
+            canvas.edit(col, row, |cell| {
+                let beneath = crate::CellStyle {
+                    bg: cell.bg,
+                    ..base
+                };
+                *cell = resolve_part(mark, &GlyphInputs::default(), beneath);
+            });
         }
     }
 

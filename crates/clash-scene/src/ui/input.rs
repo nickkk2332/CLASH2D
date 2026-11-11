@@ -9,8 +9,9 @@ use crate::input::{
     CONTEXT_MENU, InputEvent, KeyChord, KeyCode, KeymapDef, MouseButton, MouseEvent, MouseKind,
 };
 
+use super::def::UiEffects;
 use super::layout::keep_selection_in_view;
-use super::screen::{Flavour, Kind, Listing, Screen, UiEvent, WidgetEvent};
+use super::screen::{Flavour, Kind, Listing, Screen, UiEvent, ViewKind, WidgetEvent};
 use super::{
     NAV_ACCEPT, NAV_DELETE, NAV_ERASE, NAV_FIRST, NAV_FOCUS_NEXT, NAV_FOCUS_PREV, NAV_LAST,
     NAV_LEFT, NAV_NEXT, NAV_PAGE_NEXT, NAV_PAGE_PREV, NAV_PREV, NAV_RIGHT, NAV_TOGGLE,
@@ -21,6 +22,18 @@ const WHEEL_LINES: i32 = 3;
 /// The most characters that can be typed into a `number`.
 const MAX_TYPED_DIGITS: usize = 18;
 
+/// Finds the `control` a key's name means (12 §9.2): its qualified id
+/// and its effects. The scene supplies one over the loaded definitions.
+pub type ControlLookup<'a> = &'a dyn Fn(&str) -> Option<(String, UiEffects)>;
+
+/// The view's own zoom as a whole factor of at least one.
+fn own_zoom(zoom: &super::def::Prop<f64>) -> u32 {
+    zoom.as_static()
+        .copied()
+        .filter(|zoom| zoom.is_finite() && *zoom >= 1.0)
+        .map_or(1, |zoom| zoom.round() as u32)
+}
+
 impl Screen {
     /// Gives the screen one input event and returns what it asks for in
     /// answer: effects to run and variables that changed. `keymap` names
@@ -29,13 +42,26 @@ impl Screen {
     /// The screen must have been laid out (by [`Screen::draw`] or
     /// [`Screen::layout`]) for focus and the mouse to mean anything.
     pub fn input(&mut self, event: &InputEvent, keymap: &KeymapDef) -> Vec<UiEvent> {
+        self.input_with(event, keymap, &|_| None)
+    }
+
+    /// As [`Screen::input`], with the controls a key's name may mean
+    /// (12 §9.2). A name that no widget and no entry of the screen's
+    /// `keys` used is looked up among them before the toolkit acts on it
+    /// itself.
+    pub fn input_with(
+        &mut self,
+        event: &InputEvent,
+        keymap: &KeymapDef,
+        controls: ControlLookup<'_>,
+    ) -> Vec<UiEvent> {
         let mut out = Vec::new();
         if self.stale {
             let (cols, rows) = self.size;
             self.layout(cols, rows);
         }
         match event {
-            InputEvent::Key(chord) => self.key(*chord, keymap, &mut out),
+            InputEvent::Key(chord) => self.key(*chord, keymap, controls, &mut out),
             InputEvent::Text(text) => {
                 for ch in text.chars() {
                     if let Some(focus) = self.focus
@@ -88,7 +114,13 @@ impl Screen {
         self.reveal_focus();
     }
 
-    fn key(&mut self, chord: KeyChord, keymap: &KeymapDef, out: &mut Vec<UiEvent>) {
+    fn key(
+        &mut self,
+        chord: KeyChord,
+        keymap: &KeymapDef,
+        controls: ControlLookup<'_>,
+        out: &mut Vec<UiEvent>,
+    ) {
         // A context the keymap does not list, or a key it does not name
         // there, falls back to the menu context.
         let name = keymap
@@ -110,6 +142,10 @@ impl Screen {
                 name: name.to_owned(),
                 effects: effects.clone(),
             });
+            return;
+        }
+        if let Some((id, effects)) = controls(name) {
+            out.push(UiEvent::Control { id, effects });
             return;
         }
         match name {
@@ -564,6 +600,23 @@ impl Screen {
                 });
                 true
             }
+            // A view that says what picking does picks where the cursor
+            // is. One that does not leaves the key to the screen.
+            Kind::View { kind, def } => {
+                if name != Some(NAV_ACCEPT) || *kind != ViewKind::Map || def.on_pick.is_empty() {
+                    return false;
+                }
+                out.push(UiEvent::ViewPick {
+                    id: self.nodes[index].id.clone(),
+                    kind: *kind,
+                    zoom: own_zoom(&def.zoom),
+                    area: inner,
+                    at: None,
+                    second: false,
+                    effects: def.on_pick.clone(),
+                });
+                true
+            }
             _ => false,
         }
     }
@@ -607,16 +660,27 @@ impl Screen {
                 self.focus = Some(index);
                 self.click(index, x, y, out);
             }
+            MouseKind::Down(MouseButton::Right) => {
+                let Some(index) = up_from(self, hit, &|kind| matches!(kind, Kind::View { .. }))
+                else {
+                    return;
+                };
+                self.view_clicked(index, x, y, true, out);
+            }
             MouseKind::Wheel(notches) => {
                 let scrolls = |kind: &Kind| {
                     matches!(
                         kind,
-                        Kind::Listing(_) | Kind::Log { .. } | Kind::Scroll { .. }
+                        Kind::Listing(_) | Kind::Log { .. } | Kind::Scroll { .. } | Kind::View { .. }
                     )
                 };
                 let Some(index) = up_from(self, hit, &scrolls) else {
                     return;
                 };
+                if matches!(self.nodes[index].kind, Kind::View { .. }) {
+                    out.push(UiEvent::ViewWheel { notches });
+                    return;
+                }
                 let lines = i32::from(notches) * WHEEL_LINES;
                 let inner = self.nodes[index].inner;
                 match &mut self.nodes[index].kind {
@@ -705,6 +769,30 @@ impl Screen {
         if let Some(name) = press {
             self.widget_key(index, accept, Some(name), out);
         }
+        if matches!(self.nodes[index].kind, Kind::View { .. }) {
+            self.view_clicked(index, x, y, false, out);
+        }
+    }
+
+    /// A click on a view of the world: the scene is told which cell of
+    /// the frame it fell on.
+    fn view_clicked(&mut self, index: usize, x: i32, y: i32, second: bool, out: &mut Vec<UiEvent>) {
+        let node = &self.nodes[index];
+        let Kind::View { kind, def } = &node.kind else {
+            return;
+        };
+        if !node.inner.contains(x, y) {
+            return;
+        }
+        out.push(UiEvent::ViewPick {
+            id: node.id.clone(),
+            kind: *kind,
+            zoom: own_zoom(&def.zoom),
+            area: node.inner,
+            at: Some((x, y)),
+            second,
+            effects: def.on_pick.clone(),
+        });
     }
 
     fn set_tab(&mut self, index: usize, page: usize, out: &mut Vec<UiEvent>) {

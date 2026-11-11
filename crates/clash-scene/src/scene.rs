@@ -51,19 +51,22 @@ use clash_expr::{
 };
 use thiserror::Error;
 
+use clash_world::Location;
+
 use crate::app::{AppIds, AppReader, AppRequest, AppState, NoApp, pref_request};
+use crate::control::{Collecting, ParamAsk, PendingDecision};
 use crate::defs::{UiDefs, namespace_of};
 use crate::frame::{Frame, FrameCell};
 use crate::frontend::Frontend;
 use crate::input::{InputEvent, KeyChord, KeymapDef};
 use crate::theme::Theme;
 use crate::ui::{
-    AppService, Args, BindScope, Binding, Collect, CommandKind, Evaluator, MessageLog,
-    PreferenceDef, Prop, SLOT_APP, SLOT_IT, SLOT_PARTY, SLOT_SCREEN, SLOT_VIEW, Screen, ScreenDef,
-    TextProp, UiData, UiEffect, UiEffects, UiEvent, ValueProp, VarRef, ViewPainter, from_var,
-    to_var,
+    AppService, Args, BindScope, Binding, CameraEffect, Collect, CommandKind, Evaluator,
+    MessageLog, PreferenceDef, Prop, SLOT_APP, SLOT_IT, SLOT_PARTY, SLOT_SCREEN, SLOT_VIEW,
+    Screen, ScreenDef, TextProp, UiData, UiEffect, UiEffects, UiEvent, ValueProp, VarRef,
+    ViewPainter, from_var, to_var,
 };
-use crate::view::WorldView;
+use crate::view::{SpriteId, WorldView};
 
 /// The role of the screen the `confirm` effect opens (12 §10.7).
 pub const ROLE_CONFIRM: &str = "confirm";
@@ -138,6 +141,52 @@ pub trait SceneHost {
     fn reader(&mut self) -> &mut dyn Host {
         // `NoReader` holds nothing, so this allocates nothing.
         Box::leak(Box::new(NoReader))
+    }
+
+    /// The decision a directly controlled character is being asked for
+    /// (03 §5.2), if one is waiting: the one the simulation returned
+    /// from `advance`. The scene opens the screen for its kind and
+    /// submits the answer as a command (12 §9.5).
+    fn pending_decision(&self) -> Option<PendingDecision> {
+        None
+    }
+
+    /// The value that stands for a cell in expressions and commands: a
+    /// `loc`. The scene knows cells by their coordinates and the
+    /// simulation by handles only it can make. Null where there is no
+    /// simulation.
+    fn cell_value(&mut self, _at: Location) -> ExprValue {
+        ExprValue::Null
+    }
+
+    /// The cell a `loc` value stands for: the other way round from
+    /// [`SceneHost::cell_value`]. A cell picker starts its cursor on the
+    /// cell its parameter is filled in with.
+    fn cell_of(&mut self, _value: &ExprValue) -> Option<Location> {
+        None
+    }
+
+    /// The value that stands for a perceived character or object: what
+    /// the party knows as the sprite with this number in the view
+    /// model. Null if the number means nothing to the host.
+    fn sprite_value(&mut self, _sprite: SpriteId) -> ExprValue {
+        ExprValue::Null
+    }
+
+    /// The sprite the view model knows a perceived thing by, if the
+    /// party perceives it somewhere: the other way round from
+    /// [`SceneHost::sprite_value`].
+    fn sprite_of(&mut self, _value: &ExprValue) -> Option<SpriteId> {
+        None
+    }
+
+    /// What the acting character believes could be chosen for a
+    /// parameter of an action (12 §9.3): the entries of a picker.
+    /// `None` if the host has nothing to say, in which case an entity
+    /// picker offers what the view model holds and a list picker is
+    /// empty. Never truth: only what that character has perceived.
+    fn candidates(&mut self, _ask: &ParamAsk<'_>) -> Option<Vec<ExprValue>> {
+        None
     }
 }
 
@@ -229,6 +278,15 @@ pub enum UiOutcome {
     },
     /// An engine service was carried out.
     Service(AppRequest),
+    /// A command that was being put together was abandoned: a picker
+    /// asking for one of its parameters was closed. Nothing was
+    /// submitted.
+    Cancelled {
+        /// The action.
+        command: String,
+    },
+    /// The cursor or the view of the world was moved.
+    Camera(CameraEffect),
     /// An effect could not be run.
     Failed {
         /// The effect.
@@ -260,15 +318,41 @@ impl Turn {
 /// (particles, shake) never touches the simulation's streams.
 const SCENE_SEED: u64 = 0x5ce4e;
 
-/// What waits for the answer of a screen opened by `confirm` or `pick`.
+/// What a screen that was opened to ask something is asking for.
 #[derive(Clone, Debug)]
-struct Pending {
-    /// Where a pick's choice is stored. `None` for a confirm.
-    into: Option<Option<VarRef>>,
+pub(crate) enum Wait {
+    /// A `confirm`: yes or no.
+    Confirm,
+    /// A `pick`: a choice, and where it is stored.
+    Pick(Option<VarRef>),
+    /// Which action an `act` is to start.
+    Action,
+    /// A parameter of the command being put together.
+    Param,
+    /// The answer to a decision the simulation asked for.
+    Decision,
+}
+
+/// What waits for the answer of a screen opened to ask something.
+#[derive(Clone, Debug)]
+pub(crate) struct Pending {
+    /// What is being asked.
+    pub(crate) wait: Wait,
     /// The effects that follow in the list that asked.
-    rest: Vec<UiEffect>,
+    pub(crate) rest: Vec<UiEffect>,
     /// What `it` was for that list.
-    it: Option<ExprValue>,
+    pub(crate) it: Option<ExprValue>,
+}
+
+impl Pending {
+    /// Something asked with no effects waiting behind it.
+    pub(crate) fn bare(wait: Wait) -> Pending {
+        Pending {
+            wait,
+            rest: Vec::new(),
+            it: None,
+        }
+    }
 }
 
 /// The scene: the stack of screens, the theme and keymap in force, the
@@ -336,33 +420,44 @@ struct Pending {
 /// `drain_events` or anything that takes the simulation mutably, and
 /// that the view it is given is read-only.
 pub struct Scene<H: SceneHost = NoHost> {
-    host: H,
-    app: Box<dyn AppState>,
-    theme: Theme,
-    keymap: KeymapDef,
-    screens: Vec<Screen>,
+    pub(crate) host: H,
+    pub(crate) app: Box<dyn AppState>,
+    pub(crate) theme: Theme,
+    pub(crate) keymap: KeymapDef,
+    /// The namespace of the keymap in force: where a bare control name
+    /// is looked up first.
+    pub(crate) keymap_ns: String,
+    pub(crate) screens: Vec<Screen>,
     /// For each open screen, what waits for its answer.
-    pending: Vec<Option<Pending>>,
-    log: MessageLog,
-    rng: Rng,
-    elapsed: f64,
-    world: Option<WorldView>,
-    ui: Option<UiDefs>,
-    app_ids: Option<AppIds>,
+    pub(crate) pending: Vec<Option<Pending>>,
+    /// Counts every screen opened and closed, so that a list of effects
+    /// can tell that the stack changed beneath it.
+    pub(crate) stack_gen: u64,
+    pub(crate) log: MessageLog,
+    pub(crate) rng: Rng,
+    pub(crate) elapsed: f64,
+    pub(crate) world: Option<WorldView>,
+    pub(crate) ui: Option<UiDefs>,
+    pub(crate) app_ids: Option<AppIds>,
     /// The player's preferences, by qualified id.
-    prefs: VarMap,
+    pub(crate) prefs: VarMap,
     /// The screen for each role (12 §10.7), by qualified id.
-    roles: BTreeMap<String, String>,
-    runner: Runner,
+    pub(crate) roles: BTreeMap<String, String>,
+    pub(crate) runner: Runner,
     /// Whether something bindings may read has changed since they were
     /// last evaluated.
-    stale: bool,
+    pub(crate) stale: bool,
     /// The grid of the last frame built.
-    size: (u16, u16),
-    run_effects: bool,
-    quit: bool,
+    pub(crate) size: (u16, u16),
+    pub(crate) run_effects: bool,
+    pub(crate) quit: bool,
     /// How many run-time warnings the bindings have raised.
-    warnings: u64,
+    pub(crate) warnings: u64,
+    /// The command being put together by pickers, if one is (12 §9.3).
+    pub(crate) collecting: Option<Collecting>,
+    /// The decision the scene has shown, so that it is shown once
+    /// (12 §9.5).
+    pub(crate) deciding: Option<PendingDecision>,
 }
 
 impl<H: SceneHost + fmt::Debug> fmt::Debug for Scene<H> {
@@ -381,7 +476,7 @@ impl<H: SceneHost + fmt::Debug> fmt::Debug for Scene<H> {
 /// Evaluates bindings for the scene: the compiled expressions, against
 /// the game's reader, the application's state and the screen's own
 /// names.
-struct Reader<'a> {
+pub(crate) struct Reader<'a> {
     runner: &'a mut Runner,
     ui: &'a UiDefs,
     theme: &'a Theme,
@@ -478,21 +573,47 @@ impl Reader<'_> {
     }
 
     /// The value an effect gives: a literal, or an expression's.
-    fn arg(&mut self, value: &ValueProp, scope: &BindScope<'_>) -> ExprValue {
+    pub(crate) fn arg(&mut self, value: &ValueProp, scope: &BindScope<'_>) -> ExprValue {
         match value {
             Prop::Static(literal) => from_var(&literal.0),
             Prop::Bound(binding) => self.value(binding, scope).unwrap_or_default(),
         }
     }
 
-    fn args(&mut self, args: &Args, scope: &BindScope<'_>) -> BTreeMap<String, ExprValue> {
+    pub(crate) fn args(
+        &mut self,
+        args: &Args,
+        scope: &BindScope<'_>,
+    ) -> BTreeMap<String, ExprValue> {
         args.iter()
             .map(|(name, value)| (name.clone(), self.arg(value, scope)))
             .collect()
     }
 
+    /// The value of an expression an effect holds: null if it was never
+    /// compiled.
+    pub(crate) fn bound(&mut self, binding: &Binding, scope: &BindScope<'_>) -> ExprValue {
+        self.value(binding, scope).unwrap_or_default()
+    }
+
+    /// What the reader calls a value: the built-in `name` (05 §4.6),
+    /// which the host answers. Empty if the host has no name for it.
+    pub(crate) fn name_of(&mut self, value: &ExprValue) -> String {
+        let exprs = self.ui.defs().exprs();
+        let none = VarMap::new();
+        let scope = no_screen(&none, None);
+        let (mut host, runner) = self.host(&scope);
+        match runner
+            .over(exprs, &mut host)
+            .call_named("name", core::slice::from_ref(value))
+        {
+            ExprValue::Null => String::new(),
+            name => name.to_string(),
+        }
+    }
+
     /// A text an effect gives.
-    fn prop_text(&mut self, text: &TextProp, scope: &BindScope<'_>) -> String {
+    pub(crate) fn prop_text(&mut self, text: &TextProp, scope: &BindScope<'_>) -> String {
         match text {
             Prop::Static(text) => text.clone(),
             Prop::Bound(binding) => self
@@ -547,8 +668,10 @@ impl<H: SceneHost> Scene<H> {
             app: Box::new(NoApp),
             theme,
             keymap,
+            keymap_ns: String::new(),
             screens: Vec::new(),
             pending: Vec::new(),
+            stack_gen: 0,
             log: MessageLog::new(),
             rng: Rng::from_seed(SCENE_SEED),
             elapsed: 0.0,
@@ -563,7 +686,18 @@ impl<H: SceneHost> Scene<H> {
             run_effects: false,
             quit: false,
             warnings: 0,
+            collecting: None,
+            deciding: None,
         }
+    }
+
+    /// Says which `keymap` definition the keymap in force is, by its
+    /// qualified id: a bare control name is looked up in its namespace
+    /// first (12 §9.2).
+    #[must_use]
+    pub fn with_keymap_id(mut self, id: &str) -> Scene<H> {
+        self.keymap_ns = namespace_of(id).to_owned();
+        self
     }
 
     /// Gives the scene the loaded definitions: from then on it can open
@@ -690,13 +824,39 @@ impl<H: SceneHost> Scene<H> {
         self.push_prefs(&mut screen);
         self.screens.push(screen);
         self.pending.push(None);
+        self.stack_gen += 1;
         self.stale = true;
     }
 
     /// Takes the top screen off the stack. The one beneath is as it was
-    /// left. Whatever waited for the closed screen's answer is dropped.
+    /// left. Whatever waited for the closed screen's answer is dropped:
+    /// if it was a picker asking for a parameter, the whole command is
+    /// abandoned and nothing is submitted (12 §9.3).
     pub fn close(&mut self) -> Option<Screen> {
-        self.pending.pop();
+        self.close_top().0
+    }
+
+    /// Closes the top screen, and names the command that was abandoned
+    /// with it, if one was.
+    pub(crate) fn close_top(&mut self) -> (Option<Screen>, Option<String>) {
+        let waiting = self.pending.pop().flatten();
+        let screen = self.pop_screen();
+        let abandoned = match waiting.map(|pending| pending.wait) {
+            Some(Wait::Param | Wait::Action) => self.abandon_command(),
+            Some(Wait::Decision) => {
+                // Still to be answered: it is shown again.
+                self.deciding = None;
+                None
+            }
+            _ => None,
+        };
+        (screen, abandoned)
+    }
+
+    /// Takes the top screen off the stack and nothing more. The caller
+    /// has dealt with what waited for it.
+    pub(crate) fn pop_screen(&mut self) -> Option<Screen> {
+        self.stack_gen += 1;
         self.stale = true;
         self.screens.pop()
     }
@@ -808,6 +968,7 @@ impl<H: SceneHost> Scene<H> {
                     .keymap(keymap)
                     .map_err(|diagnostics| diagnostics.render())?
                     .clone();
+                self.keymap_ns = namespace_of(keymap).to_owned();
             }
             _ => {}
         }
@@ -856,16 +1017,48 @@ impl<H: SceneHost> Scene<H> {
     /// Passes input to the top screen and returns what it asks for,
     /// without running any effect: see [`Scene::handle`].
     pub fn input(&mut self, event: &InputEvent) -> Vec<UiEvent> {
-        match self.screens.last_mut() {
+        let Scene {
+            screens,
+            keymap,
+            keymap_ns,
+            ui,
+            stale,
+            ..
+        } = self;
+        match screens.last_mut() {
             Some(screen) => {
-                let events = screen.input(event, &self.keymap);
+                // A name nothing on the screen used may be a control's.
+                let controls =
+                    |name: &str| ui.as_ref().and_then(|ui| ui.control(name, keymap_ns));
+                let events = screen.input_with(event, keymap, &controls);
                 if !events.is_empty() {
-                    self.stale = true;
+                    *stale = true;
                 }
                 events
             }
             None => Vec::new(),
         }
+    }
+
+    /// Gives a key a meaning in a context of the keymap in force, at
+    /// once (12 §9.2): `name` is what the key is to mean there, a
+    /// control's name or one of the toolkit's, and an empty `name` takes
+    /// the key's meaning away. Controls are untouched. The `rebind`
+    /// service does this and then tells the application, which keeps
+    /// the player's bindings between runs and gives them back through
+    /// this function when it starts.
+    pub fn rebind(&mut self, context: &str, key: &str, name: &str) -> Result<(), String> {
+        let chord = KeyChord::parse(key).map_err(|error| error.to_string())?;
+        if context.is_empty() {
+            return Err("`rebind` needs the context the key is bound in".to_owned());
+        }
+        let keys = self.keymap.contexts.entry(context.to_owned()).or_default();
+        if name.is_empty() {
+            keys.remove(&chord);
+        } else {
+            keys.insert(chord, name.to_owned());
+        }
+        Ok(())
     }
 
     /// Advances the scene by real time, in seconds. The application
@@ -893,7 +1086,7 @@ impl<H: SceneHost> Scene<H> {
 
     /// Runs `f` with something to evaluate bindings with and the
     /// screens. `None` if the scene has no definitions.
-    fn with_reader<R>(
+    pub(crate) fn with_reader<R>(
         &mut self,
         f: impl FnOnce(&mut Reader<'_>, &mut Vec<Screen>) -> R,
     ) -> Option<R> {
@@ -1018,8 +1211,28 @@ where
                         VarRef::Screen(_) => out.push(UiOutcome::Changed(var.clone())),
                     }
                 }
+                UiEvent::Control { effects, .. } => self.run_into(effects, None, &mut out),
+                UiEvent::ViewPick {
+                    kind,
+                    zoom,
+                    area,
+                    at,
+                    second,
+                    effects,
+                    ..
+                } => self.view_picked(*kind, *zoom, *area, *at, *second, effects, &mut out),
+                UiEvent::ViewWheel { notches } => {
+                    let by = CameraEffect {
+                        zoom: i32::from(notches.signum()),
+                        ..CameraEffect::default()
+                    };
+                    if self.move_camera(&by).is_ok() {
+                        out.push(UiOutcome::Camera(by));
+                    }
+                }
             }
         }
+        self.push_status();
         out
     }
 
@@ -1068,14 +1281,19 @@ where
         out
     }
 
-    fn run_into(&mut self, effects: &UiEffects, it: Option<ExprValue>, out: &mut Vec<UiOutcome>) {
+    pub(crate) fn run_into(
+        &mut self,
+        effects: &UiEffects,
+        it: Option<ExprValue>,
+        out: &mut Vec<UiOutcome>,
+    ) {
         let origin = self.screens.len().checked_sub(1);
         self.run_list(&effects.0, it, origin, out);
     }
 
     /// Works out a value in the screen that asked, or with no screen if
     /// it has closed.
-    fn eval<R: Default>(
+    pub(crate) fn eval<R: Default>(
         &mut self,
         origin: Option<usize>,
         it: Option<&ExprValue>,
@@ -1103,6 +1321,37 @@ where
             .ok_or_else(|| format!("there is no screen `{name}`"))
     }
 
+    /// Opens the screen for a role as [`Scene::open_role`] does, giving
+    /// it only those of `with` that it declares as parameters: a picker
+    /// or a prompt takes what it has a use for.
+    pub(crate) fn open_role_with(
+        &mut self,
+        role: &str,
+        with: BTreeMap<String, ExprValue>,
+        pending: Option<Pending>,
+    ) -> Result<String, String> {
+        let Some(id) = self.roles.get(role).cloned() else {
+            return Err(format!(
+                "no screen answers the role `{role}`: the profile's `screens` names none"
+            ));
+        };
+        let Some(ui) = &self.ui else {
+            return Err("the scene has no definitions to open a screen from".to_owned());
+        };
+        let mut screen = ui
+            .screen(&id, &self.theme)
+            .map_err(|diagnostics| diagnostics.render())?;
+        for (name, value) in with {
+            // A parameter the screen does not declare is not its concern.
+            screen.set_param(&name, value);
+        }
+        self.open(screen);
+        if let Some(slot) = self.pending.last_mut() {
+            *slot = pending;
+        }
+        Ok(id)
+    }
+
     /// Opens the screen for a role, with a waiting list of effects.
     fn open_role(
         &mut self,
@@ -1122,7 +1371,7 @@ where
         Ok(id)
     }
 
-    fn run_list(
+    pub(crate) fn run_list(
         &mut self,
         effects: &[UiEffect],
         it: Option<ExprValue>,
@@ -1159,8 +1408,12 @@ where
                     }
                 }
                 UiEffect::Close => {
-                    if let Some(closed) = self.close() {
+                    let (closed, abandoned) = self.close_top();
+                    if let Some(closed) = closed {
                         out.push(UiOutcome::Closed(closed.id().to_owned()));
+                    }
+                    if let Some(command) = abandoned {
+                        out.push(UiOutcome::Cancelled { command });
                     }
                     if origin.is_some_and(|at| at >= self.screens.len()) {
                         origin = None;
@@ -1199,7 +1452,7 @@ where
                         with
                     });
                     let pending = Pending {
-                        into: None,
+                        wait: Wait::Confirm,
                         rest: effects[index + 1..].to_vec(),
                         it: it.clone(),
                     };
@@ -1241,7 +1494,7 @@ where
                         with
                     });
                     let pending = Pending {
-                        into: Some(pick.into.as_deref().map(VarRef::parse)),
+                        wait: Wait::Pick(pick.into.as_deref().map(VarRef::parse)),
                         rest: effects[index + 1..].to_vec(),
                         it: it.clone(),
                     };
@@ -1253,53 +1506,106 @@ where
                 }
                 UiEffect::Answer(value) => {
                     let answer = self.eval(origin, it.as_ref(), |r, scope| r.arg(value, scope));
-                    let waiting = self.pending.last_mut().and_then(Option::take);
-                    if let Some(closed) = self.close() {
-                        out.push(UiOutcome::Closed(closed.id().to_owned()));
-                    }
-                    let beneath = self.screens.len().checked_sub(1);
-                    origin = None;
-                    let Some(waiting) = waiting else { continue };
-                    match waiting.into {
-                        // A confirm: go on only on yes.
-                        None => {
-                            if answer.as_bool().unwrap_or(false) {
-                                self.run_list(&waiting.rest, waiting.it, beneath, out);
+                    let asked = self
+                        .pending
+                        .last()
+                        .and_then(Option::as_ref)
+                        .map(|pending| pending.wait.clone());
+                    // An answer to a picker of a command being put
+                    // together, or to a decision, is the scene's to
+                    // take: the screen may stay open.
+                    let stack = self.stack_gen;
+                    match asked {
+                        Some(Wait::Param) => self.param_answered(answer, out),
+                        Some(Wait::Action) => self.action_answered(answer, out),
+                        Some(Wait::Decision) => self.decision_answered(answer, out),
+                        _ => {
+                            let waiting = self.pending.last_mut().and_then(Option::take);
+                            if let Some(closed) = self.close() {
+                                out.push(UiOutcome::Closed(closed.id().to_owned()));
                             }
-                        }
-                        // A pick: store the choice and go on with it.
-                        Some(into) => {
-                            if answer.is_null() {
-                                continue;
-                            }
-                            if let Some(var) = into {
-                                match self.assign(&var, &answer, beneath) {
-                                    Ok(var) => out.push(UiOutcome::Changed(var)),
-                                    Err(reason) => out.push(UiOutcome::Failed {
-                                        effect: "pick",
-                                        reason,
-                                    }),
+                            let beneath = self.screens.len().checked_sub(1);
+                            match waiting {
+                                // A confirm: go on only on yes.
+                                Some(Pending {
+                                    wait: Wait::Confirm,
+                                    rest,
+                                    it,
+                                }) => {
+                                    if answer.as_bool().unwrap_or(false) {
+                                        self.run_list(&rest, it, beneath, out);
+                                    }
                                 }
+                                // A pick: store the choice and go on
+                                // with it.
+                                Some(Pending {
+                                    wait: Wait::Pick(into),
+                                    rest,
+                                    ..
+                                }) if !answer.is_null() => {
+                                    if let Some(var) = into {
+                                        match self.assign(&var, &answer, beneath) {
+                                            Ok(var) => out.push(UiOutcome::Changed(var)),
+                                            Err(reason) => out.push(UiOutcome::Failed {
+                                                effect: "pick",
+                                                reason,
+                                            }),
+                                        }
+                                    }
+                                    self.run_list(&rest, Some(answer), beneath, out);
+                                }
+                                _ => {}
                             }
-                            self.run_list(&waiting.rest, Some(answer), beneath, out);
                         }
                     }
+                    if self.stack_gen != stack {
+                        origin = None;
+                    }
+                }
+                UiEffect::Submit(command)
+                    if command.kind == CommandKind::Act
+                        && (command.collect != Collect::Given || command.choose.is_some()) =>
+                {
+                    // The player is asked: what follows in the list
+                    // waits for the command to be submitted.
+                    let rest = effects[index + 1..].to_vec();
+                    self.begin_act(command, it.clone(), origin, rest, out);
+                    return;
                 }
                 UiEffect::Submit(command) => {
                     let args =
                         self.eval(origin, it.as_ref(), |r, scope| r.args(&command.args, scope));
+                    let name = match command.kind {
+                        // An action is known to the simulation by its
+                        // qualified id, where the scene can tell it.
+                        CommandKind::Act => self
+                            .action_id(&command.name, origin)
+                            .unwrap_or_else(|| command.name.clone()),
+                        _ => command.name.clone(),
+                    };
                     let command = UiCommand {
                         kind: command.kind,
-                        name: command.name.clone(),
+                        name,
                         args,
                         collect: command.collect,
                     };
-                    match self.host.submit(H::Command::from(command.clone())) {
-                        Ok(()) => out.push(UiOutcome::Submitted(command)),
-                        Err(refusal) => out.push(UiOutcome::Refused {
-                            command,
-                            reason: refusal.to_string(),
-                        }),
+                    self.submit_command(command, out);
+                }
+                UiEffect::Camera(camera) => match self.move_camera(camera) {
+                    Ok(()) => out.push(UiOutcome::Camera(*camera)),
+                    Err(reason) => out.push(failed(reason)),
+                },
+                UiEffect::Picker(picker) => {
+                    let value = match picker {
+                        crate::ui::PickerEffect::Toggle(value) => {
+                            self.eval(origin, it.as_ref(), |r, scope| r.arg(value, scope))
+                        }
+                        _ => ExprValue::Null,
+                    };
+                    let stack = self.stack_gen;
+                    self.picker_effect(picker, value, out);
+                    if self.stack_gen != stack {
+                        origin = None;
                     }
                 }
                 UiEffect::App(app) => {
@@ -1313,6 +1619,24 @@ where
                         Err(reason) => out.push(failed(reason)),
                     }
                 }
+            }
+        }
+    }
+
+    /// Hands a finished command to the simulation and reports what came
+    /// of it. Returns whether it was accepted.
+    pub(crate) fn submit_command(&mut self, command: UiCommand, out: &mut Vec<UiOutcome>) -> bool {
+        match self.host.submit(H::Command::from(command.clone())) {
+            Ok(()) => {
+                out.push(UiOutcome::Submitted(command));
+                true
+            }
+            Err(refusal) => {
+                out.push(UiOutcome::Refused {
+                    command,
+                    reason: refusal.to_string(),
+                });
+                false
             }
         }
     }
@@ -1387,12 +1711,8 @@ where
                 ) else {
                     return Err("`rebind` needs `context`, `key` and `name` as texts".to_owned());
                 };
-                let chord = KeyChord::parse(key).map_err(|error| error.to_string())?;
-                self.keymap
-                    .contexts
-                    .entry(context.to_owned())
-                    .or_default()
-                    .insert(chord, name.to_owned());
+                // At once; the application is then told, to keep it.
+                self.rebind(context, key, name)?;
             }
             AppService::Quit => self.quit = true,
             _ => {}
@@ -1407,6 +1727,10 @@ where
     /// ([`Scene::running_effects`]), what they came to.
     pub fn turn(&mut self, front: &mut dyn Frontend, frame: &mut Frame, seconds: f64) -> Turn {
         let mut turn = Turn::default();
+        if self.run_effects {
+            // A decision the simulation is waiting for gets its screen.
+            turn.outcomes.extend(self.sync_decision());
+        }
         for event in front.poll() {
             if event == InputEvent::Close {
                 turn.close_requested = true;

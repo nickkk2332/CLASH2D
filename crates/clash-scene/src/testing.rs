@@ -23,12 +23,28 @@
 //! | `entity` | `pool(name)` | `pool?`, its own | no |
 //! | `entity` | `items` | `list<item>`, its own | no |
 //! | `entity` | `seen` | `list<entity>` | yes |
+//! | `entity` | `at` | `loc` | yes |
 //! | `pool` | `value`, `max`, `frac` | `real` | no |
 //! | `item` | `name` | `string` | yes |
 //! | `item` | `weight` | `real` | no |
 //!
+//! and one more kind, `loc`, a cell, with the function `dist(a, b)`,
+//! the distance in metres between two entities or cells as the host
+//! places them ([`FakeHost::place`]); safe for belief. The built-in
+//! `name(x)` is answered with the `name` of an entity or an item.
+//!
 //! Its world holds three entities: Mara (1) and Jonas (2), who are the
 //! party, Mara being `view`, and a stranger (3) whom Mara has seen.
+//!
+//! # Where the simulation's own values come from
+//!
+//! The scene knows cells by their coordinates and perceived things by
+//! the number of their sprite. The fake host turns a cell into a `loc`
+//! ([`FakeHost::loc`]) and the sprite with number `n` into the entity
+//! with number `n`, and back. It offers the candidates a test gives it
+//! ([`FakeHost::offer`]) and the decision a test says is waiting
+//! ([`FakeHost::ask`]), which the commands `react`, `pass` and `choose`
+//! answer.
 //!
 //! [`FakeHost::plain`] is for a load with no simulation's registry, as
 //! the gallery's: there `view` is `any`, and the host gives it as a map
@@ -39,18 +55,35 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use clash_core::{Real, Rng};
 use clash_expr::{
-    DefRef, FunctionId, Handle, Host, KindId, KindSpec, PropertyId, PropertySpec, Registry,
-    RuntimeWarning, Type, Value,
+    DefRef, FunctionId, FunctionSpec, Handle, Host, KindId, KindSpec, PropertyId, PropertySpec,
+    Registry, RuntimeWarning, Type, Value,
 };
+use clash_world::{CellPos, Location};
 
 use crate::app::{AppCurrent, AppEntry, AppList, AppRequest, AppState};
+use crate::control::{COMMAND_CHOOSE, COMMAND_PASS, COMMAND_REACT, ParamAsk, PendingDecision};
 use crate::scene::{SceneHost, UiCommand};
 use crate::ui::{AppService, KIND_ENTITY};
+use crate::view::SpriteId;
 
 /// The kind of a thing an entity carries, in the fake registry.
 pub const KIND_ITEM: &str = "item";
 /// The kind of a reserve an entity has, in the fake registry.
 pub const KIND_POOL: &str = "pool";
+/// The kind of a cell, in the fake registry.
+pub const KIND_LOC: &str = "loc";
+/// The kind of a reaction window, in the fake registry: an action that
+/// answers one binds it.
+pub const KIND_WINDOW: &str = "window";
+/// The function that gives the distance between two things.
+pub const FN_DIST: &str = "dist";
+/// The built-in that gives what the reader calls something.
+const FN_NAME: &str = "name";
+
+/// How many bits of a fake `loc` handle hold each coordinate.
+const LOC_BITS: u32 = 20;
+/// Added to a coordinate so that it is stored as a positive number.
+const LOC_BIAS: i64 = 1 << (LOC_BITS - 1);
 
 /// A registry with the built-in functions and the kinds and properties
 /// tabled in the [module](self) documentation.
@@ -64,6 +97,8 @@ pub fn registry() -> Registry {
     let entity = kind(KIND_ENTITY, "Any entity.");
     let item = kind(KIND_ITEM, "A thing carried.");
     let pool = kind(KIND_POOL, "A reserve: an amount against a most.");
+    let loc = kind(KIND_LOC, "A cell of the world.");
+    kind(KIND_WINDOW, "An open reaction window.");
     let specs = [
         PropertySpec::new(entity, "name", Type::Str)
             .belief_safe(true)
@@ -79,6 +114,9 @@ pub fn registry() -> Registry {
         PropertySpec::new(entity, "seen", Type::list(Type::Subject(entity)))
             .belief_safe(true)
             .doc("The entities it has perceived."),
+        PropertySpec::new(entity, "at", Type::Subject(loc))
+            .belief_safe(true)
+            .doc("The cell it is believed to be in."),
         PropertySpec::new(pool, "value", Type::Real).doc("How much there is."),
         PropertySpec::new(pool, "max", Type::Real).doc("The most there can be."),
         PropertySpec::new(pool, "frac", Type::Real).doc("The share there is, from 0 to 1."),
@@ -93,6 +131,14 @@ pub fn registry() -> Registry {
             .expect("the fake properties have distinct names");
     }
     registry
+        .add_function(
+            FunctionSpec::new(FN_DIST, Type::Real.nullable())
+                .param("a", Type::Any, "An entity or a cell.")
+                .param("b", Type::Any, "An entity or a cell.")
+                .doc("The distance between two things, in metres. Null if either is nowhere."),
+        )
+        .expect("the fake registry has no `dist` yet");
+    registry
 }
 
 fn real(value: f64) -> Value {
@@ -105,6 +151,7 @@ struct Kinds {
     entity: KindId,
     item: KindId,
     pool: KindId,
+    loc: KindId,
 }
 
 #[derive(Debug, Default)]
@@ -117,6 +164,24 @@ struct World {
     party: Value,
     log: Vec<UiCommand>,
     refused: Vec<String>,
+    /// Where each entity is.
+    places: BTreeMap<Handle, CellPos>,
+    /// What may be chosen for each parameter, by its name.
+    offers: BTreeMap<String, Vec<Value>>,
+    /// The decision that is waiting.
+    decision: Option<PendingDecision>,
+}
+
+/// A cell as the payload of a fake `loc` handle.
+fn pack(cell: CellPos) -> u64 {
+    let part = |n: i32| ((i64::from(n) + LOC_BIAS) as u64) & ((1 << LOC_BITS) - 1);
+    part(cell.x) | (part(cell.y) << LOC_BITS) | (part(cell.z) << (2 * LOC_BITS))
+}
+
+/// The cell a fake `loc` handle's payload stands for.
+fn unpack(payload: u64) -> CellPos {
+    let part = |shift: u32| (((payload >> shift) & ((1 << LOC_BITS) - 1)) as i64 - LOC_BIAS) as i32;
+    CellPos::new(part(0), part(LOC_BITS), part(2 * LOC_BITS))
 }
 
 fn lock<T>(state: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -151,6 +216,7 @@ impl FakeHost {
             entity: kind(KIND_ENTITY),
             item: kind(KIND_ITEM),
             pool: kind(KIND_POOL),
+            loc: kind(KIND_LOC),
         };
         let host = FakeHost {
             world: Arc::new(Mutex::new(World {
@@ -294,6 +360,48 @@ impl FakeHost {
     pub fn commands(&self) -> Vec<UiCommand> {
         lock(&self.world).log.clone()
     }
+
+    /// The value of a cell: a `loc`. Coordinates within half a million
+    /// cells of the origin are told apart.
+    ///
+    /// # Panics
+    ///
+    /// If the host is [`plain`](FakeHost::plain): a mistake in a test.
+    pub fn loc(&self, x: i32, y: i32, z: i32) -> Value {
+        Value::Subject(self.handle(|kinds| kinds.loc, pack(CellPos::new(x, y, z))))
+    }
+
+    /// Says where an entity is, for `dist` and for its `at`.
+    pub fn place(&self, entity: Handle, x: i32, y: i32, z: i32) {
+        let at = self.loc(x, y, z);
+        self.set(entity, "at", at);
+        lock(&self.world)
+            .places
+            .insert(entity, CellPos::new(x, y, z));
+    }
+
+    /// Says what the acting character believes could be chosen for the
+    /// parameter with this name, of any action.
+    pub fn offer(&self, param: &str, values: Vec<Value>) {
+        lock(&self.world).offers.insert(param.to_owned(), values);
+    }
+
+    /// Says which decision is waiting, or that none is. A `react`, a
+    /// `pass` or a `choose` that the host accepts answers it.
+    pub fn ask(&self, decision: Option<PendingDecision>) {
+        lock(&self.world).decision = decision;
+    }
+}
+
+impl World {
+    /// Where a value is: an entity's place, or the cell a `loc` is.
+    fn cell_of(&self, value: &Value) -> Option<CellPos> {
+        let handle = value.as_subject()?;
+        match self.kinds {
+            Some(kinds) if handle.kind == kinds.loc => Some(unpack(handle.payload)),
+            _ => self.places.get(&handle).copied(),
+        }
+    }
 }
 
 impl SceneHost for FakeHost {
@@ -305,8 +413,53 @@ impl SceneHost for FakeHost {
         if world.refused.contains(&command.name) {
             return Err(format!("the fake host refuses `{}`", command.name));
         }
+        if [COMMAND_REACT, COMMAND_PASS, COMMAND_CHOOSE].contains(&command.name.as_str()) {
+            world.decision = None;
+        }
         world.log.push(command);
         Ok(())
+    }
+
+    fn pending_decision(&self) -> Option<PendingDecision> {
+        lock(&self.world).decision.clone()
+    }
+
+    fn cell_value(&mut self, at: Location) -> Value {
+        match lock(&self.world).kinds {
+            Some(kinds) => Value::Subject(Handle::new(kinds.loc, pack(at.cell))),
+            None => Value::map([
+                ("x", Value::Int(i64::from(at.cell.x))),
+                ("y", Value::Int(i64::from(at.cell.y))),
+                ("z", Value::Int(i64::from(at.cell.z))),
+            ]),
+        }
+    }
+
+    fn cell_of(&mut self, value: &Value) -> Option<Location> {
+        let world = lock(&self.world);
+        let handle = value.as_subject()?;
+        // The fake world has one grid.
+        (handle.kind == world.kinds?.loc).then(|| {
+            Location::new(clash_world::GridId::new(0), unpack(handle.payload))
+        })
+    }
+
+    fn sprite_value(&mut self, sprite: SpriteId) -> Value {
+        // The sprite with a number is the entity with that number.
+        match lock(&self.world).kinds {
+            Some(kinds) => Value::Subject(Handle::new(kinds.entity, sprite.raw())),
+            None => Value::Null,
+        }
+    }
+
+    fn sprite_of(&mut self, value: &Value) -> Option<SpriteId> {
+        let entity = lock(&self.world).kinds?.entity;
+        let handle = value.as_subject()?;
+        (handle.kind == entity).then(|| SpriteId::new(handle.payload))
+    }
+
+    fn candidates(&mut self, ask: &ParamAsk<'_>) -> Option<Vec<Value>> {
+        lock(&self.world).offers.get(ask.param).cloned()
     }
 
     fn view(&self) -> Value {
@@ -365,8 +518,40 @@ impl Host for FakeHost {
         Value::Null
     }
 
-    fn call(&mut self, _function: FunctionId, _args: &[Value]) -> Value {
-        Value::Null
+    fn call(&mut self, function: FunctionId, args: &[Value]) -> Value {
+        let world = lock(&self.world);
+        // A plain host has the built-ins and nothing more: `name` is the
+        // one function the scene asks it for.
+        let name = match &world.registry {
+            Some(registry) => match registry.function(function) {
+                Some(function) => function.spec.name.clone(),
+                None => return Value::Null,
+            },
+            None => FN_NAME.to_owned(),
+        };
+        match (name.as_str(), args) {
+            (FN_NAME, [Value::Subject(handle)]) => world
+                .values
+                .get(&(*handle, FN_NAME.to_owned()))
+                .cloned()
+                .unwrap_or_default(),
+            (FN_NAME, [value]) => value
+                .as_map()
+                .and_then(|map| map.get(FN_NAME))
+                .cloned()
+                .unwrap_or_default(),
+            (FN_DIST, [a, b]) => match (world.cell_of(a), world.cell_of(b)) {
+                (Some(a), Some(b)) => {
+                    let squared: f64 = [a.x - b.x, a.y - b.y, a.z - b.z]
+                        .iter()
+                        .map(|d| f64::from(*d) * f64::from(*d))
+                        .sum();
+                    real(squared.sqrt())
+                }
+                _ => Value::Null,
+            },
+            _ => Value::Null,
+        }
     }
 
     fn rng(&mut self) -> Option<&mut Rng> {

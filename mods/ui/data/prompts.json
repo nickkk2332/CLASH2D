@@ -13,7 +13,7 @@
         { "button": { "id": "no", "label": "{$no ?? 'No'}", "on_activate": [ { "answer": false } ] } } ] } ] },
     "keys": { "back": [ { "answer": false } ] } },
 
-  { "//": "What the `pick` effect opens for a list: one row for each entry, shown as the effect's `item` says. A profile names it for the role `picker.list`. Activating a row answers with that entry; Esc leaves without choosing.",
+  { "//": "What the `pick` effect opens for a list: one row for each entry, shown as the effect's `item` says. A profile names it for the role `picker.list`. Activating a row answers with that entry; Esc leaves without choosing. It is also the picker for a parameter chosen from a list, and then the selection starts on the value the parameter is filled in with.",
     "type": "screen", "id": "pick_list",
     "title": "Choose",
     "params": { "options": "list<any>", "title": "string?" },
