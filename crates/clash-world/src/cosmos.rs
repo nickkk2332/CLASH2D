@@ -356,6 +356,9 @@ pub struct Cosmos {
     pub(crate) occupants: LookupMap<EntityId, OccupantRecord>,
     /// The stability checks edits have asked for (02 §14.2).
     pub(crate) stability: StabilityQueue,
+    /// The light worked out so far (15 §3.3). Derived: never saved or
+    /// hashed, and empty in a clone.
+    pub(crate) light: crate::light::LightSlot,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -386,6 +389,7 @@ impl Cosmos {
             sites: SiteTable::new(),
             occupants: LookupMap::new(),
             stability: StabilityQueue::default(),
+            light: crate::light::LightSlot::new(),
         }
     }
 
@@ -613,6 +617,7 @@ impl Cosmos {
         column: Column,
     ) -> Result<Option<Column>, WorldError> {
         self.purge_occupants(grid, tract);
+        self.light_tract_reloaded(grid, tract);
         let slot = self.slot_mut(grid).ok_or(WorldError::UnknownGrid(grid))?;
         Ok(slot.grid.insert_column(tract, column))
     }
@@ -621,6 +626,7 @@ impl Cosmos {
     /// in it is taken out of the occupant index, without events.
     pub(crate) fn remove_column(&mut self, grid: GridId, tract: TractPos) -> Option<Column> {
         self.purge_occupants(grid, tract);
+        self.light_tract_reloaded(grid, tract);
         self.slot_mut(grid)?.grid.remove_column(tract)
     }
 }

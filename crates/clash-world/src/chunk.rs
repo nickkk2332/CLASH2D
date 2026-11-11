@@ -217,6 +217,22 @@ impl Chunk {
         }
     }
 
+    /// Whether any state a layer's palette holds passes a test. A palette
+    /// may hold states no cell uses until the chunk is compacted, so
+    /// this can say yes where a scan of the cells would say no, and
+    /// never the other way round: a quick way to rule a chunk out.
+    pub fn any_state(&self, layer: Layer, mut test: impl FnMut(ElementState) -> bool) -> bool {
+        match layer {
+            Layer::Floor => self.floors.palette().iter().any(|state| test(state.raw())),
+            Layer::Block => self.blocks.palette().iter().any(|state| test(state.raw())),
+            Layer::Fixture => self
+                .fixtures
+                .palette()
+                .iter()
+                .any(|state| test(state.raw())),
+        }
+    }
+
     /// The derived flags of a cell, from the chunk's bitsets.
     #[inline]
     pub fn flags(&self, idx: CellIdx) -> CellFlags {

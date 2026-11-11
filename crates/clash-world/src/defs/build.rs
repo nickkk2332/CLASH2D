@@ -16,6 +16,7 @@ use super::{
     WALK_STEP_M, WorldDefs, WrapAxis,
 };
 use crate::dims::{CELL_M, REGION_CELLS, STOREY_M};
+use crate::light::{LightSource, LightSpec, Sky, SkyId};
 use crate::topology::{Edge, Extent, Topology};
 
 /// The most states one element may declare: what sixteen bits can index.
@@ -204,6 +205,7 @@ struct StateChange<'a> {
     coverage: Option<Real>,
     thickness: Option<Real>,
     glyph: Option<&'a GlyphSpec>,
+    light: Option<&'a LightSpec>,
 }
 
 /// A floor, block or fixture definition, whichever it was written as.
@@ -223,6 +225,24 @@ struct ElementInput<'a> {
     interactions: &'a [String],
     device: Option<&'a DefRef>,
     glyph: Option<&'a GlyphSpec>,
+    light: Option<&'a LightSpec>,
+}
+
+/// The light a definition or one of its states gives off, or nothing
+/// and a reported mistake.
+fn light_of(
+    spec: Option<&LightSpec>,
+    at: At<'_>,
+    path: &str,
+    errors: &mut Errors,
+) -> Option<LightSource> {
+    match LightSource::from_spec(spec?) {
+        Ok(light) => light,
+        Err(message) => {
+            at.error(errors, path, message);
+            None
+        }
+    }
 }
 
 /// The geometry of one state before it is checked.
@@ -348,13 +368,16 @@ fn build_element(
         thickness: input.thickness,
     };
     let base_glyph = input.glyph.cloned().unwrap_or_default();
+    let base_light = light_of(input.light, at, "light", errors);
 
     let mut state_names = Vec::new();
     let mut states = Vec::new();
     let mut glyphs = Vec::new();
+    let mut lights = Vec::new();
     if input.states.is_empty() {
         states.push(state_info(input.layer, base_flags, base, at, "", errors));
         glyphs.push(base_glyph);
+        lights.push(base_light);
     } else {
         if input.states.len() > MAX_STATES {
             at.error(errors, "states", "an element has at most 65,536 states");
@@ -386,6 +409,10 @@ fn build_element(
                 thickness: change.thickness.unwrap_or(base.thickness),
             };
             states.push(state_info(input.layer, flags, geometry, at, &path, errors));
+            lights.push(match change.light {
+                Some(_) => light_of(change.light, at, &format!("{path}.light"), errors),
+                None => base_light,
+            });
             glyphs.push(match change.glyph {
                 Some(over) => base_glyph.overlaid(over),
                 None => base_glyph.clone(),
@@ -443,6 +470,7 @@ fn build_element(
         contact,
         interactions: input.interactions.to_vec(),
         device: input.device.map(|device| device.0.clone()),
+        lights,
     }
 }
 
@@ -506,6 +534,7 @@ fn none_element(layer: Layer, damage_types: usize) -> Element {
         contact: None,
         interactions: Vec::new(),
         device: None,
+        lights: vec![None],
     }
 }
 
@@ -553,6 +582,7 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
     let realm_defs = sorted("realm", raw.realms, errors);
     let plane_defs = sorted("plane", raw.planes, errors);
     let area_kind_defs = sorted("area_kind", raw.area_kinds, errors);
+    let sky_defs = sorted("sky", raw.skies, errors);
 
     // Every id of every type is numbered before anything is resolved, so
     // that a reference may point forwards (04 §7.2).
@@ -565,6 +595,15 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
     let mut blocks: Table<BlockId, Element> = index("block", &block_defs, true, errors);
     let mut fixtures: Table<FixtureId, Element> = index("fixture", &fixture_defs, true, errors);
     let mut realms = index("realm", &realm_defs, false, errors);
+    let mut skies: Table<SkyId, Sky> = index("sky", &sky_defs, false, errors);
+
+    // Skies.
+    for (id, def) in &sky_defs {
+        let at = At { kind: "sky", id };
+        let sky = Sky::from_def(def, |path, message| at.error(errors, path, message));
+        skies.entries.push(sky);
+    }
+    let sky_reach = skies.entries.iter().map(|sky| sky.reach).max().unwrap_or(0);
 
     // Damage types.
     let mut kinetic: Option<DamageTypeId> = None;
@@ -695,6 +734,7 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
                         coverage: None,
                         thickness: state.thickness.map(|thickness| thickness.get()),
                         glyph: state.glyph.as_ref(),
+                        light: state.light.as_ref(),
                     })
                     .collect(),
                 heap: None,
@@ -702,6 +742,7 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
                 interactions: &def.interactions,
                 device: def.device.as_ref(),
                 glyph: def.glyph.as_ref(),
+                light: def.light.as_ref(),
             };
             let at = At { kind: "floor", id };
             floor_entries.push(build_element(&input, at, &refs, errors));
@@ -723,6 +764,7 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
                 interactions: &def.interactions,
                 device: def.device.as_ref(),
                 glyph: def.glyph.as_ref(),
+                light: def.light.as_ref(),
             };
             let at = At { kind: "block", id };
             block_entries.push(build_element(&input, at, &refs, errors));
@@ -744,6 +786,7 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
                 interactions: &def.interactions,
                 device: def.device.as_ref(),
                 glyph: def.glyph.as_ref(),
+                light: def.light.as_ref(),
             };
             let at = At {
                 kind: "fixture",
@@ -755,6 +798,12 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
     floors.entries = floor_entries;
     blocks.entries = block_entries;
     fixtures.entries = fixture_entries;
+    let source_reach = [&floors.entries, &blocks.entries, &fixtures.entries]
+        .into_iter()
+        .flatten()
+        .flat_map(|element| element.lights.iter().flatten())
+        .map(LightSource::reach_cells)
+        .max();
 
     let written: Vec<Option<&str>> = floor_defs
         .iter()
@@ -828,11 +877,22 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
                     errors,
                 )
             });
+            let sky_id = stratum.sky.as_ref().and_then(|sky| {
+                resolve(
+                    &skies,
+                    "sky",
+                    sky.as_str(),
+                    at,
+                    &format!("{path}.sky"),
+                    errors,
+                )
+            });
             strata.push(Stratum {
                 from_z: stratum.from_z,
                 gravity: stratum.gravity,
                 atmosphere,
                 sky: stratum.sky.as_ref().map(|sky| sky.0.clone()),
+                sky_id,
                 temp_offset: stratum.temp_offset,
                 temp: stratum.temp.map(|temp| temp.get()),
             });
@@ -981,6 +1041,9 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         planes,
         area_kinds,
         kinetic,
+        skies,
+        sky_reach,
+        source_reach,
     })
 }
 
@@ -1014,6 +1077,7 @@ fn solid_states(states: &[(String, super::StateSpec)]) -> Vec<StateChange<'_>> {
             coverage: state.coverage,
             thickness: None,
             glyph: state.glyph.as_ref(),
+            light: state.light.as_ref(),
         })
         .collect()
 }

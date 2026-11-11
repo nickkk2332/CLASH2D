@@ -1,0 +1,50 @@
+[
+  { "//": "Day and night under an open sky. The realm's clock starts at eight in the morning. Light under cover loses a quarter for each cell and reaches eight cells in.",
+    "type": "sky", "id": "day_night",
+    "day": "24 h",
+    "starts_at": "8 h",
+    "light": [
+      { "at": "5 h",  "level": 0.03 },
+      { "at": "7 h",  "level": 1.0 },
+      { "at": "17 h", "level": 1.0 },
+      { "at": "19 h", "level": 0.03 }
+    ],
+    "spread": { "loss": 0.25, "reach": 8 },
+    "backdrop": { "ch": " ", "bg": "sky" } },
+
+  { "//": "Above the weather: the same day, a little harsher, and never quite dark.",
+    "type": "sky", "id": "high_altitude",
+    "starts_at": "8 h",
+    "light": [
+      { "at": "5 h",  "level": 0.05 },
+      { "at": "7 h",  "level": 1.2 },
+      { "at": "17 h", "level": 1.2 },
+      { "at": "19 h", "level": 0.05 }
+    ],
+    "backdrop": { "ch": " ", "bg": "sky" } },
+
+  { "//": "No air to scatter light: full sun at every hour, and hard shadows, since nothing spreads.",
+    "type": "sky", "id": "orbit",
+    "light": [ { "at": "0 h", "level": 1.5 } ],
+    "spread": { "loss": 1.0, "reach": 0 },
+    "backdrop": { "ch": ".", "fg": "white", "bg": "black" } },
+
+  { "//": "A lamp on a post or a stand. Switched off it stays where it is and gives no light.",
+    "type": "fixture", "id": "lamp", "material": "steel",
+    "height": 2.5, "fill": 0.02,
+    "flags": ["fragile"],
+    "light": { "intensity": 1.0, "radius": "8 m" },
+    "states": {
+      "on": {},
+      "off": { "light": { "intensity": 0 }, "glyph": { "fg": "dark_gray" } }
+    },
+    "interactions": ["switch"],
+    "glyph": { "ch": "!", "fg": "yellow" } },
+
+  { "//": "A block that glows: a lit panel, a crystal, a slab of something hot.",
+    "type": "block", "id": "glow_block", "material": "glass",
+    "height": 3.0, "fill": 1.0,
+    "flags": ["opaque", "load_bearing"],
+    "light": { "intensity": 0.5 },
+    "glyph": { "ch": "#", "fg": "yellow" } }
+]

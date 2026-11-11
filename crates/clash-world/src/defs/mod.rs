@@ -41,6 +41,7 @@ pub use state::{
     StateRefError,
 };
 
+use crate::light::{LightSource, Sky, SkyId};
 use crate::topology::{Edge, Topology};
 
 /// The reserved namespace of what the engine itself supplies (04 §4.4).
@@ -311,9 +312,22 @@ pub struct Element {
     /// The entity definition of its device, as written. The world stores
     /// and reports it.
     pub device: Option<String>,
+    /// The light each state gives off, if any (15 §3.3): the state's
+    /// own, or else the definition's.
+    pub lights: Vec<Option<LightSource>>,
 }
 
 impl Element {
+    /// The light a state gives off, by its bits, read as
+    /// [`info`](Element::info) reads them.
+    #[inline]
+    pub fn light(&self, bits: u16) -> Option<LightSource> {
+        match self.lights.get(usize::from(bits)) {
+            Some(light) => *light,
+            None => self.lights.first().copied().flatten(),
+        }
+    }
+
     /// The derived values for a state's bits. For a definition with
     /// declared states the bits are the state's index, and an index past
     /// the end means the first state. Otherwise there is one state
@@ -351,8 +365,11 @@ pub struct Stratum {
     pub gravity: Real,
     /// The atmosphere. `None` is vacuum.
     pub atmosphere: Option<AtmosphereId>,
-    /// A presentation hint, as written.
+    /// The sky definition, as written.
     pub sky: Option<String>,
+    /// The sky definition: what light the sky gives by time of day
+    /// (15 §3.3).
+    pub sky_id: Option<SkyId>,
     /// Kelvin added to the region's temperature.
     pub temp_offset: Option<Real>,
     /// A temperature in kelvin replacing the region's.
@@ -463,6 +480,12 @@ pub struct WorldDefs {
     planes: Table<PlaneId, Plane>,
     area_kinds: Table<AreaKindId, AreaKind>,
     kinetic: Option<DamageTypeId>,
+    skies: Table<SkyId, Sky>,
+    /// The furthest any sky's light spreads, in cells.
+    sky_reach: i32,
+    /// The furthest any element's light shines, in whole cells. `None`
+    /// when no element gives light.
+    source_reach: Option<i32>,
 }
 
 // `WorldDefs` is shared between threads behind an `Arc`.
@@ -534,6 +557,44 @@ impl WorldDefs {
     /// deliver, if one is loaded.
     pub fn kinetic_damage_type(&self) -> Option<DamageTypeId> {
         self.kinetic
+    }
+
+    /// The `sky` definitions.
+    pub fn skies(&self) -> &Table<SkyId, Sky> {
+        &self.skies
+    }
+
+    /// The light an element state gives off, if any (15 §3.3).
+    #[inline]
+    pub fn light_of(&self, layer: Layer, state: ElementState) -> Option<LightSource> {
+        self.element(layer, state)?.light(state.bits)
+    }
+
+    /// Whether any element state gives off light.
+    pub fn has_light_sources(&self) -> bool {
+        self.source_reach.is_some()
+    }
+
+    /// The furthest any sky's light spreads from the cells open to it,
+    /// in cells.
+    pub fn sky_reach(&self) -> i32 {
+        self.sky_reach
+    }
+
+    /// How far a change to a cell can change the static light of
+    /// another, in cells along `x` and `y` and storeys along `z`: the
+    /// furthest any sky's light spreads or any element's light shines.
+    pub fn light_reach(&self) -> clash_core::IVec3 {
+        let storey = crate::dims::STOREY_CELLS as i32;
+        // A source's shadow is cast by cells up to one beyond the
+        // straight line to what it lights.
+        let source = self.source_reach.map_or(0, |reach| reach + 1);
+        let source_storeys = self.source_reach.map_or(0, |reach| reach / storey + 1);
+        clash_core::IVec3::new(
+            self.sky_reach.max(source),
+            self.sky_reach.max(source),
+            (self.sky_reach / storey).max(source_storeys),
+        )
     }
 
     fn elements(&self, layer: Layer) -> &[Element] {

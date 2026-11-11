@@ -51,7 +51,8 @@ fn every_world_type_is_registered() {
             "floor",
             "material",
             "plane",
-            "realm"
+            "realm",
+            "sky"
         ]
     );
     for info in types.infos() {

@@ -18,6 +18,7 @@ use serde::de::{Deserializer, IntoDeserializer, MapAccess, Visitor};
 
 use super::flags::EngineFlag;
 use super::quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temperature};
+use crate::light::{LightSpec, SkyDef};
 
 /// A reference to another definition by its id, bare (`"alloy"`) or
 /// qualified (`"mymod:alloy"`). Resolved when definitions are built.
@@ -216,6 +217,10 @@ pub struct StateSpec {
     /// Glyph fields this state changes.
     #[serde(default)]
     pub glyph: Option<GlyphSpec>,
+    /// The light this state gives off, in place of the definition's
+    /// (15 §3.3). An intensity of zero is none.
+    #[serde(default)]
+    pub light: Option<LightSpec>,
 }
 
 /// A named state of a floor.
@@ -234,6 +239,10 @@ pub struct FloorStateSpec {
     /// Glyph fields this state changes.
     #[serde(default)]
     pub glyph: Option<GlyphSpec>,
+    /// The light this state gives off, in place of the definition's
+    /// (15 §3.3). An intensity of zero is none.
+    #[serde(default)]
+    pub light: Option<LightSpec>,
 }
 
 /// The striking surface of an element's `contact` (07 §6.5).
@@ -303,6 +312,9 @@ pub struct BlockDef {
     /// How it is drawn.
     #[serde(default)]
     pub glyph: Option<GlyphSpec>,
+    /// The light it gives off (15 §3.3).
+    #[serde(default)]
+    pub light: Option<LightSpec>,
 }
 
 /// A `fixture` definition: a static prop standing in a cell (02 §5.4).
@@ -349,6 +361,9 @@ pub struct FixtureDef {
     /// How it is drawn.
     #[serde(default)]
     pub glyph: Option<GlyphSpec>,
+    /// The light it gives off (15 §3.3).
+    #[serde(default)]
+    pub light: Option<LightSpec>,
 }
 
 /// A `floor` definition: the surface at the base of a cell (02 §5.4).
@@ -387,6 +402,9 @@ pub struct FloorDef {
     /// How it is drawn.
     #[serde(default)]
     pub glyph: Option<GlyphSpec>,
+    /// The light it gives off (15 §3.3).
+    #[serde(default)]
+    pub light: Option<LightSpec>,
 }
 
 /// A horizontal axis that may wrap.
@@ -703,4 +721,6 @@ pub struct RawWorldDefs {
     pub planes: Vec<(String, PlaneDef)>,
     /// `area_kind` definitions.
     pub area_kinds: Vec<(String, AreaKindDef)>,
+    /// `sky` definitions.
+    pub skies: Vec<(String, SkyDef)>,
 }

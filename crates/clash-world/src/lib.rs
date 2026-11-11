@@ -20,6 +20,7 @@
 //! | Stored cells | [`Chunk`], [`Column`], [`Grid`]; built with [`ColumnBuilder`] |
 //! | The world, and reading it | [`Cosmos`], [`GridView`], [`CellView`], [`CellFlags`], [`Ambient`] |
 //! | Rays, lines of sight, fields of view, the geometry round a cell, paths | [`query`] |
+//! | How bright a cell is | [`Cosmos::light`], [`Cosmos::fill_light`]; see [`light`] |
 //! | Changing cells | [`WorldCtx::edit`] gives a [`WorldEdit`]: the only way cells change |
 //! | What happened | [`WorldEvent`], put into an [`EventSink`] |
 //! | Who and what did it | [`Cause`] |
@@ -54,6 +55,7 @@ mod error;
 mod event;
 mod grid;
 pub mod iter;
+pub mod light;
 pub mod load;
 mod occupancy;
 mod pos;
@@ -83,6 +85,9 @@ pub use error::WorldError;
 pub use event::{EventSink, WorldEvent};
 pub use grid::{
     COLUMN_MAX_CHUNKS, CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE,
+};
+pub use light::{
+    LightSource, LightSpec, LightStats, MovingLight, Sky, SkyDef, SkyId, SkyTime, StaticLight,
 };
 pub use load::{check_defs, register_defs};
 pub use occupancy::{
