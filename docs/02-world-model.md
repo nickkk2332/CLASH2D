@@ -106,6 +106,10 @@ footprint by design.
 Axes: `+x` east, `+y` south, `+z` up. A cell index inside a chunk is
 `CellIdx(u16) = lx | ly << 5 | lz << 10`.
 
+Positions order storey by storey, row by row: by `z`, then `y`, then `x`.
+That is the order of a chunk's cell array, and the order of every result
+that lists cells. Tracts and regions order row by row: by `y`, then `x`.
+
 ### 3.2 Locations
 
 ```rust
@@ -124,7 +128,9 @@ Things that need more precision than a cell carry it separately:
   (0 to 2999). This is the "exact height" used for jumps, launches and flight
   within a storey.
 - A body in flight has `pos: [Real; 3]` in metres in its grid's frame, where
-  `z_m = cell.z * 3 + altitude`.
+  `z_m = cell.z * 3 + altitude`. A point in metres with its grid is a
+  `PointM { grid, pos }`. A point exactly on a boundary belongs to the cell
+  on its positive side.
 
 ### 3.3 Distance
 
@@ -132,12 +138,20 @@ Gameplay distance is physical: metres between cell centres, with z scaled by
 `STOREY_M`. Grid stepping uses the 8 horizontal neighbours plus up and down;
 a diagonal step costs √2. On wrapped axes, deltas take the shorter way round.
 
+Walks over cells have a defined order (`clash_world::iter`): a box storey by
+storey and row by row; the eight neighbours clockwise from north, then up,
+then down; the shell of radius `r`, which is the cells whose distance from
+the centre is at least `r` and less than `r + 1` metres. A straight segment
+visits the cell that holds its start, then every cell it runs through for
+some length, then the cell that holds its end; where it passes exactly
+through an edge or a corner it steps straight to the cell diagonally across.
+
 ## 4. Cosmos and realms
 
 ```rust
 pub struct Cosmos {
     realms: BTreeMap<RealmId, Realm>,
-    grids: LookupMap<GridId, GridSlot>,        // base grids and subgrids
+    grids: Vec<Option<Box<GridSlot>>>,         // base grids and subgrids, indexed by GridId
     charts: BTreeMap<ChartId, Chart>,
     tickets: TicketTable,
     bodies: BodyTable,
@@ -228,12 +242,39 @@ author wants:
 Realms are created when a world is created and may be created and destroyed
 at runtime (section 21).
 
+What a definition must say, and what follows when it does not:
+
+- `size_regions`, `z_range` and `strata` are required. A realm needs at
+  least one stratum, no two may start at the same storey, and a storey
+  below the lowest stratum takes the lowest.
+- A face not named in `edges` is a barrier. Naming a face of a wrapped
+  axis is a load error.
+- `fill` defaults to nothing below and nothing above. `time_rate` defaults
+  to 1 and must be zero or more.
+- `generator`, `calendar`, `sky` and boundary links are stored as written
+  until the packages that give them meaning are built.
+
+`Cosmos::create_realm(timeline, def, seed)` makes the realm, a clock for it
+under universal time at `time_rate`, and its empty base grid.
+
 ### 4.2 Topology
 
-`Realm::normalize(CellPos) -> Result<CellPos, Edge>` wraps coordinates on
-wrapped axes and reports which edge was crossed otherwise. All world access
-normalises first. `Realm::delta(a, b)` gives the shortest offset between two
-cells, respecting wrap.
+A grid's shape is a `Topology`: its extent along `x` and `y`, each
+unbounded, bounded or wrapped, and its lowest and highest storey. A realm's
+cells run from 0 up to its size on each horizontal axis. A subgrid's own
+space is unbounded.
+
+`Topology::normalize(CellPos) -> Result<CellPos, Edge>` wraps coordinates on
+wrapped axes and reports which edge was crossed otherwise. A position
+beyond several edges reports the first of west, east, north, south, bottom,
+top. All world access normalises first. `Topology::delta(a, b)` gives the
+shortest offset between two cells, respecting wrap, and
+`delta(a, b) = −delta(b, a)` always: exactly half way round a wrapped axis,
+the lower coordinate goes forward and the higher goes back.
+`Cosmos::normalize` and `Cosmos::delta` do the same for `Location`s.
+
+Grid ids are never reused, and the cosmos keeps its grids in a table
+indexed by id, so that reading a cell costs no lookup for its grid.
 
 ## 5. Cells
 
@@ -268,6 +309,14 @@ three materials, and a power that transmutes matter is a material change.
 
 In data, a state is written `"wall"` (default material and state),
 `"wall@brick"` (material), `"door#open"` (named state), or `"door@steel#open"`.
+The bits may also be given as a number, `"rubble#3"`, for a definition that
+uses them as an amount. `"none"` is no element.
+
+For a definition that declares named `states`, `bits` is the index of the
+active one, and bits past the last state mean the first. For any other
+definition the bits are its own. Every form of "no element" is the one
+value `NONE`: definition 0, material 0, bits 0. Material 0, like
+definition 0 of each element type, is the built-in `engine:none`.
 
 ### 5.2 Standing, falling and climbing
 
@@ -418,7 +467,14 @@ material would ignore. Resolution order: element definition, then material,
 then the damage type's default.
 
 `states` lists named variants that adjust flags, geometry and glyph. The
-active state's index is stored in `bits`.
+active state's index is stored in `bits`. The first state written is the
+default. A state that changes `height` without giving a `coverage` takes
+the default coverage for its new height, unless the definition fixed one.
+
+A block or fixture must give `material`, `height` and `fill`; a floor must
+give `material` and `thickness`. Heights and thicknesses run from 0 to 3 m,
+and `fill` and `coverage` from 0 to 1; a value outside its range is a load
+error. A material's `resist` and an element's are keyed by damage type id.
 
 `on_destroy` may name what the element becomes. Without it, the element is
 removed and its material's `rubble` fixture is left behind.
@@ -505,6 +561,17 @@ A chunk of solid rock or empty air is `Uniform` and costs a few bytes. A
 typical city chunk needs 4 or 8 bits per cell per layer. Palettes grow on
 write and are compacted on save.
 
+The representation is private to the type, so that a layer can never hold
+an index its palette lacks. A palette that fills up at 8 bits or wider is
+first cleared of entries no cell uses, and widened only if that frees less
+than a quarter of it. Compaction is canonical: palette entries end up in
+the order their values first appear, cell by cell, and a layer whose cells
+all hold one value becomes `Uniform`.
+
+Two layers that hold the same values are equal, serialise alike and hash
+equal, whatever order the values were written in. The hash is over the runs
+of equal values in cell order, so it does not see the palette at all.
+
 ### 6.2 Chunks
 
 ```rust
@@ -518,22 +585,43 @@ pub struct Chunk {
     vars: SparseCells<VarMap>,
     fields: FieldStore,                  // section 16
     occupants: OccupantIndex,            // section 8; rebuilt on load, never saved
-    derived: DerivedCache,               // lazily rebuilt
+    derived: DerivedCache,               // kept up to date by every structural write
     rev: ChunkRev,                       // { structure, fields, occupants }: u32 counters
     dirty: bool,                         // differs from what is on disk
 }
 ```
 
-`SparseCells<T>` is a sorted `Vec<(CellIdx, T)>`.
+`SparseCells<T>` is a sorted `Vec<(CellIdx, T)>`. The four sparse layers are
+kept together behind one pointer that is null when all are empty, as it is
+for most chunks.
 
-`DerivedCache` holds one bitset (8192 bits) per hot query: `walk_blocked`,
-`opaque`, `has_floor`, `solid_top`, `fragile`. They are rebuilt from the
-palettes when `rev.structure` changes. Inner loops for movement and sight read
-bitsets, not palettes. Per-palette-entry flags are computed once when an entry
-is added.
+`DerivedCache` holds the answers to the hot queries for every cell: five
+flags, kept as the bits of one byte per cell (`CellFlags`), so that reading
+all of a cell's flags is one load. A chunk whose three element layers are
+uniform keeps a single value instead and costs nothing.
+
+| Flag | Set when |
+|------|----------|
+| `walk_blocked` | The block or fixture stands in the way of ordinary walking: it is taller than a step (`WALK_STEP_M`, 0.5 m) and is not `passable`, a `ramp`, `stairs` or `liquid` |
+| `opaque` | The block or fixture is `opaque` |
+| `has_floor` | The cell has a floor |
+| `solid_top` | The block can be stood on from the cell above: full height, fill of at least 0.95, not `liquid` |
+| `fragile` | Any of the three elements is `fragile` |
+
+`walk_blocked` is a first answer for inner loops. The movement rules, which
+know the mover, read the heights themselves (section 5.3).
+
+The cache is kept up to date by every structural write, which looks up the
+contribution of each of the cell's three states in the per-state tables
+built with the definitions. It is never rebuilt lazily: reads take the
+chunk by shared reference and may run in parallel. It is rebuilt whole only
+when a chunk is compacted. Inner loops for movement and sight read the
+cache, not palettes.
 
 Revision counters are how every cache outside the chunk (paths, field of view,
-light, rendering) knows whether it is stale.
+light, rendering) knows whether it is stale. A write that changes nothing
+bumps nothing. Revisions, caches and the dirty flag are not state: they are
+not hashed and not saved.
 
 ### 6.3 Grids
 
@@ -543,21 +631,37 @@ pub struct Grid {
 }
 
 pub struct Column {
-    z_lo: i32, z_hi: i32,                 // chunk-z range that has storage
-    chunks: Vec<Box<Chunk>>,              // indexed by chunk z − z_lo
-    below_fill: BlockState,               // implicit content under z_lo
-    above_fill: BlockState,               // implicit content over z_hi; usually none
+    z_lo: i32,                            // chunk z of chunks[0]; the stored range is z_lo .. z_lo + chunks.len()
+    chunks: Vec<Chunk>,                   // indexed by chunk z − z_lo
+    below_fill: BlockState,               // implicit content under the stored range
+    above_fill: BlockState,               // implicit content over it; usually none
     heightmap: Box<[i32; 1024]>,          // per cell column: highest z that is not open
 }
 ```
 
 Cell lookup hashes the tract and indexes the chunk by z. Reading outside
-`z_lo..=z_hi` returns the fill without allocating. Writing there creates the
-chunk.
+the stored range returns the fill without allocating. Writing there creates
+the chunk, and any between it and the stored range, so that the range stays
+unbroken. A column with nothing stored still knows where its two fills
+meet.
 
 The heightmap is maintained on every structural edit. It answers "is this cell
 under open sky", lets falling bodies and pressure waves skip empty air, and
-bounds how far down a top-down view must look.
+bounds how far down a top-down view must look. Its entry for a cell column
+is the highest storey that is not open: the highest that holds a floor, a
+block or a fixture, or that can be stood in because the block below has a
+solid top. It is `HEIGHT_NONE` where every cell is open and `HEIGHT_FULL`
+where the fill above is not empty. A cell at or above its column's entry is
+under open sky.
+
+A column hashes by what its cells hold, not by how much of it happens to be
+stored: a stored chunk that holds exactly the fill hashes like an unstored
+one.
+
+A chunk or column that is not yet part of the world is built with a
+`ColumnBuilder`: start from the fills, set cells, and `build`. Generation
+and tests make cells this way. Once a column is part of a grid its cells
+change only through `WorldEdit`.
 
 Subgrids use the same `Grid` type with their own small coordinate space.
 
@@ -570,19 +674,29 @@ directly, so that subgrid compositing (section 18) is transparent to callers.
 
 ```rust
 impl Cosmos {
-    pub fn cell(&self, loc: Location) -> CellView;          // states of all three elements
-    pub fn flags(&self, loc: Location) -> CellFlags;        // fast path from derived bitsets
-    pub fn standable(&self, loc: Location) -> bool;
-    pub fn obstacle_height(&self, loc: Location) -> Real;   // metres
-    pub fn field(&self, loc: Location, field: FieldId) -> u8;
-    pub fn ambient(&self, loc: Location) -> Ambient;        // gravity, atmosphere, clock
+    pub fn cell(&self, loc: Location) -> Result<CellView, WorldError>;      // states of all three elements
+    pub fn flags(&self, loc: Location) -> Result<CellFlags, WorldError>;    // fast path from the derived cache
+    pub fn standable(&self, loc: Location) -> Result<bool, WorldError>;
+    pub fn obstacle_height(&self, loc: Location) -> Result<Real, WorldError>;   // metres
+    pub fn field(&self, loc: Location, field: FieldId) -> Result<u8, WorldError>;
+    pub fn ambient(&self, loc: Location) -> Result<Ambient, WorldError>;    // gravity, atmosphere, clock
     pub fn is_loaded(&self, loc: Location) -> bool;
+    pub fn grid(&self, grid: GridId) -> Result<GridView<'_>, WorldError>;   // the same reads for many cells of one grid
 }
 ```
 
 Reading an unloaded cell is an error value, not a panic and not a silent
 load. Code that may touch unloaded space must go through the coarse API
 (section 17) or hold a ticket.
+
+The error values are `WorldError::NotLoaded` with the normalised location,
+`OutsideRealm` with the location and the edge it lies beyond, and
+`UnknownGrid`. `ambient` needs the cell to be inside its grid and does not
+need its tract loaded. `obstacle_height` is the height of the tallest block
+or fixture in the cell that is not `passable`. Also read through `Cosmos`
+and `GridView`: `is_open`, `height` (the heightmap), `under_open_sky`,
+`damage`, `decals` and `var`. A `GridView` is a read-only handle on one
+grid for code that reads many of its cells.
 
 ### 7.2 Edits
 

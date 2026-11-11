@@ -1,6 +1,6 @@
 //! Element states: the ids of the definitions they are made from,
 //! [`ElementState`] and its typed wrappers, and the text form
-//! `"door@steel#open"` (02 §5.1).
+//! `"def@material#state"` (02 §5.1).
 
 use core::fmt;
 
@@ -272,18 +272,18 @@ pub enum StatePart<'a> {
     Bits(u16),
 }
 
-/// A state as written in data: `"wall"` (default material and state),
-/// `"wall@brick"` (material), `"door#open"` (named state),
-/// `"door@steel#open"`, or `"rubble#3"` (the bits as a number).
+/// A state as written in data: `"gate"` (default material and state),
+/// `"gate@alloy"` (material), `"gate#open"` (named state),
+/// `"gate@alloy#open"`, or `"gate#3"` (the bits as a number).
 ///
 /// ```
 /// use clash_world::{StatePart, StateRef};
 ///
-/// let state = StateRef::parse("core:door@steel#open").unwrap();
-/// assert_eq!(state.def, "core:door");
-/// assert_eq!(state.material, Some("steel"));
+/// let state = StateRef::parse("mymod:gate@alloy#open").unwrap();
+/// assert_eq!(state.def, "mymod:gate");
+/// assert_eq!(state.material, Some("alloy"));
 /// assert_eq!(state.state, Some(StatePart::Named("open")));
-/// assert!(StateRef::parse("door@").is_err());
+/// assert!(StateRef::parse("gate@").is_err());
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct StateRef<'a> {

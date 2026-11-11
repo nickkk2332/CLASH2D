@@ -156,6 +156,7 @@ fn reads_outside_the_stored_range_return_the_fill_and_writes_create_storage() {
 fn a_uniform_chunk_is_small() {
     let kit = kit();
     let chunk = Chunk::uniform(&kit.defs, kit.rock);
+    println!("a uniform chunk takes {} bytes", chunk.memory_bytes());
     assert!(
         chunk.memory_bytes() <= 200,
         "{} bytes",

@@ -10,16 +10,26 @@
 //! What these functions add is whole columns, built beforehand with a
 //! [`ColumnBuilder`].
 //!
+//! A test builds its definitions, creates a realm with
+//! [`Cosmos::create_realm`], and then loads ground into its base grid:
+//!
 //! ```
 //! use std::sync::Arc;
 //! use clash_world::test_support::{flat_column, load_column};
-//! use clash_world::{BlockState, Cosmos, FloorState, RawWorldDefs, TractPos, WorldDefs};
+//! use clash_world::{
+//!     BlockState, Cosmos, FloorState, GridId, RawWorldDefs, TractPos, WorldDefs, WorldError,
+//! };
 //!
+//! // No definitions and no realm here, to keep the example short: the
+//! // column is empty and there is no grid to put it in.
 //! let defs = Arc::new(WorldDefs::build(RawWorldDefs::default()).unwrap());
-//! let cosmos = Cosmos::new(Arc::clone(&defs));
-//! // With a realm created, a tract of bare ground is one call away:
+//! let mut cosmos = Cosmos::new(Arc::clone(&defs));
 //! let column = flat_column(&defs, BlockState::NONE, FloorState::NONE, 0);
-//! assert!(load_column(&mut cosmos.clone(), clash_world::GridId::new(0), TractPos::new(0, 0), column).is_err());
+//! let nowhere = GridId::new(0);
+//! assert_eq!(
+//!     load_column(&mut cosmos, nowhere, TractPos::new(0, 0), column).err(),
+//!     Some(WorldError::UnknownGrid(nowhere))
+//! );
 //! ```
 
 use crate::cosmos::Cosmos;

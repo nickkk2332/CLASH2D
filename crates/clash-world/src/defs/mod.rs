@@ -63,7 +63,7 @@ pub struct DefError {
     pub kind: &'static str,
     /// The definition's id.
     pub id: String,
-    /// Where in the definition, as a dotted path: `"resist.blast"`.
+    /// Where in the definition, as a dotted path: `"resist.some_type"`.
     pub path: String,
     /// What is wrong.
     pub message: String,
@@ -623,7 +623,7 @@ impl WorldDefs {
     }
 
     /// An element state written out in full, the way data writes it:
-    /// `core:door@core:wood#open`.
+    /// `mymod:gate@mymod:alloy#open`.
     pub fn state_text(&self, layer: Layer, state: ElementState) -> String {
         let names = match layer {
             Layer::Floor => &self.floors.names,

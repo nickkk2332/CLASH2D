@@ -18,8 +18,8 @@ use serde::de::{Deserializer, MapAccess, Visitor};
 use super::flags::EngineFlag;
 use super::quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temperature};
 
-/// A reference to another definition by its id, bare (`"granite"`) or
-/// qualified (`"core:granite"`). Resolved when definitions are built.
+/// A reference to another definition by its id, bare (`"alloy"`) or
+/// qualified (`"mymod:alloy"`). Resolved when definitions are built.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 #[serde(transparent)]
 pub struct DefRef(pub String);
