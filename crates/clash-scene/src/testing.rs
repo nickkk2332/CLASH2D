@@ -33,8 +33,38 @@
 //! places them ([`FakeHost::place`]); safe for belief. The built-in
 //! `name(x)` is answered with the `name` of an entity or an item.
 //!
+//! The registry also holds the rest of the simulation's kinds of
+//! subject and the kernel's and the world's events, as the simulation
+//! registers them (`clash_sim::KERNEL_EVENTS`, `WORLD_EVENTS`), so that
+//! `show` definitions compile against it as they do in the game.
+//!
 //! Its world holds three entities: Mara (1) and Jonas (2), who are the
 //! party, Mara being `view`, and a stranger (3) whom Mara has seen.
+//!
+//! # Who is reading
+//!
+//! The reader helpers of 05 §4.6 are answered plainly. `name(x)` is the
+//! `name` an entity or item was given, or `someone` for an entity with
+//! none; `the(x)` and `a(x)` are the same, since the fake names carry
+//! their own articles. Once a test says who reads
+//! ([`FakeHost::read_as`]), that one is "you": `verb` agrees with it and
+//! the pronouns are the second person's. Until then nobody is.
+//!
+//! # A stand-in for perception
+//!
+//! Perception is not built, so the fake host answers what playback asks
+//! from what a test tells it ([`FakeHost::see`], [`FakeHost::look`]):
+//!
+//! - An event is **seen** if a cell it is about is seen in the picture
+//!   playback has, or a thing it is about has a sprite in such a cell.
+//! - Otherwise it is **heard** from that cell if the cell lies within
+//!   [`FakeHost::set_hearing`] cells of where `view` is placed (12 by
+//!   default), and else not perceived.
+//! - What is seen in a cell is what the test said with `see`; a cell it
+//!   did not is out of view.
+//! - The thing with number `n` has the sprite with number `n`, looking
+//!   as the test said with `look`; one it said nothing of was never
+//!   perceived.
 //!
 //! # Where the simulation's own values come from
 //!
@@ -53,18 +83,20 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use clash_core::{Real, Rng};
+use clash_core::{EntityId, Real, Rng, Tick};
 use clash_expr::{
-    DefRef, FunctionId, FunctionSpec, Handle, Host, KindId, KindSpec, PropertyId, PropertySpec,
-    Registry, RuntimeWarning, Type, Value,
+    DefRef, EventSpec, FunctionId, FunctionSpec, Handle, Host, KindId, KindSpec, PropertyId,
+    PropertySpec, Registry, RuntimeWarning, Type, Value,
 };
+use clash_sim::{CAUSE_SUBJECTS, KERNEL_EVENTS, SimEvent, WORLD_EVENTS};
 use clash_world::{CellPos, Location};
 
 use crate::app::{AppCurrent, AppEntry, AppList, AppRequest, AppState};
 use crate::control::{COMMAND_CHOOSE, COMMAND_PASS, COMMAND_REACT, ParamAsk, PendingDecision};
+use crate::playback::Perceived;
 use crate::scene::{SceneHost, UiCommand};
 use crate::ui::{AppService, KIND_ENTITY};
-use crate::view::SpriteId;
+use crate::view::{CellContents, EntitySprite, SpriteId, ViewModel};
 
 /// The kind of a thing an entity carries, in the fake registry.
 pub const KIND_ITEM: &str = "item";
@@ -79,6 +111,13 @@ pub const KIND_WINDOW: &str = "window";
 pub const FN_DIST: &str = "dist";
 /// The built-in that gives what the reader calls something.
 const FN_NAME: &str = "name";
+
+/// What the fake host calls an entity that was given no name.
+pub const UNNAMED: &str = "someone";
+
+/// How far, in cells, the party hears what it does not see unless a
+/// test says otherwise.
+pub const HEARING_DEFAULT: i32 = 12;
 
 /// How many bits of a fake `loc` handle hold each coordinate.
 const LOC_BITS: u32 = 20;
@@ -138,6 +177,24 @@ pub fn registry() -> Registry {
                 .doc("The distance between two things, in metres. Null if either is nowhere."),
         )
         .expect("the fake registry has no `dist` yet");
+    // The rest of the simulation's kinds and its events, entered as the
+    // simulation enters them.
+    clash_sim::Kinds::ensure(&mut registry).expect("the fake registry has room for the kinds");
+    for info in KERNEL_EVENTS.iter().chain(WORLD_EVENTS) {
+        let mut spec = EventSpec::new(info.name).doc(info.doc);
+        for (name, kind) in info.subjects.iter().chain(CAUSE_SUBJECTS) {
+            if let Some(kind) = registry.kind_id(kind) {
+                spec = spec.subject(name.trim_end_matches('?'), kind);
+            }
+        }
+        for (name, ty, doc) in info.fields {
+            let ty = registry.parse_type(ty).unwrap_or(Type::Any);
+            spec = spec.field(*name, ty, *doc);
+        }
+        registry
+            .add_event(spec)
+            .expect("the simulation's events have distinct names");
+    }
     registry
 }
 
@@ -170,6 +227,17 @@ struct World {
     offers: BTreeMap<String, Vec<Value>>,
     /// The decision that is waiting.
     decision: Option<PendingDecision>,
+    /// What the party sees in each cell in view.
+    sight: BTreeMap<Location, CellContents>,
+    /// How the party perceives each thing it ever has, by number: `None`
+    /// for one it does not perceive now.
+    looks: BTreeMap<u64, Option<EntitySprite>>,
+    /// Who reads text: "you".
+    reader: Option<Handle>,
+    /// How far the party hears, in cells.
+    hearing: i32,
+    /// Every moment playback told the host of, in order.
+    moments: Vec<Option<Tick>>,
 }
 
 /// A cell as the payload of a fake `loc` handle.
@@ -222,6 +290,7 @@ impl FakeHost {
             world: Arc::new(Mutex::new(World {
                 registry: Some(registry),
                 kinds: Some(kinds),
+                hearing: HEARING_DEFAULT,
                 ..World::default()
             })),
         };
@@ -292,7 +361,10 @@ impl FakeHost {
             ("items", Value::list([item("Crowbar", 3.0)])),
         ]);
         let host = FakeHost {
-            world: Arc::new(Mutex::new(World::default())),
+            world: Arc::new(Mutex::new(World {
+                hearing: HEARING_DEFAULT,
+                ..World::default()
+            })),
         };
         host.set_view(mara.clone());
         host.set_party(Value::list([mara, jonas]));
@@ -391,6 +463,57 @@ impl FakeHost {
     pub fn ask(&self, decision: Option<PendingDecision>) {
         lock(&self.world).decision = decision;
     }
+
+    /// Says what the party sees in a cell now, or with `None` that the
+    /// cell is out of view: what playback is told when an event that was
+    /// seen changes the cell.
+    pub fn see(&self, at: Location, contents: Option<CellContents>) {
+        let mut world = lock(&self.world);
+        match contents {
+            Some(contents) => world.sight.insert(at, contents),
+            None => world.sight.remove(&at),
+        };
+    }
+
+    /// Says how the party perceives the thing with this number now, or
+    /// with `None` that it knows of it and does not perceive it now. Its
+    /// sprite has the same number.
+    pub fn look(&self, number: u64, look: Option<EntitySprite>) {
+        lock(&self.world).looks.insert(number, look);
+    }
+
+    /// Makes text read as it does to this entity: it is "you". `None`:
+    /// nobody is.
+    pub fn read_as(&self, reader: Option<Handle>) {
+        lock(&self.world).reader = reader;
+    }
+
+    /// Says how far, in cells, the party hears what it does not see,
+    /// from where `view` is placed.
+    pub fn set_hearing(&self, cells: i32) {
+        lock(&self.world).hearing = cells;
+    }
+
+    /// Every moment playback has told the host of, oldest first
+    /// ([`SceneHost::as_of`]).
+    pub fn moments(&self) -> Vec<Option<Tick>> {
+        lock(&self.world).moments.clone()
+    }
+}
+
+/// The verb in the third person singular: `hits`, `crashes`, `carries`.
+fn third_person(word: &str) -> String {
+    let before_last = word.chars().rev().nth(1);
+    if word.ends_with('y') && !before_last.is_some_and(|ch| "aeiou".contains(ch)) {
+        format!("{}ies", &word[..word.len() - 1])
+    } else if ["s", "sh", "ch", "x", "z", "o"]
+        .iter()
+        .any(|end| word.ends_with(end))
+    {
+        format!("{word}es")
+    } else {
+        format!("{word}s")
+    }
 }
 
 impl World {
@@ -461,6 +584,65 @@ impl SceneHost for FakeHost {
         lock(&self.world).offers.get(ask.param).cloned()
     }
 
+    fn perceived(&mut self, event: &SimEvent, picture: &ViewModel) -> Perceived {
+        let subjects = event.subjects();
+        let sprite_of = |entity: EntityId| {
+            picture
+                .sprite(SpriteId::new(entity.to_bits()))
+                .map(|sprite| sprite.loc)
+        };
+        // The cells the event is about, its `here` first, and the cells
+        // the things it is about are drawn in.
+        let mut places: Vec<Location> = event
+            .subject("here")
+            .and_then(|s| s.loc())
+            .into_iter()
+            .collect();
+        places.extend(subjects.iter().filter_map(|(_, subject)| subject.loc()));
+        places.extend(
+            subjects
+                .iter()
+                .filter_map(|(_, subject)| subject.entity().and_then(sprite_of)),
+        );
+        if places
+            .iter()
+            .any(|at| picture.cell(*at).is_some_and(|cell| cell.seen()))
+        {
+            return Perceived::Seen;
+        }
+        let world = lock(&self.world);
+        let Some(from) = places.first().copied() else {
+            return Perceived::Not;
+        };
+        let listener = world.cell_of(&world.view);
+        let hearing = i64::from(world.hearing);
+        match listener {
+            Some(at) if at.z == from.cell.z => {
+                let (dx, dy) = (i64::from(at.x - from.cell.x), i64::from(at.y - from.cell.y));
+                if dx * dx + dy * dy <= hearing * hearing {
+                    Perceived::Heard { from }
+                } else {
+                    Perceived::Not
+                }
+            }
+            _ => Perceived::Not,
+        }
+    }
+
+    fn seen_cell(&mut self, at: Location) -> Option<CellContents> {
+        lock(&self.world).sight.get(&at).copied()
+    }
+
+    fn seen_sprite(&mut self, entity: EntityId) -> Option<(SpriteId, Option<EntitySprite>)> {
+        let number = entity.to_bits();
+        let look = *lock(&self.world).looks.get(&number)?;
+        Some((SpriteId::new(number), look))
+    }
+
+    fn as_of(&mut self, moment: Option<Tick>) {
+        lock(&self.world).moments.push(moment);
+    }
+
     fn view(&self) -> Value {
         lock(&self.world).view.clone()
     }
@@ -528,17 +710,46 @@ impl Host for FakeHost {
             },
             None => FN_NAME.to_owned(),
         };
+        // What the reader calls something, and whether it is the reader.
+        let called = |value: &Value| -> (Value, bool) {
+            if world.reader.is_some() && value.as_subject() == world.reader {
+                return (Value::text("you"), true);
+            }
+            let named = match value {
+                Value::Subject(handle) => {
+                    let named = world.values.get(&(*handle, FN_NAME.to_owned())).cloned();
+                    let entity = world.kinds.is_some_and(|kinds| handle.kind == kinds.entity);
+                    match named {
+                        Some(named) => named,
+                        None if entity => Value::text(UNNAMED),
+                        None => Value::Null,
+                    }
+                }
+                other => other
+                    .as_map()
+                    .and_then(|map| map.get(FN_NAME))
+                    .cloned()
+                    .unwrap_or_default(),
+            };
+            (named, false)
+        };
+        let person = |value: &Value, second: &str, third: &str| {
+            Value::text(if called(value).1 { second } else { third })
+        };
         match (name.as_str(), args) {
-            (FN_NAME, [Value::Subject(handle)]) => world
-                .values
-                .get(&(*handle, FN_NAME.to_owned()))
-                .cloned()
-                .unwrap_or_default(),
-            (FN_NAME, [value]) => value
-                .as_map()
-                .and_then(|map| map.get(FN_NAME))
-                .cloned()
-                .unwrap_or_default(),
+            (FN_NAME | "the" | "a", [value]) => called(value).0,
+            ("they", [value]) => person(value, "you", "they"),
+            ("them", [value]) => person(value, "you", "them"),
+            ("their", [value]) => person(value, "your", "their"),
+            ("themself", [value]) => person(value, "yourself", "themself"),
+            ("verb", [value, word]) => {
+                let word = word.as_str().unwrap_or_default();
+                if called(value).1 {
+                    Value::text(word)
+                } else {
+                    Value::text(third_person(word))
+                }
+            }
             (FN_DIST, [a, b]) => match (world.cell_of(a), world.cell_of(b)) {
                 (Some(a), Some(b)) => {
                     let squared: f64 = [a.x - b.x, a.y - b.y, a.z - b.z]
