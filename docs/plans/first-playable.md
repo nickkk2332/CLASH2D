@@ -239,7 +239,7 @@ Done when
 
 Build
 - `population`; anonymous instantiation; the notable triggers; storage
-  with tracts; the agent record; `remember` and `forget`.
+  with tracts; the agent record; `make_notable` and `make_anonymous`.
 
 Done when
 - Reloading a tract shows the same anonymous individuals (invariant B7).

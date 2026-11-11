@@ -97,6 +97,7 @@ An action declares its attacks and strikes with them in a phase.
 | `arc` | For strikes at several targets (section 6.4) |
 | `swing` | Degrees the surface travels through before it lands. Obstacles in that arc are struck first (section 6.4). Absent for thrusts and shoves. |
 | `height` | The band of heights, in metres above the attacker's footing, that the attack can reach (section 4.3). Defaults to the attacker's own height and a little over. |
+| `lands` | The phase at whose start this attack strikes. By default it is found when the action loads: the phase whose `do` strikes with it. An attack struck from a `tick` or under a condition has no such phase, never clashes, and has no time to impact. |
 | `clashes` | Whether this attack can meet another (section 8) |
 | `spill`, `spill_kind` | What a locked clash releases (section 8) |
 | `on_land`, `on_miss`, `on_stopped` | Effect lists |
@@ -142,6 +143,12 @@ The `strike` effect resolves one attack against one target:
 
 A strike at a cell rather than a creature skips steps 3 to 5 and delivers
 its whole energy to the element as a packet (02 §12).
+
+Where several defences are in force at step 5 they are tried in a fixed
+order: first those of others who protect the target, then the target's
+own; within each, in the order they came into force, and by entity id
+where that is equal. Each takes what it can, and the next meets what is
+left.
 
 ### 3.5 Speed behind the blow
 
@@ -523,7 +530,7 @@ a forced role for the victim.
 { "type": "action", "id": "blade_takedown", "name": "Takedown",
   "roles": { "attacker": { "uses": { "arm": "all" } },
              "victim":   { "uses": { "arm": "all", "legs": "all" }, "forced": true } },
-  "requires": "not perceives($victim, $attacker) or $victim.has_trait('helpless')",
+  "requires_at_start": "not perceives($victim, $attacker) or $victim.has_trait('helpless')",
   "cutscene": "takedown_from_behind",
   "attacks": { "throat": { "with": { "held": "blade", "surface": "edge" }, "energy": 60, "push": 0 } },
   "phases": [
@@ -533,8 +540,10 @@ a forced role for the victim.
     { "id": "settle", "time": "300 ms" } ] }
 ```
 
-- `requires` is what makes it a takedown and not an attack: the victim does
-  not know, or cannot resist.
+- `requires_at_start` (03 §6.1) is what makes it a takedown and not an
+  attack: the victim does not know, or cannot resist. It is tested only
+  when the attempt is made. The player is not told beforehand whether an
+  unseen guard has in fact noticed them.
 - Being in the forced role holds the victim's channels, so the victim has
   no defence.
 - `"sure": true` skips aim. The victim is being held still.
@@ -611,8 +620,11 @@ A projectile may also drive and steer itself:
 
 ### 11.2 Time of flight
 
-A projectile is on the timeline. A window of kind `shot` opens for the
-target when it is fired, and closes when it arrives.
+A projectile is on the timeline. `shoot` may name a window: its kind, and
+whom it is for, by default whoever was aimed at. The window opens when
+the shot is fired and closes when it arrives. Its `$window.body` is the
+projectile, a subject of kind `body` (05 §5.1), which `arrest` and
+`intercept` act on and the `projectile_*` events carry.
 
 | Shot | Speed | Across 50 m | A person who needs 250 ms to notice |
 |------|-------|-------------|--------------------------------------|
@@ -691,7 +703,9 @@ for those quick enough to have one (section 11.2).
 | Catch it | A reaction whose effect is `arrest` (02 §15) on a contest it names. The projectile ends in the catcher's hand. |
 | Knock it aside or shoot it down | `intercept`: an attack aimed at the projectile itself, by a contest against its size and speed. If it lands, the projectile is given an impulse, or ended. |
 
-Two beams or two charging bodies meeting head-on is a clash (section 8).
+Two attacks made at range that are both marked `clashes` meet as any two
+do (section 8): a beam against a beam is two strikes with inline surfaces
+(08 §7.7).
 
 ## 12. Stances, styles and combinations
 
@@ -728,8 +742,15 @@ draws no random numbers and changes nothing. It returns:
 | `speed` | Push speed, and whether that staggers or launches |
 | `recoil` | Whether the striking surface would be damaged |
 
+A preview runs hook handlers **dry**: what a handler would change about
+the strike or the hit is applied, and everything else it would do is
+skipped. Only handlers on things `self` knows the target has are run
+(15 §7.1). So a barrier that works by a rule on `hit_incoming` shows in
+the preview of anyone who knows it is there, and not otherwise. Handlers
+that draw random numbers are skipped.
+
 It is computed from what `self` could know: the target as it appears
-(15 §8) and what it is visibly wearing. Something that looks like an
+(15 §8.1) and what it is visibly wearing. Something that looks like an
 ordinary man and is not previews as an ordinary man.
 
 Uses: the precise targeting picker (12 §9.3) shows a preview per part;
@@ -791,6 +812,17 @@ and `cutscene` on actions; `surfaces` and `band` on body parts; `give` and
 **Hooks**: `strike_resolving`, `defence_resolving`, `knockback_incoming`,
 `clash_resolving`, `seize_resolving`.
 
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `strike_resolving` | Step 1 of a strike | Change its energy, target, part and effort; cancel |
+| `defence_resolving` | A defence is applied at step 5 | Change how much it turns; make it fail |
+| `knockback_incoming` | A push moves its target (section 7) | Change the speed and direction; cancel |
+| `clash_resolving` | Two strikes are resolved together | Change either side's energy; decide the outcome |
+| `seize_resolving` | A grip is taken (section 9.1) | Make it fail; change what it pins |
+
+`shove` is an attack with no surface that only pushes. `drag` moves a
+gripped thing with the one gripping it.
+
 **Effects**: `strike`, `shoot`, `throw`, `seize`, `release_grip`, `drag`,
 `shove`, `wrench`, `intercept`.
 
@@ -802,9 +834,12 @@ entity), `in_arc`.
 
 **Properties**: `self.gripping`, `self.gripped_by`, `self.defending`,
 `self.reach`; on running actions, `attack(id)` with its current `energy`
-and time to impact.
+and time to impact. In a mind context these are readable only for the
+mind's own actions.
 
-**Settings**: `clash_window`, `lock_ratio`, `stagger_at`, `launch_at`.
+**Settings**: `clash_window`, `lock_ratio`, `stagger_at`, `launch_at`,
+`projectile.near_miss` (how close a shot must pass to raise
+`projectile_passed`), `shoot.max_count`.
 
 ## 17. Invariants
 
@@ -813,7 +848,7 @@ and time to impact.
 | C1 | Every strike that harms does so through a `Hit` or a damage packet. Combat changes no body or element directly. |
 | C2 | The energy delivered, turned aside, pushed, spilled and returned by a strike sums to no more than the energy put into it. |
 | C3 | A defence applies only if it is in force at the instant of impact. |
-| C4 | Chance enters only through contests and shot dispersion, both from the simulation's random stream. |
+| C4 | Chance enters only through contests, shot dispersion and where on a body a hit falls (06 §7.3), all from the simulation's random stream. |
 | C5 | `strike_preview` and `odds` are pure. |
 | C6 | Two attacks that clash are resolved once, together. |
 | C7 | A grip exists exactly as long as the action maintaining it. |

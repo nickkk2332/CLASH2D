@@ -345,6 +345,7 @@ action does".
 | `uses` | Channels occupied for the whole action (section 6.2). |
 | `params` | Typed parameters. Each may have a `default`, an expression evaluated when the command omits it (section 6.3). |
 | `requires` | Condition that must hold to start. `fail_text` gives the reason shown when it does not. |
+| `requires_at_start` | A condition tested only when the action begins, and never shown beforehand. If it fails the action is interrupted at once and says why. For things the actor cannot know in advance (01 R11): whether a victim has noticed them. |
 | `tempo` | Expression dividing phase durations (section 6.5). Default 1. |
 | `foreground` | Whether finishing this action can prompt a decision. Default true. A sustained aura or a conversation is background. |
 | `footing` | Whether the actor must be standing on something. Default true. An action without it can be done in the air (07 §7.1). |
@@ -565,7 +566,7 @@ A **joint action** is one action instance with several participants.
     "attacker": { "uses": { "arm": "all" } },
     "victim":   { "uses": { "arm": "all", "legs": "all" }, "forced": true }
   },
-  "requires": "not perceives($victim, $attacker)",
+  "requires_at_start": "not perceives($victim, $attacker)",
   "phases": [
     { "id": "seize",  "time": "200 ms" },
     { "id": "finish", "time": "600 ms", "do": [ { "run": "takedown_result" } ] },

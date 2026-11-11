@@ -75,7 +75,7 @@ listed has the same parts to build it from.
   "while": "self.loc.medium.phase != 'liquid'",
   "rules": [
     { "on": "action_finished", "if": "event.action.ability == ability",
-      "do": [ { "track_add": { "who": "self", "track": "pyrokinesis", "amount": 1 } } ] } ] }
+      "do": [ { "advance_track": { "who": "self", "track": "pyrokinesis", "amount": 1 } } ] } ] }
 ```
 
 | Field | Meaning |
@@ -144,8 +144,8 @@ from that rank up.
 ### 4.2 Parameters
 
 Parameters are how one definition serves a novice and a god. An action
-says `"energy": "ability.power * $effort"` and never needs to know the
-rank.
+says `"energy": "ability.power"` and never needs to know the rank. Effort
+is applied by the strike itself (07 §6.1).
 
 Parameters can be modified exactly as attributes can (06 §4.1). A modifier
 names an ability, or a tag, and a parameter:
@@ -285,7 +285,8 @@ The hook `ability_suppressing` lets an ability resist.
 
 ### 6.3 Loss
 
-`revoke_ability` removes an ability. So does the end of its last source.
+`revoke_ability` removes an ability whatever its sources, and it does not
+come back while they remain. So does the end of its last source.
 Either ends its modes and everything bound to it (section 7.3).
 
 Abilities can be taken as well as lost: `grant_ability` to one character of
@@ -344,8 +345,16 @@ pub struct Binding { pub what: Bound, pub ends: Option<WakeId>, pub on_end: OnEn
 | `create_area`, `open_portal`, `attach` with `"bound": true` | As named |
 
 A binding ends when its duration runs out, when it is dismissed, when the
-ability is suppressed or revoked, or when its owner stops (06 §8.3), as
-the ability's definition chooses. On ending:
+mode that made it ends, when the ability is suppressed or revoked, or
+when its owner stops (06 §8.3). Which of these apply is said where the
+binding is made:
+
+```json
+"bound": { "for": "2 min", "ends_on": ["mode", "suppressed", "owner_stops"], "on_end": "restore" }
+```
+
+`"bound": true` is short for ending on all of them and removing what was
+left. On ending:
 
 | `on_end` | Does |
 |----------|------|
@@ -390,7 +399,8 @@ rewind_area { area, by, with_occupants, with_minds }
 ```
 
 undoes those changes, newest first, back to the moment `by` ago, through
-`WorldEdit`. Fields are restored from copies the journal takes each second.
+`WorldEdit`. Fields are restored from copies the journal takes at an
+interval (`rules.journal_copy_interval`, default one second).
 Collapses and releases that began inside the area within that span are
 ended. With `with_occupants`, characters and objects inside are put back
 from snapshots the journal took of them at the same interval.
@@ -840,8 +850,24 @@ items and modules; `while` and `bound` on traits; `cost`, `cooldown`,
 `mode_ended`, `rank_changed`, `binding_created`, `binding_ended`,
 `snapshot_taken`, `snapshot_restored`, `area_moved`.
 
-**Hooks**: `ability_using`, `ability_suppressing`, `binding_ending`,
-`contest_resolving`.
+**Hooks**: `ability_using`, `ability_granting`, `ability_revoking`,
+`ability_suppressing`, `binding_ending`, `contest_resolving`.
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `ability_using` | A granted action starts | Change its cost and parameters; cancel |
+| `ability_granting`, `ability_revoking` | An ability is given or taken by a rule | Cancel: a gift that cannot be stolen |
+| `ability_suppressing` | Suppression takes hold | Cancel: resist it |
+| `binding_ending` | Something bound ends | Change how it ends; cancel |
+| `contest_resolving` | A contest is decided (07 §4.1) | Change either side's value |
+
+`restore_abilities` lifts a suppression early. `move_area` moves an
+unanchored area.
+
+**Refusals.** These are refused with a reason: `restore` of a snapshot
+that has expired; a snapshot or journal past its limit; a binding past
+`rules.max_bindings`; `restore_as_generated` over more than
+`rules.max_restore_cells`.
 
 **Effects**: `grant_ability`, `revoke_ability`, `set_rank`,
 `suppress_abilities`, `restore_abilities`, `start_mode`, `end_mode`,
@@ -859,7 +885,9 @@ entities,
 
 **Functions**: `magnitude`.
 
-**Settings**: `max_snapshot_cells`, `max_journal_changes`, `max_bindings`.
+**Settings**: `rules.max_snapshot_cells`, `rules.max_journal_changes`,
+`rules.max_bindings`, `rules.max_restore_cells`,
+`rules.journal_copy_interval`.
 
 ## 13. Invariants
 

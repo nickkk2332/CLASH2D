@@ -311,7 +311,9 @@ answers are `null`.
 
 A rule or behaviour that decides what a character does must read these
 properties, not `x.loc`. The linter flags direct reads of another entity's
-state in rules attached to minds, templates and creature definitions.
+state in anything evaluated to decide what a character does: rules
+attached to minds, templates, creatures, traits, abilities and items, and
+the defaults and conditions of actions.
 
 One deliberate exception: **static geometry is common knowledge.**
 Path-finding and movement use the true layout of walls, floors and doors.
@@ -335,7 +337,10 @@ pub struct Persona {
 ```
 
 Every character has a true persona, may have others, and **presents** one at
-a time. Appearance is derived from the body and what is worn, with whatever
+a time. A persona also presents an **apparent kind**: the template whose
+ordinary body an observer takes it to have. Previews (07 §13) are worked
+out against that body and what is visibly worn, corrected by whatever the
+observer has appraised (section 7.1). Appearance is derived from the body and what is worn, with whatever
 the persona overrides: a mask, a costume, another face.
 
 Tracks, memories and relations refer to personas. A masked vigilante and the

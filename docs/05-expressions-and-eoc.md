@@ -227,6 +227,8 @@ properties.
 | `ability` | An ability instance (08 §3.2) |
 | `group`, `incident` | As in 15 and 09 |
 | `action` | A running action (03 §6) |
+| `part`, `wound` | A part of a body, and a wound on one (06 §6, §7.3) |
+| `body` | Something in flight (02 §15): a projectile, debris, a thrown creature |
 | `window` | An open window (03 §7) |
 | `global` | The whole simulation |
 

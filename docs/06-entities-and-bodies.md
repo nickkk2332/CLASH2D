@@ -345,7 +345,11 @@ part's materials.
   their damage. Functions, channel slots, leaks and signals follow as in
   sections 6.3 and 7.3. A breached cell of tissue that leaks, leaks.
 - Harm reaches it as harm to cells (02 §12). There is no aiming at it: an
-  attacker damages the cells they can reach. Severing a limb is `detach`
+  attacker damages the cells they can reach. Because that is the world's
+  work, `hit_incoming` does not run for it and cannot veto it (05 §8.2).
+  The creature's defences are the thresholds of what it is made of. The
+  simulation raises `body_cells_damaged`, with the part and what it lost,
+  for rules to answer afterwards. Severing a limb is `detach`
   (02 §18.3) of its cells, after which the limb is a piece of world.
 - It moves by a motion model (11 §5), usually `stride`, steered by its own
   mind as a crew steers a vessel, and turns in quarter-turns (11 §5.5).
@@ -452,7 +456,13 @@ guarantees only that nothing is cushioned: there is no buffer between being
 cut and being impaired.
 
 Wounds close and heal over time at their tissues' `heal` rates, as timers.
-Treatment, regeneration and scarring are verbs and rules.
+Treatment, regeneration and scarring are verbs and rules: `close_wound`,
+`reopen_wound` and `heal_part`, with the events `wound_closed` and
+`wound_healed`.
+
+Which part an unaimed hit finds, which inner part is struck, and whether a
+hit finds a gap in what is worn are drawn from the simulation's random
+stream. A rule on `hit_incoming` may set the part outright.
 
 ### 7.4 Spread hits
 
@@ -504,6 +514,12 @@ separate components so that they can part company.
   (11 §8.1): a machine with a pilot.
 - A raised corpse that acts for itself is a body given a new mind by
   `create_mind`.
+
+Pools, tracks and traits may state a `seat`, as attributes do. Those
+seated in the mind go with it; the rest stay with the body. After a
+transfer, where abilities come from is worked out again for both: one
+whose source stayed behind is lost to the mind, and one whose source came
+along is kept (08 §3.4).
 
 All of scene S16 is these four verbs plus relations (15).
 
@@ -576,6 +592,12 @@ Containment (01 §6) says an entity may be inside another. `Holds` says how.
 Moving something between holds is done by verbs (`take`, `drop`, `stow`,
 `wear`, `remove`, `give`, `put_in`, `take_out`), which check capacity and
 free grasps and go through relocation.
+
+When a part can no longer hold, because it is disabled, severed or
+destroyed, what it grasped is dropped where the holder is, with
+`item_dropped` and the cause. What was worn on a severed part goes with
+the part. When a holder is destroyed, everything it held, wore, stowed or
+enclosed is left where it was, whole.
 
 Whether a contained entity can perceive, be perceived or be hit depends on
 the hold and on the container, and is defined with the relevant system: an
@@ -742,7 +764,7 @@ A character is in one **posture** at a time.
   { "type": "posture", "id": "standing", "height": 1.0 },
   { "type": "posture", "id": "crouched", "height": 0.6, "speed": 0.5, "signature": 0.6 },
   { "type": "posture", "id": "prone",    "height": 0.2, "speed": 0.15, "signature": 0.3,
-    "movement": ["crawl"], "holds": { "leg": "all" }, "traits": ["steadied"] }
+    "movement": ["crawl"], "occupies": { "leg": "all" }, "traits": ["steadied"] }
 ]
 ```
 
@@ -751,7 +773,7 @@ A character is in one **posture** at a time.
 | `height` | Scales the body's height, and with it the height of every part's band. So it decides what cover hides (02 §5.3), what a shot at a given height meets (07 §11.1), and what can be reached (07 §4.3). |
 | `speed`, `movement` | A factor on movement, and which movement modes are allowed |
 | `signature` | A factor on how easily the body is perceived (15 §5.3) |
-| `holds` | Channel slots unavailable while in it |
+| `occupies` | Channel slots unavailable while in it |
 | `traits` | Whatever else content wants it to carry: a steadier aim, a weaker guard |
 | `look` | How the body is drawn in it (12 §4.4) |
 
@@ -786,7 +808,7 @@ would be lost by forgetting it:
 - it took part in an action with a controlled or notable entity;
 - it was wounded, or gained or lost a trait, item or relation;
 - a variable on it was set;
-- a rule called `remember` on it.
+- a rule called `make_notable` on it.
 
 When a tract unloads:
 
@@ -797,7 +819,7 @@ When a tract unloads:
 | Notable, with goals elsewhere | An agent |
 
 Named characters created by scenarios or generation are notable from the
-start. `forget` makes an individual anonymous again.
+start. `make_anonymous` makes an individual anonymous again.
 
 ### 12.3 Stored entities
 
@@ -809,26 +831,53 @@ A stored entity keeps every component. Its timers follow 03 §9. Its place is
 **Definition types**: `attribute`, `pool`, `track`, `trait`, `body_part`,
 `body_plan`, `body_function`, `template`, `creature`, `mind`, `item`,
 `movement`, `posture`, `population`, `content_table`. Tissue extras on
-`material`.
+`material`. `seat` on attributes, pools, tracks and traits. `limp` and
+`postures` on body plans; `remains` on templates.
 `ages` on items and `keeps` on containers.
 Body flags on `damage_type` (`severs`).
 
 **Events**: `entity_created`, `entity_destroyed`, `entity_died`,
 `entity_revived`, `mind_released`, `mind_transferred`, `hit_landed`,
 `wound_inflicted`, `wound_healed`, `part_disabled`, `part_restored`,
-`part_severed`, `part_destroyed`, `body_changed`, `function_changed`,
+`part_severed`, `part_destroyed`, `body_changed`, `body_cells_damaged`,
+`wound_closed`, `function_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
 `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
 `item_broken`, `item_stage_reached`, `item_turned`, `posture_changed`,
 `contents_materialised`, `became_notable`.
 
-**Hooks**: `hit_incoming`, `entity_dying`, `trait_adding`, `pool_changing`,
-`item_taking`, `passage_requested`, `exposure_incoming` (02 §16; 16 §9.5).
+**Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
+`trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
+`item_leaving`, `body_changing`, `mind_transferring`, `posture_changing`,
+`passage_requested`. Each is described in the table below.
 
 **Effects**: the verbs of sections 6.5, 8.2, 8.3, 9.2 and 11, and:
 `hit`, `add_trait`, `remove_trait`, `set_attr_base`, `add_modifier`,
-`remove_modifier`, `pool_add`, `pool_rate`, `track_add`, `spawn`,
-`destroy`, `apply_template`, `remember`, `forget`, `rename`, `set_color`.
+`remove_modifier`, `pool_add`, `pool_rate`, `advance_track`, `spawn`,
+`destroy`, `apply_template`, `make_notable`, `make_anonymous`, `rename`,
+`set_color`, `close_wound`, `reopen_wound`.
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `hit_incoming` | A hit is applied to a body (section 7.1) | Change its energy, intensity, part and direction; cancel |
+| `exposure_incoming` | A dose reaches a body by any route (02 §16; 16 §9.5) | Change the amount; cancel |
+| `entity_dying` | An entity stops for good (section 8.3) | Cancel |
+| `trait_adding`, `trait_removing` | A trait is added or removed | Cancel |
+| `pool_changing` | A verb changes a pool's level | Change the amount; cancel |
+| `item_taking`, `item_leaving` | An item enters or leaves a hold | Cancel: a thing that will not be picked up, or will not come off |
+| `body_changing` | Any body verb of section 6.5 | Cancel: a body that cannot be reshaped |
+| `mind_transferring` | `transfer_mind`, `set_driver` | Cancel: a mind that cannot be moved or ridden |
+| `posture_changing` | A posture is forced | Cancel |
+| `passage_requested` | A mover asks to swap places | Decide who yields |
+
+**Refusals.** These are refused with a reason (14 §5) and change nothing:
+`add_part` with no free socket; removing a body's root part; `create_mind`
+in something that has a mind; `transfer_mind` into something that has a
+mind, unless it says `"swap": true`, in which case the two change places.
+Parts of an old plan that `set_body_plan` cannot map are dropped as items.
+
+**Settings**: `hit.overkill_factor` (how many times what a whole body could
+absorb destroys it outright, section 7.4).
 
 **Queries** (05 §11): `parts`, `wounds`, `traits`, `held`.
 
@@ -843,7 +892,7 @@ Body flags on `damage_type` (`severs`).
 | # | Invariant |
 |---|-----------|
 | B1 | Nothing reduces a hit's effect except layers, hooks and rules. There is no hidden health value. |
-| B2 | A part's channel slots are enabled exactly when the part is whole. |
+| B2 | A part's channel slots are enabled exactly when the part is whole and nothing holds them: a grip that pins, a posture, a trait, or `disable_channel`. |
 | B3 | Function capacities, mass and attribute caches always equal a from-scratch recomputation. |
 | B4 | Applying the same character spec with the same seed yields the same entity. |
 | B5 | A mind is on exactly one entity. Moving it leaves none behind. |
