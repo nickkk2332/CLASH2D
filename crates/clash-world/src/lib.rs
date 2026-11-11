@@ -5,12 +5,18 @@
 //! upward: it does not know that entities, rules or a renderer exist.
 //! Specified in `docs/02-world-model.md`.
 
+pub mod defs;
 pub mod dims;
 pub mod iter;
 mod pos;
 pub mod storage;
 mod topology;
 
+pub use defs::{
+    AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
+    ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer, MaterialId,
+    RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
+};
 pub use pos::{
     CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,
     distance_sq_cells,

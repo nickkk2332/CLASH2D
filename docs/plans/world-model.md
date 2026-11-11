@@ -30,7 +30,7 @@ Section references such as "02 §14" point into those documents.
 | F4 | `clash-data` v0 | L | F2 | todo |
 | W1 | Dimensions and coordinates | S | F2 | in progress |
 | W2 | Paletted storage | S | F2 | in progress |
-| W3 | Cell definitions | M | F4, W1 | todo |
+| W3 | Cell definitions | M | F4, W1 | in progress |
 | W4 | Chunks and grids | M | W2, W3 | todo |
 | W5 | Cosmos, realms, views | M | W4, F3 | todo |
 | W6 | Edits, causes, events | M | W5 | todo |
