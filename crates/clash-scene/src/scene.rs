@@ -384,6 +384,7 @@ impl<H: SceneHost + fmt::Debug> fmt::Debug for Scene<H> {
 struct Reader<'a> {
     runner: &'a mut Runner,
     ui: &'a UiDefs,
+    theme: &'a Theme,
     game: &'a mut dyn Host,
     view: ExprValue,
     party: ExprValue,
@@ -899,6 +900,7 @@ impl<H: SceneHost> Scene<H> {
         let Scene {
             host,
             app,
+            theme,
             screens,
             ui,
             app_ids,
@@ -920,6 +922,7 @@ impl<H: SceneHost> Scene<H> {
         let mut reader = Reader {
             runner,
             ui,
+            theme,
             game: host.reader(),
             view,
             party,
@@ -937,10 +940,10 @@ impl<H: SceneHost> Scene<H> {
         }
         self.stale = false;
         let first = self.lowest_shown();
-        let theme = self.theme.clone();
         self.with_reader(|reader, screens| {
+            let theme = reader.theme;
             for screen in screens.iter_mut().skip(first) {
-                screen.refresh(reader, &theme);
+                screen.refresh(reader, theme);
             }
         });
     }

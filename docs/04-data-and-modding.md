@@ -410,7 +410,11 @@ in one place:
   type's own is a `Located<String>` resolved in `finish`.
 - The source of an expression, and any other string that is checked or
   compiled after loading, is a `Located<String>`, so that the later
-  error can point into the file.
+  error can point into the file. A field type of a crate's own that is
+  compiled keeps its place and its JSON path, read with
+  `clash_data::by_site`; one that is also read from plain JSON, by a
+  test with `serde_json`, is read with `clash_data::by_site_or_plain`,
+  which gives it its place under the loader and none otherwise.
 - A field with a default that a mod might `scale` or `add` to is listed
   in `Def::DEFAULTS` (section 6.1).
 - What the engine itself supplies, such as the `none` of an element

@@ -47,9 +47,9 @@ actions that call `hit`.
 | U4 | View model and world drawing | L | U1, S9 | beta |
 | U5 | Playback | L | U4 | todo |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |
-| U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | todo |
+| U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
 | U7 | Input, controls, pickers | M | U6b, T5 | todo |
-| U8 | Slots and theming | S | U6b | todo |
+| U8 | Slots and theming | S | U6b | done |
 | U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
 | U10 | Cutscenes | M | U5, T6 | todo |
 | U11 | Application | M | U3, U9, P3 | todo |
@@ -567,6 +567,13 @@ checked by the linter against every loaded theme; the figures and art a
 screen names are plain text, not references the loader resolves, until
 U6b (decision D-322).
 
+Since U6b and U8: bound properties are compiled and evaluated, rows and
+options come from expressions, effects are typed and run, slots are
+filled and a `number` can be typed into. Still stubbed: rows from a
+query (K6), the views beyond U4, the log's content (U5), the
+development widgets, rebuilding the stack on reload, and the figures
+and art a screen names, which are still plain text (D-322).
+
 ### U6b — Toolkit: binding and UI effects
 
 **Spec** 12 §10.4, §10.5 · **Size** M
@@ -580,6 +587,32 @@ Done when
 - A binding that would read truth about a non-party entity is a load error
   outside `debug` screens.
 - A `run` effect appears in the input log and replays.
+
+Beta: every bound property and every expression of an effect is
+compiled when mods load, by `ScreenDef` and `UiPartDef` in
+`Def::compile`, in a pure context with `view`, `party`, `app`,
+`screen.name`, `$name` and `it`, and outside `debug` screens in a mind
+context whose own are the party; mistakes are placed inside the string.
+The scene evaluates what is on show when it is told the simulation has
+advanced or a variable has changed, against a host it is given
+(`SceneHost::view`, `party`, `reader`) and the application's state
+(`AppState`). Effects are read into typed effects at load and run on a
+screen stack with popups; `confirm` and `pick` open the screens of the
+roles `confirm` and `picker.list` and go on when they answer; `act`,
+`command` and `run` hand the host a whole `UiCommand`; `app` services
+reach the application. Tested against the fake host and application of
+`clash_scene::testing`, since no simulation exists to run against.
+Stubbed, each waiting for what it needs: the `Ui` command itself,
+`ui_callable`, the input log and replay are the kernel's (K3, K7): the
+scene's part is that the command it hands over is complete and the
+same every time, which a test shows; `show_screen` from a rule waits
+for the event stream (K2, U5); `act` with `"needed"` or `"all"` only
+marks the command, and choosing an action with `pick` and the other
+pickers are U7; bindings show the simulation as it is, not the moment
+playback has reached (U5); rows cannot come from a query (K6); a
+view's `centre` and an `inspect`'s `of` are compiled and not used;
+`app.creation` is whatever the application says (U9, E9); no benchmark
+of re-evaluation. Decisions D-430 to D-436.
 
 ### U7 — Input, controls, pickers
 
@@ -601,6 +634,14 @@ Done when
 Done when
 - A `ui_part` from a second mod appears in a slot in order, subject to its
   condition; switching theme restyles every screen.
+
+Done: the `ui_part` and `preference` definition types; a slot is filled
+with the parts aimed at it, in order, each shown while its `if` holds,
+and a part aimed at a slot no screen places is a load error unless it
+says `"required": false`; the `theme` preference restyles every open
+screen, each keeping its state; the `ui` mod defines the built-in
+preferences and a second theme. A test loads a part from a second mod,
+and a golden frame shows the second gallery in each theme.
 
 ### U9 — Bundled screens
 

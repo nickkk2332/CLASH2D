@@ -51,9 +51,10 @@
 //! # Bare names
 //!
 //! A theme and a screen name colours, figures and art by plain text, not
-//! yet by reference fields the loader resolves. Until they do (package
-//! U6b), a bare name is read from the namespace of the definition that
-//! is being made (decision D-322):
+//! yet by reference fields the loader resolves. Until they do, a bare
+//! name is read from the namespace of the definition that is being made
+//! (decision D-322), and so is the screen an effect opens and the
+//! preference a widget is bound to ([`UiDefs::resolve`]):
 //!
 //! - A `color` or `figure` definition is known by its qualified id. Its
 //!   bare name means the one in the namespace of the theme or screen
@@ -1270,6 +1271,95 @@ mod tests {
         );
         ui.add_art("demo", "assets/title.txt", "CLASH\n");
         assert!(ui.screen("demo:title", &theme).is_ok());
+    }
+
+    #[test]
+    fn a_profile_names_screens_for_roles_and_sets_preferences() {
+        const MOD: &str = r#"[
+  { "type": "preference", "id": "numbers", "kind": "flag", "default": false },
+  { "type": "preference", "id": "speed", "kind": "number", "default": 1, "max": 4 },
+  { "type": "screen", "id": "ask", "layout": { "text": "Sure?" } }
+]"#;
+        let load_with = |profile: &str| {
+            let types = types();
+            Loader::new(&types)
+                .memory_mod("demo", r#"{ "id": "demo" }"#, &[("data/ui.json", MOD)])
+                .memory_profile("game", profile)
+                .load_profile("game")
+                .into_result()
+                .unwrap_or_else(|e| panic!("{}", e.render()))
+        };
+        let defs = load_with(
+            r#"{ "id": "game", "mods": ["demo"],
+                 "screens": { "confirm": "demo:ask" },
+                 "preferences": { "demo:numbers": true, "speed": 2 } }"#,
+        );
+        let ui = UiDefs::from_defs(&defs).unwrap();
+        assert_eq!(
+            ui.profile_roles(),
+            BTreeMap::from([("confirm".to_owned(), "demo:ask".to_owned())])
+        );
+        let prefs = ui.pref_defaults();
+        assert_eq!(
+            prefs.get("demo:numbers"),
+            Some(&clash_core::Value::Bool(true))
+        );
+        assert_eq!(prefs.get("demo:speed"), Some(&clash_core::Value::Int(2)));
+        assert!(ui.check().is_empty(), "{}", ui.check().render());
+        // A scene made from these starts with them.
+        let scene = Scene::new(NoHost, Theme::default(), KeymapDef::fallback()).with_defs(ui);
+        assert_eq!(scene.role("confirm"), Some("demo:ask"));
+        assert_eq!(scene.pref("demo:speed"), Some(&clash_core::Value::Int(2)));
+
+        // What the profile gets wrong is reported where it is written,
+        // and a value a preference cannot hold is not taken.
+        let defs = load_with(
+            r#"{ "id": "game", "mods": ["demo"],
+  "screens": { "confirm": "demo:aks" },
+  "preferences": { "demo:speed": 9, "demo:nothing": true } }"#,
+        );
+        let ui = UiDefs::from_defs(&defs).unwrap();
+        assert_eq!(
+            ui.pref_defaults().get("demo:speed"),
+            Some(&clash_core::Value::Int(1))
+        );
+        let text = ui.check().render();
+        for needle in [
+            "there is no screen `demo:aks`",
+            "did you mean `demo:ask`?",
+            "the preference `demo:speed` cannot be 9: 9 is above the most it may be",
+            "there is no preference `demo:nothing`",
+            "--> profiles/game.json:2:",
+            "--> profiles/game.json:3:",
+        ] {
+            assert!(text.contains(needle), "missing `{needle}` in:\n{text}");
+        }
+    }
+
+    #[test]
+    fn a_bare_name_is_resolved_from_a_namespace() {
+        let defs = load(&[
+            (
+                "alpha",
+                r#"[ { "type": "screen", "id": "title", "layout": { "text": "a" } },
+                           { "type": "screen", "id": "only", "layout": { "text": "o" } } ]"#,
+            ),
+            (
+                "beta",
+                r#"[ { "type": "screen", "id": "title", "layout": { "text": "b" } } ]"#,
+            ),
+        ]);
+        let ui = UiDefs::from_defs(&defs).unwrap();
+        let found = |name: &str, namespace: &str| ui.resolve::<ScreenDef>(name, namespace);
+        assert_eq!(found("title", "beta").as_deref(), Some("beta:title"));
+        assert_eq!(found("title", "alpha").as_deref(), Some("alpha:title"));
+        assert_eq!(found("title", "gamma").as_deref(), Some("alpha:title"));
+        assert_eq!(found("only", "beta").as_deref(), Some("alpha:only"));
+        assert_eq!(found("alpha:title", "beta").as_deref(), Some("alpha:title"));
+        assert_eq!(found("alpha:nothing", "alpha"), None);
+        assert_eq!(found("nothing", "alpha"), None);
+        assert!(ui.get::<ScreenDef>("beta:title").is_some());
+        assert!(ui.get::<ScreenDef>("title").is_none());
     }
 
     #[test]

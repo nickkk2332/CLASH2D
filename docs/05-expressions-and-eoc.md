@@ -591,6 +591,13 @@ is the character's own, `self.loc.material` is the world's. Everything
 else must be registered safe. Naming a bound subject, a local or an event
 field is always allowed; it is reading from them that is checked.
 
+A context may bind more than one thing as own, and a local as well as a
+subject: an ordinary screen binds the party, a list, and a parameter
+that is one of its members (12 §10.4). An element of an own list is
+own. The compiler can be asked whether a whole expression's value is
+own, so that whoever binds that value by another name elsewhere, as a
+screen binds each row of a list to `it`, may bind it as own there.
+
 Who declares the context: the definition type that owns the field, in
 Rust, once for each field (04 §7.3). It lists the subjects with their
 kinds, the locals with their types, the event, whether the field is pure

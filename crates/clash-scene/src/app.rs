@@ -408,3 +408,90 @@ pub(crate) fn pref_request(id: &str, value: &Value) -> AppRequest {
         ]),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_is_registered_once_with_documentation_and_is_safe_for_belief() {
+        let mut registry = Registry::with_builtins();
+        register_expr(&mut registry);
+        let kinds = registry.kinds().count();
+        let properties = registry.properties().count();
+        register_expr(&mut registry);
+        assert_eq!(
+            registry.kinds().count(),
+            kinds,
+            "registering twice changes nothing"
+        );
+        assert_eq!(registry.properties().count(), properties);
+
+        let app = registry.kind_id(KIND_APP).unwrap();
+        let entry = registry.kind_id(KIND_APP_ENTRY).unwrap();
+        for kind in [app, entry] {
+            assert!(!registry.kind(kind).unwrap().spec.doc.is_empty());
+        }
+        let names: Vec<&str> = registry
+            .properties_of(app)
+            .map(|property| property.spec.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "can_load",
+                "can_save",
+                "creation",
+                "mods",
+                "pref",
+                "profile",
+                "profiles",
+                "saves",
+                "scenario",
+                "scenarios",
+                "size"
+            ]
+        );
+        for property in registry
+            .properties_of(app)
+            .chain(registry.properties_of(entry))
+        {
+            let name = &property.spec.name;
+            assert!(
+                !property.spec.doc.is_empty(),
+                "`{name}` has no documentation"
+            );
+            assert!(property.spec.belief_safe, "`{name}` is not safe for belief");
+        }
+        // Every name is known to the scene, which answers it.
+        let ids = AppIds::find(&registry).unwrap();
+        assert_eq!(ids.props.len(), properties_of_app(&registry));
+        assert!(ids.owns(Handle::new(app, 0)));
+        assert!(AppIds::find(&Registry::with_builtins()).is_none());
+    }
+
+    fn properties_of_app(registry: &Registry) -> usize {
+        let app = registry.kind_id(KIND_APP).unwrap();
+        let entry = registry.kind_id(KIND_APP_ENTRY).unwrap();
+        registry.properties_of(app).count() + registry.properties_of(entry).count()
+    }
+
+    #[test]
+    fn a_scene_without_an_application_refuses_what_only_one_can_do() {
+        let mut app = NoApp;
+        assert!(app.entries(AppList::Saves).is_empty());
+        assert!(app.current(AppCurrent::Profile).is_none());
+        assert!(!app.can_save() && !app.can_load());
+        let request = |service| AppRequest {
+            service,
+            args: BTreeMap::new(),
+        };
+        assert_eq!(
+            app.service(&request(AppService::Save)),
+            Err("there is no application here to carry out `save`".to_owned())
+        );
+        for own in [AppService::Quit, AppService::SetPref, AppService::Rebind] {
+            assert_eq!(app.service(&request(own)), Ok(()));
+        }
+    }
+}

@@ -726,11 +726,31 @@ A screen has parameters, local variables, a layout tree, and key handlers.
 |-------|----|
 | `title` | The screen's title, a text |
 | `context` | The keymap context (section 9.2) its keys are named in. Left out, `menu`. `debug` also lets it see truth and use the development widgets. A key the context does not name is looked up in `menu`. |
-| `params` | The values it is opened with: each name and its type. Read as `$name`. |
+| `params` | The values it is opened with: each name and its type, written as the expression language writes types (05 §3), or `party_member` (section 10.4). Read as `$name`. A parameter no value is given for is null. |
 | `vars` | Its own variables and their starting values: `true`, a number or a text. Read as `screen.name`. |
 | `min_size` | The smallest grid it can be shown on, as `[columns, rows]` |
 | `layout` | The layout tree: one node (section 10.2) |
 | `keys` | For a key name, the UI effects run when that key is pressed and no widget used it |
+| `popup` | The screen does not fill the frame: how large it is and where it sits (below) |
+
+**The stack.** Screens are kept on a stack. Input goes to the top one.
+A screen that is closed gives way to the one beneath, which is as it was
+left: its variables, its focus, its selections.
+
+**Popups.** A screen with a `popup` does not fill the frame. It is drawn
+over the screens beneath it, which stay on show: the frame is drawn from
+the lowest screen that still shows upward. A click outside a popup does
+nothing.
+
+```json
+"popup": { "width": 44, "height": "fit", "place": "centre", "dim": true }
+```
+
+| Field | Is |
+|-------|----|
+| `width`, `height` | Cells, a percentage of the frame, `"fit"` for as large as its content, or `"fill"`. Left out, `"fit"`. Never more than the frame. |
+| `place` | `centre`, `top`, `bottom`, `left`, `right`, `top_left`, `top_right`, `bottom_left` or `bottom_right`. Left out, `centre`. |
+| `dim` | `true` to draw everything beneath it dimmed: each colour keeps 44% of its brightness, and on sixteen colours a character falls back to dark grey. Left out, `false`. |
 
 ### 10.2 Layout
 
@@ -774,7 +794,7 @@ what is left, then nothing.
 | `grid` | `columns`: the width of each column, written as `width` is. `rows`: the height of each row; left out, a row fits its tallest child. `cells`: the nodes, row by row. |
 | `tabs` | `pages`: a list of `{ "title", "content" }`, the content being one node. `selected`: the screen variable holding the shown page's number, from 0. A strip of titles is drawn above the page. |
 | `scroll` | One node. It is laid out at its own size and shown through the scroll's space, with a scrollbar when it is taller. Moving the focus to something inside scrolls it into view. |
-| `slot` | The slot's name |
+| `slot` | The slot's name. What is put into it (section 10.6) is laid out one below another; an empty slot takes no room. |
 
 ### 10.3 Widgets
 
@@ -839,6 +859,29 @@ of texts (a table row's cells), or an object:
 
 `selected` holds the row's number from 0 in the order written, counted
 through the whole of a tree, and unchanged by a table's sorting.
+
+**Rows from an expression.** Where `rows` is a string it is an
+expression giving a list, and each element is a row. A `list`, `tree`
+or `menu` shows a row by its `item`, a text over the row as `it`, and a
+`table` by each column's `value`; with neither, a row that is a map is
+shown by its `label` and anything else as text. A tree's `children` is
+an expression over `it` giving the rows beneath it, at most sixteen
+deep. A list of more than 10,000 rows is cut there. `options` written
+as a string is likewise an expression giving a list: each element is a
+flag, a number or a text, which is both the value and what is shown, or
+a map with `value` and `label`. A query written as an object (05 §11)
+is kept and gives no rows until queries are built.
+
+For the effects of a row (`on_select`, `on_activate`), `it` is the row:
+its element where the rows come from an expression, its `label` where
+they are written out. For a `figure`'s `shade` it is the region's name,
+and for a view's `on_pick` the place picked.
+
+**Typing a number.** A `number` with the focus takes the keys that type
+one: digits, a minus sign first and, unless its variable holds a whole
+number, one point. What is typed is shown in place of the value and
+becomes the value, brought within `min` and `max`, on `accept` or as
+soon as any other key is used; `erase` takes the last character back.
 
 **A figure** is a definition:
 
@@ -908,32 +951,57 @@ progress is ended.
 Every widget property that shows something is an expression in a **pure**
 context (05 §7.3). The names available:
 
-| Name | Is |
-|------|----|
-| `view` | The active controlled character |
-| `party` | All directly controlled characters |
-| `$name` | Screen parameters |
-| `screen.name` | Screen variables |
-| `it` | The current row in a list, table or tree |
-| `app` | Things outside the simulation: saves, profiles, mods, scenarios, preferences, the creation session |
+| Name | Type | Is |
+|------|------|----|
+| `view` | `entity` | The active controlled character. Null when there is none. |
+| `party` | `list<entity>` | All directly controlled characters |
+| `$name` | As `params` declares | Screen parameters |
+| `screen.name` | `any` | Screen variables. A name the screen does not declare is a load error. |
+| `it` | The element of the row's list | The current row in a list, table, tree or menu, and in the effects of a row (section 10.3) |
+| `app` | `app` | Things outside the simulation: saves, profiles, mods, scenarios, preferences, the creation session |
 
-Bindings are re-evaluated when the simulation has advanced or a screen
-variable has changed, for widgets that are visible. While events are
-still being played back, bindings on the view show the world as of the
-moment playback has reached, so a health bar does not drop before the
-blow is seen.
+Every bound property and every expression of a UI effect is compiled
+when mods load, with these names and no others. A name that is not
+there, a property that does not exist, a value of the wrong type, a
+random function and a read the screen may not make (below) are load
+errors, placed at the line and column inside the string. A text
+property is a template (05 §4.6); a property that holds a number, a
+condition or a list is an expression when it is written as a string or
+as `{ "expr": "…" }`.
+
+`entity` is the kind of subject the simulation registers under that
+name (05 §5.1). Where none is registered, as in a tool that loads mods
+without a simulation, `view` and the members of `party` are `any`, and
+what is read of them is checked when it runs.
+
+Bindings are re-evaluated before the next frame when the simulation has
+advanced, when a screen variable or a preference has changed, when a
+screen has been opened or closed and when the grid has changed size.
+Only the screens on show are evaluated, and of them only what is on
+show: a node whose `if` does not hold is passed over with everything
+inside it, and so is every page of a `tabs` but the one shown. While
+events are still being played back, bindings on the view show the world
+as of the moment playback has reached, so a health bar does not drop
+before the blow is seen. A binding that faults when it runs (05 §4.4,
+§4.5) gives null: a number shows as 0, a condition as false, a list as
+empty.
 
 `app` is the same for every mod and is listed in full in the generated
-reference:
+reference. It is a kind of subject the scene registers, with these
+properties, all safe for belief:
 
-| `app.` | Is |
-|--------|----|
-| `saves`, `profiles`, `mods`, `scenarios` | Lists, each entry with its name, description and state |
-| `profile`, `scenario` | The ones in use |
-| `pref(id)` | A preference (below) |
-| `creation` | The character being made (06 §10.3) |
-| `size` | The grid in columns and rows |
-| `can_save`, `can_load` | Whether the scenario's saving policy allows it now |
+| `app.` | Type | Is |
+|--------|------|----|
+| `saves`, `profiles`, `mods`, `scenarios` | `list<app_entry>` | What there is of each |
+| `profile`, `scenario` | `app_entry?` | The ones in use |
+| `pref(id)` | `any` | A preference's value (below). `id` is the id of a `preference`, checked when mods load. |
+| `creation` | `any` | The character being made (06 §10.3); null when none is |
+| `size` | `list<int>` | The grid, as `[columns, rows]` |
+| `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
+
+An `app_entry` has `id` (a save's file name, a qualified id), `name`,
+`description` and `state` (a word: `enabled`, `disabled`, `broken`,
+`current`), all texts.
 
 **What a screen may know.** In ordinary screens, the party's own
 characters are available in full. Everyone and everything else is available
@@ -946,6 +1014,16 @@ member stands for what the party knows of it: its persona, its track
 (08 §7.5). Reading anything else of it is a load error. A parameter of
 type `party_member` may be read in full.
 
+An ordinary screen is a mind context (05 §7.3) in which the party is
+the character whose mind it is. What may be read in full is `view`,
+`party` and its members, a parameter of type `party_member`, and
+whatever is reached from those through properties registered as
+yielding something of the same owner, as a character's parts and what
+it carries are. A row of such a list is the party's own too: in a list
+whose `rows` is `party`, `it` may be read in full. Of everything else,
+only what is registered as safe for belief may be read. A `ui_part`
+(section 10.6) is held to this whatever screen it is placed in.
+
 **Preferences.** A `preference` is a player's choice about display and
 input, kept outside saves and invisible to rules:
 
@@ -954,9 +1032,31 @@ input, kept outside saves and invisible to rules:
   "name": "Show damage numbers", "doc": "Float the energy of each hit over its target." }
 ```
 
-The built-in ones are defined the same way: `theme`, `keymap`,
-`playback_speed`, `cutscenes` (all, major, none). A profile may set
-defaults.
+| Field | Is |
+|-------|----|
+| `kind` | What it holds: `flag`, `number`, `text`, or `choice`, one of the texts in `options`. Required. |
+| `default` | Its value until the player or a profile sets one. Required, and of the kind. |
+| `options` | For a `choice`: the texts it may hold |
+| `min`, `max` | For a `number`: the least and the greatest it may hold |
+| `name` | What it is called where the player sets it |
+| `doc` | What it does |
+
+The built-in ones are defined the same way, in the `ui` mod: `theme`
+and `keymap`, each the qualified id of a definition of that type,
+`playback_speed`, a number, and `cutscenes` (all, major, none). A
+profile may set defaults in its `preferences`, by id.
+
+The scene keeps the preferences' values, by qualified id, and tells the
+application of each change so that it can keep the choice between
+runs. A value the preference cannot hold is refused, with the reason.
+The engine itself acts on two, by their bare names, whichever mod
+defines them: changing `theme` restyles every open screen, each keeping
+its variables, focus and selections, and changing `keymap` changes what
+the keys mean. A theme or a keymap that cannot be used is refused and
+the preference keeps its value. A widget's `bind` and a `set` effect
+name a preference as `pref.id`, where a bare id means the preference of
+that name in the screen's own namespace, or else the first of that name
+in order of qualified id.
 
 ### 10.5 UI effects
 
@@ -971,9 +1071,78 @@ Keys, clicks and widget events run lists of UI effects.
 | `act`, `command` | Build and submit a simulation command |
 | `run` | Run a rule marked `ui_callable`, through the `Ui` command so it is logged and replayable |
 | `confirm` | Ask before continuing |
+| `answer` | Close a screen opened by `confirm` or `pick`, giving its answer |
 | `app` | Engine services: new game, save, load, delete save, quit, change a preference, rebind a key, select a profile, reload mods, edit the creation session. Saving and loading are offered only as the scenario's saving policy allows (13 §9.2). |
 
 UI effects cannot change the simulation except by submitting commands.
+
+A list of effects is a JSON list of objects, each with one key, the
+effect's name. An effect that does not exist, or an argument it does
+not take, is a load error where it is written. A **value** is `true`,
+`false`, a number, or a string holding an expression, compiled with the
+screen's bindings (section 10.4): a text is written `"'like this'"`.
+
+| Effect | Written | Arguments |
+|--------|---------|-----------|
+| `open` | `"id"`, or an object | `screen`: the screen's id. `with`: a value for each of its parameters, by name. |
+| `close` | `{}` | None. Closes the top screen. |
+| `replace` | As `open` | As `open`. Closes the top screen and opens another in its place. |
+| `set` | An object | For each key, `screen.name` or `pref.id`, the value it is given. A screen variable holds a flag, a number or a text. |
+| `focus` | `"id"` | The `id` of the widget to focus |
+| `confirm` | `"text"`, or an object | `text`: the question. `yes`, `no`: what the two answers are called. |
+| `pick` | An object | `from`: an expression giving the list to choose from. `item`: how an entry is shown, a text over the entry as `it`. `into`: the screen variable or preference the choice is stored in. `title`. |
+| `answer` | A value | The answer: for a `confirm`, true to go on; for a `pick`, the choice, or null for none |
+| `act` | An object | `action`: the action's id. `params`: a value for each parameter by name, or `"needed"` or `"all"` (section 9.3). |
+| `command` | `"name"`, or an object | `name`: the command. `args`: its arguments by name. |
+| `run` | `"rule"`, or an object | `rule`: the rule's id. `args`: its arguments by name. |
+| `app` | `"service"`, or an object with one key, the service, holding its arguments | See below |
+
+| Service | Arguments |
+|---------|-----------|
+| `new_game` | `scenario` (may be left out): the scenario's id |
+| `save` | `name` (may be left out) |
+| `load`, `delete_save` | `save`: the save's id |
+| `quit`, `reload_mods` | None |
+| `set_pref` | `pref`: the preference's id. `value`. |
+| `rebind` | `context`, `key`, `name`: as a keymap writes them (section 9.2) |
+| `select_profile` | `profile`: the profile's id |
+| `edit_creation` | `field`, `value` |
+
+A list is run in order, in the screen that asked: its expressions read
+that screen's variables and parameters, and `it` where the event has a
+row (section 10.3). An effect that cannot be run, a screen that does
+not exist, a value a variable cannot hold, a command the simulation
+refuses, a service the application cannot carry out, is reported with
+its reason and the list goes on. Once the screen that asked has closed,
+what is left of its list runs with no screen: `set` and `focus` fail
+and the rest still run.
+
+`open` and `replace` name a screen by its qualified id, or by a bare
+name, which means the screen of that name in the namespace of the
+screen that asks, or else the first of that name in order of qualified
+id.
+
+`confirm` and `pick` open a screen and stop: the rest of the list waits
+for its answer. `confirm` opens the screen of the role `confirm`
+(section 10.7) with the parameters `text`, `yes` and `no`. `pick` opens
+the screen of the role `picker.list` with `options`, a list of maps
+each with `label`, the entry as `item` shows it, and `value`, the
+entry, and with `title`. The opened screen answers with the `answer`
+effect, which closes it. On an answer of true to a `confirm` the rest
+of the list runs. On an answer that is not null to a `pick` the choice
+is stored in `into`, if that is given and the choice is a flag, a
+number or a text, and the rest of the list runs with the choice as
+`it`. Any other answer, and closing the screen any other way, drops
+what was waiting.
+
+`act`, `command` and `run` each build a command, its name and its
+arguments as values, and submit it. What the command is to the
+simulation is the simulation's business: it takes it or refuses it,
+with a reason. For `act` with `"needed"` or `"all"` the command says
+that the player is to be asked for the parameters (section 9.3).
+
+The scene carries out `set_pref`, `rebind` and `quit` itself and then
+passes every service on to the application.
 
 **From the simulation.** A rule may ask for a screen:
 `{ "show_screen": { "screen": "trade", "to": "self", "with": { … } } }`.
@@ -994,10 +1163,32 @@ an interaction opens a shop, a book, a terminal or a mod's own screen.
 A screen places `slot`s where others may add. A `ui_part` puts a widget
 into a slot. Every bundled screen and its slots are listed in the
 generated reference. A part aimed at a slot that does not exist is a load
-error, unless it says `"optional": true`. Any layout node may carry an
+error, unless it says `"required": false`. Any layout node may carry an
 `id`, so that a patch can change one node of a screen and leave the rest
 (04 §6.1). A mod that adds a resource adds its bar without replacing the
 whole display. A mod that wants a different display overrides the screen.
+
+A slot is known by its qualified name: the namespace of the screen that
+places it, a colon, and the name the screen gives it. The screen
+`ui:hud` places `{ "slot": "hud.bars" }`, and that slot is
+`ui:hud.bars`. A slot's name is free; by convention it starts with its
+screen's.
+
+| Field | Is |
+|-------|----|
+| `into` | The slot's qualified name. A bare name means a slot of the part's own mod. Required. |
+| `order` | Where the part comes among the others in the slot: lower first, and parts of equal order by qualified id. Left out, 0. |
+| `if` | The part is shown, and takes space, only while this holds |
+| `required` | Left out, true: the slot must exist. With `false`, a part whose slot no screen places is simply not shown. |
+| `widget` | One layout node (section 10.2): a widget, or a container of them. Required. |
+
+The parts of a slot are laid out one below another. A part's bindings
+are compiled by themselves, since a part may be placed in any screen:
+they see `view`, `party`, `app` and the screen's variables as
+`screen.name`, which are not checked against any screen and read as
+null where the screen has none of that name, and they do not see the
+screen's parameters. A part is always held to what an ordinary screen
+may know (section 10.4).
 
 ### 10.7 The bundled screens
 
@@ -1044,7 +1235,8 @@ know-how appear in them with no screen written.
 |------|-------------|
 | `play`, `creation`, `summary` | A game is being played, a character made, a game ended |
 | `reaction`, `choice` | The simulation asks for a decision |
-| `picker.<type>` | A parameter of that type is being chosen |
+| `picker.<type>` | A parameter of that type is being chosen. `picker.list` is also what the `pick` effect opens (section 10.5). |
+| `confirm` | The `confirm` effect asks |
 | `tooltip`, `context_menu` | Something is hovered or clicked (section 9.4) |
 
 A role with no screen is a load error.
@@ -1125,8 +1317,15 @@ widgets, and how each is drawn beyond its styles and marks, is fixed.
 The shares by which a cell is dimmed for depth, light and memory
 (section 6.1) are the engine's constants, not settings. A mod cannot
 choose which line a section view cuts along or put a camera anywhere:
-those are the scene's until controls and UI effects reach the camera
-(packages U6b, U7).
+those are the scene's until controls reach the camera (package U7): a
+view's `centre` is compiled and not yet followed. The share of its
+brightness that a dimming popup leaves beneath it is the engine's
+constant. What is put into a slot is always laid out one below another.
+A screen's `rows` cannot yet come from a query (05 §11), only from an
+expression. An `inspect` cannot yet list the properties of a subject
+given by `of`. Which preferences the engine itself acts on, `theme` and
+`keymap`, is fixed. The words `Yes` and `No` of the bundled confirm
+screen are that screen's, and a mod changes them by overriding it.
 
 ## 14. Invariants
 
