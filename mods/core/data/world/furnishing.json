@@ -1,0 +1,44 @@
+[
+  { "//": "What the bundled maps are furnished with. Kept apart from the basic elements so that maps can grow without touching them.",
+    "type": "floor", "id": "boards", "material": "wood", "thickness": "4 cm",
+    "glyph": { "ch": ".", "fg": "material" } },
+
+  { "type": "floor", "id": "roofing", "material": "wood", "thickness": "10 cm",
+    "glyph": { "ch": "~", "fg": "material" } },
+
+  { "//": "A flight of stairs up to the storey above. Its states face the way one climbs, so a turned map turns it.",
+    "type": "fixture", "id": "flight", "material": "wood",
+    "height": 3.0, "fill": 0.3,
+    "flags": ["stairs"],
+    "states": {
+      "north": { "glyph": { "ch": "^" } },
+      "east":  { "glyph": { "ch": ">" } },
+      "south": { "glyph": { "ch": "v" } },
+      "west":  { "glyph": { "ch": "<" } }
+    },
+    "glyph": { "ch": "^", "fg": "material" } },
+
+  { "type": "fixture", "id": "table", "material": "wood",
+    "height": 0.8, "fill": 0.1,
+    "glyph": { "ch": "T", "fg": "material" } },
+
+  { "type": "fixture", "id": "chair", "material": "wood",
+    "height": 0.9, "fill": 0.05,
+    "glyph": { "ch": "h", "fg": "material" } },
+
+  { "type": "fixture", "id": "bed", "material": "wood",
+    "height": 0.6, "fill": 0.2,
+    "glyph": { "ch": "b", "fg": "material" } },
+
+  { "type": "fixture", "id": "shelf", "material": "wood",
+    "height": 2.0, "fill": 0.15,
+    "glyph": { "ch": "[", "fg": "material" } },
+
+  { "type": "fixture", "id": "counter", "material": "wood",
+    "height": 1.0, "fill": 0.25,
+    "glyph": { "ch": "c", "fg": "material" } },
+
+  { "type": "area_kind", "id": "home", "tags": ["dwelling"] },
+
+  { "type": "area_kind", "id": "shop", "tags": ["trade"] }
+]

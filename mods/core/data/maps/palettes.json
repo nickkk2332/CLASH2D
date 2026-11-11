@@ -1,0 +1,12 @@
+[
+  { "//": "What the bundled houses share. A map lists it first and adds its own walls.",
+    "type": "palette", "id": "house_common",
+    "entries": {
+      ".": {},
+      "+": "door",
+      "w": "window",
+      "t": { "fixture": "table" },
+      "h": { "fixture": "chair" },
+      "b": { "fixture": "bed", "mark": "bed" }
+    } }
+]

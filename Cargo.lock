@@ -94,7 +94,10 @@ name = "clash-gen"
 version = "0.1.0"
 dependencies = [
  "clash-core",
+ "clash-data",
+ "clash-expr",
  "clash-world",
+ "proptest",
  "serde",
  "serde_json",
  "thiserror",
@@ -151,6 +154,7 @@ version = "0.1.0"
 dependencies = [
  "clash-core",
  "clash-data",
+ "clash-gen",
  "clash-save",
  "clash-scene",
  "clash-sim",

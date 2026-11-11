@@ -6,6 +6,10 @@
 //!
 //! This is a stub. It is filled in by WG1 to WG9 of `docs/plans/worldgen.md`.
 //! What exists so far is [`noise`]: the deterministic noise functions and
-//! the description of a noise field that those packages build on.
+//! the description of a noise field that those packages build on; and
+//! [`map`]: the map format, from definitions to resolved maps.
 
+pub mod map;
 pub mod noise;
+
+pub use map::{check_defs, register_defs};

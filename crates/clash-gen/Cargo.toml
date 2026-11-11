@@ -8,11 +8,14 @@ publish.workspace = true
 
 [dependencies]
 clash-core.workspace = true
+clash-data.workspace = true
+clash-expr.workspace = true
 clash-world.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
 serde_json.workspace = true
 
 [lints]

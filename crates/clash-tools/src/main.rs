@@ -26,6 +26,7 @@ pub fn engine_types() -> DefTypes {
     let mut types = DefTypes::new();
     clash_data::expr::register_defs(&mut types);
     clash_world::register_defs(&mut types);
+    clash_gen::register_defs(&mut types);
     clash_scene::register_defs(&mut types);
     types
 }
@@ -36,6 +37,7 @@ pub fn engine_types() -> DefTypes {
 /// from definitions adds its check here.
 pub const ENGINE_CHECKS: &[data::BuildCheck] = &[
     |defs| clash_world::check_defs(defs),
+    |defs| clash_gen::check_defs(defs),
     clash_scene::check_defs,
 ];
 
