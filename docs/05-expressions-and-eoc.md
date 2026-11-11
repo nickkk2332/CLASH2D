@@ -279,6 +279,8 @@ Content stores its own state in **variables** on subjects.
 | `action` | A running action | `$power` inside the action |
 | `global` | The simulation | `global.var.day_of_reckoning` |
 | local | One rule run | `$g` |
+| `scenario` | The game in progress (13) | `scenario.var.wave` |
+| `legacy` | The player's profile, across games (13 §10.1) | `legacy.var.towers_cleared` |
 
 - `subject.var.name` refers to a variable in the mod's own namespace, or an
   import. `subject.var('other_mod:name')` names one exactly.

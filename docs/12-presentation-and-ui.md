@@ -470,7 +470,7 @@ Keys, clicks and widget events run lists of UI effects.
 | `act`, `command` | Build and submit a simulation command |
 | `run` | Run a rule marked `ui_callable`, through the `Ui` command so it is logged and replayable |
 | `confirm` | Ask before continuing |
-| `app` | Engine services: new game, save, load, delete save, quit, change a preference, rebind a key, select a profile, reload mods, edit the creation session |
+| `app` | Engine services: new game, save, load, delete save, quit, change a preference, rebind a key, select a profile, reload mods, edit the creation session. Saving and loading are offered only as the scenario's saving policy allows (13 §9.2). |
 
 UI effects cannot change the simulation except by submitting commands.
 

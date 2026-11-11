@@ -607,6 +607,11 @@ matter (01 R11, document 15), and the two can differ.
 Each carries the tick, location, cause and type-specific data. The simulation
 forwards them to the EOC runtime and the presentation stream.
 
+Events that sum many changes (`EnergyReleased`, `CollapseSettled`,
+`TractDevastated`) carry totals by instigator: elements destroyed, mass
+brought down, occupants exposed. Rules that keep account of what someone
+has broken listen to these, not to every element (13 §8.1).
+
 ## 8. Occupancy
 
 ### 8.1 Spatial index

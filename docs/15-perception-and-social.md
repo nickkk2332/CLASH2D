@@ -123,6 +123,10 @@ A device may have senses too: a camera, a tripwire, sonar (11).
 which perceives and remembers them as its own (08 §7.5). Ending the relay
 stops the flow; what was learned stays.
 
+A device with senses may keep what it perceives as memories without having
+a mind: a recorder. Its memories can be read by whoever can operate it
+(13 §8.4).
+
 The `Senses` component holds which senses an entity has and its **facing**.
 
 ## 5. Detection

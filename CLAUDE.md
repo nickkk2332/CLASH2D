@@ -52,6 +52,13 @@ documents disagree silently.
 - **No `unsafe`** without a decision entry.
 - **No new dependency** without a decision entry.
 
+## A word used two ways
+
+In the plans and in this file, a *scenario* is a scripted regression test
+with a golden hash, kept under `scenarios/`. In `docs/13-scenarios-and-events.md`
+a *scenario* is a definition type: a game the player can start. Say
+"test script" and "game scenario" when it could be unclear.
+
 ## Definition of done
 
 - `cargo xtask check` passes (format, clippy with warnings denied, tests,

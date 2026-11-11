@@ -183,6 +183,7 @@ pub enum Advance {
     NeedInput(DecisionRequest),   // a controlled entity must choose
     Reached(Tick),                // the requested limit was reached
     Yielded,                      // work budget spent; call again
+    Request(AppRequest),          // a rule asked to save, restore or end (13 §9.1)
 }
 
 impl Sim {

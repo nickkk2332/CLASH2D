@@ -207,6 +207,7 @@ pub enum Advance {
     NeedInput(DecisionRequest),
     Reached(Tick),
     Yielded,                   // work budget spent; call again
+    Request(AppRequest),       // a rule asked for a checkpoint, a restore or an ending (13 §9.1)
 }
 ```
 
