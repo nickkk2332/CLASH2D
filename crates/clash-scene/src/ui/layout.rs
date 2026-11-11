@@ -9,7 +9,7 @@
 
 use crate::frame::Rect;
 
-use super::def::Size;
+use super::def::{Place, Size};
 use super::screen::{Flavour, Kind, Screen};
 
 /// The width of the drawn part of a `bar` that is given no size.
@@ -108,7 +108,8 @@ impl Screen {
 
     fn tag(&self, index: usize) -> Tag {
         match &self.nodes[index].kind {
-            Kind::Rows => Tag::Line { vertical: true },
+            // What is put into a slot is laid out one below another.
+            Kind::Rows | Kind::Slot { .. } => Tag::Line { vertical: true },
             Kind::Cols => Tag::Line { vertical: false },
             Kind::Stack => Tag::Stack,
             Kind::Grid { .. } => Tag::Grid,
@@ -145,7 +146,7 @@ impl Screen {
             })
         };
         match &node.kind {
-            Kind::Rows => any_child(vertical),
+            Kind::Rows | Kind::Slot { .. } => any_child(vertical),
             Kind::Cols => any_child(!vertical),
             Kind::Stack => any_child(false),
             Kind::Grid { columns, rows } => {
@@ -173,7 +174,9 @@ impl Screen {
         for node in &mut self.nodes {
             node.shown = false;
         }
-        let area = Rect::new(0, 0, i32::from(cols), i32::from(rows));
+        let frame = Rect::new(0, 0, i32::from(cols), i32::from(rows));
+        let area = self.popup_area(frame);
+        self.area = area;
         if !self.nodes.is_empty() && self.visible(0) && !self.too_small() {
             self.place(0, area, area);
         }
@@ -192,6 +195,45 @@ impl Screen {
         if self.hover.is_some_and(|hover| !self.nodes[hover].shown) {
             self.hover = None;
         }
+    }
+
+    /// The part of the frame the screen takes: all of it, or, for a
+    /// popup, a rectangle of its size at its place.
+    fn popup_area(&mut self, frame: Rect) -> Rect {
+        let Some(popup) = self.popup else {
+            return frame;
+        };
+        if self.nodes.is_empty() || self.too_small() {
+            return frame;
+        }
+        let side = |size: Option<Size>, avail: i32, natural: i32| {
+            match size {
+                Some(Size::Cells(cells)) => i32::from(cells),
+                Some(Size::Percent(percent)) => avail * i32::from(percent) / 100,
+                Some(Size::Fill(_)) => avail,
+                Some(Size::Fit) | None => natural,
+            }
+            .clamp(0, avail)
+        };
+        let natural_w = self.measure(0, frame.w, frame.h).0;
+        let w = side(popup.width, frame.w, natural_w);
+        // Wrapped text grows taller as it gets narrower.
+        let natural_h = self.measure(0, w, frame.h).1;
+        let h = side(popup.height, frame.h, natural_h);
+        let (left, centre, right) = (0, (frame.w - w) / 2, frame.w - w);
+        let (top, middle, bottom) = (0, (frame.h - h) / 2, frame.h - h);
+        let (x, y) = match popup.place {
+            Place::Centre => (centre, middle),
+            Place::Top => (centre, top),
+            Place::Bottom => (centre, bottom),
+            Place::Left => (left, middle),
+            Place::Right => (right, middle),
+            Place::TopLeft => (left, top),
+            Place::TopRight => (right, top),
+            Place::BottomLeft => (left, bottom),
+            Place::BottomRight => (right, bottom),
+        };
+        Rect::new(frame.x + x, frame.y + y, w, h)
     }
 
     /// Scrolls every `scroll` around the focused node so that the node is

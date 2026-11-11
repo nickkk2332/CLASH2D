@@ -100,5 +100,6 @@
           { "frame": "trace_view", "trace_view": { "id": "trace", "tip": "trace_view: a stream of trace records." } } ] } } ] } },
 
       { "tooltip": { "value": "Nothing with a tip has the focus." } } ] },
-    "keys": { "back": [ { "close": {} } ] } }
+    "keys": { "back": [ { "close": {} } ],
+              "more": [ { "open": { "screen": "gallery_more", "with": { "who": "view" } } } ] } }
 ]

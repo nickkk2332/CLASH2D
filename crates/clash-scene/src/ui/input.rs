@@ -18,6 +18,8 @@ use super::{
 
 /// How many lines one notch of the mouse wheel scrolls.
 const WHEEL_LINES: i32 = 3;
+/// The most characters that can be typed into a `number`.
+const MAX_TYPED_DIGITS: usize = 18;
 
 impl Screen {
     /// Gives the screen one input event and returns what it asks for in
@@ -199,6 +201,7 @@ impl Screen {
                 id: self.nodes[index].id.clone(),
                 event: WidgetEvent::Select,
                 row,
+                it: row.map(|row| listing.it_of(row)),
                 effects: listing.on_select.clone(),
             });
         }
@@ -219,6 +222,7 @@ impl Screen {
                     id: self.nodes[index].id.clone(),
                     event: WidgetEvent::Activate,
                     row: Some(row),
+                    it: Some(listing.it_of(row)),
                     effects: effects.clone(),
                 });
             }
@@ -238,6 +242,7 @@ impl Screen {
                 id: self.nodes[index].id.clone(),
                 event: WidgetEvent::Change,
                 row: None,
+                it: None,
                 effects: effects.clone(),
             });
         }
@@ -435,21 +440,71 @@ impl Screen {
                 max,
                 step,
                 on_change,
+                typing,
                 ..
             } => {
+                let limit = |mut value: f64| {
+                    if let Some(max) = max.as_ref() {
+                        value = value.min(max.value);
+                    }
+                    if let Some(min) = min.as_ref() {
+                        value = value.max(min.value);
+                    }
+                    value
+                };
+                // A key that types part of a number is kept until the
+                // number is taken with `accept` or by moving on.
+                let digit = chord
+                    .typed()
+                    .filter(|ch| ch.is_ascii_digit() || matches!(ch, '-' | '.'));
+                if let Some(ch) = digit {
+                    let whole = matches!(self.read(var), Some(Value::Int(_)) | None);
+                    let text = typing.get_or_insert_with(String::new);
+                    let fits = match ch {
+                        '-' => text.is_empty(),
+                        '.' => !whole && !text.contains('.'),
+                        _ => text.len() < MAX_TYPED_DIGITS,
+                    };
+                    if fits {
+                        text.push(ch);
+                    }
+                    if text.is_empty() {
+                        *typing = None;
+                    }
+                    self.stale = true;
+                    return true;
+                }
+                let mut used = false;
+                if let Some(text) = typing.as_mut() {
+                    if name == Some(NAV_ERASE) {
+                        text.pop();
+                        if text.is_empty() {
+                            *typing = None;
+                        }
+                        self.stale = true;
+                        return true;
+                    }
+                    // Anything else takes what was typed as the value.
+                    let typed = text.parse::<f64>().ok().filter(|value| value.is_finite());
+                    *typing = None;
+                    self.stale = true;
+                    if let Some(typed) = typed {
+                        let before = self.number_of(var);
+                        let value = limit(typed);
+                        if value != before {
+                            self.store_number(var, value);
+                            self.changed(index, var, on_change, out);
+                        }
+                    }
+                    used = name == Some(NAV_ACCEPT);
+                }
                 let by = match name {
                     Some(NAV_RIGHT) => step.value,
                     Some(NAV_LEFT) => -step.value,
-                    _ => return false,
+                    _ => return used,
                 };
                 let before = self.number_of(var);
-                let mut value = before + by;
-                if let Some(max) = max {
-                    value = value.min(max.value);
-                }
-                if let Some(min) = min {
-                    value = value.max(min.value);
-                }
+                let value = limit(before + by);
                 if value != before {
                     self.store_number(var, value);
                     self.changed(index, var, on_change, out);
@@ -504,6 +559,7 @@ impl Screen {
                     id: self.nodes[index].id.clone(),
                     event: WidgetEvent::Activate,
                     row: None,
+                    it: None,
                     effects: on_activate.clone(),
                 });
                 true

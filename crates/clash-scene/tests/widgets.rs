@@ -10,8 +10,8 @@ use std::path::PathBuf;
 
 use clash_core::{Real, Value};
 use clash_scene::ui::{
-    BindScope, Evaluator, FigureDef, MessageLog, Screen, ScreenDef, UiData, UiEnv, UiError,
-    UiEvent, UiProblem, VarRef, ViewDef, ViewKind, ViewPainter, WidgetEvent,
+    BindScope, Binding, Evaluator, FigureDef, MessageLog, Screen, ScreenDef, UiData, UiEnv,
+    UiError, UiEvent, UiProblem, VarRef, ViewDef, ViewKind, ViewPainter, WidgetEvent,
 };
 use clash_scene::{
     Attrs, Canvas, CellStyle, Frame, InputEvent, KeymapDef, Mods, MouseButton, MouseEvent,
@@ -559,7 +559,7 @@ fn list_selects_scrolls_and_activates() {
         }
     );
     assert!(
-        matches!(&events[1], UiEvent::Widget { id: Some(id), event: WidgetEvent::Select, row: Some(1), effects }
+        matches!(&events[1], UiEvent::Widget { id: Some(id), event: WidgetEvent::Select, row: Some(1), effects, .. }
         if id == "items" && effects.names().eq(["set"]))
     );
 
@@ -1419,23 +1419,24 @@ fn the_mouse_focuses_selects_activates_and_scrolls() {
 fn bound_properties_show_placeholders_until_an_evaluator_fills_them() {
     struct Fake;
     impl Evaluator for Fake {
-        fn text(&mut self, source: &str, scope: &BindScope<'_>) -> Option<String> {
+        fn text(&mut self, binding: &Binding, scope: &BindScope<'_>) -> Option<String> {
             let name = scope
                 .vars
                 .get("name")
                 .and_then(Value::as_str)
                 .unwrap_or("?");
-            match source {
+            match binding.source() {
                 "{$who.name}" => Some(format!("<blood>{name}</>")),
                 "{broken}" => Some("a < b".to_owned()),
                 _ => None,
             }
         }
-        fn number(&mut self, source: &str, _: &BindScope<'_>) -> Option<f64> {
-            (source == "$who.pool.blood.frac").then_some(0.5)
-        }
-        fn flag(&mut self, source: &str, scope: &BindScope<'_>) -> Option<bool> {
-            (source == "screen.tab == 1").then(|| scope.screen == "nope")
+        fn value(&mut self, binding: &Binding, scope: &BindScope<'_>) -> Option<clash_expr::Value> {
+            match binding.source() {
+                "$who.pool.blood.frac" => Some(clash_expr::Value::Real(Real::of(0.5))),
+                "screen.tab == 1" => Some(clash_expr::Value::Bool(scope.screen == "nope")),
+                _ => None,
+            }
         }
     }
     let fix = fixture();

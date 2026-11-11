@@ -18,7 +18,10 @@
 //! | A window, a terminal or nothing | the [`Frontend`] trait; [`NullFrontend`] for tests |
 //! | Golden frames | [`golden`] |
 //! | Screens and widgets | [`ui`]: [`ui::ScreenDef`], [`ui::Screen`] |
-//! | The scene itself | [`Scene`], over a [`SceneHost`] |
+//! | Bindings and effects | [`ui::Binding`], [`ui::UiEffect`]; the scene evaluates and runs them |
+//! | The scene itself | [`Scene`], over a [`SceneHost`], with an [`AppState`] |
+//! | What `app` is | [`app`]: [`AppState`], [`AppEntry`], [`AppRequest`], [`app::register_expr`] |
+//! | A host and an application for tests | [`testing`] |
 //! | Definitions from mods | [`register_defs`], then [`UiDefs`]; see [`defs`] |
 //! | The picture of the world | [`view`]: [`ViewModel`], [`WorldView`], [`Camera`], [`WorldGlyphs`] |
 //! | How a condition looks; shading over a map | the `ambience` and `overlay` definitions: [`AmbienceDef`], [`OverlayDef`] |
@@ -37,9 +40,12 @@
 //! Playback, cutscenes and the link to the simulation come with packages
 //! U5, U10 and U11 of `docs/plans/first-playable.md`. Until perception
 //! and playback exist, nothing but a test or the omniscient fill of
-//! [`view::omniscient`] puts anything into the view model. Bindings and
-//! interface effects come with U6b; [`ui`] says where they plug in.
+//! [`view::omniscient`] puts anything into the view model. Nothing
+//! implements [`SceneHost`] but tests and the fake of [`testing`]: the
+//! simulation will, and until it does `view` and `party` are whatever a
+//! host says they are.
 
+pub mod app;
 pub mod color;
 pub mod defs;
 pub mod frame;
@@ -48,15 +54,18 @@ pub mod glyph;
 pub mod golden;
 pub mod input;
 pub mod scene;
+pub mod testing;
 pub mod text;
 pub mod theme;
 pub mod ui;
 pub mod view;
 
+pub use app::{AppCurrent, AppEntry, AppList, AppRequest, AppState, NoApp};
+
 pub use color::{Ansi16, Color, ColorDef, ColorError, ColorRef, Rgb, ansi256};
 pub use defs::{
-    AmbienceId, ColorId, FigureId, KeymapId, OverlayId, ScreenId, ThemeId, UiDefs, check_defs,
-    engine_types, register_defs, register_engine_defs,
+    AmbienceId, ColorId, FigureId, KeymapId, OverlayId, PreferenceId, ScreenId, ThemeId, UiDefs,
+    UiPartId, check_defs, engine_types, register_defs, register_engine_defs,
 };
 pub use frame::{
     Attrs, Borders, Canvas, CellStyle, Frame, FrameCell, FrameFx, Rect, Sprite, Wash,
@@ -69,7 +78,10 @@ pub use input::{
     CONTEXT_MENU, InputEvent, KeyChord, KeyCode, KeyError, KeymapDef, Mods, MouseButton,
     MouseEvent, MouseKind,
 };
-pub use scene::{NoHost, Scene, SceneHost, Turn};
+pub use scene::{
+    NoHost, NoReader, NoSimulation, PREF_KEYMAP, PREF_THEME, ROLE_CONFIRM, ROLE_PICK_LIST, Scene,
+    SceneHost, Turn, UiCommand, UiOutcome,
+};
 pub use text::{RichText, TextError};
 pub use theme::{BordersDef, FontDef, Style, StyleDef, Theme, ThemeDef, ThemeError};
 pub use view::{
