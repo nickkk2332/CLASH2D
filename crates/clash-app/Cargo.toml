@@ -1,15 +1,31 @@
 [package]
 name = "clash-app"
-description = "The game binary."
+description = "The game: the library that starts a profile and runs the loop, and the binary `clash`."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[lib]
+name = "clash_app"
+
+[[bin]]
+name = "clash"
+path = "src/main.rs"
+
 [dependencies]
+clash-core.workspace = true
+clash-time.workspace = true
+clash-data.workspace = true
+clash-expr.workspace = true
+clash-world.workspace = true
+clash-gen.workspace = true
+clash-sim.workspace = true
+clash-save.workspace = true
+clash-scene.workspace = true
 clash-front-term.workspace = true
 clash-front-window.workspace = true
-clash-save.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true
