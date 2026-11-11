@@ -3,7 +3,8 @@
   "name": "Development tools",
   "version": "0.1.0",
   "engine": ">=0.1",
-  "description": "The in-game development tools. A profile that lists this mod is a development profile. So far: a view of the world as it really is.",
+  "description": "The in-game development tools. A profile that lists this mod is a development profile. So far: a view of the world as it really is, on a key it adds to the `ui` keymap, so a profile that lists this mod lists `ui` too.",
   "authors": ["CLASH2D contributors"],
-  "requires": ["ui"]
+  "requires": [],
+  "after": ["ui"]
 }
