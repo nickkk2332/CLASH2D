@@ -70,10 +70,7 @@ impl StateHash for FieldStore {
     fn state_hash(&self, _hasher: &mut StateHasher) {}
 }
 
-/// A chunk's index from cells to occupants. A typed placeholder: package
-/// W7 builds occupancy. It is rebuilt on load and never saved or hashed.
-#[derive(Clone, PartialEq, Eq, Default, Debug)]
-pub struct OccupantIndex {}
+pub use crate::occupancy::OccupantIndex;
 
 /// Counters that tell every cache outside a chunk whether it is stale.
 /// Each wraps round on overflow; compare for equality, not order.
@@ -343,7 +340,22 @@ impl Chunk {
             + self.blocks.heap_bytes()
             + self.fixtures.heap_bytes()
             + self.derived.heap_bytes()
+            + self.occupants.heap_bytes()
             + sparse
+    }
+
+    /// The chunk's occupant index, to change. Bumps the occupant
+    /// revision: whoever asks for this is about to change who is where.
+    pub(crate) fn occupants_mut(&mut self) -> &mut OccupantIndex {
+        self.rev.occupants = self.rev.occupants.wrapping_add(1);
+        &mut self.occupants
+    }
+
+    /// Gives the chunk an occupant index made while the chunk had no
+    /// storage.
+    pub(crate) fn adopt_occupants(&mut self, index: OccupantIndex) {
+        self.rev.occupants = self.rev.occupants.wrapping_add(1);
+        self.occupants = index;
     }
 
     /// Whether the chunk holds exactly one block state in every cell and
@@ -413,7 +425,6 @@ impl Chunk {
         old
     }
 
-    #[allow(dead_code, reason = "used by the sparse-layer writes below")]
     fn sparse_mut(&mut self) -> &mut SparseLayers {
         self.sparse.get_or_insert_with(Box::default)
     }
@@ -426,7 +437,6 @@ impl Chunk {
 
     /// Sets the accumulated damage of a cell's three elements and returns
     /// what it was.
-    #[allow(dead_code, reason = "a write primitive for WorldEdit, package W6")]
     pub(crate) fn set_damage(&mut self, idx: CellIdx, damage: [u8; 3]) -> [u8; 3] {
         let old = self.damage(idx);
         if old == damage {
@@ -443,7 +453,6 @@ impl Chunk {
     }
 
     /// Adds a mark to a cell.
-    #[allow(dead_code, reason = "a write primitive for WorldEdit, package W6")]
     pub(crate) fn add_decal(&mut self, idx: CellIdx, decal: Decal) {
         self.sparse_mut()
             .decals
@@ -454,7 +463,6 @@ impl Chunk {
 
     /// Removes every mark of a kind from a cell and returns how many
     /// there were.
-    #[allow(dead_code, reason = "a write primitive for WorldEdit, package W6")]
     pub(crate) fn remove_decals(&mut self, idx: CellIdx, kind: DecalId) -> usize {
         let Some(sparse) = self.sparse.as_mut() else {
             return 0;
@@ -477,7 +485,6 @@ impl Chunk {
 
     /// Sets or clears a mod variable on a cell and returns the value it
     /// had.
-    #[allow(dead_code, reason = "a write primitive for WorldEdit, package W6")]
     pub(crate) fn set_var(
         &mut self,
         idx: CellIdx,

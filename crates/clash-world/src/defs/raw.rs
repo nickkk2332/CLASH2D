@@ -634,6 +634,52 @@ pub struct RealmDef {
     pub edges: EdgesSpec,
 }
 
+/// A `plane` definition: an interaction layer (02 §8.2). A plane has a
+/// name and nothing else; what being on it means is for rules.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlaneDef {
+    /// Free-form tags.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+/// An `area_kind` definition: what every area of a kind starts with
+/// (02 §8.3).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AreaKindDef {
+    /// Tags every area of this kind carries.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Variables every area of this kind starts with: a name and a
+    /// boolean, a number or a text.
+    #[serde(default)]
+    pub vars: BTreeMap<String, serde_json::Value>,
+    /// The rate of the clock areas of this kind run on, relative to their
+    /// realm's. Absent: they have no clock of their own.
+    #[serde(default)]
+    pub clock_rate: Option<Real>,
+    /// Which area applies where several overlap: the highest. Default 0.
+    #[serde(default)]
+    pub priority: i32,
+    /// Whether areas of this kind are sealed volumes with compartments
+    /// and pressure (11 §10). Stored and reported only.
+    #[serde(default)]
+    pub sealed: bool,
+    /// How fast a sealed area's held temperature moves toward the
+    /// outside (11 §4.6). Stored as written.
+    #[serde(default)]
+    pub leak: Option<serde_json::Value>,
+    /// How it looks inside (12 §6.4). Stored as written.
+    #[serde(default)]
+    pub ambience: Option<DefRef>,
+    /// Rules attached to every area of this kind (05 §9.3): rule ids or
+    /// inline rules. Carried as written until the rule runtime exists.
+    #[serde(default)]
+    pub rules: Vec<serde_json::Value>,
+}
+
 /// The raw definitions of the world model, each with its qualified id
 /// (`namespace:name`), in any order. The input of
 /// [`WorldDefs::build`](crate::WorldDefs::build).
@@ -653,4 +699,8 @@ pub struct RawWorldDefs {
     pub fixtures: Vec<(String, FixtureDef)>,
     /// `realm` definitions.
     pub realms: Vec<(String, RealmDef)>,
+    /// `plane` definitions.
+    pub planes: Vec<(String, PlaneDef)>,
+    /// `area_kind` definitions.
+    pub area_kinds: Vec<(String, AreaKindDef)>,
 }

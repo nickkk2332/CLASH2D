@@ -20,6 +20,13 @@
 //! | Stored cells | [`Chunk`], [`Column`], [`Grid`]; built with [`ColumnBuilder`] |
 //! | The world, and reading it | [`Cosmos`], [`GridView`], [`CellView`], [`CellFlags`], [`Ambient`] |
 //! | Rays, lines of sight, fields of view, the geometry round a cell, paths | [`query`] |
+//! | Changing cells | [`WorldCtx::edit`] gives a [`WorldEdit`]: the only way cells change |
+//! | What happened | [`WorldEvent`], put into an [`EventSink`] |
+//! | Who and what did it | [`Cause`] |
+//! | Who is where | [`WorldCtx::place`], [`WorldCtx::relocate`], [`WorldCtx::remove`]; [`Occupant`], [`Footprint`], [`PlaneMask`]; [`Cosmos::occupants_at`] and the other queries with an [`OccupantFilter`] |
+//! | Volumes that mean something | [`Area`], [`AreaSpec`], [`AreaShape`]; [`WorldCtx::create_area`], [`WorldCtx::enclose`]; [`Cosmos::areas_at`] |
+//! | Places with identity | [`Site`], [`Cosmos::create_site`], [`Cosmos::site_of`] |
+//! | Stability checks waiting | [`Cosmos::stability_requests`] |
 //! | Why something could not be done | [`WorldError`] |
 //! | A world for a test | [`test_support`] |
 //!
@@ -29,25 +36,37 @@
 //!   different places in different grids.
 //! - Reading a cell that is not loaded is an error value
 //!   ([`WorldError::NotLoaded`]). It never loads and never panics.
+//! - Cells change only through [`WorldEdit`], and an occupant's position
+//!   only through [`WorldCtx::relocate`]. Whatever changes emits an
+//!   event; the world never calls upward.
 //! - Results come in a defined order: cells storey by storey, row by row.
 //! - Nothing here names a material or a block. What exists is what the
 //!   definitions say.
 
+mod area;
 mod cause;
 mod chunk;
 mod cosmos;
 pub mod defs;
 pub mod dims;
+mod edit;
 mod error;
+mod event;
 mod grid;
 pub mod iter;
 pub mod load;
+mod occupancy;
 mod pos;
 pub mod query;
+mod site;
 pub mod storage;
 pub mod test_support;
 mod topology;
 
+pub use area::{
+    AREA_MAX_CELLS, AREA_MAX_TRACTS, AmbientOverride, Area, AreaAnchor, AreaDrift, AreaId,
+    AreaShape, AreaSpec, AreaTable, Drift, Enclosure, FIELD_BLOCK_COVERAGE, GravityOverride,
+};
 pub use cause::{Cause, CauseKind};
 pub use chunk::{
     Chunk, ChunkRev, ConduitId, ConduitSet, DAMAGE_MAX, Decal, DecalId, DecalList, FieldId,
@@ -55,13 +74,22 @@ pub use chunk::{
 };
 pub use cosmos::{Ambient, Cosmos, GridView, Realm, RealmId, RealmState};
 pub use defs::{
-    AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
+    AreaKindId, AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
     ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer, MaterialId,
-    RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
+    PlaneId, RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
 };
+pub use edit::{DISPLACE_RANGE_CELLS, StabilityQueue, StabilityRequest, WorldCtx, WorldEdit};
 pub use error::WorldError;
-pub use grid::{CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE};
+pub use event::{EventSink, WorldEvent};
+pub use grid::{
+    COLUMN_MAX_CHUNKS, CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE,
+};
 pub use load::{check_defs, register_defs};
+pub use occupancy::{
+    FOOTPRINT_MAX_SIDE, Footprint, Occupant, OccupantEntry, OccupantFilter, OccupantFlags,
+    OccupantKind, OccupantKinds, OccupantRecord, Occupied, PlaneMask, QUERY_MAX_LINE_CELLS,
+    QUERY_MAX_TRACTS, distinct_ids,
+};
 pub use pos::{
     CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,
     distance_sq_cells,
@@ -72,4 +100,5 @@ pub use query::{
     RayFilter, RayHit, RayHits, RayObstacles, RaySpan, RayTarget, RevParts, RevStamp, Step,
     StepKind,
 };
+pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};
 pub use topology::{Edge, Extent, Topology};

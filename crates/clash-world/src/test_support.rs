@@ -39,7 +39,9 @@ use crate::grid::{Column, ColumnBuilder};
 use crate::pos::{GridId, TractPos};
 
 /// Makes a tract of a grid loaded, holding the cells of `column`. Returns
-/// the column that was loaded there before, if any.
+/// the column that was loaded there before, if any. Whoever stood in a
+/// column that is replaced is taken out of the occupant index, without
+/// events.
 pub fn load_column(
     cosmos: &mut Cosmos,
     grid: GridId,
@@ -49,7 +51,9 @@ pub fn load_column(
     cosmos.insert_column(grid, tract, column)
 }
 
-/// Unloads a tract of a grid and returns its cells.
+/// Unloads a tract of a grid and returns its cells. Whoever stood in it
+/// is taken out of the occupant index, without events: every occupant is
+/// in loaded space.
 pub fn unload_column(cosmos: &mut Cosmos, grid: GridId, tract: TractPos) -> Option<Column> {
     cosmos.remove_column(grid, tract)
 }

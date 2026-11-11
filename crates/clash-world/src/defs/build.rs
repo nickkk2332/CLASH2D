@@ -4,21 +4,26 @@
 
 use std::collections::BTreeMap;
 
-use clash_core::{DenseId, Real};
+use clash_core::{DenseId, Real, Value, VarKey, VarMap};
 
 use super::state::{StatePart, is_name};
 use super::{
-    Atmosphere, BlockId, BlockState, CellFlags, Contact, ContactSpec, DamageType, DamageTypeId,
-    DefError, DefRef, ENGINE_NAMESPACE, EdgeKind, EdgeRule, EdgeSpec, Element, ElementFlags,
-    ElementState, EngineFlag, FixtureId, GlyphSpec, Layer, Material, MaterialId, NONE_ID,
-    RawWorldDefs, RealmKind, Resist, ResistSpec, SOLID_TOP_MIN_FILL, StateInfo, StateRef,
-    StateRefError, Stratum, Table, WALK_STEP_M, WorldDefs, WrapAxis,
+    AreaKind, AreaKindId, Atmosphere, BlockId, BlockState, CellFlags, Contact, ContactSpec,
+    DEFAULT_PLANE_ID, DamageType, DamageTypeId, DefError, DefRef, ENGINE_NAMESPACE, EdgeKind,
+    EdgeRule, EdgeSpec, Element, ElementFlags, ElementState, EngineFlag, FixtureId, GlyphSpec,
+    Layer, Material, MaterialId, NONE_ID, Plane, PlaneId, RawWorldDefs, RealmKind, Resist,
+    ResistSpec, SOLID_TOP_MIN_FILL, StateInfo, StateRef, StateRefError, Stratum, Table,
+    WALK_STEP_M, WorldDefs, WrapAxis,
 };
 use crate::dims::{CELL_M, REGION_CELLS, STOREY_M};
 use crate::topology::{Edge, Extent, Topology};
 
 /// The most states one element may declare: what sixteen bits can index.
 const MAX_STATES: usize = 1 << u16::BITS;
+
+/// The most planes there can be, counting the built-in one: one for each
+/// bit of a plane mask (02 §8.2).
+const MAX_PLANES: usize = u32::BITS as usize;
 
 /// The mistakes found so far.
 #[derive(Default)]
@@ -546,6 +551,8 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
     let block_defs = sorted("block", raw.blocks, errors);
     let fixture_defs = sorted("fixture", raw.fixtures, errors);
     let realm_defs = sorted("realm", raw.realms, errors);
+    let plane_defs = sorted("plane", raw.planes, errors);
+    let area_kind_defs = sorted("area_kind", raw.area_kinds, errors);
 
     // Every id of every type is numbered before anything is resolved, so
     // that a reference may point forwards (04 §7.2).
@@ -896,6 +903,70 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         });
     }
 
+    // Planes. Plane 0 is the built-in one; a plane's id is its bit in a
+    // plane mask, so there is room for a fixed number.
+    let mut planes: Table<PlaneId, Plane> = Table {
+        names: vec![DEFAULT_PLANE_ID.to_owned()],
+        by_name: BTreeMap::from([(DEFAULT_PLANE_ID.to_owned(), PlaneId::new(0))]),
+        entries: vec![Plane::default()],
+    };
+    for (id, def) in &plane_defs {
+        let position = planes.names.len();
+        match PlaneId::from_index(position).filter(|_| position < MAX_PLANES) {
+            Some(plane) => {
+                planes.names.push(id.clone());
+                planes.by_name.insert(id.clone(), plane);
+                planes.entries.push(Plane {
+                    tags: tags(&def.tags),
+                });
+            }
+            None => errors.push(
+                "plane",
+                id,
+                "id",
+                format!("there are at most {MAX_PLANES} planes, counting the built-in one"),
+            ),
+        }
+    }
+
+    // Area kinds.
+    let mut area_kinds: Table<AreaKindId, AreaKind> =
+        index("area_kind", &area_kind_defs, false, errors);
+    for (id, def) in &area_kind_defs {
+        let at = At {
+            kind: "area_kind",
+            id,
+        };
+        let mut vars = VarMap::new();
+        for (name, value) in &def.vars {
+            match plain_value(value) {
+                Some(value) => {
+                    vars.set(VarKey::new(name.as_str()), value);
+                }
+                None => at.error(
+                    errors,
+                    &format!("vars.{name}"),
+                    "must be a boolean, a number or a text",
+                ),
+            }
+        }
+        if let Some(rate) = def.clock_rate
+            && (rate < Real::ZERO || !rate.is_finite())
+        {
+            at.error(errors, "clock_rate", "must be zero or more");
+        }
+        area_kinds.entries.push(AreaKind {
+            tags: tags(&def.tags),
+            vars,
+            clock_rate: def.clock_rate,
+            priority: def.priority,
+            sealed: def.sealed,
+            leak: def.leak.clone(),
+            ambience: def.ambience.as_ref().map(|ambience| ambience.0.clone()),
+            rules: def.rules.clone(),
+        });
+    }
+
     if !errors.list.is_empty() {
         return Err(core::mem::take(&mut errors.list));
     }
@@ -907,8 +978,27 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         blocks,
         fixtures,
         realms,
+        planes,
+        area_kinds,
         kinetic,
     })
+}
+
+/// A variable's value as data writes it: a boolean, a whole number, a
+/// number or a text. Anything else is not a value.
+fn plain_value(value: &serde_json::Value) -> Option<Value> {
+    match value {
+        serde_json::Value::Bool(flag) => Some(Value::Bool(*flag)),
+        serde_json::Value::Number(number) => match number.as_i64() {
+            Some(whole) => Some(Value::Int(whole)),
+            None => number
+                .as_f64()
+                .and_then(|real| Real::new(real).ok())
+                .map(Value::Real),
+        },
+        serde_json::Value::String(text) => Some(Value::Str(text.clone())),
+        _ => None,
+    }
 }
 
 /// The declared states of a block or fixture.

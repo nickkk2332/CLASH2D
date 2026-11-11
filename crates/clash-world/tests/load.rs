@@ -43,12 +43,14 @@ fn every_world_type_is_registered() {
     assert_eq!(
         types.names(),
         [
+            "area_kind",
             "atmosphere",
             "block",
             "damage_type",
             "fixture",
             "floor",
             "material",
+            "plane",
             "realm"
         ]
     );

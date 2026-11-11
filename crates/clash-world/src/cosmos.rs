@@ -4,17 +4,25 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use clash_core::{IVec3, Real, StateHash, StateHasher, Value, VarMap, define_id, impl_state_hash};
+use clash_core::{
+    EntityId, IVec3, LookupMap, Real, StateHash, StateHasher, Value, VarMap, define_id,
+    impl_state_hash,
+};
 use clash_time::{ClockId, Timeline};
 use serde::{Deserialize, Serialize};
 
+use crate::area::{AreaDrift, AreaId, AreaTable};
 use crate::chunk::{Decal, FieldId};
 use crate::defs::{
-    AtmosphereId, CellFlags, EngineFlag, RealmDefId, RealmKind, StateInfo, WorldDefs,
+    AtmosphereId, CellFlags, ElementState, EngineFlag, Layer, RealmDefId, RealmKind, StateInfo,
+    WorldDefs,
 };
+use crate::edit::StabilityQueue;
 use crate::error::WorldError;
 use crate::grid::{CellView, Column, Grid};
+use crate::occupancy::OccupantRecord;
 use crate::pos::{CellPos, GridId, Location, TractPos};
+use crate::site::SiteTable;
 use crate::topology::Topology;
 
 define_id! {
@@ -70,15 +78,23 @@ impl_state_hash!(Realm {
     state
 });
 
-/// The ambient conditions of a cell: what its stratum says (02 §4.1).
+/// The ambient conditions of a cell: what its stratum says (02 §4.1),
+/// with what the areas that cover it change (02 §8.3).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Ambient {
-    /// Gravity in m/s², along −z.
+    /// Gravity in m/s², along −z: the stratum's, scaled or replaced by
+    /// an area's override.
     pub gravity: Real,
     /// The atmosphere. `None` is vacuum.
     pub atmosphere: Option<AtmosphereId>,
-    /// The clock things here run on.
+    /// The clock things here run on: an area's if one that covers the
+    /// cell has a clock, else the realm's.
     pub clock: ClockId,
+    /// Gravity as an acceleration in m/s² east, south and up. Straight
+    /// down at `gravity` unless an area gives it another direction.
+    pub gravity_vector: [Real; 3],
+    /// How the medium is moving, if an area that covers the cell says.
+    pub drift: Option<AreaDrift>,
 }
 
 /// A grid and what the cosmos knows about it.
@@ -125,6 +141,7 @@ pub struct GridView<'a> {
     id: GridId,
     slot: &'a GridSlot,
     defs: &'a WorldDefs,
+    areas: &'a AreaTable,
 }
 
 impl<'a> GridView<'a> {
@@ -143,6 +160,11 @@ impl<'a> GridView<'a> {
         self.slot.realm
     }
 
+    /// The clock of the realm the grid belongs to.
+    pub fn clock(&self) -> ClockId {
+        self.slot.clock
+    }
+
     /// The loaded tracts, row by row.
     pub fn loaded_tracts(&self) -> Vec<TractPos> {
         self.slot.grid.loaded_tracts()
@@ -151,6 +173,23 @@ impl<'a> GridView<'a> {
     /// The column of a loaded tract.
     pub fn column(&self, tract: TractPos) -> Option<&'a Column> {
         self.slot.grid.column(tract)
+    }
+
+    /// The element of a cell on a layer.
+    pub fn element(&self, cell: CellPos, layer: Layer) -> Result<ElementState, WorldError> {
+        let (column, cell) = self.locate(cell)?;
+        Ok(column.element(layer, cell))
+    }
+
+    /// The areas that cover a cell, in id order. The cell must be inside
+    /// the grid; its tract need not be loaded.
+    pub fn areas_at(&self, cell: CellPos) -> Result<Vec<AreaId>, WorldError> {
+        let cell = self.normalize(cell)?;
+        Ok(self
+            .areas
+            .at(&self.slot.topology, self.id, cell)
+            .map(|area| area.id)
+            .collect())
     }
 
     /// A position brought inside the grid, or the edge it lies beyond.
@@ -264,8 +303,12 @@ impl<'a> GridView<'a> {
         self.locate(cell).map(|_| 0)
     }
 
-    /// The ambient conditions of a cell. The cell must be inside the
-    /// grid; its tract need not be loaded.
+    /// The ambient conditions of a cell: its stratum's, with what the
+    /// areas that cover it change. Where areas overlap, the one with the
+    /// highest priority applies, and of equals the one made first:
+    /// separately for gravity, for drift and for the clock, among the
+    /// areas that set each. The cell must be inside the grid; its tract
+    /// need not be loaded.
     pub fn ambient(&self, cell: CellPos) -> Result<Ambient, WorldError> {
         let cell = self.normalize(cell)?;
         let stratum = self
@@ -273,11 +316,19 @@ impl<'a> GridView<'a> {
             .realms()
             .get(self.slot.realm_def)
             .and_then(|kind| kind.stratum_at(cell.z));
-        Ok(Ambient {
-            gravity: stratum.map_or(Real::ZERO, |stratum| stratum.gravity),
+        let gravity = stratum.map_or(Real::ZERO, |stratum| stratum.gravity);
+        let mut ambient = Ambient {
+            gravity,
             atmosphere: stratum.and_then(|stratum| stratum.atmosphere),
             clock: self.slot.clock,
-        })
+            gravity_vector: [Real::ZERO, Real::ZERO, -gravity],
+            drift: None,
+        };
+        if !self.areas.is_empty() {
+            self.areas
+                .apply_ambient(&self.slot.topology, self.id, cell, &mut ambient);
+        }
+        Ok(ambient)
     }
 }
 
@@ -295,6 +346,31 @@ pub struct Cosmos {
     grids: Vec<Option<Box<GridSlot>>>,
     next_realm: u32,
     vars: VarMap,
+    /// Every area, of every grid (02 §8.3).
+    pub(crate) areas: AreaTable,
+    /// Every site, of every realm (02 §8.4).
+    pub(crate) sites: SiteTable,
+    /// Where each occupant is. With the chunks' occupant indices this is
+    /// the spatial index of 02 §8.1: rebuilt on load, never saved or
+    /// hashed.
+    pub(crate) occupants: LookupMap<EntityId, OccupantRecord>,
+    /// The stability checks edits have asked for (02 §14.2).
+    pub(crate) stability: StabilityQueue,
+}
+
+/// The parts of the cosmos that a change to one grid touches, borrowed
+/// apart so that they can be changed together.
+pub(crate) struct GridMut<'a> {
+    /// The definitions.
+    pub defs: &'a WorldDefs,
+    /// The grid's loaded columns.
+    pub grid: &'a mut Grid,
+    /// The grid's shape.
+    pub topology: Topology,
+    /// Every area.
+    pub areas: &'a mut AreaTable,
+    /// The stability checks asked for.
+    pub stability: &'a mut StabilityQueue,
 }
 
 impl Cosmos {
@@ -306,7 +382,27 @@ impl Cosmos {
             grids: Vec::new(),
             next_realm: 0,
             vars: VarMap::new(),
+            areas: AreaTable::new(),
+            sites: SiteTable::new(),
+            occupants: LookupMap::new(),
+            stability: StabilityQueue::default(),
         }
+    }
+
+    /// The parts of the cosmos that a change to one grid touches.
+    pub(crate) fn grid_mut(&mut self, grid: GridId) -> Result<GridMut<'_>, WorldError> {
+        let slot = self
+            .grids
+            .get_mut(grid.index())
+            .and_then(|slot| slot.as_deref_mut())
+            .ok_or(WorldError::UnknownGrid(grid))?;
+        Ok(GridMut {
+            defs: &self.defs,
+            topology: slot.topology,
+            grid: &mut slot.grid,
+            areas: &mut self.areas,
+            stability: &mut self.stability,
+        })
     }
 
     #[inline]
@@ -400,6 +496,7 @@ impl Cosmos {
                 id: grid,
                 slot,
                 defs: &self.defs,
+                areas: &self.areas,
             }),
             None => Err(WorldError::UnknownGrid(grid)),
         }
@@ -501,31 +598,37 @@ impl Cosmos {
 
     /// The column of a loaded tract, to change. Crate-private: cells
     /// change only through `WorldEdit`.
-    #[allow(dead_code, reason = "a write primitive for WorldEdit, package W6")]
+    #[allow(dead_code, reason = "kept for the packages that load and store tracts")]
     pub(crate) fn column_mut(&mut self, grid: GridId, tract: TractPos) -> Option<&mut Column> {
         self.slot_mut(grid)?.grid.column_mut(tract)
     }
 
     /// Makes a tract of a grid loaded with these cells, and returns the
-    /// column it replaced, if any.
+    /// column it replaced, if any. Whoever stood in the column replaced
+    /// is taken out of the occupant index, without events.
     pub(crate) fn insert_column(
         &mut self,
         grid: GridId,
         tract: TractPos,
         column: Column,
     ) -> Result<Option<Column>, WorldError> {
+        self.purge_occupants(grid, tract);
         let slot = self.slot_mut(grid).ok_or(WorldError::UnknownGrid(grid))?;
         Ok(slot.grid.insert_column(tract, column))
     }
 
-    /// Unloads a tract of a grid and returns its column.
+    /// Unloads a tract of a grid and returns its column. Whoever stood
+    /// in it is taken out of the occupant index, without events.
     pub(crate) fn remove_column(&mut self, grid: GridId, tract: TractPos) -> Option<Column> {
+        self.purge_occupants(grid, tract);
         self.slot_mut(grid)?.grid.remove_column(tract)
     }
 }
 
 /// Hashes the realms in id order, then the grids in id order with their
-/// loaded columns in tract order, then the global variables.
+/// loaded columns in tract order, then the global variables, the areas,
+/// the sites and the stability checks waiting. Who occupies which cell is
+/// not hashed: the simulation above owns the entities.
 impl StateHash for Cosmos {
     fn state_hash(&self, hasher: &mut StateHasher) {
         self.realms.state_hash(hasher);
@@ -535,5 +638,8 @@ impl StateHash for Cosmos {
         }
         hasher.write_u32(self.next_realm);
         self.vars.state_hash(hasher);
+        self.areas.state_hash(hasher);
+        self.sites.state_hash(hasher);
+        self.stability.state_hash(hasher);
     }
 }

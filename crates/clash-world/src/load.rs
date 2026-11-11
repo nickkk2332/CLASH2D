@@ -52,14 +52,17 @@ use clash_core::{DenseId, Real};
 use clash_data::{Def, DefLabel, DefTypes, Defs, Diagnostic, Diagnostics, Span, code};
 
 use crate::defs::{
-    AtmosphereDef, AtmosphereId, BlockDef, BlockId, DamageTypeDef, DamageTypeId, DefError, DefRef,
-    Density, ENGINE_NAMESPACE, EnergyDensity, FixtureDef, FixtureId, FloorDef, FloorId, Length,
-    MaterialDef, MaterialId, NONE_ID, OrderedMap, RawWorldDefs, RealmDef, RealmDefId, Table,
-    WorldDefs,
+    AreaKindDef, AreaKindId, AtmosphereDef, AtmosphereId, BlockDef, BlockId, DamageTypeDef,
+    DamageTypeId, DefError, DefRef, Density, ENGINE_NAMESPACE, EnergyDensity, FixtureDef,
+    FixtureId, FloorDef, FloorId, Length, MaterialDef, MaterialId, NONE_ID, OrderedMap, PlaneDef,
+    PlaneId, RawWorldDefs, RealmDef, RealmDefId, Table, WorldDefs,
 };
 
 /// The name of the built-in "nothing here" within the engine's namespace.
 const NONE_NAME: &str = "none";
+
+/// The built-in plane, id 0, without its namespace: `engine:default`.
+const DEFAULT_PLANE_NAME: &str = "default";
 
 /// The key of an element's or a material's resistances, whose entries are
 /// named by damage type.
@@ -183,6 +186,24 @@ impl Def for FixtureDef {
     }
 }
 
+impl Def for PlaneDef {
+    type Id = PlaneId;
+    const TYPE: &'static str = "plane";
+    const DOC: &'static str =
+        "An interaction layer: occupants that share no plane do not meet (02 §8.2).";
+
+    fn builtins() -> Vec<(&'static str, PlaneDef)> {
+        vec![(DEFAULT_PLANE_NAME, PlaneDef::default())]
+    }
+}
+
+impl Def for AreaKindDef {
+    type Id = AreaKindId;
+    const TYPE: &'static str = "area_kind";
+    const DOC: &'static str =
+        "What every area of a kind starts with: tags, variables, clock, priority (02 §8.3).";
+}
+
 impl Def for RealmDef {
     type Id = RealmDefId;
     const TYPE: &'static str = "realm";
@@ -204,6 +225,8 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<BlockDef>();
     types.register::<FixtureDef>();
     types.register::<RealmDef>();
+    types.register::<PlaneDef>();
+    types.register::<AreaKindDef>();
 }
 
 /// Whether a qualified id is one of the engine's own.
@@ -239,6 +262,8 @@ impl RawWorldDefs {
             blocks: written(defs),
             fixtures: written(defs),
             realms: written(defs),
+            planes: written(defs),
+            area_kinds: written(defs),
         }
     }
 }
@@ -366,7 +391,9 @@ impl WorldDefs {
             && ids_agree::<FloorDef, _>(defs, world.floors())
             && ids_agree::<BlockDef, _>(defs, world.blocks())
             && ids_agree::<FixtureDef, _>(defs, world.fixtures())
-            && ids_agree::<RealmDef, _>(defs, world.realms());
+            && ids_agree::<RealmDef, _>(defs, world.realms())
+            && ids_agree::<PlaneDef, _>(defs, world.planes())
+            && ids_agree::<AreaKindDef, _>(defs, world.area_kinds());
         if !agree {
             // Not a mistake in a mod: the two numberings are meant to be
             // the same by construction. Refuse to go on with ids that
