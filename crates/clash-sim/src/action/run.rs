@@ -776,7 +776,10 @@ impl Sim {
         for holder in displace {
             self.end_cancelled(holder, cause);
         }
-        if self.actions.wait_of(actor).is_some()
+        // A foreground action ends a wait; one in the background does
+        // not occupy the actor.
+        if def.foreground
+            && self.actions.wait_of(actor).is_some()
             && let Some(wait) = self.actions.take_wait(actor)
             && let Some(wake) = wait.wake
         {
@@ -829,7 +832,7 @@ impl Sim {
             self.interrupt_action(id, reason, cause);
             return Ok(id);
         }
-        if !self.run_list(id, |def| &def.on_start) {
+        if !self.run_list(id, |def| Some(&def.on_start)) {
             return Ok(id);
         }
         self.run_phases(id, Next::Phase(PhaseIndex::new(0)));
@@ -841,7 +844,7 @@ impl Sim {
     /// Runs one of a running action's effect lists with its locals, and
     /// keeps what the list did to them. `false` if the action is no
     /// longer running afterwards, or was not.
-    fn run_list(&mut self, id: ActionId, list: impl Fn(&ActionDef) -> &Effects) -> bool {
+    fn run_list(&mut self, id: ActionId, list: impl Fn(&ActionDef) -> Option<&Effects>) -> bool {
         let defs = Arc::clone(&self.defs);
         let Some((actor, def_id)) = self
             .actions
@@ -850,10 +853,10 @@ impl Sim {
         else {
             return false;
         };
-        let Some(def) = action_def(&defs, def_id) else {
-            return false;
+        let Some(effects) = action_def(&defs, def_id).and_then(list) else {
+            return self.actions.get(id).is_some();
         };
-        self.run_list_of(id, actor, list(def));
+        self.run_list_of(id, actor, effects);
         self.actions.get(id).is_some()
     }
 
@@ -1116,10 +1119,7 @@ impl Sim {
                 }),
             );
         }
-        if !self.run_list(id, |def| {
-            def.phase(index)
-                .map_or_else(|| &def.on_start, |phase| &phase.on_enter)
-        }) {
+        if !self.run_list(id, |def| def.phase(index).map(|phase| &phase.on_enter)) {
             return Entered::Gone;
         }
         // An effect of the phase may have moved the action on.
@@ -1194,10 +1194,7 @@ impl Sim {
         }
         let def = action_def(&defs, def_id)?;
         let phase = def.phase(index)?;
-        if !self.run_list(id, |def| {
-            def.phase(index)
-                .map_or_else(|| &def.on_finish, |phase| &phase.on_exit)
-        }) {
+        if !self.run_list(id, |def| def.phase(index).map(|phase| &phase.on_exit)) {
             return None;
         }
         self.emit(
@@ -1238,7 +1235,7 @@ impl Sim {
         if !self.run_list(id, |def| {
             def.phase(index)
                 .and_then(|phase| phase.tick.as_ref())
-                .map_or_else(|| &def.on_finish, |tick| &tick.effects)
+                .map(|tick| &tick.effects)
         }) {
             return;
         }
@@ -1285,7 +1282,7 @@ impl Sim {
     /// The last phase ended: `on_finish`, then the slots are released and
     /// `action_finished` raised.
     fn finish_action(&mut self, id: ActionId) {
-        if !self.run_list(id, |def| &def.on_finish) {
+        if !self.run_list(id, |def| Some(&def.on_finish)) {
             return;
         }
         let Some(action) = self.release(id) else {
