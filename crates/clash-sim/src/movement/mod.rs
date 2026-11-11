@@ -119,9 +119,10 @@ pub const PASSAGE_REQUESTED: &str = "passage_requested";
 /// by.
 pub const YIELDS_FIELD: &str = "yields";
 
-/// The notifications movement raises, for the kernel's table of events
-/// (which lists them) and the generated reference. Each is raised as a
-/// payload under its name.
+/// The notifications movement raises, entered beside the kernel's own in
+/// every simulation's event bus and in the engine's registry, and listed
+/// for the generated reference. Each is raised as a payload under its
+/// name.
 pub const MOVEMENT_EVENTS: &[EventInfo] = &[
     EventInfo {
         name: STEP_REFUSED,

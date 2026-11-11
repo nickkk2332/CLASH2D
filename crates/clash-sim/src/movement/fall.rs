@@ -71,8 +71,11 @@ pub fn lose_footing(sim: &mut Sim, entity: EntityId, cause: Cause) -> Option<Lan
 /// `None` if it did not fall: it is not standing in the world, there is
 /// no gravity where it is, or there is nowhere below to come to rest.
 ///
-/// See the [module documentation](self): this stands in for a flight as
-/// a body of the world's.
+/// This stands in for a flight as a body of the world's (02 §15):
+/// until the simulation hands entities to the world as bodies, a fall is
+/// over at once. The flight package replaces this one function with
+/// `WorldCtx::launch`, and raises `landed` when the world reports
+/// `body_landed`.
 pub fn fall(sim: &mut Sim, entity: EntityId, cause: Cause) -> Option<Landing> {
     let (from, alt_mm) = standing(sim, entity).ok()?;
     let cosmos = sim.truth().cosmos();
