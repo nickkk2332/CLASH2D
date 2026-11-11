@@ -60,3 +60,12 @@ missing_docs = "warn"
 [workspace.lints.clippy]
 disallowed_types = "deny"
 disallowed_methods = "deny"
+
+# Debug information is the larger part of a debug build's size, and many
+# copies of this workspace are built side by side. Line tables are enough
+# for a backtrace.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
