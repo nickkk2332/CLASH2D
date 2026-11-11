@@ -26,7 +26,7 @@ use super::defs::LightSource;
 use super::solve::{self, Scratch};
 use super::{LIGHT_EYE_MM, LightStats, SKY_DARK};
 use crate::cosmos::{Cosmos, GridView};
-use crate::defs::{CellFlags, EngineFlag, Layer, StateInfo, WorldDefs};
+use crate::defs::{BlockState, CellFlags, EngineFlag, FixtureState, Layer, StateInfo, WorldDefs};
 use crate::dims::{CHUNK_AREA, CHUNK_CELLS, CHUNK_XY, CHUNK_Z, CHUNK_Z_BITS, STOREY_M, STOREY_MM};
 use crate::grid::Column;
 use crate::pos::{CellIdx, CellPos, ChunkPos, GridId, TractPos};
@@ -58,7 +58,7 @@ pub const LIGHT_SOURCES_MAX_PER_CHUNK: usize = 128;
 
 /// The most chunks whose light is kept. When more have been asked
 /// about, those not asked about lately are dropped.
-pub const LIGHT_CACHE_MAX_CHUNKS: usize = 1 << 12;
+pub const LIGHT_CACHE_MAX_CHUNKS: usize = 1 << 10;
 
 /// How many passes a chunk may go unasked before a full cache drops it.
 const TRIM_AGE: u64 = 4;
@@ -125,7 +125,9 @@ pub(super) struct Shape {
     pub(super) cells: ShapeCells,
     /// The sources in the chunk, in cell order.
     pub(super) sources: Vec<(CellIdx, LightSource)>,
-    /// Counts the times the shape has changed.
+    /// The number the shape took when it last changed. Numbers are
+    /// drawn from one count for the whole cache, so a shape dropped and
+    /// read again never takes one it had before.
     version: u64,
     /// The latest changes, oldest first.
     changes: Vec<Change>,
@@ -133,6 +135,9 @@ pub(super) struct Shape {
     forgotten: u64,
     /// The pass in which the shape was last compared with the world.
     checked: u64,
+    /// Read the cells again at the next look, whatever the revisions
+    /// say.
+    reread: bool,
 }
 
 impl Shape {
@@ -145,6 +150,7 @@ impl Shape {
             changes: Vec::new(),
             forgotten: 0,
             checked: 0,
+            reread: false,
         }
     }
 
@@ -160,7 +166,7 @@ impl Shape {
         if seen_version == self.version {
             return false;
         }
-        if seen_version < self.forgotten {
+        if seen_version < self.forgotten || seen_version > self.version {
             return true;
         }
         let shift = [offset.x * CHUNK_XY, offset.y * CHUNK_XY, offset.z * CHUNK_Z];
@@ -248,6 +254,8 @@ pub(crate) struct LightCache {
     /// Counts the questions asked. Within one, the world cannot change,
     /// so each shape is compared with it at most once.
     pass: u64,
+    /// The last version number given to a shape.
+    versions: u64,
     stats: LightStats,
     scratch: Scratch,
 }
@@ -259,6 +267,7 @@ impl LightCache {
             lit: LookupMap::new(),
             reloaded: LookupMap::new(),
             pass: 1,
+            versions: 0,
             stats: LightStats::default(),
             scratch: Scratch::default(),
         }
@@ -301,7 +310,7 @@ impl LightCache {
     }
 
     /// Drops what has not been asked about lately.
-    fn trim(&mut self) {
+    pub(super) fn trim(&mut self) {
         let oldest = self.pass.saturating_sub(TRIM_AGE);
         for key in self.lit.sorted_keys() {
             if self.lit.get(&key).is_some_and(|lit| lit.used < oldest) {
@@ -321,20 +330,14 @@ impl LightCache {
             // One question about more chunks than are kept.
             self.lit.clear();
         }
-        self.reloaded.clear();
         // A shape dropped here is read afresh when asked about, so no
-        // note of a reloaded tract is still needed: but a shape kept
-        // might have missed one. Make every kept shape look again.
+        // note of a reloaded tract is needed for it: but a shape kept
+        // might yet miss one. Make every kept shape read its cells
+        // again, and the notes can go.
+        self.reloaded.clear();
         for key in self.shapes.sorted_keys() {
             if let Some(shape) = self.shapes.get_mut(&key) {
-                shape.seen = match shape.seen {
-                    Some(Seen::At { .. }) => Some(Seen::At {
-                        rev: u32::MAX,
-                        column_rev: u32::MAX,
-                    }),
-                    other => other,
-                };
-                shape.checked = 0;
+                shape.reread = true;
             }
         }
     }
@@ -344,7 +347,11 @@ impl LightCache {
     fn refresh(&mut self, view: &GridView<'_>, defs: &WorldDefs, chunk: ChunkPos) -> u64 {
         let key = (view.id(), chunk);
         let pass = self.pass;
-        let reloaded = self.reloaded.get(&(view.id(), chunk.tract())).copied();
+        let reloaded = if self.reloaded.is_empty() {
+            None
+        } else {
+            self.reloaded.get(&(view.id(), chunk.tract())).copied()
+        };
         let shape = self.shapes.get_or_insert_with(key, Shape::new);
         if shape.checked == pass {
             return shape.version;
@@ -361,8 +368,9 @@ impl LightCache {
             },
             None => Seen::Absent,
         };
-        let forced = reloaded.is_some_and(|after| shape.checked <= after);
+        let forced = shape.reread || reloaded.is_some_and(|after| shape.checked <= after);
         shape.checked = pass;
+        shape.reread = false;
         if shape.seen == Some(now) && !forced {
             return shape.version;
         }
@@ -380,7 +388,8 @@ impl LightCache {
             changed_box(&shape.cells, &shape.sources, &cells, &sources)
         };
         if let Some((min, max)) = changed {
-            shape.version += 1;
+            self.versions += 1;
+            shape.version = self.versions;
             shape.cells = cells;
             shape.sources = sources;
             if first {
@@ -478,11 +487,10 @@ fn read_shape(
     let base = chunk_z << CHUNK_Z_BITS;
     let eye_m = Real::from(LIGHT_EYE_MM) * STOREY_M / Real::from(STOREY_MM);
     let taller = |info: &StateInfo| info.flags.has(EngineFlag::Opaque) && info.height > eye_m;
-    let bits_of = |flags: CellFlags, cell: CellPos| {
+    let bits_of = |flags: CellFlags, block: BlockState, fixture: FixtureState| {
         let mut bits = 0;
         if flags.contains(CellFlags::OPAQUE)
-            && (taller(defs.block_info(column.block(cell)))
-                || taller(defs.fixture_info(column.fixture(cell))))
+            && (taller(defs.block_info(block)) || taller(defs.fixture_info(fixture)))
         {
             bits |= S_BLOCKS;
         }
@@ -491,7 +499,6 @@ fn read_shape(
         }
         bits
     };
-    let cell_of = |idx: CellIdx| CellPos::new(idx.lx(), idx.ly(), base + idx.lz());
 
     let stored = column.chunk(chunk_z);
     let mut cells = Box::new([0_u8; CHUNK_CELLS]);
@@ -509,13 +516,29 @@ fn read_shape(
         };
         chunk.uniform_flags().is_some() && one(Layer::Block) && one(Layer::Fixture)
     });
-    if alike {
-        let first = cell_of(CellIdx::default());
-        cells.fill(bits_of(column.flags(first), first));
-    } else {
-        for idx in CellIdx::all() {
-            let cell = cell_of(idx);
-            cells[idx.index()] = bits_of(column.flags(cell), cell);
+    match stored {
+        Some(chunk) if !alike => {
+            let each = chunk.flag_cells();
+            let all = chunk.uniform_flags().unwrap_or(CellFlags::NONE);
+            for idx in CellIdx::all() {
+                let flags = each.map_or(all, |each| each[idx.index()]);
+                // The elements are looked up only where something is
+                // opaque.
+                cells[idx.index()] = if flags.contains(CellFlags::OPAQUE) {
+                    bits_of(flags, chunk.block(idx), chunk.fixture(idx))
+                } else {
+                    bits_of(flags, BlockState::NONE, FixtureState::NONE)
+                };
+            }
+        }
+        _ => {
+            let first = CellPos::new(0, 0, base);
+            let bits = bits_of(
+                column.flags(first),
+                column.block(first),
+                column.fixture(first),
+            );
+            cells.fill(bits);
         }
     }
     // Open to the sky: at or above the column's highest storey that is
@@ -574,7 +597,7 @@ fn changed_box(
         }
     };
     match (old, new) {
-        (ShapeCells::All(a), ShapeCells::All(b)) if a == b => {}
+        _ if old == new => {}
         (ShapeCells::All(_), ShapeCells::All(_)) => {
             add(CellIdx::default());
             add(CellIdx::new(

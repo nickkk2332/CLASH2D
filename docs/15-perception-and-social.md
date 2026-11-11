@@ -94,22 +94,143 @@ particular), where it came from, and its strength.
 
 ### 3.3 Light
 
-`Cosmos::light(loc) -> Real` gives illumination from 0 (dark) upward.
+```rust
+impl Cosmos {
+    pub fn light(&self, loc: Location, time: SkyTime) -> Result<Real, WorldError>;
+    pub fn light_with(&self, loc: Location, time: SkyTime, moving: &[MovingLight]) -> Result<Real, WorldError>;
+    pub fn add_moving_light(&self, loc: Location, level: Real, moving: &[MovingLight]) -> Result<Real, WorldError>;
+    pub fn fill_light(&self, grid: GridId, cells: CellBox, time: SkyTime,
+                      moving: &[MovingLight], out: &mut Vec<Real>) -> Result<(), WorldError>;
+    pub fn static_light(&self, loc: Location) -> Result<StaticLight, WorldError>;
+}
+```
 
-- **Sky.** The stratum's sky definition gives ambient light by local time.
-  Cells open to the sky (02 §6.3 heightmap) receive it in full. It spreads
-  from them through non-opaque cells, losing a fixed fraction per cell, to a
-  capped distance. Rooms with windows are lit near the windows.
-- **Sources.** Elements, fields, items and creatures tagged as light sources
-  contribute `intensity / (1 + d²)` to cells they have line of sight to,
-  within their radius. An intensity may be negative: a source of darkness.
-  Light at a cell is never below zero.
-- The static part is cached per chunk and rebuilt when the chunk's
-  structure revision or its fixed sources change. Moving sources are added
-  at query time.
+`light` gives illumination from 0 (dark) upward, with no upper end. 1 is
+what a cell open to the sky gets from a sky at level 1: full daylight, by
+convention. It is the sum of what the sky gives the cell and what the
+sources that see it give it, and is never below zero.
 
-Light scales `line` signals whose kind uses it, and tints what the player
-sees (12).
+**The moment.** The world does not hold the timeline, so the moment is
+given: a `SkyTime` carries the local time of the realm's clock
+(`Timeline::local_now(realm.clock)`) and the share of the sky's light
+that gets through, 1 unless the weather says less (09 §14.1). The scene
+may ask for the light of the moment it is playing back.
+
+**Sky.** A stratum names a `sky` definition, which gives ambient light by
+local time.
+
+```json
+{ "type": "sky", "id": "day_night",
+  "day": "24 h", "starts_at": "8 h",
+  "light": [ { "at": "5 h",  "level": 0.03 }, { "at": "7 h",  "level": 1.0 },
+             { "at": "17 h", "level": 1.0 },  { "at": "19 h", "level": 0.03 } ],
+  "spread": { "loss": 0.25, "reach": 8 },
+  "backdrop": { "ch": " ", "bg": "sky" } }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `day` | The length of a day. Default 24 hours. Until calendars are built (09 §14.2) a realm's day comes from here. |
+| `starts_at` | The time of day when the realm's clock reads zero. Default midnight. |
+| `light` | Levels by time of day, in order of time. Between two entries the level runs in a straight line, and from the last round midnight to the first. One entry is a sky that never changes; none is a sky that gives no light, as is a stratum that names no sky. |
+| `spread.loss` | The fraction of the light lost for each cell it travels under cover. Default 0.25. |
+| `spread.reach` | How many cells it travels at most. Default 8; at most 16. |
+| `backdrop` | What is drawn where a view looks down into nothing (12 §6.1). Stored and reported only. |
+
+- Cells open to the sky (02 §6.3 heightmap) receive the sky's level in
+  full.
+- From them it spreads, cell to cell, through cells that do not stop it.
+  A cell stops light when something `opaque` in it stands taller than
+  1.5 m (`LIGHT_EYE_MM`): half a storey, the height light is taken to
+  travel at. A window, an open door and a hole are alike: nothing in
+  them is opaque, and light passes at the ordinary loss.
+- A step to one of the four neighbours beside a cell counts as one cell.
+  A step to a diagonal neighbour counts as a cell and a half, and needs
+  both cells beside the corner clear, so that light never slips between
+  two walls that touch at their corners. A step to the storey above or
+  below counts as three cells, a storey being three metres, and needs
+  the upper cell to have no floor.
+- After `n` cells the light is `level × (1 − loss)^n`, the odd half cell
+  counting as the square root of a cell's share. Past `reach` cells it is
+  nothing: a room is lit near its windows and dark beyond the cap.
+- A cell that stops light is lit by its neighbours and passes nothing
+  on. One sees the wall of a lit room, from either side.
+
+**Sources.** A floor, block or fixture may give off light, and a state of
+it may give off another or none:
+
+```json
+{ "type": "fixture", "id": "lamp", "material": "steel", "height": 2.5, "fill": 0.02,
+  "light": { "intensity": 1.0, "radius": "8 m" },
+  "states": { "on": {}, "off": { "light": { "intensity": 0 } } } }
+```
+
+- A source gives `intensity / (1 + d²)` to every cell it sees within its
+  radius, `d` being the metres between the centres of the two cells with
+  a storey counting three. An intensity may be negative: a source of
+  darkness.
+- A source sees what an eye in its cell would at 1.5 m: the field of
+  view of 02 §22, with its walls that are seen and its sight down and up
+  through cells that nothing closes. Something opaque no taller than
+  1.5 m casts no shadow.
+- `radius` is at most 16 m. Left out, it is where the source's light
+  falls to 0.01: `√(|intensity| / 0.01 − 1)`, and never more than 16 m.
+- The sources that reach a cell are added in a fixed order: chunk by
+  chunk, storey by storey and row by row, and within a chunk in cell
+  order. A chunk counts at most 128 sources, the first in cell order: a
+  cavern of glowing rock is a budget, not a mistake. The fill of a tract
+  outside its stored cells gives no light.
+- **Moving sources** are not part of the cells: a carried lamp, a muzzle
+  flash, a glowing creature. Whoever asks for light hands in the ones
+  that matter as a list of `MovingLight` (a cell, an intensity, a
+  radius), and each adds in the same way, in the order of the list. The
+  world keeps none. Items, creatures and fields tagged as light sources
+  reach light this way, supplied by the simulation.
+- The sky's part and the fixed sources' part together are never below
+  zero, and nor is the whole with moving sources added.
+
+**The cache.** How far each cell is from the open sky, in half cells,
+and what the fixed sources give it do not change with the time of day.
+They are kept for each chunk asked about, in a table beside the chunks
+keyed by grid and chunk position, and `static_light` reads them.
+
+- For each chunk the cache keeps its **shape**: per cell, whether it
+  stops light, has a floor and is open to the sky, and the sources in
+  it. A shape is read from the cells again when the chunk's structure
+  revision moves, or that of any chunk of its tract, since a roof far
+  above changes what is open to the sky. When what is read differs from
+  what was kept, the box of cells that changed is noted.
+- A chunk's light is worked out from the shapes of the chunk and its
+  twenty-six neighbours. It is worked out again only when a shape among
+  them has changed within light's reach of the chunk: the furthest any
+  loaded sky spreads or any loaded source shines. An edit that moves
+  nothing opaque, no floor and no source costs nothing, and nor does one
+  out of reach.
+- Each answer is a function of the cells within reach of its chunk and
+  nothing else, so no result depends on the order chunks were asked
+  about, and the cache always equals working the light out from nothing
+  (invariant P5).
+- The cache is derived. It is not saved and not hashed, a copy of the
+  cosmos starts with none, and it drops what has not been asked about
+  lately when it holds more than 1024 chunks.
+
+**Many cells.** `fill_light` fills a buffer the caller keeps with the
+light of every cell of a box, storey by storey and row by row: a screen,
+or the box round a field of view. Each cell gets exactly what
+`light_with` gives it, at a few nanoseconds a cell.
+
+**Unloaded space.** `light` of a cell whose tract is not loaded is the
+error of 02 §7.1; `fill_light` writes zero for such cells. Light neither
+comes out of space that is not loaded nor passes through it.
+
+Light is truth about the world. It scales `line` signals whose kind uses
+it, and tints what the player sees (12); what a character then believes
+is its own.
+
+Not built yet: the weather's share of the sky's light is a number the
+caller gives; a realm's day comes from its sky until calendars exist;
+fields give no light until they are built (02 §16); glass that passes
+only part of the light; and `light(loc)` as a function for rules.
 
 **Coloured light (experimental).**
 
@@ -605,7 +726,7 @@ another character is the persona the controlled character perceives.
 
 **Definition types**: `signal_kind`, `sense`, `event_signal`,
 `relation_kind`, `group`, `lines`, `message_kind`, `appearance_feature`,
-`pronouns`.
+`pronouns`, `sky` (section 3.3; registered by the world, 02 §23).
 `exposes` on signal kinds.
 Fields `signals` on
 actions and phases; `signature` and `senses` on templates and traits;
@@ -641,7 +762,8 @@ map.
 
 **Settings**: `mind.max_noted`, `mind.max_memories`, `mind.max_tracks`,
 `perception.warm_factor` (the multiple of threshold a signal must exceed
-to reach a warm character), `light.spread_loss`.
+to reach a warm character). How sky light spreads is not a setting: it is
+`spread` on each `sky` definition (section 3.3).
 
 **Queries**: `tracks`, `memories`, `observers` (who currently perceives a
 subject), `members`, `suspects`.
@@ -651,6 +773,13 @@ subject), `members`, `suspects`.
 **Functions and properties**: `perceives`, `could_perceive`, `light(loc)`;
 on minds, the properties of section 7.2 and `rel`, `in_group`, `role_in`,
 `persona`, `presenting`, `facing`.
+
+**Reachable only from Rust** so far: light. `light(loc)` waits for the
+rule runtime to bind it, and until then a rule has no way to ask how
+bright a place is or to add a moving source; the constants of section 3.3
+(the height light travels at, the level at which a source's light stops
+mattering, the count of sources a chunk takes) are named constants, not
+settings.
 
 ## 16. Invariants
 
@@ -669,7 +798,9 @@ Targets, unmeasured.
 
 | Operation | Target |
 |-----------|--------|
-| Light at a cell, cached | under 30 ns |
+| Light at a cell, cached, in a fill | under 30 ns (measured: 1 to 3 ns) |
+| Light at one cell asked for alone, cached | under 1 µs (measured: 0.5 µs) |
+| Light of an 80 × 50 view after one edit that light cares about | under 1 ms (measured: 0.03 ms in the open, 0.2 ms in a building) |
 | One observer-target evaluation, including line of sight at 30 m | under 2 µs |
 | Emitting a signal to 50 observers in range | under 100 µs |
 | One simulated second of perception for 300 hot characters in a crowd | under 4 ms |

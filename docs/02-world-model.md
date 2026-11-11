@@ -220,7 +220,7 @@ A realm has no hard-coded "kind". What a realm is follows from its properties.
 | `z_range` | Lowest and highest storey. Storage is sparse, so a tall range costs nothing. |
 | `generator` | Which world generator plans the realm, surveys regions and realises tracts (section 9; 10 §9). |
 | `fill` | What implicit cells contain below and above the generated range of a tract. |
-| `strata` | Ambient conditions by altitude: gravity (m/s², along −z), atmosphere (a definition giving density, pressure, sound speed, breathability; `null` is vacuum), sky (a presentation hint), and temperature: `temp_offset` added to the region's, or `temp` replacing it (11 §4.6). |
+| `strata` | Ambient conditions by altitude: gravity (m/s², along −z), atmosphere (a definition giving density, pressure, sound speed, breathability; `null` is vacuum), sky (a `sky` definition: the light the sky gives by time of day and a backdrop, 15 §3.3; left out, the stratum has no sky light), and temperature: `temp_offset` added to the region's, or `temp` replacing it (11 §4.6). |
 | `time_rate` | Rate of the realm's clock relative to universal time. |
 | `edges` | Per face: `"barrier"` (impassable and indestructible), `"void"` (whatever leaves is removed and an event is emitted), or a boundary link (section 19). Wrapped axes have no edges. |
 
@@ -258,8 +258,10 @@ What a definition must say, and what follows when it does not:
   axis is a load error.
 - `fill` defaults to nothing below and nothing above. `time_rate` defaults
   to 1 and must be zero or more.
-- `generator`, `calendar`, `sky` and boundary links are stored as written
+- `generator`, `calendar` and boundary links are stored as written
   until the packages that give them meaning are built.
+- A stratum's `sky` names a `sky` definition. Naming one that does not
+  exist is a load error.
 
 `Cosmos::create_realm(timeline, def, seed)` makes the realm, a clock for it
 under universal time at `time_rate`, and its empty base grid.
@@ -498,6 +500,15 @@ walks into it, lands on it or is thrown against it (07 §6.5):
 { "type": "fixture", "id": "spikes", "material": "iron", "height": 0.5, "fill": 0.05,
   "contact": { "surface": { "kind": "pierce", "area": 3.0e-5, "give": 0.003, "span": 0.02 },
                "energy": 60 } }
+```
+
+`light` makes an element a fixed source of light, and a state may give
+another light or, with an intensity of zero, none (15 §3.3):
+
+```json
+{ "type": "fixture", "id": "lamp", "material": "steel", "height": 2.5, "fill": 0.02,
+  "light": { "intensity": 1.0, "radius": "8 m" },
+  "states": { "on": {}, "off": { "light": { "intensity": 0 } } } }
 ```
 
 **Engine flags** (fixed set, stored as a bitset per state):
@@ -2406,7 +2417,12 @@ Still to come, with the packages that build them:
 
 Illumination (`Cosmos::light`) is specified in 15 §3.3 and the medium of a
 cell (`Cosmos::medium`) in 11 §4. Both are world queries with caches keyed
-on chunk revisions.
+on chunk revisions. Light's cache is a table of the cosmos beside the
+chunks, behind a lock, since reads take the cosmos by shared reference:
+it keeps, for each chunk, what the chunk looks like to light, and works
+a chunk's light out again only when that has changed within light's
+reach. Loading or unloading a tract tells it to read that tract's cells
+again whatever their revisions say.
 
 ## 23. Modding surface
 
@@ -2538,8 +2554,10 @@ sees or the geometry round a cell has no expression for it; `path_cost`
 override, priority or anchor after it is made; an occupant's footprint
 (`relocate_as`) and its mass and flags (`update_occupant`); writing an
 element's damage directly (`set_damage`); the fill that `enclose` uses, as
-a query (`enclosed_cells`); and the occupant queries of section 8.1, which
-rules reach only through their own queries over entities (05).
+a query (`enclosed_cells`); the light at a cell (`light`, `fill_light`,
+`add_moving_light`; 15 §3.3 names `light(loc)` for rules); and the
+occupant queries of section 8.1, which rules reach only through their
+own queries over entities (05).
 
 ## 24. Invariants
 

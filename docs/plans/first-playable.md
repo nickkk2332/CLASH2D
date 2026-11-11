@@ -31,7 +31,7 @@ actions that call `hit`.
 | E10 | Movement | M | E4, W14, W18 | todo |
 | E11 | Coming and going | L | E9, W8 | todo |
 | E12 | Minimal devices | M | E8 | todo |
-| S1 | Light | M | W18 | todo |
+| S1 | Light | M | W18 | beta |
 | S2 | Signals and senses | M | E3 | todo |
 | S3 | Detection | L | S1, S2, E10 | todo |
 | S4 | Percepts | M | S3, K3 | todo |
@@ -276,6 +276,16 @@ Build
 Done when
 - The cache equals recomputation after edits (invariant P5).
 - A room is lit near its windows and dark beyond the cap.
+
+Beta: everything in the list above is built, in `clash_world::light`
+(decisions D-410 to D-415), with the `sky` definition type and `light`
+on elements. Stubbed, each waiting for the package that owns it: items,
+creatures and fields that give light are handed in by the simulation as
+moving sources (fields give none until W16); the weather's share of sky
+light is a number the caller gives; a realm's day comes from its sky
+until calendars exist; `light(loc)` is not yet a function for rules; no
+test script (the console has no simulation behind it yet) and no
+benchmark, only a timing test that prints.
 
 ### S2 — Signals and senses
 

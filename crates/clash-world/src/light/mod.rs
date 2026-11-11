@@ -73,6 +73,9 @@ mod cache;
 mod defs;
 mod solve;
 
+#[cfg(test)]
+mod tests;
+
 use std::sync::{Mutex, MutexGuard};
 
 use clash_core::{Dur, IVec3, Real};

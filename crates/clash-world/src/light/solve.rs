@@ -129,10 +129,13 @@ pub(super) fn sky_steps(
     let Some(own) = shapes[BLOCK_CENTRE].filter(|shape| shape.is_present()) else {
         return Steps::All(SKY_DARK);
     };
-    // Answers that need no working out.
-    if let ShapeCells::All(bits) = own.cells
-        && bits & S_SKY != 0
-    {
+    // Answers that need no working out: a chunk open to the sky in
+    // every cell, and one closed in with everything round it.
+    let open = match &own.cells {
+        ShapeCells::All(bits) => bits & S_SKY != 0,
+        ShapeCells::Each(cells) => cells.iter().all(|bits| bits & S_SKY != 0),
+    };
+    if open {
         return Steps::All(0);
     }
     let closed = |shape: &Option<&Shape>| match shape {
@@ -179,7 +182,9 @@ pub(super) fn sky_steps(
             continue;
         }
         worth[place] = match shape.cells {
-            ShapeCells::All(all) => all & S_SKY == 0 && (all & S_BLOCKS == 0 || place == BLOCK_CENTRE),
+            ShapeCells::All(all) => {
+                all & S_SKY == 0 && (all & S_BLOCKS == 0 || place == BLOCK_CENTRE)
+            }
             ShapeCells::Each(_) => true,
         };
         let run = (to[0] - from[0]) as usize;
@@ -229,9 +234,7 @@ pub(super) fn sky_steps(
                 for x in low[0].max(0)..(low[0] + CHUNK_XY).min(region.side) {
                     let at = region.index(x, y, z);
                     let here = bits[at];
-                    if here & S_SKY != 0
-                        || (here & S_BLOCKS != 0 && place != BLOCK_CENTRE)
-                    {
+                    if here & S_SKY != 0 || (here & S_BLOCKS != 0 && place != BLOCK_CENTRE) {
                         continue;
                     }
                     let mut best = SKY_DARK;
@@ -295,8 +298,7 @@ pub(super) fn sky_steps(
         for ly in 0..CHUNK_XY {
             let from = region.index(region.reach, region.reach + ly, region.storeys + lz);
             let to = ((lz * CHUNK_XY + ly) * CHUNK_XY) as usize;
-            out[to..to + CHUNK_XY as usize]
-                .copy_from_slice(&steps[from..from + CHUNK_XY as usize]);
+            out[to..to + CHUNK_XY as usize].copy_from_slice(&steps[from..from + CHUNK_XY as usize]);
         }
     }
     let first = out[0];
