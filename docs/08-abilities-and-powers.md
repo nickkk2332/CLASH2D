@@ -364,7 +364,7 @@ restore  { name }                               →  puts it back
 
 Snapshots are what recall, undoing an injury, mending what was broken and
 turning back a room are made of. They are local. Turning back the whole
-world is a different and much costlier mechanism (13 §9.5).
+world is a different, much costlier and experimental mechanism (13 §9.5).
 
 A snapshot must be taken before it can be restored. Two further verbs go
 back without one.
@@ -498,7 +498,7 @@ exist. Section references are where the mechanism is specified.
 | Reflexes | Notice delay (03 §7.2) |
 | Recall, undoing | Snapshots (section 7.4) |
 | Undoing the last moments in a place | An area with a journal, and `rewind_area` (section 7.4). Those inside may be made to forget. |
-| Turning back the world | `rewind_world` (13 §9.5): everything returns to an earlier moment, and only those chosen remember |
+| Turning back the world | Experimental. `rewind_world` (13 §9.5): everything returns to an earlier moment, and only those chosen remember |
 | Sensing danger | A window kind's `noticed_if` and `notice` reading a trait |
 
 ### 8.4 Matter and elements
@@ -776,9 +776,11 @@ Targets, unmeasured.
 
 ## 15. Open questions
 
-1. **Turning back the world.** Settled in 13 §9.5: a rule, including an
-   ability's, may ask for the whole simulation to be returned to an earlier
-   moment with memories carried, where world history is being kept.
+1. **Turning back the world.** Offered as an experimental feature in
+   13 §9.5: a rule, including an ability's, may ask for the whole
+   simulation to be returned to an earlier moment with memories carried,
+   where world history is being kept. Its cost and several of its
+   interactions are unresolved and listed there.
 2. **Seeing the future.** The simulation is deterministic, so running a
    copy ahead is possible in principle. Its cost and how it would be shown
    are unexamined.

@@ -180,7 +180,7 @@ Build
   differing interval with the subsystem named; `diff` of two states;
   `report`.
 - Periodic snapshots in development builds and `rewind`. The same
-  snapshot-and-replay machinery serves `rewind_world` (scenarios package
+  snapshot-and-replay machinery serves the experimental `rewind_world` (scenarios package
   SC11), so it must not depend on anything only a development build has.
 
 Done when

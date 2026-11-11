@@ -391,8 +391,8 @@ returns it (03 §4.3); the application carries it out at a safe point.
 | `restore_checkpoint { name, carry }` | A return to it |
 | `end_scenario { as }` | An ending |
 | `next_scenario { scenario, carry }` | An ending that leads on |
-| `keep_world_history { span, every }` | Continuous snapshots, so the world can be turned back (section 9.5) |
-| `rewind_world { by, carry }` | A return of everything to an earlier moment |
+| `keep_world_history { span, every }` | Experimental. Continuous snapshots, so the world can be turned back (section 9.5) |
+| `rewind_world { by, carry }` | Experimental. A return of everything to an earlier moment |
 
 ### 9.2 Saving
 
@@ -433,7 +433,14 @@ screen, writes legacy variables, applies the save policy, and either
 returns to the title, offers to continue playing where that makes sense, or
 starts what follows.
 
-### 9.5 Turning back the whole world
+### 9.5 Turning back the whole world (experimental)
+
+> **Experimental.** This feature is specified so that it can be tried, not
+> because it is known to work well. Its cost is unmeasured and may prove
+> prohibitive. Its interactions with the rest of the simulation have not
+> been worked through. It may change in incompatible ways or be withdrawn.
+> No bundled content uses it. A mod must opt in to use it (04 §8.4), and is
+> warned at every load that it has.
 
 A checkpoint is a moment someone chose in advance. An author who wants the
 world itself turned back by some span, at any time, asks for **history**.
@@ -469,6 +476,17 @@ how often they are taken. An area rewind (08 §7.4) costs almost nothing by
 comparison, and can make those inside it forget, which is enough for most
 purposes. `rewind_world` is for the author who needs everyone, everywhere,
 to have forgotten.
+
+Known to be unresolved, and part of why it is experimental:
+
+| Question | State |
+|----------|-------|
+| What it costs on a realistically loaded world | Unmeasured. The budgets in section 15 are guesses. |
+| Legacy variables written during the abandoned span | They have already reached the player's profile. Whether they revert unless carried is undecided. |
+| Realms created or destroyed, journeys begun, and definitions reloaded during the span | Expected to be undone with everything else. Not examined case by case. |
+| Realms whose clocks run at other rates | `by` is universal time. What that means to someone inside a fast realm is not worked out. |
+| Use by several characters, or again during a replay | Undefined. |
+| Whether a player finds it comprehensible | Untested. |
 
 ## 10. Between games
 
@@ -551,8 +569,10 @@ Scope `legacy` for variables.
 **Effects**: `add_objective`, `complete_objective`, `fail_objective`,
 `start_mission`, `post_mission`, `fire_beat`, `set_tension`, `open_case`,
 `add_finding`, `accuse`, `close_case`, `checkpoint`, `restore_checkpoint`,
-`end_scenario`, `next_scenario`, `keep_world_history`, `rewind_world`,
-`keep_character`, `take_control`.
+`end_scenario`, `next_scenario`, `keep_character`, `take_control`.
+
+**Experimental effects** (section 9.5; opt-in by 04 §8.4):
+`keep_world_history`, `rewind_world`.
 
 **Queries**: `objectives`, `missions`, `postings`, `cases`, `findings`.
 
@@ -586,8 +606,8 @@ Targets, unmeasured.
 | Opening a case | under 20 µs |
 | Starting a game in a small authored realm | under 1 s |
 | Starting a game in a generated island realm | under 5 s |
-| Taking a world-history snapshot of the default loaded set | under 150 ms |
-| `rewind_world` by ten seconds | under 2 s |
+| Taking a world-history snapshot of the default loaded set (experimental; a guess) | under 150 ms |
+| `rewind_world` by ten seconds (experimental; a guess) | under 2 s |
 
 ## 16. Open questions
 

@@ -145,6 +145,9 @@ Build
   the remaining quantity types and dimension checking.
 - The semantic and cross stages; a `validate` hook per definition type.
 - The content fingerprint.
+- Experimental marking (04 §8.4): features named on registered items; the
+  `experimental` list in `mod.json`; the load error for use without
+  opting in and the warning for use with it; the list recorded in saves.
 
 Done when
 - A unit of the wrong dimension is rejected with the field's expected
@@ -152,6 +155,9 @@ Done when
 - Inline definitions receive stable ids and cannot be referenced.
 - The fingerprint is identical across runs and changes when any finished
   tree changes.
+- A fixture verb marked experimental is refused to a mod that has not opted
+  in, with the feature named, and accepted with a warning from one that has.
+- A test fails if any bundled mod names an experimental feature.
 
 ### P5 — Schemas, reference, scaffolding
 

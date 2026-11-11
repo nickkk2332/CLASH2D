@@ -55,7 +55,7 @@ into the specifications.
 
 | Document | Open questions |
 |----------|----------------|
-| 02 World model | Reviewed and settled (decisions D-169 to D-180) |
+| 02 World model | Reviewed and settled (decisions D-169 to D-181) |
 | All others | Awaiting review |
 
 The ones most likely to change something once code exists:
@@ -70,6 +70,7 @@ The ones most likely to change something once code exists:
 | Vessels do not tilt | 11 §18 | Ships sink upright |
 | Characters do not plan ahead or get lost | 09 §20 | Cunning is authored, not reasoned |
 | "Scenario" means two things | 13 §1; decision D-157 | A rename is possible if the note proves insufficient |
+| Whole-world rewind is experimental | 13 §9.5; decision D-181 | Its cost is unmeasured and several interactions are unresolved. It may change or be withdrawn. Nothing else depends on it. |
 
 ## Suggested build order
 

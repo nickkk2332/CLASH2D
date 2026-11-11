@@ -61,7 +61,8 @@ first version.
   "requires": [ { "id": "core", "version": ">=0.1" } ],
   "after": ["weather_plus"],
   "conflicts": ["old_ashlands"],
-  "imports": ["core"]
+  "imports": ["core"],
+  "experimental": []
 }
 ```
 
@@ -72,6 +73,7 @@ first version.
 | `after` | Mods loaded before this one if present. For compatibility patches. |
 | `conflicts` | Mods that may not be loaded alongside. |
 | `imports` | Namespaces searched for bare references, in order (section 4.3). Defaults to the ids in `requires`. |
+| `experimental` | Experimental features this mod opts in to (section 8.4). Empty by default. |
 
 ### 3.3 Profiles
 
@@ -354,6 +356,26 @@ The same structure is available as JSON for editors and tools.
 Errors prevent a profile from starting. Warnings do not. `--lenient`
 replaces each broken definition with a placeholder and carries on, for
 working on a large mod with something temporarily broken.
+
+### 8.4 Experimental features
+
+Anything registered with the engine (a verb, an event, a definition type,
+a field) may be marked **experimental**, under a feature name. An
+experimental feature is one that is specified so it can be tried. It may
+change incompatibly or be removed, and nothing bundled depends on it.
+
+- A mod that uses an experimental feature must name it in the
+  `experimental` list of its `mod.json`. Using one without naming it is a
+  load error that says which feature and where.
+- A mod that names one is warned at every load, by name, that it relies on
+  something experimental.
+- The generated reference (section 13) marks experimental items and lists
+  them together.
+- A save records which experimental features its mods used.
+
+Bundled mods name none, and a test fails if one does.
+
+Experimental features at present: `world_rewind` (13 §9.5).
 
 ## 9. Registries
 

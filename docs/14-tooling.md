@@ -319,7 +319,7 @@ it. Then the inspector can be opened on the past. `advance` from there
 replays the same future, unless something is changed first.
 
 This is a tool, switched on in development builds. The same machinery,
-switched on by content and with memories carried, is what `rewind_world`
+switched on by content and with memories carried, is what the experimental `rewind_world`
 uses (13 §9.5). Local undoing is separate (08 §7.4).
 
 ## 9. Writing mods
