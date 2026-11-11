@@ -47,7 +47,9 @@ The host the scripts run against is the simulation itself
 `mods` directory beside `scenarios/` (or the one `--mods <dir>` names);
 `gen flat|city|country size=N` makes a realm from the first bundled realm
 definition with that generator, or from a realm definition named by id,
-and loads a block of N × N tracts. The commands the host adds (`spawn`,
+and loads a block of N × N tracts. Scripts name the realm definition
+(`gen core:test_city`), so that a mod adding another realm on the same
+generator does not change what they build. The commands the host adds (`spawn`,
 `move`, `remove`, `set`, `control`, `session`, `damage`, `field`, `look`,
 `frame`) are listed in `docs/14-tooling.md` section 3.3 and by `help`.
 

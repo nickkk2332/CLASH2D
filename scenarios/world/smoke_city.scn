@@ -1,8 +1,8 @@
 # The test city is generated and looked at (world-model package W11).
 use default seed=3
-gen city size=2
+gen core:test_city size=2
 size 48 16
 look
 expect frame smoke_city.frame
 look @c:40,10,0
-expect hash b262ebeb0d09344d575f1ed603393085
+expect hash f8d0d52ca98b7d5619b3b103c67ad5ef

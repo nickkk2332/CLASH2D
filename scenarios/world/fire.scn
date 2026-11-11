@@ -1,7 +1,7 @@
 # Fire on a row of wooden boards: it spreads along them, burns them
 # away and dies down where nothing is left to burn (02 §16).
 use default seed=9
-gen flat size=1
+gen core:testland size=1
 set @c:10,10,0 floor core:boards
 set @c:11,10,0 floor core:boards
 set @c:12,10,0 floor core:boards
@@ -17,4 +17,4 @@ expect event element_destroyed layer=floor
 assert "@c:10,10,0.floor == null"
 advance 60s
 assert "@c:16,10,0.floor == null"
-expect hash b34efb87020c651326bf0f62a0d730f3
+expect hash 06afeb603cdf0dde4be7c6fbcf08662b

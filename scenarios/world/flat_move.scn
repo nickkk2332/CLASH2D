@@ -1,7 +1,7 @@
 # A flat world, and entities made, moved, carried and removed by the
 # console's debug commands (03 §4.4).
 use default seed=7
-gen flat size=2
+gen core:testland size=2
 spawn creature at=@c:5,5,0 as=walker
 expect event entity_created
 assert "@walker.loc.x == 5 and @walker.loc.y == 5"
@@ -20,4 +20,4 @@ remove @stone
 expect event entity_removed
 move @walker @c:200,6,0
 expect reason world.not_loaded
-expect hash f4659ffbe7b4778a4d5bb9adb4d0c425
+expect hash 7a6c14a166a9842be3e4c22042d167a8

@@ -2,7 +2,7 @@
 # character and unload behind it (02 §9), and a change made at the
 # start is still there when the walker comes back to it.
 use default seed=13
-gen city size=1
+gen core:test_city size=1
 spawn creature as=w
 session @w @c:641,641,0
 expect event tract_loaded
@@ -24,4 +24,4 @@ assert "not @c:641,641,0.is_loaded and @w.loc.x == 993"
 advance 1s
 session @w @c:641,641,0
 assert "@c:642,641,0.block.def_id == 'core:wall' and not @c:993,641,0.is_loaded"
-expect hash 790f0710b28a48cb8ec86b573f8bde19
+expect hash 64049a0ee6aa766534b0549698332801

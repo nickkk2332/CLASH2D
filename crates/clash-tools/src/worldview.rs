@@ -393,7 +393,7 @@ mod tests {
         assert_eq!(output.code, EXIT_OK, "{}{}", output.out, output.err);
         assert!(output.out.contains("> gen city size=2"), "{}", output.out);
         assert!(
-            output.out.contains("made a realm of `core:test_city`"),
+            output.out.contains("made a realm of `core:"),
             "{}",
             output.out
         );

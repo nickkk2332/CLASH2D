@@ -202,7 +202,7 @@ at one function of the host that is the seam for it.
 | Command | Does |
 |---------|------|
 | `use <profile> [seed]` | Loads a profile from the mods directory, with every definition type of the engine, and starts a simulation with an empty world |
-| `gen <kind> [size]` | Makes a realm and loads a block of `size` × `size` tracts from tract (0, 0) (at most 16 a side), held by debug tickets; puts the cursor in the middle, on the highest cell that can be stood in. `flat`, `city` and `country` name the generators `flat`, `test_city` and `standard`, and make the first realm definition that names that generator; a realm definition's id is also accepted. Each realm made draws from the seed plus the number of realms made before it |
+| `gen <kind> [size]` | Makes a realm and loads a block of `size` × `size` tracts from tract (0, 0) (at most 16 a side), held by debug tickets; puts the cursor in the middle, on the highest cell that can be stood in. `flat`, `city` and `country` name the generators `flat`, `test_city` and `standard`, and make the first realm definition in load order that names that generator; a realm definition's id is also accepted, and test scripts name one, so that a mod adding a realm on the same generator changes nothing they do. Each realm made draws from the seed plus the number of realms made before it |
 | `spawn <what> [at] [mass] [tag] [control]` | Makes an entity of a kind of occupant (`creature`, `item`, `device`, `other`) and puts it in a cell or inside an entity; the cursor's cell if `at` is left out. Gives the entity, for `as=` |
 | `move <who> <to>` | Moves an entity to a cell, or into an entity |
 | `remove <who>` | Removes an entity for good |
