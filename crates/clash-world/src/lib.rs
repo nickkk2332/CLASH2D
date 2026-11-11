@@ -27,6 +27,11 @@
 //! | Volumes that mean something | [`Area`], [`AreaSpec`], [`AreaShape`]; [`WorldCtx::create_area`], [`WorldCtx::enclose`]; [`Cosmos::areas_at`] |
 //! | Places with identity | [`Site`], [`Cosmos::create_site`], [`Cosmos::site_of`] |
 //! | Stability checks waiting | [`Cosmos::stability_requests`] |
+//! | What is known of space that is not loaded | [`RegionRecord`], [`TractRecord`]; [`Cosmos::tract_record`], [`Cosmos::add_pending_edit`] |
+//! | Generating: the interfaces, and choosing a generator | [`RegionSurveyor`], [`TractRealizer`], [`GenCtx`]; [`GeneratorRegistry`], [`Generators`] |
+//! | Loading and unloading tracts | [`WorldCtx::load_tracts`], [`WorldCtx::unload_tract`], with a [`TractIo`] |
+//! | Where changed tracts are kept | [`TractStore`], [`MemoryStore`]; [`encode_column`], [`decode_column`] |
+//! | Keeping tracts loaded | [`Ticket`], [`Cosmos::hold_ticket`], [`WorldCtx::reconcile_activity`] |
 //! | Why something could not be done | [`WorldError`] |
 //! | A world for a test | [`test_support`] |
 //!
@@ -52,16 +57,21 @@ pub mod dims;
 mod edit;
 mod error;
 mod event;
+mod generate;
 mod grid;
 pub mod iter;
 pub mod load;
+mod loading;
 mod occupancy;
 mod pos;
 pub mod query;
 mod site;
 pub mod storage;
+mod store;
 pub mod test_support;
+mod ticket;
 mod topology;
+mod tract;
 
 pub use area::{
     AREA_MAX_CELLS, AREA_MAX_TRACTS, AmbientOverride, Area, AreaAnchor, AreaDrift, AreaId,
@@ -81,10 +91,17 @@ pub use defs::{
 pub use edit::{DISPLACE_RANGE_CELLS, StabilityQueue, StabilityRequest, WorldCtx, WorldEdit};
 pub use error::WorldError;
 pub use event::{EventSink, WorldEvent};
+pub use generate::{
+    BatchRunner, GenCtx, GenError, GeneratorFactory, GeneratorRegistry, GeneratorRequest,
+    Generators, PortalSpec, RealizeJob, RealizedTract, RealmInfo, RegionSurveyResult,
+    RegionSurveyor, SerialRunner, SubgridSpec, TractRealizer, TractRecords3x3, WorldGenerator,
+    realize_batch,
+};
 pub use grid::{
     COLUMN_MAX_CHUNKS, CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE,
 };
 pub use load::{check_defs, register_defs};
+pub use loading::{LoadError, LoadedTract, TractIo};
 pub use occupancy::{
     FOOTPRINT_MAX_SIDE, Footprint, Occupant, OccupantEntry, OccupantFilter, OccupantFlags,
     OccupantKind, OccupantKinds, OccupantRecord, Occupied, PlaneMask, QUERY_MAX_LINE_CELLS,
@@ -101,4 +118,18 @@ pub use query::{
     StepKind,
 };
 pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};
+pub use store::{
+    MemoryStore, StoreError, TRACT_BLOB_KIND, TRACT_BLOB_VERSION, TractStore, decode_column,
+    encode_column,
+};
+pub use ticket::{
+    Activity, DEFAULT_MAX_LOADED_TRACTS, DEFAULT_PRIORITY, HOT_RADIUS, PINNED, Reconciled,
+    RefusedTicket, Ticket, TicketAnchor, TicketId, TicketReason, TicketTable, TractFailure,
+    UNLOAD_MARGIN, WARM_MARGIN,
+};
 pub use topology::{Edge, Extent, Topology};
+pub use tract::{
+    CellEdit, DevastationKindId, MapId, PathKindId, PathLine, PendingEdit, Placement, RegionKindId,
+    RegionRecord, RegionSurvey, SiteIdx, SpawnRequest, Stamp, TractDefId, TractExtra, TractRecord,
+    TractState,
+};

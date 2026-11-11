@@ -74,6 +74,10 @@ pub struct Column {
     /// Bumped by every change to who occupies the column's cells, at any
     /// height.
     occupants_rev: u32,
+    /// Where the revision counters of this column's chunks started when
+    /// it was loaded, and what a chunk height without storage counts as
+    /// (02 §22). Zero until the column joins a grid.
+    rev_base: u32,
 }
 
 impl Column {
@@ -96,6 +100,7 @@ impl Column {
             heightmap: Box::new([HEIGHT_NONE; CHUNK_AREA]),
             stray: BTreeMap::new(),
             occupants_rev: 0,
+            rev_base: 0,
         };
         let chunk_base = column.z_lo << CHUNK_Z_BITS;
         if surface_z != chunk_base && below_fill != above_fill {
@@ -341,22 +346,31 @@ impl Column {
     /// it and the stored range if it is not stored yet. `None` only if the
     /// height is too far from the stored range to index.
     pub(crate) fn chunk_mut(&mut self, defs: &WorldDefs, chunk_z: i32) -> Option<&mut Chunk> {
+        // A chunk created here starts its revisions where the column's
+        // unstored heights stand, so that the write that follows moves it
+        // on from what a cache saw there.
+        let base = self.rev_base;
+        let fresh = move |fill: BlockState| {
+            let mut chunk = Chunk::uniform(defs, fill);
+            chunk.set_rev_base(base);
+            chunk
+        };
         if self.chunks.is_empty() {
             // The first chunk goes where the fills meet; the range then
             // grows from there to the height asked for.
             let fill = self.fill_at(self.z_lo);
-            self.chunks.push(Chunk::uniform(defs, fill));
+            self.chunks.push(fresh(fill));
         }
         if chunk_z < self.z_lo {
             let missing = usize::try_from(i64::from(self.z_lo) - i64::from(chunk_z)).ok()?;
             let fill = self.below_fill;
-            let new = (0..missing).map(|_| Chunk::uniform(defs, fill));
+            let new = (0..missing).map(|_| fresh(fill));
             self.chunks.splice(0..0, new);
             self.z_lo = chunk_z;
         }
         let at = usize::try_from(i64::from(chunk_z) - i64::from(self.z_lo)).ok()?;
         while self.chunks.len() <= at {
-            self.chunks.push(Chunk::uniform(defs, self.above_fill));
+            self.chunks.push(fresh(self.above_fill));
         }
         self.adopt_strays();
         self.chunks.get_mut(at)
@@ -621,6 +635,76 @@ impl Column {
         }
     }
 
+    /// The revision a chunk height without storage counts as: where the
+    /// counters of this column's chunks started when it was loaded
+    /// (02 §22). Zero for a column that is not in a grid, and for the
+    /// first columns a grid loads.
+    pub fn rev_base(&self) -> u32 {
+        self.rev_base
+    }
+
+    /// Starts every revision counter of the column at `base`. Called as
+    /// the column joins a grid.
+    pub(crate) fn set_rev_base(&mut self, base: u32) {
+        self.rev_base = base;
+        self.occupants_rev = base;
+        for chunk in &mut self.chunks {
+            chunk.set_rev_base(base);
+        }
+    }
+
+    /// The highest any revision counter of the column stands.
+    pub(crate) fn rev_high(&self) -> u32 {
+        self.chunks
+            .iter()
+            .map(|chunk| {
+                let rev = chunk.rev();
+                rev.structure.max(rev.fields).max(rev.occupants)
+            })
+            .fold(self.rev_base.max(self.occupants_rev), u32::max)
+    }
+
+    /// What the column holds, in the form a tract is stored in: the
+    /// fills and the chunks that say something the fills do not.
+    pub(crate) fn image(&self) -> ColumnImage {
+        let (start, chunks) = self.significant();
+        ColumnImage {
+            below_fill: self.below_fill,
+            above_fill: self.above_fill,
+            z_lo: start,
+            chunks: chunks.iter().map(Chunk::image).collect(),
+        }
+    }
+
+    /// A column holding what an image says, with its caches built. It
+    /// matches what is on disk. `None` if the image stacks more chunks
+    /// than a column stores or reaches past the last chunk height.
+    pub(crate) fn from_image(defs: &WorldDefs, image: ColumnImage) -> Option<Column> {
+        let count = i64::try_from(image.chunks.len()).ok()?;
+        if count > COLUMN_MAX_CHUNKS || i64::from(image.z_lo) + count > i64::from(i32::MAX) {
+            return None;
+        }
+        let mut column = Column {
+            z_lo: image.z_lo,
+            chunks: image
+                .chunks
+                .into_iter()
+                .map(|chunk| Chunk::from_image(defs, chunk))
+                .collect(),
+            below_fill: image.below_fill,
+            above_fill: image.above_fill,
+            below_flags: defs.cell_flags(FloorState::NONE, image.below_fill, FixtureState::NONE),
+            above_flags: defs.cell_flags(FloorState::NONE, image.above_fill, FixtureState::NONE),
+            heightmap: Box::new([HEIGHT_NONE; CHUNK_AREA]),
+            stray: BTreeMap::new(),
+            occupants_rev: 0,
+            rev_base: 0,
+        };
+        column.recompute_heightmap();
+        column.clear_dirty();
+        Some(column)
+    }
+
     /// The stored chunks that say something the fills do not: the stored
     /// range with pure-fill chunks trimmed from both ends, and the chunk
     /// height it starts at.
@@ -646,6 +730,16 @@ impl Column {
         }
         (start, kept)
     }
+}
+
+/// What a column holds, in the form a tract is stored in (02 §11).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ColumnImage {
+    below_fill: BlockState,
+    above_fill: BlockState,
+    /// The chunk height of the first chunk.
+    z_lo: i32,
+    chunks: Vec<crate::chunk::ChunkImage>,
 }
 
 /// Hashes what the cells hold, not how much of it happens to be stored: a
@@ -749,6 +843,12 @@ impl<'a> ColumnBuilder<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct Grid {
     columns: LookupMap<TractPos, Column>,
+    /// One more than the highest any revision counter stood in a column
+    /// that has left the grid. A column that joins starts its counters
+    /// here, so a tract that is unloaded and loaded again never comes
+    /// back with revisions a cache has seen (02 §22). Like the counters
+    /// themselves this is not state.
+    rev_floor: u32,
 }
 
 impl Grid {
@@ -756,6 +856,7 @@ impl Grid {
     pub fn new() -> Grid {
         Grid {
             columns: LookupMap::new(),
+            rev_floor: 0,
         }
     }
 
@@ -788,13 +889,24 @@ impl Grid {
 
     /// Makes a tract loaded with these cells, and returns the column it
     /// replaced, if any.
-    pub(crate) fn insert_column(&mut self, tract: TractPos, column: Column) -> Option<Column> {
+    pub(crate) fn insert_column(&mut self, tract: TractPos, mut column: Column) -> Option<Column> {
+        if let Some(replaced) = self.columns.get(&tract) {
+            self.leave(replaced.rev_high());
+        }
+        column.set_rev_base(self.rev_floor);
         self.columns.insert(tract, column)
     }
 
     /// Unloads a tract and returns its column.
     pub(crate) fn remove_column(&mut self, tract: TractPos) -> Option<Column> {
-        self.columns.remove(&tract)
+        let column = self.columns.remove(&tract)?;
+        self.leave(column.rev_high());
+        Some(column)
+    }
+
+    /// Notes how high the revisions of a column that is leaving stood.
+    fn leave(&mut self, rev_high: u32) {
+        self.rev_floor = self.rev_floor.max(rev_high.wrapping_add(1));
     }
 }
 

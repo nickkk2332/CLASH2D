@@ -7,6 +7,16 @@
     "resist": { "impact": { "threshold": "500 kPa" } },
     "glyph": { "ch": ".", "fg": "dark_gray" } },
 
+  { "//": "What a sidewalk is paved with.",
+    "type": "floor", "id": "pavement", "material": "concrete", "thickness": "8 cm",
+    "resist": { "impact": { "threshold": "400 kPa" } },
+    "glyph": { "ch": ",", "fg": "gray" } },
+
+  { "//": "The deck that closes a building at the top.",
+    "type": "floor", "id": "roof", "material": "concrete", "thickness": 0.2,
+    "resist": { "impact": { "threshold": "300 kPa" }, "blast": { "threshold": "50 kPa" } },
+    "glyph": { "ch": "_", "fg": "material" } },
+
   { "type": "floor", "id": "grass", "material": "soil", "thickness": "5 cm",
     "tags": ["plant"],
     "glyph": { "ch": "\"", "fg": "green" } }

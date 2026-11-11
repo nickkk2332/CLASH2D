@@ -21,9 +21,11 @@ use crate::edit::StabilityQueue;
 use crate::error::WorldError;
 use crate::grid::{CellView, Column, Grid};
 use crate::occupancy::OccupantRecord;
-use crate::pos::{CellPos, GridId, Location, TractPos};
+use crate::pos::{CellPos, GridId, Location, RegionPos, TractPos};
 use crate::site::SiteTable;
+use crate::ticket::TicketTable;
 use crate::topology::Topology;
+use crate::tract::RegionRecord;
 
 define_id! {
     /// A realm of the cosmos. Never reused.
@@ -66,6 +68,9 @@ pub struct Realm {
     pub vars: VarMap,
     /// Whether it still exists.
     pub state: RealmState,
+    /// The records of the regions that have been surveyed, and through
+    /// them of every tract the engine knows anything about (02 §9.1).
+    pub regions: BTreeMap<RegionPos, RegionRecord>,
 }
 
 impl_state_hash!(Realm {
@@ -75,7 +80,8 @@ impl_state_hash!(Realm {
     clock,
     base_grid,
     vars,
-    state
+    state,
+    regions
 });
 
 /// The ambient conditions of a cell: what its stratum says (02 §4.1),
@@ -356,6 +362,9 @@ pub struct Cosmos {
     pub(crate) occupants: LookupMap<EntityId, OccupantRecord>,
     /// The stability checks edits have asked for (02 §14.2).
     pub(crate) stability: StabilityQueue,
+    /// The requests to keep tracts loaded, and which tracts they keep
+    /// (02 §10).
+    pub(crate) tickets: TicketTable,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -386,6 +395,7 @@ impl Cosmos {
             sites: SiteTable::new(),
             occupants: LookupMap::new(),
             stability: StabilityQueue::default(),
+            tickets: TicketTable::new(),
         }
     }
 
@@ -458,6 +468,7 @@ impl Cosmos {
                 base_grid,
                 vars: VarMap::new(),
                 state: RealmState::Active,
+                regions: BTreeMap::new(),
             },
         );
         Ok(id)
@@ -466,6 +477,12 @@ impl Cosmos {
     /// A realm by id.
     pub fn realm(&self, id: RealmId) -> Option<&Realm> {
         self.realms.get(&id)
+    }
+
+    /// A realm by id, to change. Crate-private: a realm's records change
+    /// through the functions that survey, load and unload.
+    pub(crate) fn realm_mut(&mut self, id: RealmId) -> Option<&mut Realm> {
+        self.realms.get_mut(&id)
     }
 
     /// Every realm, in id order.
@@ -621,14 +638,20 @@ impl Cosmos {
     /// in it is taken out of the occupant index, without events.
     pub(crate) fn remove_column(&mut self, grid: GridId, tract: TractPos) -> Option<Column> {
         self.purge_occupants(grid, tract);
-        self.slot_mut(grid)?.grid.remove_column(tract)
+        let slot = self.slot_mut(grid)?;
+        let realm = slot.realm;
+        let column = slot.grid.remove_column(tract)?;
+        // A tract that is gone is no longer one the tickets keep.
+        self.tickets.forget(realm, tract);
+        Some(column)
     }
 }
 
-/// Hashes the realms in id order, then the grids in id order with their
-/// loaded columns in tract order, then the global variables, the areas,
-/// the sites and the stability checks waiting. Who occupies which cell is
-/// not hashed: the simulation above owns the entities.
+/// Hashes the realms in id order with their region records, then the
+/// grids in id order with their loaded columns in tract order, then the
+/// global variables, the areas, the sites, the stability checks waiting
+/// and the tickets. Who occupies which cell is not hashed: the simulation
+/// above owns the entities.
 impl StateHash for Cosmos {
     fn state_hash(&self, hasher: &mut StateHasher) {
         self.realms.state_hash(hasher);
@@ -641,5 +664,6 @@ impl StateHash for Cosmos {
         self.areas.state_hash(hasher);
         self.sites.state_hash(hasher);
         self.stability.state_hash(hasher);
+        self.tickets.state_hash(hasher);
     }
 }

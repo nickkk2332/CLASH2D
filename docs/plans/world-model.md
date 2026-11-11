@@ -35,8 +35,8 @@ Section references such as "02 §14" point into those documents.
 | W5 | Cosmos, realms, views | M | W4, F3 | beta |
 | W6 | Edits, causes, events | M | W5 | beta |
 | W7 | Occupancy, planes, areas, sites | M | W6 | beta |
-| W8 | Tracts, regions, generation, loading | L | W7 | todo |
-| W9 | Tickets and activity | M | W8 | todo |
+| W8 | Tracts, regions, generation, loading | L | W7 | in progress |
+| W9 | Tickets and activity | M | W8 | in progress |
 | W10 | Persistence | M | W8 | todo |
 | W11 | World viewer and scenario runner | M | W8 | todo |
 | W12 | Damage and destruction | M | W6 | todo |

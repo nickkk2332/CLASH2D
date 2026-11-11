@@ -552,6 +552,70 @@ impl Chunk {
     pub(crate) fn clear_dirty(&mut self) {
         self.dirty = false;
     }
+
+    /// Starts every revision counter at `base`: where the counters of a
+    /// chunk begin when its tract is loaded, so that they continue from
+    /// where no earlier loading left them (02 §22).
+    pub(crate) fn set_rev_base(&mut self, base: u32) {
+        self.rev = ChunkRev {
+            structure: base,
+            fields: base,
+            occupants: base,
+        };
+    }
+
+    /// What the chunk holds, in the form it is stored in.
+    pub(crate) fn image(&self) -> ChunkImage {
+        let sparse = self.sparse.as_deref().cloned().unwrap_or_default();
+        ChunkImage {
+            floors: self.floors.clone(),
+            blocks: self.blocks.clone(),
+            fixtures: self.fixtures.clone(),
+            damage: sparse.damage,
+            conduits: sparse.conduits,
+            decals: sparse.decals,
+            vars: sparse.vars,
+        }
+    }
+
+    /// A chunk holding what an image says, with its caches built and its
+    /// revisions at zero. It matches what is on disk.
+    pub(crate) fn from_image(defs: &WorldDefs, image: ChunkImage) -> Chunk {
+        let sparse = SparseLayers {
+            damage: image.damage,
+            conduits: image.conduits,
+            decals: image.decals,
+            vars: image.vars,
+        };
+        let mut chunk = Chunk {
+            floors: image.floors,
+            blocks: image.blocks,
+            fixtures: image.fixtures,
+            sparse: (!sparse.is_empty()).then(|| Box::new(sparse)),
+            fields: FieldStore::default(),
+            occupants: OccupantIndex::default(),
+            derived: DerivedCache::Uniform(CellFlags::NONE),
+            rev: ChunkRev::default(),
+            dirty: false,
+        };
+        chunk.compact(defs);
+        chunk
+    }
+}
+
+/// What a chunk holds, in the form a tract is stored in (02 §11): the
+/// three element layers with compacted palettes and the sparse layers.
+/// Occupants, caches, revisions and the dirty flag are not stored.
+/// Fields join it with package W16.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct ChunkImage {
+    floors: Paletted<FloorState>,
+    blocks: Paletted<BlockState>,
+    fixtures: Paletted<FixtureState>,
+    damage: SparseCells<[u8; 3]>,
+    conduits: SparseCells<ConduitSet>,
+    decals: SparseCells<DecalList>,
+    vars: SparseCells<VarMap>,
 }
 
 /// Hashes what the cells hold: the three element layers, the sparse

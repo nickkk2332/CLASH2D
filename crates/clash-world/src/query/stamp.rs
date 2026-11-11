@@ -75,10 +75,11 @@ enum Seen {
 /// and the passing of time leave it current. Counters are compared for
 /// equality, so their wrapping round does not matter.
 ///
-/// One limit, until tracts are loaded through tickets (package W8): a
-/// tract that is unloaded and loaded again between two looks at a stamp
-/// starts its counters afresh, and can look unchanged. Whoever keeps a
-/// cached answer across the unloading of its tracts drops it.
+/// A tract that is unloaded and loaded again between two looks at a
+/// stamp does not come back looking unchanged: a column that joins a
+/// grid starts its counters above where any column that left it stood,
+/// and a chunk that holds only its tract's fill counts as standing where
+/// its column started.
 ///
 /// ```
 /// use clash_world::{RevParts, RevStamp};
@@ -129,9 +130,15 @@ impl RevStamp {
     fn look(parts: RevParts, view: &GridView<'_>, chunk: ChunkPos) -> Seen {
         match view.column(chunk.tract()) {
             Some(column) => {
-                let rev = column
-                    .chunk(chunk.z)
-                    .map_or(ChunkRev::default(), |c| c.rev());
+                // A chunk height without storage stands where the
+                // column's counters started when it was loaded.
+                let base = column.rev_base();
+                let unstored = ChunkRev {
+                    structure: base,
+                    fields: base,
+                    occupants: base,
+                };
+                let rev = column.chunk(chunk.z).map_or(unstored, |c| c.rev());
                 Seen::At(parts.mask(rev))
             }
             None => Seen::Absent,
