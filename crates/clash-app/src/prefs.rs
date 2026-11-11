@@ -20,6 +20,11 @@
 //!
 //! A file that cannot be read or is not what this module writes is
 //! reported once and then left alone: nothing is written over it.
+//!
+//! One preference is never kept: the omniscient view's
+//! ([`crate::perception_shim::PREF_OMNISCIENT`]). A debugging view of
+//! the truth must not outlive the run it was switched on in, nor reach
+//! a profile that cannot switch it off ([`kept`]).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -30,6 +35,12 @@ use serde_json::{Map, Value as Json, json};
 /// The file preferences and bindings are kept in, in the user's data
 /// directory.
 pub const PREFS_FILE: &str = "preferences.json";
+
+/// Whether a preference is kept between runs: every one but the one
+/// whose bare name is [`crate::perception_shim::PREF_OMNISCIENT`].
+pub fn kept(id: &str) -> bool {
+    id.rsplit(':').next().unwrap_or(id) != crate::perception_shim::PREF_OMNISCIENT
+}
 
 /// One key the player gave a meaning.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -146,9 +157,10 @@ impl PrefStore {
         &self.bindings
     }
 
-    /// Keeps a preference's value.
+    /// Keeps a preference's value, unless it is one that is never kept
+    /// ([`kept`]).
     pub fn set_pref(&mut self, id: &str, value: Value) -> Result<(), String> {
-        if self.prefs.get(id) == Some(&value) {
+        if !kept(id) || self.prefs.get(id) == Some(&value) {
             return Ok(());
         }
         self.prefs.insert(id.to_owned(), value);
@@ -295,6 +307,17 @@ mod tests {
             .unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "[1, 2, 3]");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_omniscient_view_is_never_kept() {
+        let dir = scratch("omniscient");
+        let (mut store, _) = PrefStore::open(&dir);
+        store.set_pref("ui:omniscient", Value::Bool(true)).unwrap();
+        assert!(store.prefs().is_empty());
+        assert!(!dir.join(PREFS_FILE).exists());
+        assert!(kept("ui:theme"));
+        assert!(!kept("other:omniscient"));
     }
 
     #[test]

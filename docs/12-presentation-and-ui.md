@@ -196,10 +196,14 @@ each a module of its own that is deleted when that package lands:
 
 **The omniscient view.** While a preference whose bare name is
 `omniscient` holds true, the view model is filled from truth round the
-character instead (section 5, `view::omniscient`). Only the `tools` mod
-defines it, with the control `tools:omniscient` on F12 in play, so only
-a development profile has it. Switching either way empties the view
-model first, so nothing learnt from truth is left behind as memory.
+character instead (section 5, `view::omniscient`). Switching either way
+empties the view model first, so nothing learnt from truth is left
+behind as memory, and the preference is never kept between runs. The
+`ui` mod defines it with the control `ui:omniscient` on F12 in play,
+which switches it only while the preference `ui:development` holds. No
+screen offers that one; a development profile sets it, as
+`profiles/dev.json` does, so in any other profile F12 does nothing. The
+toggle moves to the `tools` mod (04 §3.5) when that exists.
 
 ### 3.3 Headless scripts
 
@@ -1666,7 +1670,8 @@ second; `look`, which opens look mode (`ui:look`), a free cursor over
 the map with what the party knows of the place under it; `inventory`,
 `condition`, `abilities`, `map` and `journal`, which open screens that
 are empty and titled until they are built; `options`, which opens
-`ui:options`; `pause`, which opens `ui:pause`; and `click` and
+`ui:options`; `pause`, which opens `ui:pause`; `omniscient`, the
+development profile's view of the truth (section 3.2); and `click` and
 `click_second` (section 9.4).
 
 **Fitting** shows an assembly (16 §11): its slots, what is in each, what

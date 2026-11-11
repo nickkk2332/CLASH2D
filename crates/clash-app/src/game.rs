@@ -266,7 +266,7 @@ impl Game {
                 .scene
                 .defs()
                 .is_some_and(|ui| ui.get::<PreferenceDef>(&id).is_some());
-            if !known || self.scene.pref(&id) == Some(&value) {
+            if !known || !crate::prefs::kept(&id) || self.scene.pref(&id) == Some(&value) {
                 continue;
             }
             match self.scene.set_pref(&id, value) {

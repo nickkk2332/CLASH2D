@@ -84,7 +84,7 @@
       ".": "wait", "x": "look",
       "i": "inventory", "c": "condition", "a": "abilities", "m": "map", "shift+j": "journal",
       "o": "options",
-      "escape": "pause"
+      "escape": "pause", "f12": "omniscient"
     },
     "targeting": {
       "h": "west", "j": "south", "k": "north", "l": "east",

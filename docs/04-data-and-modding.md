@@ -150,8 +150,10 @@ other: the world content of `core` is in `mods/core/data/world/`, and it
 includes two small realms, `testland` and `training_room`, that the
 engine's tests and tools stand worlds in. The repository's default
 profile, `profiles/default.json`, lists `core` and `ui` and boots into
-`ui:title`; `profiles/dev.json` lists `tools` as well. So far `tools`
-holds the omniscient view of 12 §3.2.
+`ui:title`. `profiles/dev.json` is a development profile: until the
+`tools` mod exists it lists the same two mods and sets the preference
+`ui:development`, which lets the omniscient view of 12 §3.2 be switched
+on.
 
 None is required by the engine. Placeholders for missing content
 (section 12.3) are synthesised by the engine in the reserved namespace

@@ -4,7 +4,7 @@
 //! preferences and key bindings are kept in the user's data directory
 //! and given back at the next start; and a development profile's
 //! omniscient view shows truth and, switched off, leaves none of it
-//! behind.
+//! behind, while in any other profile its key does nothing.
 
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
@@ -225,9 +225,14 @@ fn the_development_profile_can_see_everything() {
     let believed = known_count(&run, at);
 
     // F12 shows what is really there: more than the character knows.
+    // It is not kept for the next run.
     press(&mut run, &["f12"]);
+    assert!(
+        !data.join(PREFS_FILE).exists(),
+        "the omniscient view was not kept"
+    );
     assert_eq!(
-        run.game().scene().pref("tools:omniscient"),
+        run.game().scene().pref("ui:omniscient"),
         Some(&Value::Bool(true))
     );
     let truth = known_count(&run, at);
@@ -240,7 +245,7 @@ fn the_development_profile_can_see_everything() {
     // from truth kept as memory: the street behind the wall is gone.
     press(&mut run, &["f12"]);
     assert_eq!(
-        run.game().scene().pref("tools:omniscient"),
+        run.game().scene().pref("ui:omniscient"),
         Some(&Value::Bool(false))
     );
     let seen_again = known_count(&run, at);
@@ -260,5 +265,23 @@ fn the_development_profile_can_see_everything() {
         remembered, 0,
         "nothing is remembered from the omniscient view"
     );
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[test]
+fn outside_a_development_profile_f12_sees_nothing_more() {
+    let data = data_dir("not-omniscient");
+    let mut run = bundled("default", &data);
+    press(&mut run, &["enter", "tab", "tab", "enter"]);
+    let at = player(&run);
+    let believed = known_count(&run, at);
+    let before = run.text();
+    press(&mut run, &["f12"]);
+    assert_eq!(
+        run.game().scene().pref("ui:omniscient"),
+        Some(&Value::Bool(false))
+    );
+    assert_eq!(known_count(&run, at), believed);
+    assert_eq!(run.text(), before);
     let _ = std::fs::remove_dir_all(&data);
 }

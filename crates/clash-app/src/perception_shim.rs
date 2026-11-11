@@ -33,10 +33,12 @@
 //!
 //! [`feed_omniscient`] is the debugging view of 12 §5: it fills the
 //! view model from truth round the character. The application calls it
-//! only while the preference named [`PREF_OMNISCIENT`] is on, which
-//! only a development profile defines. Switching either way empties the
-//! view model first, so that nothing learnt from truth is left behind
-//! as memory.
+//! only while the preference named [`PREF_OMNISCIENT`] is on. The `ui`
+//! mod defines it with a control that switches it only where the
+//! preference `ui:development` holds, which only a development profile
+//! sets; it is never kept between runs ([`crate::prefs::kept`]).
+//! Switching either way empties the view model first, so that nothing
+//! learnt from truth is left behind as memory.
 //!
 //! # When perception lands
 //!

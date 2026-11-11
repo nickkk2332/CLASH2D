@@ -1,7 +1,7 @@
 {
   "id": "dev",
   "name": "CLASH2D (development)",
-  "mods": ["core", "ui", "tools"],
+  "mods": ["core", "ui"],
   "boot_screen": "ui:title",
   "screens": {
     "play": "ui:play",
@@ -18,5 +18,6 @@
     "picker.text": "ui:pick_text",
     "picker.multi": "ui:pick_multi",
     "context_menu": "ui:context_menu"
-  }
+  },
+  "preferences": { "ui:development": true }
 }
