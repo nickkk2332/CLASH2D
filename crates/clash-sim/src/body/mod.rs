@@ -18,7 +18,7 @@
 //! | [`BodyError`] | Why a change was refused, with a [`reason`] code | here |
 //! | [`Hit`], [`apply_hit`], [`HitReport`] | Everything that harms a body, and what it did | [`hit`] |
 //! | [`Wound`], [`close_wound`], [`on_wake`] | Wounds, their leaks, closing and healing | [`wound`] |
-//! | [`props`] | The kinds, properties and events registered with the expression language, and [`property`], which answers them |
+//! | [`props`] | The kinds, properties and events registered with the expression language, and [`property`], which answers them | [`props`] |
 //!
 //! Nothing here knows the simulation. The functions take the stores, the
 //! definitions, the timeline and an expression host, and return what

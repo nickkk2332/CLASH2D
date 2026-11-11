@@ -23,7 +23,7 @@ actions that call `hit`.
 | E2 | Attributes, pools, tracks | M | E1, K5 | beta |
 | E3 | Traits | M | E2 | todo |
 | E4 | Bodies | L | E2, T3 | beta |
-| E5 | Hits and wounds | L | E4, W12 | todo |
+| E5 | Hits and wounds | L | E4, W12 | beta |
 | E6 | Body editing | M | E4 | todo |
 | E7 | Minds and vital state | M | E1, T4 | todo |
 | E8 | Items and holds | L | E5 | todo |
@@ -230,6 +230,29 @@ Done when
   a pool, and the pool's threshold event fires.
 - Scenario `through_the_wall`: a hit launches a creature, the wall breaks by
   02 §12, and the creature's injuries come from the impact events.
+
+Beta: built ahead of the kernel, in `clash_sim::body::hit` and
+`body::wound` (decisions D-524 to D-529). Built: `Hit` with its four
+ways of arriving and the hook `hit_incoming` described with its fields;
+`apply_hit`, which resolves layers by the world's `resolve_packet` from
+the outside in, with worn layers handed in by the caller, organs inside
+parts, severing, destruction, exits and an account of all the energy;
+wounds with their leaks as rates on pools under the wound as source,
+signals into pools, closing and healing by one wake-up for each body
+(`on_wake`, `suspend`, `resume`, `set_clock`), `close_wound`,
+`reopen_wound` and `heal_part`; spread hits by exposed area and outright
+destruction; `exposure_hit`, `impact_hit` and `field_hit`, which turn
+what the world reports into hits; `Detached`, the part that came off as
+data for the item package. Stubbed, each waiting for the kernel or a
+later package: raising `hit_incoming` and the events, and handing on
+exits and detached parts; making items of what came off and applying
+`WornHit`s to worn items (E8); deciding when a body in pieces ends its
+creature (E7); which parts face a hit's direction; a pool that names a
+substance (G19). The scripts `one_bad_cut` and `through_the_wall` are
+integration tests in `crates/clash-sim/tests/body.rs` until the kernel
+holds bodies: the first in full against a timeline the test drives, the
+second only as far as impact reports becoming hits; both scripts under
+`scenarios/people/` are owed. No benchmark (Z1).
 
 ### E6 — Body editing
 

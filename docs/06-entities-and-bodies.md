@@ -411,7 +411,7 @@ the world's `material` type, which reads them and gives them no meaning:
 | Property | Meaning |
 |----------|---------|
 | `leak` | `{ "pool", "rate", "closes" }`. While a wound through a layer of this material is open, it drains the named pool by `rate` for each second and each square metre of the layer the wound lays open (section 7.3). `closes` is how long such a breach leaks before it closes by itself; left out, it leaks until something closes it. If the pool names a substance (16 §9.5), what drains is spilled where the body is. |
-| `signal` | `{ "pool", "per_joule" }`. When a layer of this material absorbs energy from a hit, the named pool gains `per_joule` for each joule (pain, alarm, heat). |
+| `signal` | `{ "pool", "per_joule" }`. When a layer of this material absorbs energy from a hit, the named pool gains `per_joule` for each joule (pain, alarm, heat), stopping at its bounds. It is added as it is: the hook `pool_changing` is for verbs (section 4.4). |
 | `heal` | The share of a layer that recovers each second, unaided: `"0.5 /d"`. Left out, damage to it stays until something mends it. |
 
 The pool is named by id, bare or qualified. A bare id is looked up in the
