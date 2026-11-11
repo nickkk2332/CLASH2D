@@ -183,6 +183,9 @@ impl Sim {
         // What it weighs counts with whatever holds it (06 §3.1).
         if let Place::In(old) = from {
             self.refresh_mass(old, cause);
+            // The container forgets how it held the entity, and what the
+            // entity conferred on it is taken back (06 §9.2).
+            crate::item::left_holder(self, id, old);
         }
         if let Place::In(new) = to {
             self.refresh_mass(new, cause);

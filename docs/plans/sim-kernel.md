@@ -533,7 +533,7 @@ lower detail" are built; the bodies of the test scripts `rule_alarm` and
 (decision D-540): the simulation is the rule host, one bus handler per
 event type a rule listens for, verbs by registry id from
 `engine_verbs()`, faults as thinned `fault` events, the save layout at
-version 4; `crates/clash-sim/tests/live_rules.rs` runs `rule_alarm` and
+version 5 with the action table and the stores of items; `crates/clash-sim/tests/live_rules.rs` runs `rule_alarm` and
 `winter_rules` against the real simulation from fixture mods, across a
 save and a replay, and the kernel's verbs (D-541). Waits: rules carried
 by definitions (`rules_of`) until a definition type of the simulation

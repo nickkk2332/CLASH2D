@@ -740,6 +740,10 @@ impl Bus {
         for ty in crate::action::hook_types() {
             bus.types.insert(ty.name.clone(), ty);
         }
+        // The events of the packages that raise their own.
+        for ty in crate::item::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         bus
     }
 
