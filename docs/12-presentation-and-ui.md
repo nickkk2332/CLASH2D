@@ -79,6 +79,193 @@ The scene holds a read-only `SimView` and a handle that can only `submit`.
 It has its own random stream and may use ordinary floating point; nothing
 it computes flows back into the simulation.
 
+### 3.1 Starting the application
+
+The application is the crate `clash-app`: a library, and the binary
+`clash`, which calls it and nothing more.
+
+```text
+clash [--profile name] [--mods dir] [--seed n] [--data dir] [--headless script]
+```
+
+| Option | Means |
+|--------|-------|
+| `--profile name` | The profile to start: a name, looked up as 04 §3.3 says, or the path of a profile file. Left out, `default`. |
+| `--mods dir` | The directory mods are read from. Left out, the first that exists of `mods` in the working directory, `mods` beside the executable, and `mods` in each of the three directories above it (where a build run from the repository finds the repository's). |
+| `--seed n` | The seed the new-game screen offers. Left out, 1. |
+| `--data dir` | The user's data directory, in place of the one below. |
+| `--headless script` | Runs without a terminal, from a script (section 3.3); `-` reads the script from standard input. |
+| `--help` | Prints the usage and leaves. |
+
+`--name=value` means the same as `--name value`. A command line that
+cannot be read prints what is wrong and the usage, and leaves with code
+2.
+
+**The user's data directory** is the first of: `--data`; the
+environment variable `CLASH_DATA_DIR`; `$XDG_DATA_HOME/clash2d`; on
+Windows `%APPDATA%\clash2d`; on macOS
+`$HOME/Library/Application Support/clash2d`; `$HOME/.local/share/clash2d`.
+An empty variable counts as unset. With none of them there is nowhere
+to keep anything, and choices last for the run. It holds:
+
+| Path | Holds |
+|------|-------|
+| `preferences.json` | The player's preferences by qualified id, and the keys they bound, each with the keymap it was made in, the context, the key as a keymap writes it, and the name (empty for a key whose meaning was taken away). |
+| `mods/` | Mods searched before the installed mods directory, so that a copy there replaces an installed mod of the same id (04 §3.1). |
+| `saves/` | Saves, once the application can save. |
+
+```json
+{ "preferences": { "ui:theme": "ui:night" },
+  "bindings": [ { "keymap": "ui:default", "context": "play", "key": "w", "name": "north" } ] }
+```
+
+The file is written whenever the scene reports a change through
+`set_pref` or `rebind` (section 10.5), through a temporary file beside
+it so that a failed write leaves the old one whole. At start each stored
+preference that a loaded mod still defines is given back with
+`Scene::set_pref`, and each binding made in the keymap in force with
+`Scene::rebind`; the others stay in the file untouched. A file that
+cannot be read, or is not what the application writes, is reported in
+the log and never written over.
+
+**Loading.** The profile is read with the engine's definition types and
+expression registry. The interface's definitions are built and checked
+(section 10), and the world's and generation's tables are built. A
+profile that defines no `start` (section 3.4) need not have world
+tables that build: a total conversion may be a title screen and nothing
+else. Whatever is wrong is printed on standard error as located
+diagnostics, each with its file, line, column and JSON path, and the
+program leaves with code 1 having drawn nothing. Warnings are put in
+the log.
+
+**The boot screen.** The profile's `boot_screen` is then opened, and
+the first frame presented is that screen: nothing of the engine's is
+drawn before it (04 §14). It is drawn with the theme and keymap that the
+preferences named `theme` and `keymap` hold; a profile that defines
+neither is drawn in the plain built-in theme and moved through with the
+keyboard's own navigation keys.
+
+**The terminal.** Without `--headless` the application runs in the
+terminal. If standard input or output is not a terminal it says so,
+names the boot screen that was ready, and leaves with success. The
+terminal is given back however the application leaves: the frontend is
+dropped when the loop ends, for whatever reason, and a panic restores
+the terminal before its message is printed.
+
+### 3.2 The frame loop as built
+
+One pass of the loop is one frame, 16 ms in a terminal:
+
+1. **Input.** What the frontend polled goes to the scene, which runs the
+   effects it asks for: screens open and close, commands are submitted
+   through the host, services are asked of the application.
+2. **Follow-up.** A refused command and an effect that could not be run
+   each get a line in the log. An `app` service that failed also opens
+   the screen of the role `error` with the reason as its parameter
+   `text`. A game that was started or loaded closes every screen and
+   opens the one of the role `play`; a game whose play screen has been
+   closed is over.
+3. **The simulation.** While the player's character is busy, the
+   simulation is advanced with `advance(Until(t))` in steps of 100 ms of
+   simulation time, until the character is free, a decision is needed,
+   or 8 ms of the frame have been spent. After each step the events are
+   drained and shown. Nothing else advances the simulation, and its
+   events reach the scene in the pass that advanced it.
+4. **Decisions.** A decision that is waiting gets its screen
+   (section 9.5).
+5. **The view.** If anything happened, the view model is fed with what
+   the character sees now.
+6. **The frame.** The scene is advanced by the real time elapsed, builds
+   a frame of the frontend's size, and the frontend presents it. The
+   rest of the frame is slept out.
+
+The loop never waits on the simulation: a pass that runs out of its
+slice presents a frame and carries on in the next. A request a rule
+makes of the application (13 §9.1) is a checkpoint save, which goes to
+the save service, or is reported in the log as not yet possible.
+
+Four parts of this loop are stand-ins for packages that are not built,
+each a module of its own that is deleted when that package lands:
+
+| Stand-in | For | Does |
+|----------|-----|------|
+| `clash_app::shim` | The action runtime (03 §4.4) | The simulation has no `Act` command yet. `step { dir }` is checked against the world as a walker would make it (`neighbours`; walls, closed doors, drops and corners stop it, with the reason in the log), carried out as a debug move, and makes the character busy for the step's length at 1.4 m/s. `go_to { to }` plans a path over the cells the character has seen and takes it a step at a time. The command `wait { dur }` makes the character busy for `dur` seconds. Anything else is refused with a reason. A character with nothing to do is asked a free decision. |
+| `clash_app::perception_shim` | Perception (15 §13) | After anything happens, every known cell becomes remembered, the field of view from the character's cell with an eye 1.6 m above its base and a reach of 40 m is worked out, each cell in it is observed with its light, and each occupant in it becomes a sprite. Nothing beyond the field of view reaches the view model. Every creature but the player's own is drawn as the theme's suspected mark. |
+| `clash_app::present` | Playback (section 7) | Every drained event marks the view to be fed again, and each event with a message (a contained fault, or a mod's event with a `text` field) gets one line in the log. |
+| `clash_app::saves` | Saving (13 §9) | The services `save`, `load` and `delete_save`, `app.saves`, `app.can_save` and `app.can_load` go through one trait. The backend in this binary lists nothing, says neither can be done, and refuses each service with "saving is not built into this binary yet". |
+
+**The omniscient view.** While a preference whose bare name is
+`omniscient` holds true, the view model is filled from truth round the
+character instead (section 5, `view::omniscient`). Switching either way
+empties the view model first, so nothing learnt from truth is left
+behind as memory, and the preference is never kept between runs. The
+`ui` mod defines it with the control `ui:omniscient` on F12 in play,
+which switches it only while the preference `ui:development` holds. No
+screen offers that one; a development profile sets it, as
+`profiles/dev.json` does, so in any other profile F12 does nothing. The
+toggle moves to the `tools` mod (04 §3.5) when that exists.
+
+### 3.3 Headless scripts
+
+`clash --headless script` runs the same loop on the null frontend, on a
+grid of 80 × 24, with a fixed step of a sixtieth of a second. Each pass
+advances the simulation until the player's character is free again, so
+a script gives the same frames every time (V8). The script is read a
+line at a time:
+
+| Line | Does |
+|------|------|
+| A key, as a keymap writes it (section 9.1): `enter`, `down`, `k`, `shift+a`, `f12` | Presses it, then one pass |
+| `type text` | Presses the key of each character of the rest of the line, a pass after each |
+| `wait`, `wait n` | One pass, or `n`, with no input |
+| `frame` | Prints the frame as plain text: a line `--- frame ---`, then one line for each row |
+| `frame golden` | Prints the frame as a golden frame is written (section 12) |
+| `size cols rows` | Changes the grid, then one pass |
+| `# ...`, or nothing | Nothing |
+
+Any other line stops the run with its number and what is wrong, and the
+program leaves with code 1. Once the game has ended the rest of the
+script is not read.
+
+### 3.4 Starts, until game scenarios exist
+
+A game scenario (13 §3) says which worlds a game has, who the player is
+and where they begin. Until that definition type is built, a mod lists
+**starts**, definitions of the type `start`, and the application offers
+them as `app.scenarios`:
+
+```json
+{ "type": "start", "id": "lane", "name": "The lane",
+  "doc": "Houses between fields. Their doors are shut.",
+  "realm": "countryside", "at": [39, 45],
+  "glyph": { "ch": "@", "fg": "bright_white", "bold": true } }
+```
+
+| Field | Is |
+|-------|----|
+| `name` | What it is called where the player chooses. Left out, its id. |
+| `doc` | A line or two about it: its entry's `description`. |
+| `realm` | The `realm` definition the world is made from: a qualified id, or a bare name in the start's own namespace. Required; one no mod defines is a load error. |
+| `at` | Where the character begins in the realm's base grid: `[x, y]`, the highest cell of that column a walker can stand in, or `[x, y, z]`, that cell. Required. |
+| `glyph` | How the player's character is drawn. Required, with a `ch`. |
+
+The service `new_game { scenario }` starts the game: a simulation with
+the realm made from the seed, the generators of the loaded mods and a
+store; the player's character, made by `clash_app::session::make_player`
+(a bare creature, until characters are made from templates, 06 §10);
+its session at the start's place, which loads the tracts round it; and
+direct control. With no `scenario` it takes the first start. The
+bundled `core` mod has two: `core:town`, the test city with its doors
+open, and `core:wayside`, the countryside, whose doors are shut.
+
+Until character creation (U9) is built, `app.creation` is a map of what
+the player has chosen for the next game: `name` and `seed`. The service
+`edit_creation { field, value }` sets one. A screen that declares a
+variable named `creation_<field>` has it set, when it opens, to that
+field, so the new-game screen starts with the seed given on the command
+line. The name is the character's until it has an `Identity` of its
+own: `name()` of the player's character gives it.
+
 ## 4. Glyphs and frames
 
 ### 4.1 Glyphs in definitions
@@ -1182,16 +1369,21 @@ properties, all safe for belief:
 
 | `app.` | Type | Is |
 |--------|------|----|
-| `saves`, `profiles`, `mods`, `scenarios` | `list<app_entry>` | What there is of each |
+| `saves`, `profiles`, `mods`, `scenarios` | `list<app_entry>` | What there is of each. Until game scenarios exist, `scenarios` lists the `start` definitions (section 3.4). |
 | `profile`, `scenario` | `app_entry?` | The ones in use |
 | `pref(id)` | `any` | A preference's value (below). `id` is the id of a `preference`, checked when mods load. |
-| `creation` | `any` | The character being made (06 §10.3); null when none is |
+| `creation` | `any` | The character being made (06 §10.3); null when none is. Until character creation is built, a map of `name` and `seed` (section 3.4). |
 | `size` | `list<int>` | The grid, as `[columns, rows]` |
 | `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
 
 An `app_entry` has `id` (a save's file name, a qualified id), `name`,
 `description` and `state` (a word: `enabled`, `disabled`, `broken`,
-`current`), all texts.
+`current`), all texts. The application fills the lists so: `profiles`
+from each `profiles/` beside a searched mods directory and inside each
+loaded mod, `current` for the one in use and `broken` for a file that
+cannot be read; `mods` from each directory of a searched mods directory
+that holds a `mod.json`, `enabled` for one the profile loaded and
+`disabled` for one it did not; `scenarios` in order of qualified id.
 
 **What a screen may know.** In ordinary screens, the party's own
 characters are available in full. Everyone and everything else is available
@@ -1441,6 +1633,7 @@ know-how appear in them with no screen written.
 | `picker.<name>` | A parameter is being chosen with that picker (section 9.3): `entity`, `cell`, `route`, `direction`, `number`, `text`, `list`, `multi`, or a kind of subject's name. `picker.list` is also what the `pick` effect opens (section 10.5). |
 | `confirm` | The `confirm` effect asks |
 | `tooltip`, `context_menu` | Something is hovered or clicked (section 9.4) |
+| `error` | An `app` service failed: the screen is opened over whatever is on show with the reason as its parameter `text` (section 3.2). Left out, the reason goes to the log alone. |
 
 A role that names a screen which does not exist is a load error. A
 role the profile leaves out is found out when it is needed: the effect
@@ -1448,9 +1641,23 @@ that wanted its screen fails with the reason.
 
 The bundled profile names the `ui` mod's screens: `ui:play` for `play`
 and `decision.free`, `ui:reaction`, `ui:choice`, `ui:confirm`,
-`ui:pick_list`, `ui:pick_entity`, `ui:pick_cell`, `ui:pick_direction`,
-`ui:pick_number`, `ui:pick_text`, `ui:pick_multi` and
-`ui:context_menu`.
+`ui:error`, `ui:pick_list`, `ui:pick_entity`, `ui:pick_cell`,
+`ui:pick_direction`, `ui:pick_number`, `ui:pick_text`, `ui:pick_multi`
+and `ui:context_menu`; its `boot_screen` is `ui:title`.
+
+**The screens a game is started and left from** are in
+`mods/ui/data/app.json`. `ui:title` offers a new game, Continue when
+there is a save (`ui:load`), Options and Quit; Esc quits. `ui:new_game`
+takes a name and a seed into `app.creation` and lists `app.scenarios`;
+activating one starts the game there. `ui:options` sets the preferences
+`theme`, `playback_speed` and `cutscenes`, has the slot
+`ui:options.prefs` for a mod's own, and gives a key a meaning: the
+context, the key and the name, through the `rebind` service.
+`ui:pause`, opened in play by the control `ui:pause` on Esc, resumes,
+saves and loads (each only while `app.can_save` or `app.can_load`
+holds), opens the options, and leaves to the title after asking:
+closing the play screen ends the game. `ui:load` lists `app.saves`.
+`ui:error` shows a reason and a button to close it.
 
 **The play screen** (`ui:play`) is a `map_view`, the `log` beneath it
 and a status column: who the active character is, by `name(view)`, and
@@ -1461,8 +1668,10 @@ directions (`north` to `north_west`, `up`, `down`), which start the
 action `step` with a `dir`; `wait`, the command of that name for one
 second; `look`, which opens look mode (`ui:look`), a free cursor over
 the map with what the party knows of the place under it; `inventory`,
-`condition`, `abilities`, `map`, `journal` and `options`, which open
-screens that are empty and titled until they are built; and `click` and
+`condition`, `abilities`, `map` and `journal`, which open screens that
+are empty and titled until they are built; `options`, which opens
+`ui:options`; `pause`, which opens `ui:pause`; `omniscient`, the
+development profile's view of the truth (section 3.2); and `click` and
 `click_second` (section 9.4).
 
 **Fitting** shows an assembly (16 §11): its slots, what is in each, what
@@ -1515,7 +1724,7 @@ A third, **null** frontend records frames for tests.
 
 **Definition types**: `screen`, `ui_part`, `theme`, `color`, `ambience`,
 `overlay`, `preference`, `figure`, `keymap`, `control`, `show`, `anim`,
-`cutscene`. Theme `marks`: the glyphs the engine draws for itself (a pile
+`cutscene`, and `start` until game scenarios exist (section 3.4). Theme `marks`: the glyphs the engine draws for itself (a pile
 of items, a suspected presence, something only heard, a capsized vessel).
 A glyph may give a `layer` to be drawn over or under its usual place in
 the order of section 6.1. Functions `between(a, b)` and `dir(a, b)`. The `glyph`
@@ -1535,6 +1744,11 @@ effects `camera` and `picker`: section 10.5. The roles: section 10.7.
 
 **Settings**: `stretch_time`, `look_down`, and the player's preferences
 for playback speed and how often cutscenes play.
+
+**The application**: the command line, the user's data directory and
+what it holds, and the headless script: sections 3.1 and 3.3. The role
+`error`, the service `edit_creation` and the `creation_<field>`
+variables: sections 3.2 and 3.4.
 
 **Widgets**: section 10.3. **UI effects**: section 10.5.
 **Binding names**: section 10.4. **Navigation names**, and the theme
@@ -1564,7 +1778,14 @@ constant. What is put into a slot is always laid out one below another.
 A screen's `rows` cannot yet come from a query (05 §11), only from an
 expression. An `inspect` cannot yet list the properties of a subject
 given by `of`. Which preferences the engine itself acts on, `theme` and
-`keymap`, is fixed. The words `Yes` and `No` of the bundled confirm
+`keymap`, and the application, `omniscient`, is fixed. A profile cannot
+be switched, nor mods read again, while the application runs: the
+services `select_profile` and `reload_mods` are refused, saying to start
+again. The grid of a headless run, its time step, the frame time and the
+share of it given to the simulation are the application's constants.
+Until the packages they stand in for land, the walking pace, eye height
+and reach of sight of section 3.2 are constants too, and every other
+creature is drawn as the suspected mark. The words `Yes` and `No` of the bundled confirm
 screen are that screen's, and a mod changes them by overriding it.
 
 ## 14. Invariants

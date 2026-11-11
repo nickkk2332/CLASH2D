@@ -106,4 +106,8 @@ pub enum WorldError {
         /// The tract.
         tract: TractPos,
     },
+    /// No body in flight has this id: it never was, or it has landed,
+    /// been caught or left.
+    #[error("there is no body {0} in flight")]
+    UnknownBody(crate::body::BodyId),
 }

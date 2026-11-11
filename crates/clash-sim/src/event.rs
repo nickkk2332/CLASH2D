@@ -509,6 +509,27 @@ fn world_subjects(event: &WorldEvent) -> Vec<(&'static str, Subject)> {
             ("target", Subject::Entity(*occupant)),
             ("here", Subject::Loc(*loc)),
         ],
+        // The occupant a field touched or dosed, or a body struck.
+        WorldEvent::FieldContact { occupant, loc, .. }
+        | WorldEvent::OccupantDosed { occupant, loc, .. }
+        | WorldEvent::BodyHitOccupant { occupant, loc, .. } => vec![
+            ("target", Subject::Entity(*occupant)),
+            ("here", Subject::Loc(*loc)),
+        ],
+        // A body that is an entity is `target`: it is what flies,
+        // strikes and comes to rest.
+        WorldEvent::BodyLaunched { owner, loc, .. }
+        | WorldEvent::BodyImpact { owner, loc, .. }
+        | WorldEvent::BodyLanded { owner, loc, .. }
+        | WorldEvent::BodyLeftLoaded { owner, loc, .. } => match owner {
+            clash_world::BodyOwner::Entity(entity) => vec![
+                ("target", Subject::Entity(*entity)),
+                ("here", Subject::Loc(*loc)),
+            ],
+            clash_world::BodyOwner::Debris(_) | clash_world::BodyOwner::Projectile(_) => {
+                vec![("here", Subject::Loc(*loc))]
+            }
+        },
         other => vec![("here", Subject::Loc(other.location()))],
     }
 }
@@ -557,7 +578,133 @@ fn world_field(event: &WorldEvent, name: &str) -> Option<FieldValue> {
         (WorldEvent::CellVarChanged { key, .. }, "key") => Some(FieldValue::text(key.as_str())),
         (WorldEvent::CellVarChanged { old, .. }, "old") => old.clone().map(plain_field),
         (WorldEvent::CellVarChanged { new, .. }, "new") => new.clone().map(plain_field),
+        // Fields (02 §16).
+        (
+            WorldEvent::FieldAppeared { level, .. }
+            | WorldEvent::FieldContact { level, .. }
+            | WorldEvent::OccupantDosed { level, .. },
+            "level",
+        ) => Some(FieldValue::from(i64::from(*level))),
+        (WorldEvent::OccupantDosed { pool, .. }, "pool") => Some(FieldValue::text(pool)),
+        (WorldEvent::OccupantDosed { amount, .. }, "amount") => Some(FieldValue::from(*amount)),
+        (WorldEvent::OccupantDosed { route, .. }, "route") => Some(FieldValue::text(route.name())),
+        (WorldEvent::FieldBudgetExceeded { active, .. }, "active") => Some(count_field(*active)),
+        (WorldEvent::FieldBudgetExceeded { max, .. }, "max") => Some(count_field(*max)),
+        // Bodies (02 §15).
+        (
+            WorldEvent::BodyLaunched { body, .. }
+            | WorldEvent::BodyImpact { body, .. }
+            | WorldEvent::BodyHitOccupant { body, .. }
+            | WorldEvent::BodyLanded { body, .. }
+            | WorldEvent::BodyLeftLoaded { body, .. },
+            "body",
+        ) => Some(FieldValue::from(i64::from(body.raw()))),
+        (
+            WorldEvent::BodyLaunched { owner, .. }
+            | WorldEvent::BodyImpact { owner, .. }
+            | WorldEvent::BodyHitOccupant { owner, .. }
+            | WorldEvent::BodyLanded { owner, .. }
+            | WorldEvent::BodyLeftLoaded { owner, .. },
+            "owner",
+        ) => Some(FieldValue::text(body_owner_name(owner))),
+        (
+            WorldEvent::BodyLaunched { owner, .. }
+            | WorldEvent::BodyImpact { owner, .. }
+            | WorldEvent::BodyHitOccupant { owner, .. }
+            | WorldEvent::BodyLanded { owner, .. }
+            | WorldEvent::BodyLeftLoaded { owner, .. },
+            "tag",
+        ) => match owner {
+            clash_world::BodyOwner::Projectile(projectile) => Some(count_field(projectile.tag)),
+            clash_world::BodyOwner::Entity(_) | clash_world::BodyOwner::Debris(_) => None,
+        },
+        (WorldEvent::BodyLaunched { mass, .. }, "mass") => Some(FieldValue::from(*mass)),
+        (WorldEvent::BodyLaunched { vel, .. }, "speed") => {
+            let [east, south, up] = *vel;
+            Some(FieldValue::from(
+                (east * east + south * south + up * up).sqrt(),
+            ))
+        }
+        (WorldEvent::BodyImpact { layer, .. }, "layer") => {
+            Some(FieldValue::text(layer_name(*layer)))
+        }
+        (WorldEvent::BodyImpact { result, .. }, "result") => Some(FieldValue::text(match result {
+            clash_world::DamageResult::Unaffected => "unaffected",
+            clash_world::DamageResult::Damaged => "damaged",
+            clash_world::DamageResult::Destroyed => "destroyed",
+        })),
+        (
+            WorldEvent::BodyImpact { energy, .. }
+            | WorldEvent::BodyLeftLoaded { energy, .. }
+            | WorldEvent::ReleaseStarted { energy, .. }
+            | WorldEvent::EnergyReleased { energy, .. },
+            "energy",
+        ) => Some(FieldValue::from(*energy)),
+        (WorldEvent::BodyImpact { intensity, .. }, "intensity") => {
+            Some(FieldValue::from(*intensity))
+        }
+        (WorldEvent::BodyHitOccupant { packet, .. }, "energy") => {
+            Some(FieldValue::from(packet.energy))
+        }
+        (WorldEvent::BodyHitOccupant { packet, .. }, "intensity") => {
+            Some(FieldValue::from(packet.intensity))
+        }
+        (WorldEvent::BodyLeftLoaded { returns, .. }, "returns") => Some(FieldValue::from(*returns)),
+        // Releases (02 §13).
+        (
+            WorldEvent::ReleaseStarted { release, .. } | WorldEvent::EnergyReleased { release, .. },
+            "release",
+        ) => Some(FieldValue::from(i64::from(release.raw()))),
+        (
+            WorldEvent::ReleaseStarted { reach, .. } | WorldEvent::EnergyReleased { reach, .. },
+            "reach",
+        ) => Some(FieldValue::from(*reach)),
+        (WorldEvent::EnergyReleased { absorbed, .. }, "absorbed") => {
+            Some(FieldValue::from(*absorbed))
+        }
+        (WorldEvent::EnergyReleased { cells, .. }, "cells") => {
+            Some(FieldValue::from(i64::from(*cells)))
+        }
+        (WorldEvent::EnergyReleased { cut_off, .. }, "cut_off") => Some(FieldValue::from(*cut_off)),
+        (WorldEvent::EnergyReleased { tallies, .. }, "elements") => Some(FieldValue::from(
+            tallies
+                .iter()
+                .map(|tally| i64::from(tally.elements))
+                .sum::<i64>(),
+        )),
+        (WorldEvent::EnergyReleased { tallies, .. }, "exposed") => Some(FieldValue::from(
+            tallies
+                .iter()
+                .map(|tally| i64::from(tally.exposed))
+                .sum::<i64>(),
+        )),
+        (WorldEvent::EnergyReleased { tallies, .. }, "thrown") => Some(FieldValue::from(
+            tallies
+                .iter()
+                .map(|tally| i64::from(tally.thrown))
+                .sum::<i64>(),
+        )),
+        (WorldEvent::EnergyReleased { tallies, .. }, "mass") => Some(FieldValue::from(
+            tallies
+                .iter()
+                .fold(Real::ZERO, |sum, tally| sum + tally.mass),
+        )),
         _ => None,
+    }
+}
+
+/// A count or a number the world keeps unsigned, as a field: the most
+/// an integer field holds if it is more than that.
+fn count_field(count: u64) -> FieldValue {
+    FieldValue::from(i64::try_from(count).unwrap_or(i64::MAX))
+}
+
+/// What a body is, as data writes it.
+const fn body_owner_name(owner: &clash_world::BodyOwner) -> &'static str {
+    match owner {
+        clash_world::BodyOwner::Entity(_) => "entity",
+        clash_world::BodyOwner::Debris(_) => "debris",
+        clash_world::BodyOwner::Projectile(_) => "projectile",
     }
 }
 
@@ -1025,6 +1172,223 @@ pub const WORLD_EVENTS: &[EventInfo] = &[
         ],
         doc: "A ticket was refused because the tickets together wanted more tracts than may be loaded. It is no longer held (02 §10.3).",
     },
+    EventInfo {
+        name: "field_appeared",
+        subjects: &[("here", "loc")],
+        fields: &[("level", "int", "The level it has there, 1 to 255.")],
+        doc: "A field came to be in a cell that held none of it (02 §16). Other changes of a field's level are not reported. Which field it is cannot be tested by a filter.",
+    },
+    EventInfo {
+        name: "field_vanished",
+        subjects: &[("here", "loc")],
+        fields: &[],
+        doc: "The last of a field left a cell (02 §16).",
+    },
+    EventInfo {
+        name: "field_contact",
+        subjects: &[("target", "entity"), ("here", "loc")],
+        fields: &[("level", "int", "The level the field has there.")],
+        doc: "A field and an entity came to share a cell: the field appeared where the entity is, or the entity moved to where the field is. Reported once, not at every step (02 §16).",
+    },
+    EventInfo {
+        name: "occupant_dosed",
+        subjects: &[("target", "entity"), ("here", "loc")],
+        fields: &[
+            ("level", "int", "The level the field has there."),
+            (
+                "pool",
+                "string",
+                "The pool the field's `expose` rule adds to, as its definition writes it.",
+            ),
+            (
+                "amount",
+                "real",
+                "The dose: the level times the rule's `per_level`.",
+            ),
+            (
+                "route",
+                "string",
+                "The route the dose takes: `breath`, `skin` or `any`.",
+            ),
+        ],
+        doc: "An entity stands in a field whose `expose` rule adds to a pool. Reported once for each step of the field, for the strongest cell of it the entity fills. The world applies no route and no guard: what reaches the pool is for the simulation (02 §16).",
+    },
+    EventInfo {
+        name: "field_budget_exceeded",
+        subjects: &[("here", "loc")],
+        fields: &[
+            ("active", "int", "How many field cells are active."),
+            ("max", "int", "The most there may be."),
+        ],
+        doc: "There are more active field cells than the budget allows: until there are fewer, the weakest decay faster. Reported when a step first finds it so; `here` is the first cell of that step (02 §16).",
+    },
+    EventInfo {
+        name: "body_launched",
+        subjects: &[("target?", "entity"), ("here", "loc")],
+        fields: &[
+            ("body", "int", "The body's id."),
+            (
+                "owner",
+                "string",
+                "What the body is: `entity`, `debris` or `projectile`.",
+            ),
+            (
+                "tag",
+                "int?",
+                "For a projectile, the number it was launched with; otherwise null.",
+            ),
+            ("mass", "real", "Its mass in kilograms."),
+            ("speed", "real", "How fast it starts, in m/s."),
+        ],
+        doc: "Something has been set flying: from now on the world moves it (02 §15). `target` is the entity the body is, if it is one; `here` is the cell it starts in.",
+    },
+    EventInfo {
+        name: "body_impact",
+        subjects: &[("target?", "entity"), ("here", "loc")],
+        fields: &[
+            ("body", "int", "The body's id."),
+            (
+                "owner",
+                "string",
+                "What the body is: `entity`, `debris` or `projectile`.",
+            ),
+            (
+                "tag",
+                "int?",
+                "For a projectile, the number it was launched with; otherwise null.",
+            ),
+            ("layer", "string", "`floor`, `block` or `fixture`."),
+            ("energy", "real", "The joules of its motion the body lost."),
+            (
+                "intensity",
+                "real",
+                "How concentrated the blow was, in pascals.",
+            ),
+            (
+                "result",
+                "string",
+                "What the blow did to the element: `unaffected`, `damaged` or `destroyed`.",
+            ),
+        ],
+        doc: "A body in flight struck a floor, block or fixture; `here` is the element's cell (02 §15.2). What the blow did to the element is reported by the element's own events. `target` is the entity the body is, if it is one: what the blow does to it is for the simulation.",
+    },
+    EventInfo {
+        name: "body_hit_occupant",
+        subjects: &[("target", "entity"), ("here", "loc")],
+        fields: &[
+            ("body", "int", "The body's id."),
+            (
+                "owner",
+                "string",
+                "What the body is: `entity`, `debris` or `projectile`.",
+            ),
+            (
+                "tag",
+                "int?",
+                "For a projectile, the number it was launched with; otherwise null.",
+            ),
+            (
+                "energy",
+                "real",
+                "The joules of the blow: the whole energy of the body's motion.",
+            ),
+            (
+                "intensity",
+                "real",
+                "How concentrated the blow was, in pascals.",
+            ),
+        ],
+        doc: "A body in flight struck an entity, `target`, in the cell `here` (02 §15.2). The world has shared their momentum and changed nothing else: what the blow does is for the simulation. A body that is an entity is the event's `actor`.",
+    },
+    EventInfo {
+        name: "body_landed",
+        subjects: &[("target?", "entity"), ("here", "loc")],
+        fields: &[
+            ("body", "int", "The body's id."),
+            (
+                "owner",
+                "string",
+                "What the body is: `entity`, `debris` or `projectile`.",
+            ),
+            (
+                "tag",
+                "int?",
+                "For a projectile, the number it was launched with; otherwise null.",
+            ),
+        ],
+        doc: "A body has come to rest and is a body no longer (02 §15.3). A fragment has been left as rubble. An entity, `target`, is in the cell `here`, back in the simulation's hands.",
+    },
+    EventInfo {
+        name: "body_left_loaded",
+        subjects: &[("target?", "entity"), ("here", "loc")],
+        fields: &[
+            ("body", "int", "The body's id."),
+            (
+                "owner",
+                "string",
+                "What the body is: `entity`, `debris` or `projectile`.",
+            ),
+            (
+                "tag",
+                "int?",
+                "For a projectile, the number it was launched with; otherwise null.",
+            ),
+            (
+                "returns",
+                "bool",
+                "Whether it comes back into loaded space and flies on as a body.",
+            ),
+            ("energy", "real", "The joules of its motion as it arrives."),
+        ],
+        doc: "A body's flight has taken it out of loaded space and has been finished by arithmetic; `here` is the last loaded cell it was in (02 §15.4). If it does not return it is a body no longer: its impact waits with the tract it came down in.",
+    },
+    EventInfo {
+        name: "release_started",
+        subjects: &[("here", "loc")],
+        fields: &[
+            ("release", "int", "The release's id."),
+            ("energy", "real", "How much was let go, in joules."),
+            (
+                "reach",
+                "real",
+                "How far it will reach with nothing in its way, in metres.",
+            ),
+        ],
+        doc: "Energy has been let go at a point: its front starts to spread from `here` now (02 §13).",
+    },
+    EventInfo {
+        name: "energy_released",
+        subjects: &[("here", "loc")],
+        fields: &[
+            ("release", "int", "The release's id."),
+            ("energy", "real", "How much was let go, in joules."),
+            (
+                "absorbed",
+                "real",
+                "The joules that elements took from it. Never more than was let go.",
+            ),
+            ("reach", "real", "How far its front got, in metres."),
+            ("cells", "int", "How many cells its front visited."),
+            (
+                "cut_off",
+                "bool",
+                "Whether it was cut off before its reach for the budget of cells.",
+            ),
+            ("elements", "int", "How many elements it destroyed."),
+            (
+                "mass",
+                "real",
+                "The mass of what it destroyed, in kilograms.",
+            ),
+            (
+                "exposed",
+                "int",
+                "How many times an entity was exposed to it.",
+            ),
+            ("thrown", "int", "How many entities it threw."),
+        ],
+        doc: "A release has gone as far as it goes; `here` is where it was let go (02 §13). It sums what the release did: rules that keep account of what someone has broken listen to this, not to every element.",
+    },
 ];
 
 #[cfg(test)]
@@ -1127,5 +1491,330 @@ mod tests {
             event.subject("target"),
             Some(Subject::Entity(EntityId::new(4, 0)))
         );
+    }
+
+    #[test]
+    fn the_events_of_fields_bodies_and_releases_are_in_the_table() {
+        use clash_world::{
+            BodyId, BodyOwner, DamagePacket, DamageResult, DamageTypeId, ElementState,
+            ExposureRoute, FieldId, Projectile, ReleaseId, ReleaseTally,
+        };
+
+        let tick = Tick(5);
+        let loc = Location::new(GridId::new(0), CellPos::new(1, 2, 0));
+        let cause = Cause::DEBUG.by(EntityId::new(9, 0));
+        let occupant = EntityId::new(4, 0);
+        let field = FieldId::new(1);
+        let kind = DamageTypeId::new(0);
+        let body = BodyId::new(7);
+        let release = ReleaseId::new(3);
+        let still = [Real::ZERO; 3];
+        let moving = [Real::of(3.0), Real::of(4.0), Real::ZERO];
+        let thrown = BodyOwner::Entity(occupant);
+        let shot = BodyOwner::Projectile(Projectile {
+            kind,
+            area: Real::ONE,
+            give: Real::ONE,
+            tag: 12,
+        });
+        let tally = |elements: u32| ReleaseTally {
+            instigator: None,
+            elements,
+            mass: Real::of(10.0),
+            exposed: 1,
+            thrown: 2,
+            absorbed: Real::ONE,
+        };
+        // Each with the subjects it must bind besides those of its
+        // cause.
+        let events: Vec<(WorldEvent, &[&str])> = vec![
+            (
+                WorldEvent::FieldAppeared {
+                    tick,
+                    loc,
+                    field,
+                    level: 9,
+                    cause,
+                },
+                &["here"],
+            ),
+            (
+                WorldEvent::FieldVanished {
+                    tick,
+                    loc,
+                    field,
+                    cause,
+                },
+                &["here"],
+            ),
+            (
+                WorldEvent::FieldContact {
+                    tick,
+                    occupant,
+                    loc,
+                    field,
+                    level: 9,
+                    cause,
+                },
+                &["target", "here"],
+            ),
+            (
+                WorldEvent::OccupantDosed {
+                    tick,
+                    occupant,
+                    loc,
+                    field,
+                    level: 9,
+                    pool: "x:smoke".to_owned(),
+                    amount: Real::ONE,
+                    route: ExposureRoute::Breath,
+                    cause,
+                },
+                &["target", "here"],
+            ),
+            (
+                WorldEvent::FieldBudgetExceeded {
+                    tick,
+                    loc,
+                    active: 9,
+                    max: 8,
+                    cause,
+                },
+                &["here"],
+            ),
+            (
+                WorldEvent::BodyLaunched {
+                    tick,
+                    body,
+                    owner: thrown,
+                    loc,
+                    pos: still,
+                    vel: moving,
+                    mass: Real::ONE,
+                    cause,
+                },
+                &["target", "here"],
+            ),
+            (
+                WorldEvent::BodyLaunched {
+                    tick,
+                    body,
+                    owner: shot,
+                    loc,
+                    pos: still,
+                    vel: moving,
+                    mass: Real::ONE,
+                    cause,
+                },
+                &["here"],
+            ),
+            (
+                WorldEvent::BodyImpact {
+                    tick,
+                    body,
+                    owner: thrown,
+                    loc,
+                    layer: Layer::Block,
+                    state: ElementState::NONE,
+                    pos: still,
+                    energy: Real::ONE,
+                    intensity: Real::ONE,
+                    result: DamageResult::Damaged,
+                    contact: None,
+                    cause,
+                },
+                &["target", "here"],
+            ),
+            (
+                WorldEvent::BodyHitOccupant {
+                    tick,
+                    body,
+                    owner: shot,
+                    occupant,
+                    loc,
+                    pos: still,
+                    packet: Box::new(DamagePacket::new(kind, Real::of(6.0), Real::of(7.0), cause)),
+                    vel: moving,
+                    push: still,
+                },
+                &["target", "here"],
+            ),
+            (
+                WorldEvent::BodyLanded {
+                    tick,
+                    body,
+                    owner: thrown,
+                    loc,
+                    pos: still,
+                    cause,
+                },
+                &["target", "here"],
+            ),
+            (
+                WorldEvent::BodyLeftLoaded {
+                    tick,
+                    body,
+                    owner: shot,
+                    loc,
+                    lands: None,
+                    at: None,
+                    returns: false,
+                    energy: Real::ONE,
+                    cause,
+                },
+                &["here"],
+            ),
+            (
+                WorldEvent::ReleaseStarted {
+                    tick,
+                    release,
+                    loc,
+                    kind,
+                    energy: Real::ONE,
+                    reach: Real::ONE,
+                    cause,
+                },
+                &["here"],
+            ),
+            (
+                WorldEvent::EnergyReleased {
+                    tick,
+                    release,
+                    loc,
+                    kind,
+                    energy: Real::ONE,
+                    absorbed: Real::ONE,
+                    reach: Real::ONE,
+                    cells: 30,
+                    cut_off: true,
+                    tallies: vec![tally(2), tally(3)],
+                    cause,
+                },
+                &["here"],
+            ),
+        ];
+        for (event, binds) in events {
+            let body = EventBody::World(event);
+            let info = WORLD_EVENTS
+                .iter()
+                .find(|info| info.name == body.name())
+                .unwrap_or_else(|| panic!("`{}` is not in WORLD_EVENTS", body.name()));
+            assert!(!info.doc.is_empty());
+            // Every field the table lists can be read by name, unless it
+            // is one that may be missing.
+            for (field, ty, doc) in info.fields {
+                assert!(!doc.is_empty());
+                assert!(
+                    ty.ends_with('?') || body.field(field).is_some(),
+                    "`{}` lists `{field}` but it cannot be read",
+                    info.name
+                );
+            }
+            let subjects = body.subjects();
+            let names: Vec<&str> = subjects.iter().map(|(name, _)| *name).collect();
+            assert_eq!(names, binds, "{}", info.name);
+            for (name, subject) in subjects {
+                let declared = info
+                    .subjects
+                    .iter()
+                    .find(|(have, _)| have.trim_end_matches('?') == name)
+                    .unwrap_or_else(|| panic!("`{}` binds undeclared `{name}`", info.name));
+                assert_eq!(declared.1, subject.kind());
+            }
+            // And every subject that is not optional is bound.
+            for (name, _) in info.subjects {
+                assert!(name.ends_with('?') || binds.contains(name), "{}", info.name);
+            }
+        }
+
+        // What a filter reads of them.
+        let read = |event: WorldEvent, name: &str| EventBody::World(event).field(name);
+        let launched = WorldEvent::BodyLaunched {
+            tick,
+            body,
+            owner: shot,
+            loc,
+            pos: still,
+            vel: moving,
+            mass: Real::ONE,
+            cause,
+        };
+        assert_eq!(
+            read(launched.clone(), "speed"),
+            Some(FieldValue::from(Real::of(5.0)))
+        );
+        assert_eq!(
+            read(launched.clone(), "owner"),
+            Some(FieldValue::text("projectile"))
+        );
+        assert_eq!(
+            read(launched.clone(), "tag"),
+            Some(FieldValue::from(12_i64))
+        );
+        assert_eq!(read(launched, "body"), Some(FieldValue::from(7_i64)));
+        let landed = WorldEvent::BodyLanded {
+            tick,
+            body,
+            owner: thrown,
+            loc,
+            pos: still,
+            cause,
+        };
+        assert_eq!(
+            read(landed.clone(), "owner"),
+            Some(FieldValue::text("entity"))
+        );
+        assert_eq!(read(landed, "tag"), None);
+        let summed = WorldEvent::EnergyReleased {
+            tick,
+            release,
+            loc,
+            kind,
+            energy: Real::ONE,
+            absorbed: Real::ONE,
+            reach: Real::ONE,
+            cells: 30,
+            cut_off: true,
+            tallies: vec![tally(2), tally(3)],
+            cause,
+        };
+        assert_eq!(
+            read(summed.clone(), "elements"),
+            Some(FieldValue::from(5_i64))
+        );
+        assert_eq!(
+            read(summed.clone(), "thrown"),
+            Some(FieldValue::from(4_i64))
+        );
+        assert_eq!(
+            read(summed.clone(), "mass"),
+            Some(FieldValue::from(Real::of(20.0)))
+        );
+        assert_eq!(read(summed, "cut_off"), Some(FieldValue::from(true)));
+    }
+
+    #[test]
+    fn every_world_event_name_is_in_the_table_once() {
+        let mut names: Vec<&str> = WORLD_EVENTS.iter().map(|info| info.name).collect();
+        let listed = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), listed);
+        for name in [
+            "field_appeared",
+            "field_vanished",
+            "field_contact",
+            "occupant_dosed",
+            "field_budget_exceeded",
+            "body_launched",
+            "body_impact",
+            "body_hit_occupant",
+            "body_landed",
+            "body_left_loaded",
+            "release_started",
+            "energy_released",
+        ] {
+            assert!(names.contains(&name), "{name}");
+        }
     }
 }
