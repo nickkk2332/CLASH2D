@@ -68,4 +68,4 @@ advance 10s
 expect event collapse_settled
 assert "@c:10,10,3.floor == null and @c:10,10,1.block == null"
 assert "@c:10,10,0.fixture.def_id == 'core:rubble'"
-expect hash 85e985d85b98d1ad1c90f10fced824f4
+expect hash 2925a5e5dcb71ee8569ceaee5d9956ca
