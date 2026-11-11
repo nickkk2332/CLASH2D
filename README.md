@@ -4,8 +4,9 @@ An engine kit: a turn-based ASCII immersive sim and superpower sandbox. Every
 world, creature, power, rule and screen is a JSON mod. The engine provides
 tools; creators provide the results.
 
-**Status: design.** There is no engine code yet. The documents below are the
-specification that implementation work follows.
+**Status: design complete, nothing built.** There is no engine code yet.
+The documents below are the specification that implementation work follows.
+Building starts with package F1 in `docs/plans/world-model.md`.
 
 ## Documents
 
@@ -25,6 +26,7 @@ specification that implementation work follows.
 | [docs/11-vehicles-and-travel.md](docs/11-vehicles-and-travel.md) | Mounts, craft, vessels, the sea, submarines, space, journeys |
 | [docs/12-presentation-and-ui.md](docs/12-presentation-and-ui.md) | Playback, cutscenes, input, the UI toolkit, frontends |
 | [docs/13-scenarios-and-events.md](docs/13-scenarios-and-events.md) | What a game is: scenarios, modes, missions, the director, investigations, death, saving and endings |
+| [docs/14-tooling.md](docs/14-tooling.md) | Console, inspector, traces, profiler, test scripts, replay, mod and map tools |
 | [docs/15-perception-and-social.md](docs/15-perception-and-social.md) | Senses, stealth, beliefs, disguise, relations, speech |
 | [docs/16-devices-and-machines.md](docs/16-devices-and-machines.md) | Interactions, resource grids, automation, crafting, construction, gadgets, powered suits |
 | [docs/plans/world-model.md](docs/plans/world-model.md) | Work packages for the foundation and the world model |
@@ -37,6 +39,7 @@ specification that implementation work follows.
 | [docs/plans/worldgen.md](docs/plans/worldgen.md) | Work packages for world generation and maps |
 | [docs/plans/scenarios.md](docs/plans/scenarios.md) | Work packages for scenarios, modes and events |
 | [docs/plans/vehicles.md](docs/plans/vehicles.md) | Work packages for vehicles, water and travel |
+| [docs/plans/tooling.md](docs/plans/tooling.md) | Work packages for tooling |
 | [docs/roadmap.md](docs/roadmap.md) | What is designed, what is next, open questions |
 | [docs/decisions.md](docs/decisions.md) | Settled decisions and their reasons |
 | [CLAUDE.md](CLAUDE.md) | Working rules for agents contributing to this repository |

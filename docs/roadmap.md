@@ -1,8 +1,8 @@
 # Roadmap
 
-What has been designed, what remains, and in what order to build. Each
-subsystem has a specification and an implementation plan under
-`docs/plans/`.
+What has been designed and in what order to build it. Every subsystem has
+a specification and an implementation plan under `docs/plans/`. The design
+is complete; no engine code exists yet.
 
 Document numbers are stable. Other documents refer to them by number.
 
@@ -24,7 +24,7 @@ Document numbers are stable. Other documents refer to them by number.
 | 11 | [Vehicles, mounts, the sea, space and travel](11-vehicles-and-travel.md) | Written |
 | 12 | [Presentation and the UI toolkit](12-presentation-and-ui.md) | Written |
 | 13 | [Scenarios, modes and events](13-scenarios-and-events.md) | Written |
-| 14 | Tooling: console, inspector, profiler, mod tools | Remaining |
+| 14 | [Tooling](14-tooling.md) | Written |
 | 15 | [Perception, belief and social behaviour](15-perception-and-social.md) | Written |
 | 16 | [Interaction, devices, machines and building](16-devices-and-machines.md) | Written |
 
@@ -42,46 +42,26 @@ Document numbers are stable. Other documents refer to them by number.
 | [worldgen](plans/worldgen.md) | 10 | M5 |
 | [scenarios](plans/scenarios.md) | 13 | M5 |
 | [vehicles](plans/vehicles.md) | 11 | M6 |
+| [tooling](plans/tooling.md) | 14 | Alongside every stage |
 
-## What remains to design
+## What remains
 
-### 14 — Tooling
+Nothing remains to design before building can start. The first package is
+F1 in [plans/world-model.md](plans/world-model.md).
 
-The one subsystem document not yet written. Much of its content has been
-committed to elsewhere and needs gathering, ordering and filling in.
+Each specification ends with its open questions. The ones most likely to
+change something once code exists:
 
-Scope: the in-game console; the inspector; rule, mind and incident traces;
-the profiler; map and world previews; a paint tool for maps; mod
-scaffolding, linting and the generated reference; test scripts and golden
-frames; replay from input logs.
-
-Already specified, to be collected:
-
-| Tool | Specified in |
-|------|--------------|
-| `lint`, `schema`, `docs`, `init-mod`, `explain`, `show` | 04 §13 |
-| Rule trace, explain, profile, console evaluation, assertions | 05 §15 |
-| World viewer and test script runner | plans/world-model W11 |
-| Golden frames | 12 §12 |
-| Views of a character's goals, plan, options, route and beliefs | 09 §16 |
-| Map and generation previews and checks | 10 §12 |
-
-Asked for along the way and not yet specified:
-
-| Request | From |
-|---------|------|
-| A paint tool that writes the map format | 10 §16 |
-| A comparison of an incident's live and abstract forms over many runs | 09 §20 |
-| A deduction aid for cases | 13 §16 |
-| Omniscient and perceived views side by side | 12 §5; 15 §13 |
-| Replaying a save and input log to a divergence | 03 §4.4; 01 §4 |
-
-Fixed:
-- Tools read the simulation and change it only through commands
-  (03 §4.4), like any other frontend.
-- Debug screens are built with the UI toolkit in a `debug` context
-  (12 §10.4).
-- Anything the generated reference does not list does not exist (04 §13).
+| Risk | Where | Why it matters |
+|------|-------|----------------|
+| Every budget is a target, not a measurement | All | The benchmark packages may show a design is too slow as specified |
+| Fighting in bulk may not look continuous with fighting in full | 09 §20 | Large battles depend on it |
+| An incident's live and abstract forms are written separately | 09 §20; 14 §11 | The off-screen world is only as believable as their agreement |
+| Maps are authored as text | 10 §16; 14 §10.2 | Large content depends on the map editor arriving |
+| Network capacity is checked per network, not per segment | 16 §17 | Automation puzzles may want finer limits |
+| Vessels do not tilt | 11 §18 | Ships sink upright |
+| Characters do not plan ahead or get lost | 09 §20 | Cunning is authored, not reasoned |
+| "Scenario" means two things | 13 §1; decision D-157 | A rename is possible if the note proves insufficient |
 
 ## Suggested build order
 
@@ -98,9 +78,8 @@ Fixed:
 The water and hull physics in the vehicles plan (V1, V3, V4) depend only on
 the world model and can be built much earlier than M6.
 
-Every subsystem that play depends on is now specified and planned. The
-remaining document, 14 (tooling), gathers tools that are mostly committed
-to already.
+Tooling (plan: tooling) is not a stage. Its packages are built as soon as
+their dependencies allow, starting in M1.
 
 From M3 onward, each stage adds to a set of small **reference mods** in
 different genres (for example a modern block with supers, a fantasy dungeon,

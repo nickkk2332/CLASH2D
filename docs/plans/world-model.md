@@ -359,7 +359,10 @@ Done when
 
 ### W11 — World viewer and scenario runner
 
-**Spec** 01 §12 · **Size** M
+**Spec** 01 §12; 14 §3, §7 · **Size** M
+
+This package builds the first form of the console and the test script
+runner. Packages TL1 and TL6 of [tooling.md](tooling.md) generalise them.
 
 Build
 - `clash-tools worldview`: terminal viewer of one storey of loaded cells

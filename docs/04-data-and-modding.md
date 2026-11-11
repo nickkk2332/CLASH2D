@@ -478,6 +478,10 @@ Schemas and the reference are generated from the same registries the loader
 uses. They cannot be out of date. A feature that is not in the generated
 reference does not exist.
 
+The full set of tools, including the console, inspector, traces, test
+scripts and the map editor, is specified in
+[14-tooling.md](14-tooling.md).
+
 ## 14. Total conversions
 
 A total conversion is a profile that:
