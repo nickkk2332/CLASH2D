@@ -641,6 +641,7 @@ Walking through walls is a movement ability, not a plane.
 ```rust
 pub struct Area {
     pub id: AreaId,
+    pub kind: Option<AreaKindId>,    // definition supplying defaults and attached rules
     pub shape: AreaShape,            // Box { min, max } | Cells(sorted Vec<CellPos>)
     pub grid: GridId,
     pub tags: TagSet,
@@ -654,6 +655,10 @@ Areas mark volumes that mean something: a vault, a crime scene, an arena, a
 no-fly zone, a bubble of stopped time. They are created by generation, by
 EOCs and by powers. Lookup is by a per-tract list. Entering and leaving emit
 events.
+
+An area may have a kind. An `area_kind` definition supplies default tags,
+variables, an optional clock rate and priority, and rules attached to every
+area of that kind (05 §9.3).
 
 An area with a clock is how scene S10 works. Occupants, bodies and processes
 inside it are re-parented to the area's clock on entry and back on exit.
@@ -1548,7 +1553,8 @@ update a hierarchical path graph incrementally.
 ## 23. Modding surface
 
 **Definition types**: `material`, `damage_type`, `atmosphere`, `floor`,
-`block`, `fixture`, `field`, `realm`, `chart`, `site`, `tract` (document 10).
+`block`, `fixture`, `field`, `realm`, `area_kind`, `chart`, `site`, `tract`
+(document 10).
 Elements may declare `interactions` and a `device` (section 5.5).
 
 **Events** an EOC can trigger on: every world event in section 7.4.

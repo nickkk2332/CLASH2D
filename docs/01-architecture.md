@@ -142,7 +142,7 @@ mechanical and enforced by lints and tests.
   everything that happens was scheduled.
 - An entity's **action** is a sequence of phases (typically windup, impact,
   recovery) with durations. Phase boundaries are timeline events. The action
-  system is specified in document 03.
+  system is specified in [03-time-and-actions.md](03-time-and-actions.md).
 - A **reaction window** is a chance to respond to something in progress.
   When one opens, and whether the player is asked or a default is taken, is
   decided by data-defined rules that mods and players can change.
@@ -182,6 +182,7 @@ and hyperbolic training rooms can be built by mods.
 pub enum Advance {
     NeedInput(DecisionRequest),   // a controlled entity must choose
     Reached(Tick),                // the requested limit was reached
+    Yielded,                      // work budget spent; call again
 }
 
 impl Sim {
@@ -235,19 +236,23 @@ documents rely on them:
 
 ## 7. Data and mods
 
-Full specification: document 04. The conventions below are fixed now because
-the world model's definitions depend on them.
+Full specification: [04-data-and-modding.md](04-data-and-modding.md). This
+section is a summary; where the two differ, document 04 governs.
 
 - A mod is a directory `mods/<mod_id>/` with `mod.json` (id, name, version,
   dependencies) and any number of `*.json` files under `data/`.
 - Each data file is a JSON array of objects. Each object has `"type"` and
   `"id"`. Keys are `snake_case`. A key named `"//"` is a comment and ignored.
 - Ids are namespaced: `mod_id:name`. Inside a mod, a bare `name` refers to
-  that mod's own namespace when defining, and resolves own namespace first,
-  then `core`, when referencing.
+  that mod's own namespace when defining. When referencing, it resolves in
+  the mod's own namespace first, then in the namespaces the mod imports, by
+  default the mods it requires.
 - `"copy_from"` inherits from another definition of the same type. Lists and
-  sets support `"extend"` and `"delete"`. A later mod may replace a definition
-  with `"override": true`.
+  sets support `"extend"` and `"delete"`. A later mod may change another
+  mod's definition with `"patch": true` or replace it with
+  `"override": true`.
+- A **profile** is a named list of mods with a boot screen. It is what the
+  game starts, and how a total conversion presents itself.
 - Physical quantities are numbers in SI units, or strings with a unit suffix
   from a fixed list (`"250 ms"`, `"3 s"`, `"2 h"`, `"70 kPa"`, `"1.5 MJ"`,
   `"80 kg"`). Durations in data are always local time.
@@ -264,7 +269,7 @@ the world model's definitions depend on them.
 
 ## 8. Events and EOC
 
-Full specification: document 05.
+Full specification: [05-expressions-and-eoc.md](05-expressions-and-eoc.md).
 
 - Every state change of interest produces a typed **event** with a payload
   (who, what, where, when, cause).
@@ -273,7 +278,7 @@ Full specification: document 05.
   effects. Conditions and numeric arguments are written in the expression
   language and compiled once at load.
 - Expressions and effects address named **subjects** bound by the trigger
-  (`self`, `target`, `source`, `location`, …) and **variables** at scopes:
+  (`self`, `target`, `actor`, `here`, …) and **variables** at scopes:
   entity, cell, area, site, tract, region, realm, global, and local context.
 - Effects are engine-provided verbs. The engine's job is to make the verb list
   broad and orthogonal enough that the rules of combat, abilities, social
@@ -350,6 +355,8 @@ Provisional choices. Adding a dependency requires an entry in
 | Need | Crate |
 |------|-------|
 | Serialisation | `serde`, `serde_json` |
+| JSON Schema generation | `schemars` |
+| File watching for hot reload (tools only, never in simulation crates) | `notify` |
 | Deterministic maths | `libm` |
 | Small collections, flags | `smallvec`, `bitflags`, `indexmap`, `rustc-hash` |
 | Errors | `thiserror` |

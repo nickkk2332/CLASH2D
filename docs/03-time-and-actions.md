@@ -545,6 +545,8 @@ A **joint action** is one action instance with several participants.
 }
 ```
 
+`perceives` is supplied by document 15 and `takedown_result` by content.
+
 - Each role claims slots on its own participant. Phases run once, on the
   clock of the first role.
 - A role marked `forced` is entered without that participant's consent. The

@@ -135,12 +135,14 @@ Done when
 
 ### F3 — `clash-time`
 
-**Spec** 01 §5 · **Size** M
+**Spec** 01 §5, 03 §3 · **Size** M
 
 Build
-- `Timeline`: schedule, cancel, pop in `(tick, sequence)` order.
+- `Timeline` with the API of 03 §3.1: schedule, cancel, remaining, rehome,
+  peek, pop in `(tick, sequence)` order, stable `WakeId`s.
 - Clock tree with rates; local to universal conversion; `set_rate`,
-  `reparent`; suspension at rate 0; rescheduling of affected wake-ups.
+  `reparent`, `destroy_clock`; parking at rate 0; rescheduling of affected
+  wake-ups.
 - Opaque `Wake { domain, id, arg }` payloads.
 - `ProcessTable<P>` generic over the owning crate's process enum; `wake`
   returns sleep-for or done; a force-resolve entry point.
@@ -157,7 +159,7 @@ Done when
 
 ### F4 — `clash-data` v0
 
-**Spec** 01 §7 · **Size** L
+**Spec** 01 §7, 04 §19 · **Size** L
 
 Build
 - Mod discovery, `mod.json`, dependency ordering.
@@ -171,7 +173,8 @@ Build
 - JSON Schema generation; `clash-tools schema`.
 - `clash-tools lint <dir>`.
 
-Not in this package: hot reload, migration, patching (document 04).
+Not in this package: everything in 04 outside the subset listed in 04 §19.
+The rest is built by packages P1 to P8 of [sim-kernel.md](sim-kernel.md).
 
 Done when
 - A fixture mod set loads; each error class (unknown key, bad unit, missing
@@ -289,7 +292,9 @@ Build
   occupant kinds of 02 §8.1 including `Device`.
 - Queries at cell, box, radius and ray, with plane and kind filters and
   defined result order.
-- Area table with per-tract lookup, enter and exit events, optional clocks.
+- Area table with per-tract lookup, enter and exit events, optional clocks;
+  the `area_kind` definition type (its `rules` field is carried as data
+  until the rule runtime exists).
 - Site table.
 
 Done when

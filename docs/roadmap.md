@@ -13,19 +13,20 @@ Document numbers are stable. Other documents refer to them by number.
 | 00 | [Vision](00-vision.md) | Written |
 | 01 | [Architecture](01-architecture.md) | Written |
 | 02 | [World model](02-world-model.md) and [plan](plans/world-model.md) | Written |
-| 03 | Time, clocks and actions | Next |
-| 04 | Data and modding pipeline | Next |
-| 05 | Expressions and EOC | Next |
-| 06 | Entities, bodies, species and items | After 03–05 |
+| 03 | [Time, clocks and actions](03-time-and-actions.md) | Written |
+| 04 | [Data and modding pipeline](04-data-and-modding.md) | Written |
+| 05 | [Expressions and EOC](05-expressions-and-eoc.md) | Written |
+| — | [Plan for 03–05](plans/sim-kernel.md) | Written |
+| 06 | Entities, bodies, species and items | Next |
 | 07 | Combat, techniques and clashes | After 06 |
 | 08 | Abilities and powers | After 07 |
 | 09 | AI and the layered simulation | After 06, 15 |
 | 10 | World generation and map format | After 04 |
 | 11 | Vehicles, mounts, travel, space and dimensions | After 06, 10 |
-| 12 | Presentation and the UI toolkit | After 03; needed for the first playable build |
+| 12 | Presentation and the UI toolkit | Next; needed for the first playable build |
 | 13 | Scenarios, modes and events | After 05, 09 |
 | 14 | Tooling: console, inspector, profiler, mod tools | Grows with everything |
-| 15 | Perception, belief and social behaviour | After 06 |
+| 15 | Perception, belief and social behaviour | Next, with 06 |
 | 16 | Interaction, devices and machines | After 05, 06 |
 
 ## What each remaining document must settle
@@ -33,45 +34,6 @@ Document numbers are stable. Other documents refer to them by number.
 "Fixed" items are already decided and are not reopened without a new entry
 in [decisions.md](decisions.md). Every document must respect rule R10 of the
 architecture: mechanism, not meaning.
-
-### 03 — Time, clocks and actions
-
-Scope: action definitions and phases; scheduling; how speed shortens phases;
-reaction windows; interrupts and cancels; decision requests for one or
-several controlled characters; how warm and cold entities are stepped; what
-the player sees when someone acts hundreds of times between their own
-decisions.
-
-Fixed:
-- Microsecond ticks; clocks with rates (01 §5).
-- When a reaction window opens and whether the player is asked is decided by
-  data-defined rules, with sensible defaults that players can adjust.
-- Zero, one or several controlled characters. Party control is enabled by
-  the scenario.
-- Every action can resolve from defaults or be specified in full.
-
-### 04 — Data and modding pipeline
-
-Scope: the complete loading rules started in 01 §7; patching another mod's
-definitions; hot reload; migration and obsoletion; the linter; schema
-publication; mod packaging, including total conversions that replace the
-bundled screens and start-up flow; error message standards.
-
-Fixed: namespaced ids; dense ids in sorted order; saves refer to string ids.
-
-### 05 — Expressions and EOC
-
-Scope: the expression language (types, operators, functions, subject and
-variable scopes); triggers; conditions; the effect verb list; control flow
-(sequences, branches, loops, weighted choices, delayed and recurring
-effects); context passing; tracing and debugging; the reserved script hook.
-
-Fixed:
-- Compiled at load; deterministic.
-- Every subsystem publishes a modding surface that this document binds.
-- The goal is CDDA's EOC power with every part of the simulation exposed as
-  hooks. Breadth and orthogonality of the verb list matter more than
-  brevity of syntax.
 
 ### 06 — Entities, bodies, species and items
 
@@ -85,6 +47,11 @@ general-purpose primitives for progression; items and inventories; promotion
 between statistical population, cold agent and full entity.
 
 Fixed:
+- The kernel entity of 03 §4.2 is extended, not replaced.
+- Body parts supply the channel slots of 03 §6.2; disabling a part disables
+  its slots.
+- Everything an entity has is reachable as properties and variables (05 §5,
+  §6), and everything that can be done to it is a verb.
 - Anatomical, data-defined bodies sharing the world's material table and
   damage rule (02 §5.4, §12).
 - No hit-point cushion. Wounds impair function, and impairment compounds
@@ -105,6 +72,9 @@ executions; knockback into the world's body system; ranged weapons across
 technology levels.
 
 Fixed:
+- Attacks, defences and reactions are actions, windows and joint actions
+  as specified in 03. Combat adds definitions and verbs, not a second
+  timing system.
 - Outcomes come from packets against materials and bodies. There is no
   separate layer of hit points and damage rolls.
 - Simple defaults for every exchange, with full control of technique and
@@ -169,6 +139,9 @@ set, layout, data binding to expressions, actions bound to commands and EOC
 effects, and how mods define screens, HUD elements and menus.
 
 Fixed:
+- Screen contents are pure expressions (05 §7.3); screen actions are
+  commands (03 §4.4) and effects.
+- A profile names its boot screen (04 §3.3).
 - Presentation never changes outcomes (01 §10).
 - Glyph grid only.
 - The engine's own screens are built with the toolkit and ship as a mod.
@@ -194,6 +167,8 @@ respond to what they perceive; short exchanges and barks; how beliefs
 spread (witnesses, reports, rumour).
 
 Fixed:
+- Supplies `noticed_if` tests for windows (03 §7.2) and the `perceived`
+  event (05 §8.5).
 - The world records truth; characters hold beliefs (01 R11).
 - No dialogue-tree system. Responses are rules.
 
@@ -214,14 +189,17 @@ verb is bound to rules, never to engine code.
 |-------|----------|--------|
 | M0 | Foundation (plan: world-model, F1–F4) | Workspace, data loading, timeline |
 | M1 | World model (W1–W23) | A world that can be generated, viewed, wrecked and saved from a console |
-| M2 | Documents 03, 04, 05 | Actions on the timeline; mods and EOC complete |
+| M2 | Documents 03, 04, 05 (plan: sim-kernel) | Actions on the timeline; mods and EOC complete |
 | M3 | Documents 06, 12, 15, 07 | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
 | M4 | Documents 16, 08, 09 | Devices and machines; abilities; characters with lives; large groups |
 | M5 | Documents 10, 13 | Generated worlds; scenarios and modes |
 | M6 | Document 11 | Mounts, vehicles, space, dimensions |
 
-Documents 03, 04 and 05 can be designed while M1 is being built. They do not
-depend on world code, only on the contracts in 01.
+Much of M2 can be built alongside M1: the data pipeline and the expression
+compiler need only the foundation packages.
+
+The next documents to write are 06, 15 and 12, which M3 needs, followed by
+07.
 
 From M3 onward, each stage adds to a set of small **reference mods** in
 different genres (for example a modern block with supers, a fantasy dungeon,
