@@ -16,6 +16,7 @@
 //! | The test generators | [`FlatGenerator`] (`"generator": "flat"`), [`CityGenerator`] (`"generator": "test_city"`) |
 //! | Tracts without a world, for tools and tests | [`realize_tracts`] |
 //! | Looking at what was made | [`ascii`] |
+//! | The map format: definitions, compiled maps, resolution | [`map`] |
 //! | Noise | [`noise`] |
 //!
 //! # Getting tracts generated and loaded
@@ -48,6 +49,7 @@
 pub mod ascii;
 mod city;
 mod flat;
+pub mod map;
 pub mod noise;
 mod parallel;
 mod standalone;
@@ -63,6 +65,7 @@ pub use clash_world::{
 
 pub use city::{CITY_GENERATOR, CityGenerator, CityParams};
 pub use flat::{FLAT_GENERATOR, FlatGenerator};
+pub use map::{check_defs, register_defs};
 pub use parallel::{PoolError, RayonRunner};
 pub use standalone::realize_tracts;
 

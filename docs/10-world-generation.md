@@ -105,26 +105,53 @@ rules.
 
 | Field | Meaning |
 |-------|---------|
-| `size` | Width and depth in cells. Every row has `size[0]` characters; every level has `size[1]` rows. Rows run north to south. |
-| `levels` | Storeys by number, relative to the map's own ground level. A level is a list of rows, or a named preset such as `roof` (a floor over everything that had a block below). |
-| `palette` | What each character means (section 3.2). Named palettes and inline entries, later overriding earlier. |
+| `size` | Width and depth in cells, each from 1 to 512. Every row has `size[0]` characters; every level has `size[1]` rows. Rows run north to south. |
+| `levels` | Storeys by number, relative to the map's own ground level; at most 256 from the lowest to the highest, and at most 1,048,576 cells over them all. A level is a list of rows, or the name of a preset. A storey between two that are written and not written itself is left as it is. |
+| `palette` | What each character means (section 3.2). Named palettes and inline entries, later overriding earlier. A key is one character, never a space. |
 | `default` | The cell spec laid under every character that is not a space |
+| `roof` | The cell spec the `roof` preset lays; the `default` if left out |
 | `params` | Values chosen once per placement (section 3.4) |
-| `front` | Which side faces a street, for placement |
+| `front` | Which side faces a street, for placement: `north`, `east`, `south` or `west` |
 | `place` | Other maps placed inside this one (section 3.5) |
 | `set` | Cell specs applied at listed coordinates or boxes, for things awkward to draw |
 | `areas`, `marks` | Areas (02 §8.3) and named points or cells |
 | `spawns` | Creatures and populations (06 §12) |
 | `wiring` | Conduit layers and device links (section 3.6) |
 | `joints` | Where it can connect to other maps (section 7.2) |
+| `anchor` | The cell a placement names when it says where the map goes: a cell or a mark. Left out, a placement says where the north-west corner at level 0 goes (section 3.5) |
 | `base` | What level 0 sits on: `ground`, `sea_level`, `sea_floor`, or an absolute storey |
-| `sit` | How it meets uneven ground: `level`, `foundation`, `follow` or `none` (section 4.2) |
+| `sit` | How it meets uneven ground: `level`, `foundation`, `follow` or `none` (section 4.2). With `foundation`, the field `foundation` names the block state that fills the gaps. |
 | `turn`, `over` | Whether a placement may turn it (section 3.3), and whether it may overlap another (section 4.1) |
-| `portals` | Portals (02 §19) between marks of this map, or from a mark to a named entry elsewhere |
-| `vehicles` | Vehicles (11 §12.1) standing at marks; a vessel is placed as a subgrid |
+| `portals` | Portals (02 §19) between marks of this map, or from a mark to a named entry elsewhere: `{ "from": "mark:a", "to": "mark:b" }` |
+| `vehicles` | Vehicles (11 §12.1) standing at marks; a vessel is placed as a subgrid: `{ "vehicle": id, "at": point, "facing": direction }` |
 | `if` | A condition on the placement's parameters; if false the map is not placed |
 
-A space character means "leave what is there". Everything else replaces.
+A space character means "leave what is there". Everything else replaces:
+a character writes all three elements of its cell. Each is what its cell
+spec states, or else what the `default` states, or else nothing. So a
+house drawn over a meadow has no grass under its boards and no boulder in
+its parlour. A cell spec that wants a layer left as the world has it says
+so with `keep`.
+
+**Presets.** `roof` lays the map's `roof` cell spec, or its `default` if
+it has none, over every cell that the storey below draws, a roof over a
+roof included. The storey below must be written. A roof that is not the
+shape of the storey under it is drawn as rows like any other level.
+
+**Points, boxes and levels.** A point is a cell, `[x, y]` or
+`[x, y, level]` with `x` east and `y` south from the north-west corner,
+or a mark, `"mark:name"`, which stands for the mark's first cell. A box
+is `[[x0, y0], [x1, y1]]`, both corners included, on the storeys given
+beside it as `"level": n` or `"level": [lowest, highest]`; level 0 if
+left out. All of them must lie inside the map.
+
+| Entry of | Written |
+|----------|---------|
+| `set` | `{ "at": point, "spec": cell spec }` or `{ "box": box, "level": levels, "spec": cell spec }`. Entries are applied in order after the rows, each over what is there: a layer the spec states is replaced, and a cell no character drew is drawn. |
+| `areas` | `{ "kind": area kind, "name": text, "level": levels, "box": box, "tags": [...] }`. The kind is an `area_kind` definition. `name` is what `place` and `spawns` call the area; its kind as written if left out. |
+| `marks` | `"name": [x, y, level]`, or a list of such cells |
+| `spawns` | `{ "creature": id }` or `{ "population": id }`, with `count` (a number, `[low, high]` or an expression; one if left out), `chance`, and either `"in": "area name"` or `"at": point` |
+| `joints` | `{ "id": label, "at": cell, "dir": direction, "kind": text }`. `dir` is `north`, `east`, `south`, `west`, `up` or `down`, and the cell must be on that edge of the map: its north row for `north`, its highest storey for `up`. |
 
 ### 3.2 Palettes and cell specs
 
@@ -133,33 +160,45 @@ A palette maps a character to a **cell spec**.
 | Spec field | Sets |
 |------------|------|
 | `floor`, `block`, `fixture` | Element states (02 §5.1) |
-| `clear` | Removes listed layers |
+| `clear` | Empties listed layers: `floor`, `block`, `fixture`, and of what else a cell holds `conduits`, `fields`, `items`, `decals`, `vars` |
+| `keep` | Leaves listed element layers (`floor`, `block`, `fixture`) as the world has them |
 | `conduits` | Conduits laid in the cell (16 §6) |
-| `field` | Field amounts (02 §16) |
-| `items` | Items, or a content table. In a container fixture they are latent contents (06 §9.3). |
-| `spawn` | A creature or population member in this cell |
-| `device` | Configuration for the element's device (16 §4.2), and a name for linking |
-| `mark` | Adds the cell to a named mark |
+| `field` | Field amounts (02 §16), by field id |
+| `items` | Items, or a content table: an item id, or `{ "item": id }` or `{ "table": id }` with `count` and `chance`. In a container fixture they are latent contents (06 §9.3). |
+| `spawn` | A creature or population member in this cell: a creature id, or `{ "creature": id }` or `{ "population": id }` with `count` and `chance` |
+| `device` | Configuration for the element's device (16 §4.2), and a name for linking: a name, or `{ "name": text, "config": { … } }` |
+| `mark` | Adds the cell to a named mark, or to each of a list of them |
 | `berth` | Adds the cell to a named berth of a kind: a parking bay, a mooring, a landing pad. Cells given `approach` with the same name are the line an AI driver follows into it (09 §5.6). |
 | `watched` | Marks what is placed in the cell as something the site's people keep an eye on (15 §6) |
-| `area` | Adds the cell to an area of a kind; touching cells with the same entry are one area |
+| `area` | Adds the cell to an area of a kind, an `area_kind` definition; touching cells with the same entry are one area. Cells touch across a side, or one above the other. |
 | `var`, `decal` | Cell variables and marks (02 §5.1) |
 
 A bare string is short for the layer its definition belongs to:
 `"wall@brick"` is `{ "block": "wall@brick" }`. If an id exists in more than
 one of floor, block and fixture, the short form is a load error asking for
-the long one.
+the long one. `"none"` is such an id. In the short form the definition is
+written out; its material and state may come from parameters.
 
 In a map used as a pattern (16 §4.5) an entry may instead ask for any
 element carrying a tag (`block_tag`, `floor_tag`, `fixture_tag`) or for
 anything at all (`"any": true`).
 
 A palette value may be a list of weighted alternatives, chosen per cell,
-or once for the whole placement with `"once": true`.
+or once for the whole placement with `"once": true`. A list cannot carry
+a key, so the second is written as an object around the list.
 
 ```json
-"t": [ { "fixture": "table", "weight": 3 }, { "fixture": "desk" }, {} ]
+"t": [ { "fixture": "table", "weight": 3 }, { "fixture": "desk" }, {} ],
+"u": { "one_of": [ "wall@brick", "wall@timber" ], "once": true }
 ```
+
+A `weight` is a number or an expression over the map's parameters, worked
+out once for the placement; one if left out. An alternative whose weight
+comes to nothing or less is never chosen, and if every weight does the
+first alternative is taken. Alternatives do not nest.
+
+The `default`, the `roof` and the `spec` of a `set` entry are palette
+values too.
 
 Shared palettes are definitions:
 
@@ -173,16 +212,84 @@ Shared palettes are definitions:
 A placement may turn a map by quarter-turns and mirror it. Element states
 with a facing are turned with it. `"turn": false` on a map forbids it.
 
+A turn mirrors first, swapping east and west, and then rotates clockwise.
+The turned map is measured from its own north-west corner again: a map 7
+wide and 5 deep turned a quarter is 5 wide and 7 deep, and every cell,
+mark, area, joint and direction it carries has turned with it. Every
+choice a map makes is made as the map is drawn, before it is turned, so
+the same seed gives the same building whichever way it faces.
+
+**Facing.** A state **faces** a direction when its name is a compass
+direction (`north`, `south_west`), alone or after an underscore
+(`open_east`), and its definition has the states for the other three
+quarter-turns as well. Turning the map replaces such a state by the state
+of the same definition that faces the turned direction: `stairs#north`
+turned a quarter clockwise is `stairs#east`, and `gate#open_east` mirrored
+is `gate#open_west`. A state that names no direction, or whose definition
+lacks one of the four, is carried over as it is. The engine gives the
+names no other meaning.
+
 ### 3.4 Parameters and chance
 
 Parameters are chosen once for each placement: given by whoever placed the
 map, or picked by the map's own rule. They may be used anywhere in the
 map: `"wall@$wall"`, `"count": "$beds"`, `"if": "$wealth > 2"`.
 
+| A parameter written as | Gets |
+|------------------------|------|
+| `{ "pick": [a, b, …] }` | One of the values, each equally likely |
+| `{ "range": [low, high] }` | A whole number from `low` to `high`; or, if either has a fraction, a number from `low` up to `high` |
+| `2`, `true`, `{ "default": "brick" }` | That value |
+| `"$wealth > 2"`, `{ "expr": "…" }` | An expression over the parameters declared before it |
+| `{ "type": "int" }` | Nothing: the placement must give it |
+
+A parameter is a `bool`, an `int`, a `real` or a `string`; an id is given
+as a `string`. The type follows from the rule, or is stated with `type`
+beside it; a rule that gives another type than the one stated is a load
+error. A parameter's text is always an expression, so a text value is
+written `{ "default": "brick" }` or `"'brick'"`. A value the placement gives replaces the rule's, and must be of
+the parameter's type; a whole number is accepted for a `real`. A
+placement that gives a parameter the map does not declare, leaves out one
+it must give, or gives one of the wrong type is refused with the reason.
+
+In a state, `$name` is replaced by the text of a `string` parameter:
+`"wall@$wall"`, `"door#$state"`. The state is checked when mods load with
+every value the map's own rule can give the parameter, and when the map
+is resolved for a value only a placement gives.
+
 Expressions in maps are evaluated in a **generation context**. They are
 pure. `rand`, `chance` and `pick` there draw from a generator seeded by the
 placement's seed and the cell, never from the simulation's stream, so the
 result depends on where and what, not on when.
+
+The generation context binds the map's parameters as `$name` and nothing
+else: no subject, no event. An expression there may use the built-in
+functions that are worked out from their arguments, the functions mods
+define, and the random functions. Reading a property or a variable, or
+calling a function that only a running simulation can answer (`now`,
+`dist`, `setting`), is a load error at the name. A shared palette is used
+by maps with different parameters, so the expressions written in one see
+none; a `$name` in one of its states is filled in by each map that lists
+it, and must be a parameter of every one of them.
+
+Every random choice is drawn from a generator seeded by a positional hash
+(01 §4) of the placement's seed, a domain named for the kind of choice,
+the cell the choice is for and a number that tells apart the choices made
+at one cell. Choices made once for the placement (parameters, `if`,
+weights, `once`, whether and how many nested maps) use the cell
+`[0, 0, 0]`. No choice draws from a generator another choice has drawn
+from, so the order in which cells are worked out decides nothing
+(invariant X6).
+
+| Domain | Seeds |
+|--------|-------|
+| `gen.map.param` | A parameter's `pick` and `range` |
+| `gen.map.expr` | The random functions of an expression |
+| `gen.map.alternative` | Which weighted alternative a cell gets |
+| `gen.map.roll` | A `chance`, and a count written as a range |
+| `gen.map.pick` | Which nested map of those that fit, and turned which way |
+| `gen.map.scatter` | The order the cells of an area are tried in |
+| `gen.map.nested` | The seed a nested map is given |
 
 ### 3.5 Maps within maps
 
@@ -199,6 +306,45 @@ maps receive parameters and place maps of their own.
 A building is usually a shell with rooms placed in it, and rooms with
 furnishings placed in them.
 
+| Field of a `place` entry | Meaning |
+|--------------------------|---------|
+| `map` | A map id, or `{ "tag": … }` for any map carrying the tag |
+| `at` | A point (section 3.1): where the nested map goes |
+| `in` | In place of `at`: the name of an area, `"area:parlour"` or `"parlour"`, to scatter copies through |
+| `turn` | Degrees clockwise (`90`), `"mirror"`, `{ "rot": 90, "mirror": true }`, or `"any"`. Not turned if left out. |
+| `chance` | The chance that the entry places anything |
+| `count`, `apart` | With `in` only: how many copies, one if left out, and how many cells must lie between two of them |
+| `params` | Parameters for the nested map, each an expression over this map's: `{ "wall": "$wall" }`. A text is written `"'brick'"`. |
+
+**Where it goes.** A nested map that names no `anchor` is put with the
+north-west corner of its turned footprint, at its level 0, on the point.
+One that names an anchor is put with that cell on the point, however it
+is turned: a door that must meet a path is the anchor of its map.
+
+**Fitting.** A nested map must lie wholly inside the map that places it,
+storeys included. A map named by id that cannot fit where it is put,
+under the turn asked for, is a load error. Of the maps carrying a tag,
+and of the turns `"any"` allows, one that fits is chosen by the
+placement; if none can, that is a load error. A map that says
+`"turn": false` is never turned.
+
+**Scattering.** The cells of the area are tried in an order the seed
+decides. A cell is kept if a map fits with its point there and no cell
+kept before is within `apart` cells of it, until `count` are kept. The
+area is every `areas` entry of that name together with the cells that
+cell specs put in an area of that name.
+
+**Laying in.** A nested map is laid over its parent after the parent's
+rows and `set`, in the order of `place`. Where it draws a cell, the
+layers its cell specs state replace the parent's, and a layer they do not
+state keeps what the parent has there: a rug laid in a parlour keeps the
+parlour's floor. Where the parent drew nothing, the nested cell replaces
+like any other. Its marks join the parent's marks of the same name, and
+its areas, spawns and everything else it carries become the parent's. Its
+joints, its anchor and its front do not: they are for placing it by
+itself. Each copy is given a seed of its own, from the parent's seed and
+the cell it is put at.
+
 ### 3.6 Wiring
 
 ```json
@@ -212,12 +358,51 @@ Conduits are drawn on their own layers over the same grid. Devices named
 in cell specs are linked by name. A map can ship a working machine room
 (scene S18).
 
+The rows of a wiring level are the size of the map, a space lays nothing,
+and every other character is an entry of the wiring's own palette. A link
+names two devices that cell specs of the same map name.
+
 ### 3.7 Validation
 
 At load: row lengths, unknown characters, unresolved parameters, nested
 maps that cannot fit, maps that nest inside themselves or deeper than
 `gen.max_nesting` (default 8), links to unnamed devices, joints off the
 boundary.
+
+Also at load: a state that names nothing, with every value the map can
+give its parameters; a short form that could be two layers; a level that
+is not a storey number or names no preset; a point, box, mark or anchor
+outside the map; a mark, area or area kind that does not exist; a
+parameter handed to a nested map that has none of that name; a turn
+asked of a map that forbids it; and an expression that reads anything but
+parameters. Each is reported at the value that is wrong, in the map that
+is wrong. A map nests inside itself if any map it could place, by id or
+by tag, could place it.
+
+These checks are a build stage (04 §8.1): maps name states, and states
+are known once the world's tables are built from the loaded definitions.
+The linter runs them after a load without errors.
+
+A mark can be named by a point, an anchor or a portal only if it is the
+same in every placement: one from `marks`, or from a character with a
+single cell spec. A mark that only some alternative gives is still
+carried when the map is resolved.
+
+### 3.8 A resolved map
+
+Resolving a map for a placement (its parameters, its seed, its turn)
+gives, for each storey, a grid of cells, each saying for floor, block and
+fixture either "leave what is there" or the state to put there; and
+beside the grids the areas, the marks and everything else the map asks
+for, all in the coordinates of the turned map. It is a pure function of
+the map, the parameters given, the seed and the turn. A map whose `if` is
+false resolves to nothing.
+
+What the world cannot yet take is carried in the resolved map as data,
+with ids as written, for the package that builds the thing it belongs to:
+spawns and items; conduits, fields, devices and links; berths and watched
+cells; cell variables and decals; pattern cells; joints, portals and
+vehicles.
 With `clash-tools map check`: rooms unreachable by walking; marks a site
 definition requires but its map does not supply; and whether the map
 stands. The map is realised on flat ground and the support and load passes
@@ -801,6 +986,17 @@ All in `clash-tools`.
 Maps reload with everything else (04 §11), so a change to a house can be
 seen in a running game.
 
+Until `map show` is built, an example of the generation crate prints a
+map of the bundled mods, storey by storey, one character for each cell
+from the glyph of what the cell holds:
+
+```bash
+cargo run -p clash-gen --example map_ascii -- <map id> [seed] [turn]
+```
+
+`turn` is `0`, `90`, `180` or `270`, with an `m` before it to mirror
+first. A space is a cell the map leaves alone, and `:` a cell it empties.
+
 ## 13. Modding surface
 
 **Definition types**: `map`, `palette`, `ground`, `tract`, `building`,
@@ -833,7 +1029,8 @@ only. A generator of type `derived` copies another realm (02 §21).
 
 **Fixed sets.** Ground steps, transform steps, crossings and street
 patterns are implemented natively and configured by data. A mod cannot
-add one. This is a known limit of the modding surface.
+add one. This is a known limit of the modding surface. So are the presets
+a level may name (`roof`), and the layers `clear` and `keep` take.
 
 **Gaps.** A field's noise is always a sum of gradient noise, with the
 four shapes of section 9.1. Value noise, billowed noise, cellular noise
@@ -841,8 +1038,19 @@ four shapes of section 9.1. Value noise, billowed noise, cellular noise
 warping exist natively for ground steps to use and cannot be asked for
 in a field.
 
+Gaps of the map format: a state has a facing by its name alone, and a
+definition cannot say that its numbered bits are a facing (section 3.3).
+A link joins devices named in one map, not a device of a nested map to
+one of its parent, and two nested copies of a map that name the same
+device are not told apart. A mark that only some weighted alternative
+gives cannot be named by a point. A parameter is a boolean, a number or
+a text, never a list. An expression in a shared palette sees no
+parameters. A map expression cannot read where its cell is.
+
 **Settings**: `gen.max_nesting`, `gen.max_settling` (the longest settling
-time a worldgen may ask for).
+time a worldgen may ask for). Until settings are loaded, `gen.max_nesting`
+is the limit handed to the function that builds the maps, with the
+setting's default.
 
 **Effects**: `apply_map`, `plan_from_map`, `transform_area`,
 `create_realm` with a generator and parameters, `survey_region`.
@@ -855,7 +1063,9 @@ of a site.
 `here.placement`.
 
 **Generation context**: parameters as `$name`; `region.*` fields; `depth`
-in assemblies; `rand`, `chance`, `pick` seeded by placement and cell.
+in assemblies; `rand`, `rand_int`, `chance`, `pick` seeded by placement
+and cell (section 3.4). `region.*` is not offered in maps until regions
+are surveyed; `depth` is a parameter the assembler gives.
 
 ## 14. Invariants
 

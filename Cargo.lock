@@ -96,8 +96,10 @@ version = "0.1.0"
 dependencies = [
  "clash-core",
  "clash-data",
+ "clash-expr",
  "clash-time",
  "clash-world",
+ "proptest",
  "rayon",
  "serde",
  "serde_json",
@@ -160,6 +162,7 @@ version = "0.1.0"
 dependencies = [
  "clash-core",
  "clash-data",
+ "clash-gen",
  "clash-save",
  "clash-scene",
  "clash-sim",

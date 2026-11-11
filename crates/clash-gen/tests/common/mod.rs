@@ -9,6 +9,10 @@
 // Each test binary, and the example, uses its own part of this module.
 #![allow(dead_code)]
 
+mod maps;
+#[allow(unused_imports, reason = "each test file uses its own part of this")]
+pub use maps::*;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
