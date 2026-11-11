@@ -66,6 +66,7 @@ pub mod decision;
 pub mod entity;
 pub mod event;
 pub mod host;
+pub mod item;
 pub mod later;
 pub mod mass;
 mod props;
@@ -124,4 +125,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     action::register_defs(types);
     stats::register_defs(types);
     body::register_defs(types);
+    item::register_defs(types);
 }

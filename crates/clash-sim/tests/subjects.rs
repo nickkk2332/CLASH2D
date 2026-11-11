@@ -422,8 +422,13 @@ fn an_entity_answers_for_itself() {
 
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
+    // Those of items are read in `tests/items.rs`.
+    let of_items: Vec<&str> = clash_sim::item::properties()
+        .iter()
+        .map(|property| property.name)
+        .collect();
     for property in engine_properties() {
-        if property.kind == "entity" {
+        if property.kind == "entity" && !of_items.contains(&property.name) {
             assert!(
                 read.contains(&("entity".to_owned(), property.name.to_owned())),
                 "entity.{} is not tested",
@@ -1034,9 +1039,14 @@ fn setters_go_through_the_engines_mutation_paths() {
     assert_eq!(sim.truth().cosmos().site(site).unwrap().name, "The Bank");
 
     // Every settable property was set.
+    // Those of items are set in `tests/items.rs`.
+    let of_items: Vec<&str> = clash_sim::item::properties()
+        .iter()
+        .map(|property| property.name)
+        .collect();
     let settable: Vec<String> = engine_properties()
         .iter()
-        .filter(|property| property.set.is_some())
+        .filter(|property| property.set.is_some() && !of_items.contains(&property.name))
         .map(|property| format!("{}.{}", property.kind, property.name))
         .collect();
     assert_eq!(

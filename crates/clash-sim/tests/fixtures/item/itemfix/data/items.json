@@ -1,0 +1,111 @@
+[
+  { "//": "What held and worn things confer: nothing reads them but the tests.",
+    "type": "attribute", "id": "warmth", "name": "Warmth", "base": 0 },
+  { "type": "attribute", "id": "menace", "name": "Menace", "base": 0 },
+
+  { "type": "material", "id": "hide", "density": 900, "toughness": "20 MJ/m3",
+    "resist": {
+      "core:impact": { "threshold": "2 MPa", "factor": 0.5 },
+      "core:cut":    { "threshold": "5 MPa" },
+      "core:pierce": { "threshold": "5 MPa" } } },
+  { "type": "material", "id": "hard_steel", "density": 7800, "toughness": "500 MJ/m3",
+    "resist": {
+      "core:impact": { "threshold": "200 MPa" },
+      "core:cut":    { "threshold": "400 MPa" },
+      "core:pierce": { "threshold": "400 MPa" } } },
+  { "type": "material", "id": "stone", "density": 2700, "toughness": "3 MJ/m3" },
+  { "//": "Stops an edge it can hold, and is cut through by one it cannot.",
+    "type": "material", "id": "mail", "density": 7800, "toughness": "500 MJ/m3",
+    "resist": {
+      "core:impact": { "threshold": "5 MPa" },
+      "core:cut":    { "threshold": "300 MPa" },
+      "core:pierce": { "threshold": "100 MPa" } } },
+
+  { "type": "item", "id": "knife", "name": "knife",
+    "material": "hard_steel", "mass": "0.2 kg", "length": "0.25 m",
+    "surfaces": [ { "id": "edge", "kind": "core:cut", "area": 1.0e-5, "give": 0.002, "span": 0.12 } ],
+    "grip": { "arm": 1 },
+    "modifiers": [ { "attr": "menace", "add": 1 } ],
+    "holder_tags": ["armed"],
+    "tags": ["blade", "small"] },
+
+  { "//": "Needs both arms.",
+    "type": "item", "id": "greatsword", "name": "greatsword",
+    "material": "hard_steel", "mass": "2.5 kg", "length": "1.3 m",
+    "grip": { "arm": 2 },
+    "modifiers": [ { "attr": "menace", "add": 3, "mul": 1.5 } ],
+    "holder_tags": ["armed"],
+    "tags": ["blade"] },
+
+  { "type": "item", "id": "coat", "name": "coat", "unknown_name": "a long garment",
+    "material": "hide", "mass": "1.8 kg", "volume": 0.004, "length": "1 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": ["torso", "arm"], "layer": 3, "thickness": "3 mm", "coverage": 1.0 },
+    "modifiers": [ { "attr": "warmth", "add": 2 } ],
+    "holder_tags": ["clothed"],
+    "color": ["brown", "russet", "gray"],
+    "tags": ["clothing"] },
+
+  { "type": "item", "id": "mail_shirt", "name": "mail shirt",
+    "material": "mail", "mass": "8 kg", "length": "0.7 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": ["torso", "arm"], "layer": 2, "thickness": "2 mm" },
+    "tags": ["clothing"] },
+
+  { "type": "item", "id": "glove", "name": "glove",
+    "material": "hide", "mass": "0.1 kg", "length": "0.2 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": "l_hand", "layer": 3, "thickness": "2 mm" },
+    "modifiers": [ { "attr": "warmth", "add": 0.5 } ],
+    "holder_tags": ["clothed"],
+    "tags": ["clothing", "small"] },
+
+  { "type": "item", "id": "hood", "name": "hood",
+    "material": "hide", "mass": "0.3 kg", "length": "0.3 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": "head", "layer": 3, "thickness": "2 mm" },
+    "tags": ["clothing"] },
+
+  { "type": "item", "id": "backpack", "name": "backpack",
+    "material": "hide", "mass": "1.2 kg", "volume": 0.003, "length": "0.5 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": "torso", "layer": 5, "thickness": "2 mm", "coverage": 0.3 },
+    "holds": { "volume": 0.02, "mass": "15 kg" },
+    "tags": ["container"] },
+
+  { "type": "item", "id": "purse", "name": "purse",
+    "material": "hide", "mass": "0.05 kg", "volume": 0.0002, "length": "0.1 m",
+    "grip": { "arm": 1 },
+    "holds": { "volume": 0.0005, "accepts": ["money"] },
+    "tags": ["container", "small"] },
+
+  { "type": "item", "id": "coin", "name": "coin",
+    "material": "hard_steel", "mass": "0.008 kg", "length": "0.02 m",
+    "grip": { "arm": 1 },
+    "stack": true,
+    "tags": ["money", "small"] },
+
+  { "type": "item", "id": "arrow", "name": "arrow",
+    "material": "hard_steel", "mass": "0.03 kg", "volume": 0.00004, "length": "0.7 m",
+    "grip": { "arm": 1 },
+    "stack": true,
+    "tags": ["ammo"] },
+
+  { "//": "Small enough for a pack, too heavy for it.",
+    "type": "item", "id": "anvil", "name": "anvil",
+    "material": "hard_steel", "mass": "100 kg", "length": "0.4 m",
+    "grip": { "arm": 2 } },
+
+  { "type": "item", "id": "boulder", "name": "boulder",
+    "material": "stone", "mass": "400 kg", "length": "0.8 m",
+    "grip": { "arm": 2 } },
+
+  { "//": "Found to hold a few things when first opened.",
+    "type": "item", "id": "crate", "name": "crate",
+    "material": "stone", "mass": "20 kg", "volume": 0.2, "length": "0.6 m",
+    "holds": { "volume": 0.15 },
+    "contents": [
+      { "item": "coin", "count": [5, 40], "chance": 0.9 },
+      { "item": "arrow", "count": [1, 12] },
+      { "item": "knife", "count": [0, 2], "chance": 0.5 } ] }
+]
