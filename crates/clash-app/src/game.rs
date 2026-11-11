@@ -308,6 +308,12 @@ impl Game {
         self.shared.borrow().session.is_some()
     }
 
+    /// Reads the loaded profile: its definitions, the interface's and
+    /// the world's.
+    pub fn with_loaded<R>(&self, read: impl FnOnce(&Loaded) -> R) -> R {
+        read(&self.shared.borrow().loaded)
+    }
+
     /// Reads the game being played, if one is: for tests and tools.
     pub fn with_session<R>(&self, read: impl FnOnce(&crate::session::Session) -> R) -> Option<R> {
         self.shared.borrow().session.as_ref().map(read)
