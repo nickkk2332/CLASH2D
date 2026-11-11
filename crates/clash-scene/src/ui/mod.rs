@@ -91,6 +91,88 @@
 //!   their content comes with the tooling packages.
 //! - `log` shows a [`MessageLog`]; playback (U5) fills it.
 
+/// Implements `Deserialize` for a type that may be written as a bare
+/// string, or as a list, or as an object. The type derives its object
+/// form with `#[serde(remote = "Self")]`.
+///
+/// Under the mod loader the string is read with its place, which the
+/// expression after `=>` is given as `Some(site)`; under any other
+/// deserialiser it is given `None`.
+macro_rules! string_or_object {
+    ($ty:ident, $expecting:literal, ($text:ident, $site:ident) => $from:expr $(, seq $seq:ident => $from_seq:expr)?) => {
+        const _: () = {
+            struct ShorthandVisitor;
+
+            impl<'de> ::serde::de::Visitor<'de> for ShorthandVisitor {
+                type Value = $ty;
+
+                fn expecting(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    f.write_str($expecting)
+                }
+
+                fn visit_str<E: ::serde::de::Error>(self, $text: &str) -> Result<$ty, E> {
+                    let $site: Option<::clash_data::Site> = None;
+                    let _ = &$site;
+                    Ok($from)
+                }
+
+                $(
+                fn visit_seq<A: ::serde::de::SeqAccess<'de>>(self, seq: A) -> Result<$ty, A::Error> {
+                    let $seq = ::serde::Deserialize::deserialize(
+                        ::serde::de::value::SeqAccessDeserializer::new(seq),
+                    )?;
+                    Ok($from_seq)
+                }
+                )?
+
+                fn visit_map<A: ::serde::de::MapAccess<'de>>(self, map: A) -> Result<$ty, A::Error> {
+                    $ty::deserialize(::serde::de::value::MapAccessDeserializer::new(map))
+                }
+            }
+
+            /// The object form, read as the derived struct.
+            struct Whole($ty);
+
+            impl<'de> ::serde::Deserialize<'de> for Whole {
+                fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<Whole, D::Error> {
+                    $ty::deserialize(deserializer).map(Whole)
+                }
+            }
+
+            impl<'de> ::clash_data::FromSite<'de> for $ty {
+                fn from_site<A: ::serde::de::MapAccess<'de>>(
+                    site: ::clash_data::Site,
+                    kind: ::clash_data::Kind,
+                    value: ::clash_data::KindValue<'_, A>,
+                ) -> Result<$ty, A::Error> {
+                    match kind {
+                        ::clash_data::Kind::String => {
+                            let text = value.read::<String>()?;
+                            let $text: &str = &text;
+                            let $site: Option<::clash_data::Site> = Some(site);
+                            let _ = &$site;
+                            Ok($from)
+                        }
+                        $(
+                        ::clash_data::Kind::List => {
+                            let $seq = value.read()?;
+                            Ok($from_seq)
+                        }
+                        )?
+                        _ => value.read::<Whole>().map(|whole| whole.0),
+                    }
+                }
+            }
+
+            impl<'de> ::serde::Deserialize<'de> for $ty {
+                fn deserialize<D: ::serde::Deserializer<'de>>(deserializer: D) -> Result<$ty, D::Error> {
+                    ::clash_data::by_site_or_plain(deserializer, ShorthandVisitor)
+                }
+            }
+        };
+    };
+}
+
 pub mod bind;
 pub mod def;
 mod draw;

@@ -279,36 +279,11 @@ impl UiEffect {
     }
 }
 
-/// Implements `Deserialize` for a type written as a bare string or as
-/// an object, whose object form is derived with `remote = "Self"`.
-macro_rules! text_or_object {
-    ($ty:ident, $expecting:literal, $text:ident => $from:expr) => {
-        impl<'de> Deserialize<'de> for $ty {
-            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<$ty, D::Error> {
-                struct Shorthand;
-                impl<'de> Visitor<'de> for Shorthand {
-                    type Value = $ty;
-                    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        f.write_str($expecting)
-                    }
-                    fn visit_str<E: de::Error>(self, $text: &str) -> Result<$ty, E> {
-                        Ok($from)
-                    }
-                    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<$ty, A::Error> {
-                        $ty::deserialize(MapAccessDeserializer::new(map))
-                    }
-                }
-                deserializer.deserialize_any(Shorthand)
-            }
-        }
-    };
-}
+string_or_object!(OpenEffect, "a screen's id, or an object with `screen` and `with`",
+    (text, site) => OpenEffect { screen: text.to_owned(), with: Args::new() });
 
-text_or_object!(OpenEffect, "a screen's id, or an object with `screen` and `with`",
-    text => OpenEffect { screen: text.to_owned(), with: Args::new() });
-
-text_or_object!(ConfirmEffect, "a question, or an object with `text`, `yes` and `no`",
-    text => ConfirmEffect { text: super::def::text_prop(text), yes: None, no: None });
+string_or_object!(ConfirmEffect, "a question, or an object with `text`, `yes` and `no`",
+    (text, site) => ConfirmEffect { text: super::def::text_prop_at(text, site), yes: None, no: None });
 
 /// `{}`: what `close` is given.
 #[derive(Deserialize)]
@@ -360,8 +335,8 @@ struct CommandBody {
     args: Args,
 }
 
-text_or_object!(CommandBody, "a command's name, or an object with `name` and `args`",
-    text => CommandBody { name: text.to_owned(), args: Args::new() });
+string_or_object!(CommandBody, "a command's name, or an object with `name` and `args`",
+    (text, site) => CommandBody { name: text.to_owned(), args: Args::new() });
 
 #[derive(Deserialize)]
 #[serde(remote = "Self", deny_unknown_fields)]
@@ -371,8 +346,8 @@ struct RunBody {
     args: Args,
 }
 
-text_or_object!(RunBody, "a rule's id, or an object with `rule` and `args`",
-    text => RunBody { rule: text.to_owned(), args: Args::new() });
+string_or_object!(RunBody, "a rule's id, or an object with `rule` and `args`",
+    (text, site) => RunBody { rule: text.to_owned(), args: Args::new() });
 
 impl<'de> Deserialize<'de> for AppEffect {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<AppEffect, D::Error> {

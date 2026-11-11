@@ -72,7 +72,7 @@ pub fn text_prop(source: &str) -> TextProp {
 }
 
 /// Reads a text field's string written at `site`.
-fn text_prop_at(source: &str, site: Option<Site>) -> TextProp {
+pub(super) fn text_prop_at(source: &str, site: Option<Site>) -> TextProp {
     let mut chars = source.chars().peekable();
     let mut plain = String::with_capacity(source.len());
     while let Some(ch) = chars.next() {
@@ -480,38 +480,6 @@ pub enum Align {
     Right,
 }
 
-/// Implements `Deserialize` for a type that may be written as a bare
-/// string or as an object. The type derives its object form with
-/// `#[serde(remote = "Self")]`.
-macro_rules! string_or_object {
-    ($ty:ident, $expecting:literal, $text:ident => $from:expr $(, seq $seq:ident => $from_seq:expr)?) => {
-        impl<'de> Deserialize<'de> for $ty {
-            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<$ty, D::Error> {
-                struct ShorthandVisitor;
-                impl<'de> Visitor<'de> for ShorthandVisitor {
-                    type Value = $ty;
-                    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        f.write_str($expecting)
-                    }
-                    fn visit_str<E: de::Error>(self, $text: &str) -> Result<$ty, E> {
-                        Ok($from)
-                    }
-                    $(
-                    fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<$ty, A::Error> {
-                        let $seq = Deserialize::deserialize(SeqAccessDeserializer::new(seq))?;
-                        Ok($from_seq)
-                    }
-                    )?
-                    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<$ty, A::Error> {
-                        $ty::deserialize(MapAccessDeserializer::new(map))
-                    }
-                }
-                deserializer.deserialize_any(ShorthandVisitor)
-            }
-        }
-    };
-}
-
 /// One row of a `list`, `table`, `tree`, `menu` or `inspect` whose rows
 /// are written in the definition.
 ///
@@ -550,7 +518,7 @@ pub struct RowDef {
 }
 
 string_or_object!(RowDef, "a row: a text, a list of cell texts, or an object",
-    text => RowDef { label: text_prop(text), ..RowDef::default() },
+    (text, site) => RowDef { label: text_prop_at(text, site), ..RowDef::default() },
     seq cells => RowDef { cells, ..RowDef::default() });
 
 /// The rows of a `list`, `table`, `tree`, `menu` or `inspect`: written
@@ -647,7 +615,7 @@ pub struct OptionDef {
 }
 
 string_or_object!(OptionDef, "an option: a text, or an object with `value` and `label`",
-    text => OptionDef { value: Literal(Value::Str(text.to_owned())), label: None });
+    (text, site) => OptionDef { value: Literal(Value::Str(text.to_owned())), label: None });
 
 /// The options of a `choice`: written out, or an expression.
 #[derive(Clone, Debug, PartialEq)]
@@ -783,9 +751,9 @@ widget_def! {
 }
 
 string_or_object!(TextDef, "a text, or an object with `value`",
-text => TextDef {
+(text, site) => TextDef {
     id: None, style: None, show_if: None, tip: None,
-    value: text_prop(text), wrap: true, align: Align::Left,
+    value: text_prop_at(text, site), wrap: true, align: Align::Left,
 });
 
 widget_def! {
@@ -1423,24 +1391,41 @@ impl<'de> Deserialize<'de> for NodeDef {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         /// The value of `frame`: a title, or true or false.
         struct FrameField(Option<FrameDef>);
-        impl<'de> Deserialize<'de> for FrameField {
-            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-                struct FrameVisitor;
-                impl Visitor<'_> for FrameVisitor {
-                    type Value = FrameField;
-                    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        f.write_str("a title, or true for a border with none")
-                    }
-                    fn visit_bool<E: de::Error>(self, on: bool) -> Result<FrameField, E> {
-                        Ok(FrameField(on.then_some(FrameDef::Plain)))
-                    }
-                    fn visit_str<E: de::Error>(self, title: &str) -> Result<FrameField, E> {
-                        Ok(FrameField(Some(FrameDef::Titled(text_prop(title)))))
-                    }
-                }
-                deserializer.deserialize_any(FrameVisitor)
+        struct FrameVisitor;
+        impl Visitor<'_> for FrameVisitor {
+            type Value = FrameField;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a title, or true for a border with none")
+            }
+            fn visit_bool<E: de::Error>(self, on: bool) -> Result<FrameField, E> {
+                Ok(FrameField(on.then_some(FrameDef::Plain)))
+            }
+            fn visit_str<E: de::Error>(self, title: &str) -> Result<FrameField, E> {
+                Ok(FrameField(Some(FrameDef::Titled(text_prop(title)))))
             }
         }
+        impl<'de> FromSite<'de> for FrameField {
+            fn from_site<A: MapAccess<'de>>(
+                site: Site,
+                kind: Kind,
+                value: KindValue<'_, A>,
+            ) -> Result<Self, A::Error> {
+                match kind {
+                    Kind::Bool => value
+                        .read::<bool>()
+                        .map(|on| FrameField(on.then_some(FrameDef::Plain))),
+                    Kind::String => {
+                        let title = value.read::<String>()?;
+                        Ok(FrameField(Some(FrameDef::Titled(text_prop_at(
+                            &title,
+                            Some(site),
+                        )))))
+                    }
+                    other => Err(other.unexpected("a title, or true for a border with none")),
+                }
+            }
+        }
+        dual_mode!(FrameField, FrameVisitor);
 
         struct NodeVisitor;
         impl<'de> Visitor<'de> for NodeVisitor {
