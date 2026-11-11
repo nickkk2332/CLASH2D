@@ -1,0 +1,112 @@
+[
+  {
+    "//": "03 §6.1",
+    "type": "action",
+    "id": "heavy_punch",
+    "name": "Heavy punch",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": { "type": "entity" },
+      "part":   { "type": "part", "default": "auto_part($target)" }
+    },
+    "requires": "dist(self, $target) <= 1.5",
+    "tempo": "self.attr.quickness",
+    "phases": [
+      { "id": "windup", "time": "300 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "target": "$target", "part": "$part" } } ] },
+      { "id": "recovery", "time": "400 ms" }
+    ]
+  },
+
+  {
+    "//": "03 §6.2: several channels, and every slot of one.",
+    "type": "action",
+    "id": "bellow",
+    "uses": { "voice": 1, "arm": 2, "legs": "all" },
+    "foreground": false,
+    "footing": false,
+    "low_attention": true,
+    "tags": ["loud"],
+    "phases": [
+      { "id": "roar", "time": "2 s", "uninterruptible": true, "fixed": true, "tags": ["telegraph"] }
+    ],
+    "on_start":     [ { "message": "A roar." } ],
+    "on_finish":    [],
+    "on_cancel":    [ { "message": "It trails off." } ],
+    "on_interrupt": [ { "message": "It is cut short." } ],
+    "on_abandon":   [ { "message": "Nobody hears the end of it." } ]
+  },
+
+  {
+    "//": "03 §6.3: a list of cells is a route.",
+    "type": "action",
+    "id": "planned_run",
+    "uses": { "legs": "all", "focus": 1 },
+    "params": {
+      "route": { "type": "list", "of": "cell", "min": 1, "max": 24,
+                 "check": "route_fault(self, $route)" },
+      "pace": { "type": "real", "default": 1.0 }
+    },
+    "vars": { "i": { "type": "int", "default": 0 }, "last": "cell" },
+    "phases": [
+      { "id": "step", "time": "41.667 ms",
+        "do": [ { "sweep": { "who": "self", "to": "$route[$i]" } },
+                { "set": { "$last": "$route[$i]", "$i": "$i + 1" } } ],
+        "next": [ { "if": "$i < len($route) and $route[$i] != null", "goto": "step" },
+                  { "finish": true } ] }
+    ]
+  },
+
+  {
+    "//": "03 §6.4: a held phase that branches.",
+    "type": "action",
+    "id": "charged_blast",
+    "uses": { "arm": 1, "focus": 1 },
+    "fail_text": "{cap(the(self))} cannot gather the power.",
+    "vars": { "power": { "type": "int", "default": 0 } },
+    "phases": [
+      { "id": "charge", "time": "hold", "max": "3 s",
+        "tick": { "every": "250 ms", "do": [ { "set": { "$power": "$power + 1" } } ] },
+        "until": "$power >= 10",
+        "cancel": true,
+        "next": [ { "if": "$power >= 4", "goto": "release" }, { "goto": "fizzle" } ] },
+      { "id": "release", "time": "100 ms", "on_exit": [ { "message": "It goes off." } ],
+        "next": [ { "finish": true } ] },
+      { "id": "fizzle", "time": "500 ms", "cancel": ["combo", "dodge"] }
+    ]
+  },
+
+  {
+    "//": "03 §7.3: a reaction with a ready phase.",
+    "type": "action",
+    "id": "sidestep",
+    "reaction_to": ["strike", "plain"],
+    "on_behalf": true,
+    "ready": "clear",
+    "uses": { "legs": 1 },
+    "requires": "$window != null",
+    "tags": ["dodge"],
+    "phases": [
+      { "id": "shift", "time": "80 ms" },
+      { "id": "clear", "time": "200 ms" }
+    ]
+  },
+
+  {
+    "//": "03 §8",
+    "type": "action",
+    "id": "takedown",
+    "roles": {
+      "attacker": { "uses": { "arm": "all" } },
+      "victim":   { "uses": { "arm": "all", "legs": "all" }, "forced": true }
+    },
+    "requires_at_start": "not perceives($victim, $attacker)",
+    "phases": [
+      { "id": "seize",  "time": "200 ms" },
+      { "id": "finish", "time": "600 ms", "do": [ { "run": "takedown_result" } ] },
+      { "id": "settle", "time": "300 ms" }
+    ]
+  }
+]

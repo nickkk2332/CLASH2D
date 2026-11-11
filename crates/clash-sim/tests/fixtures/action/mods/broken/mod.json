@@ -1,0 +1,1 @@
+{ "id": "broken", "name": "One definition for each mistake", "version": "0.1.0", "requires": ["spec"] }
