@@ -43,6 +43,8 @@ pub use state::{
     StateRefError,
 };
 
+use crate::chunk::FieldId;
+use crate::field::{Field, FieldReaction, FieldReactionId};
 use crate::light::{LightSource, Sky, SkyId};
 use crate::topology::{Edge, Topology};
 
@@ -160,6 +162,22 @@ impl<I: DenseId, T> Table<I, T> {
     /// Whether there are no definitions at all.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// A table of definitions already in order of qualified id, numbered
+    /// in that order. A name past what the id type can count gets no
+    /// number.
+    pub(crate) fn from_sorted(names: Vec<String>, entries: Vec<T>) -> Table<I, T> {
+        let by_name = names
+            .iter()
+            .enumerate()
+            .filter_map(|(position, name)| Some((name.clone(), I::from_index(position)?)))
+            .collect();
+        Table {
+            names,
+            by_name,
+            entries,
+        }
     }
 }
 
@@ -494,6 +512,8 @@ pub struct WorldDefs {
     fingerprint: clash_core::Hash128,
     /// Where the placeholders of each kind begin (04 §12.3).
     placeholders: placeholder::Placeholders,
+    fields: Table<FieldId, Field>,
+    field_reactions: Table<FieldReactionId, FieldReaction>,
 }
 
 // `WorldDefs` is shared between threads behind an `Arc`.
@@ -570,6 +590,18 @@ impl WorldDefs {
     /// The `sky` definitions.
     pub fn skies(&self) -> &Table<SkyId, Sky> {
         &self.skies
+    }
+
+    /// The `field` definitions (02 §16).
+    pub fn fields(&self) -> &Table<FieldId, Field> {
+        &self.fields
+    }
+
+    /// The `field_reaction` definitions (02 §16). What each means for
+    /// the stepper is compiled into the fields that take part:
+    /// [`Field::reacts`] and [`Field::conducts`].
+    pub fn field_reactions(&self) -> &Table<FieldReactionId, FieldReaction> {
+        &self.field_reactions
     }
 
     /// The light an element state gives off, if any (15 §3.3).

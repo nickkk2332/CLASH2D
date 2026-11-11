@@ -232,8 +232,12 @@ is its own.
 
 Not built yet: the weather's share of the sky's light is a number the
 caller gives; a realm's day comes from its sky until calendars exist;
-fields give no light until they are built (02 §16); glass that passes
-only part of the light; and `light(loc)` as a function for rules.
+glass that passes only part of the light; and `light(loc)` as a
+function for rules. A field's light (02 §16) is not in the cache:
+`Cosmos::field_lights(grid, box)` lists it as moving sources, one for
+each cell of a field that gives light, with the intensity its level
+gives, and whoever asks for light hands them in. A large fire is
+thousands of sources: the caller takes those that matter.
 
 **Coloured light (experimental).**
 

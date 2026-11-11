@@ -18,6 +18,7 @@ use serde::de::{Deserializer, IntoDeserializer, MapAccess, Visitor};
 
 use super::flags::EngineFlag;
 use super::quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temperature};
+use crate::field::{FieldDef, FieldReactionDef};
 use crate::light::{LightSpec, SkyDef};
 
 /// A reference to another definition by its id, bare (`"alloy"`) or
@@ -727,4 +728,8 @@ pub struct RawWorldDefs {
     pub area_kinds: Vec<(String, AreaKindDef)>,
     /// `sky` definitions.
     pub skies: Vec<(String, SkyDef)>,
+    /// `field` definitions.
+    pub fields: Vec<(String, FieldDef)>,
+    /// `field_reaction` definitions.
+    pub field_reactions: Vec<(String, FieldReactionDef)>,
 }

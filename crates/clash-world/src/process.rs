@@ -40,6 +40,7 @@ use crate::collapse::{CollapseState, FallingMass};
 use crate::cosmos::Cosmos;
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
+use crate::field::{FieldState, FieldStep};
 
 /// A stability check that is waiting out the settle delay on a clock
 /// (02 §14.2). When it wakes, the checks asked for where that clock
@@ -62,6 +63,8 @@ pub enum WorldProcess {
     Settle(SettleCheck),
     /// A mass of debris on its way down (02 §14.3).
     Fall(FallingMass),
+    /// The fields of one clock and one step interval, stepped (02 §16).
+    FieldStep(FieldStep),
 }
 
 impl StateHash for WorldProcess {
@@ -74,6 +77,10 @@ impl StateHash for WorldProcess {
             WorldProcess::Fall(mass) => {
                 hasher.write_u8(1);
                 mass.state_hash(hasher);
+            }
+            WorldProcess::FieldStep(step) => {
+                hasher.write_u8(2);
+                step.state_hash(hasher);
             }
         }
     }
@@ -89,6 +96,8 @@ pub struct WorldActivity {
     pub(crate) processes: ProcessTable<WorldProcess>,
     /// The collapses in progress and the checks waiting.
     pub(crate) collapse: CollapseState,
+    /// Where the fields are and which processes step them (02 §16).
+    pub(crate) fields: FieldState,
 }
 
 impl WorldActivity {
@@ -97,6 +106,7 @@ impl WorldActivity {
         WorldActivity {
             processes: ProcessTable::new(WakeDomain::World),
             collapse: CollapseState::default(),
+            fields: FieldState::new(),
         }
     }
 
@@ -122,6 +132,7 @@ impl StateHash for WorldActivity {
     fn state_hash(&self, hasher: &mut StateHasher) {
         self.processes.state_hash(hasher);
         self.collapse.state_hash(hasher);
+        self.fields.state_hash(hasher);
     }
 }
 
@@ -165,6 +176,10 @@ impl WorldCtx<'_> {
                 let (mass, next) = self.run_fall(mass);
                 (WorldProcess::Fall(mass), next)
             }
+            WorldProcess::FieldStep(step) => {
+                let next = self.run_field_step(step);
+                (WorldProcess::FieldStep(step), next)
+            }
         };
         if let (WorldProcess::Fall(mass), Next::Sleep(_)) = (&process, next) {
             // It goes on falling, on the clock of where it now is.
@@ -204,12 +219,14 @@ impl WorldCtx<'_> {
             .iter()
             .filter_map(|(id, process)| match process {
                 WorldProcess::Fall(mass) => Some((id, mass.at)),
-                WorldProcess::Settle(_) => None,
+                _ => None,
             })
             .filter_map(|(id, at)| Some((id, self.cosmos.ambient(at).ok()?.clock)))
             .collect();
         for (id, clock) in placed {
             self.keep_clock(id, clock);
         }
+        // Fields follow the clock of where they are too (02 §16).
+        self.resume_fields();
     }
 }

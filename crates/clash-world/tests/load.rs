@@ -47,6 +47,8 @@ fn every_world_type_is_registered() {
             "atmosphere",
             "block",
             "damage_type",
+            "field",
+            "field_reaction",
             "fixture",
             "floor",
             "material",

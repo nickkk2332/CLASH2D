@@ -27,6 +27,7 @@
 //! | Who is where | [`WorldCtx::place`], [`WorldCtx::relocate`], [`WorldCtx::remove`]; [`Occupant`], [`Footprint`], [`PlaneMask`]; [`Cosmos::occupants_at`] and the other queries with an [`OccupantFilter`] |
 //! | Volumes that mean something | [`Area`], [`AreaSpec`], [`AreaShape`]; [`WorldCtx::create_area`], [`WorldCtx::enclose`]; [`Cosmos::areas_at`] |
 //! | Places with identity | [`Site`], [`Cosmos::create_site`], [`Cosmos::site_of`] |
+//! | Fire, smoke, water: values in cells that evolve by rule | [`field`]: [`WorldEdit::add_field`], [`Cosmos::field`], [`Cosmos::field_lights`], [`Cosmos::field_hides_sight`] |
 //! | Harm to an element, and its destruction | [`WorldEdit::damage`] with a [`DamagePacket`] gives a [`DamageOutcome`]; the rule alone is [`resolve_packet`] |
 //! | Whether a structure stands, and what carries what | [`Cosmos::assess_stability`] gives an [`Assessment`] |
 //! | Stability checks waiting | [`Cosmos::stability_requests`]; ask for one with [`WorldCtx::check_stability`] |
@@ -65,6 +66,7 @@ pub mod dims;
 mod edit;
 mod error;
 mod event;
+pub mod field;
 mod generate;
 mod grid;
 pub mod iter;
@@ -113,6 +115,10 @@ pub use defs::{
 pub use edit::{DISPLACE_RANGE_CELLS, StabilityQueue, StabilityRequest, WorldCtx, WorldEdit};
 pub use error::WorldError;
 pub use event::{EventSink, WorldEvent};
+pub use field::{
+    CatchUp, ExposureRoute, FIELD_MAX_ACTIVE_CELLS, FIELD_OVER_BUDGET_DECAY, Field, FieldCell,
+    FieldReaction, FieldReactionId, FieldRule, FieldSample, FieldState, FieldStep,
+};
 pub use generate::GeneratorMaker;
 pub use generate::{
     BatchRunner, GenCtx, GenError, GeneratorFactory, GeneratorRegistry, GeneratorRequest,

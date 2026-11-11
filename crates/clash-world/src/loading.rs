@@ -695,6 +695,11 @@ impl WorldCtx<'_> {
         {
             record.extra_mut().pending = waiting;
         }
+        // The fields a stored tract held catch up on the time that
+        // passed (02 §9.4 step 4).
+        if from_store {
+            self.fields_loaded(realm, grid, tract);
+        }
         self.events.emit(WorldEvent::TractLoaded {
             tick,
             realm,

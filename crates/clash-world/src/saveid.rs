@@ -480,6 +480,8 @@ impl MapIds for WorldProcess {
         match self {
             WorldProcess::Settle(_) => {}
             WorldProcess::Fall(mass) => mass.map_ids(map),
+            // A field step names a clock and an interval, no definition.
+            WorldProcess::FieldStep(_) => {}
         }
     }
 }
