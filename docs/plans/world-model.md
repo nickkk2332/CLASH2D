@@ -35,8 +35,8 @@ Section references such as "02 §14" point into those documents.
 | W5 | Cosmos, realms, views | M | W4, F3 | beta |
 | W6 | Edits, causes, events | M | W5 | beta |
 | W7 | Occupancy, planes, areas, sites | M | W6 | beta |
-| W8 | Tracts, regions, generation, loading | L | W7 | in progress |
-| W9 | Tickets and activity | M | W8 | in progress |
+| W8 | Tracts, regions, generation, loading | L | W7 | beta |
+| W9 | Tickets and activity | M | W8 | beta |
 | W10 | Persistence | M | W8 | todo |
 | W11 | World viewer and scenario runner | M | W8 | todo |
 | W12 | Damage and destruction | M | W6 | todo |
@@ -458,7 +458,8 @@ review additions, drift in areas and `enclose`. Stubbed:
 
 Build
 - `RegionRecord`, `TractRecord`, `TractExtra`; lifecycle states.
-- `RegionSurveyor`, `TractRealizer`, `GenCtx` in `clash-gen`.
+- `RegionSurveyor`, `TractRealizer`, `GenCtx`: defined in `clash-world`,
+  which calls them, and implemented and re-exported by `clash-gen`.
 - Test generators `flat` and `test_city` (parameters: street spacing, storey
   range, column spacing; a ruin variant for W17).
 - Load and unload procedures of 02 §9.4 and §9.5 against an in-memory store.
@@ -471,6 +472,48 @@ Done when
   inputs).
 - Load, unload, load without changes yields identical cells.
 - Unloading a tract that still has an occupant fails the assertion.
+
+Status `beta` (decisions D-370 to D-375). Built as 02 §9 now reads: the
+records, kept by each realm; the generation interfaces in
+`clash_world::generate`, with a registry that binds the generator a realm
+definition names and the parameters it gives (`generator_params`); `flat`
+and `test_city` in `clash-gen`, built only from states their parameters
+name, with stairs, a sidewalk floor, a roof and the realm `core:test_city`
+added to `mods/core`; `WorldCtx::load_tracts` and `unload_tract` against a
+`TractStore`, with `MemoryStore` and a column codec behind
+`encode_column` and `decode_column`; realisation in batches on a
+`BatchRunner`, with `clash_gen::RayonRunner`; and the rule of 02 §22 that a
+tract loaded again does not look unchanged to a cache.
+`cargo run -p clash-gen --example city_ascii -- [seed] [storey]` prints a
+block of the city, and a test holds the map for seed 1 against
+`crates/clash-gen/tests/golden/`. The tests are in
+`crates/clash-gen/tests/tracts.rs` and `crates/clash-world/tests/store.rs`.
+Stubbed:
+
+- Stamps and total devastation at load, and with them the ruin variant of
+  `test_city` (W17). A pending stamp is stored and stays pending.
+- The catching up of fields at load (W16), and the checks that no body or
+  process is left in a tract that unloads (W14, W13).
+- Pending edits are explicit cell changes, spawn requests and stamps. A
+  map, a liquid level, devastation and a rule to run join `PendingEdit`
+  with their packages.
+- `RegionSurvey`, `Placement`, `PathLine`, `Stamp`, `SpawnRequest`,
+  `PortalSpec` and `SubgridSpec` are typed and carried and nothing reads
+  them. `TractDefId` is a bare id: the `tract` definition type is
+  document 10's. A generator's portals and subgrids are dropped.
+- The tract blob holds runtime ids, no entity section and no fingerprint:
+  the final layout, the save-id table and the `redb` store are W10's.
+- A mistake in a realm's `generator_params` names the definition and the
+  parameter's path and is not yet a diagnostic with file and line: the
+  linter does not bind generators (`clash-tools` was closed to this
+  change). `Generators::param_errors` is what it would call.
+- No benchmark (W23). An ignored timing test in
+  `crates/clash-gen/tests/tracts.rs` prints rough figures instead. On the
+  build machine: realising a `test_city` tract takes about 0.4 ms on one
+  thread and 0.1 ms a tract on four (target 2 ms); storing and loading a
+  changed tract about 0.3 ms together (target 1 ms to load); a stored
+  city tract is about 1 KB.
+- No test script: the runner is W11's.
 
 ### W9 — Tickets and activity
 
@@ -486,6 +529,24 @@ Done when
 - Oscillating across a tract boundary causes no load or unload.
 - Over budget, the lowest priority is refused first and pinned tickets never
   are.
+
+Status `beta` (decisions D-376 to D-378). Built as 02 §10 now reads: the
+ticket table in the cosmos, `hold_ticket`, `release_ticket` and
+`move_ticket`, fixed and entity anchors, levels with the warm margin, the
+unloading margin, and `WorldCtx::reconcile_activity`, the one function the
+simulation calls at a safe point, with the budget, the refusal order and
+`TicketRefused`. The tests are in `crates/clash-gen/tests/tickets.rs`,
+beside the generators they load with. Stubbed:
+
+- `Body` and `Subgrid` anchors (W14, W20a): their holders move a fixed
+  anchor until then.
+- Forcing a process or a body whose ticket was refused to resolve is the
+  holder's part (W13, W14). The world reports the refusal.
+- `max_loaded_tracts` and `world.hot_radius` are a field of the ticket
+  table and a named constant until settings are bound (P6).
+- `hold_ticket` and `release_ticket` are functions, not yet verbs: the rule
+  runtime binds them.
+- No benchmark (W23) and no test script (W11).
 
 ### W10 — Persistence
 
@@ -701,8 +762,8 @@ rules as a trait (D-315). Built alongside W7, not after it. Stubbed:
   there is no golden hash to keep.
 - Nothing is registered with the expression runtime, which does not
   exist yet. `line of sight` (02 §23) is bound when it does.
-- A tract unloaded and loaded again can look unchanged to a cache. W8
-  owes the rule in 02 §22 that prevents it.
+- A tract unloaded and loaded again could look unchanged to a cache. W8
+  has since built the rule in 02 §22 that prevents it (decision D-375).
 
 ### W19 — Portals, boundary links, realm transfer
 

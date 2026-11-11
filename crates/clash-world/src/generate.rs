@@ -192,8 +192,8 @@ impl TractRecords3x3 {
         (1, 1),
     ];
 
-    /// A neighbourhood from the record at each of [`OFFSETS`]
-    /// (TractRecords3x3::OFFSETS), in that order.
+    /// A neighbourhood from the record at each of
+    /// [`OFFSETS`](TractRecords3x3::OFFSETS), in that order.
     pub fn new(records: [Option<TractRecord>; TractRecords3x3::COUNT]) -> TractRecords3x3 {
         TractRecords3x3 { records }
     }

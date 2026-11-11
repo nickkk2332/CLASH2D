@@ -8,8 +8,9 @@ S13, S18 and S19, of [00-vision.md](00-vision.md).
 ## 1. Scope
 
 This document specifies how space, matter and place are represented, stored,
-loaded, changed and destroyed. It covers the `clash-world` crate and the
-generator interface of `clash-gen`.
+loaded, changed and destroyed. It covers the `clash-world` crate, which
+holds the generator interface, and the test generators of `clash-gen`,
+which implements it (section 9.3).
 
 It does not specify entity internals (06), actions and reactions (03), the EOC
 language (05), generation content (10), the cold simulation's logic (09),
@@ -219,6 +220,7 @@ A realm has no hard-coded "kind". What a realm is follows from its properties.
 | `wrap` | Axes that wrap around. A planet wraps `x`. A torus wraps both. |
 | `z_range` | Lowest and highest storey. Storage is sparse, so a tall range costs nothing. |
 | `generator` | Which world generator plans the realm, surveys regions and realises tracts (section 9; 10 §9). |
+| `generator_params` | Optional. What the realm tells its generator: values by name, which the generator reads (section 9.3). |
 | `fill` | What implicit cells contain below and above the generated range of a tract. |
 | `strata` | Ambient conditions by altitude: gravity (m/s², along −z), atmosphere (a definition giving density, pressure, sound speed, breathability; `null` is vacuum), sky (a presentation hint), and temperature: `temp_offset` added to the region's, or `temp` replacing it (11 §4.6). |
 | `time_rate` | Rate of the realm's clock relative to universal time. |
@@ -258,8 +260,11 @@ What a definition must say, and what follows when it does not:
   axis is a load error.
 - `fill` defaults to nothing below and nothing above. `time_rate` defaults
   to 1 and must be zero or more.
-- `generator`, `calendar`, `sky` and boundary links are stored as written
-  until the packages that give them meaning are built.
+- `calendar`, `sky` and boundary links are stored as written until the
+  packages that give them meaning are built. `generator` and
+  `generator_params` are stored as written and read when the generators
+  are bound (section 9.3): a realm with no generator, or one nobody
+  registered, loads and cannot have tracts generated.
 
 `Cosmos::create_realm(timeline, def, seed)` makes the realm, a clock for it
 under universal time at `time_rate`, and its empty base grid.
@@ -634,7 +639,11 @@ Revision counters are how every cache outside the chunk (paths, field of view,
 light, rendering) knows whether it is stale. A write that changes nothing
 bumps nothing. Revisions, caches and the dirty flag are not state: they are
 not hashed and not saved. A cache keeps the revisions it was read from in a
-`RevStamp` (section 22).
+`RevStamp` (section 22). Counters do not start at zero for every loading:
+a column that joins a grid starts all of its counters one above the
+highest any counter stood in a column that has left that grid, and a chunk
+height without storage counts as standing where its column started
+(`Column::rev_base`).
 
 ### 6.3 Grids
 
@@ -840,6 +849,12 @@ whoever owns it drains. Rules name an event in snake case
 | `AreaClosed` | `area`, `loc` (where it was enclosed from) | A breached area closes again |
 | `OccupantDisplaced` | `occupant`, `from`, `to` | An edit left an occupant no room and it was moved (section 23) |
 | `OccupantEntombed` | `occupant`, `loc` | An edit left an occupant no room and there was nowhere to go |
+| `TractLoaded` | `realm`, `tract`, `loc` (the tract's cell with the lowest coordinates, at storey 0), `first` (never loaded before) | A tract has been loaded, after the changes waiting for it were made (section 9.4) |
+| `TractUnloading` | `realm`, `tract`, `loc` | A tract is about to be unloaded, or is to be and still holds occupants (section 9.5) |
+| `TicketRefused` | `ticket` (the id it had), `realm`, `loc` (the tract it was centred on), `reason` (who held it) | The tickets wanted more tracts than may be loaded and this one was dropped (section 10.3) |
+
+The three tract events carry no cause of their own: `cause()` gives the
+coarse cause for them.
 
 Events that sum many changes (`EnergyReleased`, `CollapseSettled`,
 `TractDevastated`) carry totals by instigator: elements destroyed, mass
@@ -1180,23 +1195,35 @@ pub struct RegionRecord {
     pub vars: VarMap,
 }
 
-pub struct TractRecord {                      // about 16 bytes; a surveyed region is about 64 KB
+pub struct TractRecord {                      // 24 bytes; a surveyed region is about 100 KB
     pub def: TractDefId,                      // what kind of place this is
     pub rot: u8, pub variant: u8,
     pub state: TractState,                    // Surveyed | Realized { pristine: bool }
     pub devastation: u8,                      // section 17
     pub devastation_kind: Option<DevastationKindId>,   // of whichever delivered the most; the later wins a tie
-    pub site: Option<SiteIdx>,
+    pub site: Option<SiteIdx>,                // a position in its region's `sites`
     pub extra: Option<Box<TractExtra>>,
 }
 
 pub struct TractExtra {
     pub pending: Vec<PendingEdit>,            // applied in order at next load
     pub stamp_watermark: u64,                 // stamps up to this sequence are already applied
-    pub last_loaded: Tick,                    // local time
+    pub last_loaded: Tick,                    // when it was last unloaded, in the local time of its realm's clock
     pub vars: VarMap,
 }
 ```
+
+A realm keeps a region's record from the moment the region is surveyed, in
+`Realm::regions`. `Cosmos::region` and `Cosmos::tract_record` read them;
+they are state, hashed and saved with the realm. A tract of an unsurveyed
+region has no record.
+
+What the records carry that later packages give meaning is typed and
+stored now: `RegionSurvey` (a kind and field values), `Placement` as 10 §4.1
+gives it, `PathLine` (a kind and the cells it runs through), and `Stamp`
+(a tick and a sequence number; its release joins it with section 17).
+`TractDefId` is a bare id until document 10's `tract` definition type is
+built, and 0 is a tract with no definition.
 
 ### 9.2 Lifecycle
 
@@ -1221,10 +1248,18 @@ pub trait TractRealizer {
                rec: &TractRecord, around: &TractRecords3x3) -> RealizedTract;
 }
 
+pub struct RealmInfo {                        // plain facts; it holds no cells
+    pub id: RealmId, pub def: RealmDefId, pub seed: u64, pub base_grid: GridId,
+    pub topology: Topology, pub below_fill: BlockState, pub above_fill: BlockState,
+}
+
+pub struct RegionSurveyResult {
+    pub record: RegionRecord,
+    pub sites: Vec<SiteSpec>,                 // made by the world and listed in the record
+}
+
 pub struct RealizedTract {
-    pub chunks: Vec<(i32, Chunk)>,            // by chunk z
-    pub below_fill: BlockState,
-    pub above_fill: BlockState,
+    pub column: Column,                       // chunks and the two fills, built with a ColumnBuilder
     pub spawns: Vec<SpawnRequest>,            // handed to the simulation
     pub areas: Vec<AreaSpec>,
     pub portals: Vec<PortalSpec>,
@@ -1242,10 +1277,84 @@ parallel, and always come out the same.
 Surveying a region assigns a `TractDefId`, rotation and variant to each of its
 4096 tracts and creates its sites.
 
+**Where the interfaces live.** In `clash-world` (`clash_world::generate`),
+because loading a tract calls them and the world cannot depend on the crate
+that implements them (01 §3). `clash-gen` implements them and re-exports
+them.
+
+**Enforced by types.** Every input of a realiser is definitions, plain facts
+or records: none holds a cell, a grid or the cosmos. A generator is a
+`WorldGenerator`: a surveyor and a realiser that is `Send`, `Sync` and
+`'static`, so it cannot borrow the world either. The records a realiser is
+shown are as the survey wrote them, with the devastation: how far along its
+life a tract is, and what is waiting for it, are left out
+(`TractRecord::as_surveyed`), so that what is generated cannot depend on
+which tracts happen to have been loaded before. A neighbour beyond an edge
+of the realm has no record.
+
+**Choosing a generator.** A realm definition names its generator and may
+give it parameters, which the realm carries as written and the generator
+reads:
+
+```json
+{ "type": "realm", "id": "plain", "generator": "flat",
+  "generator_params": { "surface_z": 0, "floor": "grass" } }
+```
+
+Generators register a factory by name in a `GeneratorRegistry`
+(`clash_gen::register_generators` adds this crate's).
+`GeneratorRegistry::bind(defs)` builds the generator of every realm
+definition and gives a `Generators`, which is what loading takes. A name
+nobody registered, a missing generator, an unknown parameter, a parameter
+out of range and a state that does not exist are each a `GenError` naming
+the realm definition and the parameter's path (`generator_params.wall`). A
+realm whose generator cannot be had is refused when one of its tracts is to
+be generated, not before: a world may hold realms that are never generated.
+Parameters are checked when the generators are bound;
+`Generators::param_errors` lists what is wrong.
+
+**In parallel.** `realize_batch(defs, runner, jobs)` realises a batch of
+tracts and returns the results in the order of the jobs. A `BatchRunner`
+decides on which threads: `SerialRunner` on the calling thread, and
+`clash_gen::RayonRunner` on a pool. Each job is a pure function of what it
+holds and each result has a place of its own, so the outcome is the same
+for every order and every thread count (invariant W6).
+`clash_gen::realize_tracts` does this without a cosmos, for tools and
+tests.
+
 Document 10 specifies the real generators and the JSON map format. The world
-model ships two test generators: `flat` (ground and nothing else) and
-`test_city` (a street grid with box buildings of configurable height, with
-walls, slabs and interior columns), used by every destruction test.
+model ships two test generators, used by every destruction test. Neither
+names content: every state comes from a parameter (invariant W9).
+
+| `flat` parameter | Meaning | Default |
+|------------------|---------|---------|
+| `surface_z` | The lowest storey that is not ground | 0 |
+| `ground` | The block state below the surface | The realm's `fill.below` |
+| `floor` | A floor state laid over the surface | None |
+
+`test_city` is a grid of streets with sidewalks, and on every block a
+building that fills its lot: outer walls with a window in every second
+cell and one or two doors onto the sidewalk; a slab on every storey and a
+roof; two partitions that cross, with a door in each of their four
+stretches; pillars; a flight of stairs from every storey but the top one,
+with an opening in the slab above it; and a few desks. What a building is
+like is drawn from the positional hash of its block of the street grid, so
+a building that straddles two tracts agrees with itself.
+
+| `test_city` parameter | Meaning | Default |
+|-----------------------|---------|---------|
+| `surface_z` | The storey of the streets and the ground storeys | 0 |
+| `street_spacing` | Cells from one street to the next | 16 |
+| `street_width`, `sidewalk_width` | Cells across a street; across a sidewalk | 3; 1 |
+| `storeys` | The fewest and the most storeys of a building, as a list | `[1, 3]` |
+| `column_spacing` | Cells between pillars | 4 |
+| `ground` | The block state under the surface | The realm's `fill.below` |
+| `street`, `sidewalk`, `slab`, `roof` | Floor states | required |
+| `wall`, `window`, `door`, `partition`, `pillar`, `stairs` | Block states | required |
+| `desk` | A fixture state | required |
+
+`cargo run -p clash-gen --example city_ascii -- [seed] [storey]` prints
+one storey of a block of it as plain characters.
 
 ### 9.4 Loading a tract
 
@@ -1265,6 +1374,60 @@ At a safe point, in this order:
 
 Loading is a pure function of cosmos state, tract and tick.
 
+```rust
+pub struct TractIo<'a> {                      // what loading needs besides the world
+    pub generators: &'a Generators,
+    pub store: &'a mut dyn TractStore,        // section 11
+}
+
+impl WorldCtx<'_> {
+    pub fn load_tracts(&mut self, io: &mut TractIo<'_>, tracts: &[(RealmId, TractPos)])
+        -> Vec<Result<LoadedTract, LoadError>>;       // one outcome for each tract, in the order given
+    pub fn load_tract(&mut self, io: &mut TractIo<'_>, realm: RealmId, tract: TractPos)
+        -> Result<LoadedTract, LoadError>;
+    pub fn unload_tract(&mut self, io: &mut TractIo<'_>, realm: RealmId, tract: TractPos)
+        -> Result<(), LoadError>;
+}
+
+pub struct LoadedTract {
+    pub realm: RealmId, pub tract: TractPos,
+    pub first: bool,                          // never loaded before
+    pub from_store: bool,                     // read, not generated
+    pub spawns: Vec<SpawnRequest>,            // for the simulation
+    pub areas: Vec<AreaId>,                   // made from what the generator asked for
+}
+```
+
+As built:
+
+- A batch is planned, realised and installed. Planning surveys the regions
+  of each tract and of its neighbours and decides where its cells come
+  from. The tracts that need generating are realised together (section
+  9.3). Then each tract is installed in the order given: its column joins
+  the grid, the changes waiting for it are made, and `TractLoaded` is
+  emitted.
+- A tract is read from the store when its record says `Realized { pristine:
+  false }` and generated otherwise (section 11).
+- What a generator asks for besides cells is acted on once, the first time
+  a tract is loaded: its areas are made (they are the cosmos's and outlive
+  the loading) and its spawn requests are handed over. A pristine tract
+  generated again gives its cells only.
+- Pending cell changes are made through `WorldEdit` with the coarse cause,
+  so they emit `ElementChanged`, ask for stability checks and move
+  occupants like any edit, and they make the tract one that is stored. A
+  pending spawn is handed over with the tract. Both are then gone from the
+  record. A pending stamp stays until section 17 is built.
+- A tract that is loaded already, or named twice in one batch, is refused,
+  as is one outside its realm. A refusal changes nothing and says why
+  (`LoadError`).
+- Not built yet: stamps and total devastation (section 17), and step 4,
+  which is the fields' (section 16).
+
+`Cosmos::add_pending_edit(realm, tract, edit)` is how a change is left for
+a tract that is not loaded. It is refused for a tract that is loaded, a
+tract whose region has not been surveyed (`Cosmos::survey_region` surveys
+one), and a cell change that names a cell of another tract.
+
 ### 9.5 Unloading a tract
 
 1. Emit `TractUnloading`. The simulation removes every occupant: persistent
@@ -1275,6 +1438,24 @@ Loading is a pure function of cosmos state, tract and tick.
 
 A tract with a process still running in it is not unloaded; the process holds
 a ticket (section 10).
+
+The world cannot remove entities and never calls upward (01 R4), so the
+three steps are not one call:
+
+- `unload_tract` is refused, changing nothing and emitting nothing, while
+  any occupant has a cell in the tract (`LoadError::Occupied`, naming one).
+  On a tract with no occupant it emits `TractUnloading` and unloads at
+  once.
+- Reconciliation (section 10.2) is what brings the two together. For a
+  tract that is to go and holds occupants it emits `TractUnloading` and
+  leaves the tract loaded. The simulation answers the event by taking its
+  entities out, and the next reconciliation unloads the tract without a
+  second event.
+
+A column that has changed since it was loaded is written whole, and its
+record becomes `Realized { pristine: false }`. One that has not is not
+written. The checks for bodies and processes come with them (sections 14
+and 15).
 
 ## 10. Activity
 
@@ -1311,11 +1492,83 @@ The world runs physics at full fidelity on every loaded tract. The difference
 between hot and warm matters only to the simulation, which throttles AI and
 ambient spawning in warm tracts.
 
+```rust
+impl Cosmos {
+    pub fn hold_ticket(&mut self, ticket: Ticket) -> Result<TicketId, WorldError>;
+    pub fn release_ticket(&mut self, id: TicketId) -> Option<Ticket>;
+    pub fn move_ticket(&mut self, id: TicketId, to: TractPos) -> Result<(), WorldError>;   // a fixed anchor
+    pub fn ticket(&self, id: TicketId) -> Option<&Ticket>;
+    pub fn tickets(&self) -> &TicketTable;
+    pub fn activity(&self, realm: RealmId, tract: TractPos) -> Option<Activity>;
+    pub fn set_max_loaded_tracts(&mut self, max: usize);
+}
+```
+
+- A ticket reaches `radius` tracts from its anchor, counted the longer way
+  along either axis; a hot ticket reaches `WARM_MARGIN` further, and the
+  tracts of that margin are warm. A tract beyond an edge of the realm is
+  not covered, and on a wrapped axis a ticket reaches round.
+- Holding a ticket loads nothing and releasing one unloads nothing:
+  reconciliation does. A ticket id is never reused.
+- Anchors built so far are `Fixed` and `Entity`. A ticket anchored to an
+  entity is centred on the tract its occupant is in, follows it, and takes
+  on its realm when it crosses into another. While the entity is not in
+  the world the ticket stays where it was last, and one that has never
+  been seen covers nothing. `Body` and `Subgrid` anchors come with bodies
+  and subgrids; until then their holders move a fixed anchor with
+  `move_ticket`.
+- `TicketReason::Eoc` carries the rule's number, which the world gives no
+  meaning.
+- `Cosmos::activity` gives a tract's level as of the last reconciliation:
+  the highest of the tickets covering it, warm for a tract kept only by the
+  unloading margin, and nothing for a tract the tickets do not keep.
+
 ### 10.2 Reconciliation
 
 At safe points the cosmos compares the tracts tickets want with the tracts
 loaded and loads or unloads the difference. Order is by priority, then
 distance to the ticket anchor, then `TractPos`, so it is deterministic.
+
+```rust
+impl WorldCtx<'_> {
+    pub fn reconcile_activity(&mut self, io: &mut TractIo<'_>) -> Reconciled;
+}
+
+pub struct Reconciled {
+    pub loaded: Vec<LoadedTract>,             // in the order they were loaded
+    pub unloaded: Vec<(RealmId, TractPos)>,   // by realm, then row by row
+    pub refused: Vec<RefusedTicket>,          // { id, ticket }: dropped for the budget
+    pub expired: Vec<RefusedTicket>,          // lapsed at their tick
+    pub waiting: Vec<(RealmId, TractPos)>,    // to be unloaded, and still occupied
+    pub failed: Vec<TractFailure>,            // { realm, tract, error }: could not be loaded or unloaded
+}
+```
+
+The simulation calls it at every safe point. In order:
+
+1. Tickets whose `expires` has come are dropped, and tickets anchored to an
+   entity follow it. If nothing has changed since the last call it returns
+   here: an idle call costs a look at each ticket.
+2. The budget (section 10.3).
+3. Unloading. A tract is loaded at a ticket's reach and unloaded only once
+   it lies more than `UNLOAD_MARGIN` (1) tract beyond every ticket's reach,
+   so an anchor pacing across a tract boundary loads and unloads nothing. A
+   tract with no occupant is unloaded at once. One that holds occupants is
+   announced with `TractUnloading`, once, and reported as waiting until a
+   reconciliation finds it empty (section 9.5). If it is wanted again by
+   then it is still unloaded, and loaded again in the same call with
+   `TractLoaded`, so the simulation sees the two events in pairs; if it is
+   wanted again and nobody has left, it simply stays.
+4. Loading what is wanted and not loaded, by priority (highest first), then
+   distance from the anchor of the ticket of that priority nearest to it,
+   then position, then realm. The batch is realised in parallel
+   (section 9.3).
+
+A tract that could not be loaded is reported with the reason and tried
+again when something changes.
+
+Reconciliation counts and unloads only the tracts the loading procedure
+loaded. A column put into the world by `test_support` is outside it.
 
 ### 10.3 Budget
 
@@ -1325,6 +1578,20 @@ told to **force-resolve**: finish instantly in resolve mode and record the
 result. A body that loses its ticket is resolved coarsely: its landing point
 is computed, damage along its path becomes a stamp, and its owner is placed
 at the destination as a cold agent or pending spawn.
+
+- While the tracts the tickets cover outnumber the budget, one ticket is
+  refused: the lowest priority, and of equals the one made last. A ticket
+  of priority 255 is pinned and never refused.
+- A refused ticket is gone from the table. Its holder is told twice over:
+  by `TicketRefused`, and in what reconciliation returns, where the
+  ticket's `reason` says who held it. Forcing a process or a body to
+  resolve is the holder's part (sections 14 and 15).
+- Tracts kept only by the unloading margin are the first to go when room is
+  short.
+- If pinned tickets alone want more than the budget, none is refused and
+  the budget still holds: the tracts that do not fit, last in loading
+  order, are not loaded, are reported as failed with `LoadError::OverBudget`
+  and are tried again at the next call.
 
 With defaults, the player's ticket loads 17 × 17 tracts (544 m across). The
 budget leaves room for about four more such areas.
@@ -1342,7 +1609,9 @@ pub trait TractStore {
 }
 ```
 
-  The default implementation uses `redb`. Tests use an in-memory map.
+  The default implementation uses `redb`. Tests use an in-memory map
+  (`MemoryStore`). `put` and `delete` take effect for later `get`s at once;
+  `commit` makes what was done since the last commit durable.
 - A tract blob holds its column (chunks with compacted palettes, sparse
   layers, fields, fills) and an opaque entity section owned by the simulation.
   It is compressed with LZ4.
@@ -1364,6 +1633,18 @@ pub trait TractStore {
 
 Rule R7 (save/load is invisible) is tested for every world scenario,
 including saves taken in the middle of a collapse and a blast.
+
+Built so far, with tract loading: the trait, `MemoryStore`, and a column
+codec behind two functions, `encode_column(&Column)` and
+`decode_column(&WorldDefs, &[u8])`. A tract blob has kind `TRCT` and version
+1. Its body is the column's two fills, the chunk height of its first stored
+chunk and its chunks, without those at either end that hold only the fill;
+each chunk is its three element layers with compacted palettes and its four
+sparse layers. Equal columns give equal bodies. The pristine policy is the
+record's `pristine` flag alone. Left to the persistence package, which
+replaces the two functions: states by save id, the entity section, fields,
+the generator fingerprint, `save.store_pristine` and the `redb` store. Until
+then a blob holds runtime ids and is good for the mod set that wrote it.
 
 ## 12. Damage
 
@@ -2391,7 +2672,9 @@ been written and counts as revision zero. A `FovSet` asked the same
 question of an unchanged world returns at once; a `Path` says whether it
 `is_current`. A tract that is unloaded and loaded again must not come
 back looking unchanged: loading starts its chunks' revisions where no
-earlier loading of that tract left them.
+earlier loading of that tract left them. A grid remembers one number, one
+more than the highest revision of any column that has left it, and a
+column that joins starts there (section 6.2).
 
 Still to come, with the packages that build them:
 
@@ -2529,6 +2812,15 @@ materials carrying the tag its `needs` names. `catch_up` is one of
 `field.max_active_cells`, `body.max_ticket_tracts`, `max_loaded_tracts`,
 `sight.portal_depth`, and the debris budget of section 12.3
 (`debris.max_bodies`).
+
+**Generator parameters.** A realm definition's `generator_params` is a
+map of values its generator reads (section 9.3). A parameter the generator
+does not know is an error, not ignored.
+
+**Tickets and pending edits from Rust.** `hold_ticket`, `release_ticket`
+and `add_pending_edit` are functions of `Cosmos` with the arguments of
+sections 10.1 and 9.4. As verbs they are bound with the rule runtime, as
+are a tract's activity and its record's variables as queries.
 
 **Reachable only from Rust** so far, each wanting a verb or a property
 when the rule runtime binds this document: the queries of section 22 other

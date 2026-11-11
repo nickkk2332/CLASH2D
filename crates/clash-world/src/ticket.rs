@@ -853,3 +853,101 @@ impl Cosmos {
         first_occupant(self.grid(grid).ok()?.column(tract)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clash_core::{Hash128, codec};
+
+    fn table() -> TicketTable {
+        let mut table = TicketTable::new();
+        let realm = RealmId::new(2);
+        let fixed = Ticket::new(
+            realm,
+            TicketAnchor::Fixed(TractPos::new(3, -4)),
+            2,
+            Activity::Hot,
+            TicketReason::Process(ProcessId::new(9)),
+        )
+        .with_priority(40)
+        .until(Tick(500));
+        let follow = Ticket::player(realm, EntityId::new(6, 1));
+        table.tickets.insert(
+            TicketId::new(0),
+            Held {
+                ticket: fixed,
+                at: Some(TractPos::new(3, -4)),
+            },
+        );
+        table.tickets.insert(
+            TicketId::new(1),
+            Held {
+                ticket: follow,
+                at: None,
+            },
+        );
+        table.next = 2;
+        table.note_loaded(realm, TractPos::new(3, -4));
+        table.note_loaded(realm, TractPos::new(4, -4));
+        table.leaving.insert((realm, TractPos::new(4, -4)));
+        table
+    }
+
+    #[test]
+    fn the_table_round_trips_and_what_is_derived_is_left_out() {
+        let mut table = table();
+        table
+            .levels
+            .insert((RealmId::new(2), TractPos::new(3, -4)), Activity::Hot);
+        table.stale = false;
+        let bytes = codec::to_bytes(&table).unwrap();
+        let back: TicketTable = codec::from_bytes(&bytes).unwrap();
+        // The tickets, the budget and the tracts kept and leaving come
+        // back; the levels are worked out again, and the table says it
+        // must be looked at.
+        assert_eq!(Hash128::of(&back), Hash128::of(&table));
+        assert_eq!(back.len(), 2);
+        assert_eq!(back.get(TicketId::new(1)), table.get(TicketId::new(1)));
+        assert_eq!(back.centre(TicketId::new(0)), Some(TractPos::new(3, -4)));
+        assert_eq!(back.kept_count(), 2);
+        assert!(back.levels.is_empty());
+        assert!(back.stale);
+    }
+
+    #[test]
+    fn what_the_tickets_keep_is_state() {
+        let table = table();
+        let hash = Hash128::of(&table);
+        let mut other = table.clone();
+        other.forget(RealmId::new(2), TractPos::new(4, -4));
+        assert_ne!(Hash128::of(&other), hash);
+        assert!(!other.is_kept(RealmId::new(2), TractPos::new(4, -4)));
+        assert!(other.leaving.is_empty());
+        let mut other = table.clone();
+        other.max_loaded += 1;
+        assert_ne!(Hash128::of(&other), hash);
+        let mut other = table.clone();
+        other.tickets.remove(&TicketId::new(1));
+        assert_ne!(Hash128::of(&other), hash);
+        // What follows from the rest does not count.
+        let mut other = table;
+        other
+            .levels
+            .insert((RealmId::new(2), TractPos::new(0, 0)), Activity::Warm);
+        other.stale = false;
+        assert_eq!(Hash128::of(&other), hash);
+    }
+
+    #[test]
+    fn a_hot_ticket_reaches_past_its_radius_and_a_warm_one_does_not() {
+        let at = TicketAnchor::Fixed(TractPos::new(0, 0));
+        let realm = RealmId::new(0);
+        let hot = Ticket::new(realm, at, 6, Activity::Hot, TicketReason::Debug);
+        let warm = Ticket::new(realm, at, 6, Activity::Warm, TicketReason::Debug);
+        assert_eq!(hot.reach(), 6 + i32::from(WARM_MARGIN));
+        assert_eq!(warm.reach(), 6);
+        assert!(Activity::Hot > Activity::Warm);
+        assert_eq!(hot.priority, DEFAULT_PRIORITY);
+        assert!(!hot.is_pinned() && hot.pinned().is_pinned());
+    }
+}

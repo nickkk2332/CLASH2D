@@ -534,7 +534,7 @@ fn a_generator_that_cannot_be_had_is_an_error_that_says_where() {
         let defs = common::try_defs_with(&[("data/town.json", &text)]).unwrap();
         let generators = clash_gen::generators(&defs);
         let town = common::realm_def(&defs, "extra:town");
-        let error = generators.of(town).err().expect("the parameters are wrong");
+        let error = generators.of(town).expect_err("the parameters are wrong");
         assert_eq!(generators.param_errors().next(), Some(&error));
         error
     };
@@ -717,4 +717,90 @@ fn the_printed_city_is_the_stored_one() {
     // The other storeys and seeds print too, and differ.
     assert_ne!(common::city_text(1, 1).unwrap(), text);
     assert_ne!(common::city_text(2, 0).unwrap(), text);
+}
+
+/// The best of a few passes of a piece of work, in microseconds.
+#[allow(
+    clippy::disallowed_types,
+    clippy::disallowed_methods,
+    reason = "a timing test reads the wall clock; nothing in the simulation does"
+)]
+fn best_micros(mut work: impl FnMut()) -> f64 {
+    let mut best = f64::INFINITY;
+    for _ in 0..7 {
+        let started = std::time::Instant::now();
+        work();
+        best = best.min(started.elapsed().as_nanos() as f64 / 1000.0);
+    }
+    best
+}
+
+/// Not a benchmark with a budget: rough figures for the budgets of
+/// 02 §25, printed. Run with
+/// `cargo test --release -p clash-gen --test tracts -- --ignored --nocapture --test-threads=1`.
+#[test]
+#[ignore = "timing; run by hand in release mode"]
+fn timing_of_realising_and_loading() {
+    let defs = common::core_defs();
+    let def = common::realm_def(&defs, common::CITY_REALM);
+    let tracts = common::block(8);
+    for threads in [0, 1, 4] {
+        let generators = generators(&defs, threads);
+        let micros = best_micros(|| {
+            let realised = realize_tracts(&generators, def, SEED, &tracts).unwrap();
+            std::hint::black_box(realised);
+        });
+        println!(
+            "realise a test_city tract, {threads} threads: {:.0} µs a tract ({} tracts)",
+            micros / tracts.len() as f64,
+            tracts.len()
+        );
+    }
+    // Loading a stored tract: every tract of the block changed, unloaded
+    // and read back.
+    let mut w = world(common::CITY_REALM, SEED);
+    let generators = generators(&w.defs, 0);
+    let mut store = MemoryStore::new();
+    let mut io = TractIo::new(&generators, &mut store);
+    let realm = w.realm;
+    let order: Vec<(RealmId, TractPos)> = tracts.iter().map(|tract| (realm, *tract)).collect();
+    w.ctx().load_tracts(&mut io, &order);
+    let wall = w.defs.block_state("wall", None).unwrap();
+    for tract in &tracts {
+        let spot = Location::new(w.grid, tract.origin(0));
+        w.ctx().edit(Cause::DEBUG).set_block(spot, wall).unwrap();
+    }
+    let unload = best_micros(|| {
+        for tract in &tracts {
+            w.ctx().unload_tract(&mut io, realm, *tract).unwrap();
+        }
+        let loaded = w.ctx().load_tracts(&mut io, &order);
+        assert!(
+            loaded
+                .iter()
+                .all(|outcome| outcome.as_ref().is_ok_and(|l| l.from_store))
+        );
+        for tract in &tracts {
+            let spot = Location::new(w.grid, tract.origin(1));
+            w.ctx().edit(Cause::DEBUG).set_block(spot, wall).unwrap();
+            w.ctx()
+                .edit(Cause::DEBUG)
+                .set_block(spot, BlockState::NONE)
+                .unwrap();
+        }
+    });
+    println!(
+        "store and load a changed test_city tract: {:.0} µs a tract",
+        unload / tracts.len() as f64
+    );
+    let bytes: usize = tracts
+        .iter()
+        .map(|tract| {
+            io.store
+                .get(realm, *tract)
+                .unwrap()
+                .map_or(0, |blob| blob.len())
+        })
+        .sum();
+    println!("a stored test_city tract: {} bytes", bytes / tracts.len());
 }
