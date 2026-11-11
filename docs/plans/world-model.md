@@ -33,8 +33,8 @@ Section references such as "02 §14" point into those documents.
 | W3 | Cell definitions | M | F4, W1 | beta |
 | W4 | Chunks and grids | M | W2, W3 | beta |
 | W5 | Cosmos, realms, views | M | W4, F3 | beta |
-| W6 | Edits, causes, events | M | W5 | todo |
-| W7 | Occupancy, planes, areas, sites | M | W6 | todo |
+| W6 | Edits, causes, events | M | W5 | in progress |
+| W7 | Occupancy, planes, areas, sites | M | W6 | in progress |
 | W8 | Tracts, regions, generation, loading | L | W7 | todo |
 | W9 | Tickets and activity | M | W8 | todo |
 | W10 | Persistence | M | W8 | todo |

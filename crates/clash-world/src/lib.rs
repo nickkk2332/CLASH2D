@@ -31,19 +31,28 @@
 //! - Nothing here names a material or a block. What exists is what the
 //!   definitions say.
 
+mod area;
 mod cause;
 mod chunk;
 mod cosmos;
 pub mod defs;
 pub mod dims;
+mod edit;
 mod error;
+mod event;
 mod grid;
 pub mod iter;
+mod occupancy;
 mod pos;
+mod site;
 pub mod storage;
 pub mod test_support;
 mod topology;
 
+pub use area::{
+    AREA_MAX_CELLS, AREA_MAX_TRACTS, AmbientOverride, Area, AreaAnchor, AreaDrift, AreaId,
+    AreaShape, AreaSpec, AreaTable, Drift, Enclosure, FIELD_BLOCK_COVERAGE, GravityOverride,
+};
 pub use cause::{Cause, CauseKind};
 pub use chunk::{
     Chunk, ChunkRev, ConduitId, ConduitSet, DAMAGE_MAX, Decal, DecalId, DecalList, FieldId,
@@ -51,14 +60,24 @@ pub use chunk::{
 };
 pub use cosmos::{Ambient, Cosmos, GridView, Realm, RealmId, RealmState};
 pub use defs::{
-    AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
+    AreaKindId, AtmosphereId, BlockId, BlockState, CellFlags, DamageTypeId, DefError, ElementFlags,
     ElementState, EngineFlag, FixtureId, FixtureState, FloorId, FloorState, Layer, MaterialId,
-    RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
+    PlaneId, RawWorldDefs, RealmDefId, StatePart, StateRef, StateRefError, WorldDefs,
 };
+pub use edit::{DISPLACE_RANGE_CELLS, StabilityQueue, StabilityRequest, WorldCtx, WorldEdit};
 pub use error::WorldError;
-pub use grid::{CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE};
+pub use event::{EventSink, WorldEvent};
+pub use grid::{
+    COLUMN_MAX_CHUNKS, CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE,
+};
+pub use occupancy::{
+    FOOTPRINT_MAX_SIDE, Footprint, Occupant, OccupantEntry, OccupantFilter, OccupantFlags,
+    OccupantKind, OccupantKinds, OccupantRecord, Occupied, PlaneMask, QUERY_MAX_LINE_CELLS,
+    QUERY_MAX_TRACTS, distinct_ids,
+};
 pub use pos::{
     CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,
     distance_sq_cells,
 };
+pub use site::{Site, SiteDefId, SiteId, SiteSpec, SiteTable};
 pub use topology::{Edge, Extent, Topology};

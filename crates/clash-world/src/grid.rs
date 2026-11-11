@@ -1,11 +1,16 @@
 //! [`Column`] and [`Grid`]: chunks stacked into tracts, and tracts
 //! gathered into a grid (02 §6.3).
 
-use clash_core::{LookupMap, StateHash, StateHasher};
+use std::collections::BTreeMap;
 
-use crate::chunk::Chunk;
-use crate::defs::{BlockState, CellFlags, FixtureState, FloorState, WorldDefs};
+use clash_core::{EntityId, LookupMap, StateHash, StateHasher, Value, VarKey};
+
+use crate::chunk::{Chunk, Decal, DecalId};
+use crate::defs::{
+    BlockState, CellFlags, ElementState, FixtureState, FloorState, Layer, WorldDefs,
+};
 use crate::dims::{CHUNK_AREA, CHUNK_XY, CHUNK_Z_BITS, CHUNK_Z_MASK};
+use crate::occupancy::{OccupantEntry, OccupantIndex};
 use crate::pos::{CellIdx, CellPos, TractPos};
 
 /// The height of a cell column in which every cell is open.
@@ -14,6 +19,11 @@ pub const HEIGHT_NONE: i32 = i32::MIN;
 /// The height of a cell column that is filled all the way up, because the
 /// fill above the stored range is not empty.
 pub const HEIGHT_FULL: i32 = i32::MAX;
+
+/// The most chunks one column stores. Chunks are stored in an unbroken
+/// run, so a write is refused when it would stretch the run past this:
+/// about 780 km of height.
+pub const COLUMN_MAX_CHUNKS: i64 = 1 << 15;
 
 /// The states of a cell's three elements.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
@@ -56,6 +66,14 @@ pub struct Column {
     above_flags: CellFlags,
     /// Per cell column: the highest storey that is not open.
     heightmap: Box<[i32; CHUNK_AREA]>,
+    /// The occupant indices of chunk heights that have no storage: of
+    /// whatever stands or flies above or below the stored range. An
+    /// index moves into its chunk when the chunk is created. Like a
+    /// chunk's own index, this is not state.
+    stray: BTreeMap<i32, OccupantIndex>,
+    /// Bumped by every change to who occupies the column's cells, at any
+    /// height.
+    occupants_rev: u32,
 }
 
 impl Column {
@@ -76,6 +94,8 @@ impl Column {
             below_flags: defs.cell_flags(FloorState::NONE, below_fill, FixtureState::NONE),
             above_flags: defs.cell_flags(FloorState::NONE, above_fill, FixtureState::NONE),
             heightmap: Box::new([HEIGHT_NONE; CHUNK_AREA]),
+            stray: BTreeMap::new(),
+            occupants_rev: 0,
         };
         let chunk_base = column.z_lo << CHUNK_Z_BITS;
         if surface_z != chunk_base && below_fill != above_fill {
@@ -163,6 +183,75 @@ impl Column {
             Some(chunk) => chunk.fixture(cell.idx()),
             None => FixtureState::NONE,
         }
+    }
+
+    /// The element of a cell on a layer.
+    pub fn element(&self, layer: Layer, cell: CellPos) -> ElementState {
+        match layer {
+            Layer::Floor => self.floor(cell).raw(),
+            Layer::Block => self.block(cell).raw(),
+            Layer::Fixture => self.fixture(cell).raw(),
+        }
+    }
+
+    /// The accumulated damage of a cell's floor, block and fixture, each
+    /// in 255ths of its capacity.
+    pub fn damage(&self, cell: CellPos) -> [u8; 3] {
+        self.chunk(cell.z >> CHUNK_Z_BITS)
+            .map_or([0; 3], |chunk| chunk.damage(cell.idx()))
+    }
+
+    /// A mod variable on a cell.
+    pub fn var(&self, cell: CellPos, key: &str) -> Option<&Value> {
+        self.chunk(cell.z >> CHUNK_Z_BITS)?
+            .vars(cell.idx())?
+            .get(key)
+    }
+
+    /// The occupant index of a chunk height, if anyone is there.
+    #[inline]
+    pub fn occupants_in(&self, chunk_z: i32) -> Option<&OccupantIndex> {
+        let index = match self.chunk(chunk_z) {
+            Some(chunk) => chunk.occupants(),
+            None => self.stray.get(&chunk_z)?,
+        };
+        (!index.is_empty()).then_some(index)
+    }
+
+    /// Whether any cell of the column holds an occupant.
+    pub fn has_occupants(&self) -> bool {
+        !self.stray.is_empty()
+            || self
+                .chunks
+                .iter()
+                .any(|chunk| !chunk.occupants().is_empty())
+    }
+
+    /// A counter bumped by every change to who occupies the column's
+    /// cells, at any height. It wraps round: compare for equality.
+    pub fn occupants_rev(&self) -> u32 {
+        self.occupants_rev
+    }
+
+    /// The occupant indices of the chunk heights from `low` to `high`
+    /// that hold anyone, each with its chunk height. Those of stored
+    /// chunks come first, lowest first, then those of heights without
+    /// storage.
+    pub(crate) fn occupant_indices(
+        &self,
+        low: i32,
+        high: i32,
+    ) -> impl Iterator<Item = (i32, &OccupantIndex)> + '_ {
+        let stored = self
+            .chunks()
+            .filter(move |(chunk_z, _)| *chunk_z >= low && *chunk_z <= high)
+            .map(|(chunk_z, chunk)| (chunk_z, chunk.occupants()));
+        let stray = (low <= high)
+            .then(|| self.stray.range(low..=high))
+            .into_iter()
+            .flatten()
+            .map(|(chunk_z, index)| (*chunk_z, index));
+        stored.chain(stray).filter(|(_, index)| !index.is_empty())
     }
 
     /// The states of a cell's three elements.
@@ -269,7 +358,115 @@ impl Column {
         while self.chunks.len() <= at {
             self.chunks.push(Chunk::uniform(defs, self.above_fill));
         }
+        self.adopt_strays();
         self.chunks.get_mut(at)
+    }
+
+    /// Moves the occupant indices of heights that now have storage into
+    /// their chunks.
+    fn adopt_strays(&mut self) {
+        if self.stray.is_empty() {
+            return;
+        }
+        for (chunk_z, chunk) in (self.z_lo..).zip(self.chunks.iter_mut()) {
+            if let Some(index) = self.stray.remove(&chunk_z) {
+                chunk.adopt_occupants(index);
+            }
+        }
+    }
+
+    /// Whether a chunk height is stored or could be: whether creating it
+    /// would keep the stored run within [`COLUMN_MAX_CHUNKS`].
+    pub(crate) fn can_store(&self, chunk_z: i32) -> bool {
+        let low = i64::from(self.z_lo);
+        let high = low + (self.chunks.len() as i64 - 1).max(0);
+        let chunk_z = i64::from(chunk_z);
+        high.max(chunk_z) - low.min(chunk_z) < COLUMN_MAX_CHUNKS
+    }
+
+    /// The occupant index of a chunk height, to change: the chunk's own
+    /// if the height is stored, one kept beside the chunks otherwise.
+    fn occupants_mut(&mut self, chunk_z: i32) -> &mut OccupantIndex {
+        self.occupants_rev = self.occupants_rev.wrapping_add(1);
+        let at = usize::try_from(i64::from(chunk_z) - i64::from(self.z_lo))
+            .ok()
+            .filter(|at| *at < self.chunks.len());
+        match at {
+            Some(at) => self.chunks[at].occupants_mut(),
+            None => self.stray.entry(chunk_z).or_default(),
+        }
+    }
+
+    /// Puts an occupant into a cell.
+    pub(crate) fn occupant_insert(&mut self, cell: CellPos, entry: OccupantEntry) {
+        self.occupants_mut(cell.z >> CHUNK_Z_BITS).insert(entry);
+    }
+
+    /// Takes an occupant out of a cell. Returns whether it was there.
+    pub(crate) fn occupant_remove(&mut self, cell: CellPos, id: EntityId) -> bool {
+        let chunk_z = cell.z >> CHUNK_Z_BITS;
+        if self.occupants_in(chunk_z).is_none() {
+            return false;
+        }
+        let removed = self.occupants_mut(chunk_z).remove(cell.idx(), id);
+        if self
+            .stray
+            .get(&chunk_z)
+            .is_some_and(OccupantIndex::is_empty)
+        {
+            self.stray.remove(&chunk_z);
+        }
+        removed
+    }
+
+    /// Sets the accumulated damage of a cell's three elements and returns
+    /// what it was. Storage is created only if there is damage to store.
+    pub(crate) fn set_damage(
+        &mut self,
+        defs: &WorldDefs,
+        cell: CellPos,
+        damage: [u8; 3],
+    ) -> [u8; 3] {
+        let old = self.damage(cell);
+        if old != damage
+            && let Some(chunk) = self.chunk_mut(defs, cell.z >> CHUNK_Z_BITS)
+        {
+            chunk.set_damage(cell.idx(), damage);
+        }
+        old
+    }
+
+    /// Adds a mark to a cell, creating storage if needed.
+    pub(crate) fn add_decal(&mut self, defs: &WorldDefs, cell: CellPos, decal: Decal) {
+        if let Some(chunk) = self.chunk_mut(defs, cell.z >> CHUNK_Z_BITS) {
+            chunk.add_decal(cell.idx(), decal);
+        }
+    }
+
+    /// Removes every mark of a kind from a cell and returns how many
+    /// there were.
+    pub(crate) fn remove_decals(&mut self, cell: CellPos, kind: DecalId) -> usize {
+        let at = usize::try_from(i64::from(cell.z >> CHUNK_Z_BITS) - i64::from(self.z_lo)).ok();
+        at.and_then(|at| self.chunks.get_mut(at))
+            .map_or(0, |chunk| chunk.remove_decals(cell.idx(), kind))
+    }
+
+    /// Sets or clears a mod variable on a cell and returns the value it
+    /// had. Storage is created only if there is a value to store.
+    pub(crate) fn set_var(
+        &mut self,
+        defs: &WorldDefs,
+        cell: CellPos,
+        key: VarKey,
+        value: Option<Value>,
+    ) -> Option<Value> {
+        let old = self.var(cell, key.as_str()).cloned();
+        if old != value
+            && let Some(chunk) = self.chunk_mut(defs, cell.z >> CHUNK_Z_BITS)
+        {
+            chunk.set_var(cell.idx(), key, value);
+        }
+        old
     }
 
     /// Sets a cell's floor, creating storage if needed, and returns the
@@ -585,7 +782,6 @@ impl Grid {
 
     /// The column of a tract, to change. Crate-private: cells change only
     /// through `WorldEdit`.
-    #[allow(dead_code, reason = "a write primitive for WorldEdit, package W6")]
     pub(crate) fn column_mut(&mut self, tract: TractPos) -> Option<&mut Column> {
         self.columns.get_mut(&tract)
     }

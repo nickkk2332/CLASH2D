@@ -24,6 +24,13 @@ define_id! {
     pub struct FixtureId(u16);
     /// A `realm` definition.
     pub struct RealmDefId(u16);
+    /// An `area_kind` definition (02 §8.3).
+    pub struct AreaKindId(u16);
+    /// A `plane` definition: an interaction layer (02 §8.2). Id 0 is the
+    /// built-in `engine:default`, the plane everything is on unless it
+    /// says otherwise. A plane's id is the number of its bit in a
+    /// [`PlaneMask`](crate::PlaneMask).
+    pub struct PlaneId(u8);
 }
 
 /// One of a cell's three elements.

@@ -88,6 +88,14 @@ pub fn try_add_json(raw: &mut RawWorldDefs, namespace: &str, text: &str) -> Resu
                 id.clone(),
                 serde_json::from_value(object).map_err(parse_error)?,
             )),
+            "plane" => raw.planes.push((
+                id.clone(),
+                serde_json::from_value(object).map_err(parse_error)?,
+            )),
+            "area_kind" => raw.area_kinds.push((
+                id.clone(),
+                serde_json::from_value(object).map_err(parse_error)?,
+            )),
             other => return Err(format!("unknown definition type `{other}`")),
         }
     }

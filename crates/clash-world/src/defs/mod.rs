@@ -21,19 +21,20 @@ mod state;
 use core::fmt;
 use std::collections::BTreeMap;
 
-use clash_core::{DenseId, Real};
+use clash_core::{DenseId, Real, VarMap};
 
 pub use flags::{CellFlags, ElementFlags, EngineFlag};
 pub use quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temperature};
 pub use raw::{
-    AtmosphereDef, BlockDef, BoundaryLinkSpec, ContactSpec, ContactSurfaceSpec, DamageTypeDef,
-    DefRef, DerivedGeneratorSpec, EdgeKind, EdgeSpec, EdgesSpec, ExitKind, FillSpec, FixtureDef,
-    FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, LinkMapSpec, MaterialDef, OrderedMap,
-    RawWorldDefs, RealmDef, ResistSpec, StateSpec, StratumSpec, WrapAxis,
+    AreaKindDef, AtmosphereDef, BlockDef, BoundaryLinkSpec, ContactSpec, ContactSurfaceSpec,
+    DamageTypeDef, DefRef, DerivedGeneratorSpec, EdgeKind, EdgeSpec, EdgesSpec, ExitKind, FillSpec,
+    FixtureDef, FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, LinkMapSpec, MaterialDef,
+    OrderedMap, PlaneDef, RawWorldDefs, RealmDef, ResistSpec, StateSpec, StratumSpec, WrapAxis,
 };
 pub use state::{
-    AtmosphereId, BlockId, BlockState, DamageTypeId, ElementState, FixtureId, FixtureState,
-    FloorId, FloorState, Layer, MaterialId, RealmDefId, StatePart, StateRef, StateRefError,
+    AreaKindId, AtmosphereId, BlockId, BlockState, DamageTypeId, ElementState, FixtureId,
+    FixtureState, FloorId, FloorState, Layer, MaterialId, PlaneId, RealmDefId, StatePart, StateRef,
+    StateRefError,
 };
 
 use crate::topology::{Edge, Topology};
@@ -406,6 +407,43 @@ impl RealmKind {
     }
 }
 
+/// The qualified id of the built-in plane, which has dense id 0: the
+/// plane everything is on unless it says otherwise (02 §8.2).
+pub const DEFAULT_PLANE_ID: &str = "engine:default";
+
+/// A resolved `plane` definition (02 §8.2).
+#[derive(Clone, Debug, Default)]
+pub struct Plane {
+    /// Free-form tags, sorted.
+    pub tags: Vec<String>,
+}
+
+/// A resolved `area_kind` definition: what every area of a kind starts
+/// with (02 §8.3).
+#[derive(Clone, Debug, Default)]
+pub struct AreaKind {
+    /// Tags every area of this kind carries, sorted.
+    pub tags: Vec<String>,
+    /// Variables every area of this kind starts with.
+    pub vars: VarMap,
+    /// The rate of the clock areas of this kind run on, relative to their
+    /// realm's. `None`: they have no clock of their own.
+    pub clock_rate: Option<Real>,
+    /// Which area applies where several overlap: the highest.
+    pub priority: i32,
+    /// Whether areas of this kind are sealed volumes (11 §10). The world
+    /// stores and reports it.
+    pub sealed: bool,
+    /// How fast a sealed area's held temperature moves toward the
+    /// outside, as written (11 §4.6).
+    pub leak: Option<serde_json::Value>,
+    /// The ambience definition, as written (12 §6.4).
+    pub ambience: Option<String>,
+    /// The rules attached to every area of this kind, as written
+    /// (05 §9.3). The world carries them; the rule runtime reads them.
+    pub rules: Vec<serde_json::Value>,
+}
+
 /// Every definition of the world model, resolved and immutable.
 ///
 /// Built once by [`WorldDefs::build`] and shared behind an `Arc`.
@@ -418,6 +456,8 @@ pub struct WorldDefs {
     blocks: Table<BlockId, Element>,
     fixtures: Table<FixtureId, Element>,
     realms: Table<RealmDefId, RealmKind>,
+    planes: Table<PlaneId, Plane>,
+    area_kinds: Table<AreaKindId, AreaKind>,
     kinetic: Option<DamageTypeId>,
 }
 
@@ -474,6 +514,16 @@ impl WorldDefs {
     /// The `realm` definitions.
     pub fn realms(&self) -> &Table<RealmDefId, RealmKind> {
         &self.realms
+    }
+
+    /// The `plane` definitions. Id 0 is the built-in `engine:default`.
+    pub fn planes(&self) -> &Table<PlaneId, Plane> {
+        &self.planes
+    }
+
+    /// The `area_kind` definitions.
+    pub fn area_kinds(&self) -> &Table<AreaKindId, AreaKind> {
+        &self.area_kinds
     }
 
     /// The damage type flagged `kinetic`, which bodies and falling masses
