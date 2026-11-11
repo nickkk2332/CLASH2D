@@ -55,7 +55,11 @@
 //! and playing it later asks nobody anything. So a cell is drawn as the
 //! party saw it when its batch ended, which for a cell that changed
 //! twice in one batch is its last state both times: events do not carry
-//! what a cell holds after them.
+//! what a cell holds after them. The last change a batch makes to a
+//! sprite leaves it as the party perceives it when the batch ends, and
+//! one no longer perceived leaves the picture at the last event that
+//! moves it. That is what makes caught-up playback equal a fresh view
+//! ([`check_caught_up`]).
 //!
 //! # The key that skips
 //!
@@ -66,8 +70,12 @@
 //!
 //! # What is not built
 //!
-//! - Floating text (`text` of 12 §7.3) and an `anim`'s particles.
+//! - Floating text, an `anim`'s particles and effects shaped by an
+//!   event's fields (12 §7.3).
 //! - Looks (12 §4.4): no event reports one yet.
+//! - The pacing constants other than `stretch_time` are the engine's,
+//!   and `stretch_time` is set from Rust ([`Playback::set_stretch_time`])
+//!   until settings exist.
 //! - Events carry no duration, so a sprite glides for its show's `time`
 //!   and not for as long as the move took (12 §7.2), and bodies in
 //!   flight are not drawn along their paths.

@@ -773,6 +773,13 @@ fn a_show_that_is_wrong_is_reported_where_it_is_written() {
         Err(diagnostics) => diagnostics.render(),
     };
     assert!(found.contains("unknown colour `octarine`"), "{found}");
+    let sound =
+        r#"[ { "type": "show", "id": "s", "on": "element_destroyed", "sound": "a bang!" } ]"#;
+    let found = match try_load(&[("sound", sound)]) {
+        Ok(_) => panic!("the mod should not load"),
+        Err(diagnostics) => diagnostics.render(),
+    };
+    assert!(found.contains("is not a sound cue's name"), "{found}");
 }
 
 // ---------------------------------------------------------------------

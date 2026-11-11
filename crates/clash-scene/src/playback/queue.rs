@@ -4,7 +4,7 @@
 //! The simulation is never waited on. It runs ahead and hands over what
 //! happened in batches, a batch being one stretch between two
 //! decisions; each event of a batch has already been turned into a
-//! [`Step`], which says what playing it does. The queue plays the steps
+//! step, which says what playing it does. The queue plays the steps
 //! in order as real time passes, and until a step is played the picture
 //! of the world stays as it was.
 //!

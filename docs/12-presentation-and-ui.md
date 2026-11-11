@@ -248,7 +248,13 @@ object, where it is and how it looks.
 - Events the party did not perceive are not applied. Events only heard are
   applied as heard: a marker and a log line, not a picture.
 - When playback is caught up, the view model must equal what a fresh
-  initialisation would produce. Debug builds check this.
+  initialisation would produce. Debug builds check this: the
+  application makes a fresh view model and hands it to
+  `Scene::check_caught_up`, or to `clash_scene::playback::check_caught_up`
+  with the played one. The check compares cells, sprites and the shapes
+  of grids, not the markers of what was only heard, which are shown for a
+  while and are not knowledge, and reports the first eight differences
+  (decision D-608).
 
 An omniscient mode for debugging builds the view model from truth.
 
@@ -504,67 +510,209 @@ colour `overlay_light` (yellow unless given).
 
 ## 7. Playback
 
+The simulation is never waited on. It runs ahead and hands over what
+happened in **batches**, a batch being one stretch between two
+decisions; the scene plays the batch in order over real time, and until
+an event is played the picture stays as it was. The application drives
+it with a few calls on the scene (decisions D-600, D-603):
+
+| Call | When |
+|------|------|
+| `push_events(batch)` | After each `advance` of the simulation, with what `drain_events` gave, in order. Each event is asked of the host here, once (section 7.5); nothing is shown yet. |
+| `advance(seconds)` | Every frame, with the real time that passed: plays what falls due. |
+| `playback_caught_up()` | Whether every event handed over has been played: the picture is of the present, and input applies to it. |
+| `skip_playback()` | Jumps to the end: everything queued is played now and every effect in progress ends. |
+| `check_caught_up(fresh)` | Once caught up, in debug builds: the check of section 5. |
+| `playback_moment()` | The tick bindings are shown as of (section 10.4). |
+| `take_sound_cues()` | The sound cues of what was played since last asked. |
+
 ### 7.1 Pacing
 
 Events arrive with ticks. Playback maps simulation time to real time one
-stretch at a time, a stretch being what happened between two decisions.
+stretch at a time.
 
-- A stretch with nothing perceivable in it is skipped.
-- Otherwise it plays in about `stretch_time` (default 350 ms), however much
-  simulation time it covers. One step by a slow character and forty by a
-  fast one take the same real time.
-- An event whose presentation has a `min_time` holds the clock for at least
-  that long.
-- A player setting scales everything, down to instant.
-- The key bound to `skip` in the keymap jumps playback to its end. By
-  default that is any key.
+- Events the party did not perceive are dropped as they arrive (section
+  7.5). A stretch with nothing perceivable in it is skipped.
+- Events of one tick are played together, as one **group**.
+- Between one group and the next, simulated time counts for at most two
+  seconds: a long wait is not waited through.
+- What is left is scaled so that the stretch plays in `stretch_time`
+  (default 350 ms) from its first group that shows something to its
+  last, however much simulation time it covers. One step by a slow
+  character and forty by a fast one take the same real time. A group
+  that only changes the picture, with no line, animation, glide, marker
+  or hold, never makes a stretch longer: it is played with what shows
+  around it. A stretch in which one group or none shows something is
+  played at once.
+- An event whose `show` has a `min_time` holds the clock for at least
+  that long: nothing later is played before it has passed, in its own
+  stretch or the next.
+- The preference `playback_speed` scales real time: 2 is twice as fast,
+  and 0 is instant, which plays everything queued at once and starts no
+  effect.
+- However far the simulation has run ahead, playback catches up: when
+  more is queued than one second of real time would play, it runs
+  faster in proportion.
+- The key the keymap in force names `skip` jumps playback to its end and
+  does nothing else. While no key is named so, any key pressed while
+  something is being played does it, and then does what it does.
+- A decision's prompt (section 9.5) opens once playback has caught up.
 
 ### 7.2 Motion
 
-Relocation events carry where from, where to and how long the move took.
-The sprite glides accordingly. Something that crosses many cells in one
-frame leaves a trail of afterimages, which is how a much faster character
-reads on screen as fast instead of as teleporting.
+A `sprite` change (section 7.3) glides the sprite from the cell it was
+drawn in to its new one over its show's `time`: it is drawn between
+cells, as a frame sprite that a terminal shows in the nearest cell, and
+not in either cell. A sprite glides one move at a time; a new move
+begins where the last led. Something that crosses two cells or more in
+one move leaves three fading afterimages behind it, which is how a much
+faster character reads on screen as fast instead of as teleporting. The
+camera may be told to follow one sprite as playback moves it.
 
-Bodies in flight (02 §15) report their path and are drawn along it.
+Relocation events do not yet carry how long the move took, so a glide
+lasts its show's `time` (decision D-606). Bodies in flight (02 §15) do
+not report their paths yet and are not drawn along them.
 
 ### 7.3 Showing events
 
 ```json
 { "type": "show", "id": "glass_breaks",
-  "on": "element_destroyed", "filter": { "material": "glass" },
-  "anim": "shatter", "at": "event.here",
-  "text": { "say": "KSSH!", "style": "sfx" },
-  "log": "Glass shatters.",
-  "heard": { "log": "Glass breaks somewhere to the {dir(view, event.here)}.", "marker": "!" },
-  "shake": 0.1, "min_time": "120 ms", "weight": 2, "sound": "glass_small" }
+  "on": "element_destroyed", "filter": { "layer": "fixture", "how": "damage" },
+  "change": [ { "cell": "here" } ],
+  "anim": "shatter", "at": "here",
+  "log": "{the(actor)} {verb(actor, 'break')} the glass.",
+  "heard": { "log": "Glass breaks somewhere close.", "marker": "!" },
+  "shake": 0.1, "min_time": "120 ms", "importance": "normal", "sound": "glass_small" }
 ```
 
-A `show` definition says how an event appears: an animation, floating text,
-a log line, screen shake, and what to do if the event was only heard. It
-may name a `sound` cue. No frontend plays sound in the first version; the
-name is carried so that content can be written ahead of one that does.
-Several may match one event; all apply. When their animations together
-would overrun the stretch, those of lower `weight` are dropped first.
-Log lines are never dropped. Events with no `show` simply update
-the view model.
+A `show` definition says how an event appears when it is played: the
+changes it makes to the picture, an animation, a log line, screen shake,
+a flash and what to do if the event was only heard. It may name a
+`sound` cue. No frontend plays sound in the first version; the name is
+carried so that content can be written ahead of one that does. Several
+may match one event; all apply, in order of qualified id, and a change
+two of them make is made once. Log lines are never dropped.
+
+| Field | Is |
+|-------|----|
+| `on` | The event, by its registered name. Required. A name no event has is a load error, with the nearest suggested. |
+| `filter` | Constants the event's plain fields must hold, as a rule's (05 §8.4). A field the event does not have is a load error. |
+| `if` | A condition. The show applies only while it holds. |
+| `change` | What the event changes in the picture when it was seen: a list of the changes below. Left out, every cell and every thing the event is about is looked at again; an empty list changes nothing. |
+| `anim` | The `anim` played, by id. One that does not exist is a load error. |
+| `at` | The subject the animation plays at: a cell, or the cell a thing's sprite is in when it begins. `here` if left out; an event that binds no `here` must say. |
+| `to` | The subject a travelling animation goes to. Required with one, and of no use without. |
+| `log` | The line written to the log. |
+| `category` | The category of its lines, which a `log` widget filters by. `event` if left out. |
+| `heard` | What to do if the event was only heard: `log`, a line, and `marker`, the character of the marker put where it seemed to come from (the theme mark `heard` if left out). Without it, an event only heard shows nothing. |
+| `shake` | Screen shake as the event is played, from 0 to 1, dying away over `time`. |
+| `flash` | A colour, by name or `#rrggbb`, washed over the whole frame and dying away over `time`. A colour the theme does not know is a load error. |
+| `time` | How long the show's own effects last: the glide of a sprite it moves, its shake and its flash. 150 ms if left out. |
+| `min_time` | How long the event holds the clock (section 7.1). |
+| `importance` | `minor`, `normal` (the default) or `major`. A `log` widget may show only lines of some importance, and the preference `effects` (`all`, `major` or `none`) plays the animations, glides, shake and flash of all shows, of `major` ones only, or of none. |
+| `sound` | A sound cue's name: letters, digits, `_`, `-`, `.` and `:`. Handed to the application with the event; nothing plays it. |
+
+The texts and the condition are expressions in the event's scope: its
+subjects and fields by name as its registration lists them, and `actor`
+and `instigator`. They are pure, and compiled as a mind context with
+nobody's own (05 §7.3): they read only what is safe for belief, because
+a line speaks from what the viewing character knows. The reader helpers
+of 05 §4.6 are answered by the host for the viewing character. A
+finished line gets a capital first letter; its tags are theme styles,
+and one a theme does not know is a load error.
+
+**Changes.** Each is an object with one key, whose value names a
+subject of the event; a name the event does not bind is a load error.
+
+| Change | Does |
+|--------|------|
+| `{ "cell": "here" }` | The cell is looked at again: what the party sees there replaces what was known of it. A cell out of view is left as it is. |
+| `{ "field": "here" }` | Only the strongest field of a known cell is taken from what the party sees there. |
+| `{ "sprite": "self" }`, `{ "sprite": { "of": "self", "to": "here" } }` | The thing moved, appeared or changed: its sprite takes the look the party perceives and the cell `to` names, or where it is perceived if `to` is left out or not bound, and glides there. A thing the party never perceived is left alone. |
+| `{ "gone": "self" }` | The thing's sprite is removed. |
+
+An event with no `show` changes the picture silently: every cell and
+thing it is about is looked at again, and if nothing seen changed it is
+dropped.
+
+**Effects.** What a show draws is drawn over the picture and is never
+part of it (decision D-606):
+
+| Effect | Comes from | Is drawn as |
+|--------|------------|-------------|
+| Glide | A `sprite` change | A frame sprite between cells, with afterimages (section 7.2) |
+| Animation at a place | `anim`, `at` | Its keyframes over the cell, which keeps its background |
+| Projectile | `anim` that travels, `at`, `to` | A frame sprite along the straight line from `at` to `to`, over the animation's time |
+| Shake | `shake` | The frame's shake |
+| Flash | `flash` | The frame's flash, from 0.6 of full strength down to nothing |
+| Heard marker | `heard` | The marker of section 5, kept for one and a half seconds of real time |
 
 ```json
 { "type": "anim", "id": "shatter", "time": "300 ms",
-  "frames": [ { "at": 0.0, "ch": "*", "fg": "white" }, { "at": 0.5, "ch": "%" } ],
-  "particles": { "count": 8, "ch": ["'", ",", "`"], "speed": [2, 6], "spread": 360, "gravity": 9, "fade": true } }
+  "frames": [ { "at": 0.0, "ch": "*", "fg": "white" }, { "at": 0.5, "ch": "%" } ] }
 ```
 
-An `anim` is a short keyframed effect at a place: glyph changes on the cell
-and particles as sprites. Larger effects (a pressure wave's ring, a beam)
-take parameters from the event, such as radius and direction.
+An `anim` is a short keyframed effect at a place, or along the way from
+one place to another:
+
+| Field | Is |
+|-------|----|
+| `time` | How long it lasts, above zero. Required. |
+| `frames` | Its keyframes, in order, at least one. Each has `at`, when it begins as a share of `time` from 0 to 1 (0 if left out), and the parts of the glyph it changes: `ch`, one character of single width; `fg`, a colour name or `#rrggbb`; `bold`. What a frame leaves out it keeps from the one before; the first must give a `ch`. Required. |
+| `travel` | Whether the glyph travels from the show's `at` to its `to` over the time. |
+
+Not built: floating text (a show's `text`), an animation's `particles`,
+larger effects that take parameters from the event such as a radius or a
+direction, and dropping animations that would overrun the stretch; the
+preference `effects` is what thins them for now (decision D-601).
 
 ### 7.4 The log
 
-`message` effects (05 §10.6) and `log` lines from `show` definitions go to
-the message log with their tick and a category. The `log` widget displays
-and filters them. The log is complete: anything shown by animation alone
-also has a line, so the game is playable by reading.
+Lines from `show` definitions, and from `message` effects (05 §10.6)
+once the simulation reports them, go to the message log with their tick,
+a category and an importance (decision D-604).
+
+- A line the same as the one before it, in text, styles, category and
+  importance, is not added again: the line before counts one more and
+  takes the newer tick, and is shown with the count after it, dimmed:
+  `Debris crashes down. (x3)`.
+- The log keeps its newest 2000 lines.
+- The `log` widget wraps lines at spaces to its width, a column less
+  when a scrollbar is drawn; shows only the categories its `filter`
+  names and the importance its `importance` asks for at least; and
+  follows the newest line unless it has been scrolled back, when it
+  stays on the lines it shows as new ones arrive.
+
+The log is complete: anything shown by animation alone also has a line,
+so the game is playable by reading. A step, which the bundled shows
+draw as a glide, is not a line.
+
+### 7.5 What the party perceived
+
+Playback applies only what the party perceived, in the manner it was
+perceived (section 5). It does not decide that: the host does, and
+until perception (15 §13) is built a stand-in in `clash_scene::testing`
+does for tests (decision D-603).
+
+| The host is asked | When | It answers |
+|-------------------|------|------------|
+| `perceived(event, picture)` | For each event as its batch arrives, with the view model as playback has it | `Seen`, `Heard { from }` with where it seemed to come from, or `Not` |
+| `seen_cell(at)` | For a cell an event that was seen changes | What the party sees there now, or nothing if it is out of view |
+| `seen_sprite(entity)` | For a thing an event that was seen is about | The number of its sprite and how the party perceives it now, or that it does not; nothing for a thing never perceived |
+| `as_of(moment)` | Before bindings are evaluated | Nothing: it is told the moment of section 10.4 |
+| `reader()` | For each line and condition | The reader helpers and what is safe for belief, for the viewing character |
+
+- **Seen**: the changes, the effects and the line.
+- **Heard**: a marker where it seemed to come from and the `heard` line,
+  and no change to any cell or sprite.
+- **Not**: dropped.
+
+Everything playing an event needs is asked when its batch arrives, and
+playing it asks nobody anything. The answers are as of the end of the
+batch, so a cell that changed twice in one batch is drawn in its last
+state both times, and the last change a batch makes to a sprite leaves
+it as the party perceives it then: one no longer perceived leaves the
+picture at the last event that moves it.
 
 ## 8. Cutscenes
 
@@ -1022,7 +1170,7 @@ The set is fixed. Widgets are composed and styled, not programmed.
 | `map_view` and the other views | `centre`, `zoom`, `overlay`, `on_pick` |
 | `figure` | `figure` (a definition: rows of character art with named regions) and `shade`, an expression giving each region its colour, or an object from region name to colour |
 | `inspect` | `of`: the subject. Or `rows` written out, each with `label`, `value` and `children`. `selected`, `on_select`, `on_activate` as for a list. |
-| `log` | `filter`: a list of categories, or an expression |
+| `log` | `filter`: a list of categories, or an expression; `importance`: the least a line must have to be shown, `minor`, `normal` or `major` (every line if left out). It wraps, folds and follows the newest line as section 7.4 says. |
 | `tooltip` | `value`: shown when nothing with a `tip` has the focus or the pointer |
 | `console`, `canvas`, `trace_view` | Debug context only: a command line, a paintable grid of cells, and a stream of trace records. The development screens of document 14 are built from these. |
 
@@ -1172,7 +1320,11 @@ show: a node whose `if` does not hold is passed over with everything
 inside it, and so is every page of a `tabs` but the one shown. While
 events are still being played back, bindings on the view show the world
 as of the moment playback has reached, so a health bar does not drop
-before the blow is seen. A binding that faults when it runs (05 §4.4,
+before the blow is seen: the scene tells the host that moment, the tick
+before the next event to be played, or that there is none once playback
+has caught up, before it evaluates bindings, and evaluates them again as
+each event is played. A host that cannot answer as of a moment answers
+as of the present (decision D-605). A binding that faults when it runs (05 §4.4,
 §4.5) gives null: a number shows as 0, a condition as false, a list as
 empty.
 
@@ -1233,14 +1385,16 @@ input, kept outside saves and invisible to rules:
 
 The built-in ones are defined the same way, in the `ui` mod: `theme`
 and `keymap`, each the qualified id of a definition of that type,
-`playback_speed`, a number, and `cutscenes` (all, major, none). A
-profile may set defaults in its `preferences`, by id.
+`playback_speed`, a number, `effects` (all, major, none) and
+`cutscenes` (all, major, none). A profile may set defaults in its
+`preferences`, by id.
 
 The scene keeps the preferences' values, by qualified id, and tells the
 application of each change so that it can keep the choice between
 runs. A value the preference cannot hold is refused, with the reason.
-The engine itself acts on two, by their bare names, whichever mod
-defines them: changing `theme` restyles every open screen, each keeping
+Playback reads `playback_speed` and `effects` by their bare names,
+whichever mod defines them (section 7). The engine itself acts on two,
+by their bare names, whichever mod defines them: changing `theme` restyles every open screen, each keeping
 its variables, focus and selections, and changing `keymap` changes what
 the keys mean. A theme or a keymap that cannot be used is refused and
 the preference keeps its value. A widget's `bind` and a `set` effect
@@ -1534,7 +1688,13 @@ the cursor, and the theme mark `line`: sections 6.3 and 6.5. The
 effects `camera` and `picker`: section 10.5. The roles: section 10.7.
 
 **Settings**: `stretch_time`, `look_down`, and the player's preferences
-for playback speed and how often cutscenes play.
+for playback speed, which effects play and how often cutscenes play.
+
+**Playback**: the fields of `show` and `anim`, the changes a show makes
+and the effects it draws: section 7.3. The scope a show's texts and
+condition are compiled in, and what the host answers for them: sections
+7.3 and 7.5. The bundled shows are `mods/ui/data/playback.json`, one or
+more for each event of the kernel and the world.
 
 **Widgets**: section 10.3. **UI effects**: section 10.5.
 **Binding names**: section 10.4. **Navigation names**, and the theme
@@ -1566,6 +1726,18 @@ expression. An `inspect` cannot yet list the properties of a subject
 given by `of`. Which preferences the engine itself acts on, `theme` and
 `keymap`, is fixed. The words `Yes` and `No` of the bundled confirm
 screen are that screen's, and a mod changes them by overriding it.
+How playback is paced beyond `stretch_time` and `playback_speed` is
+the engine's: that a long wait counts for two seconds, that a backlog
+of more than a second plays faster, how long a heard marker stays, how
+strongly a flash begins and how many afterimages a fast move leaves.
+`stretch_time` itself is set by the application until settings exist
+(P6). Which effects a show can draw is the fixed set of section 7.3,
+and an animation is a glyph's keyframes: floating text, particles and
+effects shaped by an event's fields are not built. No event is marked as
+one the player must read about, so the linter's warning of invariant V5
+is not given. The words of a line come from the reader helpers the host
+answers, and the bundled shows name a destroyed block a wall, since an
+event says nothing of what was destroyed that the reader may know.
 
 ## 14. Invariants
 
