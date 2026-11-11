@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+clash-core.workspace = true
 clash-data.workspace = true
 clash-world.workspace = true
 clash-gen.workspace = true
@@ -15,7 +16,6 @@ clash-save.workspace = true
 clash-scene.workspace = true
 
 [dev-dependencies]
-clash-core.workspace = true
 clash-time.workspace = true
 serde.workspace = true
 

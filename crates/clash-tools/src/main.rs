@@ -14,6 +14,7 @@ use std::process::ExitCode;
 use clash_data::DefTypes;
 
 mod data;
+mod save;
 mod scenario;
 
 /// Every definition type the engine knows.
@@ -38,9 +39,10 @@ pub const ENGINE_CHECKS: &[data::BuildCheck] = &[
 
 fn usage() -> String {
     format!(
-        "usage: clash-tools <command> [arguments]\n\n{}\n{}",
+        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}",
         data::USAGE,
-        scenario::USAGE
+        scenario::USAGE,
+        save::USAGE
     )
 }
 
@@ -54,8 +56,12 @@ fn main() -> ExitCode {
         print!("{}", usage());
         return ExitCode::SUCCESS;
     }
-    if command == "scenario" {
-        let output = scenario::run(rest);
+    let own = match command.as_str() {
+        "scenario" => Some(scenario::run(rest)),
+        "save" => Some(save::run(rest)),
+        _ => None,
+    };
+    if let Some(output) = own {
         print!("{}", output.out);
         eprint!("{}", output.err);
         return ExitCode::from(output.code);
