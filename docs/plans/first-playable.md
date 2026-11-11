@@ -26,7 +26,7 @@ actions that call `hit`.
 | E5 | Hits and wounds | L | E4, W12 | beta |
 | E6 | Body editing | M | E4 | todo |
 | E7 | Minds and vital state | M | E1, T4 | todo |
-| E8 | Items and holds | L | E5 | todo |
+| E8 | Items and holds | L | E5 | beta |
 | E9 | Templates and creation | L | E3, E6, E8 | todo |
 | E10 | Movement | M | E4, W14, W18 | todo |
 | E11 | Coming and going | L | E9, W8 | todo |
@@ -304,6 +304,35 @@ Done when
 - A held item is dropped when the holding part's slot is disabled.
 - Latent contents are identical whenever they are first materialised.
 - Invariant B6 holds under random holding operations.
+
+Beta, in `clash_sim::item`, tested in `crates/clash-sim/tests/items.rs`
+over the fixtures in `crates/clash-sim/tests/fixtures/item`: the `item`
+type with every field of 06 §9.1 that has a meaning yet, `modifiers` and
+`holder_tags` (D-561), and `contains`, `guards`, `grants`, `traits`,
+`rules`, `ages` and `keeps` carried; the `Item` and `Holds` components;
+`create`, a debug command `CreateItem`, colours picked by seed;
+grasps on the channel slots of working parts, wearing at layers over the
+parts a `wear` selects, containers with volume, mass and tags, all through
+`relocate`, which now tells the holder when anything leaves it (D-560);
+what a grasped or worn item confers, applied and taken back exactly
+(a property test against recomputation); stacks that split and rejoin
+(D-562); item damage, broken items, worn layers handed to `body::apply_hit`
+and damaged by what they absorbed (D-563); what a disabled, severed or
+destroyed part held, and parts that come off as items (D-565); latent
+contents from a container's own list and seed (D-564); fourteen verbs,
+eighteen properties, ten events and two hooks, twenty-one reasons
+(06 §9.2, §13); plain items in `mods/core/data/items.json`, with the
+channel `arm` they grip by. Stubbed, each waiting for what it needs:
+ageing and the script `the_larder` (temperature, V1); `gas_mask` and what
+`guards` keep out (exposure by route); `round` and ammunition (C-series),
+`look` (U4), `interactions` and `device` (E12, G1); `content_table`
+(WG8); the kernel applying hits and body changes, which is when it calls
+`worn_layers_of`, `apply_worn_hits`, `part_item` and `on_body_changes`;
+the kernel joining stats, when `confer::with_stats` stops building the
+tables for each change and the `attr_changed` of conferring is raised;
+seats and fixed holds (vehicles, devices). A simple item measures about
+400 bytes with the kernel's record, over the 300 of 06 §15; the item's
+own component is 56.
 
 ### E9 — Templates and creation
 

@@ -18,7 +18,8 @@
 //! | [`damage`], [`repair`], [`worn_layers`], [`apply_worn_hits`] | Item damage, and worn items as layers for hits | `wear` |
 //! | [`part_item`], [`on_body_changes`] | What a body's changes do to what it holds | `wear` |
 //! | [`materialise`] | Latent contents | `latent` |
-//! | [`properties`], [`verbs`], [`event_types`] | What rules read, call and listen for | `props`, [`verbs`], here |
+//! | [`properties`], [`verbs()`], [`event_types`], [`ITEM_REASONS`] | What rules read, call, listen for and are refused with | `props`, [`verbs`](mod@verbs), here |
+//! | [`conferred`], [`reconfer`] | What held and worn things confer, from scratch | `confer` |
 //!
 //! # The rules, in short
 //!
@@ -58,12 +59,22 @@
 //! # The seam to stats
 //!
 //! The stats package is not yet joined to the simulation, so the one
-//! function that reaches it, `confer::with_stats`, borrows the store and
-//! the timeline out of the simulation for the length of a call. When the
-//! kernel offers its own way to change stats, that function is the one
-//! place to change. The `attr_changed` events of what an item confers
-//! are the stats' to raise: the changes are handed to
-//! `confer::stat_changes`, which does nothing yet.
+//! function that reaches it, `confer::with_stats`, builds the stats'
+//! tables for the length of a call and borrows the store and the
+//! timeline out of the simulation while it runs. When the kernel offers
+//! its own way to change stats, that function is the one place to
+//! change. The `attr_changed` events of what an item confers are the
+//! stats' to raise: the changes are handed to `confer::stat_changes`,
+//! which does nothing yet.
+//!
+//! # The seam to bodies
+//!
+//! Bodies are not yet applied by the kernel either. Whoever applies a
+//! hit or changes a body calls [`worn_layers_of`], [`apply_worn_hits`],
+//! [`part_item`] and [`on_body_changes`] as the table above says. The
+//! body package's `part_severed` and `part_destroyed` events are not yet
+//! raised with the part that came off, so nothing listens for them:
+//! [`part_item`] is called with the `Detached` value instead.
 //!
 //! # What is not built here
 //!

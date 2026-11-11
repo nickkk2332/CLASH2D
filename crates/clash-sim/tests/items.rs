@@ -1642,3 +1642,22 @@ fn a_refused_holding_changes_nothing() {
             .all(|event| !event.name().starts_with("item_"))
     );
 }
+
+// ---- Budgets ----------------------------------------------------------------
+
+/// 06 §15 sets a simple item at under 300 bytes. Measured: the `Item`
+/// component is 56 bytes, and with `Physical` (48), `Identity` (88) and
+/// the kernel's record (208) a simple item is about 400, before the
+/// stores' indices. The kernel's record is most of it. This holds the
+/// item's own share to what it is.
+#[test]
+fn a_simple_item_keeps_its_own_share_of_memory_small() {
+    use clash_sim::KernelEntity;
+    use clash_sim::component::{Identity, Physical};
+    assert!(size_of::<item::Item>() <= 64, "{}", size_of::<item::Item>());
+    let whole = size_of::<item::Item>()
+        + size_of::<Physical>()
+        + size_of::<Identity>()
+        + size_of::<KernelEntity>();
+    assert!(whole <= 448, "{whole}");
+}

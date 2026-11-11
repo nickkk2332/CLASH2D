@@ -1052,55 +1052,209 @@ An item is an entity with an `Item` component. Items are made of materials
 and take damage by the element rule (02 §12.2) with a capacity from their
 material and volume. Weapons notch and break; armour wears through.
 
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name`, `description` | text | What a reader calls it, and what a closer look says |
+| `unknown_name` | text | What it is called by someone who has not learned what it is (05 §4.6) |
+| `material` | `id<material>`, required | What it is made of. It takes damage as that material does. |
+| `mass` | mass, required | The mass of one |
+| `volume` | volume | The space one takes up. Left out, its mass over its material's density. |
+| `length` | length | Along its greatest dimension. The area it presents lying flat is its volume over its length. |
+| `tags` | list of tags | Free-form. An item is made with them as its own (the kernel entity's tags). |
+| `surfaces` | list | Parts of the item that can be brought to bear, each with a damage type, contact area, give and span (07 §3.2). Combat turns energy over that area into intensity. Carried for combat. |
+| `grip` | map of `id<channel>` to count | Channel slots needed to hold it in a grasp. An item with none cannot be. |
+| `wear` | one entry or a list, at most 32 | The layers it adds over the parts it is worn on; below. An item with none cannot be worn. |
+| `holds` | `{ volume, mass, accepts }` | Capacity as a container: the most volume and mass what is stowed in it may take, each left out for any; `accepts`, tags of which a thing must carry one, empty for anything. A container cannot `stack`. |
+| `stack` | bool | Whether items equal in every respect (definition, material, damage, colour, tags, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
+| `modifiers` | list of `{ attr, add, mul }` | Attribute modifiers on whoever holds it in a grasp or wears it, under the item as their source (section 4.1). `add` defaults to 0, `mul` to 1. |
+| `holder_tags` | list of tags | Tags whoever holds it in a grasp or wears it carries while they do |
+| `grants`, `traits`, `rules` | lists | Given to whoever holds or wears it. Carried until actions, traits and the rule runtime read them. |
+| `guards` | map of route to share | While worn, the share of exposure it keeps out, by route: `{ "breath": 0.95 }` for a mask (02 §16). Carried until exposure reads it. |
+| `contains` | volume | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup. Carried until substances are built. |
+| `color` | colour name, or a list | A colour this particular item carries: fixed, or picked from a list by the item's seed when it is made. `set_color` changes it. Glyphs draw it with `"fg": "own"` and descriptions name it (12 §4.3). Creatures may carry one too. |
+| `glyph` | glyph | How it is drawn |
+| `contents` | list of `{ item, count, chance }` | What a container is found to hold when it is first opened (section 9.3). `count` is a number or `[least, most]`, default 1; `chance` from 0 to 1, default 1. Needs `holds`. |
+| `ages` | `{ life, rate, stages, into }` | How it ages (section 9.4) |
+| `keeps` | `{ temperature, ageing }` | What a container keeps for its contents (section 9.4) |
+| `look` | | How whoever wears or holds it appears (12 §4.4). Not a field yet. |
+| `round` | | For ammunition: the projectile it fires and with what energy (07 §11.5). Not a field yet. |
+| `interactions`, `device` | | As for elements (02 §5.5; 16). Not fields yet. |
+
+A `wear` entry:
+
+```json
+{ "parts": ["torso", "arm"], "layer": 3, "material": "leather",
+  "thickness": "3 mm", "coverage": 0.9 }
+```
+
 | Field | Meaning |
 |-------|---------|
-| `surfaces` | Parts of the item that can be brought to bear, each with a damage type, contact area, give and span (07 §3.2). Combat turns energy over that area into intensity. |
-| `grip` | Channel slots needed to wield it |
-| `wear` | Which body parts it covers, in which layer order, its thickness there and its coverage (the fraction of hits it intercepts) |
-| `holds` | Capacity as a container: volume, mass, what kinds |
-| `stack` | Items equal in every respect (definition, material, damage, traits, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
-| `grants`, `traits`, `rules` | Given to whoever holds or wears it |
-| `guards` | While worn, the share of exposure it keeps out, by route: `{ "breath": 0.95 }` for a mask (02 §16) |
-| `contains` | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup |
-| `color` | A colour this particular item carries: fixed, or picked from a list when it is made. `set_color` changes it. Glyphs draw it with `"fg": "own"` and descriptions name it (12 §4.3). Creatures may carry one too. |
-| `unknown_name` | What it is called by someone who has not learned what it is (05 §4.6) |
-| `look` | How whoever wears or holds it appears (12 §4.4) |
-| `round` | For ammunition: the projectile it fires and with what energy (07 §11.5) |
-| `interactions`, `device` | As for elements (02 §5.5; 16) |
+| `parts` | `"all"` for every outer part, one name, or a list. A part answers to a name that is its name in the body (`l_arm`), the id of its definition (`arm`, `core:arm`), or a tag its definition carries (`limb`). Only parts on the outside of the body are covered. |
+| `layer` | Its order among what is worn over a part, an integer, default 0: a higher layer is further out. A part takes one item at each layer; the first entry of an item to cover a part at a layer has it. |
+| `material` | What the layer is made of. Left out, the item's own. |
+| `thickness` | How thick the layer is there. Above zero. |
+| `coverage` | The share of hits on a covered part that it is in the way of, from 0 to 1, default 1 |
+
+**The component.** `Item` holds the definition the item was made from
+(none for a part that came off a body), its material, its count (at least
+one), its damage in 255ths, its colour, its seed, whether its contents are
+still latent, and for a part that came off a body the part as it was. Its
+`Physical` is one member's mass and volume times the count, with a height
+of zero. It is made by `create_item` from a definition, of the entity kind
+`item`, with an `Identity` naming the definition and the definition's tags.
+Its seed comes from the random stream `items`, or is given by whoever
+generates it (the positional seed of section 9.3); its colour, when picked
+from a list, is drawn from the seed.
+
+**Damage.** An item's capacity is its material's toughness times the
+volume of one member, and its damage is counted in 255ths of that, as an
+element's is. A packet is applied by the element rule; one that cannot
+affect the material changes nothing; one that affects a member of a stack
+splits that member off first. At 255 the item is **broken**: it is still
+there, it is no longer a layer when worn, and what else being broken means
+is a rule's to say. `repair_item` takes a share of the capacity off the
+damage.
+
+**Anonymous stacks and notable items** (section 12.2). For the beta, a
+pile of equal things is one entity with a count, and a thing becomes one
+of its own by being split off: when it is damaged, worn, or split by a
+verb. Nothing more is kept for an anonymous member.
 
 ### 9.2 Holding
 
-Containment (01 §6) says an entity may be inside another. `Holds` says how.
+Containment (01 §6) says an entity may be inside another. `Holds`, a
+component of the holder, says how: it lists what the holder holds in some
+way other than `Inside`, and the tags the holder carries only because of
+what it holds.
 
-| Hold | Meaning |
-|------|---------|
-| `Grasp(part)` | In a hand or equivalent; occupies that part's grasp |
-| `Worn(parts, layer)` | Covering parts; acts as outer layers for hits |
-| `Stowed` | Inside a container's capacity |
-| `Seat(n)` | Riding or seated (11) |
-| `Inside` | Enclosed: a person in a locker, something swallowed |
-| `Fixed` | Attached: a mounted device, an implant, a grafted tool |
+| Hold | Rules read | Meaning |
+|------|------------|---------|
+| `Grasp(slots)` | `grasp` | In a hand or equivalent; occupies slots of the channels its `grip` names, on one or more working parts (03 §6.2). The pieces split from a grasped stack share its slots. |
+| `Worn(parts)` | `worn` | Covering parts, each at the layer of the `wear` entry that covers it; acts as outer layers for hits |
+| `Stowed` | `stowed` | Inside a container's capacity |
+| `Seat(n)` | `seat` | Riding or seated (11) |
+| `Inside` | `inside` | Enclosed: a person in a locker, something swallowed. What is inside another with no record is held this way. |
+| `Fixed` | `fixed` | Attached: a mounted device, an implant, a grafted tool |
 
-Moving something between holds is done by verbs (`take`, `drop`, `stow`,
-`wear`, `remove`, `give`, `put_in`, `take_out`), which check capacity and
-free grasps and go through relocation.
+Moving something between holds is done by verbs, which check capacity and
+free grasps and go through relocation. Each raises the hooks
+`item_leaving` (for a thing in a hold) and `item_taking` before it changes
+anything, and changes nothing if a handler cancels. None asks how far away
+the thing is or how strong its holder is: an action's `requires` does.
+
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `take` | `who: entity`, `what: entity` | entity | Takes a thing into a grasp of `who`, wherever it is: picks it up, draws it from a pack, takes it from another's hand, takes it off if `who` wears it. The slots are found among the working parts of `who`'s body in order of part. An equal stack already in `who`'s grasp takes it without another hand. Returns what is grasped. |
+| `drop` | `what: entity` | entity | Puts a held thing down where its holder is: in the holder's cell, or inside whatever encloses the holder. Returns what lies there, which may be an equal stack it joined. |
+| `give` | `what: entity`, `to: entity` | entity | `take` by `to`, of a thing that is held |
+| `wear` | `who: entity`, `what: entity` | entity | Puts an item on: it covers the outer parts its `wear` selects. One member of a stack is split off and worn. |
+| `remove` | `what: entity` | entity | Takes a worn item off into its wearer's grasp. To take it off and put it down, `drop` it. |
+| `stow` | `who: entity`, `what: entity` | entity | `put_in` the first container `who` wears or grasps that would take it, in order of id |
+| `put_in` | `what: entity`, `container: entity` | entity | Puts a thing into a container: an item is stowed in its capacity, anything else enclosed. A latent container is opened first. Returns what is in it, which may be an equal stack it joined. |
+| `take_out` | `what: entity`, `to: entity?` | entity | Out of the container it is stowed in or enclosed by: into the grasp of `to`, or with none to where the container is |
+| `create_item` | `def: id<item>`, `count: int?`, `at: loc?`, `in: entity?` | entity | Makes `count` items (default 1) as one entity: inside `in`, at `at`, or out of the world. More than one needs a definition that stacks. |
+| `split` | `item: entity`, `count: int` | entity | Splits `count` members off a stack, in the same place and hold. Returns the piece. |
+| `destroy_item` | `item: entity` | null | Unmakes an item and every member of its stack. What it held is put down where it was; latent contents are never made. |
+| `set_color` | `of: entity`, `color: string?` | null | Changes the colour an item carries; null takes it away |
+| `repair_item` | `item: entity`, `share: real` | entity | Takes a share of its capacity off its damage; 1 mends it entirely. It rejoins an equal stack in the same hold. |
+| `materialise_contents` | `container: entity` | `list<entity>` | Makes a latent container's contents (section 9.3) |
+
+A debug command, `CreateItem { def, count, place }`, makes items by
+qualified id for tools and test scripts.
+
+**What a held thing confers.** An item in a grasp or worn confers its
+`modifiers` and `holder_tags`; stowed it confers nothing. They are applied
+when it enters such a hold and taken back when it leaves, by whatever
+moved it: when anything leaves a container through relocation, the kernel
+tells the holder, which forgets how it held the thing. So what a holder
+has from its items always equals what a recomputation from what it holds
+gives (invariant B3), and a record never names something that is not
+there (B6).
+
+**Containers.** A thing goes into a container if the container has
+`holds`, it carries one of the tags `accepts` lists (if any), and the
+volume and the mass of what is directly inside, with it, are within the
+container's. Mass counts everything inside the thing. Carried mass reaches
+the holder's `Physical` through containment (section 3.1).
 
 When a part can no longer hold, because it is disabled, severed or
 destroyed, what it grasped is dropped where the holder is, with
-`item_dropped` and the cause. What was worn on a severed part goes with
-the part. When a holder is destroyed, everything it held, wore, stowed or
-enclosed is left where it was, whole.
+`item_dropped` and the cause; no hook can stop it. What was worn on a
+severed part goes with the part; what was worn on it and on other parts
+stays on those. When a holder is destroyed, everything it held, wore,
+stowed or enclosed is left where it was, whole.
+
+Whoever applies a hit hands the layers the target wears (`worn_layers`,
+over each part outermost first; a broken item adds none) to the body's
+hit, and what each layer took back to the items: the 255ths of the item's
+whole capacity that the joules it absorbed amount to, at least one; a
+layer that was not breached stops short of broken.
 
 Whether a contained entity can perceive, be perceived or be hit depends on
 the hold and on the container, and is defined with the relevant system: an
 exposed rider can be hit; a person in a closed locker cannot be seen.
 
+| Event | Subjects | Fields |
+|-------|----------|--------|
+| `item_taking` (hook) | `self`; `holder`, what is to hold it | `hold` (`string`), the kind of hold it is to enter. A handler may cancel. |
+| `item_leaving` (hook) | `self`; `holder`, what holds it now | `hold` (`string`), the kind it is in. A handler may cancel. Not raised when a part that can no longer hold lets go, nor when its holder is removed. |
+| `item_taken` | `self`, `holder`, `from?` | `hold` (`string`); `count` (`int`), its members. A thing entered a hold other than a worn one. |
+| `item_dropped` | `self`; `holder`, what held it | `count` (`int`). It lies where its holder was. |
+| `item_worn` | `self`, `holder` | `parts` (`int`), how many parts it covers |
+| `item_removed` | `self`, `holder` | — A worn item came off; `item_taken` or `item_dropped` follows. |
+| `item_damaged` | `self` | `old`, `new` (`int`), in 255ths; `kind` (`string`), the qualified id of the damage type |
+| `item_repaired` | `self` | `old`, `new` (`int`) |
+| `item_broken` | `self` | — Its damage reached 255. |
+| `item_split` | `self`, `piece` | `count` (`int`), the piece's members |
+| `item_merged` | `self`, the stack that remains | `count` (`int`), the members that joined. The entity that joined it is gone. |
+| `contents_materialised` | `self` | `count` (`int`), the entities made |
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `item.unknown_def` | The id is not an `item` definition | `def` |
+| `item.not_an_item` | The entity has no `Item` | `entity` |
+| `item.bad_count` | A count is zero, or a split would leave nothing | `count`, `have` |
+| `item.not_stackable` | More than one of a definition that does not stack | `item` |
+| `item.not_equal` | Two items to be merged are not equal, or not in the same hold | `item`, `into` |
+| `item.no_grip` | A thing with no `grip` is to be grasped | `item` |
+| `item.no_free_grasp` | The holder's working parts supply too few free slots of a channel | `holder`, `channel`, `needed`, `free` |
+| `item.no_body` | Something with no body is to grasp or wear | `entity` |
+| `item.not_wearable` | The item has no `wear` | `item` |
+| `item.no_part_to_wear_on` | The wearer has no outer part the item goes on | `item`, `wearer` |
+| `item.layer_taken` | A part it would cover already wears something at that layer | `item`, `part`, `layer`, `by` |
+| `item.not_a_container` | The container has no `holds` | `container` |
+| `item.not_accepted` | The container accepts none of the thing's tags | `item`, `container` |
+| `item.does_not_fit` | Too large or too heavy for the room left | `item`, `container`, `what` (`volume` or `mass`), `needed`, `room` |
+| `item.not_held` | A thing inside nothing is to be dropped or given | `item` |
+| `item.not_worn` | `remove` of a thing not worn | `item` |
+| `item.not_contained` | `take_out` of a thing not stowed or enclosed | `item` |
+| `item.no_container` | `stow` finds nothing that would take it | `who`, `item` |
+| `item.bad_amount` | A share to repair, or a packet's energy or intensity, is negative or not finite | `amount` |
+| `item.not_registered` | The definitions were loaded without the `item` type | — |
+| `item.bad_argument` | A verb's argument is missing or of the wrong kind | `arg` |
+
+What relocation refuses (an unknown entity, a thing put inside itself,
+nesting too deep, a cell not loaded) is refused as relocation refuses it.
+
 ### 9.3 Latent contents
 
 A container that generation filled does not create its items until
-something looks. It keeps a reference to a content table and the positional
-seed. The first search, opening or hit materialises the items, and they are
-always the same items. A city of unopened drawers costs nothing.
+something looks. It keeps the positional seed it was made with, and its
+definition's `contents` list (a `content_table` definition, shared between
+containers, is not built yet). The first search, opening or hit
+materialises the items, and they are always the same items: each entry is
+drawn, in order, from a generator seeded by the container's seed alone,
+with every draw made whether or not it matters, so that the same seed
+gives the same contents whenever and in whatever order containers are
+opened. A city of unopened drawers costs nothing.
+
+What opens it: `materialise_contents`, putting something into it, and the
+first packet that affects it. What the list gives is stowed whether or not
+it fits: the list is its author's to keep within `holds`. A thing that
+stacks is made as one stack; one that does not, as so many entities.
+`contents_materialised` reports it.
 
 ### 9.4 Ageing
 
@@ -1137,6 +1291,10 @@ scheduled wake-up, moved when the rate changes. At 1 the item becomes
 
 Food spoiling, iron rusting in the wet, wine improving, medicine expiring,
 ice melting in a pack and a corpse going over are items that age.
+
+For the beta, `ages` and `keeps` are read and checked (a `life` above
+zero, stages at ages from 0 to 1, a factor of zero or more) and carried;
+nothing ages yet, and `rate` is kept as written.
 
 ## 10. Templates, choices and creation
 
@@ -1335,8 +1493,10 @@ Body flags on `damage_type` (`severs`).
 `wound_closed`, `wound_reopened`, `function_changed`, `attr_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
 `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
-`item_broken`, `item_stage_reached`, `item_turned`, `posture_changed`,
-`contents_materialised`, `became_notable`.
+`item_repaired`, `item_broken`, `item_split`, `item_merged`,
+`item_stage_reached`, `item_turned`, `posture_changed`,
+`contents_materialised`, `became_notable`. Those of items are described
+with their fields in section 9.2.
 
 **Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
 `trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
@@ -1351,7 +1511,10 @@ section 7.6.
 `remove_modifier`, `pool_add`, `pool_rate`, `advance_track`, `spawn`,
 `destroy`, `apply_template`, `make_notable`, `make_anonymous`, `rename`,
 `set_color`, `close_wound`, `reopen_wound`, `disable_part`,
-`restore_part`.
+`restore_part`. The verbs of items (section 9.2) are registered with their
+arguments: `take`, `drop`, `give`, `wear`, `remove`, `stow`, `put_in`,
+`take_out`, `create_item`, `split`, `destroy_item`, `set_color`,
+`repair_item` and `materialise_contents`.
 
 | Hook | Runs before | A handler may |
 |------|-------------|---------------|
@@ -1372,7 +1535,8 @@ in something that has a mind; `transfer_mind` into something that has a
 mind, unless it says `"swap": true`, in which case the two change places.
 Parts of an old plan that `set_body_plan` cannot map are dropped as items.
 The refusals of attributes, pools and tracks are tabled in section 4.4,
-and those of bodies, hits and wounds in section 7.6.
+those of bodies, hits and wounds in section 7.6, and those of items in
+section 9.2.
 
 **Settings**: `hit.overkill_factor` (how many times what a whole body could
 absorb destroys it outright, section 7.4).
@@ -1397,7 +1561,35 @@ read truth; none is safe for belief.
 | `entity.volume`, `entity.height` | `real?`: cubic metres; metres |
 | `entity.name`, `entity.description` | `string?`: the entity's own, null for one that goes by its definition's |
 | `entity.def` | `any`: the definition it was made from, as an id of whatever type that is; null for none |
-| `entity.has_component(component: string)` | `bool`: by the component's name, `identity` or `physical` |
+| `entity.has_component(component: string)` | `bool`: by the component's name, `identity`, `physical`, `stats`, `body`, `item` or `holds` |
+
+**Registered for items** (section 9). All read truth; none is safe for
+belief. `held`, `carried` and `worn_on` yield what belongs to the same
+owner as the subject, so a character may read what it holds, wears and
+carries, and what its own pack holds; what is inside someone else's pack
+is not reachable from a mind (05 §7.3). Those that follow holding name
+`item_taken`, `item_dropped`, `item_worn`, `item_removed` and
+`entity_relocated` as the events that change them (05 §7.5).
+
+| Property | Gives |
+|----------|-------|
+| `entity.item` | `id<item>?`: the definition it was made from; null for what is not an item and for a part that came off a body |
+| `entity.is_item` | `bool` |
+| `entity.count` | `int?`: the members of a stack; null for what is not an item |
+| `entity.condition` | `real?`: from 1, undamaged, to 0, broken: one less its damage in 255ths |
+| `entity.is_broken` | `bool` |
+| `entity.material` | `id<material>?`: what an item is made of |
+| `entity.color` | `string?`: the colour an item carries. **Settable**: `set_color`; null takes it away |
+| `entity.holder` | `entity?`: what the entity is directly inside; the same as `container` |
+| `entity.hold` | `string?`: how it is held there: `grasp`, `worn`, `stowed`, `seat`, `inside` or `fixed` |
+| `entity.held(hold: string)` | `list<entity>`: what the entity holds in that kind of hold, in order of id |
+| `entity.carried` | `list<entity>`: everything inside it at any depth, each container before its contents |
+| `entity.worn_on(part: string)` | `list<entity>`: what it wears over the part of that name, outermost first; a broken item is not listed |
+| `entity.free_grasp(channel: id<channel>)` | `int`: the slots of the channel its working parts supply that nothing it grasps occupies |
+| `entity.capacity_volume`, `entity.capacity_mass` | `real?`: a container's `holds`, in cubic metres and kilograms; null for none or no limit |
+| `entity.stowed_volume` | `real?`: the space what is directly inside it takes up |
+| `entity.is_latent` | `bool`: a container whose contents have not been made |
+| `entity.conferred_tags` | `list<string>`: the tags it carries only because of what it grasps or wears |
 
 **Gaps.** Reachable only from Rust for now: `templates`, until
 `template` is a definition type an id can name; the name and the
@@ -1406,7 +1598,18 @@ read a field of a definition of any type; and `scale`, `color`,
 `velocity` and the rest of the list above, which wait for the
 components that hold them.
 Whether an entity has a component of a given kind is the property
-`entity.has_component`. Attributes, pools and tracks are built with their
+`entity.has_component`. Items and holding are built with their
+definition type, components, verbs, properties, events and refusals
+(section 9). Reachable only from Rust until the kernel applies hits and
+body changes: handing worn layers to a hit and what they took back to the
+items, dropping what a part that can no longer hold was grasping, and
+making the item a part that came off leaves. The query `held` (05 §11) is
+a list property until queries are built. Not built: ageing (section 9.4),
+`look`, `round`, `interactions` and `device` on items, `content_table`,
+what `grants`, `traits`, `rules`, `guards` and `contains` give (carried
+as data), what seats and fixed holds mean, a check of an item's colour
+names against the `color` definitions, and `age`.
+Attributes, pools and tracks are built with their
 definition types, properties and events; the verbs of section 4.4 are
 functions in Rust until the rule runtime registers them, a track's
 `on_advance` is kept and not yet run, and what is seated in a mind does

@@ -10,13 +10,14 @@
 //! # The seam to stats
 //!
 //! [`with_stats`] is the one place this package reaches the stats. The
-//! stats' functions want the store of `Stats`, the timeline and a host
-//! over the rest of the simulation, all at once, and the kernel does not
-//! hand those out yet. So the store and the timeline are taken out of
-//! the simulation for the length of the call and put back. While they
-//! are out, a derived attribute that reads the time or another entity's
-//! stats reads nothing; one that reads its owner's attributes, a body
-//! function or a mass reads what it should.
+//! stats' functions want their tables, the store of `Stats`, the
+//! timeline and a host over the rest of the simulation, all at once, and
+//! the kernel does not hand those out yet. So the tables are built for
+//! the call, and the store and the timeline are taken out of the
+//! simulation for its length and put back. While they are out, a derived
+//! attribute that reads the time or another entity's stats reads
+//! nothing; one that reads its owner's attributes or a mass reads what
+//! it should.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
