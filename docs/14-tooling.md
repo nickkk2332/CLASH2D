@@ -83,6 +83,49 @@ check
 - `as <reference> <command>` runs a command with `self` bound to something
   else.
 
+The forms of a value:
+
+| Form | Written |
+|------|---------|
+| Number | An optional sign, digits, an optional fraction and an optional exponent, and directly after it an optional unit of 05 §4.7: `10`, `-3`, `0.2`, `1e9`, `400ms`, `5min`. With a fraction or an exponent it is a real. A parameter that takes a time reads a bare number as seconds. |
+| Word | An id or a keyword: letters, digits and `_`, with at most one `:` for a namespace. `town_guard`, `core:glass`, `on`. |
+| Reference | `@here`, `@self`, `@sel`, `@c:x,y,z`, `@e:17` (or `@e:17v2`, with a generation), `@kind:name` for any kind the host knows (`@site:old_mill`), and `@name`. `here`, `self`, `sel`, `c` and `e` cannot be given as names. |
+| Quoted | Between double quotes, on one line. Inside, `\"` is a double quote and `\\` a backslash; there are no other escapes. It holds an expression, or the text itself where the parameter is a text or a `string`. |
+| JSON | From `{` to the matching `}`, whatever is between them. In a file it may run over several lines. |
+| Raw | Anything else, taken as written: an unquoted expression, a file name, a hash. It ends at the first space outside round, square and curly brackets and outside the expression language's single-quoted strings, so `dist(self, @sel)` is one value. |
+
+The rest of the language:
+
+- Arguments are separated by spaces or tabs. `key=value` has nothing
+  around its `=`. A `#` where an argument could start begins a comment
+  that runs to the end of the line. A blank line does nothing.
+- An expression may name references: `"@b.wounds.count == 0"`. The
+  console resolves each one and hands the simulation the expression with
+  a local in its place (`$at0`, `$at1`, …) and the value of each local.
+- A bare word that is the name of a parameter not yet given, with a
+  positional value after it, names that parameter: `spawn town_guard at
+  @c:120,44,0` is `at=@c:120,44,0`. A value that happens to be such a
+  word is given by name.
+- The other positional values go to the parameters in order. A verb's
+  direct argument (05 §10.1) is its first parameter. A parameter that
+  takes the rest of the line, as the expression of `eval`, `watch`,
+  `assert` and `until` does, joins the positional values from its place
+  on, which is why an expression without quotes may have spaces in it.
+- `as=<name>` is accepted by every command and names what the command
+  gives back. It is not a parameter; a verb's own argument called `as` is
+  given by position or through `do`.
+- A command's name is one word or two (`map export`, `scene step`,
+  `break off`). The longer name is tried first.
+- A line is at most 65,536 bytes.
+- A line is checked against its command in full before anything runs,
+  and everything wrong with it is reported together: diagnostics `E1401`
+  onward for the syntax of a line, `E1421` onward for a line that does
+  not fit its command, `E1441` onward for test scripts. Each has the
+  place and, where the console can tell, what to write instead.
+- The **canonical form** of a line has one space between arguments,
+  numbers in their shortest form, JSON compact and a comment as `# text`.
+  Printing a parsed line and parsing it again gives the same tree.
+
 ### 3.3 What it can do
 
 | Kind | Commands |
@@ -102,6 +145,36 @@ Every command has help generated from its registration.
 
 Console commands that change the simulation are `Debug` commands
 (03 §4.4). They are validated, logged and replayed like any other.
+
+A registration states the command's name, its documentation, its
+parameters with their types, defaults and documentation, whether it
+changes the simulation, and which of the three hosts of section 3.1 offer
+it. `break`, `next`, `continue` and `rewind` are offered only where a
+person is typing, and `expect` only in files. `help` lists the commands
+and `help <command>` describes one.
+
+A verb whose name a built-in command already has is not registered a
+second time: the built-in keeps the name (`run` is the console's way to
+run a rule) and the verb is reached with `do`.
+
+`save <name>` and `load <name>` keep the whole state in memory under a
+name; the simulation writes no files (01 R5). `load` is refused with
+`no_such_save` for a name nothing was saved under, and `until` with
+`until_not_reached` when its `max` passes before its condition holds.
+
+A console session can be written out as a file: every line that was
+carried out, in canonical form, and every line that was refused followed
+by `expect reason` with the reason. Lines that failed and commands that
+files are not offered are left out. The file is a test script (section 7)
+and replays to the same state hash.
+
+The console itself is the same code in all three hosts. It is written
+against one interface the simulation implements, `ConsoleHost`: carry out
+a command, resolve a reference, evaluate an expression, let time pass by
+a span or until a condition, give the state hash, save to bytes and load
+from them, hand over the events and trace records since last asked, say
+why the last command was refused, present the frame as text, set the
+thread count, start from a profile and a seed, and build a small world.
 
 ### 3.4 Commands from mods
 
@@ -287,21 +360,68 @@ expect hash 9c41f0aa…
 | `expect hash <value>` | The simulation's state hash is that value |
 | `expect frame <file>` | The presented frame equals the stored one (12 §12) |
 
+The details:
+
+- A script file has the extension `.scn`. Each line is a console line
+  (section 3.2); JSON left open at the end of a line goes on over the
+  following lines to its closing brace. Blank lines and comments are
+  skipped. A mistake is reported with its file, line and column.
+- A command that is refused fails the script, unless the next line is
+  `expect reason`.
+- The fields of `expect event` and `expect trace` are written
+  `field=value` and may have any names. A value is a number, a word, a
+  reference, a quoted expression that is evaluated, or JSON. A number
+  equals the same number whether whole or real; a word equals a text; a
+  field that holds an id holds its qualified id, so it is written in
+  full (`kind=core:cut`); a reference equals the subject it names. The
+  record must have every field named, and may have more.
+- `within=<time>` looks back that far from now. Without it, `expect
+  event` looks at the whole run, as `expect trace` always does.
+- A hash is 32 hexadecimal digits. `expect hash` with no value fails,
+  saying what the hash is, until `--bless` writes one in.
+- The file of `expect frame` is named relative to the script.
+- `assert` may be given `as <reference>` like any command.
+
 ### 7.2 How scripts are run
 
-`clash-tools scenario run` runs each script in four ways and requires the
-same result from all:
+`clash-tools scenario run <dir>` finds every script under a directory,
+runs them in order of path, and runs each in four ways, requiring the same
+result from all:
 
-| Mode | Checks |
-|------|--------|
-| Straight | The expectations |
-| Twice in one process | No hidden state |
-| With a save and load at several points | Rule R7 |
-| With different thread counts | Rule R1 |
+| Mode | How | Checks |
+|------|-----|--------|
+| Straight | Once, on a fresh simulation | The expectations |
+| Twice in one process | Twice more, each on a fresh simulation | No hidden state |
+| With a save and load at several points | Once for each split point: save after that command, load into a fresh simulation, go on | Rule R7 |
+| With different thread counts | Once with one thread and once with four | Rule R1 |
 
-`--bless` rewrites expected hashes and frames, and the change description
-must say why they changed. `--paranoid` also runs every invariant checker
-(section 7.3) after every command.
+"The same result" is exact. The straight run records the state hash after
+every command; every other run must pass every expectation and give the
+same hash after every command. A failure names the line, what was expected
+and what was found, and which run it was: the split point or the thread
+count. Where a run's state first differs from the straight run's is
+reported in preference to an expectation that fails later because of it.
+If the straight run fails, the other modes are not run.
+
+A **split point** is the end of a command. A script of at most eight
+commands is split after each; a longer one at eight points spread evenly
+from its first command to its last. Each split point is a run of its own,
+so that a failure can name it. The hash straight after loading must equal
+the hash before saving.
+
+`--bless` runs each script once, rewrites the hashes it expects to the
+ones found, writes one in where `expect hash` has none, and writes the
+frames it expects to their files. It changes no other byte of a script.
+A script that fails for any other reason is not blessed. The change
+description must say why a hash or a frame changed. `--paranoid` also runs
+every invariant checker (section 7.3) after every command.
+
+| Exit code | Means |
+|-----------|-------|
+| 0 | Every script passed in every mode |
+| 1 | A script failed or does not parse; or the directory cannot be read, or holds no script |
+| 2 | The command line was not understood |
+| 3 | The scripts parse, and no simulation is registered to run them against |
 
 Mods ship scripts beside their data (04 §3.1) and run them the same way.
 

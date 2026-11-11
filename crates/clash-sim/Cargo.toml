@@ -7,9 +7,16 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+clash-core.workspace = true
 clash-world.workspace = true
 clash-gen.workspace = true
 clash-expr.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
 
 [lints]
 workspace = true

@@ -7,3 +7,5 @@
 //! 15 and 16.
 //!
 //! This is a stub. It is filled in by K1 onward of `docs/plans/sim-kernel.md` and the plans that follow it.
+
+pub mod console;
