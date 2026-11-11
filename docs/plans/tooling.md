@@ -179,7 +179,9 @@ Build
 - Hashes at intervals in the input log; `replay`; stopping at the first
   differing interval with the subsystem named; `diff` of two states;
   `report`.
-- Periodic snapshots in development builds and `rewind`.
+- Periodic snapshots in development builds and `rewind`. The same
+  snapshot-and-replay machinery serves `rewind_world` (scenarios package
+  SC11), so it must not depend on anything only a development build has.
 
 Done when
 - A fixture with a deliberate nondeterminism is caught at the right

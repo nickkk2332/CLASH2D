@@ -690,7 +690,7 @@ measured figures.
 
 1. **Rewinding.** Settled: snapshots, area journals and restoring a place
    as generated (08 §7.4); the whole world by saving and loading with
-   memories carried (13 §9.3).
+   memories carried (13 §9.3, §9.5).
 2. **Windows without named candidates.** Bystanders reacting to something
    not aimed at them needs perception. (15)
 3. **Clash detection.** Settled in 07 §8: strikes at each other due within

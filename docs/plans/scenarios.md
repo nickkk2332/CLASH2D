@@ -27,6 +27,7 @@ regression tests each package adds are called test scripts here.
 | SC8 | Legacy, roster, campaigns | M | SC7 | todo |
 | SC9 | Bundled scenarios | L | SC2–SC8, WG12, I10 | todo |
 | SC10 | Benchmarks and budget gate | S | SC1, then recurring | todo |
+| SC11 | Turning back the whole world | M | SC7, TL8 | todo |
 
 ## Order and parallelism
 
@@ -34,7 +35,7 @@ regression tests each package adds are called test scripts here.
 |------|----------|
 | 1 | SC1, SC6 |
 | 2 | SC2, SC3, SC5, SC7 |
-| 3 | SC4, SC8 |
+| 3 | SC4, SC8, SC11 |
 | 4 | SC9 |
 
 ## Milestones
@@ -209,6 +210,27 @@ Done when
   ending or for a day, and passes checks of its mode's defining behaviour.
 - No scenario relies on engine behaviour that names its mode.
 
+### SC11 — Turning back the whole world
+
+**Spec** 13 §9.5 · **Size** M · Uses the snapshot-and-replay machinery of
+tooling package TL8
+
+Build
+- `keep_world_history` and `rewind_world` as requests to the application;
+  history kept by span and interval, optionally bound to an ability;
+  carrying legacy variables, memories as foreknowledge and named variables;
+  discarding the later input log; reasons when history is short or absent.
+
+Done when
+- After `rewind_world`, the state hash before `carry` is applied equals
+  the hash recorded at that tick in the original run.
+- Test script `relived_minute`: a character exempted by `carry` holds
+  memories of the abandoned span; a character who was not holds none; and
+  the world's cells and everyone's positions are as they were.
+- With no history kept, `rewind_world` is refused with its reason; with
+  too little, it goes back as far as there is and reports how far.
+- History bound to an ability stops being kept when the ability is revoked.
+
 ### SC10 — Benchmarks and budget gate
 
 **Spec** 13 §15 · **Size** S, recurring
@@ -231,3 +253,4 @@ Under `scenarios/games/`.
 | `carry_on` | SC7 | — | Another character, same world |
 | `remembered_dawn` | SC7 | — | Restore with memories carried |
 | `second_chapter` | SC8 | S21 | Campaign carry |
+| `relived_minute` | SC11 | S10 | World rewind with memories carried |

@@ -28,8 +28,9 @@ Fixed from earlier documents:
 - Incidents (09 §11) are the only kind of thing that happens. The director
   starts and paces them; it has no events of its own.
 - Nothing is scaled for fairness (D-034).
-- Turning the whole world back is done by saving and loading, as a rule of
-  the scenario, not by an ability (08 §15).
+- Turning the whole world back is done by saving and loading. A scenario's
+  rules use it for checkpoints and for returning after death. An ability
+  may use it too, where an author accepts what it costs (section 9.5).
 
 Names of scenarios, missions and directors in examples are illustrative
 content.
@@ -390,6 +391,8 @@ returns it (03 §4.3); the application carries it out at a safe point.
 | `restore_checkpoint { name, carry }` | A return to it |
 | `end_scenario { as }` | An ending |
 | `next_scenario { scenario, carry }` | An ending that leads on |
+| `keep_world_history { span, every }` | Continuous snapshots, so the world can be turned back (section 9.5) |
+| `rewind_world { by, carry }` | A return of everything to an earlier moment |
 
 ### 9.2 Saving
 
@@ -429,6 +432,43 @@ An ending names an outcome. The application shows the scenario's summary
 screen, writes legacy variables, applies the save policy, and either
 returns to the title, offers to continue playing where that makes sense, or
 starts what follows.
+
+### 9.5 Turning back the whole world
+
+A checkpoint is a moment someone chose in advance. An author who wants the
+world itself turned back by some span, at any time, asks for **history**.
+
+```
+keep_world_history { span, every }
+rewind_world { by, carry }
+```
+
+- While history is kept, the application takes a snapshot of the whole
+  simulation every `every` of universal time and keeps those within `span`,
+  together with the input log.
+- `rewind_world` loads the latest snapshot at or before the moment `by`
+  ago and replays the log up to that moment exactly (14 §8.3). The world is
+  then as it was, to the tick.
+- `carry` is then applied, as for `restore_checkpoint`: legacy variables;
+  and for named characters, their memories of the abandoned span, marked as
+  foreknowledge, and any named variables. Nobody else has lived anything
+  after that moment.
+- The commands the player gave after that moment are discarded with the
+  future they belonged to.
+- If history does not reach back as far as asked, the rewind goes as far as
+  it does and says so. With no history kept, it is refused with a reason.
+- Keeping history may be bound to an ability (08 §7.3), so that it is kept
+  only while someone who can use it exists.
+
+It is independent of the saving policy (section 9.2). It is something that
+happens in the world, not the player reloading.
+
+This is the expensive way to go back. Snapshots of everything, taken
+continuously, cost memory and time in proportion to how much is loaded and
+how often they are taken. An area rewind (08 §7.4) costs almost nothing by
+comparison, and can make those inside it forget, which is enough for most
+purposes. `rewind_world` is for the author who needs everyone, everywhere,
+to have forgotten.
 
 ## 10. Between games
 
@@ -503,14 +543,16 @@ Scope `legacy` for variables.
 **Events**: `scenario_started`, `objective_changed`, `mission_started`,
 `mission_done`, `mission_failed`, `mission_expired`, `beat_fired`,
 `director_started`, `case_opened`, `finding_added`, `case_closed`,
-`party_gone`, `checkpoint_made`, `restored`, `scenario_ended`.
+`party_gone`, `checkpoint_made`, `restored`, `world_rewound`,
+`scenario_ended`.
 
 **Hooks**: `director_choosing`, `case_judging`, `scenario_ending`.
 
 **Effects**: `add_objective`, `complete_objective`, `fail_objective`,
 `start_mission`, `post_mission`, `fire_beat`, `set_tension`, `open_case`,
 `add_finding`, `accuse`, `close_case`, `checkpoint`, `restore_checkpoint`,
-`end_scenario`, `next_scenario`, `keep_character`, `take_control`.
+`end_scenario`, `next_scenario`, `keep_world_history`, `rewind_world`,
+`keep_character`, `take_control`.
 
 **Queries**: `objectives`, `missions`, `postings`, `cases`, `findings`.
 
@@ -544,6 +586,8 @@ Targets, unmeasured.
 | Opening a case | under 20 µs |
 | Starting a game in a small authored realm | under 1 s |
 | Starting a game in a generated island realm | under 5 s |
+| Taking a world-history snapshot of the default loaded set | under 150 ms |
+| `rewind_world` by ten seconds | under 2 s |
 
 ## 16. Open questions
 
@@ -560,3 +604,6 @@ Targets, unmeasured.
 5. **Director and distance.** The director places incidents near the
    party. For a party that crosses a continent in a minute, "near" needs a
    better definition.
+6. **Cheaper history.** World-history snapshots are whole. Copying only
+   what changed since the last one would cut the cost of section 9.5
+   considerably.

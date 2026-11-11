@@ -318,8 +318,9 @@ In development builds the game keeps a snapshot every so often. `rewind
 it. Then the inspector can be opened on the past. `advance` from there
 replays the same future, unless something is changed first.
 
-This is a tool. It is not offered to rules and is not how abilities turn
-back time (08 §7.4; 13 §9.3).
+This is a tool, switched on in development builds. The same machinery,
+switched on by content and with memories carried, is what `rewind_world`
+uses (13 §9.5). Local undoing is separate (08 §7.4).
 
 ## 9. Writing mods
 

@@ -364,7 +364,7 @@ restore  { name }                               →  puts it back
 
 Snapshots are what recall, undoing an injury, mending what was broken and
 turning back a room are made of. They are local. Turning back the whole
-world is not offered (section 15).
+world is a different and much costlier mechanism (13 §9.5).
 
 A snapshot must be taken before it can be restored. Two further verbs go
 back without one.
@@ -373,15 +373,24 @@ back without one.
 every cell change made inside it for a stated span, with the state before.
 
 ```
-rewind_area { area, by, with_occupants }
+rewind_area { area, by, with_occupants, with_minds }
 ```
 
 undoes those changes, newest first, back to the moment `by` ago, through
 `WorldEdit`. Fields are restored from copies the journal takes each second.
 Collapses and releases that began inside the area within that span are
 ended. With `with_occupants`, characters and objects inside are put back
-from snapshots the journal took of them at the same interval. Minds are not
-touched: whoever watched a wall fall and stand up again remembers both.
+from snapshots the journal took of them at the same interval.
+
+By default minds are not touched: whoever watched a wall fall and stand up
+again remembers both. With `with_minds`, the characters inside the area are
+also given back the beliefs, memories and relations they had at that
+moment, so they do not remember the span that was undone.
+
+That is as far as it reaches. Anyone who watched from outside still
+remembers. So does anyone who was told, any group whose knowledge was added
+to, and the place's own local knowledge (09 §12). An area rewind can make
+those inside forget. It cannot make the world forget.
 
 A journal costs memory in proportion to what changes inside it and nothing
 when nothing does. `rules.max_journal_changes` bounds it; past the bound
@@ -488,7 +497,8 @@ exist. Section references are where the mechanism is specified.
 | Ageing, decay, ripening | A high clock rate on the target, so its own timers and pools run ahead |
 | Reflexes | Notice delay (03 §7.2) |
 | Recall, undoing | Snapshots (section 7.4) |
-| Undoing the last moments in a place | An area with a journal, and `rewind_area` (section 7.4) |
+| Undoing the last moments in a place | An area with a journal, and `rewind_area` (section 7.4). Those inside may be made to forget. |
+| Turning back the world | `rewind_world` (13 §9.5): everything returns to an earlier moment, and only those chosen remember |
 | Sensing danger | A window kind's `noticed_if` and `notice` reading a trait |
 
 ### 8.4 Matter and elements
@@ -766,10 +776,9 @@ Targets, unmeasured.
 
 ## 15. Open questions
 
-1. **Turning back the world.** Snapshots are local. A power that rewinds
-   everything, or returns its user to a moment after dying, is a matter of
-   saving and reloading the simulation, which is a scenario-level rule and
-   not an effect. (13)
+1. **Turning back the world.** Settled in 13 §9.5: a rule, including an
+   ability's, may ask for the whole simulation to be returned to an earlier
+   moment with memories carried, where world history is being kept.
 2. **Seeing the future.** The simulation is deterministic, so running a
    copy ahead is possible in principle. Its cost and how it would be shown
    are unexamined.

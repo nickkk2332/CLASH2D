@@ -190,6 +190,9 @@ Done when
 - Scenario `undo_the_blast`: a wall destroyed inside a journalled area
   stands again after `rewind_area`, a collapse begun in that span is ended,
   and a character who watched remembers both.
+- With `with_minds`, a character inside the area holds no memory of the
+  undone span afterwards, while a character who watched from outside, and
+  the place's local knowledge, still do.
 - An area with no journal records nothing, and one in which nothing changes
   uses no memory beyond its own record.
 - `restore_as_generated` returns a wrecked street to the hash of the same

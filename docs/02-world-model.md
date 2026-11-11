@@ -1756,7 +1756,7 @@ settle it.
    section 22: always across subgrids; one portal deep, within range,
    through portals that allow it.
 6. **Rewinding time.** Settled: snapshots, area journals and restoring a
-   place as generated in 08 §7.4; the whole world in 13 §9.3.
+   place as generated in 08 §7.4; the whole world in 13 §9.3 and §9.5.
 7. **Scale of battle.** Settled in 09 §9.3 (a cap on fully simulated
    characters, by attention) and 09 §5.5 (crowds that do not jam).
 

@@ -55,7 +55,7 @@ into the specifications.
 
 | Document | Open questions |
 |----------|----------------|
-| 02 World model | Reviewed and settled (decisions D-169 to D-178) |
+| 02 World model | Reviewed and settled (decisions D-169 to D-180) |
 | All others | Awaiting review |
 
 The ones most likely to change something once code exists:
