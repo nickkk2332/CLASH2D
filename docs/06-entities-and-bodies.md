@@ -499,6 +499,8 @@ separate components so that they can part company.
   that needs channels.
 - A body with no active mind does not act. With a **driver** it acts as the
   driver directs: a puppet, a remote drone, a raised corpse on strings.
+- A seat inside a body may make whoever sits in it that body's driver
+  (11 §8.1): a machine with a pilot.
 - A raised corpse that acts for itself is a body given a new mind by
   `create_mind`.
 

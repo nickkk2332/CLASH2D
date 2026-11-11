@@ -186,7 +186,7 @@ An objective obliges nothing. A sandbox may have none.
     { "id": "bring", "text": "Bring them to {$poster.name}.", "after": "find",
       "done": "delivered($quarry, $poster)" } ],
   "expires": "10 d",
-  "on_done": [ { "pay": { "to": "view", "from": "$poster", "amount": "$reward" } } ] }
+  "on_done": [ { "pay": { "of": "credits", "to": "view", "from": "$poster", "amount": "$reward" } } ] }
 ```
 
 A **mission** is a template for objectives, started with parameters.

@@ -511,7 +511,14 @@ whole display. A mod that wants a different display overrides the screen.
 The `ui` mod provides: title, profile and mod list, new game and scenario
 choice, character creation, the play screen (map, log, status, slots),
 inventory, condition, abilities, look and inspect, the reaction prompt, the
-choice prompt, the pickers, options and key binding, save and load.
+choice prompt, the pickers, options and key binding, save and load, trade
+(16 §3.6) and fitting.
+
+**Fitting** shows an assembly (16 §11): its slots, what is in each, what
+could go in each from what is at hand, and what the whole offers and draws
+of each resource on its bus. It serves a torch, a suit, an implant set and
+a vehicle alike, and installs and removes through the interactions the
+content defines.
 
 **Character creation** edits a character spec (06 §10.3) held in
 `app.creation`. The screen lists the templates the scenario allows, shows

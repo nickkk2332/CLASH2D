@@ -671,7 +671,7 @@ and turns into records (09).
 | `map`, `building` or `assembly` | What stands there |
 | `roles` | Named places inside it, from the map's marks. Routines (09 §10.2) and incidents (09 §11) refer to these. |
 | `staff` | Who works there. Those marked `notable` become agents (06 §12); the rest are counted in the site's population. |
-| `owner` | The group that holds it |
+| `owner` | The group or character that holds it to begin with (09 §13.4) |
 | `stocks`, `supplies` | 09 §13 |
 | `incidents` | Kinds of incident that may happen here beyond those selected by tag |
 

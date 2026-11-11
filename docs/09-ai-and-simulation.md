@@ -649,7 +649,7 @@ An incident whose place is not loaded is **abstract**. Each stage's
 | `move_stock`, `set_stock` | Section 13.2 |
 | `add_knowledge` | Section 12 |
 | `pending_edit`, `stamp` | Changes the place for when it is next loaded (02 §17) |
-| `set_service`, `set_site`, `set_region` | Services, tags and variables |
+| `set_service`, `set_site`, `set_region` | Services, tags, variables, and who holds a site |
 | `set_agent` | An agent's aim, place, relations, variables |
 | `start_incident`, `end_incident` | Chains and endings |
 
@@ -764,6 +764,25 @@ supplies a service to a region does so while it stands, is staffed and is
 supplied itself. Knock out the power station and the district goes dark by
 one value changing.
 
+### 13.4 Holdings
+
+A site is **held** by a group or by a character: the `owner` of its
+definition (10 §11.1) to begin with. `set_site { site, holder }` changes
+it, as does a trade (16 §3.6), and `site_changed_hands` is raised.
+
+Holding a site does nothing by itself. What it is worth to hold one is
+written with what already exists:
+
+| A holding | How |
+|-----------|-----|
+| Earns | The site's stock of an account resource is its balance (16 §5.6), with a rate from its definition, its people and its machines. A standing payment from the site to its holder passes on whatever share content says. |
+| Pays its people | Standing payments to its staff. When one stops, rules on `payment_stopped` decide whether they stay. |
+| Supplies its holder | The holder trades with its own site, taking from stock and having it delivered |
+| Can be lost | Incidents, devastation and other holders change its stock, its staff and who holds it, like anything else |
+
+Someone with factories, a guild with chapter houses, a gang with fronts
+and a lord with manors are holders of sites.
+
 ## 14. Weather and time of day
 
 ### 14.1 Weather
@@ -831,7 +850,8 @@ and `value` on grants (08 §11).
 `agent_loaded`, `agent_stored`, `agent_folded`, `incident_started`,
 `incident_stage`, `incident_ended`, `responder_arrived`,
 `knowledge_added`, `published`, `population_changed`, `stock_changed`,
-`shipment_sent`, `shipment_arrived`, `weather_changed`, `day_part_changed`.
+`shipment_sent`, `shipment_arrived`, `site_changed_hands`,
+`weather_changed`, `day_part_changed`.
 
 **Hooks**: `goal_scoring` (adjust a score), `option_scoring`,
 `incident_starting`, `casualties_applying`.
@@ -853,7 +873,7 @@ and `value` on grants (08 §11).
 **Settings**: `max_hot_minds`.
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
-sites, `locals`, `stock(what)`, `population(kind)`; on regions,
+sites, `locals`, `stock(what)`, `population(kind)`, `holder`; on regions,
 `weather`, `wind`, `sea_state`; on realms, `time_of_day`, `day`, `season`;
 on incidents, `stage`, `cast(role)`.
 

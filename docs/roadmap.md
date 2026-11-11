@@ -88,7 +88,7 @@ The ones most likely to change something once code exists:
 | M1 | World model (plan: world-model, W1–W23) | A world that can be generated, viewed, wrecked and saved from a console |
 | M2 | Data, rules and actions (plan: sim-kernel) | Actions on the timeline; mods and EOC complete |
 | M3 | Entities, perception, presentation (plan: first-playable) and combat (plan: combat) | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
-| M4 | Devices (plan: devices), abilities (plan: abilities), AI and the layered simulation (plan: ai) | Interactions, power, crafting, base building, automation, gadgets and suits; abilities of every family; characters who decide for themselves; large groups; a world that carries on unobserved |
+| M4 | Devices (plan: devices), abilities (plan: abilities), AI and the layered simulation (plan: ai) | Interactions, power, crafting, base building, automation, gadgets and suits, accounts and trade; abilities of every family; characters who decide for themselves; large groups; a world that carries on unobserved |
 | M5 | World generation (plan: worldgen) and scenarios (plan: scenarios) | Authored and generated worlds with people in them; games to start in them: sandbox, roguelike, campaign, skirmish, investigation |
 | M6 | Vehicles (plan: vehicles) | Mounts, craft, ships, submarines, aircraft, spacecraft, journeys |
 

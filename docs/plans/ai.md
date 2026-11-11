@@ -383,7 +383,7 @@ Under `scenarios/ai/`.
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -397,3 +397,4 @@ small package of its own.
 | Formations of vehicles | I7 | 09 §8; 11 §7 | A collective whose members are vehicles holds a formation behind its leader. Completed with vehicles package V7. |
 | Consistent, not clever | I10 | 09 §1 | Each bundled mind's behaviour is stated in a sentence or two in its documentation, and a test script shows it doing that twice running from different seeds, differing only where its rules draw chance. No bundled mind reads anything that singles out the player. |
 | Usual guard in bulk exchanges | I8 | 09 §9.1 | Bulk previews include the defences each side's representative members have ready. A shielded line loses fewer to a volley than an unshielded one of the same number. |
+| Holdings | L5 | 09 §13.4; 16 §5.6 | A site's stock of an account resource changes at its stated rate while unloaded; a standing payment from the site to its holder moves that share; changing the holder redirects it. Completed with devices packages G13 and G14. |

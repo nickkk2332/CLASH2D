@@ -374,6 +374,42 @@ it. Orders to the collective reach each vehicle's commander as orders do.
 Scene S23 is two people, one in a joint action with a horse and one with a
 motorbike, each also running an attack on a free channel.
 
+### 8.1 Driven bodies
+
+A machine that fights with limbs of its own is neither a suit nor a
+vehicle. It is a **body**: a creature made by a template (06 §10), usually
+of metal, usually with no mind, with a seat inside it.
+
+```json
+"holds": [ { "seat": { "id": "cockpit", "in_part": "torso", "exposure": 0.0,
+                       "drives": true, "uses": { "arm": 2, "leg": 2 } } } ]
+```
+
+Sitting in a seat that `drives` is a joint action between the occupant and
+the body. While it lasts the occupant is the body's driver (06 §8.2).
+
+| Question | Answer |
+|----------|--------|
+| What acts | The body, with its own parts, reach, mass and strength. It strikes, grips, throws and is struck by document 07 as any body is. Its limbs can be disabled and severed. |
+| Who decides | The driver. Commands given to the driver go to the body's actions. An AI driver scores the body's options (09 §6). |
+| What the driver's own body does | The seat's `uses` are held for as long as the action lasts. A cockpit of sticks and pedals takes hands and feet. A link that takes none leaves the driver free to act as well. |
+| What the driver perceives | The body's senses, relayed (15 §4), and whatever its own can make out from the seat |
+| Whose skill | Rules for the body may read `self.driver`. Content decides what comes from the machine and what from the one inside. |
+| What powers it | An implant set in the body (16 §11.5): a core, stores, weapons. `when_unsupplied` makes it inert. |
+| What reaches the driver | A hit that breaches the part holding the seat reaches the occupant by the seat's exposure. `unseat` throws them clear. |
+| When the driver stops | The joint action ends and the body does nothing (06 §8.2), where it stands |
+
+| Machine | Is |
+|---------|----|
+| Worn, moves as the wearer moves | A suit (16 §11.4) |
+| Has its own limbs and fights with them, someone inside deciding | A driven body |
+| Operated from stations, armed with mounted weapons | A craft or a vessel (section 3) |
+| So large it is walked around in or climbed | A vessel on legs, or a body made of cells (06 §6.6) |
+
+A mount with a rider is the same arrangement with a mind of its own in the
+way. A driven body with a mind that yields to its driver, and takes over
+when the driver is lost, is both.
+
 ## 9. Getting on, in and across
 
 | Situation | Mechanism |
@@ -648,14 +684,16 @@ loaded tract. Crews in warm tracts are stepped as 03 §10.
 
 ## 15. Modding surface
 
-**Definition types**: `vehicle`, `travel_band`. The `part` block on `device`
+**Definition types**: `vehicle`, `travel_band`. `drives` and `uses` on seat
+holds. The `part` block on `device`
 (16 §4.2). Resources are defined in 16 §5. The `fluid` block on `material` and `atmosphere`. `sea_level`
 on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
 
 **Events**: `vehicle_moved`, `vehicle_collided`, `vehicle_mode_changed`,
 `part_installed`, `part_removed`, `resource_exhausted`,
 `resource_restored`, `station_taken`, `station_left`, `boarded`,
-`alighted`, `unseated`, `docked`, `undocked`, `hull_breached`,
+`alighted`, `unseated`, `driving_started`, `driving_ended`, `docked`,
+`undocked`, `hull_breached`,
 `compartment_flooding`, `compartment_flooded`, `decompression`,
 `hull_crushing`, `vessel_sinking`, `vessel_settled`, `vessel_listing`,
 `vessel_capsized`, `liquid_level_changed`, `travel_started`,
@@ -673,7 +711,8 @@ on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
 `capsized`,
 `resource(id)`, `crew`, `station(id).operator`; on any location,
 `medium.phase`, `medium.pressure`, `medium.density`, `medium.breathable`,
-`compartment`, `compartment.pressure`, `compartment.flooded`.
+`compartment`, `compartment.pressure`, `compartment.flooded`; on a body,
+`driver`; on a character, `driving`.
 
 **Queries**: `parts`, `seats`, `stations`, `compartments`, `aboard`.
 

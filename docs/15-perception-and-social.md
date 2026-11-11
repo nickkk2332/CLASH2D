@@ -407,7 +407,8 @@ pub struct Group {
 
 A group is any body of people: a watch, a gang, a cult, a regiment, a hive,
 an adventuring party. Group definitions name roles and which roles may give
-orders to which. A group may have a collective, a mind that decides for it
+orders to which. A role flagged `spends` may pay from what the group holds
+(16 §5.6). A group may have a collective, a mind that decides for it
 (09 §8.1).
 
 - A member with no relation of its own toward someone uses its group's.

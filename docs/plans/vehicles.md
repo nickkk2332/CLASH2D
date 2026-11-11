@@ -31,6 +31,7 @@ packages they depend on are done.
 | V12 | Chart lanes | S | V11 | todo |
 | V13 | Benchmarks and budget gate | S | V1, then recurring | todo |
 | V14 | Bodies made of cells | L | V6b, V3, E5, C7 | todo |
+| V15 | Driven bodies | M | V8, E7, C4, G10 | todo |
 
 ## Order and parallelism
 
@@ -40,7 +41,7 @@ packages they depend on are done.
 | 2 | V3, V5, V8 |
 | 3 | V4, V6a, V7, V10 |
 | 4 | V6b, V9, V11 |
-| 5 | V12, V14 |
+| 5 | V12, V14, V15 |
 
 ## Milestones
 
@@ -272,6 +273,30 @@ Done when
 - Scenario `the_colossus`: climb it, cut into it, be thrown off, and bring
   it down by destroying what its vital function depends on.
 
+### V15 — Driven bodies
+
+**Spec** 11 §8.1; 06 §8.2 · **Size** M · Added after the first review of
+what the design supports (decision D-201)
+
+Build
+- Seats that `drive`: the joint action, the occupant as driver, the
+  seat's `uses` held on the driver's own body.
+- Commands and AI options routed to the driven body; `self.driver` and
+  `driving`; senses relayed to the driver.
+- Hits through the part holding the seat reaching the occupant by
+  exposure; the body going still when the driver stops or is thrown out.
+
+Done when
+- Test script `in_the_cockpit`: a pilot in a metal body with no mind
+  strikes, grips and throws with its limbs by document 07; loses an arm of
+  the machine and the actions that needed it; is reached by a hit that
+  breaches the torso; is knocked out, and the machine stops where it
+  stands.
+- A seat that uses no channels leaves the driver able to act with their
+  own body at the same time; one that uses hands does not.
+- With its power store empty the body is inert by `when_unsupplied`.
+- An AI driver chooses among the body's attacks, not its own.
+
 ### V13 — Benchmarks and budget gate
 
 **Spec** 11 §17 · **Size** S, recurring
@@ -291,10 +316,11 @@ Under `scenarios/vehicles/`.
 | `voyage` | V11 | S9 | Aboard against skipped |
 | `orbit_to_luna` | V12 | S9 | Edge exit, lane, arrival |
 | `the_colossus` | V14 | S11 | A creature that is a place |
+| `in_the_cockpit` | V15 | S25 | A machine with limbs and a pilot |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a

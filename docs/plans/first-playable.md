@@ -553,7 +553,7 @@ Under `scenarios/people/`. Presentation scenarios also have golden frames.
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -569,3 +569,4 @@ small package of its own.
 | Relations that intervene | S7 | 15 §9.1; 03 §7.1 | A relation kind flagged `intervenes` makes its holder a window candidate. Covered by sim-kernel test script `bodyguard`, run here with real relations. |
 | Sound cue names | U5 | 12 §7.3 | A `show` definition's `sound` loads, is validated as a name, appears in the event the frontend receives, and plays nothing. |
 | Several at once | U7 | 12 §9.6 | With three controlled characters selected, one move command gives each its own action in entity order, and one answer settles the same pending decision for all three. |
+| Roles that spend | S7 | 15 §9.2; 16 §5.6 | A role flagged `spends` is recorded on the group definition and readable by rules. Used by devices package G13. |
