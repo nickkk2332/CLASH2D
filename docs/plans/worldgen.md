@@ -304,3 +304,4 @@ small package of its own.
 | Site definitions for founding | WG9 | 10 §11.1 | A site definition flagged `founded` loads without a map (invariant X7 exempts it) and cannot be placed by generation. |
 | Names | WG9 | 10 §11.5 | People, settlements and sites generated from a `names` definition have the same names for the same seed in any order of exploration; `make_name` gives the same result as generation for the same seed. |
 | Order across plans | WG11 | — | WG11 depends on vehicles package V10, which is in a later milestone. WG11 is built when V10 is, not with the rest of this plan. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

@@ -280,7 +280,6 @@ Under `scenarios/combat/`.
 | `volley` | C9 | S19 | Many projectiles |
 | `hold_back` | C11 | — | Effort from preview |
 | `blade_in_a_corridor` | C2 | — | Swings meet the world |
-| `bodyguard` | C4 | — | Defending someone else |
 | `off_its_hinges` | C7 | — | Holding the world |
 | `caught_arrow` | C9 | — | Stopping a shot |
 | `the_pit` | C2 | — | Contact surfaces |
@@ -311,3 +310,4 @@ small package of its own.
 | Ammunition as items | C10 | 07 §11.5; 06 §9.1 | Test script `mixed_belt`: a magazine loaded with two kinds of round fires them in the order loaded, each with its own projectile and energy; an empty magazine refuses with a reason; `count` above one launches that many. |
 | Fighting at lower detail | C11 | 07 §15 | A shot fired in a warm tract is instant. A warm entity attacked by a hot one is promoted before the strike resolves. Bulk exchanges themselves are ai package I8. |
 | Order across plans | C10 | — | C10 depends on devices package G9 (assemblies), which is in a later milestone. Until G9 exists C10 is built against a magazine supplied by a test fixture. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

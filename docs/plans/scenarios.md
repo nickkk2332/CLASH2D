@@ -278,3 +278,4 @@ small package of its own.
 |----------|---------|------|-----------|
 | Distance as travel time | SC5 | 13 §7.3 | With an entry's distance given as ten minutes, incidents are placed a few streets from a party on foot and far further from one that has been flying, measured over the last hour of its own time. |
 | Reopening a case | SC6 | 13 §8.5 | Test script `second_look`: a finding gained after a case is closed runs `case_judging` again with `reopening` set; rules that no longer accept the blame reopen it and `case_reopened` is raised; `reopen_case` does the same directly. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

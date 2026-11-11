@@ -181,12 +181,12 @@ An objective obliges nothing. A sandbox may have none.
 { "type": "mission", "id": "bounty", "name": "Bounty: {$quarry.name}",
   "params": { "quarry": "persona", "poster": "group", "reward": "real" },
   "objectives": [
-    { "id": "find",  "text": "Find {$quarry.name}.", "done": "view.knows($quarry) and view.confidence($quarry) > 0.8",
+    { "id": "find",  "text": "Find {$quarry.name}.", "done": "taker.knows($quarry) and taker.confidence($quarry) > 0.8",
       "marker": { "last_known": "$quarry" } },
     { "id": "bring", "text": "Bring them to {$poster.name}.", "after": "find",
       "done": "delivered($quarry, $poster)" } ],
   "expires": "10 d",
-  "on_done": [ { "pay": { "of": "credits", "to": "view", "from": "$poster", "amount": "$reward" } } ] }
+  "on_done": [ { "pay": { "of": "credits", "to": "taker", "from": "$poster", "amount": "$reward" } } ] }
 ```
 
 A **mission** is a template for objectives, started with parameters.
@@ -197,7 +197,7 @@ Missions come from the world:
 | Source | How |
 |--------|-----|
 | A person | A `talk` option (15 §11) whose effect is `start_mission` |
-| A **posting** | A piece of published knowledge (09 §12) that carries a mission. A notice board, a terminal or a town crier shows what its channel holds; accepting one starts it. |
+| A **posting** | A piece of published knowledge (09 §12) that carries a mission. A notice board, a terminal or a town crier shows what its outlet holds; accepting one starts it. |
 | An incident | A stage's effects offer one: a robbery in progress, a call for help |
 | A group | A collective's goal (09 §8.1) posts one when it wants something done |
 | A scenario | Directly |
@@ -211,10 +211,11 @@ you.
 ```json
 "plot": [
   { "id": "arrival",     "when": "start",
-    "do": [ { "show_screen": { "screen": "ashfall_intro", "to": "view" } } ] },
+    "do": [ { "show_screen": { "screen": "ashfall_intro" } } ] },
   { "id": "first_night", "after": ["arrival"], "when": "realm.time_of_day == 'night'",
     "do": [ { "start_incident": { "id": "scavengers_come", "at": "start.site" } } ] },
-  { "id": "signal",      "after": ["first_night"], "when": "party.any(it.has_item_tag('radio_part'))",
+  { "id": "signal",      "after": ["first_night"],
+    "when": { "exists": { "items": { "held_by": "party", "where": "it.has_tag('radio_part')" } } },
     "do": [ { "start_mission": { "mission": "repair_the_radio" } } ] } ]
 ```
 
@@ -255,6 +256,9 @@ player's part of the world is not dull, and not relentless.
 
 The director keeps one number, **tension**, for the party. Listed events
 raise it. It fades with time. It is a variable rules can read and set.
+Below the band a lull is counted, and something is started when it ends.
+Above the band nothing is started. Inside it nothing is started and the
+lull does not run.
 
 ### 7.3 Starting things
 
@@ -331,7 +335,7 @@ pub struct Case {
     pub truth: Cause,                  // never shown
     pub holders: Vec<Holder>,          // who is working it: a group, a persona
     pub findings: BTreeMap<Holder, Vec<Finding>>,
-    pub state: CaseState,              // Open | Closed { blamed: Option<PersonaId> }
+    pub state: BTreeMap<Holder, CaseState>,   // each holder's own: Open | Closed { blamed }
 }
 ```
 
@@ -425,6 +429,18 @@ remains able to act.
 | `end` | An ending. Under `single`, the save is removed. |
 | `continue` | The player takes another character in the same world: one of their own, a new one made on the creation screen and placed by rule, or by `become` |
 | `restore` | The last checkpoint is restored |
+
+`on_party_gone` may also be written in full:
+
+```json
+"on_party_gone": { "when": "party.count == 0", "then": "continue",
+                   "by": ["own", "create"], "as": "lost", "do": [] }
+```
+
+`when` defaults to there being no directly controlled character alive
+with a working mind. `by` says which of the ways of carrying on are
+offered. `restore` with no checkpoint to go back to is refused, with its
+reason, and the scenario ends as `end` would.
 
 `restore_checkpoint` may **carry** things across: legacy variables
 (section 10.1), and the controlled characters' memories, which arrive
@@ -591,6 +607,30 @@ Scope `legacy` for variables.
 **Queries**: `objectives`, `missions`, `postings`, `cases`, `findings`.
 
 **Functions**: `cause_facts`.
+
+**Where expressions are read.** An objective's and a mission's
+expressions have `taker` bound, the character who took it on, and read
+what the taker believes, which is why a marker follows belief. A beat's
+`when`, a director's weights and an ending's conditions read truth, with
+`party`, `scenario` and `start` bound.
+
+**Further verbs and fields.** `fail_mission` and `cancel_mission`; on a
+mission, `failed` (a condition), `on_failed` and `on_expired`. An
+objective with `after` is hidden until those it names are done. A
+posting is withdrawn with `remove_knowledge` (09 §17). `set_director`
+changes the director, or removes it. `take_control { who }` gives the
+player direct control of a character. `accuse`, `open_case` and
+`close_case` name the `holder` concerned, and each holder closes its own
+view of a case. A `case_kind` says what opens one, who may hold it, and
+what its holders do with it. If no rule answers `case_judging`, the
+accusation is refused. Agents working a case gain findings by the cold
+step `examine` (09 §10.3).
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `director_choosing` | The director starts what it drew, where it chose | Change the entry or the place; cancel |
+| `case_judging` | A holder accepts or refuses an accusation | Decide it |
+| `scenario_ending` | An ending takes effect | Change which ending; cancel |
 
 **Properties**: `scenario.id`, `scenario.var.*`, `scenario.director`,
 `party`, `party.count`, `party.tension`, `start.site`, `start.realm`,

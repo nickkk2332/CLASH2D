@@ -320,7 +320,8 @@ knows the current path and source location at every point.
 The unit list is fixed and documented: `us ms s min h d`; `mm cm m km`;
 `ml L`; `g kg t`; `J kJ MJ GJ`; `W kW MW`; `N kN`; `Pa kPa MPa GPa`;
 `K C`; `m/s km/h`. A field that holds a rate takes any unit of the right
-quantity followed by `/s`: `"0.012 kg/s"`, `"0.02 K/s"`. The rate of a
+quantity followed by `/s`, `/min`, `/h` or `/d`: `"0.012 kg/s"`,
+`"0.02 K/s"`, `"0.15 /h"`. The rate of a
 resource whose unit is its own (16 §5.1) is a bare number, per second. A
 unit of the wrong dimension for the field is an error.
 

@@ -185,6 +185,7 @@ a species feature, a mutation, a perk, a blessing, a curse, a drug, a stun.
 | `while` | A reactive condition (05 §7.5). While false the trait is dormant and confers nothing. |
 | `bound` | When added by an ability: the trait ends when that ability does (08 §7.3) |
 | `look` | How its holder appears while it lasts (12 §4.4) |
+| `goals`, `weights` | Goals added to the holder's mind, and changes to the weights it scores them by (09 §3) |
 
 There is no separate concept of "status effect", "mutation" or "perk".
 A trait with a duration is a status. Without one it lasts until removed.
@@ -816,8 +817,7 @@ When a tract unloads:
 | Individual | Becomes |
 |------------|---------|
 | Anonymous | Nothing. Its population count is adjusted if it died or left. |
-| Notable, with nothing to pursue | Stored with the tract |
-| Notable, with goals elsewhere | An agent |
+| Notable | An agent (09 §10). With a routine or goals it goes on living while unloaded. With neither it waits where it was. |
 
 Named characters created by scenarios or generation are notable from the
 start. `make_anonymous` makes an individual anonymous again.

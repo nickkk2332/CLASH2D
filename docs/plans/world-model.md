@@ -727,3 +727,4 @@ small package of its own.
 | Timeline ordering and the clock tree | F3 | 03 §3.2, §3.3; 01 §5 | Wake-ups pop in (tick, sequence) order; a clock's rate change preserves the remaining local time of everything on it (invariants T1, T2). |
 | Mod layout, `mod.json` and ids | F4 | 04 §3.1, §3.2, §4.1, §4.2 | A mod directory with a `mod.json` loads; ids are namespaced and an id that breaks the form is a diagnostic. |
 | Interiors that do not fit | W20a | 02 §18.4 | A vessel map whose interior is larger than its envelope is a load error that says to use a realm behind a portal. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

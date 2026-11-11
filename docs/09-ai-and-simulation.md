@@ -156,6 +156,24 @@ say `target.loc`; it must say `self.believed_loc(target)` and accept that
 the answer may be stale or `null`. This is rule R11 enforced by the
 compiler.
 
+Everything a goal, a method or a tactic reaches is compiled in the same
+context (05 §7.3): the mod's own functions, a grant's `value`, the rules
+a `run` step calls, and handlers of `goal_scoring` and `option_scoring`.
+Options are gathered from what the character believes. An action that
+turns out, when tried, not to be possible is a failed step, and the mind
+thinks again.
+
+"Static geometry" is the shape of the world (02 §23): what is solid and
+what can be walked. It is not the state of a door, a fire in the next
+room or what lies on a shelf. Those the character has to have **noted**
+(15 §7.1). Path costs, `near` and hauling read what has been noted.
+
+Who a mind counts as an enemy or a friend is read from its relations
+(15 §9.1): `threats` are those it knows of toward whom it, or its group,
+holds a relation whose kind is flagged `opposes`, and `allies` those
+with one flagged `sides_with`. Warm characters are opposed when their
+groups are. The engine has no other idea of sides.
+
 ## 4. Methods and steps
 
 A method is a list of **steps**. Steps are fed into the character's plan
@@ -551,6 +569,7 @@ A goal may have **cold methods**: steps that work on records.
 | `obtain`, `deliver` | Move stock between a site and itself |
 | `meet` | Be where another agent is, when they are |
 | `learn` | Draw on a knowledge store (section 12) |
+| `examine` | Gain findings about a case from a place, a body or a witness (13 §8.4) |
 
 A thief with a goal to grow rich, a watch captain with one to keep the
 peace, and a wandering swordsman with one to find a worthy opponent pursue
@@ -699,7 +718,7 @@ its goal.
 | A mind's beliefs (15 §7) | That character knows |
 | A group's knowledge (15 §9.2) | The group knows collectively |
 | **Local knowledge** of a site or tract | People there know: what the anonymous saw |
-| A **channel** | Has been published: a newspaper, a broadcast, a town crier, a rumour mill |
+| An **outlet** | Has been published: a newspaper, a broadcast, a town crier, a rumour mill |
 
 Local knowledge is what makes witnesses out of a crowd. When anonymous
 individuals are instantiated in a place, each draws from its local
@@ -710,7 +729,7 @@ street saw it.
 
 Knowledge moves by rules listening for `knowledge_added`, with delays:
 from a site's locals to the watch after a few minutes if anyone reports
-it; from the watch to a channel; from a channel to every site that
+it; from the watch to an outlet; from an outlet to every site that
 receives it. Each hop may lose confidence and detail.
 
 `add_knowledge`, `share_knowledge` and `publish` are the verbs. What
@@ -900,7 +919,13 @@ views are how it is found.
 ## 17. Modding surface
 
 **Definition types**: `mind`, `goal`, `tactics`, `collective`, `formation`,
-`routine`, `incident`, `weather`, `channel`. Fields `calendar` on realms;
+`routine`, `incident`, `weather`, `outlet`. Fields `calendar` on realms;
+`wake_clarity` on minds (how clear a percept must be to make it think
+again); `noise` on tactics; `retry_after` on goals; `if` on routine
+entries; `on_start` and `on_end` on incident stages, run whether the
+stage is played out or settled by arithmetic. A `tactics` definition maps
+any purpose tag to an expression; the option field `preview_incoming` is
+the preview of what the option's target could do in return.
 `cover_loss` on fields;
 `stocks` and `supplies` on site definitions; `cold` on goals; `intent`
 and `value` on grants (08 §11).
@@ -922,7 +947,20 @@ and `value` on grants (08 §11).
 `casualties`, `set_agent`, `make_agent`, `fold_agent`, `found_site`,
 `set_site_role`, `dissolve_site`, `add_knowledge`,
 `share_knowledge`, `publish`, `migrate`, `move_stock`, `set_stock`,
-`send_shipment`, `set_weather`, `set_service`, `set_site`, `set_region`.
+`send_shipment`, `set_weather`, `set_service`, `set_site`, `set_region`,
+`set_mind_def`, `set_routine`, `join_site` (who, site, role, home),
+`leave_site`, `cancel_order`, `remove_knowledge`. `fold_agent` is
+`make_anonymous` (06 §12.2) for an agent.
+
+`start_incident` is refused, with a reason and the event
+`incident_refused`, when no place fits or a cast role with no `else`
+cannot be filled. A stage lasts at least `incident.min_stage_time`, and
+one incident may start at most `incident.max_chain` others in one tick.
+
+For minds that something is listening to, `method_chosen`, `step_started`
+and `option_chosen` are raised, so a rule can observe a decision as the
+inspector can. `agent_storing` and `agent_loading` are hooks: a rule may
+change what an agent carries across.
 
 **Queries**: `visible`, `heard`, `allies`, `threats` (all from belief),
 `jobs`, `agents` (of a site, group or region), `incidents`, `knowledge`.
@@ -932,7 +970,14 @@ and `value` on grants (08 §11).
 `price`, `threat_removed`, `harm_prevented`, `escape_margin`,
 `detection_risk`.
 
-**Settings**: `max_hot_minds`.
+**Settings**: `sim.max_hot_minds`, `mind.max_memories`, `mind.max_tracks`,
+`mind.max_noted`, `incident.min_stage_time`, `incident.max_chain`,
+`incident.region_cap`.
+
+Rates in this document are written with a unit of time (04 §7.1):
+`"0.02 /d"`, `"0.15 /h"`. A time of day such as `"06:00"` is hours and
+minutes of a twenty-four hour day, scaled to the length of the realm's
+own; `realm.clock` gives the same as a fraction of the day.
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
 sites, `locals`, `stock(what)`, `population(kind)`, `holder`; on regions,

@@ -604,3 +604,4 @@ small package of its own.
 | Safety limits | P4 | 04 §15 | A file over the size limit, nesting over the depth limit and a definition count over its limit each give a diagnostic and no crash. A file reference that leaves the mod's directory is refused. |
 | Rules at lower detail | K5, T7 | 05 §13.5 | Attached rules on a stored entity do not run; recurring ones follow `while_unloaded`; nothing cold raises a cell-level event. |
 | The script hook | none | 05 §16 | Reserved. No package builds it, and nothing may depend on it. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

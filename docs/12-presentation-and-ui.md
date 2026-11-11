@@ -667,7 +667,8 @@ UI effects cannot change the simulation except by submitting commands.
 `{ "show_screen": { "screen": "trade", "to": "self", "with": { … } } }`.
 Like a cutscene's cue (section 8.1) it is an output event and changes
 nothing in the simulation. The interface of whoever controls `to` opens
-the screen with those values. If nobody does, nothing happens. This is how
+the screen with those values; with no `to`, the player's does. If nobody
+controls `to`, nothing happens. This is how
 an interaction opens a shop, a book, a terminal or a mod's own screen.
 
 ### 10.6 Extending screens

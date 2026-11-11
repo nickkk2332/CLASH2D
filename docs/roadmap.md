@@ -58,6 +58,7 @@ under "Review additions".
 |----------|----------------|
 | 02 World model | Reviewed and settled (decisions D-169 to D-181) |
 | 03 to 16 | Reviewed (decisions D-182 to D-195) |
+| All | Audited before building, by scripted cross-checks and six independent readings: identifiers, plan coverage, hooks, what minds and players may know, and the interface toolkit (decisions D-234 to D-242) |
 
 What the review left unanswered on purpose:
 

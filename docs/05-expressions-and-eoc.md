@@ -228,6 +228,8 @@ properties.
 | `network`, `job` | As in 16 |
 | `ability` | An ability instance (08 §3.2) |
 | `group`, `incident` | As in 15 and 09 |
+| `persona`, `track`, `memory` | As in 15 §7 and §8 |
+| `case`, `mission`, `objective` | As in 13 |
 | `action` | A running action (03 §6) |
 | `part`, `wound` | A part of a body, and a wound on one (06 §6, §7.3) |
 | `body` | Something in flight (02 §15): a projectile, debris, a thrown creature |

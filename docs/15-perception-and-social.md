@@ -147,7 +147,7 @@ alone, as before, and nothing in the simulation reads a light's colour.
 |-------|---------|
 | `signal` | The kind this sense receives |
 | `range` | Beyond this nothing is considered |
-| `arc` | Degrees either side of facing that the sense covers; 360 for hearing |
+| `arc` | The whole angle, in degrees, that the sense covers, centred on the facing; 360 for hearing |
 | `threshold` | Minimum received strength to register. An expression, so injury, darkness adaptation and traits matter. |
 | `gain`, `decay` | How fast awareness builds and fades (section 5) |
 | `interval` | How often the sense sweeps for standing signatures |
@@ -200,7 +200,8 @@ Nothing scans every tick.
 | A signal is emitted | Observers within the signal's reach |
 | An explicit `search` or `listen` action | The observer, with whatever bonus the action's rules give |
 
-Only hot entities observe. Pairs with nothing received and no awareness are
+Only hot entities sweep; warm ones receive only strong signals
+(section 14). Pairs with nothing received and no awareness are
 not stored.
 
 ### 5.3 Concealment
@@ -219,7 +220,7 @@ Being hard to perceive is not a special state. It follows from the numbers:
 | Traits | Camouflage, invisibility, silence: modifiers on signature |
 | Another plane (02 §8.2) | Not received unless the sense spans planes |
 
-Scene S13 is the fourth-from-last row plus section 7.2.
+Scene S13 is the row about containers plus section 7.2.
 
 ## 6. Percepts
 
@@ -232,7 +233,11 @@ perceived
   self      the observer
   sense     which sense
   about     a persona, a location, or nothing
-  event     the underlying event, if the signal carried one
+  event     the underlying event, if the signal carried one: its type,
+            and its roles as this observer made them out. They are
+            personas, never entities. `about_actor` is whoever the
+            observer took the actor for, or null. The true actor and
+            instigator (02 §7.3) are not in it.
   where     where it seemed to come from
   clarity   received / threshold
 ```
@@ -273,6 +278,7 @@ pub struct Beliefs {
     tracks: BTreeMap<PersonaId, Track>,
     memories: Vec<Memory>,
     map: Option<MapMemory>,
+    noted: Vec<Noted>,          // bounded: things noticed about the world
 }
 ```
 
@@ -280,9 +286,17 @@ pub struct Beliefs {
 
 | Kind | Holds |
 |------|-------|
-| **Track** | What this mind knows about one persona: where and when last perceived, what they were doing, how it knows (saw, heard, was told, inferred), and a confidence. A track may also hold **facts**: true values of particular properties, recorded by `appraise` (08 §7.5) at the moment of appraisal. It also holds **observed capabilities**: for each action or ability this mind has seen the persona use or been told of, its id, the strongest result seen, and when. The list is bounded by the setting `track_capabilities` (default 8); the weakest and oldest go first. `threat` (09 §6.2) reads it. |
+| **Track** | What this mind knows about one persona: where and when last perceived, what they were doing, how it knows (saw, heard, was told, inferred, or carried back from a time that was undone, 13 §9.3), and a confidence. A track may also hold **facts**: true values of particular properties, recorded by `appraise` (08 §7.5) at the moment of appraisal. It also holds **observed capabilities**: for each action or ability this mind has seen the persona use or been told of, its id, the strongest result seen, and when. The list is bounded by the setting `track_capabilities` (default 8); the weakest and oldest go first. `threat` (09 §6.2) reads it. |
 | **Memory** | Something that happened: the event type, where, when, which personas played which roles, how it knows, confidence, and salience. |
 | **Map memory** | What places looked like when last seen. Kept for controlled characters. |
+
+**Noted things** are what a character has noticed about the world
+itself: that a door was locked, that a room was on fire, that a crate
+stood by the gate. Each holds what, where, its state and when. The list
+is bounded (`mind.max_noted`), oldest and least used first to go. Watched
+things (section 6) are noted from the start by those who mind them.
+Belief-side queries (`visible`, `heard`, `tracks`, `threats`, `allies`)
+give personas, so a face kept in a variable is still only a face.
 
 Free-form beliefs are variables on the mind.
 
@@ -426,6 +440,9 @@ A relation is a value held by one mind toward a persona or a group.
 `self.rel('fear', x)` reads it; verbs set, add and clear it. `fade` moves it
 toward its default per minute of local time.
 
+A kind flagged `opposes` or `sides_with` is how the AI layer knows
+enemies from friends (09 §3.4).
+
 A kind flagged `intervenes` makes its holder a candidate for windows
 opened by actions against the one it is held toward (03 §7.1): the
 bodyguard may answer the blow aimed at the person guarded.
@@ -458,14 +475,35 @@ orders to which. A role flagged `spends` may pay from what the group holds
   `claims`. Wearing the uniform gets you treated as one of them, until
   someone sees through it.
 - Group knowledge is how "the watch is looking for you" works. Members add
-  to it by reporting and consult it when they recognise someone.
+  to it by reporting and consult it when they recognise someone. It counts
+  as told to every member the moment it is added. That is a deliberate
+  simplification. A mod that wants news to travel adds to it only when a
+  report reaches someone who can pass it on.
+
+```json
+{ "type": "group", "id": "town_watch", "name": "the Watch",
+  "roles": { "sergeant": { "orders": ["guard"], "spends": true }, "guard": {} },
+  "collective": "watch_command",
+  "relations": { "smugglers": { "hostile": 1 } } }
+```
+
+Groups are also made in play: `create_group { def, name }`,
+`dissolve_group`, and `set_role { who, group, role }`. A gang, a cult, a
+party and a raised horde begin that way.
 
 ## 10. Orders
 
 ```
-order { from, to, plan }     hook order_received (may refuse or alter)
-                             → the plan is enqueued on `to` (03 §5.3)
+order { from, to, plan, until }     hook order_received (may refuse or alter)
+                                    → the order is kept in `to.orders`
 ```
+
+What a character does about an order is a goal (09 §8.1). The bundled
+"do as ordered" goal makes the order's plan its own for as long as it
+scores highest, and a job named by an order scores above the rest while
+the order stands. `cancel_order` withdraws one, and `until` ends it by
+itself. `order` and `say` may name the `signal` kind that carries them
+and its `strength`.
 
 - A relation kind with `"orders": true` is what makes an order something to
   obey. Whether it is obeyed is still a rule: loyalty, fear, a contrary
@@ -585,7 +623,25 @@ actions and phases; `signature` and `senses` on templates and traits;
 `add_track`, `clear_track`, `set_awareness`, `set_relation`,
 `add_relation`, `clear_relation`, `join_group`, `leave_group`,
 `set_group_relation`, `report_to_group`, `order`, `face`, and the persona
-verbs of section 8.3.
+verbs of section 8.3, `set_persona` (its name, tags, claims and what it
+overrides), `create_group`, `dissolve_group`, `set_role`, `cancel_order`.
+
+A persona has a `quality` (how well it holds as a disguise) and a sense a
+`scrutiny`; `identity_check` is given both. If no rule answers, the
+disguise holds.
+
+**Subjects**: `persona`, `track`, `memory` and `group` are subject kinds
+(05 §5.1). A persona gives `name`, `tags`, `claims`, `pronouns` and its
+features; a track the properties of section 7.2; a memory its type,
+place, time, roles, how it is known, confidence, salience and a `var`
+map.
+
+**Events**: `group_created`, `group_dissolved`, `role_changed`,
+`order_cancelled`.
+
+**Settings**: `mind.max_noted`, `mind.max_memories`, `mind.max_tracks`,
+`perception.warm_factor` (the multiple of threshold a signal must exceed
+to reach a warm character), `light.spread_loss`.
 
 **Queries**: `tracks`, `memories`, `observers` (who currently perceives a
 subject), `members`, `suspects`.

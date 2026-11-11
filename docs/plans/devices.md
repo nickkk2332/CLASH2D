@@ -478,3 +478,4 @@ small package of its own.
 | Rates from the place | G3 | 16 §5.2 | A producer whose rate reads light gives more at noon than at dusk and nothing at night, with one rebalance at each change of the region's light and none between. Needs reactive expressions (abilities package A1). |
 | Containers that keep | G2 | 06 §9.4 | A powered cold box states what it `keeps`; unpowered, it keeps nothing. Used by first-playable addition "Ageing". |
 | Jobs at founded sites | G8 | 09 §13.5; 16 §10.2 | Jobs created in a founded site are on its board and are taken by characters who belong to it. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

@@ -841,7 +841,7 @@ count as liquid), `travel.local_range`, `travel.intercept_range`,
 **Effects**: the verbs of sections 7 and 12.2, and `board`, `alight`,
 `unseat`, `couple`, `uncouple`, `pump`, `vent`, `set_compartment_gas`,
 `open_valve`, `add_resource`, `drain_resource`, `end_travel`,
-`set_liquid_level`.
+`set_liquid_level`, `lash`, `unlash`, `right`.
 
 **Properties**: on vehicles, `mass`, `speed`, `heading`, `mode`,
 `top_speed`, `thrust`, `buoyancy`, `depth`, `altitude`, `range`, `list`,

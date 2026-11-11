@@ -577,7 +577,6 @@ Under `scenarios/people/`. Presentation scenarios also have golden frames.
 | `creation_flow` | U9 | S20 | Data-driven character creation |
 | `the_open_door` | S4 | — | Watched things and discrepancies |
 | `a_tall_figure_in_red` | S6 | — | Features and descriptions |
-| `bodyguard` | S7 | — | Relations that intervene |
 | `the_larder` | E8 | — | Ageing |
 | `gas_mask` | E2, E8 | — | Exposure by route |
 | `behind_lead` | S2 | — | Signals that expose |
@@ -617,3 +616,4 @@ small package of its own.
 | Region map and chart views | U4 | 12 §6.2 | The `region_map` and `chart_view` widgets draw from what the party knows. `chart_view` needs world-model package W21. |
 | Widget fields, roles, preferences, overlays | U6a, U6b, U8 | 12 §6.2, §10.3, §10.4, §10.7 | Every widget's fields are as tabled; a profile without a screen for a role fails to load; a preference defined by a test mod appears in options and is readable as `app.pref`; an overlay defined by a test mod draws only what the party has perceived. |
 | Screens asked for by rules | U6b | 12 §10.5 | `show_screen` opens a screen for the player who controls `to`, with its values, when playback reaches it; for a character nobody controls it does nothing. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |
