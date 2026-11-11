@@ -92,6 +92,9 @@ check
 | Time | `advance`, `step`, `until`, `rewind` (section 8.3) |
 | Looking | `select`, `inspect`, `watch`, `trace`, `profile`, `view` |
 | State | `save`, `load`, `hash`, `check`, `diff` |
+| Setting up | `use` (a profile and seed), `gen` (a small world), `find` |
+| The interface | `key <chord>`, `open <screen>`, `size <cols> <rows>`, `scene step <time>`, so that a mod can test its own screens with `expect frame` |
+| Maps | `map export <name> <mod>` writes a captured map into a mod's directory |
 | Tests | `assert`, `expect` (section 7) |
 | Mods | `reload`, `lint`, `show`, `refs` |
 
@@ -204,7 +207,9 @@ tick=4812350 kind=mind    subject=e:9          goal=flee score=0.83 was=fight re
 ```
 
 - Kinds: rules, events, actions, strikes, hits, perception, minds,
-  networks, recipes, incidents, generation, loading, clocks.
+  networks, recipes, incidents, generation, loading, clocks,
+  input, UI effects, playback (which `show` matched an event and why not)
+  and cutscene cues.
 - A trace is switched on for a kind, a subject, a place, or a combination.
 - Records go to a panel in the game, to a file as one JSON object per
   line, and to test scripts, which can assert on them.
@@ -262,7 +267,7 @@ use profile=test_core seed=7
 gen flat size=1
 spawn duellist at @c:10,10,0 as=a
 spawn duellist at @c:11,10,0 as=b
-as @b set_trait stance_guarded
+as @b add_trait stance_guarded
 as @a act slash target=@b
 advance 400ms
 assert "@b.wounds.count == 0"
@@ -358,7 +363,7 @@ uses (13 §9.5). Local undoing is separate (08 §7.4).
 
 | Tool | Answers |
 |------|---------|
-| The reference (`docs`) | What definition types, fields, units, events, verbs, properties, functions, reasons, diagnostics and console commands exist, with their documentation |
+| The reference (`docs`) | What definition types, fields, units, events and hooks (with their subjects, fields and which a handler may change), verbs (with their arguments), properties, functions, queries, settings, reasons, diagnostics, console commands, widgets, UI effects, binding names, screens and slots exist, with their documentation |
 | The reference browser | The same, searchable, in the game |
 | `show <type> <id>` | What a definition is after every patch, and where each value came from |
 | `refs <type> <id>` | What refers to it, and what it refers to |
@@ -415,6 +420,11 @@ wiring and devices, with a palette made for it. Something built in play,
 by hand or by helpers, becomes a design that can be planned elsewhere
 (16 §10.3), shipped in a mod, or placed by generation.
 
+The simulation writes no files (01 R5). A captured map is kept with the
+save, under a name, and `plan_from_map` and `apply_map` accept it in that
+game at once. `map export` copies one into a mod's directory, where it is
+an ordinary map after the next reload.
+
 ## 11. Checking that incidents agree
 
 An incident's stages each have a live form and an abstract form (09 §11),
@@ -468,7 +478,18 @@ variables. They are saved, and a rule may read them.
 
 ## 15. Modding surface
 
-**Definition type**: `console_command`.
+**Definition types**: `console_command`, `reason`.
+
+```json
+{ "type": "reason", "id": "no_fuel", "text": "{the(target)} is out of fuel.", "doc": "Raised by engines with an empty tank." }
+```
+
+A mod's own refusals carry reasons of its own. `cancel_event` names one
+(05 §10.5), and it is listed in the reference beside the engine's.
+
+The tools are the bundled `tools` mod (04 §3.5). A profile that lists it
+is a development profile: the console, breaks and rewind are available
+there and nowhere else.
 
 **Console commands**: section 3.3, and one for each registered verb.
 

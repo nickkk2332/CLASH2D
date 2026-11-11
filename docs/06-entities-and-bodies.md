@@ -573,6 +573,7 @@ material and volume. Weapons notch and break; armour wears through.
 | `contains` | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup |
 | `color` | A colour this particular item carries: fixed, or picked from a list when it is made. `set_color` changes it. Glyphs draw it with `"fg": "own"` and descriptions name it (12 §4.3). Creatures may carry one too. |
 | `unknown_name` | What it is called by someone who has not learned what it is (05 §4.6) |
+| `look` | How whoever wears or holds it appears (12 §4.4) |
 | `round` | For ammunition: the projectile it fires and with what energy (07 §11.5) |
 | `interactions`, `device` | As for elements (02 §5.5; 16) |
 

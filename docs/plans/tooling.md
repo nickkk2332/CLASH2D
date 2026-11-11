@@ -47,8 +47,7 @@ they can be built.
 
 | Earliest | Packages |
 |----------|----------|
-| M1, with the world viewer | TL5 |
-| M2, with the kernel | TL1, TL2, TL3, TL13 |
+| M2, with the kernel | TL1, TL2, TL3, TL5, TL13 |
 | M2, after TL1 | TL6, then TL7, TL8 |
 | M3, with screens | TL4, TL9 |
 | M3, with combat | TL14 |
@@ -298,3 +297,4 @@ small package of its own.
 | Stepping through a rule | TL15 | 14 §6.4 | See the package. |
 | Map and generation previews | worldgen WG12 | 14 §10.1; 10 §12 | Built with worldgen package WG12; listed here so that every section of 14 has an owner. |
 | Logs and failures | TL3 | 14 §14 | The structured log carries time, tick, subsystem, severity and fields; rule warnings are rate-limited per site; a simulated panic is caught at the top and writes a report. |
+| Reasons from mods; interface commands; reference coverage | TL1, TL2, TL9 | 14 §3.3, §9.2, §15 | A mod's `reason` is carried by its `cancel_event` and listed in the reference. A script presses a key, opens a screen and compares a frame. The reference lists every hook with what a handler may change and every verb with its arguments, and a test fails for any registered without them. |

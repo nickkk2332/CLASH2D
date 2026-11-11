@@ -50,7 +50,7 @@ actions that call `hit`.
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | todo |
 | U7 | Input, controls, pickers | M | U6b, T5 | todo |
 | U8 | Slots and theming | S | U6b | todo |
-| U9 | Bundled screens | L | U7, E9 | todo |
+| U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
 | U10 | Cutscenes | M | U5, T6 | todo |
 | U11 | Application | M | U3, U9, P3 | todo |
 | Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
@@ -69,9 +69,10 @@ kernel and can start as soon as K2 is done.
 | 5 | E8 | S3 | — |
 | 6 | E9, E12 | S4 | — |
 | 7 | E11 | S5 | — |
-| 8 | — | S6, S9 | U9 |
+| 8 | — | S6, S9 | — |
 | 9 | — | S7 | U4, U11 |
 | 10 | — | S8 | U5 |
+| 11 | — | — | U9 |
 | 11 | — | — | U10 |
 
 ## Milestones
@@ -613,3 +614,6 @@ small package of its own.
 | Route picker | U7 | 12 §9.3 | Frame test: the picker draws a numbered path as steps are added, shows the parameter's `check` beside the step that fails it, lets steps be taken back, and submits the list in order. |
 | Presentation testing | U1 | 12 §12 | Golden frames as text for the bundled screens; the view model equals a fresh one after every scripted playback; a test asserts the scene reaches the simulation only through `submit`. |
 | Perception at lower detail | S3 | 15 §14 | A warm entity does not sweep; a signal strong enough promotes it; a cold agent keeps its beliefs unchanged while stored. |
+| Region map and chart views | U4 | 12 §6.2 | The `region_map` and `chart_view` widgets draw from what the party knows. `chart_view` needs world-model package W21. |
+| Widget fields, roles, preferences, overlays | U6a, U6b, U8 | 12 §6.2, §10.3, §10.4, §10.7 | Every widget's fields are as tabled; a profile without a screen for a role fails to load; a preference defined by a test mod appears in options and is readable as `app.pref`; an overlay defined by a test mod draws only what the party has perceived. |
+| Screens asked for by rules | U6b | 12 §10.5 | `show_screen` opens a screen for the player who controls `to`, with its values, when playback reaches it; for a character nobody controls it does nothing. |

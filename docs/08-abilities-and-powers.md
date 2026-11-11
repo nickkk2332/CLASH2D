@@ -242,6 +242,7 @@ transformation, a stance of power, flight.
 - When the pool or store empties, the mode ends. This uses the pool's
   scheduled crossing (06 §4.2); nothing is checked per tick.
 - A mode may claim channel slots for as long as it is on.
+- A mode may carry a `look` (12 §4.4).
 
 Switching is an action the mode supplies, with whatever windup its
 definition gives it. A mode with no windup is a toggle.

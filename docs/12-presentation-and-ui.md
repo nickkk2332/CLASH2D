@@ -261,7 +261,17 @@ A `map_view` may draw an **overlay** on top of the cells:
 
 In an ordinary screen an overlay is drawn from the view model, so it shows
 what the character has perceived. In the debug context it shows the
-truth. Mods add overlays as definitions.
+truth. Mods add overlays as definitions:
+
+```json
+{ "type": "overlay", "id": "danger", "name": "Known hazards",
+  "cell": "known_field(it, 'fire') > 0", "shade": "red", "legend": "Fire" }
+```
+
+The view model holds, for the party: each cell they have seen and what
+was there; for each tract, its glyph, devastation and the sites they know
+of; and the travelers they have perceived on a chart. Overlays, the
+region map and the chart draw from that and nothing else.
 
 ### 6.3 Camera
 
@@ -301,7 +311,8 @@ stretch at a time, a stretch being what happened between two decisions.
 - An event whose presentation has a `min_time` holds the clock for at least
   that long.
 - A player setting scales everything, down to instant.
-- Any key during playback jumps to its end.
+- The key bound to `skip` in the keymap jumps playback to its end. By
+  default that is any key.
 
 ### 7.2 Motion
 
@@ -328,7 +339,9 @@ A `show` definition says how an event appears: an animation, floating text,
 a log line, screen shake, and what to do if the event was only heard. It
 may name a `sound` cue. No frontend plays sound in the first version; the
 name is carried so that content can be written ahead of one that does.
-Several may match one event; all apply. Events with no `show` simply update
+Several may match one event; all apply. When their animations together
+would overrun the stretch, those of lower `weight` are dropped first.
+Log lines are never dropped. Events with no `show` simply update
 the view model.
 
 ```json
@@ -360,7 +373,10 @@ A cutscene begins with a **cue**, raised one of three ways:
 | A `cutscene` definition has `on` and `if` | Moments that emerge: a clash above some energy, a tower falling, a death. The condition is evaluated in the simulation when the event occurs, like a rule whose only effect is the cue. |
 | The `play_cutscene` effect | Anything else. |
 
-A cue is an output event. It changes nothing in the simulation.
+A cue is an output event. It changes nothing in the simulation. It
+carries how the party perceived the event that raised it (15 §13), and a
+cutscene plays only for what was seen. A shot whose subject the party
+does not perceive, or who is gone, is skipped.
 
 ### 8.2 Choreography
 
@@ -374,7 +390,7 @@ A cue is an output event. It changes nothing in the simulation.
     { "time": "250 ms", "release": ["energy_released"],
       "anim": [ { "play": "shock_ring", "at": "between(a, b)" } ],
       "shake": 0.6, "flash": "white",
-      "caption": "{a.name} and {b.name} meet." },
+      "caption": "{cap(name(a))} and {name(b)} meet." },
     { "time": "500 ms", "camera": { "zoom": 1 }, "pace": 1 }
   ] }
 ```
@@ -550,6 +566,31 @@ and is told the actual one.
 
 The set is fixed. Widgets are composed and styled, not programmed.
 
+| Widgets | Fields |
+|---------|--------|
+| All | `id`, `style`, `if` (shown when true), `tip` (a tooltip) |
+| `text`, `art` | `value` |
+| `list`, `table`, `tree`, `menu` | `rows` (a query or a list), how each row is shown, `on_select` and `on_activate` (UI effects, with the row as `it`), `selected` (a screen variable to keep the choice in) |
+| `button` | `label`, `on_activate` |
+| `input`, `number`, `toggle`, `choice` | `bind` (the screen variable or preference it edits), `on_change` |
+| `bar`, `gauge` | `value`, `max`, `label` |
+| `map_view` and the other views | `centre`, `zoom`, `overlay`, `on_pick` |
+| `figure` | `figure` (a definition: rows of character art with named regions) and `shade`, an expression giving each region its colour |
+| `log` | `filter` |
+| `console`, `canvas`, `trace_view` | Debug context only: a command line, a paintable grid of cells, and a stream of trace records. The development screens of document 14 are built from these. |
+
+Widgets write only to screen variables and preferences. Anything that
+changes the game is a UI effect that submits a command.
+
+A screen states a `min_size`. On a smaller grid it is replaced by a plain
+notice saying how large the window must be. The smallest grid the bundled
+screens support is 80 by 24.
+
+**Reloading.** When definitions are reloaded (04 §11) the screen stack is
+rebuilt by screen id. Screen variables are kept where still declared. A
+screen that no longer exists is closed, with a diagnostic. A cutscene in
+progress is ended.
+
 ### 10.4 Binding
 
 Every widget property that shows something is an expression in a **pure**
@@ -565,12 +606,45 @@ context (05 §7.3). The names available:
 | `app` | Things outside the simulation: saves, profiles, mods, scenarios, preferences, the creation session |
 
 Bindings are re-evaluated when the simulation has advanced or a screen
-variable has changed, for widgets that are visible.
+variable has changed, for widgets that are visible. While events are
+still being played back, bindings on the view show the world as of the
+moment playback has reached, so a health bar does not drop before the
+blow is seen.
+
+`app` is the same for every mod and is listed in full in the generated
+reference:
+
+| `app.` | Is |
+|--------|----|
+| `saves`, `profiles`, `mods`, `scenarios` | Lists, each entry with its name, description and state |
+| `profile`, `scenario` | The ones in use |
+| `pref(id)` | A preference (below) |
+| `creation` | The character being made (06 §10.3) |
+| `size` | The grid in columns and rows |
+| `can_save`, `can_load` | Whether the scenario's saving policy allows it now |
 
 **What a screen may know.** In ordinary screens, the party's own
 characters are available in full. Everyone and everything else is available
 only as the party perceives it: queries return perceived personas and
 remembered places (15). Screens with context `debug` see truth.
+
+In an ordinary screen a parameter of type `entity` that is not a party
+member stands for what the party knows of it: its persona, its track
+(15 §7.2), the features made out (15 §8.4) and whatever was appraised
+(08 §7.5). Reading anything else of it is a load error. A parameter of
+type `party_member` may be read in full.
+
+**Preferences.** A `preference` is a player's choice about display and
+input, kept outside saves and invisible to rules:
+
+```json
+{ "type": "preference", "id": "damage_numbers", "kind": "flag", "default": false,
+  "name": "Show damage numbers", "doc": "Float the energy of each hit over its target." }
+```
+
+The built-in ones are defined the same way: `theme`, `keymap`,
+`playback_speed`, `cutscenes` (all, major, none). A profile may set
+defaults.
 
 ### 10.5 UI effects
 
@@ -605,7 +679,11 @@ an interaction opens a shop, a book, a terminal or a mod's own screen.
 ```
 
 A screen places `slot`s where others may add. A `ui_part` puts a widget
-into a slot. A mod that adds a resource adds its bar without replacing the
+into a slot. Every bundled screen and its slots are listed in the
+generated reference. A part aimed at a slot that does not exist is a load
+error, unless it says `"optional": true`. Any layout node may carry an
+`id`, so that a patch can change one node of a screen and leave the rest
+(04 §6.1). A mod that adds a resource adds its bar without replacing the
 whole display. A mod that wants a different display overrides the screen.
 
 ### 10.7 The bundled screens
@@ -614,7 +692,13 @@ The `ui` mod provides: title, profile and mod list, new game and scenario
 choice, character creation, the play screen (map, log, status, slots),
 inventory, condition, abilities, look and inspect, the reaction prompt, the
 choice prompt, the pickers, options and key binding, save and load, trade
-(16 §3.6), fitting, make, build, work, device and know-how.
+(16 §3.6), fitting, make, build, work, device and know-how; the journal,
+case file and codex (14 §13); a scenario's introduction and summary
+(13 §3); the helm (a station's readouts, 11 §15); and the map, which
+hosts the region map and the chart for plotting a course.
+
+Which screen answers each need is set by the profile (04 §3.3), so a
+profile without the `ui` mod supplies its own:
 
 **Make** lists the recipes the character knows that could be done here:
 by hand, and at each station within reach. Each shows what it takes, what
@@ -642,6 +726,15 @@ make, and what they could learn next (16 §8.5).
 
 All five are built from definitions, so a mod's machines, recipes and
 know-how appear in them with no screen written.
+
+| Role | Opened when |
+|------|-------------|
+| `play`, `creation`, `summary` | A game is being played, a character made, a game ended |
+| `reaction`, `choice` | The simulation asks for a decision |
+| `picker.<type>` | A parameter of that type is being chosen |
+| `tooltip`, `context_menu` | Something is hovered or clicked (section 9.4) |
+
+A role with no screen is a load error.
 
 **Fitting** shows an assembly (16 §11): its slots, what is in each, what
 could go in each from what is at hand, and what the whole offers and draws
@@ -687,7 +780,11 @@ A third, **null** frontend records frames for tests.
 ## 13. Modding surface
 
 **Definition types**: `screen`, `ui_part`, `theme`, `color`, `ambience`,
-`figure`, `keymap`, `control`, `show`, `anim`, `cutscene`. The `glyph`
+`overlay`, `preference`, `figure`, `keymap`, `control`, `show`, `anim`,
+`cutscene`. Theme `marks`: the glyphs the engine draws for itself (a pile
+of items, a suspected presence, something only heard, a capsized vessel).
+A glyph may give a `layer` to be drawn over or under its usual place in
+the order of section 6.1. Functions `between(a, b)` and `dir(a, b)`. The `glyph`
 field on everything drawable. The `look` field on traits, modes, postures
 and worn items. The `cutscene` field on actions.
 
@@ -707,8 +804,8 @@ for playback speed and how often cutscenes play.
 | V1 | The scene changes the simulation only through `submit`. |
 | V2 | Nothing computed by presentation is read by the simulation. |
 | V3 | The view model shows only what controlled characters perceived, except in debug contexts. |
-| V4 | Caught-up playback equals a fresh view of the simulation. |
-| V5 | Every player-relevant event produces a log line. Nothing is conveyed only by an effect a terminal cannot show. |
+| V4 | Caught-up playback equals a fresh view of the simulation, and until then every binding on the view shows the moment playback has reached. |
+| V5 | Every player-relevant event produces a log line. Nothing is conveyed only by an effect a terminal cannot show. The linter warns of an event type registered as player-relevant that no `show` gives a `log`. |
 | V6 | A cutscene never alters, drops or reorders events in simulation time. |
 | V7 | Every bundled screen is a definition that a mod can override. |
 | V8 | With a fixed time step and input script, frames are reproducible. |

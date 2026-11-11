@@ -89,6 +89,11 @@ A **profile** is a named set of mods and how the game starts with them.
 }
 ```
 
+A profile may also give `screens`, naming the screen for each role the
+interface needs (12 §10.7), and `preferences`, defaults for the player's
+display choices. The default profile is the one named `default` in
+`profiles/`.
+
 Profiles live in `profiles/` or inside a mod. The game starts a profile:
 named on the command line, or chosen on the launcher screen of the default
 profile. `boot_screen` names the screen definition (12) shown first.
