@@ -1,0 +1,112 @@
+[
+  { "//": "Values are illustrative. Density in kg/m3, toughness in J/m3, thresholds in Pa.",
+    "type": "material", "id": "granite",
+    "density": 2700,
+    "toughness": 2.5e6,
+    "resist": {
+      "impact": { "threshold": "60 MPa" },
+      "cut":    { "threshold": "400 MPa", "factor": 0.1 },
+      "pierce": { "threshold": "400 MPa", "factor": 0.1 },
+      "blast":  { "threshold": "200 MPa" },
+      "heat":   { "threshold": "100 MPa", "factor": 0.05 }
+    },
+    "span": 2,
+    "bearing": "130 MPa",
+    "rubble": "rubble",
+    "color": "dark_gray",
+    "tags": ["mineral", "igneous"] },
+
+  { "type": "material", "id": "soil",
+    "density": 1500,
+    "toughness": 5.0e4,
+    "resist": {
+      "impact": { "threshold": "200 kPa" },
+      "cut":    { "threshold": "100 kPa", "factor": 0.5 },
+      "blast":  { "threshold": "150 kPa" },
+      "heat":   { "threshold": "5 MPa", "factor": 0.05 }
+    },
+    "span": 0,
+    "bearing": "300 kPa",
+    "rubble": "rubble",
+    "color": "brown",
+    "tags": ["earth"] },
+
+  { "type": "material", "id": "concrete",
+    "density": "2400 kg/m3",
+    "toughness": 1.0e6,
+    "resist": {
+      "impact": { "threshold": "20 MPa" },
+      "cut":    { "threshold": "200 MPa", "factor": 0.2 },
+      "blast":  { "threshold": "100 MPa" },
+      "heat":   { "threshold": "50 MPa", "factor": 0.1 }
+    },
+    "span": 4,
+    "bearing": "30 MPa",
+    "flammable": false,
+    "rubble": "rubble",
+    "color": "gray",
+    "tags": ["mineral"] },
+
+  { "type": "material", "id": "brick",
+    "density": 1900,
+    "toughness": 6.0e5,
+    "resist": {
+      "impact": { "threshold": "10 MPa" },
+      "cut":    { "threshold": "100 MPa", "factor": 0.2 },
+      "blast":  { "threshold": "40 MPa" },
+      "heat":   { "threshold": "80 MPa", "factor": 0.05 }
+    },
+    "span": 2,
+    "bearing": "15 MPa",
+    "rubble": "rubble",
+    "color": "red",
+    "tags": ["mineral"] },
+
+  { "type": "material", "id": "glass",
+    "density": 2500,
+    "toughness": 5.0e4,
+    "resist": {
+      "impact": { "threshold": "500 kPa" },
+      "cut":    { "threshold": "50 MPa", "factor": 0.1 },
+      "blast":  { "threshold": "5 kPa" },
+      "heat":   { "threshold": "20 MPa", "factor": 0.1 }
+    },
+    "span": 1,
+    "bearing": "20 MPa",
+    "rubble": "rubble",
+    "color": "cyan",
+    "tags": ["mineral", "brittle"] },
+
+  { "type": "material", "id": "wood",
+    "density": 600,
+    "toughness": 3.0e5,
+    "resist": {
+      "impact": { "threshold": "3 MPa" },
+      "cut":    { "threshold": "5 MPa" },
+      "pierce": { "threshold": "5 MPa", "factor": 0.5 },
+      "blast":  { "threshold": "2 MPa" },
+      "heat":   { "threshold": "300 kPa" }
+    },
+    "span": 3,
+    "bearing": "8 MPa",
+    "flammable": true,
+    "rubble": "rubble",
+    "color": "brown",
+    "tags": ["organic", "fuel"] },
+
+  { "type": "material", "id": "steel",
+    "density": 7850,
+    "toughness": "100 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "250 MPa" },
+      "cut":    { "threshold": "800 MPa", "factor": 0.1 },
+      "pierce": { "threshold": "600 MPa", "factor": 0.3 },
+      "blast":  { "threshold": "300 MPa" },
+      "heat":   { "threshold": "400 MPa", "factor": 0.05 }
+    },
+    "span": 8,
+    "bearing": "250 MPa",
+    "rubble": "rubble",
+    "color": "light_gray",
+    "tags": ["metal"] }
+]

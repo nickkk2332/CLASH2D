@@ -7,14 +7,14 @@
 //! 2. `cargo clippy --workspace --all-targets` with warnings denied
 //! 3. `cargo test --workspace`
 //! 4. `cargo doc --workspace --no-deps` with warnings denied
+//! 5. the check that the literals for chunk, tract and region sizes appear
+//!    only in `clash_world::dims` (see the `dims` module)
 //!
 //! Every step runs even when an earlier one fails, so one run shows
 //! everything that is wrong. `cargo xtask <step>` runs a single step by name
-//! (`fmt`, `clippy`, `test`, `doc`).
-//!
-//! The check that the literals for chunk, tract and region sizes appear only
-//! in `clash_world::dims` joins this list with work package W1, which creates
-//! that module.
+//! (`fmt`, `clippy`, `test`, `doc`, `dims`).
+
+mod dims;
 
 use std::env;
 use std::ffi::OsString;
@@ -22,13 +22,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant};
 
+/// The name of the one step that is not a cargo command: the size-literal
+/// check, which this program does itself.
+const DIMS_STEP: &str = "dims";
+
 /// One step of `cargo xtask check`: a cargo command and the environment it
-/// needs.
+/// needs, or the built-in size-literal check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Step {
     /// The name used on the command line and in the summary.
     name: &'static str,
-    /// Arguments passed to cargo.
+    /// Arguments passed to cargo. Empty for the built-in check.
     args: &'static [&'static str],
     /// Environment variables set for the command.
     env: &'static [(&'static str, &'static str)],
@@ -62,6 +66,11 @@ const STEPS: &[Step] = &[
         name: "doc",
         args: &["doc", "--workspace", "--no-deps"],
         env: &[("RUSTDOCFLAGS", "-D warnings")],
+    },
+    Step {
+        name: DIMS_STEP,
+        args: &[],
+        env: &[],
     },
 ];
 
@@ -105,6 +114,9 @@ fn usage() -> String {
 
 /// The command a step runs, as a person would type it.
 fn command_line(step: &Step) -> String {
+    if step.name == DIMS_STEP {
+        return String::from("(built in) size literals appear only in clash_world::dims");
+    }
     let mut line = String::new();
     for (key, value) in step.env {
         line.push_str(&format!("{key}=\"{value}\" "));
@@ -125,6 +137,14 @@ fn workspace_root() -> PathBuf {
 /// Runs one step and reports whether it passed and how long it took.
 fn run(step: &Step, root: &Path) -> (bool, Duration) {
     println!("\nxtask: {} — {}", step.name, command_line(step));
+    if step.name == DIMS_STEP {
+        let started = Instant::now();
+        let found = dims::violations(root);
+        for violation in &found {
+            eprintln!("{violation}");
+        }
+        return (found.is_empty(), started.elapsed());
+    }
     let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
     let started = Instant::now();
     let status = Command::new(cargo)
@@ -194,12 +214,24 @@ mod tests {
     }
 
     #[test]
-    fn check_runs_the_four_gates_in_order() {
+    fn check_runs_every_gate_in_order() {
         let Request::Run(steps) = parse(&args(&["check"])) else {
             panic!("`check` must run steps");
         };
         let names: Vec<&str> = steps.iter().map(|step| step.name).collect();
-        assert_eq!(names, ["fmt", "clippy", "test", "doc"]);
+        assert_eq!(names, ["fmt", "clippy", "test", "doc", "dims"]);
+    }
+
+    #[test]
+    fn the_size_literal_check_is_built_in() {
+        let dims = STEPS.iter().find(|step| step.name == DIMS_STEP).unwrap();
+        assert!(dims.args.is_empty());
+        assert!(command_line(dims).contains("clash_world::dims"));
+        assert!(
+            STEPS
+                .iter()
+                .all(|step| step.name == DIMS_STEP || !step.args.is_empty())
+        );
     }
 
     #[test]

@@ -1,0 +1,10 @@
+[
+  { "//": "What destroyed elements leave behind. Amounts add up; a full cell becomes the heap block.",
+    "type": "fixture", "id": "rubble", "material": "concrete",
+    "height": 0.5, "fill": 0.15, "flags": ["rough"], "heap": "rubble_heap",
+    "glyph": { "ch": ";", "fg": "material" } },
+
+  { "type": "fixture", "id": "desk", "material": "wood",
+    "height": 0.8, "fill": 0.1,
+    "glyph": { "ch": "n", "fg": "material" } }
+]

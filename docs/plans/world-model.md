@@ -28,11 +28,11 @@ Section references such as "02 §14" point into those documents.
 | F2 | `clash-core` | M | F1 | done |
 | F3 | `clash-time` | M | F2 | done |
 | F4 | `clash-data` v0 | L | F2 | todo |
-| W1 | Dimensions and coordinates | S | F2 | todo |
-| W2 | Paletted storage | S | F2 | todo |
-| W3 | Cell definitions | M | F4, W1 | todo |
-| W4 | Chunks and grids | M | W2, W3 | todo |
-| W5 | Cosmos, realms, views | M | W4, F3 | todo |
+| W1 | Dimensions and coordinates | S | F2 | done |
+| W2 | Paletted storage | S | F2 | done |
+| W3 | Cell definitions | M | F4, W1 | beta |
+| W4 | Chunks and grids | M | W2, W3 | beta |
+| W5 | Cosmos, realms, views | M | W4, F3 | beta |
 | W6 | Edits, causes, events | M | W5 | todo |
 | W7 | Occupancy, planes, areas, sites | M | W6 | todo |
 | W8 | Tracts, regions, generation, loading | L | W7 | todo |
@@ -123,8 +123,8 @@ ones not yet started as compiling stubs with their dependency edges, so
 that later packages fill a crate in rather than add one. The disallow lists
 are in the root `clippy.toml`; the frontends, `clash-app`, `clash-tools`
 and `xtask` opt out with a `clippy.toml` of their own. The check that size
-literals appear only in `clash_world::dims` is not in `cargo xtask check`
-yet: W1 adds it with the module.
+literals appear only in `clash_world::dims` joined `cargo xtask check` with
+W1, as its fifth step, `dims` (decision D-285).
 
 ### F2 — `clash-core`
 
@@ -232,6 +232,14 @@ Done when
   symmetry.
 - Segment traversal visits exactly the cells a brute-force reference finds.
 
+As built (decisions D-284, D-285). Positions order by `z`, then `y`, then
+`x`. A realm's cells run from 0 to its size on each horizontal axis.
+`CellBox` was added for boxes of cells. `cargo xtask check` gained the
+`dims` step: the literals 32, 64, 1024, 2048, 4096 and 8192 may appear in
+the source of `clash-world` and `clash-gen` only in `dims.rs`, in comments,
+in strings, in test modules, or on a line marked `dims-ok`. The literal 8
+is not looked for.
+
 ### W2 — Paletted storage
 
 **Spec** 02 §6.1 · **Size** S
@@ -244,6 +252,9 @@ Done when
 - Property test against a plain `Vec<T>` model.
 - A uniform layer is under 200 bytes; a 16-entry palette uses 4 bits per cell.
 - Two layers with equal contents but different palette histories hash equal.
+
+As built (decision D-281). The representation of `Paletted` is private.
+The serialised form is the compacted, canonical one.
 
 ### W3 — Cell definitions
 
@@ -267,6 +278,27 @@ Done when
 - Derived values for a concrete wall match 02 §12.2 (0.6 m³, 0.6 MJ).
 - Schemas are generated for every type.
 
+Status `beta` (decision D-283). Built: the definition types as plain
+`serde` structs that refuse unknown keys; `WorldDefs::build`, which sorts,
+numbers, resolves and derives, and reports every mistake; the state
+reference parser; the content, as definition files under `mods/core/world/`;
+`contact` on elements (review addition). Stubbed, because `clash-data` was
+being written at the same time:
+
+- The definitions are not registered with the loader. Its typed loading
+  feeds `WorldDefs::build` when package P4 lands, and the files move under
+  `mods/core/data/` with it. Until then a test-only reader loads them.
+- `clash-tools lint mods` and schema generation are the loader's, and are
+  not checked here.
+- Quantities with units are read by a private helper in `clash-world`,
+  to be replaced by the loader's quantity types. References are a newtype
+  around the id; a bare name is looked up in the definition's own
+  namespace, then in every namespace in sorted order, which stands in for
+  a mod's import list.
+- Not read yet, each left to the package that gives it meaning: `changes`,
+  rubble by damage type or as a field (W25); `fluid` (vehicles V1);
+  `friction` (W14); `load`, `when_supplied`, `conveys` (devices plan).
+
 ### W4 — Chunks and grids
 
 **Spec** 02 §6.2, §6.3 · **Size** M
@@ -284,6 +316,22 @@ Done when
   random edits (property test).
 - Benchmarks exist for flag and state reads.
 
+Status `beta` (decisions D-280, D-281). Built as specified in 02 §6.2 and
+§6.3 as they now read: per-cell derived flags kept on every write, chunks
+held inline in their column, `ColumnBuilder` for cells not yet in the
+world. Stubbed:
+
+- Benchmarks. The beta plan leaves W23 for later. Two ignored timing tests
+  in `crates/clash-world/tests/cosmos.rs` print rough figures instead. On
+  the build machine, for cells scattered at random over 64 tracts: a flag
+  read 10 ns through a `GridView` and 12 ns through `Cosmos` (target 10 ns),
+  a read of all three states 18 ns (target 30 ns). A uniform chunk is 184
+  bytes (target 200).
+- `FieldStore` and `OccupantIndex` are empty typed placeholders (W16, W7).
+- Chunks and columns are not serialised: the tract blob codec is W10's.
+- The write primitives for damage, decals and cell variables exist and are
+  tested, and nothing calls them until `WorldEdit` (W6).
+
 ### W5 — Cosmos, realms, views
 
 **Spec** 02 §4, §7.1 · **Size** M
@@ -297,6 +345,19 @@ Build
 Done when
 - Edge normalisation, strata boundaries and realm isolation are tested.
 - Reading an unloaded cell returns the error value.
+
+Status `beta` (decisions D-282, D-284). Everything listed is built; one
+thing is stubbed, the last below. The read API returns
+`Result<_, WorldError>`. `GridView` gives the same reads for many cells of
+one grid. `Realm` holds what exists so far: id, definition, seed, clock,
+base grid, variables and state; region records, stamps, areas, sites,
+travelers and the plan join it with their packages. `ambient` reads the
+stratum only; areas are consulted from W7. Until tracts load through
+tickets (W8, W9), `clash_world::test_support` puts whole columns into a
+cosmos for tests. `Cause` and `Decal` were defined here, ahead of W6,
+because the decal layer stores them. Stubbed: the `realm` definition type is in
+the same state as those of W3. `WorldDefs::build` reads it, and it is
+registered with the loader when they are.
 
 ### W6 — Edits, causes, events
 

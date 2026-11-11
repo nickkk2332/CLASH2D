@@ -1,0 +1,13 @@
+[
+  { "type": "floor", "id": "slab", "material": "concrete", "thickness": 0.2,
+    "resist": { "impact": { "threshold": "300 kPa" }, "blast": { "threshold": "50 kPa" } },
+    "glyph": { "ch": ".", "fg": "material" } },
+
+  { "type": "floor", "id": "asphalt", "material": "concrete", "thickness": "10 cm",
+    "resist": { "impact": { "threshold": "500 kPa" } },
+    "glyph": { "ch": ".", "fg": "dark_gray" } },
+
+  { "type": "floor", "id": "grass", "material": "soil", "thickness": "5 cm",
+    "tags": ["plant"],
+    "glyph": { "ch": "\"", "fg": "green" } }
+]

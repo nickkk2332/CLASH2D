@@ -147,6 +147,10 @@ dependencies = [
  "clash-core",
  "clash-data",
  "clash-time",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
