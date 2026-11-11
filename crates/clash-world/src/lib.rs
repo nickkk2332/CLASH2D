@@ -18,6 +18,7 @@
 //! | The state of an element | [`FloorState`], [`BlockState`], [`FixtureState`], [`ElementState`] |
 //! | Stored cells | [`Chunk`], [`Column`], [`Grid`]; built with [`ColumnBuilder`] |
 //! | The world, and reading it | [`Cosmos`], [`GridView`], [`CellView`], [`CellFlags`], [`Ambient`] |
+//! | Rays, lines of sight, fields of view, the geometry round a cell, paths | [`query`] |
 //! | Why something could not be done | [`WorldError`] |
 //! | A world for a test | [`test_support`] |
 //!
@@ -40,6 +41,7 @@ mod error;
 mod grid;
 pub mod iter;
 mod pos;
+pub mod query;
 pub mod storage;
 pub mod test_support;
 mod topology;
@@ -60,5 +62,11 @@ pub use grid::{CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE};
 pub use pos::{
     CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,
     distance_sq_cells,
+};
+pub use query::{
+    CellGeometry, Connection, Footing, FovSet, Freshness, MoveProfile, MoveRules,
+    NeighbourGeometry, NoObstacles, Path, PathFail, PathFinder, PathLimits, RayBlocks, RayEnd,
+    RayFilter, RayHit, RayHits, RayObstacles, RaySpan, RayTarget, RevParts, RevStamp, Step,
+    StepKind,
 };
 pub use topology::{Edge, Extent, Topology};
