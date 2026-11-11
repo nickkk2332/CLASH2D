@@ -376,7 +376,10 @@ Done when
 Build
 - `TractStore`; in-memory and `redb` implementations.
 - Versioned tract blob codec with LZ4; save-id table; remapping on load;
-  placeholders that keep the original string id.
+  placeholders that keep the original string id. The encoding and the
+  blob frame are already built, in `clash_core::codec` (01 §11.1, D-251):
+  this package chooses the tract blob's kind and version and writes its
+  body with them.
 - Pristine policy and generator fingerprint.
 - Serialisation of realm and cosmos world state.
 

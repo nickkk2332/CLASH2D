@@ -5,3 +5,7 @@
 //! thread count. Specified in `docs/10-world-generation.md`.
 //!
 //! This is a stub. It is filled in by WG1 to WG9 of `docs/plans/worldgen.md`.
+//! What exists so far is [`noise`]: the deterministic noise functions and
+//! the description of a noise field that those packages build on.
+
+pub mod noise;

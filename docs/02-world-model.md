@@ -987,7 +987,9 @@ pub trait TractStore {
   `save.store_pristine = true` stores everything instead.
 - Region records, realm state and cosmos state are stored in the main save
   alongside simulation state.
-- The codec is versioned per blob.
+- The codec is versioned per blob. A blob is the frame of 01 §11.1: a
+  kind, a version, a checksum and a body in the engine's binary encoding.
+  A blob that fails any check is an error, never a panic.
 
 Rule R7 (save/load is invisible) is tested for every world scenario,
 including saves taken in the middle of a collapse and a blast.

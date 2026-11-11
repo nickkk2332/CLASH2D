@@ -584,6 +584,50 @@ A realm definition's `generator` names a **worldgen** definition.
 | `holders` | Groups that hold territory, and what they hold |
 | `wasteland` | What totally devastated tracts become (02 §17.2) |
 
+**Noise fields.** A field written as an object is noise, given a large
+form by its `shape` and stretched over its `range`:
+
+| Key | Meaning | Default |
+|-----|---------|---------|
+| `noise.octaves` | How many layers of noise are added, each finer and weaker than the last: 1 to 16 | required |
+| `noise.scale` | The distance across the broadest features, in tracts | required |
+| `noise.lacunarity` | How much finer each layer is than the last: at least 1 | 2 |
+| `noise.gain` | How much weaker each layer is than the last: above 0, at most 1 | 0.5 |
+| `shape` | The large form the field takes over the realm | `flat` |
+| `range` | The lowest and the highest value the field takes | `[0, 1]` |
+
+A field is sampled at a position measured in tracts, with fractions for
+positions inside a tract. Its noise is keyed by the realm's seed and the
+field's name, so two fields of one realm are unrelated, and the same
+field in two realms is too.
+
+The noise `u` runs from 0 to 1. It is a sum of layers of gradient noise:
+layer `i` is read at the position divided by `scale` and multiplied by
+`lacunarity^i`, and is weighted by `gain^i`. The sum is divided by the
+sum of the weights and moved from the range −1 to 1 to the range 0 to 1.
+Its mean is one half and most of it lies near that: the ends of the range
+are rare, and rarer the more octaves there are.
+
+The shape turns `u` into `s`, also from 0 to 1. Two shapes use the
+realm's extent through `b = (1 − nx²)(1 − ny²)`, where `nx` and `ny` are
+the position's offsets from the middle of the realm as fractions of the
+way to its edge. `b` is 1 at the middle and 0 all along the edges.
+
+| Shape | `s` | Gives |
+|-------|-----|-------|
+| `flat` | `u` | The noise alone, with no large form |
+| `island` | `b · (1 + u) / 2` | High ground in the middle, and the bottom of the range all along the realm's edges |
+| `continent` | `u · ⁴√b` | The noise over most of the realm, sinking to the bottom of the range only close to the edges |
+| `ridged` | Each layer `n` of the sum replaced by `(1 − abs(n))²` | Sharp crests with broad valleys between, and no large form |
+
+The field's value is `low + s · (high − low)`. In the example, the middle
+of the island is never below 9, half way up its range, and its whole edge
+is at −12, so `height < 0` puts sea all round it.
+
+A description with a number outside these limits, a `range` whose upper
+end is below its lower, or a key that is not in the table fails to load
+with a reason.
+
 ### 9.2 The realm plan
 
 When a realm is created its plan is computed once and stored with it:
@@ -780,7 +824,7 @@ holds for the pieces of an assembly taken together.
 
 **Named choices.** `near` is one of `coast`, `road`, `river`, `centre`,
 `edge`. A field's `shape` is one of `island`, `continent`, `flat`,
-`ridged`. A holder's `seat` is `largest_settlement`, `first`, or a named
+`ridged` (section 9.1). A holder's `seat` is `largest_settlement`, `first`, or a named
 settlement. A worldgen names which of its fields is the surface height
 (`"surface": "height"`). A settlement names the mark that counts as a
 home (`"home_mark": "bed"`); the engine does not know what a bed is.
@@ -790,6 +834,12 @@ only. A generator of type `derived` copies another realm (02 §21).
 **Fixed sets.** Ground steps, transform steps, crossings and street
 patterns are implemented natively and configured by data. A mod cannot
 add one. This is a known limit of the modding surface.
+
+**Gaps.** A field's noise is always a sum of gradient noise, with the
+four shapes of section 9.1. Value noise, billowed noise, cellular noise
+(patches round scattered points), noise in three dimensions and domain
+warping exist natively for ground steps to use and cannot be asked for
+in a field.
 
 **Settings**: `gen.max_nesting`, `gen.max_settling` (the longest settling
 time a worldgen may ask for).

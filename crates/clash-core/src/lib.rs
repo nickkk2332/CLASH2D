@@ -20,6 +20,7 @@
 //! | Randomness decided by sequence | [`RngStreams`], [`Rng`] |
 //! | A state hash | [`StateHash`], [`StateHasher`], [`Hash128`], [`impl_state_hash!`] |
 //! | A value a mod stores | [`Value`], [`VarKey`], [`VarMap`] |
+//! | Bytes for a save or a stored blob | [`codec`]: a compact binary serde format and a checked, compressed frame |
 //! | Reporting failure | the convention in [`error`] |
 //!
 //! # What simulation code must not use
@@ -44,6 +45,7 @@
 //! public so that their own documentation can be read: each opens with
 //! the conventions its types share.
 
+pub mod codec;
 pub mod dir;
 pub mod error;
 pub mod hash;
@@ -57,6 +59,7 @@ pub mod sorted;
 pub mod time;
 pub mod value;
 
+pub use codec::CodecError;
 pub use dir::{Dir8, Vertical};
 pub use error::{ParseHashError, RealError, RngError};
 pub use hash::{Hash128, StateHash, StateHasher};
