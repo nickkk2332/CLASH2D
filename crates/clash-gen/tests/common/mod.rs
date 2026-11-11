@@ -12,6 +12,9 @@
 mod maps;
 #[allow(unused_imports, reason = "each test file uses its own part of this")]
 pub use maps::*;
+mod standard;
+#[allow(unused_imports, reason = "each test file uses its own part of this")]
+pub use standard::*;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

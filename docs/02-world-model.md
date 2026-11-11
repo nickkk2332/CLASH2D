@@ -1252,8 +1252,8 @@ What the records carry that later packages give meaning is typed and
 stored now: `RegionSurvey` (a kind and field values), `Placement` as 10 §4.1
 gives it, `PathLine` (a kind and the cells it runs through), and `Stamp`
 (a tick and a sequence number; its release joins it with section 17).
-`TractDefId` is a bare id until document 10's `tract` definition type is
-built, and 0 is a tract with no definition.
+`TractDefId` is the dense id of a `tract` definition (10 §6), and 0 is
+the engine's `engine:none`: a tract with no definition.
 
 ### 9.2 Lifecycle
 
@@ -1342,6 +1342,13 @@ realm whose generator cannot be had is refused when one of its tracts is to
 be generated, not before: a world may hold realms that are never generated.
 Parameters are checked when the generators are bound;
 `Generators::param_errors` lists what is wrong.
+
+A generator built from definitions the world's tables do not hold (maps,
+grounds, tract definitions) registers a closure that owns them
+(`GeneratorRegistry::register_maker`), which takes the place of a plain
+factory of the same name. `clash_gen::generators_with(defs)` binds every
+generator of that crate this way, the `standard` one of 10 §6.2 among
+them.
 
 **In parallel.** `realize_batch(defs, runner, jobs)` realises a batch of
 tracts and returns the results in the order of the jobs. A `BatchRunner`
@@ -1447,6 +1454,13 @@ As built:
   occupants like any edit, and they make the tract one that is stored. A
   pending spawn is handed over with the tract. Both are then gone from the
   record. A pending stamp stays until section 17 is built.
+- A pending map stays in the record too: the world cannot resolve a map
+  (01 §3). `Cosmos::take_pending_maps(realm, tract)` hands the maps
+  waiting for a tract to whoever holds the maps, and
+  `clash_gen::apply_pending_maps` writes them through `WorldEdit` with
+  the coarse cause (10 §4.3). Whoever loads tracts calls it for each
+  tract loaded, so a pending map is written after the pending cell
+  changes of the same load.
 - A tract that is loaded already, or named twice in one batch, is refused,
   as is one outside its realm. A refusal changes nothing and says why
   (`LoadError`).
@@ -2502,6 +2516,12 @@ pub enum PendingEdit {
 
 The cold simulation and EOCs use these to change places nobody is looking at:
 board up a shop, leave a body in an alley, put a crater where the fight was.
+
+As built, the map is `PendingEdit::Map(PendingMap { placement, mode })`:
+a placement as 10 §4.1 gives it, seed included, so that every tract a
+map covers takes its own window of the same map, and a `MapMode` of
+`replace`, `only_empty` or `add` (10 §4.3). `Liquid`, `Devastation` and
+`Eoc` join the list with the packages that give them meaning.
 
 ### 17.4 Events for the cold simulation
 

@@ -530,11 +530,31 @@ impl BatchRunner for SerialRunner {
     }
 }
 
+/// A factory that owns what it builds generators from: definitions the
+/// world's tables do not hold, such as maps and ground rules, which a
+/// plain [`GeneratorFactory`] has no way to reach. Registered with
+/// [`GeneratorRegistry::register_maker`].
+pub type GeneratorMaker =
+    dyn Fn(&GeneratorRequest<'_>) -> Result<Arc<dyn WorldGenerator>, GenError> + Send + Sync;
+
+/// A [`GeneratorMaker`] held by a registry.
+#[derive(Clone)]
+struct Maker(Arc<GeneratorMaker>);
+
+impl fmt::Debug for Maker {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Maker")
+    }
+}
+
 /// The generators there are, by name.
 #[derive(Clone, Debug)]
 pub struct GeneratorRegistry {
     factories: BTreeMap<String, GeneratorFactory>,
     runner: Arc<dyn BatchRunner>,
+    /// Generators made by a closure, by name. A name here is looked up
+    /// before the plain factories.
+    makers: BTreeMap<String, Maker>,
 }
 
 impl Default for GeneratorRegistry {
@@ -550,7 +570,15 @@ impl GeneratorRegistry {
         GeneratorRegistry {
             factories: BTreeMap::new(),
             runner: Arc::new(SerialRunner),
+            makers: BTreeMap::new(),
         }
+    }
+
+    /// Registers a generator made by a closure, which may own what it
+    /// builds from. A name registered this way is used in preference to
+    /// a plain factory of the same name.
+    pub fn register_maker(&mut self, name: &str, maker: Arc<GeneratorMaker>) {
+        self.makers.insert(name.to_owned(), Maker(maker));
     }
 
     /// Registers a generator under the name realm definitions give it
@@ -561,7 +589,13 @@ impl GeneratorRegistry {
 
     /// The names registered, in order.
     pub fn names(&self) -> impl Iterator<Item = &str> + '_ {
-        self.factories.keys().map(String::as_str)
+        let names: std::collections::BTreeSet<&str> = self
+            .factories
+            .keys()
+            .chain(self.makers.keys())
+            .map(String::as_str)
+            .collect();
+        names.into_iter()
     }
 
     /// Sets how batches of tracts are realised.
@@ -589,6 +623,15 @@ impl GeneratorRegistry {
                         });
                     }
                 };
+                let request = GeneratorRequest {
+                    defs,
+                    realm_def: id,
+                    realm_name,
+                    kind,
+                };
+                if let Some(maker) = self.makers.get(name) {
+                    return (maker.0)(&request);
+                }
                 let factory =
                     self.factories
                         .get(name)
@@ -596,12 +639,7 @@ impl GeneratorRegistry {
                             realm: realm_name.to_owned(),
                             name: name.to_owned(),
                         })?;
-                factory(&GeneratorRequest {
-                    defs,
-                    realm_def: id,
-                    realm_name,
-                    kind,
-                })
+                factory(&request)
             })
             .collect();
         Generators {

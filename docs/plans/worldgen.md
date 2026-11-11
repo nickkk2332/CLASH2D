@@ -19,9 +19,9 @@ plan's scenarios. The test generators stay, as fixtures.
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | WG1 | Map format | L | W3, X4 | beta |
-| WG2 | Placing and applying maps | L | WG1, W8, W17 | todo |
-| WG3 | Ground | M | WG1 | todo |
-| WG4 | Tract definitions and realisation | M | WG2, WG3 | todo |
+| WG2 | Placing and applying maps | L | WG1, W8, W17 | beta |
+| WG3 | Ground | M | WG1 | in progress |
+| WG4 | Tract definitions and realisation | M | WG2, WG3 | in progress |
 | WG5 | Transforms and ruin | M | WG4, W22 | todo |
 | WG6 | World generators and realm plans | L | WG4 | todo |
 | WG7 | Region kinds and surveys | L | WG6 | todo |
@@ -111,6 +111,23 @@ Done when
   ordinary edit with a cause (invariant X8).
 - Scenario `aftermath_edit`: a pending map is present when its tract loads.
 - A map on a slope is levelled, founded or followed as it asks.
+
+Built (beta), in `clash_gen::place`: `placement_box` and the overlap
+test, `PlacedMap` (a placement resolved: cells, marks, areas and spawn
+requests in world coordinates), windows of a map per tract, `order`,
+the four ways of sitting both when a tract is realised and in the world
+as it is, `apply_map` with its three modes, `place_map` and
+`apply_pending_maps` for tracts that are not loaded
+(`PendingEdit::Map` in the world, decision D-513). Every "Done when"
+above has a test in `crates/clash-gen/tests/place.rs`. Stubbed: portals
+and subgrids are not handed on (the world's types are placeholders);
+items, conduits, fields, devices and the rest stay carried in the
+placed map for the packages that own them; the simulation raises
+`map_applied` and binds the `apply_map` verb (K5); `plan_from_map` is
+WG11's; `aftermath_edit` is an integration test, since test scripts
+have no world to run in yet; an overlapping placement is dropped,
+never moved; a placement does not go round a wrapped edge; levelling
+in the world as it is makes no ramps.
 
 ### WG3 — Ground
 

@@ -416,7 +416,7 @@ reported with its cell.
 ```rust
 pub struct Placement {
     pub map: MapId,
-    pub origin: CellPos,          // where the map's north-west corner at level 0 goes
+    pub origin: CellPos,          // where the map's anchor goes: its north-west corner at level 0 if it names none
     pub turn: Turn,               // quarter-turns and mirror
     pub params: VarMap,
     pub seed: u64,
@@ -429,6 +429,40 @@ Placements are records. A region survey writes them; realising a tract
 reads those that overlap it. A map may be far larger than a tract: each
 tract it covers realises its own window of it.
 
+**Where a map goes.** `origin` is where the map's anchor goes (section
+3.5): the cell its `anchor` names, or the north-west corner at level 0 of
+its turned footprint. The world position of a map cell is the origin, less
+the anchor, plus the cell.
+
+**A window for each tract.** Resolving a map is a pure function of the
+placement (section 3.8), so each tract a map covers resolves it again and
+writes the cells that fall inside itself. No tract reads another's cells,
+and the tracts of a large map come out the same in every order and on
+every thread count (invariant X1).
+
+**Order.** Within a tract, placements are written in `order`. Two of the
+same order are written by position, then map, then seed, so the result
+does not depend on the order they were gathered in.
+
+**What a map hands on.** Besides cells:
+
+| Asked for by the map | Becomes |
+|----------------------|---------|
+| `spawns`, and `spawn` in a cell spec | One spawn request (02 §9.3) for each creature, at a cell: handed over by the tract the cell is in. `what` is the creature or population id as written; its parameters are `kind` (`creature` or `population`) and `map`, the qualified id of the map that asked. A spawn that names an area is given cells of open floor in it, chosen by the placement's seed. |
+| `areas`, and `area` in a cell spec | An area (02 §8.3), made once: by the tract that holds the lowest corner of its box, or its first cell |
+| `marks` | Named cells in world coordinates, known from the map and the placement alone, without realising anything |
+| Everything else (section 3.8) | Carried in the placed map as the map format left it, with the function that turns a map cell into a world cell |
+
+**Where a realiser finds placements.** A realiser is shown tract records
+and no region record (02 §9.3), so every placement that overlaps a tract
+must follow from what it is shown. Two sources do: the placements a realm
+definition makes by hand (section 6.2), which the generator holds and
+which may cover any number of tracts; and those of tract definitions
+(section 6), which are a pure function of the seed, the tract's position
+and its definition, and lie wholly inside their tract. A survey writes
+both into the region's record (02 §9.1) for everything else that asks
+what stands where.
+
 **Overlap.** Every placement has a box: its footprint and its storeys,
 after turning. When a survey writes a placement it tests the box against
 those already written. Two placements may overlap only if the later one's
@@ -436,6 +470,10 @@ map says `"over": true`, as a market stall on a square does. Otherwise the
 later is moved as its rule allows, or dropped and noted in the survey's
 report. The test is in three dimensions, so a sewer may run under a street
 and may not run through a cellar.
+
+A tract definition's placements are tested against those written before
+them for the same tract, the realm's own among them. One that meets
+another is dropped; no rule moves one yet.
 
 ### 4.2 Sitting on the ground
 
@@ -448,22 +486,83 @@ Ground is rarely flat and maps usually are.
 | `follow` | Each column of the map is shifted to its own ground height. For fences, roads, low walls. |
 | `none` | Nothing is done |
 
+**The storey of level 0** is the placement's `origin`, which a survey
+sets by the map's `base`: `ground` and `sea_floor` are the surface under
+the anchor, as the height field gives it; `sea_level` is the realm's
+(section 5.1), or the surface where the realm has no sea; a number is
+that storey.
+
+**When a tract is realised:**
+
+- `level`: the surface under the whole footprint is the map's level 0
+  before the ground is filled. The ground's own steps then lay strata
+  and a surface under the map and put ramps where the surface now steps
+  one storey, inside or outside the footprint. A step of more than one
+  storey is left as a cliff.
+- `foundation`: after the ground is filled, under every column the map
+  draws, cells from the surface up to the map's level 0 are filled with
+  the `foundation` state, and where the surface is higher, the cells
+  from level 0 up to and including the surface cell are emptied.
+- `follow`: each column is written with its level 0 at that column's
+  surface.
+- Nothing is scattered by the ground (section 5.1) under a footprint
+  that levels or founds.
+
+**When a map is applied to the world as it is** (section 4.3) there is
+no height field, and the ground of a column is read from the cells: the
+storey nearest the one the placement names, within 8 storeys, whose
+cell stands on a block with a solid top. `level` cuts the ground above
+level 0 within the footprint and fills gaps with the block under the
+origin, without ramps; `foundation` and `follow` do as above. Only
+`replace` cuts.
+
 ### 4.3 Applying a map to the world as it is
 
 The same maps are used after generation.
 
 | Verb | Does |
 |------|------|
-| `apply_map { map, at, turn, params, mode }` | Writes a map into loaded cells through `WorldEdit` |
+| `apply_map { map, at, turn, params, seed, mode }` | Writes a map into loaded cells through `WorldEdit` |
 | A pending edit naming a map (02 §17.3) | The same, applied when the tract next loads |
 | `plan_from_map` (16 §10.3) | Creates construction jobs for every cell where the map differs from the world |
 
-`mode` is `replace`, `only_empty`, or `add` (place elements only where the
-layer is empty, and never clear).
+| `mode` | Writes |
+|--------|--------|
+| `replace` (default) | Every layer the map states, emptying a layer where the map states nothing for it |
+| `only_empty` | A cell of the map only where the world's cell holds nothing at all: no floor, no block and no fixture. Such a cell is written whole. |
+| `add` | Each element the map states, only where that layer of the world's cell is empty. Nothing is ever cleared. |
+
+`map`, `at`, `turn`, `params` and `seed` are the fields of a placement
+(section 4.1): `at` is where the map's anchor goes, and a `seed` left
+out is drawn from the cell.
 
 An incident's aftermath, a conjured fortress, a scenario's set dressing and
 a building design are all maps applied this way. `at` may be a mark of a
 site: `site.mark('counter')`.
+
+Every change is an ordinary edit with the cause given: it emits
+`ElementChanged`, asks for stability checks and moves occupants like any
+other (invariant X8). Putting an element in place asks for no stability
+check (02 §7.2): whoever applies a building asks for one.
+
+**As built**, in `clash_gen::place`:
+
+- `apply_map(ctx, maps, grid, placement, mode, cause)` writes the cells
+  of the map that lie in loaded tracts and returns a `MapApplied`: how
+  many elements changed, the spawn requests and the areas it made, the
+  marks in world coordinates.
+- `place_map(ctx, maps, realm, placement, mode, cause)` does the same
+  and, for each tract the map covers that is not loaded, leaves a
+  pending edit (`PendingEdit::Map`). A tract that is neither loaded nor
+  surveyed cannot hold one and is reported.
+- The world cannot resolve a map, so a pending map stays in the tract's
+  record when the tract loads. `apply_pending_maps(ctx, maps, realm,
+  tract)` takes the maps waiting for a tract that has loaded and writes
+  each, clipped to that tract, with the coarse cause. Whoever loads
+  tracts calls it for each tract loaded. Pending maps are therefore
+  written after the pending cell changes of the same load.
+- The simulation raises `map_applied` from the `MapApplied` it is
+  handed. `plan_from_map` is built with construction (16 §10.3).
 
 ## 5. Ground
 
@@ -471,6 +570,7 @@ site: `site.mark('counter')`.
 
 ```json
 { "type": "ground", "id": "temperate_lowland",
+  "params": { "moisture": 0.5 },
   "steps": [
     { "strata": [ { "depth": 1,  "block": "solid@soil",  "anchor": true },
                   { "depth": 4,  "block": "solid@clay",  "anchor": true },
@@ -501,6 +601,104 @@ Surface height comes from the realm plan's height field (section 9.2),
 sampled per cell and rounded to storeys. Where neighbouring cells differ by
 one storey, a ramp is placed.
 
+**The definition.**
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `steps` | The steps, in order. Each is an object with one key, the step's name. | required |
+| `params` | Parameters with their default values, each a boolean, a number or a text: `{ "trees": 0.02 }`. A tract definition may set them (section 6). The expressions of the steps see them as `$name`, in the generation context (section 3.4), with nothing else bound. | none |
+| `depth` | How many storeys below the surface the ground is worked, from 1 to 128: veins, pockets and caves are made no deeper, and a `liquid` step looks no deeper for voids | 16 |
+| `tags` | Free-form tags | none |
+
+**The surface.** A column's surface is the lowest storey that is not
+ground. Until realm plans are built it comes from the realm's generator
+(section 6.2): its `height` field, sampled at each cell column and
+rounded to the nearest storey, flattened under maps that sit by `level`
+(section 4.2). The realm's `sea_level` (02 §4.1) is the lowest storey
+that is not sea.
+
+**`strata`**: a list of layers from the surface down. It is the first
+step, and a ground has at most one; a ground with none is the realm's
+`fill.below` up to the surface.
+
+| Field of a stratum | Meaning | Default |
+|--------------------|---------|---------|
+| `block` | The block state it is made of. It must be `load_bearing` and not a liquid. | required |
+| `depth` | How many storeys thick it is, from 1 to 256. Only the last stratum may leave it out: it then goes all the way down. If the last states one, the realm's `fill.below` lies under it. | all the way down |
+| `anchor` | Whether it anchors (section 5.2). Stated, it selects the state of the block that has the flag or lacks it. | as the state written |
+
+**`surface`**
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `floor` | The floor laid in the surface cell of every column | none |
+| `block` | A low block put in the surface cell | none |
+| `ramp` | The block put in the surface cell of a column where one of the four columns beside it is one storey higher. It must be flagged `ramp`. | no ramps |
+| `where` | `land`: only columns whose surface is at or above the sea, or all of them in a realm with no sea. `sea`: only columns below it. | everywhere |
+
+**`liquid`**
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `to` | `sea_level`: below the realm's sea level, and nothing in a realm with none. A number: below that storey. `plan`: the level of the planned lake over the cell; no lake is planned until realm plans are built, so nothing. | required |
+| `block` | The still liquid put in every cell with no block from `depth` under the surface up to the level. It must be flagged `liquid`. | required |
+
+A chunk that holds nothing but the liquid is stored as one value.
+
+**`veins`, `pockets`**: a vein is a straight run of cells, one cell
+thick; a pocket is a ball of cells.
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `block` | The state that replaces. It must be `load_bearing` and not a liquid. | required |
+| `in` | The only state that is replaced | whatever the strata laid in the cell |
+| `below` | The highest storey reached, counted from the surface: −1 is the top storey of the ground | −1 |
+| `above` | The lowest storey reached, counted from the surface | `depth` under the surface |
+| `density` | About what share of the ground in reach is replaced, from 0 to 1: a number or an expression | required |
+| `size` | `[low, high]`, each from 1 to 16: the length of a vein, or the width of a pocket, in cells | `[3, 6]` |
+| `if` | A condition; the step is skipped for a tract where it is false | always |
+
+**`caves`**: a cave is a run of 36 cells that turns every 6, carved as
+wide as its `width`.
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `below`, `above` | As for veins | −2; `depth` under the surface |
+| `density` | About what share of the ground in reach is carved, before the rules of section 5.2 refuse any of it | required |
+| `width` | `[low, high]`, each from 1 to 16: how wide a cave is, in cells | `[1, 3]` |
+| `if` | As for veins | always |
+
+**`scatter`**
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `map` | A map id, or `{ "tag": … }`, placed with its anchor in the surface cell, turned a quarter-turn chosen by position if it may be turned. Each map is at most 12 cells on a side. A scattered map does not shape the ground: it sits by `follow` if it says so, and otherwise where it is put. | one of `map` and the elements |
+| `floor`, `block`, `fixture` | Element states put in the surface cell, where it has no block but a liquid and no fixture | one of `map` and the elements |
+| `density` | The share of surface cells that get one, from 0 to 1: a number or an expression. With `apart` it is at most one cell in `(2 × apart + 1)²`. | required |
+| `apart` | How many cells must lie between two of them, up to 8, across the edges of tracts as within them | 0 |
+| `where`, `if` | As above | everywhere; always |
+
+**`paths`** takes no fields. Nothing records paths until regions are
+surveyed (section 8.3), so it draws nothing yet.
+
+**`float`** is not built: a ground that uses it fails to load.
+
+**Pure by position.** A vein, a pocket or a cave starts in a cell of a
+coarse lattice, as many to a cell as the density asks, each drawn from
+the positional hash of that lattice cell; a tract works out every one
+that could reach it and keeps the cells inside itself. A scatter step
+makes a cell a candidate by its own hash and keeps a candidate when no
+candidate within `apart` cells has a lower hash. So two tracts agree on
+whatever crosses their edge without either reading the other.
+
+| Domain | Seeds |
+|--------|-------|
+| `gen.field.height` | The surface height field |
+| `gen.ground.vein`, `gen.ground.pocket`, `gen.ground.cave` | The features of a lattice cell, by step |
+| `gen.ground.scatter` | Whether a cell is a candidate, and its rank among them |
+| `gen.ground.scatter_map` | Which map a scattered cell gets, turned how, and its seed |
+| `gen.ground.expr`, `gen.tract.param` | The random functions of a step's and a tract's expressions, by tract |
+
 ### 5.2 What holds
 
 Each stratum says whether its blocks are `anchor` (02 §5.4). The flag
@@ -518,12 +716,29 @@ waiting for the first nearby edit to bring it down. A void in loose ground
 is made by digging, in play, where the support rule applies from the first
 cell removed.
 
+The rules that keep it so:
+
+- Every block of the ground (a stratum, a vein, a pocket) is
+  `load_bearing`: ground stands on ground.
+- A cave cell is carved only where the stratum laid there anchors, the
+  block there now anchors, and the cell above holds a block that
+  anchors or nothing at all. So no loose ground, no surface floor, no
+  ramp and no liquid is left over a void, and a vein of rock through
+  loose ground is no place for a cave.
+- A vein or pocket of a state that does not anchor is laid one storey
+  thick, between ground that anchors: never over a void, and never on
+  or under more loose ground.
+- A run of strata that do not anchor carries its own weight on its
+  lowest storey (02 §14.5). A realm whose gravity would crush such a
+  run of a ground it uses refuses the ground when its generator is
+  bound, naming the ground and the storey that fails.
+
 ## 6. Tracts
 
 ```json
 { "type": "tract", "id": "meadow", "tags": ["open", "rural"],
   "ground": "temperate_lowland",
-  "params": { "moisture": "region.moisture" },
+  "params": { "moisture": 0.7 },
   "ruin": { "transform": "scorched" },
   "bands": ["overland", "air"],
   "glyph": { "ch": "\"", "fg": "green" } }
@@ -534,6 +749,40 @@ bands may cross it (11 §13.2), what it becomes when ruined (section 10.2;
 `ruin` may instead be keyed by kind of devastation, 02 §17.2),
 and how it is drawn on the region map (12 §6.2). What stands on it is in
 placements.
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `ground` | The `ground` definition its tracts are filled by | The realm's `fill.below` up to the surface, and nothing else |
+| `params` | Values for the ground's parameters, by name: each a plain value or an expression, of the type of the parameter's default (a whole number is taken for a real). A text is an expression, so a text value is written `"'fen'"`. The expressions are worked out once for each tract, in the generation context with nothing bound; `region.*` joins it when regions are surveyed. | The ground's defaults |
+| `place` | Maps that stand on every tract of the definition (below) | none |
+| `ruin` | What it becomes when ruined: an object, `{ "transform": id }`, `{ "tract": id }`, or one of those under each kind of devastation. Carried as written until transforms are built. | none |
+| `bands` | The travel bands that may cross it, by id as written | none |
+| `glyph` | How it is drawn on the region map: `ch`, `fg`, `bg` | none |
+| `tags` | Free-form tags | none |
+
+A tract with dense id 0 has no definition (02 §9.1): the engine supplies
+`engine:none`, a tract definition with no ground and nothing placed.
+
+**`place`.** Until settlements lay out lots (section 8.4), a tract
+definition may say what stands on its tracts. An entry is made, or not,
+for each tract by the positional hash of the tract and the entry's
+position in the list.
+
+| Field of a `place` entry | Meaning | Default |
+|--------------------------|---------|---------|
+| `map` | A map id, or `{ "tag": … }` for any map carrying the tag | required |
+| `at` | `[x, y]`: where the map's anchor goes, in cells east and south of the tract's north-west corner. The storey follows from the map's `base` (section 4.2). | required |
+| `turn` | As a map's own `place` writes it (section 3.5) | not turned |
+| `facing` | In place of `turn`: the direction the map's `front` is to face, `north`, `east`, `south` or `west`. The map is rotated so that it does, and never mirrored. | none |
+| `chance` | The chance that it is placed at all, from 0 to 1 | 1 |
+| `params` | Parameters for the map: plain values | none |
+| `order` | The placement's `order` (section 4.1) | Its position in the list |
+
+A placement of a tract definition lies wholly inside its tract. Of the
+maps a tag gives and the turns `"any"` allows, those that fit are the
+ones chosen among; if none fits, or the map cannot be resolved with the
+parameters given, the definition fails to load at the entry. Placements
+are tested for overlap in the order of the list (section 4.1).
 
 ### 6.1 Realising a tract
 
@@ -547,6 +796,57 @@ records and the placements overlapping it:
 5. The result: chunks, fills, spawns, areas, portals, subgrids (02 §9.3).
 
 What follows (stamps, pending edits, catching up) is 02 §9.4.
+
+As built, levelling is done before the ground is filled: the surface
+under a map that sits by `level` is its level 0 when the ground's steps
+run, so that the ground lays its own strata, surface and ramps there
+(section 4.2). Foundations are made after the ground and before any
+placement is written. Each cell's content is still decided by one rule
+of precedence: ground, then placements in order, then transforms
+(invariant X5). Transforms are not built: the step is a function that
+does nothing yet. Portals and subgrids are not handed on yet.
+
+### 6.2 The `standard` generator
+
+Until world generators and region kinds are built (sections 8 and 9), a
+realm definition names the generator `standard` and says in its
+`generator_params` what its land is made of (02 §9.3):
+
+```json
+{ "type": "realm", "id": "countryside", "generator": "standard",
+  "generator_params": {
+    "tracts": [ { "tract": "field", "weight": 5 }, { "tract": "wood", "weight": 3 } ],
+    "patch": 2,
+    "layout": { "at": [0, 0], "rows": [ "wff ", "llll", "fwf " ],
+                "legend": { "f": "field", "w": "wood", "l": "lane" } },
+    "height": { "noise": { "octaves": 3, "scale": 8 }, "range": [0, 3] } } }
+```
+
+| Parameter | Meaning | Default |
+|-----------|---------|---------|
+| `tracts` | The tract definitions the land is made of, each `{ "tract": id, "weight": number }`. Every tract is given one by weighted choice, from the positional hash of its patch. | Tracts with no definition |
+| `patch` | Tracts along the side of a patch, from 1 to 64: the tracts of a patch are given the same definition | 1 |
+| `layout` | Tract definitions written as rows of characters (section 9.3): `at` is the tract of the first character of the first row, `rows` run north to south, `legend` says which definition each character stands for, and a space leaves the tract to `tracts` | none |
+| `height` | The surface: a noise field (section 9.1), sampled at each cell column at its position in tracts and rounded to the nearest storey | flat |
+| `surface_z` | The storey the surface is counted from: added to `height` | 0 |
+| `place` | Maps placed by hand anywhere in the realm (section 9.3): each `{ "map": id, "at": [x, y] }`, or `[x, y, z]` to say the storey of its level 0, with `turn` in degrees clockwise, `mirror`, `seed`, `params` (plain values) and `order` (its position in the list if left out). A seed left out is the positional hash of the cell. | none |
+
+The sea is the realm definition's own `sea_level` (02 §4.1). A wrong
+parameter is reported when the generators are bound, with the realm
+definition and the parameter's path; the linter binds them.
+
+**Surveying.** A region's survey gives each tract its definition and
+writes the placements: the realm's own that touch the region, then each
+tract's. It is a pure function of the seed and the position (invariant
+X2). A placement dropped for overlap is not written; the generator
+lists them for a region on request.
+
+**The seam.** Region kinds (section 8.1) replace the weighted choice of
+a tract's definition; settlements and sites (sections 8.4 and 11) add
+placements. Whatever replaces them must stay a pure function of the
+seed and the position, and must give a tract's realiser every placement
+that overlaps the tract or lies within 12 cells of it, so that a
+levelled lot beside the tract can shape a ramp inside it.
 
 ## 7. Building large places from parts
 
@@ -997,6 +1297,19 @@ cargo run -p clash-gen --example map_ascii -- <map id> [seed] [turn]
 `turn` is `0`, `90`, `180` or `270`, with an `m` before it to mirror
 first. A space is a cell the map leaves alone, and `:` a cell it empties.
 
+Until `gen region` is built, another example prints realised tracts of
+a realm of the `standard` generator the same way, seen along the
+ground:
+
+```bash
+cargo run -p clash-gen --example tract_ascii -- <realm id> [seed] [tract x] [tract y] [storey] [width] [height]
+```
+
+`tract x` and `tract y` name the north-west tract printed, and `width`
+and `height` how many tracts are printed east and south from it (2 and
+1 if left out). `storey` counts up from the surface of each cell
+column, so 0 is what stands on the ground however the ground rolls.
+
 ## 13. Modding surface
 
 **Definition types**: `map`, `palette`, `ground`, `tract`, `building`,
@@ -1037,6 +1350,18 @@ four shapes of section 9.1. Value noise, billowed noise, cellular noise
 (patches round scattered points), noise in three dimensions and domain
 warping exist natively for ground steps to use and cannot be asked for
 in a field.
+
+Gaps of placing and of ground: a placement does not go round a wrapped
+edge of a realm, and the height field does not join across one. A map
+levelled in the world as it is leaves steps without ramps. An
+overlapping placement of a tract definition is dropped, never moved. A
+ground's `float` step is not built and its `paths` step draws nothing
+yet. With `apart`, a `scatter` step reaches at most one cell in
+`(2 × apart + 1)²`, less than the closest packing would allow. A
+ground's parameters are plain values with a default, not the rules a
+map's may be. The ids of the areas a realm's maps ask for are given out
+in the order its tracts first load; the cells are the same in every
+order.
 
 Gaps of the map format: a state has a facing by its name alone, and a
 definition cannot say that its numbered bits are a facing (section 3.3).
