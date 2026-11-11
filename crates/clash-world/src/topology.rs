@@ -51,6 +51,12 @@ impl Edge {
     }
 }
 
+impl core::fmt::Display for Edge {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 impl StateHash for Edge {
     fn state_hash(&self, hasher: &mut StateHasher) {
         hasher.write_u8(*self as u8);
@@ -72,6 +78,7 @@ pub enum Extent {
 impl Extent {
     /// Brings a coordinate inside, or says on which side it lies:
     /// `Err(false)` below zero, `Err(true)` at or above the size.
+    #[inline]
     fn normalize(self, value: i32) -> Result<i32, bool> {
         match self {
             Extent::Unbounded => Ok(value),
@@ -114,8 +121,16 @@ impl Extent {
 }
 
 /// `value` brought into `0..size`. A size of zero or less gives zero.
+#[inline]
 fn wrap(value: i32, size: i32) -> i32 {
-    if size <= 0 { 0 } else { value.rem_euclid(size) }
+    if value >= 0 && value < size {
+        // Already inside, as nearly every position is: no division.
+        value
+    } else if size <= 0 {
+        0
+    } else {
+        value.rem_euclid(size)
+    }
 }
 
 /// The shape of a grid.
