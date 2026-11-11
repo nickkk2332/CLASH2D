@@ -16,6 +16,7 @@
 //! | [`Text`] | Player-facing text |
 //! | [`Located<T>`] | Any value, together with where it was written |
 //! | [`Gated<F, T>`] | A field that is an experimental feature (04 §8.4) |
+//! | a type read with [`by_kind`] | More than one shape: an id or an object, a number or a string |
 //!
 //! A unit of the wrong dimension for a field is an error that names both
 //! dimensions.
@@ -30,7 +31,8 @@ use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor}
 use serde::ser::{Serialize, Serializer};
 
 use crate::de::{
-    GATED_MAGIC, INLINE_MAGIC, LOCATED_FIELDS, LOCATED_MAGIC, MICROS_MAGIC, REF_MAGIC, TAG_MAGIC,
+    GATED_MAGIC, INLINE_MAGIC, KIND_FIELDS, KIND_MAGIC, LOCATED_FIELDS, LOCATED_MAGIC,
+    MICROS_MAGIC, REF_MAGIC, TAG_MAGIC,
 };
 use crate::defs::Def;
 use crate::source::{FileId, Span};
@@ -834,6 +836,172 @@ impl<'de> Deserialize<'de> for Text {
             span: Some(located.span),
         })
     }
+}
+
+/// What kind of JSON value a field was given, for a field that takes
+/// more than one shape. See [`by_kind`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Kind {
+    /// `null`.
+    Null,
+    /// `true` or `false`.
+    Bool,
+    /// A number.
+    Number,
+    /// A string.
+    String,
+    /// A list.
+    List,
+    /// An object.
+    Object,
+}
+
+impl Kind {
+    /// The error for a kind the field does not take. `expected` says
+    /// what it does take: `"a block id, or a map of them"`. It is
+    /// reported as a value of the wrong kind, at the value.
+    pub fn unexpected<E: de::Error>(self, expected: &'static str) -> E {
+        let found = match self {
+            Kind::Null => de::Unexpected::Unit,
+            Kind::Bool => de::Unexpected::Bool(false),
+            Kind::Number => de::Unexpected::Float(0.0),
+            Kind::String => de::Unexpected::Str(""),
+            Kind::List => de::Unexpected::Seq,
+            Kind::Object => de::Unexpected::Map,
+        };
+        E::invalid_type(found, &expected)
+    }
+}
+
+impl<'de> Deserialize<'de> for Kind {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Kind, D::Error> {
+        struct KindVisitor;
+
+        impl Visitor<'_> for KindVisitor {
+            type Value = Kind;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("the kind of a value")
+            }
+
+            fn visit_str<E: de::Error>(self, value: &str) -> Result<Kind, E> {
+                Ok(match value {
+                    "null" => Kind::Null,
+                    "bool" => Kind::Bool,
+                    "number" => Kind::Number,
+                    "string" => Kind::String,
+                    "list" => Kind::List,
+                    "object" => Kind::Object,
+                    other => return Err(E::custom(format!("unknown kind `{other}`"))),
+                })
+            }
+        }
+
+        deserializer.deserialize_str(KindVisitor)
+    }
+}
+
+/// The value [`FromKind::from_kind`] was told the kind of, waiting to be
+/// read as whatever type that kind calls for.
+pub struct KindValue<'m, A> {
+    map: &'m mut A,
+}
+
+impl<'de, A: MapAccess<'de>> KindValue<'_, A> {
+    /// Reads the value as an `X`. Mistakes inside it are reported where
+    /// they are, as for any field.
+    pub fn read<X: Deserialize<'de>>(self) -> Result<X, A::Error> {
+        self.map.next_value::<X>()
+    }
+}
+
+/// A field type that takes more than one JSON shape: an id or an object,
+/// a number or a string. Implement this and let `Deserialize` call
+/// [`by_kind`].
+pub trait FromKind<'de>: Sized {
+    /// Builds the value, given what kind of JSON is there.
+    fn from_kind<A: MapAccess<'de>>(kind: Kind, value: KindValue<'_, A>) -> Result<Self, A::Error>;
+}
+
+struct ByKindVisitor<T>(PhantomData<fn() -> T>);
+
+impl<'de, T: FromKind<'de>> Visitor<'de> for ByKindVisitor<T> {
+    type Value = T;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a value read by the mod loader")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<T, A::Error> {
+        let missing =
+            || <A::Error as de::Error>::custom("this field can only be read by the mod loader");
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        let kind = map.next_value::<Kind>()?;
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        T::from_kind(kind, KindValue { map: &mut map })
+    }
+}
+
+/// Reads a field that takes more than one JSON shape, keeping positions.
+///
+/// `serde`'s `untagged` cannot be used in a definition (see
+/// [`crate::de`]). This is what to use in its place: the loader says
+/// what kind of value is there, and the type reads it as the type that
+/// kind calls for.
+///
+/// ```
+/// use std::collections::BTreeMap;
+/// use clash_data::{by_kind, FromKind, Kind, KindValue};
+/// use serde::de::{Deserialize, Deserializer, MapAccess};
+///
+/// /// A name, or names by language.
+/// #[derive(Debug, PartialEq)]
+/// enum Label {
+///     One(String),
+///     Many(BTreeMap<String, String>),
+/// }
+///
+/// impl<'de> FromKind<'de> for Label {
+///     fn from_kind<A: MapAccess<'de>>(
+///         kind: Kind,
+///         value: KindValue<'_, A>,
+///     ) -> Result<Label, A::Error> {
+///         match kind {
+///             Kind::String => value.read().map(Label::One),
+///             Kind::Object => value.read().map(Label::Many),
+///             other => Err(other.unexpected("a name, or names by language")),
+///         }
+///     }
+/// }
+///
+/// impl<'de> Deserialize<'de> for Label {
+///     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Label, D::Error> {
+///         by_kind(deserializer)
+///     }
+/// }
+///
+/// # use clash_data::{from_node, parse_json, Diagnostics, Limits, SourceMap};
+/// # let mut sources = SourceMap::new();
+/// # let file = sources.add("l.json", r#"["Ash", { "fr": "Cendre" }, 7]"#);
+/// # let (tree, _) = parse_json(file, sources.text(file), &Limits::default());
+/// # let tree = tree.unwrap();
+/// # let items = tree.as_array().unwrap();
+/// # let mut diagnostics = Diagnostics::new();
+/// # let one: Option<Label> = from_node(&items[0], &sources, &mut diagnostics, None);
+/// # assert_eq!(one, Some(Label::One("Ash".to_owned())));
+/// # let many: Option<Label> = from_node(&items[1], &sources, &mut diagnostics, None);
+/// # assert!(matches!(many, Some(Label::Many(_))));
+/// # let bad: Option<Label> = from_node(&items[2], &sources, &mut diagnostics, None);
+/// # assert!(bad.is_none());
+/// # assert_eq!(
+/// #     diagnostics.as_slice()[0].message,
+/// #     "expected a name, or names by language, found a number"
+/// # );
+/// ```
+pub fn by_kind<'de, T: FromKind<'de>, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<T, D::Error> {
+    deserializer.deserialize_struct(KIND_MAGIC, KIND_FIELDS, ByKindVisitor(PhantomData))
 }
 
 /// Names an experimental feature (04 §8.4) for [`Gated`].

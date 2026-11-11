@@ -527,6 +527,28 @@ fn two_directories_with_one_mod_id_are_an_error() {
 }
 
 #[test]
+fn a_mod_cannot_take_a_namespace_the_engine_reserves() {
+    let mut types = types();
+    types.reserve_namespace("world").reserve_namespace("world");
+    assert_eq!(types.reserved_namespaces(), ["world"]);
+    let outcome = loader(
+        &types,
+        &[test_mod("world", "", &[]), test_mod("fine", "", &[])],
+    )
+    .load_all();
+    assert!(outcome.defs.is_none());
+    let refused = only(&outcome, "E0002");
+    assert_eq!(
+        refused.message,
+        "the namespace \"world\" is reserved for the engine"
+    );
+    assert_eq!(
+        refused.location.as_ref().unwrap().file,
+        "mods/world/mod.json"
+    );
+}
+
+#[test]
 fn a_directory_that_cannot_be_read_is_a_diagnostic() {
     let types = types();
     let outcome = Loader::new(&types)

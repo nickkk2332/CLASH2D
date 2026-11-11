@@ -154,8 +154,8 @@ impl<'t> Loader<'t> {
         self
     }
 
-    /// Adds a profile given as text, found by [`load_profile`]
-    /// (Loader::load_profile) under `name`.
+    /// Adds a profile given as text, which
+    /// [`load_profile`](Loader::load_profile) finds under `name`.
     pub fn memory_profile(mut self, name: &str, text: &str) -> Loader<'t> {
         self.memory_profiles
             .push((name.to_owned(), text.to_owned()));
@@ -462,6 +462,25 @@ impl<'t> Loader<'t> {
             &sources,
             &mut diagnostics,
         );
+        for &index in &order {
+            let manifest = &found[index].manifest;
+            if self
+                .types
+                .reserved_namespaces()
+                .contains(&manifest.id.as_str())
+            {
+                diagnostics.push(
+                    Diagnostic::new(
+                        code::BAD_MOD_ID,
+                        format!(
+                            "the namespace \"{}\" is reserved for the engine",
+                            manifest.id
+                        ),
+                    )
+                    .at(&sources, manifest.id_span),
+                );
+            }
+        }
 
         // Read and parse the data files of the chosen mods, in load order.
         let mut table = ModTable::default();

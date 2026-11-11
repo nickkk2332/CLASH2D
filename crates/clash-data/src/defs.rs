@@ -334,6 +334,7 @@ struct TypeEntry<T: Def>(PhantomData<fn() -> T>);
 struct Staged<T: Def> {
     items: Vec<Option<T>>,
     names: Vec<String>,
+    index: BTreeMap<String, usize>,
     spans: Vec<Option<Span>>,
     placeholders: Vec<bool>,
     obsolete: Vec<bool>,
@@ -371,6 +372,11 @@ impl<T: Def> AnyType for TypeEntry<T> {
         let mut staged = Staged::<T> {
             items: Vec::with_capacity(entries.len()),
             names: Vec::with_capacity(entries.len()),
+            index: entries
+                .iter()
+                .enumerate()
+                .map(|(index, entry)| (entry.id.to_owned(), index))
+                .collect(),
             spans: Vec::with_capacity(entries.len()),
             placeholders: Vec::with_capacity(entries.len()),
             obsolete: Vec::with_capacity(entries.len()),
@@ -533,6 +539,7 @@ pub type CrossCheck = fn(&mut CrossCx<'_>);
 pub struct DefTypes {
     types: BTreeMap<&'static str, Box<dyn AnyType>>,
     cross_checks: Vec<CrossCheck>,
+    reserved: Vec<&'static str>,
 }
 
 impl DefTypes {
@@ -564,6 +571,22 @@ impl DefTypes {
     pub fn add_cross_check(&mut self, check: CrossCheck) -> &mut DefTypes {
         self.cross_checks.push(check);
         self
+    }
+
+    /// Reserves a namespace for the engine besides `engine` itself: the
+    /// engine's settings live in namespaces named after their subsystem
+    /// (04 §10). No mod may have a reserved namespace as its id.
+    pub fn reserve_namespace(&mut self, namespace: &'static str) -> &mut DefTypes {
+        if !self.reserved.contains(&namespace) {
+            self.reserved.push(namespace);
+        }
+        self
+    }
+
+    /// The namespaces reserved with
+    /// [`reserve_namespace`](DefTypes::reserve_namespace).
+    pub fn reserved_namespaces(&self) -> &[&'static str] {
+        &self.reserved
     }
 
     /// Whether a JSON name is registered.
@@ -618,8 +641,7 @@ impl<'a> DefsView<'a> {
     /// The dense id of a qualified id.
     pub fn lookup<T: Def>(&self, qualified: &str) -> Option<T::Id> {
         let staged = self.staged::<T>()?;
-        let index = staged.names.iter().position(|name| name == qualified)?;
-        T::Id::from_index(index)
+        T::Id::from_index(*staged.index.get(qualified)?)
     }
 
     /// The qualified id of a dense id.

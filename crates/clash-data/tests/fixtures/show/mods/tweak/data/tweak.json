@@ -1,0 +1,6 @@
+[
+  { "//": "Lighter, and it reaches further.",
+    "type": "material", "id": "ash:cinder", "patch": true,
+    "span": 3,
+    "scale": { "density": 0.5 } }
+]

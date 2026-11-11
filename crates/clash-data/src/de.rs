@@ -27,7 +27,9 @@
 //! of its own. Positions are lost, unknown keys go unnoticed and the
 //! field types of this crate cannot be read inside the buffered part.
 //! Use plain structs and externally tagged enums (a string, or an object
-//! with one key), or write `Deserialize` by hand.
+//! with one key). For a field that takes more than one shape, such as an
+//! id or an object, implement [`FromKind`](crate::FromKind) and read it
+//! with [`by_kind`](crate::by_kind), which keeps positions.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
@@ -56,6 +58,10 @@ pub(crate) const LOCATED_MAGIC: &str = "$clash_data::Located";
 pub(crate) const LOCATED_FIELDS: &[&str] = &["file", "start", "end", "value"];
 /// The reserved name [`Gated`](crate::Gated) asks for itself under.
 pub(crate) const GATED_MAGIC: &str = "$clash_data::Gated";
+/// The reserved name [`by_kind`](crate::by_kind) asks under.
+pub(crate) const KIND_MAGIC: &str = "$clash_data::ByKind";
+/// What [`by_kind`](crate::by_kind) is fed, in order.
+pub(crate) const KIND_FIELDS: &[&str] = &["kind", "value"];
 /// The reserved name a duration asks for itself under. It is answered in
 /// whole microseconds.
 pub(crate) const MICROS_MAGIC: &str = "$clash_data::quantity::micros";
@@ -1214,6 +1220,12 @@ impl<'de, 'c> Deserializer<'de> for NodeDe<'c> {
                 root: self.root,
                 at: 0,
             }),
+            KIND_MAGIC => visitor.visit_map(KindDe {
+                node: self.node,
+                cx: self.cx,
+                root: self.root,
+                at: 0,
+            }),
             _ => self.visit_object(Some(fields), visitor),
         }
     }
@@ -1396,6 +1408,91 @@ impl<'de> MapAccess<'de> for LocatedDe<'_> {
                 root: self.root,
                 key: false,
             }),
+        }
+    }
+}
+
+/// The name of a JSON kind as [`Kind`](crate::Kind) reads it.
+fn kind_word(node: &Node) -> &'static str {
+    match node.kind {
+        NodeKind::Null => "null",
+        NodeKind::Bool(_) => "bool",
+        NodeKind::Number(_) | NodeKind::Quantity { .. } => "number",
+        NodeKind::String(_) => "string",
+        NodeKind::Array(_) => "list",
+        NodeKind::Object(_) => "object",
+    }
+}
+
+/// Feeds [`by_kind`](crate::by_kind): what kind of value is here, then the
+/// value itself, to be read as whatever type that kind calls for.
+struct KindDe<'c> {
+    node: &'c Node,
+    cx: &'c DeCx<'c>,
+    root: bool,
+    at: usize,
+}
+
+impl<'de> MapAccess<'de> for KindDe<'_> {
+    type Error = DeError;
+
+    fn next_key_seed<K: DeserializeSeed<'de>>(
+        &mut self,
+        seed: K,
+    ) -> Result<Option<K::Value>, DeError> {
+        match KIND_FIELDS.get(self.at) {
+            Some(&field) => seed
+                .deserialize(IntoDeserializer::<DeError>::into_deserializer(field))
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+
+    fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value, DeError> {
+        let at = self.at;
+        self.at += 1;
+        if at == 0 {
+            seed.deserialize(IntoDeserializer::<DeError>::into_deserializer(kind_word(
+                self.node,
+            )))
+        } else {
+            seed.deserialize(NodeDe {
+                node: self.node,
+                cx: self.cx,
+                root: self.root,
+                key: false,
+            })
+        }
+    }
+}
+
+/// Feeds [`by_kind`](crate::by_kind) a stand-in: `null`.
+struct KindStandIn {
+    at: usize,
+}
+
+impl<'de> MapAccess<'de> for KindStandIn {
+    type Error = DeError;
+
+    fn next_key_seed<K: DeserializeSeed<'de>>(
+        &mut self,
+        seed: K,
+    ) -> Result<Option<K::Value>, DeError> {
+        match KIND_FIELDS.get(self.at) {
+            Some(&field) => seed
+                .deserialize(IntoDeserializer::<DeError>::into_deserializer(field))
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+
+    fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value, DeError> {
+        let at = self.at;
+        self.at += 1;
+        if at == 0 {
+            seed.deserialize(IntoDeserializer::<DeError>::into_deserializer("null"))
+        } else {
+            seed.deserialize(StandIn)
         }
     }
 }
@@ -1681,6 +1778,7 @@ impl<'de> Deserializer<'de> for StandIn {
             REF_MAGIC | INLINE_MAGIC => visitor.visit_u32(0),
             GATED_MAGIC => visitor.visit_newtype_struct(self),
             LOCATED_MAGIC => visitor.visit_map(LocatedStandIn { at: 0 }),
+            KIND_MAGIC => visitor.visit_map(KindStandIn { at: 0 }),
             _ => visitor.visit_map(NoEntries),
         }
     }

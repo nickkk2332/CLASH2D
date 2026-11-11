@@ -48,6 +48,13 @@ Mods are searched for in the install directory and in the user's data
 directory. A mod is a directory. Reading mods from archives is not in the
 first version.
 
+The directories are searched in a stated order, and the first to hold a
+given mod id supplies it. A copy in a later directory is ignored, with a
+warning: that is how a working copy replaces an installed mod. Two
+directories in one search directory that declare the same id are an error.
+A mod loads under the id in its `mod.json`; a directory named otherwise is
+a warning. Files and directories whose names start with a dot are not read.
+
 ### 3.2 `mod.json`
 
 ```json
@@ -75,6 +82,13 @@ first version.
 | `imports` | Namespaces searched for bare references, in order (section 4.3). Defaults to the ids in `requires`. |
 | `experimental` | Experimental features this mod opts in to (section 8.4). Empty by default. |
 
+Only `id` is required. `name` defaults to the id and `version` to `0`. An
+entry of `requires` is a mod id, or an object with `id` and `version`. A
+version is numbers separated by dots, and a missing number counts as zero.
+A requirement is one or more comparisons separated by commas, each `>=`,
+`>`, `<=`, `<` or `=` and a version: `">=1.0, <2.0"`. A bare version means
+exactly that version.
+
 ### 3.3 Profiles
 
 A **profile** is a named set of mods and how the game starts with them.
@@ -94,9 +108,15 @@ interface needs (12 §10.7), and `preferences`, defaults for the player's
 display choices. The default profile is the one named `default` in
 `profiles/`.
 
-Profiles live in `profiles/` or inside a mod. The game starts a profile:
-named on the command line, or chosen on the launcher screen of the default
-profile. `boot_screen` names the screen definition (12) shown first.
+A profile is a file `<name>.json`. Profiles live in `profiles/` beside the
+mods directory, or in the `profiles/` directory of a mod. The game starts a
+profile: named on the command line, by file or by name, or chosen on the
+launcher screen of the default profile. `boot_screen` names the screen
+definition (12) shown first.
+
+A profile is the whole list of what a game is made of. A mod that one of
+its mods requires must be listed too: it is never added silently, and
+leaving it out is an error that says to add it.
 
 This is how a megamod or total conversion presents itself as its own game:
 it ships a profile with its own title screen, menus and mod list, and need
@@ -162,6 +182,14 @@ ids of that type as suggestions.
 The namespace `engine` is reserved. Dense id 0 of every element type is the
 built-in `none`.
 
+A definition type may supply definitions of the engine's own in that
+namespace. They take the first dense ids of their type, ahead of every
+mod's. A bare reference that matches nothing in the mod's own namespace or
+its imports is looked up in `engine` last, so `"none"` can be written bare.
+No mod may have `engine` as its id, define anything in it, or patch or
+override what is there. The namespaces the engine keeps its settings in
+(section 10) are reserved as mod ids in the same way.
+
 ## 5. Definition files
 
 A data file is a JSON array of objects, or a single object.
@@ -185,9 +213,9 @@ A data file is a JSON array of objects, or a single object.
 | `id` | Required. |
 | `//` | Comment. Ignored anywhere. |
 | `abstract` | Exists only to be inherited from. Never instantiated, not referable except by `copy_from`. |
-| `if_mod`, `unless_mod` | Include this object only if the named mod is, or is not, in the profile. |
+| `if_mod`, `unless_mod` | Include this object only if the named mod is, or is not, in the profile. Each takes a mod id or a list of them: every one must be there for `if_mod`, none for `unless_mod`. An object left out is not looked at any further. |
 | `obsolete` | Section 12.2. |
-| `copy_from`, `patch`, `override`, `extend`, `delete`, `scale`, `add` | Section 6. |
+| `copy_from`, `patch`, `optional`, `override`, `extend`, `delete`, `scale`, `add` | Section 6. |
 
 Keys are `snake_case`. Unknown keys are errors.
 
@@ -201,6 +229,13 @@ map piece inside a tract), it may be written inline instead of by id. Inline
 definitions get the id `<parent id>#<path>` and cannot be referenced from
 elsewhere. An inline definition may be given an `id` of its own so that
 another mod can patch or remove it.
+
+The path is the JSON path from the parent (section 8.2):
+`ashlands:sift#phases.sift.on_end`, `ashlands:sift#rules[1]`. An inline
+definition is loaded as a definition of its own type and takes a dense id
+like any other. One nested in another gets its id from the inline
+definition it is in. An `id` of its own is a bare name, defined in the
+namespace of the mod that wrote it.
 
 ## 6. Inheritance, patching and overriding
 
@@ -231,12 +266,21 @@ phase can be changed without restating the rest.
 
 - In such a list a new entry is appended, unless it says `"before": id` or
   `"after": id`. `delete` takes entry ids. A dotted path may step through
-  an entry by its id: `"scale": { "phases.windup.time": 0.5 }`.
+  an entry by its id: `"scale": { "phases.windup.time": 0.5 }`. `before`
+  and `after` are read only where the list is already there in what is
+  being changed; an entry already in the list that names one is moved.
+- Within one change the order is fixed, whatever order the keys are
+  written in: plain fields, then `delete`, then `extend`. `extend` on a
+  list or map that is not there yet starts it empty.
 - `scale` and `add` are kept pending while definitions are folded
   together and applied once the final value is known, after inheritance:
   `scale` first, then `add`. A value written with a unit is converted
-  before either. On a field the base left out, they act on the field's
-  default; on a field with no default they are an error.
+  before either, and keeps its dimension, so the field it lands in still
+  checks it. An amount to `add` may itself be written with a unit; one in
+  degrees Celsius is a difference of that many kelvin. On a field the
+  base left out, they act on the default the definition type declares for
+  it; on a field with none they are an error. A type declares defaults
+  for the fields a mod might scale, and fields of list entries have none.
 - `abstract` and `obsolete` are not inherited.
 - A bare id, and a bare name inside an expression, is looked up in the
   namespace of the file that wrote it, wherever the value ends up after
@@ -264,6 +308,11 @@ Changes an existing definition in place. Several mods may patch the same
 definition; patches apply in load order. Patching something that does not
 exist is an error, unless `"optional": true` is set, in which case the patch
 is skipped.
+
+A patch, like an override, must load after what it changes. A mod that
+patches another's definition lists that mod in `requires` or `after`; a
+patch that loads before its target is the same error, with a note saying
+where the target is defined.
 
 **Disputed fields.** Two mods that `scale`, `add` to or `extend` the same
 field compose. Two mods that *replace* the same field with different
@@ -305,8 +354,9 @@ knows the current path and source location at every point.
 | Rust type | In JSON |
 |-----------|---------|
 | `bool`, integers, `Real` | Literals |
-| `Dur`, `Length`, `Mass`, `Energy`, `Pressure`, `Speed`, `Temperature` | A number in SI units, or a string with a unit: `"250 ms"`, `"70 kPa"`, `"1.5 MJ"`, `"-5 C"` |
-| `Ref<T>` | An id of a definition of type `T`. Resolved to a dense id during loading. |
+| `Time`, `Length`, `Mass`, `Energy`, `Pressure`, `Speed`, `Temperature`, `Power`, `Force`, `Volume` | A number in SI units, or a string with a unit: `"250 ms"`, `"70 kPa"`, `"1.5 MJ"`, `"-5 C"`. `Time` holds a `Dur`. |
+| `Rate<Q>`, `Frequency` | A quantity per time, or a plain rate: `"0.012 kg/s"`, `"0.15 /h"` |
+| `Ref<T>` | An id of a definition of type `T`. Resolved to a dense id during loading. May be the key of a map. |
 | `StateRef` | An element state such as `"wall@brick#open"` (02 §5.1) |
 | `Tag`, `TagSet` | Free-form strings; interned |
 | `Text` | Player-facing text. May contain `{expression}` templates (05 §4.6) |
@@ -314,8 +364,23 @@ knows the current path and source location at every point.
 | `Cond` | A condition (05 §7.2) |
 | `Effects` | A list of effects (05 §10) |
 | `Inline<T>` | An id, or an inline definition of type `T` |
-| Enums | One of a fixed set of strings |
+| `Located<T>` | Any value, kept with where it was written, for a field that is checked or compiled after loading |
+| `Gated<F, T>` | A field that is an experimental feature `F` (section 8.4) |
+| Enums | One of a fixed set of strings; a value that carries data is an object with one key |
 | `Option<T>` | Absent or `null` |
+
+A definition type is a plain struct that derives `serde::Deserialize`. It
+needs no `deny_unknown_fields`: the loader checks keys itself. It must not
+use `flatten`, `untagged` or an internal `tag`, which make `serde` buffer
+the value and lose its positions. A field that takes more than one shape,
+an id or an object, a number or a string, is read with
+`clash_data::by_kind`: the loader says what kind of value is there and the
+type reads it as the type that kind calls for.
+
+A duration in a definition is a `Time`, or a `Dur` field read through
+`clash_data::dur`: `clash_core::Dur` by itself reads as a bare count of
+microseconds, which is right for saves and wrong for data. A whole number
+may be written with a zero fraction or an exponent (`2.0e4`).
 
 The unit list is fixed and documented: `us ms s min h d`; `mm cm m km`;
 `ml L`; `g kg t`; `J kJ MJ GJ`; `W kW MW`; `N kN`; `Pa kPa MPa GPa`;
@@ -324,6 +389,13 @@ quantity followed by `/s`, `/min`, `/h` or `/d`: `"0.012 kg/s"`,
 `"0.02 K/s"`, `"0.15 /h"`. The rate of a
 resource whose unit is its own (16 §5.1) is a bare number, per second. A
 unit of the wrong dimension for the field is an error.
+
+Units are case-sensitive. A speed is a length per time and a power is an
+energy per time, so `m/s` and `km/h` are the rate rule applied to lengths
+and a power may be written `"5 J/s"`. A rate of temperature is a
+difference, so `"2 C/s"` is two kelvin per second. A bare number is in the
+SI unit of the field: seconds, metres, cubic metres, kilograms, joules,
+watts, newtons, pascals, kelvin, and each of those per second for a rate.
 
 Tags are free-form, so a misspelt one loads. The linter warns of a tag
 that is tested somewhere and given to nothing, or given and never tested.
@@ -341,8 +413,19 @@ definition is deserialised. A `Ref<T>` therefore resolves the moment it is
 read, and a dangling reference is reported with the exact location of the
 string.
 
-Dense ids are assigned in sorted order of qualified id, per type. The same
-set of mods always yields the same numbers.
+Dense ids are assigned in sorted order of qualified id, per type, after
+the engine's own (section 4.4). The same set of mods always yields the same
+numbers. A type's ids are as wide as its Rust id type; more definitions
+than that can count is an error.
+
+Inline definitions and tags are not known until their parents are read. A
+first pass reads every definition only to find them, resolving nothing and
+reporting nothing, so that they are numbered in sorted order with the
+rest before the pass that counts.
+
+A reference written in a syntax of a type's own, such as a state
+reference, is read as a `Located` string and resolved by the type after
+its definition is read, through the same lookup a `Ref` uses.
 
 ### 7.3 Expressions
 
@@ -391,11 +474,35 @@ Every diagnostic has:
 
 The same structure is available as JSON for editors and tools.
 
+A JSON path is keys joined with dots. An entry of a list is named by its
+`id` if it has one, so that its path does not change when another entry is
+put before it, and by `[index]` otherwise: `resist.impact.threshold`,
+`phases.windup.time`, `flags[1]`. The path follows `in:` when it is not the
+definition's top level: `= in: material ashlands:ash, at resist.impact`.
+
+Diagnostics are given in reading order: by file path, then by position.
+Typed loading goes on past a mistake wherever it can, so that one load
+reports every unknown key, every wrong value and every missing field of a
+definition.
+
+A code is a letter for its usual severity (`E`, `W`, `N`) and four digits.
+The first two digits group codes by what they are about: `00` mods and
+profiles, `01` files and syntax, `02` values and fields, `03` the keys every
+definition carries, `04` merging, `05` references, `06` expressions, `07` a
+type's own checks, `08` whole-set checks, `09` lenient loading. A crate that
+adds a stage declares its codes with their explanations in a table of its
+own, which `explain` and the reference read.
+
 ### 8.3 Outcome
 
 Errors prevent a profile from starting. Warnings do not. `--lenient`
 replaces each broken definition with a placeholder and carries on, for
 working on a large mod with something temporarily broken.
+
+The errors are still reported, with a note for each definition replaced,
+and the linter still exits with failure. The placeholder is supplied by
+the definition type and is inert. A type that supplies none stops a
+lenient load at a broken definition of it, and says so.
 
 ### 8.4 Experimental features
 
@@ -412,6 +519,9 @@ change incompatibly or be removed, and nothing bundled depends on it.
 - The generated reference (section 13) marks experimental items and lists
   them together.
 - A save records which experimental features its mods used.
+
+Opting in is per mod: what counts is the mod that wrote the value that
+uses the feature, wherever patching and inheritance carry it.
 
 Bundled mods name none, and a test fails if one does.
 
@@ -437,8 +547,28 @@ Each definition type is registered by the crate that owns it, with its Rust
 type, its JSON name, its validation function and its documentation.
 `clash-data` drives the pipeline without knowing any of them.
 
+A type implements the `Def` trait: its dense id type and its JSON name, and
+where it has them its documentation, the defaults a mod may `scale` or
+`add` to (section 6.1), a `finish` that resolves what plain reading cannot,
+a `validate`, a placeholder (section 8.3), the engine's own definitions
+(section 4.4) and the experimental feature it is part of. Each crate
+offers one function that registers its types in a `DefTypes`, and may add
+whole-set checks to it. The application and the tools call each crate's
+function in turn and load with the result, so both read mods with the same
+types. A registry also says whether a definition is a placeholder or
+obsolete, and `Defs` holds the tags, the mods in load order, the profile,
+the files it was read from and every finished tree.
+
 The **content fingerprint** is a hash of all finished trees in canonical
 form. It is stored in saves and used by the pristine policy (02 §11).
+
+Canonical form is each definition's type, id and values in order, without
+positions: moving a definition within a file, or between files of one mod,
+changes nothing. Key order is kept, because it can carry meaning
+(section 5). A string carries the namespace of the mod that wrote it,
+because that decides what a bare reference in it means (section 6.1).
+Abstract definitions are left out: they reach the fingerprint through what
+copies from them.
 
 ## 10. Settings
 
@@ -537,12 +667,12 @@ All in `clash-tools`.
 
 | Command | Does |
 |---------|------|
-| `lint <profile or dir>` | Runs the pipeline and prints every diagnostic. Non-zero exit on errors. `--json` for machines. |
+| `lint <profile or dir>` | Runs the pipeline and prints every diagnostic. Non-zero exit on errors. `--json` for machines. The directory is a directory of mods, all of which are loaded, or one mod's directory, which is loaded with what it requires. A profile is a file or a name. `--mods <dir>` names where mods are searched for, and `--lenient` is section 8.3. |
 | `schema --out <dir>` | Writes a JSON Schema per definition type and one for data files as a whole. `--profile <p> --with-ids` also lists every existing id per type, so editors can complete references. |
 | `docs --out <dir>` | Generates the modding reference: every definition type and field, unit, diagnostic code, event, effect, property and function, with their documentation. |
 | `init-mod <id>` | Creates a mod skeleton with editor settings that attach the schemas. |
 | `explain <code>` | Prints the long explanation of a diagnostic. |
-| `show <type> <id>` | Prints a finished definition with the origin of each value: which file set it, which patch changed it. |
+| `show <type> <id>` | Prints a finished definition with the origin of each value: the file and line that last set it and the mod that file belongs to. The type may be left out. Abstract definitions can be shown. |
 | `scenario run` | Runs golden scenarios, including those shipped by mods (plans/world-model W11). |
 
 Schemas and the reference are generated from the same registries the loader
@@ -582,6 +712,14 @@ profiles.
 
 **Expression function**: `setting(id)`. **Command**: `Setting`.
 
+**Known limits.** These are fixed in the engine and cannot be changed from
+data: the list of units (section 7.1); the definition types and their
+fields; which fields have a default that `scale` and `add` can act on when
+a definition leaves them out (section 6.1), so a mod that wants to scale
+any other field writes its value in full; each type's own checks and the
+whole-set checks (section 8.1). An inline definition that has an `id` of
+its own can be referred to but not yet patched from another mod.
+
 ## 17. Invariants
 
 | # | Invariant |
@@ -615,6 +753,16 @@ sections 3.1, 3.2, 3.4, 4, 5 (without inline definitions and `if_mod`), 6.1
 (`extend` and `delete`), 6.2, 6.4, 7.1 (without `Expr`, `Cond`, `Effects`),
 7.2, 8 (without codes and the compile stage), 9, and the `lint` and `schema`
 commands. The rest is built by the packages in plans/sim-kernel.
+
+For the beta, F4 and packages P1 to P4 were built together. Not built
+yet: the `schema` and `docs` commands and `init-mod` (P5); the `setting`
+and `migration` types, the warning for a reference to an obsolete
+definition and placeholders for ids a save names (P6, P7); hot reload
+(P8); `Expr`, `Cond`, `Effects` and the compiling of `Text` templates,
+which the expression packages add (a `Text` holds its string and where it
+was written until then); patching, from another mod, an inline definition
+that has an `id` of its own; the warning for tags given and never tested;
+reading files in parallel.
 
 ## 20. Open questions
 

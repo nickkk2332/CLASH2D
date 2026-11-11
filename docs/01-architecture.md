@@ -79,6 +79,11 @@ mods/
 docs/
 ```
 
+An arrow also allows whatever the crate at its head may depend on:
+`clash-tools` reaches `clash-data` through `clash-sim` and names it as a
+dependency of its own. What stays forbidden is a dependency upward or
+sideways, on a crate the arrows do not lead to.
+
 Definition *types* live in the crate that gives them meaning (`BlockDef` in
 `clash-world`, `ActionDef` in `clash-sim`). `clash-data` provides the loading
 framework and knows nothing about what a block or an action is.

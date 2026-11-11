@@ -8,11 +8,12 @@ use std::path::PathBuf;
 
 use clash_core::{Dur, Real, define_id};
 use clash_data::{
-    CODES, CrossCx, Def, DefTypes, Diagnostics, Energy, Feature, FinishCx, Frequency, Gated,
-    Inline, Length, LoadOutcome, Loader, Located, Mass, Power, Pressure, Rate, Ref, Speed, TagSet,
-    Temperature, Text, Time, ValidateCx, Volume, code,
+    CODES, CrossCx, Def, DefTypes, Diagnostics, Energy, Feature, FinishCx, Frequency, FromKind,
+    Gated, Inline, Kind, KindValue, Length, LoadOutcome, Loader, Located, Mass, Power, Pressure,
+    Rate, Ref, Speed, TagSet, Temperature, Text, Time, ValidateCx, Volume, by_kind, code,
 };
 use serde::Deserialize;
+use serde::de::{Deserializer, MapAccess};
 
 define_id! {
     pub struct DamageTypeId(u16);
@@ -73,9 +74,35 @@ pub struct MaterialDef {
     #[serde(default)]
     pub name: Option<Text>,
     #[serde(default)]
-    pub rubble: Option<Ref<BlockDef>>,
+    pub rubble: Option<Rubble>,
     #[serde(default)]
     pub glow: Option<Gated<ColouredLight, String>>,
+}
+
+/// A field that takes two shapes: one block, or a block per damage type.
+#[derive(Debug, PartialEq)]
+pub enum Rubble {
+    One(Ref<BlockDef>),
+    ByDamage(BTreeMap<Ref<DamageTypeDef>, Ref<BlockDef>>),
+}
+
+impl<'de> FromKind<'de> for Rubble {
+    fn from_kind<A: MapAccess<'de>>(
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Rubble, A::Error> {
+        match kind {
+            Kind::String => value.read().map(Rubble::One),
+            Kind::Object => value.read().map(Rubble::ByDamage),
+            other => Err(other.unexpected("a block id, or a block id for each damage type")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Rubble {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Rubble, D::Error> {
+        by_kind(deserializer)
+    }
 }
 
 fn default_span() -> u32 {

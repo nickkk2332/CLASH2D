@@ -563,6 +563,59 @@ fn imports_replace_the_default_of_requires() {
 }
 
 #[test]
+fn a_field_may_take_more_than_one_shape() {
+    let defs = clean(load_one(
+        r#"[ { "type": "damage_type", "id": "heat" },
+            { "type": "material", "id": "stone", "density": 1, "toughness": 1, "rubble": "gravel" },
+            { "type": "material", "id": "ice", "density": 1, "toughness": 1,
+              "rubble": { "heat": "puddle" } },
+            { "type": "block", "id": "gravel", "material": "stone", "height": 1 },
+            { "type": "block", "id": "puddle", "material": "ice", "height": 1 } ]"#,
+    ));
+    let blocks = defs.registry::<BlockDef>();
+    let gravel = clash_data::Ref::new(blocks.lookup("m:gravel").unwrap());
+    let puddle = clash_data::Ref::new(blocks.lookup("m:puddle").unwrap());
+    let heat = clash_data::Ref::new(defs.lookup::<DamageTypeDef>("m:heat").unwrap());
+    assert_eq!(material(&defs, "m:stone").rubble, Some(Rubble::One(gravel)));
+    assert_eq!(
+        material(&defs, "m:ice").rubble,
+        Some(Rubble::ByDamage([(heat, puddle)].into_iter().collect()))
+    );
+
+    // Each shape reports its own mistakes where they are, and a shape
+    // the field does not take is a value of the wrong kind.
+    let outcome = load_one(
+        "[ { \"type\": \"damage_type\", \"id\": \"heat\" },\n  { \"type\": \"material\", \"id\": \"a\", \"density\": 1, \"toughness\": 1, \"rubble\": 7 },\n  { \"type\": \"material\", \"id\": \"b\", \"density\": 1, \"toughness\": 1, \"rubble\": \"gravle\" },\n  { \"type\": \"material\", \"id\": \"c\", \"density\": 1, \"toughness\": 1,\n    \"rubble\": { \"heat\": \"pudle\", \"cold\": \"gravel\" } },\n  { \"type\": \"block\", \"id\": \"gravel\", \"material\": \"a\", \"height\": 1 } ]",
+    );
+    let shown: Vec<String> = outcome
+        .diagnostics
+        .iter()
+        .map(|d| {
+            format!(
+                "{} {} {} [{}]",
+                d.code,
+                d.location.as_ref().unwrap().line,
+                d.message,
+                d.path
+            )
+        })
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            "E0201 2 expected a block id, or a block id for each damage type, found a number [rubble]",
+            "E0501 3 no block \"gravle\" [rubble]",
+            "E0501 5 no block \"pudle\" [rubble.heat]",
+            "E0501 5 no damage_type \"cold\" [rubble.cold]",
+        ]
+    );
+    assert_eq!(
+        outcome.diagnostics.as_slice()[1].suggestion.as_deref(),
+        Some("did you mean \"gravel\"?")
+    );
+}
+
+#[test]
 fn a_dangling_reference_points_at_the_string() {
     let outcome = load_one(
         "[ { \"type\": \"material\", \"id\": \"granite\", \"density\": 1, \"toughness\": 1 },\n  { \"type\": \"block\", \"id\": \"wall\", \"height\": 1,\n    \"material\": \"granit\" },\n  { \"type\": \"block\", \"id\": \"odd\", \"height\": 1, \"material\": \"Not An Id\" },\n  { \"type\": \"block\", \"id\": \"num\", \"height\": 1, \"material\": 4 } ]",

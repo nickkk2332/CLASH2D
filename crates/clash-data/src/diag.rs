@@ -106,7 +106,7 @@ codes! {
         "A mod is a directory with a `mod.json` (04 §3.2). The file must be one JSON object with at least an `id`. Each field has a fixed form: `requires` is a list of mod ids or of objects with `id` and `version`; `after`, `conflicts`, `imports`, `authors` and `experimental` are lists of strings. A profile (04 §3.3) is one object with an `id` and a list of `mods`. The message says which field is wrong and what was expected.";
     BAD_MOD_ID = "E0002", Error, "mods",
         "A mod id does not have the required form.",
-        "A mod's id is its namespace (04 §3.2, §4.1). It starts with a lowercase letter and holds only lowercase letters, digits and underscores. The namespace `engine` is reserved for the engine and cannot be a mod's id.";
+        "A mod's id is its namespace (04 §3.2, §4.1). It starts with a lowercase letter and holds only lowercase letters, digits and underscores. The namespace `engine` is reserved for the engine and cannot be a mod's id; nor can the namespaces the engine keeps its own settings in, which are named after its subsystems (04 §10).";
     DUPLICATE_MOD = "E0003", Error, "mods",
         "Two mod directories declare the same id.",
         "Each mod id may be found once in a search directory. Two directories in one search directory that declare the same id would make the result depend on which is read first, so neither is preferred: rename or remove one. (A mod found in an earlier search directory hides one with the same id in a later directory; that is reported as W0011, not as this error.)";

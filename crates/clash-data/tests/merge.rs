@@ -704,6 +704,22 @@ fn inheritance_mistakes_are_each_reported() {
 }
 
 #[test]
+fn obsolete_is_kept_on_the_registry_and_is_not_inherited() {
+    let defs = clean(load_one(
+        r#"[ { "type": "material", "id": "old", "obsolete": true, "density": 1, "toughness": 1 },
+            { "type": "material", "id": "new", "copy_from": "old" },
+            { "type": "material", "id": "retired", "density": 1, "toughness": 1 },
+            { "type": "material", "id": "retired", "patch": true, "obsolete": true } ]"#,
+    ));
+    let materials = defs.registry::<MaterialDef>();
+    let obsolete = |id: &str| materials.is_obsolete(materials.lookup(id).unwrap());
+    assert!(obsolete("m:old"));
+    assert!(!obsolete("m:new"));
+    assert!(obsolete("m:retired"));
+    assert!(!obsolete("engine:none"));
+}
+
+#[test]
 fn an_abstract_definition_is_only_for_copy_from() {
     let outcome = load_one(
         r#"[ { "type": "material", "id": "base", "abstract": true, "density": 1 },

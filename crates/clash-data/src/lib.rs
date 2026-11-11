@@ -27,8 +27,9 @@
 //! units ([`Length`], [`Mass`], [`Time`], [`Energy`], [`Power`],
 //! [`Force`], [`Temperature`], [`Volume`], [`Pressure`], [`Speed`],
 //! [`Rate`], [`Frequency`]), references ([`Ref`], [`Inline`]), [`Tag`]
-//! and [`TagSet`], [`Text`], [`Located`] and [`Gated`]. What a
-//! definition struct must avoid is listed in [`de`].
+//! and [`TagSet`], [`Text`], [`Located`] and [`Gated`]. A field that
+//! takes more than one shape (an id or an object) is read with
+//! [`by_kind`]. What a definition struct must avoid is listed in [`de`].
 //!
 //! # For a crate that loads
 //!
@@ -91,9 +92,9 @@ pub use diag::{
     CODES, Code, CodeInfo, DefLabel, Diagnostic, Diagnostics, Note, Severity, code, explain,
 };
 pub use fields::{
-    Energy, Feature, Force, Frequency, Gated, HasRate, Inline, Length, Located, Mass, Power,
-    Pressure, Quantity, Rate, Ref, Seconds, Speed, Tag, TagSet, Temperature, Text, Time, Volume,
-    dur,
+    Energy, Feature, Force, Frequency, FromKind, Gated, HasRate, Inline, Kind, KindValue, Length,
+    Located, Mass, Power, Pressure, Quantity, Rate, Ref, Seconds, Speed, Tag, TagSet, Temperature,
+    Text, Time, Volume, by_kind, dur,
 };
 pub use json::{COMMENT_KEY, Limits, Member, Node, NodeKind, Num, parse_json};
 pub use load::{LoadOutcome, Loader};

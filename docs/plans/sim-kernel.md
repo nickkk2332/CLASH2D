@@ -25,10 +25,10 @@ start while the world model is being built.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| P1 | Diagnostics | M | F4 | in progress |
-| P2 | Complete merge semantics | M | F4 | in progress |
-| P3 | Profiles and running without mods | S | F4 | in progress |
-| P4 | Typed loading and validation stages | M | P2 | in progress |
+| P1 | Diagnostics | M | F4 | done |
+| P2 | Complete merge semantics | M | F4 | done |
+| P3 | Profiles and running without mods | S | F4 | beta |
+| P4 | Typed loading and validation stages | M | P2 | beta |
 | P5 | Schemas, reference, scaffolding | M | P1, P4 | todo |
 | P6 | Settings | S | K5 | todo |
 | P7 | Migration and obsoletion | M | P4, W10 | todo |
@@ -103,6 +103,13 @@ Done when
 - Every code has an explanation, and a test fails if one is added without.
 - JSON output round-trips.
 
+As built (decision D-267). Built with F4, so there was no older error form
+to convert. A code cannot be declared without a title and an explanation:
+they are arguments of the macro that declares it, and a test checks that
+none is empty. A crate that adds a stage keeps a table of its own;
+`clash-tools explain` reads every table. The `06` group of codes is left
+for the expression packages.
+
 ### P2 — Complete merge semantics
 
 **Spec** 04 §4.3, §5, §6 · **Size** M
@@ -122,6 +129,11 @@ Done when
   and line.
 - Results are independent of file system enumeration order.
 
+As built (decisions D-262, D-264). Every value of a finished tree keeps
+the span it was last written at, which is all `show` needs; a value
+changed by `scale` or `add` is attributed to the patch that changed it.
+The disputed-field warning of the review additions is built here.
+
 ### P3 — Profiles and running without mods
 
 **Spec** 04 §3.3–3.5, §4.4, §12.3 · **Size** S
@@ -135,6 +147,16 @@ Done when
 - A dependency cycle names the mods in it.
 - Two orderings of the same profile list give the specified, different,
   patch order.
+
+As built (decisions D-264, D-265). Beta: the three items above are built
+and tested, with the engine's own definitions (`engine:none`) and the
+placeholders of lenient loading. Stubbed: the frame test of the "Total
+conversions" review addition, which needs the scene layer; what is tested
+here is that a profile listing none of the bundled mods loads only its own
+and carries its boot screen. Placeholders for ids that a save names and no
+mod defines (04 §12.3) come with package P7. A profile's `boot_screen`,
+`settings`, `screens` and `preferences` are kept as written for the crates
+that own screens and settings.
 
 ### P4 — Typed loading and validation stages
 
@@ -158,6 +180,17 @@ Done when
 - A fixture verb marked experimental is refused to a mod that has not opted
   in, with the feature named, and accepted with a warning from one that has.
 - A test fails if any bundled mod names an experimental feature.
+
+As built (decisions D-260, D-261, D-263, D-266). Beta: every item above is
+built and tested, with the safety limits of the review additions. The
+fixture verb is a rule's effect that the fixture type reports through
+`FinishCx::use_experimental`, which is the call a real verb will make; a
+whole type (`Def::EXPERIMENTAL`) and a field (`Gated`) can be marked too.
+Stubbed: `Text` holds its string and where it was written, and its
+templates are compiled by X4. An inline definition given an `id` of its
+own can be referred to but not yet patched from another mod. The list of
+experimental features is on `Defs` for the save format to record. A
+feature named in `mod.json` that nothing registers is not reported.
 
 ### P5 — Schemas, reference, scaffolding
 

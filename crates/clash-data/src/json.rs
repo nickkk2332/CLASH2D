@@ -1042,4 +1042,37 @@ mod tests {
     fn a_byte_order_mark_is_skipped() {
         assert_eq!(ok("\u{feff}[1]").as_array().unwrap().len(), 1);
     }
+
+    #[test]
+    fn mangled_input_is_reported_and_never_panics() {
+        // Bad data is an error message, not a crash (01 R6). Every
+        // truncation of a document, and the document with each of a set
+        // of awkward characters put in at each position, must come back
+        // as a tree or as located problems.
+        let document = "[ { \"//\": \"é😀\", \"id\": \"a\\u00e9\\ud83d\\ude00\\n\", \"n\": [1, -2.5e-3, true, null], \"o\": {} } ]";
+        let mut inputs: Vec<String> = Vec::new();
+        for (cut, _) in document.char_indices() {
+            inputs.push(document[..cut].to_owned());
+            for awkward in [
+                "\"", "\\", "\\u", "\\ud83d", "é", "😀", "\n", "\t", "{", "]", ",", "-", "e",
+                "\u{0}",
+            ] {
+                inputs.push(format!("{}{awkward}{}", &document[..cut], &document[cut..]));
+            }
+        }
+        for input in &inputs {
+            let (tree, problems, sources) = parse(input);
+            assert!(
+                tree.is_some() || !problems.is_empty(),
+                "{input:?} gave neither a tree nor a problem"
+            );
+            for problem in &problems {
+                // A position can always be shown.
+                let location = sources.locate(problem.span);
+                assert!(location.line >= 1 && location.column >= 1, "{input:?}");
+                assert!(!problem.message.is_empty());
+            }
+        }
+        assert!(inputs.len() > 1000);
+    }
 }
