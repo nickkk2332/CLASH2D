@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use clash_core::{DenseId, Dir8, IVec2, IVec3, Real, Turn, Vertical};
+use clash_core::{Dir8, IVec2, IVec3, Real, Turn, Vertical};
 use clash_data::expr::{Any, ExprDefs, Int, Number};
 use clash_data::{
     Cond, DefLabel, Defs, Diagnostic, Diagnostics, Expr, Located, Site, Span, code, diag,
@@ -506,16 +506,6 @@ impl CompiledMap {
         &self.marks
     }
 
-    pub(crate) fn in_bounds(&self, cell: IVec3) -> bool {
-        let (low, high) = self.level_range();
-        cell.x >= 0
-            && cell.y >= 0
-            && cell.x < self.size.x
-            && cell.y < self.size.y
-            && cell.z >= low
-            && cell.z <= high
-    }
-
     pub(crate) fn level(&self, z: i32) -> &CompiledLevel {
         usize::try_from(z - self.lowest)
             .ok()
@@ -690,9 +680,13 @@ fn single_char(key: &str) -> Option<char> {
     }
 }
 
+/// A `$name` found in a text: the bytes it covers, `$` included, and
+/// the name; or the bytes of a `$` that no name follows.
+type ParamUse<'a> = Result<(usize, usize, &'a str), (usize, usize)>;
+
 /// The parameter names written in a text as `$name`, with the byte
 /// range of each including its `$`.
-pub(crate) fn template_parts(text: &str) -> Vec<Result<(usize, usize, &str), (usize, usize)>> {
+fn template_parts(text: &str) -> Vec<ParamUse<'_>> {
     let bytes = text.as_bytes();
     let mut found = Vec::new();
     let mut at = 0;
@@ -1454,7 +1448,7 @@ impl<'a> Builder<'a> {
             let ty = declared
                 .or_else(|| inferred.as_deref().and_then(ParamType::from_name))
                 .unwrap_or(ParamType::Real);
-            let mut mismatch = |builder: &mut Builder<'a>, value: &clash_core::Value| {
+            let mismatch = |builder: &mut Builder<'a>, value: &clash_core::Value| {
                 if ty.accept(value).is_none() {
                     builder.error(
                         &label,
@@ -2111,7 +2105,7 @@ impl<'a> Builder<'a> {
         // Portals and vehicles.
         let mut portals = Vec::new();
         for (index, portal) in def.portals.iter().enumerate() {
-            let mut mark_of = |builder: &mut Builder<'a>, text: &Located<String>, end: &str| {
+            let mark_of = |builder: &mut Builder<'a>, text: &Located<String>, end: &str| {
                 let name = text.value.strip_prefix(MARK_PREFIX)?;
                 if !marks.contains_key(name) {
                     let site = Site {
@@ -2304,10 +2298,6 @@ impl<'a> Builder<'a> {
     /// inside itself, and that none nests deeper than the limit
     /// (10 §3.7).
     fn nesting(&mut self, maps: &mut [CompiledMap], limits: MapLimits) {
-        let shapes: Vec<(IVec2, (i32, i32), Option<IVec3>, bool)> = maps
-            .iter()
-            .map(|map| (map.size, map.level_range(), map.anchor, map.may_turn))
-            .collect();
         for map in maps.iter() {
             let label = DefLabel::new("map", map.name.clone());
             for place in &map.place {
@@ -2337,7 +2327,8 @@ impl<'a> Builder<'a> {
                             }
                         }
                     }
-                    let (size, levels, anchor, may_turn) = shapes[candidate.index()];
+                    let (size, levels) = (child.size, child.level_range());
+                    let (anchor, may_turn) = (child.anchor, child.may_turn);
                     if let TurnRule::Fixed(turn) = place.turn
                         && turn != Turn::IDENTITY
                         && !may_turn

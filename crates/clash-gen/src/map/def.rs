@@ -19,7 +19,7 @@ use clash_data::{
 };
 use clash_expr::{Expr as Tree, ExprKind};
 use serde::Deserialize;
-use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 define_id! {
     /// A `map` definition.

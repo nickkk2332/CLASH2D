@@ -20,7 +20,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use clash_core::{DenseId, Dir8, HashDomain, IVec2, IVec3, Real, Rng, Turn, VarMap, pos_hash};
+use clash_core::{Dir8, HashDomain, IVec2, IVec3, Real, Rng, Turn, VarMap, pos_hash};
 use clash_data::expr::{Any, Int, Number};
 use clash_data::{Cond, Expr, Runner};
 use clash_expr::{FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value};
@@ -420,6 +420,9 @@ pub struct ResolvedMap {
     /// Vehicles.
     pub vehicles: Vec<MapVehicle>,
 }
+
+/// Cells in the order positions are listed in.
+type CellSet = BTreeSet<(i32, i32, i32)>;
 
 /// The order positions are listed in: storey, then row, then column.
 fn cell_key(cell: IVec3) -> (i32, i32, i32) {
@@ -895,8 +898,7 @@ impl Draft {
     /// Makes areas of the cells specs put in them: touching cells of
     /// one name are one area.
     fn gather_areas(&mut self) {
-        let mut by_name: BTreeMap<(String, Option<AreaKindId>), BTreeSet<(i32, i32, i32)>> =
-            BTreeMap::new();
+        let mut by_name: BTreeMap<(String, Option<AreaKindId>), CellSet> = BTreeMap::new();
         for (at, name, kind) in self.area_cells.drain(..) {
             by_name
                 .entry((name, kind))
@@ -1704,7 +1706,7 @@ fn choose(entry: &ReadyEntry, seed: u64, at: IVec3, entry_index: usize) -> usize
         if left < *weight {
             return index;
         }
-        left = left - *weight;
+        left -= *weight;
     }
     entry.weights.len() - 1
 }
