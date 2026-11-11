@@ -329,6 +329,9 @@ impl Sim {
             }
             trace.push(event.name().to_owned());
             self.deliver(&mut event);
+            // What the engine's own packages do about it, once rules
+            // have had their say.
+            crate::movement::on_event(self, &event);
             self.out.push(event);
         }
     }
