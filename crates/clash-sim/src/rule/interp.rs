@@ -1342,7 +1342,6 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
             return;
         };
         let event = occurrence.event;
-        let event_subjects = occurrence.subjects.clone();
         // Who is called is settled before anyone is.
         let mut calls: Vec<(EocId, Option<Handle>)> = set
             .global_candidates(event, &occurrence.fields)
@@ -1350,6 +1349,12 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
             .map(|id| (id, None))
             .collect();
         let mut found: Vec<EocId> = Vec::new();
+        // Subjects are looked at only if some attached rule listens.
+        let event_subjects = if set.attached_listen(event) {
+            occurrence.subjects.clone()
+        } else {
+            Vec::new()
+        };
         for (index, subject) in event_subjects.iter().enumerate() {
             let Value::Subject(owner) = subject else {
                 continue;
@@ -1448,6 +1453,9 @@ impl RuleSet {
     /// fields they changed, whether it was consumed, and the reason it
     /// was cancelled for.
     pub fn deliver<H: RuleHost + ?Sized>(&self, host: &mut H, occurrence: &mut Occurrence) {
+        if !self.listens(occurrence.event) {
+            return;
+        }
         host.rule_state().running.depth += 1;
         Exec::new(self, host, Some(occurrence)).deliver();
         self.leave(host);

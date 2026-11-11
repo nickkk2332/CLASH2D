@@ -71,10 +71,13 @@
 //! 1. **The registry.** Before mods load, the simulation's kinds,
 //!    properties, functions, events and verbs are in the registry the
 //!    loader is given, and [`crate::register_defs`] is called, which
-//!    calls this module's.
+//!    calls this module's. The engine's own events must be there, each
+//!    with its subjects and fields, for a rule to listen for one; the
+//!    events mods define are entered by this module's step.
 //! 2. **`RuleHost` for the simulation.** The reads are those of
 //!    `clash_expr::Host` that package K4 builds over `Sim`. The rest:
-//!    `rule_state` is `&mut sim.rules`; `local_now` the local time of
+//!    `rule_state` is `&mut sim.rules`; `rule_limits` reads the
+//!    settings of [`LIMIT_SETTINGS`]; `local_now` the local time of
 //!    the clock the subject is on; `global` the handle of the `global`
 //!    subject; `simulated` whether an entity is in the world;
 //!    `rules_of` the `rules` of the subject's definitions;
@@ -87,19 +90,25 @@
 //! 3. **A `RuleSet`.** Built once from the definitions with
 //!    [`RuleSet::new`] when the simulation is set up, and again after a
 //!    load. It is not state.
-//! 4. **One handler for each event type.** For every event type the
-//!    bus knows, register with `Sim::on(name, Handler::new(…))` a
-//!    closure that makes an [`Occurrence`] from the
-//!    [`Delivery`](crate::Delivery) (the subjects and fields in the
-//!    order the registry's `EventSpec` declares them, each subject as
-//!    its handle; `as_hook()` if `delivery.is_hook()`), calls
-//!    [`RuleSet::deliver`], and writes the answer back: for each slot
-//!    of [`Occurrence::changed`] `delivery.set_field`, `consume()` if
-//!    it was consumed, `cancel(reason)` if it was cancelled. Global and
-//!    attached rules are both found by `deliver`, so nothing is
-//!    registered with `Sim::on_subject`: an attachment is state, not a
-//!    handler, and needs no registering after a load. The handler's
-//!    priority places rules among the engine's own handlers.
+//! 4. **One handler for each event type.** For every event type that
+//!    [`RuleSet::listens`] for, register with
+//!    `Sim::on(name, Handler::new(…))` a closure that:
+//!    - makes an [`Occurrence`] from the [`Delivery`](crate::Delivery):
+//!      the event's id in the registry; one value for each subject and
+//!      each field its `EventSpec` declares, in that order, a subject as
+//!      its handle and null for one the event does not have;
+//!      `as_hook()` if `delivery.is_hook()`; `consumed` as
+//!      `delivery.is_consumed()` says;
+//!    - calls [`RuleSet::deliver`] with the simulation as the host;
+//!    - writes the answer back: `delivery.set_field` for each slot of
+//!      [`Occurrence::changed`], `delivery.consume()` if it was
+//!      consumed, `delivery.cancel(reason)` if it was cancelled.
+//!
+//!    Global and attached rules are both found by `deliver`, so nothing
+//!    is registered with `Sim::on_subject`: an attachment is state, not
+//!    a handler, and needs no registering after a load. The handler's
+//!    priority places rules among the engine's own handlers. Handlers
+//!    are not state: the same registration is made after a load.
 //! 5. **The save.** [`RuleState`] replaces the kernel's placeholder in
 //!    `Sim::rules`; it serialises through the engine's codec and is
 //!    already part of the `rules` hash. The kernel raises its save

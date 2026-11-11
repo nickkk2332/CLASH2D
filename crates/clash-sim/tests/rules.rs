@@ -17,8 +17,8 @@ use clash_expr::{Handle, Value};
 use clash_sim::action::ActionDef;
 use clash_sim::rule::testing::{FakeHost, REFUSED, SEALED};
 use clash_sim::rule::{
-    CORE_EFFECTS, EffectKind, EocDef, LIMIT_SETTINGS, RULE_REASONS, RuleFault, RuleSet, RuleState,
-    reason,
+    CORE_EFFECTS, EffectKind, EocDef, LIMIT_SETTINGS, Occurrence, RULE_REASONS, RuleFault, RuleSet,
+    RuleState, Rules, reason,
 };
 
 // ---- the harness ---------------------------------------------------------
@@ -1629,4 +1629,165 @@ fn every_core_effect_compiles() {
             effect.name
         );
     }
+}
+
+// ---- 05 §19: what a run costs --------------------------------------------------
+
+/// Not a check: prints what delivering an event and running a rule cost,
+/// for the budgets of 05 §19. Run with
+/// `cargo test -p clash-sim --release --test rules -- --ignored --nocapture time_per_run`.
+#[test]
+#[ignore = "a measurement, not a check"]
+#[allow(
+    clippy::disallowed_types,
+    clippy::disallowed_methods,
+    reason = "a measurement needs a clock; this test is not part of the simulation and nothing \
+              in the crate reads one"
+)]
+fn time_per_run() {
+    let data = r#"[
+  { "type": "variable", "id": "seen", "scope": "entity", "value": "int", "default": 0 },
+  { "type": "eoc", "id": "marks", "on": "alarm_tripped",
+    "filter": { "kind": "glass" },
+    "if": "event.loud",
+    "do": [ { "set": { "who.var.seen": 1 } } ] },
+  { "type": "eoc", "id": "counts", "params": { "n": "int" }, "returns": "int",
+    "do": [ { "let": { "sum": 0 } },
+            { "repeat": "$n", "do": [ { "add": { "$sum": "$i" } } ] },
+            { "return": "$sum" } ] }
+]"#;
+    let defs = clean(load_written(&[], data));
+    let rules = Arc::new(RuleSet::new(defs));
+    let mut host = FakeHost::new(rules.clone());
+    let who = Value::Subject(host.entity(1));
+    let here = Value::Subject(host.place(1));
+    let rounds = 1_000_000_u32;
+    let per =
+        |elapsed: std::time::Duration, rounds: u32| elapsed.as_nanos() as f64 / f64::from(rounds);
+
+    // An event that nothing listens for.
+    let quiet = host.event("sim_started");
+    let start = std::time::Instant::now();
+    for _ in 0..rounds {
+        let mut occurrence = Occurrence::new(quiet, Vec::new(), Vec::new());
+        rules.deliver(&mut host, &mut occurrence);
+    }
+    println!(
+        "an event with no handlers: {:.0} ns",
+        per(start.elapsed(), rounds)
+    );
+
+    // An event whose one rule is filtered out by the index.
+    let tripped = host.event("alarm_tripped");
+    let fields = |kind: &str| vec![Value::Bool(true), Value::from(kind), real(1.0)];
+    let subjects = vec![here, who];
+    let start = std::time::Instant::now();
+    for _ in 0..rounds {
+        let mut occurrence = Occurrence::new(tripped, subjects.clone(), fields("wood"));
+        rules.deliver(&mut host, &mut occurrence);
+    }
+    println!(
+        "an event a filter turns away: {:.0} ns",
+        per(start.elapsed(), rounds)
+    );
+
+    // An event one rule answers: bindings, filter, condition, one `set`.
+    let start = std::time::Instant::now();
+    for _ in 0..rounds {
+        let mut occurrence = Occurrence::new(tripped, subjects.clone(), fields("glass"));
+        rules.deliver(&mut host, &mut occurrence);
+    }
+    println!(
+        "an event one rule answers with one `set`: {:.0} ns",
+        per(start.elapsed(), rounds)
+    );
+
+    // A call that runs a loop of a thousand passes, each one `add`.
+    let counts = rules.lookup("written:counts").unwrap();
+    let calls = 2_000_u32;
+    let start = std::time::Instant::now();
+    for _ in 0..calls {
+        let value = rules
+            .call(&mut host, counts, &[], &[("n", Value::Int(1_000))])
+            .unwrap();
+        assert_eq!(value, Value::Int(499_500));
+    }
+    println!(
+        "one pass of a loop with one `add`: {:.0} ns",
+        per(start.elapsed(), calls * 1_000)
+    );
+    assert!(host.faults.is_empty());
+}
+
+// ---- 05 §9.3: rules a definition carries --------------------------------------
+
+clash_core::define_id! {
+    /// A definition that carries rules, for the test below.
+    struct CarrierId;
+}
+
+/// Stands for any definition whose instances are subjects: an area
+/// kind, a template, a trait.
+#[derive(Debug, serde::Deserialize)]
+struct CarrierDef {
+    #[serde(default)]
+    rules: Rules,
+}
+
+impl clash_data::Def for CarrierDef {
+    type Id = CarrierId;
+    const TYPE: &'static str = "carrier";
+    const DOC: &'static str = "A definition that carries rules.";
+}
+
+#[test]
+fn a_definition_carries_rules_by_id_and_written_in_place() {
+    let data = r#"[
+  { "type": "variable", "id": "seen", "scope": "entity", "value": "int", "default": 0 },
+  { "type": "carrier", "id": "watchful",
+    "rules": [
+      { "on": "alarm_tripped", "as": "who",
+        "do": [ { "add": { "self.var.seen": 1 } } ] },
+      "named"
+    ] },
+  { "type": "eoc", "id": "named", "on": "alarm_tripped", "attached": true, "as": "who",
+    "do": [ { "add": { "self.var.seen": 10 } } ] }
+]"#;
+    let mut types = types();
+    types.register::<CarrierDef>();
+    let outcome = Loader::new(&types)
+        .expr_registry(&FakeHost::registry())
+        .memory_mod(
+            "written",
+            r#"{ "id": "written" }"#,
+            &[("data/w.json", data)],
+        )
+        .load_mods(&["written"]);
+    let defs = clean(outcome);
+    let carrier = defs.get::<CarrierDef>(defs.lookup::<CarrierDef>("written:watchful").unwrap());
+    let carried: Vec<_> = carrier.rules.iter().map(|rule| rule.id()).collect();
+    assert_eq!(carried.len(), 2);
+
+    // A rule written in place is attached without saying so, binds its
+    // owner as `self`, and has no name to be called by.
+    let rules = defs.registry::<EocDef>();
+    let inline = rules.get(carried[0]);
+    assert!(rules.name(carried[0]).contains('#'));
+    assert!(inline.is_attached() && !inline.is_global());
+    assert_eq!(inline.role(), 1);
+    assert!(inline.subject_names().iter().any(|name| &**name == "self"));
+    assert_eq!(rules.name(carried[1]), "written:named");
+
+    // The host answers `rules_of` from what the definition carries, and
+    // both run for an instance that takes part in the event.
+    let mut host = FakeHost::new(Arc::new(RuleSet::new(defs.clone())));
+    let (one, two) = (host.entity(1), host.entity(2));
+    for rule in &carried {
+        host.carry(one, *rule);
+    }
+    alarm(&mut host, one, true, "x", 1.0);
+    alarm(&mut host, two, true, "x", 1.0);
+    assert_eq!(host.var(one, "written:seen"), Value::Int(11));
+    assert_eq!(host.var(two, "written:seen"), Value::Int(0));
+    assert!(host.faults.is_empty());
 }

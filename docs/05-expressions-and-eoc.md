@@ -762,6 +762,17 @@ called for an event is settled before anyone is: a handler that registers
 or removes another does not change the delivery under way. Handlers are
 not state and are registered again after a load.
 
+Rules (decision D-470) are found by one function, which the simulation
+calls from one handler for each event type that some rule listens for.
+It runs the global rules of the event's type, then for each subject of
+the event, in the order the event declares them, the rules that subject
+carries through its definitions and those attached to it at run time
+whose `as` is that subject's place; within each group by `priority` and
+then by rule id, which is the order of the rules' qualified ids. Which
+rules run is settled before any does, so a rule attached or detached by
+one of them is not run or dropped for the event under way. An event
+type that no rule listens for costs nothing.
+
 ### 8.4 Filters
 
 `"filter"` on a rule is a cheap test on an event's discrete fields, applied
@@ -778,6 +789,13 @@ event looks at the handlers with no filter and at those whose first entry
 names a field the event has with that value; the rest of each filter is
 then tested. A thousand handlers filtered on other values cost an event
 nothing.
+
+A rule's filter names fields of its event, each with a constant of the
+field's type: a text, a number, a truth value, or the id of a definition
+where the field holds one, resolved at load. A field the event does not
+have, and a value that is not a constant, are load errors. Numbers are
+compared by value, so `12` matches a field that holds `12.0`. Global
+rules are indexed by the first entry as handlers are.
 
 ### 8.5 Perceived events
 
@@ -1577,6 +1595,15 @@ one of 19 operations with five reads from the host in about 200 ns. The
 figures come from the ignored test `time_per_evaluation` in
 `crates/clash-expr/tests/machine.rs`; the benchmark and its gate are
 package T8.
+
+Measured for the next three rows when package K5 was built, in a release
+build against the fake host: an event that no rule listens for is turned
+away in about 30 ns, most of it making the event; an event whose one
+rule the filter index turns away costs about 190 ns; an event that one
+rule answers, with its bindings, filter and condition and one `set` of a
+variable, about 430 ns; and one pass of a loop with one `add` to a
+local, about 90 ns. The figures come from the ignored test
+`time_per_run` in `crates/clash-sim/tests/rules.rs`.
 
 ## 20. Open questions
 

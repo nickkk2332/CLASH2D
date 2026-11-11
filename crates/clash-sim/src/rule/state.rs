@@ -282,15 +282,19 @@ impl Occurrence {
     }
 }
 
-/// The global rules that listen for one event, indexed by the first
-/// entry of their filters (05 §8.4), each list in delivery order.
+/// The rules that listen for one event: the global ones, indexed by
+/// the first entry of their filters (05 §8.4), each list in delivery
+/// order, and whether any attached rule listens too.
 #[derive(Clone, Debug, Default)]
 struct Listeners {
-    /// Those with no filter.
+    /// The global rules with no filter.
     open: Vec<EocId>,
-    /// Those with a filter, by the slot of its first field and the key
-    /// of the value that field must have.
+    /// The global rules with a filter, by the slot of its first field
+    /// and the key of the value that field must have.
     keyed: BTreeMap<(u16, String), Vec<EocId>>,
+    /// Whether some attached rule listens for the event, so that its
+    /// subjects are worth looking at.
+    attached: bool,
 }
 
 /// A text that is the same for values a filter counts as equal and
@@ -334,13 +338,17 @@ impl RuleSet {
             // In order of id, so each list is filled in order of id and
             // sorting by priority keeps that order within a priority.
             for (id, rule) in rules.iter() {
-                let Some(event) = rule.event().filter(|_| rule.is_global()) else {
+                let Some(event) = rule.event() else {
                     continue;
                 };
                 if by_event.len() <= event.index() {
                     by_event.resize_with(event.index() + 1, Listeners::default);
                 }
                 let listeners = &mut by_event[event.index()];
+                if rule.is_attached() {
+                    listeners.attached = true;
+                    continue;
+                }
                 let list = match rule.filter().first() {
                     None => &mut listeners.open,
                     Some((slot, value)) => listeners
@@ -363,6 +371,23 @@ impl RuleSet {
             eoc_type,
             by_event,
         }
+    }
+
+    /// Whether any rule listens for an event type: a global one, or an
+    /// attached one that something might carry. An event nothing
+    /// listens for need not be handed to [`deliver`](RuleSet::deliver)
+    /// at all.
+    pub fn listens(&self, event: EventId) -> bool {
+        self.by_event.get(event.index()).is_some_and(|listeners| {
+            listeners.attached || !listeners.open.is_empty() || !listeners.keyed.is_empty()
+        })
+    }
+
+    /// Whether some attached rule listens for an event type.
+    pub(crate) fn attached_listen(&self, event: EventId) -> bool {
+        self.by_event
+            .get(event.index())
+            .is_some_and(|listeners| listeners.attached)
     }
 
     /// The definitions the rules belong to.

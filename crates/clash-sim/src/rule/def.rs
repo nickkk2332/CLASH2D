@@ -498,6 +498,7 @@ impl Def for EocDef {
     type Id = EocId;
     const TYPE: &'static str = EOC_TYPE;
     const DOC: &'static str = "A rule: when an event happens, or when it is called, if a condition holds, do a list of effects (05 §9).";
+    const DEFAULTS: &'static str = r#"{ "priority": 0 }"#;
 
     #[allow(clippy::too_many_lines)]
     fn compile(&mut self, cx: &mut CompileCx<'_>) {
