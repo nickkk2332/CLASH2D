@@ -1,0 +1,329 @@
+# 01 — Architecture
+
+This document describes the whole engine at the level of contracts: what the
+parts are, what each may depend on, and the rules every part obeys. Subsystem
+documents (02 onward) fill in one part each and must stay inside these
+contracts. See [roadmap.md](roadmap.md) for the list of subsystem documents.
+
+## 1. Shape of the system
+
+```
+                 ┌───────────── frontends ─────────────┐
+                 │  window (GPU glyph grid) │ terminal  │
+                 └───────────────▲─────────────────────┘
+                                 │ glyph frames
+                          ┌──────┴──────┐
+   player input ─────────►│    scene    │  camera, UI, cutscene director
+        │                 └──────▲──────┘
+        │ Commands               │ SimEvents (timestamped) + read-only views
+        ▼                        │
+  ┌─────────────────────────── sim ───────────────────────────┐
+  │  entities · bodies · actions · combat · powers · AI        │
+  │  EOC runtime · cold simulation                             │
+  │      ┌───────────────────── world ──────────────────┐      │
+  │      │ cosmos · realms · grids · fields             │      │
+  │      │ damage · collapse · bodies in flight         │      │
+  │      └──────────────────────────────────────────────┘      │
+  │  time: ticks · clocks · event queue · processes            │
+  └───────────▲─────────────────────────────▲──────────────────┘
+              │ definitions                 │ load / store
+          ┌───┴───┐                     ┌───┴───┐
+          │ data  │◄── mods/*.json      │ save  │
+          └───────┘                     └───────┘
+```
+
+The simulation is a pure state machine. It takes commands, advances time, and
+emits events. Everything a player sees is produced by the scene layer from
+those events and from read-only views of simulation state.
+
+## 2. Hard rules
+
+These apply to all code in the simulation (`clash-core`, `clash-time`,
+`clash-data`, `clash-expr`, `clash-world`, `clash-gen`, `clash-sim`).
+
+| # | Rule |
+|---|------|
+| R1 | **Deterministic.** Same starting state, same mods, same commands give bit-identical state. Section 4 lists what that forbids. |
+| R2 | **No content in the engine.** Engine code never names a specific material, creature, power or rule. It names *kinds* of definition and reads instances from data. |
+| R3 | **One way to change each kind of state.** World cells change only through `WorldEdit`. Entity positions change only through one relocation function. This is what keeps caches, events and saves correct. |
+| R4 | **Events out, never calls up.** Lower layers emit events; they never call into higher layers. `clash-world` does not know that entities, EOCs or a renderer exist. |
+| R5 | **The sim never waits.** No wall-clock time, no I/O, no blocking on input inside the simulation. `advance` returns when a decision is needed. |
+| R6 | **Bad data is an error message, not a crash.** Mod mistakes are reported at load with file, line and JSON path. A running simulation never panics because of content. |
+| R7 | **Save/load is invisible.** Running N steps, saving, loading and running M more gives the same state hash as running N+M steps. |
+| R8 | **SI units.** Metres, kilograms, seconds, joules, pascals, kelvin. No bespoke units in engine code or data. |
+| R9 | **Constants are named.** Dimensions such as chunk size are constants in one module and never appear as literals. |
+
+## 3. Workspace layout
+
+A Cargo workspace. Arrows mean "may depend on".
+
+```
+crates/
+  clash-core            maths, ids, deterministic RNG, state hashing, errors
+  clash-time      → core                 ticks, clocks, event queue, processes
+  clash-data      → core                 mod loading, JSON → typed definitions, registries, schemas
+  clash-expr      → core                 expression language: parse, check, compile, evaluate
+  clash-world     → core, time, data     cosmos, realms, grids, fields, damage, collapse, bodies in flight
+  clash-gen       → world                region survey and tract generation (mapgen)
+  clash-sim       → world, gen, expr     entities, actions, combat, powers, AI, EOC runtime, cold sim
+  clash-save      → sim                  save container, versioning, migration
+  clash-scene     → sim                  presentation model, camera, UI state, cutscene director
+  clash-front-window → scene             window + GPU glyph renderer
+  clash-front-term   → scene             terminal renderer
+  clash-app       → front-*, save        the game binary
+  clash-tools     → sim, save            mod linter, schema dump, headless runner, world viewer, benches
+mods/
+  core/                                  minimal definitions the tests and tools need
+docs/
+```
+
+Definition *types* live in the crate that gives them meaning (`BlockDef` in
+`clash-world`, `ActionDef` in `clash-sim`). `clash-data` provides the loading
+framework and knows nothing about what a block or an action is.
+
+## 4. Determinism contract
+
+Determinism is the property most easily lost by accident, so the rules are
+mechanical and enforced by lints and tests.
+
+**Numbers**
+
+- Space and time are integers: cell coordinates `i32`, ticks `i64`.
+- Physical magnitudes (energy, mass, force, pressure, velocity, positions of
+  bodies in flight) are `Real`, a newtype over `f64` in `clash-core`. `Real`
+  exposes `+ - * /`, `sqrt`, comparisons and conversions, which are
+  IEEE-exact on the supported targets (x86-64, aarch64). Anything else
+  (`sin`, `pow`, `exp`, `ln`, …) goes through wrappers backed by the pure-Rust
+  `libm` crate. Calling the `std` float functions directly is denied by lint.
+- `Real` never holds NaN. Constructors and division check and return an error
+  or a defined fallback.
+- The energy range the engine must handle is about 1 J to 10^33 J. `f64`
+  covers this with margin. Do not introduce a logarithmic "power level"
+  representation in the engine; a derived tier for UI and AI is fine.
+
+**Randomness**
+
+- *Positional* randomness for generation: a stateless hash of
+  `(seed, domain, coordinates, salt)` seeds a local generator. The result
+  depends only on where and what, never on when or in what order.
+- *Stream* randomness for simulation: named generator streams stored in
+  simulation state and saved. Systems draw from their own stream.
+- No thread-local or OS randomness anywhere in the simulation.
+
+**Ordering**
+
+- Simulation state never iterates a hash map. Use `Vec`, `BTreeMap`,
+  `IndexMap`, or `LookupMap` (a hash map wrapper in `clash-core` that offers
+  lookup, insert and remove but no iteration).
+- Simultaneous events are ordered by `(tick, sequence number)`.
+- Parallelism is allowed only where the result is independent of scheduling:
+  pure generation of tracts, compression, read-only queries, and two-phase
+  updates (compute deltas in parallel, apply in a fixed order).
+
+**Hashing**
+
+- Every state type implements `StateHash`, feeding a stable hasher in a fixed
+  order. The simulation exposes a total hash and per-subsystem hashes so a
+  divergence can be localised.
+- Golden-hash tests run scripted scenarios and compare hashes. A change that
+  alters a golden hash must say why in its description.
+
+## 5. Time
+
+### 5.1 Ticks and the timeline
+
+- `Tick(i64)` counts microseconds of universal time. Range is about 292,000
+  years. A character a thousand times faster than a human acts in about a
+  third of a millisecond, which is still hundreds of ticks.
+- The **timeline** is a priority queue of scheduled wake-ups ordered by
+  `(due tick, sequence number)`. Nothing in the simulation runs "every turn";
+  everything that happens was scheduled.
+- An entity's **action** is a sequence of phases (typically windup, impact,
+  recovery) with durations. Phase boundaries are timeline events. The action
+  system is specified in document 03.
+- A **process** is scheduled activity that belongs to the world rather than to
+  an entity: a pressure wave expanding, a tower collapsing, a body in flight,
+  a fire spreading. Processes are plain serialisable state plus a `wake`
+  function that does some work and says when to wake next.
+
+### 5.2 Clocks
+
+Every scheduled wake-up belongs to a **clock**. A clock has a rate relative to
+its parent and the root clock is universal time.
+
+```
+universal
+ ├─ realm "earth"            rate 1
+ │   ├─ area "time-stop"     rate 0      (knives hang in the air)
+ │   └─ entity "speedster"   rate 1      (speed comes from short actions, not clock rate)
+ └─ realm "training-room"    rate 365    (a year inside per day outside)
+```
+
+- Durations are given in local time. The timeline converts to universal ticks
+  using the product of rates up the chain.
+- Changing a clock's rate, or moving something to a different parent clock,
+  reschedules that clock's pending wake-ups. A rate of zero suspends them.
+- Realms have a clock. Areas may have one. Entities and processes inherit the
+  clock of where they are unless given their own.
+
+This is how scenes S3 and S10 work, and how slow-motion fields, time dilation
+and hyperbolic training rooms can be built by mods.
+
+### 5.3 Advancing
+
+```rust
+pub enum Advance {
+    NeedInput(DecisionRequest),   // the controlled entity must choose
+    Reached(Tick),                // the requested limit was reached
+}
+
+impl Sim {
+    pub fn submit(&mut self, cmd: Command) -> Result<(), CommandError>;
+    pub fn advance(&mut self, limit: AdvanceLimit) -> Advance;
+    pub fn drain_events(&mut self) -> Vec<SimEvent>;
+    pub fn view(&self) -> SimView<'_>;
+    pub fn state_hash(&self) -> StateHash;
+}
+```
+
+`advance` pops timeline events in order and runs them until the controlled
+entity has a decision to make (its action finished, or a reaction window
+opened) or the limit is reached. Between any two events is a **safe point**,
+where loading, unloading and saving are allowed.
+
+## 6. State
+
+| Owner | State |
+|-------|-------|
+| `clash-world` | The **cosmos**: realms, grids of cells, fields, areas, sites, portals, subgrids, bodies in flight, tract and region records, tickets. See document 02. |
+| `clash-sim` | **Entities** and their components (creatures, items, bodies and wounds, inventories, minds), the cold-simulation records (agents, factions, populations), EOC variables, RNG streams. |
+| `clash-time` | Timeline, clocks, process table. |
+| `clash-data` | Immutable **definitions** loaded from mods, addressed by dense numeric ids. |
+
+Entities are stored in a purpose-built component store (sparse sets keyed by
+generational `EntityId`) rather than a third-party ECS. The reasons are
+deterministic iteration and serialisation order, uniform reflective access for
+the expression language, and a stable API for agents to build on. Document 06
+specifies it.
+
+The world does not store entities. It stores an index from cells to opaque
+occupant ids, kept consistent by the single relocation function (R3).
+
+## 7. Data and mods
+
+Full specification: document 04. The conventions below are fixed now because
+the world model's definitions depend on them.
+
+- A mod is a directory `mods/<mod_id>/` with `mod.json` (id, name, version,
+  dependencies) and any number of `*.json` files under `data/`.
+- Each data file is a JSON array of objects. Each object has `"type"` and
+  `"id"`. Keys are `snake_case`. A key named `"//"` is a comment and ignored.
+- Ids are namespaced: `mod_id:name`. Inside a mod, a bare `name` refers to
+  that mod's own namespace when defining, and resolves own namespace first,
+  then `core`, when referencing.
+- `"copy_from"` inherits from another definition of the same type. Lists and
+  sets support `"extend"` and `"delete"`. A later mod may replace a definition
+  with `"override": true`.
+- Physical quantities are numbers in SI units, or strings with a unit suffix
+  from a fixed list (`"250 ms"`, `"3 s"`, `"2 h"`, `"70 kPa"`, `"1.5 MJ"`,
+  `"80 kg"`). Durations in data are always local time.
+- Unknown keys are errors with a "did you mean" suggestion. Every error
+  carries file, line, column and JSON path.
+- Definitions receive dense numeric ids at load, assigned in sorted order of
+  qualified id so that the same mod set always produces the same ids.
+- JSON Schemas are generated from the Rust definition types so editors can
+  autocomplete and validate mod files.
+- Saves refer to definitions by string id through a per-save id table, never
+  by runtime numeric id. Removing or renaming a definition is handled by
+  migration entries and placeholder definitions, not by corrupting the save.
+- Mods can be reloaded while the game runs.
+
+## 8. Events and EOC
+
+Full specification: document 05.
+
+- Every state change of interest produces a typed **event** with a payload
+  (who, what, where, when, cause).
+- An **EOC** (effect-on-condition) is a JSON definition: a trigger (an event
+  type, a recurrence, or explicit activation), a condition, and a list of
+  effects. Conditions and numeric arguments are written in the expression
+  language and compiled once at load.
+- Expressions and effects address named **subjects** bound by the trigger
+  (`self`, `target`, `source`, `location`, …) and **variables** at scopes:
+  entity, cell, area, site, tract, region, realm, global, and local context.
+- Effects are engine-provided verbs. The engine's job is to make the verb list
+  broad and orthogonal enough that the base game's own rules of combat, powers
+  and world reactions are written with them.
+- The reserved script hook is a second provider of conditions and effects
+  behind the same interface. Nothing in the engine may require it.
+
+Each subsystem document ends with a **modding surface** section listing the
+definitions, events, effects and queries it exposes. A subsystem feature that
+cannot be reached from data is unfinished.
+
+## 9. Simulation level of detail
+
+| Level | Space | Time | Entities | World |
+|-------|-------|------|----------|-------|
+| **Hot** | Loaded cells | Exact timeline events | Individually scheduled, full AI | Full physics |
+| **Warm** | Loaded cells | Exact timeline events for physics | Exist, AI throttled | Full physics |
+| **Cold** | Tract and region records only | Coarse steps | Important characters as abstract agents; everyone else as statistics | Devastation values, deferred edits |
+
+There is no fixed "reality bubble". Tracts are loaded because something asked
+for them through an **interest ticket**: the player, an important fight, a
+body in flight, a building that has not finished collapsing. Document 02
+specifies tickets. Document 09 specifies the cold simulation and how
+characters are promoted to and demoted from individual simulation.
+
+## 10. Presentation boundary
+
+Full specification: document 12.
+
+- The scene layer consumes `SimEvent`s, which carry simulation timestamps,
+  and plays them back over real time. Slow motion, zoom, screen shake and
+  glyphs sliding between cells are presentation choices made from event data.
+- A **cutscene** is a data-defined choreography selected by matching event
+  patterns ("a clash between two named characters with energy above X"). It
+  may restage how already-decided events are shown. Sequences that need
+  simulated coordination, such as a paired takedown, are **paired actions** in
+  the simulation (document 07), and the cutscene presents them.
+- Frontends receive a grid of glyph cells with optional sub-cell offsets and
+  effects. The terminal frontend ignores what it cannot draw.
+- The simulation runs headless. Tools and tests use it without any frontend.
+
+## 11. Saving
+
+- A save contains: the mod list with versions and a content fingerprint, the
+  id table, the cosmos (per-realm, per-tract), entities, timeline, clocks,
+  processes, variables and RNG streams.
+- Saving happens at safe points and is atomic. World data is stored per tract
+  so the cost of a save is proportional to what changed.
+- The format is versioned. Each version bump ships a migration.
+
+## 12. Testing and performance gates
+
+| Kind | Purpose |
+|------|---------|
+| Unit and property tests | Local correctness; coordinate maths, storage and codecs are property-tested. |
+| Golden-hash scenarios | Scripted situations run headless; the final state hash must match. Catches accidental behaviour change and nondeterminism. |
+| Save-transparency tests | R7, applied to every scenario at several split points. |
+| Double-run tests | Each scenario runs twice in one process and once with a different thread count; hashes must agree. |
+| Benchmarks with budgets | Each subsystem document states budgets. Benchmarks fail CI when a budget is exceeded by a set margin. |
+
+## 13. Dependencies
+
+Provisional choices. Adding a dependency requires an entry in
+[decisions.md](decisions.md).
+
+| Need | Crate |
+|------|-------|
+| Serialisation | `serde`, `serde_json` |
+| Deterministic maths | `libm` |
+| Small collections, flags | `smallvec`, `bitflags`, `indexmap`, `rustc-hash` |
+| Errors | `thiserror` |
+| Compression | `lz4_flex` (pure Rust) |
+| Save storage | `redb` behind a `TractStore` trait |
+| Parallel generation | `rayon` |
+| Tests and benches | `proptest`, `criterion` |
+| Terminal | `crossterm` |
+| Window | `winit`, `wgpu` (decided in document 12) |
