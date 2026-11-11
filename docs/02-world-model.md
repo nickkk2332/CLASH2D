@@ -193,6 +193,7 @@ A realm has no hard-coded "kind". What a realm is follows from its properties.
 |----------|---------|
 | `size_regions` | Horizontal extent. The example is about 1050 km × 525 km. |
 | `sea_level` | Optional. The storey up to which ocean tracts are filled with still liquid (11 §4.3). |
+| `calendar` | Optional. The length of the day and year and the names of their parts (09 §14.2). |
 | `wrap` | Axes that wrap around. A planet wraps `x`. A torus wraps both. |
 | `z_range` | Lowest and highest storey. Storage is sparse, so a tall range costs nothing. |
 | `generator` | Which generator surveys regions and realises tracts (section 9). |
@@ -698,6 +699,10 @@ pub struct Site {
     pub tags: TagSet,
 }
 ```
+
+The simulation attaches to a site what the cold layer needs: its people,
+its stocks, its jobs, and its **local knowledge**, which is what the people
+there know (09 §12, §13). The world stores the site and maps tracts to it.
 
 A site gives a place identity that survives being unloaded: a bank, a
 headquarters, a lair. The cold simulation (document 09) attaches owners,

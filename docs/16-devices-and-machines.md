@@ -520,6 +520,7 @@ pub struct Job {
     pub params: VarMap,
     pub supplied: Vec<EntityId>,       // inputs already delivered
     pub done: Real,                    // work done so far
+    pub claims: Vec<EntityId>,         // who has taken it on (09 §7.1)
     pub state: JobState,               // Planned | Supplied | Under way | Blocked(reason)
     pub priority: u8,
     pub cause: Cause,

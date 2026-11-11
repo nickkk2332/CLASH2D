@@ -190,6 +190,8 @@ properties.
 | `element` | A floor, block or fixture of a cell (16 §3.5) |
 | `area`, `site`, `tract`, `region`, `realm`, `subgrid` | As in 02 |
 | `network`, `job` | As in 16 |
+| `ability` | An ability instance (08 §3.2) |
+| `group`, `incident` | As in 15 and 09 |
 | `action` | A running action (03 §6) |
 | `window` | An open window (03 §7) |
 | `global` | The whole simulation |
