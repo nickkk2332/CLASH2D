@@ -37,7 +37,10 @@ fn defs() -> Arc<WorldDefs> {
             { "type": "material", "id": "adamant", "density": 1000, "toughness": 1.0e5,
               "span": 4 },
             { "type": "block", "id": "prop", "material": "adamant",
-              "height": 3.0, "fill": 0.01, "flags": ["load_bearing"] }
+              "height": 3.0, "fill": 0.01, "flags": ["load_bearing"] },
+            { "type": "material", "id": "brine", "density": 1000, "toughness": 1.0e3 },
+            { "type": "block", "id": "pool", "material": "brine",
+              "height": 3.0, "fill": 1.0, "flags": ["liquid"] }
         ]"#,
         "the materials of the collapse tests",
     );
@@ -765,6 +768,39 @@ fn a_mass_keeps_falling_when_what_it_was_to_land_on_goes() {
     assert_eq!(w.fixture_at(14, 10, 1), FixtureState::NONE);
     assert_eq!(w.defs.rubble_units(w.fixture_at(14, 10, 0)), Some(250));
     assert!(w.cosmos.activity().is_idle());
+}
+
+#[test]
+fn a_still_liquid_is_not_structure() {
+    let defs = defs();
+    let mut w = world_from(Arc::clone(&defs), |builder| {
+        // A tank of liquid two storeys deep, with a wall beside it.
+        let pool = defs.block_state("t:pool", None).unwrap();
+        let wall = defs.block_state("core:wall", None).unwrap();
+        for z in 0..2 {
+            for y in 20..=22 {
+                for x in 20..=22 {
+                    builder.set_block(at(x, y, z), pool);
+                }
+            }
+        }
+        builder.set_block(at(19, 21, 0), wall);
+    });
+    let pool = w.block("t:pool");
+    // The wall goes. The liquid beside it stands on nothing that bears,
+    // and reaches nowhere: as structure it would fall. It is not looked
+    // at.
+    let beside = w.loc(19, 21, 0);
+    w.ctx()
+        .edit(someone())
+        .set_block(beside, BlockState::NONE)
+        .unwrap();
+    let found = w.cosmos.assess_stability(w.grid, &[at(19, 21, 0)]).unwrap();
+    assert!(found.is_stable());
+    assert_eq!(found.elements(), 0);
+    w.run_out();
+    assert_eq!(w.count_blocks(at(20, 20, 0), at(22, 22, 1), pool), 18);
+    assert_eq!(started(&w), 0);
 }
 
 #[test]

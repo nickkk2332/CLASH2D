@@ -211,9 +211,11 @@ impl<'a> Probe<'a> {
                     if !held.floor.is_none() {
                         bits |= FLOOR;
                     }
-                    if !held.block.is_none() {
+                    let flags = self.defs.block_info(held.block).flags;
+                    // A still liquid is not structure: it neither falls
+                    // nor holds anything up.
+                    if !held.block.is_none() && !flags.has(EngineFlag::Liquid) {
                         bits |= BLOCK;
-                        let flags = self.defs.block_info(held.block).flags;
                         // Fill outside the stored cells is solid ground.
                         let implicit = column.chunk(cell.z >> CHUNK_Z_BITS).is_none();
                         if implicit || flags.has(EngineFlag::LoadBearing) {
@@ -747,7 +749,8 @@ impl Cosmos {
     /// - **Support** (02 §14.1). Storey by storey from the bottom, the
     ///   sources of support are a block or floor standing on a supported
     ///   `load_bearing` block, or on solid fill. Blocks flagged `anchor`
-    ///   and floors laid on them are always supported. Support spreads a
+    ///   and floors laid on them are always supported. A block flagged
+    ///   `liquid` is not structure. Support spreads a
     ///   step at a time between a floor and a block in one cell, between
     ///   floors of the eight cells round a cell and between blocks of
     ///   them. An element takes it only at a distance within its

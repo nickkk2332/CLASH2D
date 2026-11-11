@@ -375,8 +375,8 @@ impl WorldCtx<'_> {
         }
     }
 
-    /// Asks for a check of every floor and every block that is not an
-    /// anchor in the loaded cells of a shape.
+    /// Asks for a check of every floor, and every block that is neither
+    /// an anchor nor a liquid, in the loaded cells of a shape.
     fn check_stability_in(&mut self, grid: GridId, shape: &AreaShape, cause: Cause) {
         let Some(bounds) = shape.bounds() else {
             return;
@@ -419,8 +419,9 @@ impl WorldCtx<'_> {
                             continue;
                         }
                         let held = column.cell(cell);
-                        let anchored = defs.block_info(held.block).flags.has(EngineFlag::Anchor);
-                        if !held.floor.is_none() || (!held.block.is_none() && !anchored) {
+                        let flags = defs.block_info(held.block).flags;
+                        let inert = flags.has(EngineFlag::Anchor) || flags.has(EngineFlag::Liquid);
+                        if !held.floor.is_none() || (!held.block.is_none() && !inert) {
                             found.push(Location::new(grid, cell));
                         }
                     }
