@@ -224,7 +224,7 @@ Done when
 
 Build
 - A reference mod with at least one working ability per table of 08 §8,
-  and the four worked examples of 08 §9 exactly as written.
+  and the worked examples of 08 §9 exactly as written.
 - Data for the abilities screen; `intent` on every grant.
 
 Done when
@@ -278,3 +278,5 @@ small package of its own.
 |----------|---------|------|-----------|
 | Field reactions in reference abilities | A10 | 02 §16; 08 §8 | The reference elemental abilities rely on field reactions (world-model package W16) for what fire, water and lightning do to each other, and define none of it themselves. |
 | Elemental reference abilities | A10 | 08 §8.4 | The reference mod includes a freezing power that lays a sheet a person can walk on over water, a quake, a wave and a gust, each built only from the mechanisms the catalogue names. |
+| Costs from something bound | A3, A7 | 08 §5.2, §7.3 | A binding made with a name is reachable as `ability.bound(name)`. An action whose cost is drawn from a bound companion spends the companion's pool, and is unavailable with a reason when the companion is gone or short. |
+| Planned movement and imposed spaces | A10 | 08 §9.5, §9.6 | Test script `as_planned`: a route of twenty-four steps is carried out in one second and cannot be changed once begun; an unsound route stops the user's clock for a second, during which they notice no window. Test script `the_court`: an imposed space replaces what was there, hits everyone inside with the pool it names and nobody without it, loses a contest to a stronger one, and when it ends the place is as it was and its owner's ability is suppressed. |

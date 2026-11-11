@@ -452,8 +452,15 @@ This is how decision D-037 reaches the player: the same action bound twice,
 quick and precise.
 
 Each parameter type has a **picker**: a cell, an entity, a direction, a
-body part, an item, a number, an entry from a query. Pickers are screens and
-can be restyled or replaced.
+body part, an item, a number, an entry from a query, a route. Pickers are
+screens and can be restyled or replaced.
+
+The **route** picker builds a list of cells one step at a time, drawing the
+path as it grows and numbering the steps. After each step it evaluates the
+parameter's `check` (03 §6.3) and shows what it says beside that step: too
+far, too sharp, blocked. An unsound step is marked, and may still be kept.
+Steps can be taken back. A list of any other type is picked one entry at a
+time in the same way.
 
 ### 9.4 Mouse
 

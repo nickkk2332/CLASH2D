@@ -387,6 +387,18 @@ the engine side of decision D-037.
 Defaults are expressions and may call functions (05 §12), so the choice of
 target or body part can be as clever as content wants.
 
+A parameter may be a **list** of another type, with a least and a greatest
+length. A list of cells is a route:
+
+```json
+"route": { "type": "list", "of": "cell", "max": 24, "check": "route_fault(self, $route)" }
+```
+
+`check` is an expression that gives a reason when the value is not sound,
+or nothing when it is. It is advice: pickers show it as the value is built
+(12 §9.3). Whether an unsound value is refused is for `requires`, and what
+happens to someone who goes ahead anyway is for the action's own effects.
+
 ### 6.4 Phases
 
 ```json

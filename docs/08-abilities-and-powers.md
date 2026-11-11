@@ -211,6 +211,15 @@ A cost names a pool (06 §4.2), a store (16 §5), or items, and an amount.
 
   Whatever is missing is taken from the other pool at the ratio. Pushing
   past one's limits by burning oneself is a field in a data file.
+- A cost may be drawn `from` something bound to the ability (section 7.3)
+  in place of the owner: a companion, a familiar, a mount.
+
+```json
+"cost": { "resolve": { "amount": 30, "from": "ability.bound('companion')" } }
+```
+
+  If that thing is gone, or has not enough, the action is unavailable and
+  says so, unless the cost also allows overdraw from the owner.
 
 ### 5.3 Concentration and gesture
 
@@ -346,6 +355,10 @@ the ability's definition chooses. On ending:
 
 `dispel { where }` ends bindings by ability tag, by owner or by place.
 
+A binding may be named when it is made (`"as": "companion"`).
+`ability.bound('companion')` is then the thing bound: the summoned
+creature, the area, the conjured element.
+
 ### 7.4 Snapshots
 
 ```
@@ -479,6 +492,7 @@ exist. Section references are where the mechanism is specified.
 | Speed | A personal clock rate (03 §3.5); or tempo |
 | A dash through things | `sweep` (06 §11) |
 | Great leaps | `leap` |
+| Movement planned ahead and then carried out | A committed action with a route (section 9.5) |
 | Wall-walking, burrowing, swimming | Movement modes over other surfaces |
 | Passing through matter | A movement mode over `solid`; or another plane (02 §8.2) |
 | Teleporting | `teleport`. Where to is a location the character knows (15 §7). |
@@ -570,6 +584,7 @@ exist. Section references are where the mechanism is specified.
 | Conjured weapons and armour | Items created bound; armour as worn layers (06 §9.2) |
 | Animating objects | `create_mind` in an item or device; a movement mode |
 | Wards | An area with rules on entering; a rule on `interaction_starting` (16 §3.4) |
+| A space imposed on the world, with laws of its own | Section 9.6 |
 | Curses and blessings | Bound traits; bound attached rules |
 | Enchanting | Installing a module (16 §11); adding traits or abilities to an item |
 
@@ -686,6 +701,98 @@ Each point of `aegis` stops a kilojoule. A hit larger than what is left
 comes through at the difference. There is no rule that a barrier holds
 until it breaks: it holds what it has the energy to hold.
 
+### 9.5 A second planned in advance
+
+```json
+{ "type": "action", "id": "planned_second", "name": "Planned second",
+  "uses": { "legs": "all", "focus": 1 },
+  "params": { "route": { "type": "list", "of": "cell", "max": 24,
+                          "check": "route_fault(self, $route)" } },
+  "phases": [
+    { "id": "commit", "time": 0,
+      "do": [ { "set": { "$i": 0 } },
+              { "if": "route_fault(self, $route) != null",
+                "then": [ { "set_time_rate": { "who": "self", "rate": 0 } },
+                          { "after": "1 s", "owner": "self.loc.realm",
+                            "do": [ { "set_time_rate": { "who": "self", "rate": 1 } } ] },
+                          { "cancel_action": {} } ] } ] },
+    { "id": "run", "time": "1 s", "fixed": true,
+      "tick": { "every": "41.667 ms",
+                "do": [ { "sweep": { "who": "self", "to": "$route[$i]" } },
+                        { "set": { "$i": "$i + 1" } } ] } } ],
+  "on_finish":    [ { "add_trait": { "to": "self", "trait": "momentum" } } ],
+  "on_interrupt": [ { "remove_trait": { "from": "self", "trait": "momentum" } } ] }
+```
+
+The player draws up to twenty-four steps with the route picker, which
+shows as each is added whether it can be done. Then the action runs them,
+one every twenty-fourth of a second. No phase allows `cancel`, so once
+begun it cannot be changed: the user goes where they said they would, and
+an opponent who reads the route can be waiting.
+
+`route_fault` is a function of the mod's own (05 §12). Here it would
+reject a step longer than the user's `momentum` allows, or a turn too
+sharp for the speed. A plan that breaks its rule stops the user's own
+clock for a second. Someone whose clock is stopped notices nothing and
+answers nothing (03 §7.2), so nothing more needs to be written for them to
+be helpless.
+
+Each step is a `sweep` (06 §11), so the user arrives with their real mass
+and speed and strikes whatever is in the way. `momentum` is a stacking
+trait that lets each plan go further than the last, and an interruption
+takes it away.
+
+The same rule can be laid on someone else: a trait whose rule on the hook
+`ActionStarting` (03 §13) lets an action begin only if its owner wins a
+contest, and stops their clock if not.
+
+### 9.6 An imposed space
+
+```json
+[
+  { "type": "ability", "id": "walled_court", "name": "Walled Court",
+    "seat": "mind", "tags": ["imposed_space"],
+    "params": { "radius": "8 + 2 * ability.rank" },
+    "modes": [ { "id": "open", "trait": "holding_court",
+                 "upkeep": { "resolve": 6.0 },
+                 "on_start": [
+                   { "create_area": { "kind": "walled_court", "at": "self.loc",
+                                      "shape": { "radius": "ability.radius" },
+                                      "journal": "5 min", "vars": { "owner": "self" },
+                                      "bound": true, "as": "court" } },
+                   { "apply_map": { "map": "court_interior", "at": "self.loc", "mode": "replace" } } ],
+                 "on_end": [
+                   { "suppress_abilities": { "who": "self", "tags": ["imposed_space"], "for": "30 s" } } ] } ] },
+
+  { "type": "area_kind", "id": "walled_court", "tags": ["imposed_space"],
+    "ambience": "court_light",
+    "rules": [
+      { "every": "1 s",
+        "do": [ { "for_each": { "entities": { "in_area": "self",
+                                              "where": "it != self.var.owner and it.pool.resolve > 0" } },
+                  "as": "x",
+                  "do": [ { "hit": { "target": "$x", "kind": "cut", "energy": 400, "intensity": "2 MPa" } } ] } ] },
+      { "on": "binding_ending",
+        "do": [ { "rewind_area": { "area": "self", "by": "5 min" } } ] } ] }
+]
+```
+
+| Part | Built from |
+|------|-----------|
+| The space | An area bound to the ability, with a journal for as long as it may last |
+| What it is like inside | A map applied over it: floor, furniture, and the shell that closes it. An ambience (12 §6.4). |
+| What it does to those inside | Rules attached to the area kind (05 §9.3): on entering, on a schedule, or on what those inside do. A rule may deliver a `hit` directly (06 §7.1), which is not aimed and which no defence answers. It may leave out whoever it likes, by any condition: here, anyone with no `resolve` at all. |
+| Getting out | The shell is elements, as strong as the map makes them, from either side |
+| Two meeting | A rule run when one is made looks for others it overlaps and settles it by a `contest` (07 §4.1) between the two abilities. The loser's binding is ended with `dispel`, or both stand, as content chooses. |
+| When it ends | `rewind_area` puts back the cells that were there before, without moving anyone. Suppressing the ability for a time afterwards is the cost of having used it. |
+| A small one against a large one | A second ability whose anchored area suppresses the first's tag within arm's reach (section 6.2) |
+
+When the inside should be larger than the outside, or have its own
+gravity or clock, make it somewhere else: `create_realm` from an authored
+map (10 §9.3), transfer everyone inside the area to it by a fixed offset
+(02 §19), leave the shell standing, and at the end transfer them back by
+the same offset and `destroy_realm`.
+
 ## 10. Power and its price
 
 The engine imposes costs that content does not have to write, and offers
@@ -746,7 +853,8 @@ items and modules; `while` and `bound` on traits; `cost`, `cooldown`,
 or owner), `modes`.
 
 **Properties**: on abilities, `rank`, each parameter by name, `owner`,
-`state`, `mode(id).on`, `cooldown(action)`, `var.*`; on entities,
+`state`, `mode(id).on`, `cooldown(action)`, `var.*`, `bound(name)`; on
+entities,
 `has_ability(id)`, `ability(id)`, `abilities_with(tag)`.
 
 **Functions**: `magnitude`.
