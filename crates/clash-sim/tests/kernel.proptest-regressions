@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc df40ec3b633829f1fee345ae990b0a0c26b267f9a5171b55c7de6e3997415085 # shrinks to ops = [Wall { x: 0, y: 64, up: false }]
+cc 70d3b2e9fbbed22f31bd37c3ecff91249f96e2387476bbc922eee247b76c2a50 # shrinks to ops = [Create { x: 0, y: 0, item: false }, Create { x: 0, y: 0, item: false }, Move { who: 2239142899676157314, x: 29, y: 42 }, Create { x: 0, y: 0, item: false }, Create { x: 0, y: 0, item: false }, Remove { who: 2805185008423388472 }, Wall { x: 29, y: 42, up: true }]

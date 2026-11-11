@@ -123,9 +123,15 @@ dependencies = [
 name = "clash-sim"
 version = "0.1.0"
 dependencies = [
+ "clash-core",
+ "clash-data",
  "clash-expr",
  "clash-gen",
+ "clash-time",
  "clash-world",
+ "proptest",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
