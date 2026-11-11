@@ -1,7 +1,8 @@
 # CLASH2D
 
-A turn-based ASCII sandbox engine for superpowered and martial-arts combat in
-a destructible, living open world. All content and rules are JSON mods.
+An engine kit: a turn-based ASCII immersive sim and superpower sandbox. Every
+world, creature, power, rule and screen is a JSON mod. The engine provides
+tools; creators provide the results.
 
 **Status: design.** There is no engine code yet. The documents below are the
 specification that implementation work follows.

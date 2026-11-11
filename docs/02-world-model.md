@@ -2,7 +2,8 @@
 
 Status: design complete, ready for implementation.
 Implementation plan: [plans/world-model.md](plans/world-model.md).
-Serves scenes S1, S2, S3, S7, S8, S9, S10, S11, S12 of [00-vision.md](00-vision.md).
+Serves scenes S1, S2, S3, S7, S8, S9, S10, S11, S12, and the world's share of
+S13, S18 and S19, of [00-vision.md](00-vision.md).
 
 ## 1. Scope
 
@@ -12,7 +13,11 @@ generator interface of `clash-gen`.
 
 It does not specify entity internals (06), actions and reactions (03), the EOC
 language (05), generation content (10), the cold simulation's logic (09),
-vehicles (11) or rendering (12). Where those systems need something from the
+vehicles (11), rendering (12), perception and belief (15) or devices (16).
+
+The world model is genre-neutral (01 R10). Examples in this document lean on
+cities and explosions because they stress the design hardest; nothing here
+assumes a setting, an era or a power level. Where those systems need something from the
 world, the interface is defined here.
 
 Code blocks are sketches. Type and field names are normative. Signatures may
@@ -392,6 +397,42 @@ removed and its material's `rubble` fixture is left behind.
 
 Mods add free-form `tags`, which are queryable but have no engine meaning.
 
+### 5.5 Interactive elements and devices
+
+Most fixtures are inert props. Some can be used: a locker, a lever, a
+terminal, a generator, a lamp, an altar. They stay fixtures in the grid, so a
+street of ten thousand doors and lockers costs no more than ten thousand
+desks, and they gain behaviour only when it is needed.
+
+```json
+{ "type": "fixture", "id": "locker", "material": "steel",
+  "height": 2.0, "fill": 0.1, "flags": ["opaque"],
+  "states": { "closed": {}, "open": { "remove_flags": ["opaque"] } },
+  "interactions": ["open", "close", "hide_inside", "search"],
+  "device": "locker_device",
+  "glyph": { "ch": "]", "fg": "material" } }
+```
+
+- `interactions` lists the verbs the element offers to whatever can reach
+  it. The world stores and reports them. What a verb does is defined by
+  rules (documents 05 and 16).
+- `device` names an entity definition. When the element needs more state
+  than its 16 bits (something is put inside, someone hides in it, it is
+  linked to another device, a rule asks), the simulation creates a **device
+  entity** in the element's cell and binds the two. The device holds
+  contents, links, variables and timers. When it is back in its default
+  state it may be dropped again.
+- The element remains the physical object. Destroying it emits
+  `ElementDestroyed`, and the simulation deals with the device: spill the
+  contents, expose whoever was hiding.
+- Blocks and floors can carry `interactions` and `device` in the same way: a
+  door, a vault wall, a pressure plate.
+
+Links between devices (power, signal, mechanical) and the rules of
+interaction are specified in document 16. The world's obligations are these
+definition fields, cell variables, element events, and the `Device` occupant
+kind.
+
 ## 6. Chunks and grids
 
 ### 6.1 Paletted storage
@@ -537,7 +578,10 @@ pub struct Cause {
 Processes pass the instigator along. When a hero throws a villain through a
 bank, the wall's destruction has the villain as actor and the hero as
 instigator. Decals store their cause. This is the raw material for collateral
-damage tracking, reputation and crime solving, which later documents build.
+damage tracking, reputation and investigation, which later documents build.
+
+Causes are ground truth. What witnesses believe happened is a separate
+matter (01 R11, document 15), and the two can differ.
 
 ### 7.4 World events
 
@@ -561,7 +605,7 @@ The world does not own entities. It owns an index from cells to occupants.
 ```rust
 pub struct Occupant {
     pub id: EntityId,
-    pub kind: OccupantKind,      // Creature | Item | Other
+    pub kind: OccupantKind,      // Creature | Item | Device | Other
     pub plane: PlaneMask,        // u8 bitmask; default bit 0
     pub mass: Real,              // kg, for collisions with bodies
     pub flags: OccupantFlags,    // BLOCKS_MOVE, BLOCKS_SIGHT, COLLIDES
@@ -571,6 +615,11 @@ pub struct Occupant {
 Each chunk's `OccupantIndex` maps `CellIdx` to a small list. Large occupants
 register a box footprint and appear in every cell of it. Anything larger than
 a few cells per side should be a subgrid.
+
+Only entities that are in the world appear in the index. An entity inside
+another (01 §6) does not: a rider on a mount, a passenger, an item in a pack,
+a person in a locker. For the world's purposes it is wherever its outermost
+container is.
 
 Queries: at a cell, in a box, within a radius, along a ray, each with an
 optional plane mask and kind filter. Results are returned in a defined order
@@ -1410,6 +1459,10 @@ refers to it. The interior stays hot and on the shared timeline throughout.
 On arrival the subgrid is transferred into the destination realm and the
 carrier is destroyed. This is the second half of scene S9.
 
+When travelers meet (an interception, a boarding action, a battle between
+ships), their subgrids and members are transferred into one shared realm
+created for the encounter, so the meeting plays out at cell scale.
+
 ### 20.3 Charts
 
 A chart is a data-defined map above cell scale: a star system, a galaxy, a
@@ -1496,6 +1549,7 @@ update a hierarchical path graph incrementally.
 
 **Definition types**: `material`, `damage_type`, `atmosphere`, `floor`,
 `block`, `fixture`, `field`, `realm`, `chart`, `site`, `tract` (document 10).
+Elements may declare `interactions` and a `device` (section 5.5).
 
 **Events** an EOC can trigger on: every world event in section 7.4.
 
@@ -1582,5 +1636,10 @@ settle it.
    how far it is followed. (12)
 6. **Rewinding time.** Determinism makes restoring a snapshot of an area
    possible in principle. Not designed. (03)
-7. **Default planet size** and whether the first content mod uses a full-size
-   world or a small one. (10)
+7. **Scale of battle.** Scene S19 puts hundreds of active characters in a few
+   loaded tracts. Occupancy queries and tickets are designed for that; the
+   entity and AI budgets that make it affordable are set elsewhere. (06, 09)
+
+Settled since first draft: there is no default planet. World size is a
+property of each realm definition (section 4.1), chosen by whoever writes
+the world. Reference mods use small realms.

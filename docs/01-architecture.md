@@ -52,6 +52,8 @@ These apply to all code in the simulation (`clash-core`, `clash-time`,
 | R7 | **Save/load is invisible.** Running N steps, saving, loading and running M more gives the same state hash as running N+M steps. |
 | R8 | **SI units.** Metres, kilograms, seconds, joules, pascals, kelvin. No bespoke units in engine code or data. |
 | R9 | **Constants are named.** Dimensions such as chunk size are constants in one module and never appear as literals. |
+| R10 | **Mechanism, not meaning.** The engine has no concept of magic, race, class, alignment, era, tech level, difficulty or balance. It offers general mechanisms (see 00 §2) and never scales or softens an outcome. If a feature only makes sense in one genre, it belongs in a mod. |
+| R11 | **Characters act on belief, not truth.** World state and the event stream are ground truth. A character's decisions may read only what that character has perceived or been told. Truth is for physics, saves, the inspector and scoring. |
 
 ## 3. Workspace layout
 
@@ -141,6 +143,11 @@ mechanical and enforced by lints and tests.
 - An entity's **action** is a sequence of phases (typically windup, impact,
   recovery) with durations. Phase boundaries are timeline events. The action
   system is specified in document 03.
+- A **reaction window** is a chance to respond to something in progress.
+  When one opens, and whether the player is asked or a default is taken, is
+  decided by data-defined rules that mods and players can change.
+- Every action can resolve from defaults (the character picks technique and
+  target) and can also be specified in full by the player.
 - A **process** is scheduled activity that belongs to the world rather than to
   an entity: a pressure wave expanding, a tower collapsing, a body in flight,
   a fire spreading. Processes are plain serialisable state plus a `wake`
@@ -173,7 +180,7 @@ and hyperbolic training rooms can be built by mods.
 
 ```rust
 pub enum Advance {
-    NeedInput(DecisionRequest),   // the controlled entity must choose
+    NeedInput(DecisionRequest),   // a controlled entity must choose
     Reached(Tick),                // the requested limit was reached
 }
 
@@ -186,9 +193,11 @@ impl Sim {
 }
 ```
 
-`advance` pops timeline events in order and runs them until the controlled
-entity has a decision to make (its action finished, or a reaction window
-opened) or the limit is reached. Between any two events is a **safe point**,
+There may be one controlled entity, several (a party), or none (a headless
+run). `advance` pops timeline events in order and runs them until a
+controlled entity has a decision to make (its action finished, or a rule
+asked for a reaction) or the limit is reached. The decision request names
+which entity it is for. Between any two events is a **safe point**,
 where loading, unloading and saving are allowed.
 
 ## 6. State
@@ -196,7 +205,7 @@ where loading, unloading and saving are allowed.
 | Owner | State |
 |-------|-------|
 | `clash-world` | The **cosmos**: realms, grids of cells, fields, areas, sites, portals, subgrids, bodies in flight, tract and region records, tickets. See document 02. |
-| `clash-sim` | **Entities** and their components (creatures, items, bodies and wounds, inventories, minds), the cold-simulation records (agents, factions, populations), EOC variables, RNG streams. |
+| `clash-sim` | **Entities** and their components (creatures, items, devices, bodies and wounds, inventories, minds, beliefs, relations), the cold-simulation records (agents, groups, populations), EOC variables, RNG streams. |
 | `clash-time` | Timeline, clocks, process table. |
 | `clash-data` | Immutable **definitions** loaded from mods, addressed by dense numeric ids. |
 
@@ -208,6 +217,21 @@ specifies it.
 
 The world does not store entities. It stores an index from cells to opaque
 occupant ids, kept consistent by the single relocation function (R3).
+
+Three structural commitments for the entity model, fixed here because other
+documents rely on them:
+
+- **Containment.** An entity is either in the world at a location or inside
+  another entity: an item in a pack, a rider on a mount, a passenger in a
+  seat, a person in a locker, a soul in a jar. Only the outermost entity is
+  in the world's index.
+- **Mind and body are separate.** What decides (a mind, a player, a command
+  from an owner) is attached to what acts (a body) by a relation that
+  effects can change. Possession, puppets, raised corpses, body swaps and
+  remote control are all rearrangements of that relation.
+- **Instances are editable.** A creature's body, a device's wiring and an
+  item's properties start from definitions and are then live data. Effects
+  can add, remove, reshape and re-material parts at runtime.
 
 ## 7. Data and mods
 
@@ -252,8 +276,10 @@ Full specification: document 05.
   (`self`, `target`, `source`, `location`, …) and **variables** at scopes:
   entity, cell, area, site, tract, region, realm, global, and local context.
 - Effects are engine-provided verbs. The engine's job is to make the verb list
-  broad and orthogonal enough that the base game's own rules of combat, powers
-  and world reactions are written with them.
+  broad and orthogonal enough that the rules of combat, abilities, social
+  behaviour and world reactions in the bundled reference mods are written
+  entirely with them. Every part of the simulation should be reachable as a
+  hook.
 - The reserved script hook is a second provider of conditions and effects
   behind the same interface. Nothing in the engine may require it.
 
@@ -289,6 +315,12 @@ Full specification: document 12.
   the simulation (document 07), and the cutscene presents them.
 - Frontends receive a grid of glyph cells with optional sub-cell offsets and
   effects. The terminal frontend ignores what it cannot draw.
+- **All UI is data.** Screens, menus and HUD elements are definitions built
+  from a glyph toolkit (panels, lists, tables, bars, text, maps, input
+  bindings) whose contents are expressions and whose actions are commands
+  and EOC effects. The engine's own screens, including character creation
+  and the main menu, are built from the same toolkit and ship as a mod, so a
+  total conversion can replace any of them.
 - The simulation runs headless. Tools and tests use it without any frontend.
 
 ## 11. Saving

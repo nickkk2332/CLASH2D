@@ -1,7 +1,8 @@
 # Working in this repository
 
-CLASH2D is a deterministic, data-driven simulation engine in Rust. It is
-built by agents working from written specifications. You have no memory of
+CLASH2D is a deterministic, data-driven simulation engine in Rust: a
+genre-neutral kit for ASCII immersive sims, with all content in JSON mods. It
+is built by agents working from written specifications. You have no memory of
 earlier sessions; the documents are the memory.
 
 ## Before you write anything
@@ -37,6 +38,11 @@ documents disagree silently.
   `BTreeMap`, `Tick`, the RNG streams and `Real`.
 - **No content in the engine.** Never name a specific material, creature or
   power in Rust. Read it from definitions.
+- **Mechanism, not meaning.** No engine concept of magic, race, class, era,
+  tech level, difficulty or balance. Never scale or soften an outcome. If a
+  feature only makes sense in one genre, it belongs in a mod.
+- **Belief, not truth.** Character decisions read only what that character
+  has perceived.
 - **One mutation path.** Cells change only through `WorldEdit`. Occupant
   positions change only through the relocation functions.
 - **Events out, never calls up.** A lower crate never depends on a higher one.

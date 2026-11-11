@@ -217,7 +217,9 @@ Done when
 
 Build
 - Definition types `damage_type`, `material`, `atmosphere`, `floor`, `block`,
-  `fixture`, including states, geometry, resist overrides, flags and tags.
+  `fixture`, including states, geometry, resist overrides, flags and tags,
+  and the `interactions` and `device` fields of 02 §5.5 (stored and
+  reported; the world gives them no behaviour).
 - `ElementState` and the typed wrappers; the state reference parser.
 - Derived per-state tables: flags, volume, mass, capacity, resolved resist
   per damage type.
@@ -283,7 +285,8 @@ Done when
 **Spec** 02 §8 · **Size** M
 
 Build
-- `OccupantIndex`; `place`, `relocate`, `remove`; box footprints.
+- `OccupantIndex`; `place`, `relocate`, `remove`; box footprints; the
+  occupant kinds of 02 §8.1 including `Device`.
 - Queries at cell, box, radius and ray, with plane and kind filters and
   defined result order.
 - Area table with per-tract lookup, enter and exit events, optional clocks.
