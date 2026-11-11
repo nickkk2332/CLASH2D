@@ -69,7 +69,7 @@ Each of these keeps its typed stub and a note where the beta stops.
 | Wave | Work | Status |
 |------|------|--------|
 | B0 | Foundation: F1, F2, F3 | done |
-| B1 | Data v0 and diagnostics (F4, P1); expressions (X1 to X3); world storage (W1 to W5); frames, themes, terminal frontend (U1, U2); binary codec; noise | in progress |
+| B1 | Data v0 and diagnostics (F4, P1); expressions (X1 to X3); world storage (W1 to W5); frames, themes, terminal frontend (U1, U2); binary codec; noise | done |
 | B2 | Edits, occupancy, queries (W6, W7, W18); tracts, tickets, persistence (W8 to W10); data merging, profiles, typed loading, settings (P2 to P4, P6); expression fields (X4); map format and placing (WG1, WG2); toolkit layout and widgets (U6a) | todo |
 | B3 | Kernel (K1 to K4); damage and collapse (W12, W13); bodies and releases (W14, W15); fields (W16); ground and tracts (WG3, WG4); world viewer (W11) | todo |
 | B4 | Rules runtime (K5 to K9); actions and control (T1 to T4); components, attributes, traits (E1 to E3); movement, view model, application: the first walk (E10, U4, U11); toolkit binding and input (U6b, U7) | todo |
@@ -85,6 +85,7 @@ The wave list is a plan, not a promise. It is revised here as work lands.
 
 Newest first. One line per merge: wave, what landed, what is stubbed.
 
+- B1 (part): data loading in `clash-data`: mod discovery, profiles, the span-keeping JSON parser, registries with dense ids, inheritance and the complete merge semantics (F4 beta, P2, P3 beta), diagnostics with codes and carets (P1), typed loading with quantities, references, inline definitions, validation stages and the fingerprint (P4, beta); `clash-tools lint`, `explain`, `show`. Stubbed: schemas, text templates, settings, migration, hot reload. The definition types of the world and the scene are not registered yet, so the repository lint test is ignored until they are.
 - B1 (part): the expression language in `clash-expr`: lexer, parser, printer, unit literals and text templates (X1); the registry, contexts including the mind context, name resolution and type checking (X2); constant folding, bytecode and the stack machine with null semantics and rate-limited warnings (X3, beta). Stubbed: the reader helpers and `exists` are signatures the host answers; no reactive-context check; no benchmark.
 - B1 (part): world storage in `clash-world`: coordinates and topology (W1), paletted storage (W2), cell definitions and `WorldDefs::build` (W3, beta), chunks, columns and grids (W4, beta), cosmos, realms and the read API (W5, beta); the size-literal step of `cargo xtask check`. Stubbed: definitions are not yet fed by the loader; fields and occupants are placeholders; no chunk serialisation.
 - B1 (part): frames, colours, themes, glyphs, styled text, input events, the `Frontend` trait, golden frames and the scene seam (U1, beta); the terminal frontend (U2); the toolkit's layout and every widget with static content (U6a, beta); `mods/ui` with a default theme and a widget gallery (`cargo run -p clash-front-term --example gallery`). Stubbed: bindings and effects (U6b), views, log, slots, popups over a play screen.
