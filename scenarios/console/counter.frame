@@ -1,0 +1,5 @@
+fake host  profile=fake seed=7  t=2s
+c0 = 42
+c1 = 0
+apples = 11
+pears = 0 (locked)

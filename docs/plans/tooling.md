@@ -24,12 +24,12 @@ says which.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| TL1 | Console | M | W11, K10 | todo |
+| TL1 | Console | M | W11, K10 | beta |
 | TL2 | Reasons | M | K2, T3 | todo |
 | TL3 | Traces | M | K10 | todo |
 | TL4 | Inspector | L | U6b, TL3, K4 | todo |
 | TL5 | Profiler and the budgets file | M | K2, W23 | todo |
-| TL6 | Test scripts | M | TL1, U1 | todo |
+| TL6 | Test scripts | M | TL1, U1 | beta |
 | TL7 | Invariant checkers | M | TL6 | todo |
 | TL8 | Replay, divergence, diff, rewind | M | K7, TL6 | todo |
 | TL9 | Mod authoring suite | M | P5, P8, U6b | todo |
@@ -82,6 +82,21 @@ Done when
 - Every registered verb has a console command without further code.
 - A console session saved as a file replays to the same hash.
 - A command from a mod runs its rule with its parameters.
+
+Beta: built ahead of the simulation in `clash_sim::console`, against the
+trait `ConsoleHost`. Built: the language with spans, diagnostics and a
+canonical printer; `CommandSpec` and `CommandTable` with the built-in
+commands of 14 §3.3 as registrations, one command derived from each verb
+of a `clash_expr::Registry`, binding and generated help; `Session`, which
+carries out `help`, `use`, `gen`, `eval`, `assert`, `advance`, `until`,
+`hash`, `save` and `load` through the trait, keeps names and writes a
+transcript that replays; `console::testing::FakeHost`. The first two
+"Done when" items are shown against the fake host. Waits for the
+simulation: an implementation of `ConsoleHost` (every command's effect,
+`Debug` commands and the input log, the profile switch); the game overlay
+and terminal viewer hosts; the `console_command` definition type, which
+becomes a `CommandSpec` with `CommandSource::Rule`; the third "Done when"
+item.
 
 ### TL2 — Reasons
 
@@ -156,6 +171,19 @@ Done when
 - A script that passes straight and fails under save-and-load is reported
   as such, naming the split point.
 - A mod's own scripts run from its directory.
+
+Beta: built ahead of the simulation in `clash_sim::console`. Built: the
+script format with every expectation of 14 §7.1, with line and column in
+errors; `Runner`, which runs a script in the four modes against any
+`ConsoleHost` and reports per mode with line, expected and found;
+`bless`; `run_dir` and the report; `clash-tools scenario run`, which
+checks syntax and exits 3 for want of a host; `scenarios/` with one
+script for the fake host. The first "Done when" item is shown with a fake
+host whose save deliberately forgets its timers. Waits for the
+simulation: registering its host with `clash-tools scenario run` so that
+scripts are run and blessed from the command line; `expect frame` against
+real frames (12 §12); `--paranoid`, which waits for the checkers of TL7;
+running a mod's own scripts from its directory, which needs profiles.
 
 ### TL7 — Invariant checkers
 

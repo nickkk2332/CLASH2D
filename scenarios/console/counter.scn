@@ -1,0 +1,30 @@
+# The console's own smoke test. It uses only what the fake host of
+# clash_sim::console::testing has, and clash-sim's tests run it in all
+# four modes of docs/14-tooling.md section 7.2.
+use profile=fake seed=7
+gen flat size=2
+new apples value=3 as=a
+new pears as=p
+timer @a every=250ms times=8
+advance 1s
+assert "@a.value == 7"
+expect event timer_fired cell=@a value=7 within=250ms
+expect trace timer cell=@a value=4
+
+# A refusal carries its reason.
+lock @p
+add @p 5
+expect reason cell_locked
+
+# An effect in JSON, over several lines.
+do {
+  "note": { "text": "half way" }
+}
+expect event effect verb=note
+
+until "@a.value == 11" max=10s
+as @a assert "self.value == 11 and clock() == 2"
+set @c:0,0,0 42
+assert @sel.value == 42
+expect frame counter.frame
+expect hash 4c577aef920e5aa66f2c92ba8a03aa95

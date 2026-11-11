@@ -487,8 +487,11 @@ Build
   `load`, `hash`. Later packages add their commands.
 - Scenario files (console commands plus an expected hash) under
   `scenarios/world/`, and `clash-tools scenario run`, which runs each
-  scenario straight, twice, with save and load at three split points, and
-  with two thread counts. `--bless` rewrites the expected hash.
+  scenario straight, twice, with save and load at the split points of
+  14 §7.2, and with two thread counts. `--bless` rewrites the expected
+  hash. The format and the runner are built: `clash_sim::console`
+  (tooling packages TL1 and TL6). This package supplies the host they run
+  against.
 
 Done when
 - The test city can be generated and browsed.
