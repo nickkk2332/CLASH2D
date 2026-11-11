@@ -19,7 +19,7 @@ actions that call `hit`.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| E1 | Component store and core components | M | K1, K7 | todo |
+| E1 | Component store and core components | M | K1, K7 | beta |
 | E2 | Attributes, pools, tracks | M | E1, K5 | todo |
 | E3 | Traits | M | E2 | todo |
 | E4 | Bodies | L | E2, T3 | todo |
@@ -98,6 +98,24 @@ Done when
 - Store operations match a simple model (property test); iteration order
   survives save and load (invariant B8).
 - `Physical` equals a from-scratch recomputation after random changes.
+
+Beta: built ahead of the kernel (K1), in `clash_sim::component`, keyed by
+`EntityId` and knowing nothing of the simulation: `ComponentStore<C>`;
+`Components`, every store behind one value, generated with
+`ComponentKind` and `ComponentBundle` from one list, so that a later
+package adds a component type with one line; `Identity`; and `Physical`,
+whose carried mass is derived from a `Containment` trait that the kernel
+implements over its places. Stores, bundles and both components serialise
+through `clash_core::codec` and hash. Stubbed, each waiting for the
+kernel: holding a `Components` in the simulation and writing it through
+the simulation's save path (K7), with definition ids going through the
+save's id table; the calls on entity removal, storage and relocation,
+which the module documentation lists; registering the properties of
+06 §13 that these components back (K4); raising events from what the
+components' functions report. A shape's size is supplied by whoever owns
+it (the body in E4, the item in E8) and is not derived here. No test
+script, since nothing here can be reached from the console until the
+kernel holds it, and no benchmark (Z1).
 
 ### E2 — Attributes, pools, tracks
 

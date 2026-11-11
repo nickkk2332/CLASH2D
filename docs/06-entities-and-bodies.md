@@ -49,24 +49,41 @@ templates and the choices made within them.
 ```rust
 pub struct EntityTable {
     kernel: Vec<Slot<KernelEntity>>,       // indexed by EntityId.index, checked by generation
-    // one ComponentStore<C> per component type
+}
+
+pub struct Components {                    // held beside the entity table
+    pub identity: ComponentStore<Identity>,
+    pub physical: ComponentStore<Physical>,
+    // one ComponentStore<C> for each component type, in a fixed order
 }
 
 pub struct ComponentStore<C> {
     dense: Vec<C>,
-    owners: Vec<EntityIndex>,
-    sparse: Vec<u32>,                      // entity index → position in dense
+    owners: Vec<EntityId>,                 // owners[i] owns dense[i]
+    sparse: Pages<u32>,                    // entity slot → position in dense, in pages
 }
 ```
 
-- Component types are a fixed set defined by the engine. Each is registered
-  with a name, a serialiser, a `StateHash` implementation and its properties
-  (05 §5.3).
-- Iteration is in dense order. Dense order is saved and restored, so it is
-  identical across runs and across saves.
+- Component types are a fixed set defined by the engine. Each has a name, a
+  serialiser, a `StateHash` implementation and its properties (05 §5.3).
+  The set is one list in the engine's source: a line in it gives a type its
+  store, its `ComponentKind`, its place in saves and in the hash, and
+  removal with its entity.
+- A store holds at most one component for an entity slot. It keeps the
+  whole id of each owner and checks it on every lookup, so an id whose slot
+  has since been given to another entity finds nothing. Whoever destroys an
+  entity removes its components from every store, in one call, before the
+  slot is given out again.
+- Iteration is in dense order. A new component goes to the end, a replaced
+  one keeps its position, and a removed one's position is taken by the
+  last. Dense order is saved and restored, so it is identical across runs
+  and across saves, and it is hashed as it is: two stores holding the same
+  components in different orders are different states. The index from slot
+  to position is rebuilt on loading and is neither saved nor hashed.
 - A component's fields are private to the module that owns it. Other code
-  changes them through that module's functions, which emit events. Rules
-  reach them only through properties and verbs.
+  changes them through that module's functions, which report what changed
+  so that events can be raised. There is no separate change log. Rules
+  reach components only through properties and verbs.
 - Mods do not add component types. They add variables (05 §6), attributes,
   traits and rules, which cover the same ground with full tooling support.
 
@@ -88,9 +105,34 @@ pub struct ComponentStore<C> {
 | `Vehicle` | Vehicles | Document 11 |
 | `Senses`, `Beliefs`, `Relations` | Minds | Document 15 |
 
-`Physical` is derived and cached: mass is the body's or item's own mass plus
-everything it holds. It is what the world uses when an entity becomes a body
-in flight (02 §15) or collides with one.
+**Identity.** The definition is named by its type and its id within the
+type, since an entity may be made from a creature, an item or any other
+type of definition. The name and the description are the entity's own and
+are usually absent: a thing with none goes by its definition's. Templates
+are listed in the order they were applied. Tags are the kernel entity's.
+
+**Physical.** It holds what the thing itself measures: its own mass,
+volume, height, footprint and cross-section, supplied by whatever knows
+its make-up (the body, the item). Each is finite and at least zero. From
+these and from containment (01 §6) it derives and caches the mass of
+everything inside the thing:
+
+```
+mass(e)    = own mass(e) + carried(e)
+carried(e) = Σ mass(c), for each c directly inside e, in order of id
+```
+
+`mass` is what the world uses when an entity becomes a body in flight
+(02 §15) or collides with one, and `carried_mass` is the second term. An
+entity with no `Physical` weighs nothing itself and passes on the mass of
+what is inside it.
+
+The cache is brought up to date whenever a thing's own mass changes and
+whenever something enters or leaves a container, for that container and
+every container around it. A sum is always made again from its parts and
+never adjusted by a difference, so that the cache is bit for bit what a
+from-scratch recomputation gives (invariant B3). It is saved and hashed
+with the component. Containment deeper than 64 levels is refused.
 
 ## 4. Attributes, pools and tracks
 
@@ -887,6 +929,12 @@ absorb destroys it outright, section 7.4).
 `exposed`; `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
 `templates`, `name`, `posture`, `velocity`, `color`; on items, `age`.
+
+**Gaps.** Reachable only from Rust for now: everything of section 3. The
+stores, `Identity` and `Physical` are built, and the properties they back
+(`mass`, `carried_mass`, `volume`, `height`, `name`, `templates`) are
+registered when the kernel's subjects are. Whether an entity has a
+component of a given kind can be asked in Rust and is not a property.
 
 ## 14. Invariants
 
