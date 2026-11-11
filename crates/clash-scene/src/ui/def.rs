@@ -1648,10 +1648,11 @@ pub struct UiPartDef {
     /// `if`: the part is shown, and takes space, only while this holds.
     #[serde(default, rename = "if")]
     pub show_if: Option<Prop<bool>>,
-    /// Whether the slot may be missing. Left out, a part aimed at a slot
-    /// that does not exist is a load error.
-    #[serde(default)]
-    pub optional: bool,
+    /// Whether the slot must exist. Left out, true: a part aimed at a
+    /// slot that no screen places is a load error. With `false` such a
+    /// part is simply not shown.
+    #[serde(default = "yes")]
+    pub required: bool,
     /// The widget, or any layout node.
     pub widget: NodeDef,
 }

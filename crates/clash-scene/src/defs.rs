@@ -226,7 +226,7 @@ fn each_slot(node: &NodeDef, f: &mut impl FnMut(&str)) {
 }
 
 /// The cross check: a part aimed at a slot that no screen places is an
-/// error, unless the part says it is optional (12 §10.6).
+/// error, unless the part says the slot is not required (12 §10.6).
 fn check_parts(cx: &mut CrossCx<'_>) {
     let defs = cx.defs();
     let mut slots = BTreeSet::new();
@@ -245,7 +245,7 @@ fn check_parts(cx: &mut CrossCx<'_>) {
             continue;
         };
         let slot = part.slot(namespace_of(name));
-        if !part.optional && !slots.contains(&slot) {
+        if part.required && !slots.contains(&slot) {
             missing.push((name.to_owned(), slot, part.into.span));
         }
     }
@@ -261,7 +261,7 @@ fn check_parts(cx: &mut CrossCx<'_>) {
         diagnostic = match near {
             Some(near) => diagnostic.suggest(format!("did you mean `{near}`?")),
             None => diagnostic.suggest(
-                "a slot is named by its screen's namespace and its own name, `namespace:name`; add `\"optional\": true` if the screen may be missing",
+                "a slot is named by its screen's namespace and its own name, `namespace:name`; add `\"required\": false` if the slot may be missing",
             ),
         };
         cx.report(diagnostic);
