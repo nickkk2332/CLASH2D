@@ -139,6 +139,7 @@ pub use physical::{
 };
 pub use store::{ComponentStore, PAGE_SLOTS};
 
+use crate::body::Body;
 use crate::stats::Stats;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
@@ -481,6 +482,8 @@ components! {
     physical: Physical = "physical";
     /// Attributes, pools and tracks. On creatures and some items.
     stats: Stats = "stats";
+    /// Parts, wounds and what the body can do. On creatures.
+    body: Body = "body";
 }
 
 // A `ComponentKinds` has one bit for each kind.

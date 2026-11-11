@@ -22,7 +22,7 @@ actions that call `hit`.
 | E1 | Component store and core components | M | K1, K7 | beta |
 | E2 | Attributes, pools, tracks | M | E1, K5 | beta |
 | E3 | Traits | M | E2 | todo |
-| E4 | Bodies | L | E2, T3 | todo |
+| E4 | Bodies | L | E2, T3 | beta |
 | E5 | Hits and wounds | L | E4, W12 | todo |
 | E6 | Body editing | M | E4 | todo |
 | E7 | Minds and vital state | M | E1, T4 | todo |
@@ -185,6 +185,32 @@ Done when
 - Disabling a part interrupts an action using its slot.
 - Doubling scale doubles thickness, quadruples area, multiplies mass by
   eight.
+
+Beta: built ahead of the kernel, in `clash_sim::body`, as functions that
+take the store of `Body`, the definitions, the store of `Physical`,
+containment and the stats' context, and return what changed (decisions
+D-520 to D-523). Built: the `body_part`, `body_plan` and `body_function`
+definition types with every field of 06 §6.1 to §6.3 and their checks,
+the tissue extras and `severs` as fields of the world's `material` and
+`damage_type`; `BodyDefs`, the tables worked out after loading; the
+`Body` component, the fourth in the component list, saved and hashed;
+`attach` from a plan at a scale; parts read by key, name, socket, tag and
+definition, what covers what, reach, bands and exposed area; condition
+and state; functions with their four combinations; channel slots by part
+and in total, with `SlotsLost` and `SlotsGained` naming what went and
+came back; mass and size handed to `Physical`; `disable`, `restore` and
+`detach`, which returns the subtree as data; the kinds, properties and
+events of 06 §6.7 registered through a registry step, and
+`body::property` to answer them; reasons for every refusal. Fixtures are
+under `crates/clash-sim/tests/fixtures/body`: a humanoid and a blob.
+Stubbed, each waiting for the kernel or a later package: holding the
+store in the simulation and calling these functions (the module
+documentation lists when); raising the events and interrupting the
+actions whose slots went (T3), which is how "disabling a part interrupts
+an action" is finished; `stats::refresh` after `function_changed`; the
+other verbs of 06 §6.5 (E6); postures, which call `set_height_factor`
+(E10); shared parts for unchanged bodies, so no benchmark of them (Z1);
+writing definition ids through the save's id table (K7).
 
 ### E5 — Hits and wounds
 

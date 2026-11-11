@@ -140,6 +140,15 @@ impl<C> ComponentStore<C> {
         page[slot % PAGE_SLOTS] = position as u32;
     }
 
+    /// The owner of the component in a slot, whatever its generation:
+    /// for a reference that holds a slot and has no room for the rest of
+    /// the id, such as the handle of a body part.
+    pub fn owner_in_slot(&self, slot: u32) -> Option<EntityId> {
+        let position = self.indexed(slot as usize)?;
+        let owner = self.owners.get(position)?;
+        (owner.slot() == slot).then_some(*owner)
+    }
+
     /// Whether `id` has a component here.
     pub fn contains(&self, id: EntityId) -> bool {
         self.position(id).is_some()

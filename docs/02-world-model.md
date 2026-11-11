@@ -378,6 +378,10 @@ decided by the movement rules in the simulation, which know the mover.
   "default_resist": { "threshold": "50 kPa", "factor": 1.0 } }
 ```
 
+A damage type may be flagged `severs`: across the whole width of a body
+part, a hit of that type takes the part off (06 §7.2). The world stores
+the flag and gives it no meaning.
+
 **Materials** are shared by terrain, items and body tissue (document 06).
 
 ```json
@@ -411,6 +415,7 @@ decided by the movement rules in the simulation, which know the mover.
 | `bearing` | Pa | The stress it can carry in compression before it is crushed (section 14.5). Absent means it is never crushed. |
 | `rubble` | fixture id | What destroyed elements of this material leave behind. May be given per damage type, and may be a field: ice destroyed by heat leaves water. |
 | `changes` | — | What it becomes by temperature. See below. |
+| `leak`, `signal`, `heal` | — | What it does as the tissue of a body: drains a pool when breached, adds to a pool when damaged, and recovers by itself (06 §6.1). The world stores them and gives them no meaning. |
 
 **Change of state.** A material may say what it becomes when the
 temperature of its cell (11 §4.6) passes a threshold.

@@ -95,6 +95,9 @@ impl Def for MaterialDef {
                 rubble: None,
                 color: None,
                 tags: Vec::new(),
+                leak: None,
+                signal: None,
+                heal: None,
             },
         )]
     }
