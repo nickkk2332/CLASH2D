@@ -247,6 +247,37 @@ impl<T: Copy + Eq> Paletted<T> {
         };
     }
 
+    /// Replaces every value the layer may hold by what `turn` makes of
+    /// it, cell for cell. Values that become equal are merged, and the
+    /// layer is left compacted.
+    pub fn map_values(&mut self, mut turn: impl FnMut(T) -> T) {
+        match &mut self.repr {
+            Repr::Uniform(value) => *value = turn(*value),
+            Repr::Packed { palette, .. } => {
+                let turned: Vec<T> = palette.iter().map(|value| turn(*value)).collect();
+                let distinct = turned
+                    .iter()
+                    .enumerate()
+                    .all(|(at, value)| !turned[..at].contains(value));
+                if distinct {
+                    *palette = turned;
+                } else {
+                    // Rare: two values have become one. Write the cells
+                    // out again so that no two palette entries are equal.
+                    let cells: Vec<T> = self.iter().collect();
+                    let mut rebuilt = Paletted::uniform(turn(cells[0]));
+                    for (index, value) in cells.into_iter().enumerate() {
+                        if let Some(idx) = CellIdx::from_index(index) {
+                            rebuilt.set(idx, turn(value));
+                        }
+                    }
+                    *self = rebuilt;
+                }
+                self.compact();
+            }
+        }
+    }
+
     /// The one value every cell holds, if the layer is stored as uniform.
     /// A layer whose cells happen to be equal is stored as uniform only
     /// after [`compact`](Paletted::compact).

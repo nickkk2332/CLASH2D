@@ -634,6 +634,20 @@ pub(crate) struct ChunkImage {
     vars: SparseCells<VarMap>,
 }
 
+impl ChunkImage {
+    /// Replaces every element state the image holds by what `turn`
+    /// makes of it: how the ids of definitions are turned into save ids
+    /// and back (02 §11).
+    pub(crate) fn map_states(&mut self, turn: &mut dyn FnMut(Layer, ElementState) -> ElementState) {
+        self.floors
+            .map_values(|state| FloorState::from_raw(turn(Layer::Floor, state.raw())));
+        self.blocks
+            .map_values(|state| BlockState::from_raw(turn(Layer::Block, state.raw())));
+        self.fixtures
+            .map_values(|state| FixtureState::from_raw(turn(Layer::Fixture, state.raw())));
+    }
+}
+
 /// Hashes what the cells hold: the three element layers, the sparse
 /// layers and the fields. Occupants, caches, revisions and the dirty flag
 /// are not state.

@@ -619,6 +619,17 @@ impl AreaTable {
         self.anchored.get(&entity).map_or(&[], Vec::as_slice)
     }
 
+    /// Replaces the kind of every area by what `turn` makes of it: how
+    /// the ids of definitions are turned into save ids and back
+    /// (02 §11).
+    pub(crate) fn map_kinds(&mut self, turn: &mut dyn FnMut(AreaKindId) -> AreaKindId) {
+        for area in self.areas.values_mut() {
+            if let Some(kind) = area.kind.as_mut() {
+                *kind = turn(*kind);
+            }
+        }
+    }
+
     /// Whether any area was made by enclosing a space.
     pub(crate) fn has_enclosures(&self) -> bool {
         self.enclosures > 0

@@ -790,9 +790,11 @@ obsolete definition from a non-obsolete one is a warning.
 ### 12.3 Placeholders
 
 An id with no definition and no migration becomes a placeholder of the right
-type from the `engine` namespace. The placeholder remembers the original id.
+type, supplied by the definition type as in section 8.3. The placeholder
+keeps the original id as its own, so it is written back under that id.
 If the definition returns in a later session, the content is restored.
-Placeholders are inert and visibly marked.
+Placeholders are inert and visibly marked. What the world's are like, and
+how a save reports them, is in 02 §11.2.
 
 ### 12.4 Format versions
 

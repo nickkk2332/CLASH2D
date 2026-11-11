@@ -10,6 +10,7 @@ publish.workspace = true
 clash-core.workspace = true
 clash-time.workspace = true
 clash-data.workspace = true
+redb.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
