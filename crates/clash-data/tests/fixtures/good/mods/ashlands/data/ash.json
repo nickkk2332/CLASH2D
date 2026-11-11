@@ -1,0 +1,25 @@
+[
+  { "type": "material", "id": "ash", "density": 600, "toughness": 2.0e4,
+    "tags": ["soft"], "name": "Ash" },
+
+  { "type": "material", "id": "cinder", "copy_from": "base_stone",
+    "toughness": 9.0e5,
+    "extend": { "tags": ["burnt"] },
+    "name": "Cinder" },
+
+  { "type": "block", "id": "ash_drift", "material": "ash",
+    "if_mod": "weather_plus", "height": 1.0, "fill": 0.3 },
+
+  { "type": "block", "id": "ash_heap", "material": "ash",
+    "height": "50 cm", "fill": 0.3 },
+
+  { "type": "block", "id": "core:wall", "patch": true,
+    "fill": 0.25 },
+
+  { "type": "action", "id": "sift", "name": "Sift the ash",
+    "phases": [
+      { "id": "stoop", "time": "400 ms" },
+      { "id": "sift", "time": "2 s",
+        "on_end": { "when": "found_something", "then": ["message"] } }
+    ] }
+]

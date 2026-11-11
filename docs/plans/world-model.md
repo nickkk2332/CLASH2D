@@ -27,7 +27,7 @@ Section references such as "02 §14" point into those documents.
 | F1 | Workspace and gates | S | — | done |
 | F2 | `clash-core` | M | F1 | done |
 | F3 | `clash-time` | M | F2 | done |
-| F4 | `clash-data` v0 | L | F2 | todo |
+| F4 | `clash-data` v0 | L | F2 | in progress |
 | W1 | Dimensions and coordinates | S | F2 | todo |
 | W2 | Paletted storage | S | F2 | todo |
 | W3 | Cell definitions | M | F4, W1 | todo |

@@ -1,0 +1,14 @@
+[
+  { "type": "material", "id": "core:base_stone", "patch": true,
+    "scale": { "density": 1.1 } },
+
+  { "type": "material", "id": "ashlands:cinder", "patch": true,
+    "span": 3,
+    "add": { "toughness": 1.0e5 } },
+
+  { "type": "block", "id": "core:wall", "patch": true,
+    "height": 2.5 },
+
+  { "type": "action", "id": "ashlands:sift", "patch": true,
+    "scale": { "phases.sift.time": 0.5 } }
+]

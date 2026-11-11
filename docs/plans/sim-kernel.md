@@ -25,10 +25,10 @@ start while the world model is being built.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| P1 | Diagnostics | M | F4 | todo |
-| P2 | Complete merge semantics | M | F4 | todo |
-| P3 | Profiles and running without mods | S | F4 | todo |
-| P4 | Typed loading and validation stages | M | P2 | todo |
+| P1 | Diagnostics | M | F4 | in progress |
+| P2 | Complete merge semantics | M | F4 | in progress |
+| P3 | Profiles and running without mods | S | F4 | in progress |
+| P4 | Typed loading and validation stages | M | P2 | in progress |
 | P5 | Schemas, reference, scaffolding | M | P1, P4 | todo |
 | P6 | Settings | S | K5 | todo |
 | P7 | Migration and obsoletion | M | P4, W10 | todo |

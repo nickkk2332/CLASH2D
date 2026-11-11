@@ -1,0 +1,7 @@
+{
+  "id": "default",
+  "name": "Fixture game",
+  "mods": ["core", "ashlands", "tweaks"],
+  "boot_screen": "ashlands:title",
+  "settings": { "core:reaction_prompts": "threats" }
+}

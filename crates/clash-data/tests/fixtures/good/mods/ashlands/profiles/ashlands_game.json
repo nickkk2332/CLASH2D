@@ -1,0 +1,6 @@
+{
+  "id": "ashlands_game",
+  "name": "The Ashlands",
+  "mods": ["core", "ashlands"],
+  "boot_screen": "ashlands:title"
+}
