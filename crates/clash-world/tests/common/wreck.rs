@@ -8,13 +8,18 @@
 
 use std::sync::Arc;
 
-use clash_core::{Dur, EntityId, Hash128, Tick};
+use clash_core::{Dur, EntityId, Hash128, Tick, codec};
 use clash_time::{Timeline, WakeDomain};
 use clash_world::test_support::load_column;
 use clash_world::{
     BlockState, Cause, CauseKind, CellPos, ColumnBuilder, Cosmos, DamageTypeId, EventSink,
-    FixtureState, FloorState, GridId, Layer, Location, TractPos, WorldCtx, WorldDefs, WorldEvent,
+    FixtureState, FloorState, Generators, GridId, Layer, Location, MemoryStore, TractIo, TractPos,
+    TractStore, WorldCtx, WorldDefs, WorldEvent,
 };
+
+/// The section the tests keep the timeline in, as the simulation keeps
+/// it in one of its own beside the world's (02 §11.4).
+const TIMELINE_SECTION: &str = "sim.timeline";
 
 pub struct World {
     pub defs: Arc<WorldDefs>,
@@ -131,6 +136,54 @@ impl World {
     /// timeline.
     pub fn state_hash(&self) -> (Hash128, Hash128) {
         (Hash128::of(&self.cosmos), Hash128::of(&self.timeline))
+    }
+
+    /// Saves the world as the simulation does (02 §11.4): the cosmos
+    /// into the store, the timeline beside it, and the store committed.
+    pub fn save(&mut self, store: &mut MemoryStore) {
+        self.cosmos.save_world(store).unwrap();
+        store.put_section(TIMELINE_SECTION, &codec::to_bytes(&self.timeline).unwrap());
+        store.commit().unwrap();
+    }
+
+    /// A world made of what a store holds, over the definitions given:
+    /// the cosmos and the timeline, with nobody in it yet. Its tracts
+    /// were put there by hand, so there are no generators.
+    pub fn load(defs: &Arc<WorldDefs>, store: &mut MemoryStore, grid: GridId) -> World {
+        let saved = store.section(TIMELINE_SECTION).unwrap().unwrap();
+        let timeline: Timeline = codec::from_bytes(&saved).unwrap();
+        let generators = Generators::none(defs);
+        let cosmos = Cosmos::load_world(defs, &mut TractIo::new(&generators, store)).unwrap();
+        World {
+            // Those of the cosmos: they may hold placeholders.
+            defs: Arc::clone(cosmos.defs()),
+            timeline,
+            cosmos,
+            events: EventSink::new(),
+            grid,
+        }
+    }
+
+    /// Puts everyone who is in another world into this one where they
+    /// are there, as the simulation places its entities again after
+    /// loading. What that tells is thrown away.
+    pub fn place_again(&mut self, from: &World) {
+        let mut told = EventSink::new();
+        for record in from.cosmos.occupants() {
+            WorldCtx::new(&mut self.cosmos, &mut self.timeline, &mut told)
+                .place(record.occupant, record.loc, record.footprint, Cause::DEBUG)
+                .unwrap();
+        }
+    }
+
+    /// This world saved and loaded again: through a real save, with
+    /// everyone in it placed again.
+    pub fn saved_and_loaded(&mut self) -> World {
+        let mut store = MemoryStore::new();
+        self.save(&mut store);
+        let mut loaded = World::load(&self.defs, &mut store, self.grid);
+        loaded.place_again(self);
+        loaded
     }
 
     /// How many cells of a box hold a floor of a definition.
