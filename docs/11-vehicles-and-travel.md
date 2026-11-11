@@ -17,7 +17,7 @@ Part of what is specified here is implemented in `clash-world`: media
 [02-world-model.md](02-world-model.md) without changing it.
 
 It relies on subgrids (02 §18), travelers and charts (02 §20), containment
-(01 §6), joint actions (03 §8) and devices (06 §3.1; fully specified in 16).
+(01 §6), joint actions (03 §8), and devices, resources and assemblies (16).
 
 Vehicle names and figures in examples are illustrative content.
 
@@ -244,23 +244,28 @@ A vehicle's capabilities come from **parts**: devices installed in it. In a
 craft they are contained entities. In a vessel they are devices standing in
 its cells, where they can be reached, repaired, sabotaged and shot.
 
+A vehicle is an assembly (16 §11) and its parts are its modules. What a part
+does with resources is written as for any device (16 §5.2). What it adds to
+a vehicle is written in its `part` block.
+
 ```json
 [
   { "type": "device", "id": "diesel_engine", "name": "diesel engine",
     "material": "steel", "mass": "900 kg",
-    "part": { "produces": { "power": "220 kW" }, "consumes": { "diesel": "0.012 kg/s" },
-              "needs_medium": "breathable", "noise": 0.8 } },
+    "converts": { "from": { "diesel": "0.012 kg/s" }, "to": { "power": "220 kW" }, "throttles": true },
+    "part": { "needs_medium": "breathable", "noise": 0.8 } },
   { "type": "device", "id": "screw", "name": "propeller",
-    "part": { "consumes": { "power": "200 kW" }, "thrust": "60 kN", "in": ["liquid"] } },
-  { "type": "device", "id": "fuel_tank", "part": { "stores": { "diesel": "800 kg" } } },
+    "consumes": { "power": { "rate": "200 kW", "when": "running" } },
+    "part": { "thrust": "60 kN", "in": ["liquid"] } },
+  { "type": "device", "id": "fuel_tank",
+    "stores": { "diesel": { "capacity": "800 kg" } } },
   { "type": "device", "id": "ballast_tank", "part": { "ballast": 40.0 } },
   { "type": "device", "id": "helm", "part": { "station": "helm" } }
 ]
 ```
 
-| Part field | Supplies |
-|------------|----------|
-| `produces`, `consumes`, `stores` | Resources (section 6.2) |
+| `part` field | Supplies |
+|--------------|----------|
 | `thrust`, `in` | Force along the heading, in the listed media |
 | `lift` | Force against gravity |
 | `steer`, `trim` | Turning and pitch authority |
@@ -271,28 +276,23 @@ its cells, where they can be reached, repaired, sabotaged and shot.
 | `seat` | A place to ride, with an `exposure` |
 | `sense` | A sense (15 §4) whose percepts go to whoever is at its station |
 | `drive` | Ability to travel a chart lane (section 13.4) |
+| `needs_medium`, `noise` | Conditions on running, and the sound it makes |
 
-A part works in proportion to its condition. A destroyed part supplies
-nothing. Nothing else is needed for damage to degrade a vehicle.
+A part works in proportion to its condition and to its supply fraction
+(16 §5.4). A destroyed part supplies nothing. Nothing else is needed for
+damage to degrade a vehicle.
 
 ### 6.2 Resources
 
-```json
-[ { "type": "resource", "id": "power",  "kind": "flow" },
-  { "type": "resource", "id": "diesel", "kind": "stock" } ]
-```
+Resources and the networks that balance them are specified in 16 §5.
 
-By default, everything installed in one vehicle shares one **bus**.
-Document 16 allows finer wiring.
+By default, everything installed in one vehicle shares one **bus**: a
+single network per resource for the whole vehicle. An engine starved of
+fuel makes less power, and a propeller on half power gives half thrust.
+Stores are straight lines between changes, so nothing runs per tick.
 
-- A **flow** resource is produced and consumed at the same instant. If
-  demand exceeds supply, consumers are served in order of a `priority` and
-  the last served runs at a fraction. A propeller on half power gives half
-  thrust.
-- A **stock** resource is held in stores. Its level is a straight line
-  between changes, so nothing runs per tick: the moment a store will empty
-  or fill is scheduled as a single wake-up, exactly as pools are
-  (06 §4.2).
+A vessel may instead be wired with conduits (16 §6), in which case a cut
+cable or a flooded switchboard isolates part of it.
 
 Fuel, electricity, compressed air, coolant, ammunition and mana are all
 resources content defines.
@@ -608,8 +608,8 @@ loaded tract. Crews in warm tracts are stepped as 03 §10.
 
 ## 15. Modding surface
 
-**Definition types**: `vehicle`, `resource`, `travel_band`. The `part` block
-on `device`. The `fluid` block on `material` and `atmosphere`. `sea_level`
+**Definition types**: `vehicle`, `travel_band`. The `part` block on `device`
+(16 §4.2). Resources are defined in 16 §5. The `fluid` block on `material` and `atmosphere`. `sea_level`
 on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
 
 **Events**: `vehicle_moved`, `vehicle_collided`, `vehicle_mode_changed`,
@@ -639,7 +639,7 @@ on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
 | # | Invariant |
 |---|-----------|
 | H1 | Vehicle performance is a function of its parts, mass and medium. No performance number is stored that those do not determine. |
-| H2 | A stock resource's level at any time equals its last recorded level plus rate times elapsed local time. |
+| H2 | A vehicle's stores obey invariant G2 of document 16: level equals last recorded level plus rate times elapsed local time. |
 | H3 | Gas and liquid are conserved by exchange: what leaves one side arrives on the other. |
 | H4 | Every envelope cell belongs to exactly one compartment. |
 | H5 | An occupant standing in a vessel has a location in the vessel's grid and is carried without being updated. |
@@ -670,8 +670,8 @@ Targets, unmeasured.
    the vertical is a question of presentation.
 3. **Very long vessels.** A swing sweeps a large area. Whether huge ships
    should be barred from turning in confined water or turn by other means.
-4. **Finer wiring.** One bus per vehicle is the default. Circuits that can
-   be cut are document 16's.
+4. **Finer wiring.** Settled: one bus per vehicle by default, or conduits
+   inside the vessel (16 §6).
 5. **Formations and fleets.** Many vehicles acting together. (09)
 6. **Draining and flooding terrain at scale.** Woken liquid is budgeted
    (02 §16). Emptying a sea is a coarse event, not a simulation.

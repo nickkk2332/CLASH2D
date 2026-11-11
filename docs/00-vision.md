@@ -70,6 +70,7 @@ produce the scenes in section 4, the design is wrong.
 | Attributes, pools and counters | Progression: training, use-based skills, point-buy, levels, cheat skills, or none |
 | Events, conditions, effects, variables | Every rule of the game |
 | Devices, links between them, interaction verbs | Machines, locks, traps, computers, rituals, wiring |
+| Resources, networks, recipes, construction, assemblies | Power grids, mana grids, automation, crafting, base building, gadgets, powered suits, implants |
 | Realms, charts, generation, layered simulation | Worlds, eras, tech levels, dimensions, armies, economies |
 | A glyph UI toolkit | Screens, menus, HUDs, character creation, the main menu itself |
 | A scenario framework | Sandbox, roguelike, campaign, warzone, and their win, loss and save rules |
@@ -89,6 +90,9 @@ engine code. If a mod wants them, they are tags, variables and rules.
 - Fight with simple defaults or with full control over technique and target.
 - Avoid fighting: hide, sneak, deceive, manipulate, recruit, command.
 - Use the world: machines, vehicles, mounts, ships, tools, terrain.
+- Survive and build: gather, craft, construct a base, wire it up, automate
+  it, defend it.
+- Equip: gadgets, modular gear, powered suits, implants.
 - Explore, travel between places, planets and dimensions, and run into
   events that were not waiting for them.
 
@@ -138,6 +142,13 @@ states which scenes it serves.
 | S20 | **Cheat skill.** A character arrives in a fantasy world as a custom species chosen at creation, with an overpowered ability and a status screen, all from one mod. | Species, progression and screens are data. |
 | S21 | **A different game.** A total-conversion mod replaces the main menu, character creation, HUD and rules, and ships a roguelike with permadeath. | The engine's own screens and modes are built from the same toolkit mods use. |
 
+### Machines and making
+
+| # | Scene | What must be true |
+|---|-------|-------------------|
+| S24 | **The workshop.** A survivor builds a generator, wires it to a workshop, sets a furnace and a loader running, and leaves. A day later the bars are stacked, or the fuel ran out halfway. | Devices need real supply from real sources. Resources are balanced over networks that content defines. Machines work unattended, and what they did while nobody watched is correct. What is built is made of materials and obeys the world's physics. |
+| S25 | **The suit.** A powered suit gives its wearer strength, flight and air to breathe in vacuum. A hit takes out an arm's weapon. Then the core fails. | Equipment is built from modules that share power. What a module gives lasts only while it is supplied and intact. An unpowered suit is a great weight of metal with someone inside. |
+
 ### Vehicles
 
 | # | Scene | What must be true |
@@ -164,6 +175,8 @@ states which scenes it serves.
 | Combat input | Simple defaults for every action, with full granular control available |
 | Progression | Data-defined; mods mix schemes freely |
 | UI | An ASCII toolkit that mods use for their own screens, up to replacing the main menu |
+| Building | Survival, base building and automation in the manner of CDDA, RimWorld and Minecraft's tech and magic mods are first-class: custom resource grids, devices that need real supply, powerful automation |
+| Kit | Gadgets of every kind and powered suits must be possible |
 
 The reasoning and consequences of each are recorded in [decisions.md](decisions.md).
 

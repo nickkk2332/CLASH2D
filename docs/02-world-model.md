@@ -242,6 +242,7 @@ cells, respecting wrap.
 | floor | The surface at the base of the cell | Paletted | concrete slab, asphalt, grass, carpet |
 | block | What occupies the cell's volume | Paletted | wall, solid rock, window, door, tree trunk |
 | fixture | A static prop standing in the cell | Paletted | desk, street lamp, rubble pile |
+| conduits | Things that carry resources through the cell (16 §6) | Sparse | cable, pipe, duct, belt, ley line |
 | damage | Accumulated damage per element | Sparse | |
 | decals | Surface marks with provenance | Sparse | blood, scorch, footprints |
 | vars | Mod variables on the cell | Sparse | |
@@ -431,8 +432,12 @@ desks, and they gain behaviour only when it is needed.
 
 Links between devices (power, signal, mechanical) and the rules of
 interaction are specified in document 16. The world's obligations are these
-definition fields, cell variables, element events, and the `Device` occupant
-kind.
+definition fields, the conduit layer, cell variables, element events, and
+the `Device` occupant kind.
+
+An element may also declare a passive `load` on a resource and what it does
+`when_supplied` (16 §4.3). The world stores these and gives them no
+behaviour.
 
 ## 6. Chunks and grids
 
@@ -459,6 +464,7 @@ pub struct Chunk {
     blocks: Paletted<BlockState>,
     fixtures: Paletted<FixtureState>,
     damage: SparseCells<[u8; 3]>,        // per element, 0..=254 of 255
+    conduits: SparseCells<ConduitSet>,   // 16 §6
     decals: SparseCells<DecalList>,
     vars: SparseCells<VarMap>,
     fields: FieldStore,                  // section 16
@@ -549,6 +555,8 @@ impl WorldEdit<'_> {
     pub fn set_fixture(&mut self, loc: Location, s: FixtureState) -> Result<(), WorldError>;
     pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> DamageOutcome;
     pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16);
+    pub fn lay_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;
+    pub fn cut_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;
     pub fn add_decal(&mut self, loc: Location, decal: Decal);
     pub fn set_var(&mut self, loc: Location, key: VarKey, value: Value);
 }
@@ -586,7 +594,8 @@ matter (01 R11, document 15), and the two can differ.
 
 ### 7.4 World events
 
-`ElementChanged`, `ElementDamaged`, `ElementDestroyed`, `FieldAppeared`,
+`ElementChanged`, `ElementDamaged`, `ElementDestroyed`, `ConduitChanged`,
+`FieldAppeared`,
 `FieldVanished`, `FieldContact`, `EnergyReleased`, `CollapseStarted`,
 `CollapseSettled`, `BodyLaunched`, `BodyImpact`, `BodyHitOccupant`,
 `BodyLanded`, `OccupantUnsupported`, `OccupantExposed`, `TractLoaded`,
@@ -1576,8 +1585,8 @@ update a hierarchical path graph incrementally.
 ## 23. Modding surface
 
 **Definition types**: `material`, `damage_type`, `atmosphere`, `floor`,
-`block`, `fixture`, `field`, `realm`, `area_kind`, `chart`, `site`, `tract`
-(document 10).
+`block`, `fixture`, `conduit` (16), `field`, `realm`, `area_kind`, `chart`,
+`site`, `tract` (document 10).
 Elements may declare `interactions` and a `device` (section 5.5).
 
 **Events** an EOC can trigger on: every world event in section 7.4.

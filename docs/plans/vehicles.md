@@ -5,7 +5,7 @@ additions it makes to the world model (02 §18.5, media, sealed volumes).
 
 Packages prefixed W are in [world-model.md](world-model.md); K and T in
 [sim-kernel.md](sim-kernel.md); E and S in
-[first-playable.md](first-playable.md). The rules for taking a package are
+[first-playable.md](first-playable.md); G in [devices.md](devices.md). The rules for taking a package are
 those of [world-model.md](world-model.md) and [CLAUDE.md](../../CLAUDE.md).
 
 Packages V1, V3 and V4 are world physics and belong to `clash-world`. They
@@ -20,7 +20,7 @@ packages they depend on are done.
 | V2 | Subgrid storage and hull entities | M | W20b, W10, E1 | todo |
 | V3 | Sealed volumes | L | W20a, V1 | todo |
 | V4 | Exchange: flooding, venting, crush | L | V3 | todo |
-| V5 | Vehicles, parts, resources, performance | L | V2, E12 | todo |
+| V5 | Vehicles, parts, performance | M | V2, G3 | todo |
 | V6a | Motion: process, ground, float, submerge, collisions | L | V5, V1 | todo |
 | V6b | Motion: air, space, rail, stride, burrow, swing | L | V6a | todo |
 | V7 | Stations, seats, boarding | M | V5, T6, E8 | todo |
@@ -123,18 +123,17 @@ Done when
 - A volume with no openings and no excess pressure runs no process
   (invariant H6).
 
-### V5 — Vehicles, parts, resources, performance
+### V5 — Vehicles, parts, performance
 
-**Spec** 11 §3, §6 · **Size** L
+**Spec** 11 §3, §6 · **Size** M
 
 Build
-- The `Vehicle` component; the `part` block on devices; `resource`.
-- The bus: flow sharing by priority; stocks with scheduled exhaustion.
+- The `Vehicle` component; the `part` block on devices.
+- The vehicle as an assembly on the network evaluator of package G3 in
+  [devices.md](devices.md).
 - Derived performance, recomputed on change.
 
 Done when
-- Stock levels are analytic and exhaustion fires at the right tick
-  (invariant H2).
 - Halving available power halves thrust; destroying the only engine stops
   everything it fed.
 - Performance equals recomputation after random part damage (invariant H1).

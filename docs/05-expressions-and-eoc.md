@@ -187,7 +187,9 @@ properties.
 |------|-----------|
 | `entity` | Any entity: creature, item, device (06) |
 | `loc` | A cell |
+| `element` | A floor, block or fixture of a cell (16 §3.5) |
 | `area`, `site`, `tract`, `region`, `realm`, `subgrid` | As in 02 |
+| `network`, `job` | As in 16 |
 | `action` | A running action (03 §6) |
 | `window` | An open window (03 §7) |
 | `global` | The whole simulation |
