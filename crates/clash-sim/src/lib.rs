@@ -54,6 +54,7 @@ pub mod event;
 pub mod later;
 pub mod reason;
 mod sim;
+pub mod stats;
 
 pub use advance::{
     Advance, AdvanceLimit, AppRequest, DEFAULT_MAX_CASCADE, MAX_CASCADE_SETTING,
@@ -82,4 +83,5 @@ pub use sim::{LoadError, SAVE_KIND, SAVE_VERSION, Sim, SimHashes, Truth};
 pub fn register_defs(types: &mut clash_data::DefTypes) {
     bus::register_defs(types);
     action::register_defs(types);
+    stats::register_defs(types);
 }

@@ -713,7 +713,7 @@ acts as one.
       "list": { "rows": { "wounds": { "of": "$who" } },
                 "item": "{it.part.name}: {it.kind.name}", "empty": "Unhurt." } },
     { "fill": 1, "rows": [
-      { "bar": { "label": "Blood", "value": "$who.pool.blood.frac", "style": "blood" } },
+      { "bar": { "label": "Blood", "value": "$who.pool.frac('blood')", "style": "blood" } },
       { "figure": { "figure": "body", "shade": "part_shade($who, it)" } },
       { "slot": "condition.extra" } ] } ] },
   "keys": { "back": [ { "close": {} } ],
@@ -988,7 +988,7 @@ an interaction opens a shop, a book, a terminal or a mod's own screen.
 ```json
 { "type": "ui_part", "id": "mana_bar", "into": "ui:hud.bars", "order": 20,
   "if": "view.has_trait('attuned')",
-  "widget": { "bar": { "label": "Mana", "value": "view.pool.mana.frac", "style": "mana" } } }
+  "widget": { "bar": { "label": "Mana", "value": "view.pool.frac('mana')", "style": "mana" } } }
 ```
 
 A screen places `slot`s where others may add. A `ui_part` puts a widget

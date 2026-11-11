@@ -20,7 +20,7 @@ actions that call `hit`.
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | E1 | Component store and core components | M | K1, K7 | beta |
-| E2 | Attributes, pools, tracks | M | E1, K5 | todo |
+| E2 | Attributes, pools, tracks | M | E1, K5 | beta |
 | E3 | Traits | M | E2 | todo |
 | E4 | Bodies | L | E2, T3 | todo |
 | E5 | Hits and wounds | L | E4, W12 | todo |
@@ -132,6 +132,32 @@ Done when
 - A pool crossing fires at the analytically correct tick, including across
   a clock rate change, and an idle pool schedules nothing.
 - `track_advanced` fires once per level.
+
+Beta: built ahead of the kernel, in `clash_sim::stats`, as functions that
+take the store of `Stats`, the definitions, the timeline and an expression
+host, and return what changed (decisions D-440 to D-449). Built: the
+`attribute`, `pool` and `track` definition types with their fields,
+scopes and checks, a dependency cycle being a load error at each `base`;
+`StatDefs`, the tables worked out after loading; the `Stats` component,
+the third in the component list, saved and hashed; modifiers and pool
+rates with sources, and `remove_source`; derived attributes worked out in
+dependency order with exact invalidation, and `refresh` from scratch;
+pools whose crossings are one scheduled wake-up, with `on_wake`,
+`set_clock`, `suspend` and `resume`; `pool_add` and all-or-nothing
+`pool_spend`; tracks with level curves; the kinds, properties and events
+of 06 §4.4 registered through a registry step, and `stats::property` to
+answer them; reasons for every refusal. Fixtures are under
+`crates/clash-sim/tests/fixtures/stats`. Stubbed, each waiting for the
+kernel or a later package: holding the store in the simulation and
+calling these functions (the module documentation lists when); raising
+`attr_changed`, `pool_crossed` and `track_advanced` from the changes
+returned, and the hook `pool_changing`; the host that forwards property
+reads; writing definition ids through the save's id table (K7);
+registering and running the six verbs and a track's `on_advance` (K5);
+calling `refresh` when a reactive input changes (05 §7.5); moving what is
+seated in a mind (E7); a pool that names a substance (G19). No test
+script, since nothing here can be reached from the console until the
+kernel holds it, so `gas_mask` waits with E8; and no benchmark (Z1).
 
 ### E3 — Traits
 
