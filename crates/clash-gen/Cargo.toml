@@ -9,10 +9,13 @@ publish.workspace = true
 [dependencies]
 clash-core.workspace = true
 clash-world.workspace = true
+rayon.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+clash-data.workspace = true
+clash-time.workspace = true
 serde_json.workspace = true
 
 [lints]

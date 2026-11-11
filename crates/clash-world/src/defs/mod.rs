@@ -385,6 +385,8 @@ pub struct RealmKind {
     pub calendar: Option<String>,
     /// Which world generator plans the realm, as written.
     pub generator: Option<GeneratorSpec>,
+    /// What the realm tells its generator, as written (02 §9.3).
+    pub generator_params: BTreeMap<String, serde_json::Value>,
     /// What implicit cells hold below a tract's stored range.
     pub below_fill: BlockState,
     /// What implicit cells hold above a tract's stored range.

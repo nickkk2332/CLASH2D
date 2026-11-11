@@ -37,6 +37,12 @@
     "flags": ["ramp", "load_bearing"],
     "glyph": { "ch": "<", "fg": "material" } },
 
+  { "//": "A flight of stairs. It joins its cell to the cell directly above, which it holds up.",
+    "type": "block", "id": "stairs", "material": "concrete",
+    "height": 3.0, "fill": 0.3, "coverage": 0.5,
+    "flags": ["stairs"],
+    "glyph": { "ch": ">", "fg": "material" } },
+
   { "//": "What a full cell of rubble becomes.",
     "type": "block", "id": "rubble_heap", "material": "concrete",
     "height": 3.0, "fill": 1.0,

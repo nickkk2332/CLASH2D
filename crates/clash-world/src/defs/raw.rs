@@ -621,6 +621,10 @@ pub struct RealmDef {
     /// Which world generator plans the realm.
     #[serde(default)]
     pub generator: Option<GeneratorSpec>,
+    /// What the realm tells its generator: values by name. Carried as
+    /// written; the generator reads them and reports what is wrong.
+    #[serde(default)]
+    pub generator_params: BTreeMap<String, serde_json::Value>,
     /// What implicit cells contain below and above a tract's stored range.
     #[serde(default)]
     pub fill: Option<FillSpec>,

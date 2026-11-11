@@ -97,4 +97,13 @@ pub enum WorldError {
     /// The cell is filled, so there is no space around it to enclose.
     #[error("{0} is filled: there is no space there to enclose")]
     NothingToEnclose(Location),
+    /// The tract's region has not been surveyed, so the tract has no
+    /// record yet.
+    #[error("tract {tract} of realm {realm} has no record: its region has not been surveyed")]
+    NotSurveyed {
+        /// The realm.
+        realm: RealmId,
+        /// The tract.
+        tract: TractPos,
+    },
 }

@@ -895,6 +895,7 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
             sea_level: def.sea_level,
             calendar: def.calendar.as_ref().map(|calendar| calendar.0.clone()),
             generator: def.generator.clone(),
+            generator_params: def.generator_params.clone(),
             below_fill,
             above_fill,
             strata,

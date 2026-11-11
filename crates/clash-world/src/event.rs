@@ -10,10 +10,12 @@ use clash_time::ClockId;
 use serde::{Deserialize, Serialize};
 
 use crate::area::AreaId;
-use crate::cause::Cause;
+use crate::cause::{Cause, CauseKind};
 use crate::chunk::{Decal, DecalId};
+use crate::cosmos::RealmId;
 use crate::defs::{ElementState, Layer};
-use crate::pos::Location;
+use crate::pos::{Location, TractPos};
+use crate::ticket::{TicketId, TicketReason};
 
 /// Where events go: a list, in the order they were emitted.
 ///
@@ -244,7 +246,56 @@ pub enum WorldEvent {
         /// Who and what made the edit.
         cause: Cause,
     },
+    /// A tract has been loaded (02 §9.4): its cells can be read and
+    /// changed, and occupants can be placed in it. The simulation puts
+    /// its entities there.
+    TractLoaded {
+        /// When.
+        tick: Tick,
+        /// The realm.
+        realm: RealmId,
+        /// The tract's cell with the lowest horizontal coordinates, at
+        /// storey 0, in the realm's base grid.
+        loc: Location,
+        /// The tract.
+        tract: TractPos,
+        /// Whether this is the first time the tract has ever been
+        /// loaded.
+        first: bool,
+    },
+    /// A tract is about to be unloaded (02 §9.5). The simulation takes
+    /// its entities out; a tract that still holds occupants is unloaded
+    /// by the first reconciliation that finds it empty.
+    TractUnloading {
+        /// When.
+        tick: Tick,
+        /// The realm.
+        realm: RealmId,
+        /// The tract's cell with the lowest horizontal coordinates, at
+        /// storey 0, in the realm's base grid.
+        loc: Location,
+        /// The tract.
+        tract: TractPos,
+    },
+    /// A ticket was refused because the tickets together wanted more
+    /// tracts than may be loaded (02 §10.3). It is no longer held.
+    TicketRefused {
+        /// When.
+        tick: Tick,
+        /// The id the ticket had.
+        ticket: TicketId,
+        /// The realm whose tracts it kept.
+        realm: RealmId,
+        /// The tract it was centred on, as for `TractLoaded`.
+        loc: Location,
+        /// Who held it.
+        reason: TicketReason,
+    },
 }
+
+/// The cause of what the world does of itself when it loads and unloads
+/// tracts.
+const ACTIVITY_CAUSE: Cause = Cause::new(CauseKind::Coarse);
 
 impl WorldEvent {
     /// When it happened, in universal time.
@@ -260,7 +311,10 @@ impl WorldEvent {
             | WorldEvent::AreaBreached { tick, .. }
             | WorldEvent::AreaClosed { tick, .. }
             | WorldEvent::OccupantDisplaced { tick, .. }
-            | WorldEvent::OccupantEntombed { tick, .. } => *tick,
+            | WorldEvent::OccupantEntombed { tick, .. }
+            | WorldEvent::TractLoaded { tick, .. }
+            | WorldEvent::TractUnloading { tick, .. }
+            | WorldEvent::TicketRefused { tick, .. } => *tick,
         }
     }
 
@@ -278,6 +332,9 @@ impl WorldEvent {
             | WorldEvent::AreaClosed { cause, .. }
             | WorldEvent::OccupantDisplaced { cause, .. }
             | WorldEvent::OccupantEntombed { cause, .. } => *cause,
+            WorldEvent::TractLoaded { .. }
+            | WorldEvent::TractUnloading { .. }
+            | WorldEvent::TicketRefused { .. } => ACTIVITY_CAUSE,
         }
     }
 
@@ -293,7 +350,10 @@ impl WorldEvent {
             | WorldEvent::AreaEntered { loc, .. }
             | WorldEvent::AreaExited { loc, .. }
             | WorldEvent::AreaClosed { loc, .. }
-            | WorldEvent::OccupantEntombed { loc, .. } => *loc,
+            | WorldEvent::OccupantEntombed { loc, .. }
+            | WorldEvent::TractLoaded { loc, .. }
+            | WorldEvent::TractUnloading { loc, .. }
+            | WorldEvent::TicketRefused { loc, .. } => *loc,
             WorldEvent::AreaBreached { leak, .. } => *leak,
             WorldEvent::OccupantDisplaced { to, .. } => *to,
         }
@@ -313,6 +373,9 @@ impl WorldEvent {
             WorldEvent::AreaClosed { .. } => "area_closed",
             WorldEvent::OccupantDisplaced { .. } => "occupant_displaced",
             WorldEvent::OccupantEntombed { .. } => "occupant_entombed",
+            WorldEvent::TractLoaded { .. } => "tract_loaded",
+            WorldEvent::TractUnloading { .. } => "tract_unloading",
+            WorldEvent::TicketRefused { .. } => "ticket_refused",
         }
     }
 }
@@ -451,6 +514,43 @@ impl StateHash for WorldEvent {
                 occupant.state_hash(hasher);
                 loc.state_hash(hasher);
                 cause.state_hash(hasher);
+            }
+            WorldEvent::TractLoaded {
+                tick,
+                realm,
+                loc,
+                tract,
+                first,
+            } => {
+                tick.state_hash(hasher);
+                realm.state_hash(hasher);
+                loc.state_hash(hasher);
+                tract.state_hash(hasher);
+                first.state_hash(hasher);
+            }
+            WorldEvent::TractUnloading {
+                tick,
+                realm,
+                loc,
+                tract,
+            } => {
+                tick.state_hash(hasher);
+                realm.state_hash(hasher);
+                loc.state_hash(hasher);
+                tract.state_hash(hasher);
+            }
+            WorldEvent::TicketRefused {
+                tick,
+                ticket,
+                realm,
+                loc,
+                reason,
+            } => {
+                tick.state_hash(hasher);
+                ticket.state_hash(hasher);
+                realm.state_hash(hasher);
+                loc.state_hash(hasher);
+                reason.state_hash(hasher);
             }
         }
     }

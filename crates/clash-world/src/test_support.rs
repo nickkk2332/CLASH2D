@@ -1,10 +1,12 @@
 //! Support for tests that need a world to stand in.
 //!
 //! **For tests and tools only.** The functions here put columns of cells
-//! into a cosmos directly, without the loading procedure of 02 §9.4, which
-//! package W8 builds. The simulation must never call them: once tracts are
-//! loaded through tickets they are how a test sets a scene and nothing
-//! more.
+//! into a cosmos directly, without the loading procedure of 02 §9.4
+//! ([`WorldCtx::load_tracts`](crate::WorldCtx::load_tracts)). The
+//! simulation must never call them: tracts are loaded through tickets,
+//! and these are how a test sets a scene and nothing more. A column put
+//! here is outside the tickets' care: reconciliation neither counts it
+//! nor unloads it (02 §10.2).
 //!
 //! Cells already in the world still change only through `WorldEdit`.
 //! What these functions add is whole columns, built beforehand with a
