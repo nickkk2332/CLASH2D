@@ -135,12 +135,19 @@ pub fn plan_path(
 ///
 /// Refused if the entity follows no path, if the path must be planned
 /// again (`move.off_path`), and with the reason the step itself was
-/// refused for. A refused step marks the path stale and teaches the
+/// refused for. An entity that is no longer standing in the world
+/// forgets its path, so that whoever follows it stops. A refused step marks the path stale and teaches the
 /// mover to avoid the cell it could not enter, so that
 /// [`plan_path`] to the same place goes round it. Entering the last
 /// cell ends the journey.
 pub fn follow_path(sim: &mut Sim, entity: EntityId, cause: Cause) -> Result<Stepped, Reason> {
-    let (from, _) = standing(sim, entity)?;
+    let from = match standing(sim, entity) {
+        Ok((from, _)) => from,
+        Err(reason) => {
+            clear_path(sim, entity);
+            return Err(reason);
+        }
+    };
     let journey = sim
         .components()
         .get::<Mover>(entity)

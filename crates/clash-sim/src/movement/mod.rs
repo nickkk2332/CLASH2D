@@ -13,7 +13,7 @@
 //! | How long a step takes | [`step_time`], in the mover's own time; `entity.step_time(dir)` in an expression |
 //! | To put a mover somewhere it can be | [`move_to`] |
 //! | To follow a path | [`plan_path`], then [`follow_path`] once for each step; [`clear_path`] |
-//! | What a mover believes | [`belief`]: [`believed_rules`], [`believed_step`], [`believed_path`] |
+//! | What a mover believes | [`belief`]: [`believed_rules`], [`believed_step`], [`believed_path`], [`believed_step_time`] |
 //! | Postures | [`set_posture`], [`posture_of`], [`posture_occupies`], [`signature_factor`] |
 //! | Losing one's footing | [`lose_footing`], [`fall`] |
 //! | The ways of moving an entity has | [`set_modes`] |
@@ -90,7 +90,7 @@ use crate::event::{CAUSE_SUBJECTS, EventBody, EventInfo, SimEvent};
 use crate::reason::ReasonInfo;
 use crate::sim::Sim;
 
-pub use belief::{believed_path, believed_rules, believed_step};
+pub use belief::{believed_path, believed_rules, believed_step, believed_step_time};
 pub use defs::{MovementDef, MovementId, PostureDef, PostureId, Surface};
 pub use fall::{Landing, fall, lose_footing};
 pub use mover::{Journey, Mover};

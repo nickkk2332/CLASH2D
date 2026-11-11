@@ -1,12 +1,12 @@
 //! Movement's properties (06 §13), all of an entity.
 //!
-//! None is marked safe for belief: each is about the entity it is read
-//! of, which a mind context may read of its own subject and of no
-//! other (05 §7.3). Those a character decides by (`can_step`,
-//! `step_fault`, `can_reach`, `path_cost`) answer from what the entity
-//! believes ([`belief`](super::belief)); `step_time` and the rest read
-//! the entity itself and the world as it is, for the truth contexts of
-//! an action's phases.
+//! None is marked safe for belief (D-466): each is about the entity it
+//! is read of, which a mind context may read of its own subject and of
+//! no other (05 §7.3). Whatever reads the world beyond the entity
+//! (`can_step`, `step_fault`, `step_time`, `can_reach`, `path_cost`)
+//! answers from what the entity believes ([`belief`](super::belief)),
+//! so that a character may decide by it; the rest read the entity's own
+//! state.
 
 use clash_core::EntityId;
 use clash_data::Def;
@@ -17,11 +17,11 @@ use crate::Sim;
 use crate::event::Subject;
 use crate::registry::{EngineDefTypes, PropertyDef};
 
-use super::belief::{believed_rules, believed_step};
+use super::belief::{believed_rules, believed_step, believed_step_time};
 use super::defs::PostureDef;
 use super::mover::{Journey, Mover};
 use super::rules::mover_rules;
-use super::step::{dir_name, fault_reason, parse_dir, step_time};
+use super::step::{dir_name, fault_reason, parse_dir};
 use super::{path, posture};
 
 /// The entity a subject is, if it is one that exists.
@@ -137,11 +137,11 @@ pub fn properties() -> Vec<PropertyDef> {
             "entity",
             "step_time",
             "real?",
-            "How long a step in a direction would take the entity, in seconds of its own time: the step's length, with what its way of moving makes of rough ground and climbing, over that way's speed now. Read from the world as it is: what a phase's `time` waits before the step is taken. Null if the step cannot be made, or `dir` is not a direction.",
+            "How long the entity expects a step in a direction to take, in seconds of its own time: the length of the step it believes lies there, with what its way of moving makes of rough ground and climbing, over that way's speed now. What a phase's `time` waits before the step is taken and checked against the world as it then is. Null if it believes it cannot make the step, or `dir` is not a direction.",
             |sim, subject, args| {
                 entity(sim, subject)
                     .zip(dir_arg(args))
-                    .and_then(|(id, kind)| step_time(sim, id, kind).ok())
+                    .and_then(|(id, kind)| believed_step_time(sim, id, kind))
                     .map_or(Value::Null, |time| Value::Real(time.as_secs_real()))
             },
         )

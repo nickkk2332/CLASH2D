@@ -32,8 +32,8 @@ use clash_sim::{
 use clash_time::{Timeline, Wake, WakeDomain, WakeId};
 use clash_world::dims::STOREY_M;
 use clash_world::{
-    AreaShape, AreaSpec, BlockState, Cause, CellBox, CellPos, Cosmos, FloorState, Footprint,
-    GridId, Layer, Location, MemoryStore, PathLimits, StepKind, TractIo, WorldDefs,
+    AreaShape, AreaSpec, Cause, CellBox, CellPos, Cosmos, FloorState, Footprint, GridId, Layer,
+    Location, MemoryStore, PathLimits, StepKind, TractIo, WorldDefs,
 };
 
 use common::{creature, debug, item, names};
@@ -1066,5 +1066,23 @@ fn an_unloaded_or_missing_mover_is_refused_with_a_reason() {
             .code,
         codes::NO_PATH
     );
-    assert_eq!(BlockState::NONE.raw(), FloorState::NONE.raw());
+    // Taken out of the world in the middle of a path, it forgets the
+    // path, so that `go_to` stops rather than striding on the spot.
+    movement::plan_path(
+        &mut sim,
+        walker,
+        cell(17, 20, 0),
+        PathLimits::DEFAULT,
+        Cause::DEBUG,
+    )
+    .unwrap();
+    assert_eq!(property(&sim, walker, "path_left", &[]), Value::Int(3));
+    sim.relocate(walker, Place::Stored, Cause::DEBUG).unwrap();
+    assert_eq!(
+        movement::follow_path(&mut sim, walker, Cause::DEBUG)
+            .unwrap_err()
+            .code,
+        codes::NOWHERE
+    );
+    assert_eq!(property(&sim, walker, "path_left", &[]), Value::Null);
 }

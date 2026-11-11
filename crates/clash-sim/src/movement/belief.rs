@@ -3,16 +3,18 @@
 //!
 //! A path is planned from what the mover has perceived, and a step is
 //! checked against truth when it is taken (06 §11). Everything a mind
-//! decides by in this package reads the world through the three
+//! decides by in this package reads the world through the first three
 //! functions here and through nothing else:
 //!
 //! | Function | Answers | Read by |
 //! |----------|---------|---------|
 //! | [`believed_rules`] | What the mover takes itself to be able to do | Every other function here |
-//! | [`believed_step`] | The geometry of a step from where it stands | `entity.can_step`, `entity.step_fault`, `entity.can_reach` |
+//! | [`believed_step`] | The geometry of a step from where it stands | `entity.can_step`, `entity.step_fault`, `entity.can_reach`, [`believed_step_time`] |
 //! | [`believed_path`] | A way from where it stands to a cell | [`plan_path`](super::plan_path), `entity.path_cost` |
+//! | [`believed_step_time`] | How long it expects a step to take | `entity.step_time`, and so the phases of the `step` and `go_to` actions |
 //!
-//! **Until perception is built (document 15) all three read truth.**
+//! **Until perception is built (document 15) the first three read
+//! truth.**
 //! That is the stand-in, and it is here and nowhere else: the
 //! perception package replaces the bodies of these functions with reads
 //! of what the entity has seen and remembers, and nothing that calls
@@ -20,7 +22,7 @@
 //! journey that refused it, is already belief and is passed in by the
 //! caller.
 
-use clash_core::EntityId;
+use clash_core::{Dur, EntityId};
 use clash_world::{CellPos, Location, Path, PathFail, PathLimits, Step, StepKind};
 
 use crate::Sim;
@@ -61,4 +63,17 @@ pub fn believed_path(
         .avoiding(avoid);
     // Stand-in: searches the world as it is.
     sim.truth().cosmos().find_path(from, to, &rules, limits)
+}
+
+/// How long a mover expects a step in a direction to take, in its own
+/// time: what its rules make of the step it believes lies there
+/// ([`MoverRules::judge`]). `None` if it believes it cannot make it.
+///
+/// An action's phase waits this long (`self.step_time(dir)`), and the
+/// step is then checked against truth as it is taken. Until perception
+/// is built it is what [`step_time`](super::step_time) gives.
+pub fn believed_step_time(sim: &Sim, entity: EntityId, kind: StepKind) -> Option<Dur> {
+    let step = believed_step(sim, entity, kind)?;
+    let price = believed_rules(sim, entity).judge(&step).ok()?;
+    Some(Dur::from_secs_real(price.seconds))
 }

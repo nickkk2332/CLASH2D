@@ -21,6 +21,7 @@ use super::{
     Identity, PAGE_SLOTS, Physical, TemplateId,
 };
 use crate::body::{Body, BodyPlanId};
+use crate::movement::Mover;
 use crate::stats::Stats;
 
 // ---- The store against a model ---------------------------------------------
@@ -376,12 +377,13 @@ fn bundle(seed: u32) -> ComponentBundle {
             Real::ONE,
             ClockId::new(seed),
         )),
+        mover: Some(Mover::default()),
     }
 }
 
 #[test]
 fn kinds_have_distinct_names_in_order() {
-    assert_eq!(ComponentKind::ALL.len(), 4);
+    assert_eq!(ComponentKind::ALL.len(), 5);
     for (index, &kind) in ComponentKind::ALL.iter().enumerate() {
         assert_eq!(kind.index(), index);
         assert_eq!(ComponentKind::from_name(kind.name()), Some(kind));
@@ -391,16 +393,17 @@ fn kinds_have_distinct_names_in_order() {
     assert_eq!(ComponentKind::Physical.name(), "physical");
     assert_eq!(ComponentKind::Stats.name(), "stats");
     assert_eq!(ComponentKind::Body.name(), "body");
+    assert_eq!(ComponentKind::Mover.name(), "mover");
     assert_eq!(ComponentKind::from_name("hit_points"), None);
     assert_eq!(<Identity as Component>::KIND, ComponentKind::Identity);
     assert_eq!(<Physical as Component>::KIND, ComponentKind::Physical);
 
     let all = ComponentKinds::of(ComponentKind::ALL);
-    assert_eq!(all.len(), 4);
+    assert_eq!(all.len(), 5);
     assert_eq!(all.iter().collect::<Vec<_>>(), ComponentKind::ALL);
     assert_eq!(
         format!("{all:?}"),
-        r#"{"identity", "physical", "stats", "body"}"#
+        r#"{"identity", "physical", "stats", "body", "mover"}"#
     );
     assert!(ComponentKinds::NONE.is_empty());
 }
@@ -534,7 +537,8 @@ fn orphans_are_components_without_a_living_owner() {
             (ComponentKind::Identity, dead),
             (ComponentKind::Physical, dead),
             (ComponentKind::Stats, dead),
-            (ComponentKind::Body, dead)
+            (ComponentKind::Body, dead),
+            (ComponentKind::Mover, dead)
         ]
     );
 }
