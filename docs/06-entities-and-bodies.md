@@ -184,6 +184,7 @@ a species feature, a mutation, a perk, a blessing, a curse, a drug, a stun.
 | `group` | Traits in the same group exclude each other: adding one removes the others. Stances, forms, moods. |
 | `while` | A reactive condition (05 §7.5). While false the trait is dormant and confers nothing. |
 | `bound` | When added by an ability: the trait ends when that ability does (08 §7.3) |
+| `look` | How its holder appears while it lasts (12 §4.4) |
 
 There is no separate concept of "status effect", "mutation" or "perk".
 A trait with a duration is a status. Without one it lasts until removed.
@@ -224,7 +225,7 @@ Materials used as tissue carry three optional extras:
 
 | Property | Meaning |
 |----------|---------|
-| `leak` | When breached, drains a named pool at a rate per square metre |
+| `leak` | When breached, drains a named pool at a rate per square metre. If the pool names a substance (16 §9.5), what drains is spilled where the body is. |
 | `signal` | When damaged, adds to a named pool per joule absorbed (pain, alarm, heat) |
 | `heal` | Rate at which damage recovers unaided |
 
@@ -553,6 +554,9 @@ material and volume. Weapons notch and break; armour wears through.
 | `stack` | Items equal in every respect (definition, material, damage, traits, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
 | `grants`, `traits`, `rules` | Given to whoever holds or wears it |
 | `guards` | While worn, the share of exposure it keeps out, by route: `{ "breath": 0.95 }` for a mask (02 §16) |
+| `contains` | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup |
+| `color` | A colour this particular item carries: fixed, or picked from a list when it is made. `set_color` changes it. Glyphs draw it with `"fg": "own"` and descriptions name it (12 §4.3). Creatures may carry one too. |
+| `unknown_name` | What it is called by someone who has not learned what it is (05 §4.6) |
 | `round` | For ammunition: the projectile it fires and with what energy (07 §11.5) |
 | `interactions`, `device` | As for elements (02 §5.5; 16) |
 
@@ -749,6 +753,7 @@ A character is in one **posture** at a time.
 | `signature` | A factor on how easily the body is perceived (15 §5.3) |
 | `holds` | Channel slots unavailable while in it |
 | `traits` | Whatever else content wants it to carry: a steadier aim, a weaker guard |
+| `look` | How the body is drawn in it (12 §4.4) |
 
 Changing posture is an action, with a time and a noise. `set_posture`
 forces one: a rule may put someone on the ground when a stagger is severe
@@ -823,7 +828,7 @@ Body flags on `damage_type` (`severs`).
 **Effects**: the verbs of sections 6.5, 8.2, 8.3, 9.2 and 11, and:
 `hit`, `add_trait`, `remove_trait`, `set_attr_base`, `add_modifier`,
 `remove_modifier`, `pool_add`, `pool_rate`, `track_add`, `spawn`,
-`destroy`, `apply_template`, `remember`, `forget`, `rename`.
+`destroy`, `apply_template`, `remember`, `forget`, `rename`, `set_color`.
 
 **Queries** (05 §11): `parts`, `wounds`, `traits`, `held`.
 
@@ -831,7 +836,7 @@ Body flags on `damage_type` (`severs`).
 `volume`, `scale`, `part(key)` and its `condition`, `state`, `layers`,
 `exposed`; `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
-`templates`, `name`, `posture`, `velocity`; on items, `age`.
+`templates`, `name`, `posture`, `velocity`, `color`; on items, `age`.
 
 ## 14. Invariants
 

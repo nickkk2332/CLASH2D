@@ -111,6 +111,28 @@ particular), where it came from, and its strength.
 Light scales `line` signals whose kind uses it, and tints what the player
 sees (12).
 
+**Coloured light (experimental).**
+
+> This is an experimental feature, named `coloured_light` (04 §8.4). A mod
+> must opt in to use it, is warned at every load, and nothing bundled uses
+> it. It may change or be withdrawn.
+
+A light source may name a colour: `"light": { "intensity": 1.2, "color":
+"amber" }`. `Cosmos::light_color(loc)` gives the colour of the light
+reaching a cell: the colours of the sources that light it, weighted by how
+much each contributes, with the sky's colour by time of day. The scene
+tints the cell toward it (12 §6.1).
+
+It is derived data, read only by the scene. Detection uses intensity
+alone, as before, and nothing in the simulation reads a light's colour.
+
+| Unresolved | |
+|------------|---|
+| Whether colour should change what is seen | A red cloak under blue light looks black. Descriptions (section 8.4) do not account for it. |
+| Cost | Three cached values per cell where there was one |
+| How it combines with ambience, decals and remembered cells | The order of tints in 12 §6.1 was chosen without it |
+| Terminals | Sixteen colours cannot show a blend |
+
 ## 4. Senses
 
 ```json
@@ -305,6 +327,7 @@ what is inside a container, whether a door is locked.
 pub struct Persona {
     pub id: PersonaId,
     pub name: Text,
+    pub pronouns: PronounsId,        // how text refers to them (05 §4.6)
     pub appearance: Appearance,      // what an observer can go by
     pub tags: TagSet,                // uniform, insignia, role
     pub claims: Vec<GroupId>,        // groups this persona presents as belonging to
@@ -538,7 +561,8 @@ another character is the persona the controlled character perceives.
 ## 15. Modding surface
 
 **Definition types**: `signal_kind`, `sense`, `event_signal`,
-`relation_kind`, `group`, `lines`, `message_kind`, `appearance_feature`.
+`relation_kind`, `group`, `lines`, `message_kind`, `appearance_feature`,
+`pronouns`.
 `exposes` on signal kinds.
 Fields `signals` on
 actions and phases; `signature` and `senses` on templates and traits;
@@ -599,4 +623,5 @@ Targets, unmeasured.
    and partial matches.
 3. **Inference.** Settled as far as the engine goes: discrepancy percepts
    (section 6). What a character concludes from one is left to rules.
-4. **Light colour.** Deferred. Intensity only.
+4. **Light colour.** Offered as an experimental feature (section 3.3):
+   a tint for the player, with no effect on perception.

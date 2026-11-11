@@ -301,3 +301,4 @@ small package of its own.
 | Ruin by kind | WG5 | 10 §6, §10.2; 02 §17.2 | A never-realised tract at total flood devastation is generated from its drowned variant, and at total blast from its scorched one. Lesser devastation applies the kind's transform, scaled. |
 | Watercourse current | WG7 | 10 §8.5; 11 §4.7 | A river's path record carries its `current`, pointing downhill along its line. |
 | Site definitions for founding | WG9 | 10 §11.1 | A site definition flagged `founded` loads without a map (invariant X7 exempts it) and cannot be placed by generation. |
+| Names | WG9 | 10 §11.5 | People, settlements and sites generated from a `names` definition have the same names for the same seed in any order of exploration; `make_name` gives the same result as generation for the same seed. |

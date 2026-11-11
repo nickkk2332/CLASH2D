@@ -40,6 +40,7 @@ actions that call `hit`.
 | S7 | Relations, groups, orders | M | S6, T4 | todo |
 | S8 | Speech | M | S7, T6 | todo |
 | S9 | Party perception | M | S5 | todo |
+| S10 | Coloured light (experimental) | S | S1, U4, P4 | todo |
 | U1 | Scene skeleton, frames, themes | M | K2 | todo |
 | U2 | Terminal frontend | S | U1 | todo |
 | U3 | Window frontend | L | U1 | todo |
@@ -382,6 +383,29 @@ Done when
 - An event out of sight and earshot is tagged unperceived.
 - Map memory records what was there when last seen, not what is there now.
 
+### S10 — Coloured light (experimental)
+
+**Spec** 15 §3.3; 12 §6.1; 04 §8.4 · **Size** S
+
+This package is experimental. No milestone depends on it and no bundled
+content may use it. Part of its purpose is to find out what it costs and
+how it looks. Record what is found against the table of unresolved
+questions in 15 §3.3.
+
+Build
+- `color` on light sources; `Cosmos::light_color` cached with light; the
+  tint in cell drawing.
+- Registration under the experimental feature `coloured_light`.
+
+Done when
+- A cell lit by two sources is tinted by their colours in proportion to
+  what each contributes.
+- State hashes and detection results are identical with the feature on
+  and off.
+- A mod that gives a light a colour without opting in fails to load, and
+  one that opts in is warned.
+- The cost of the cache is measured and written into 15 §17.
+
 ## Presentation
 
 ### U1 — Scene skeleton, frames, themes
@@ -575,3 +599,8 @@ small package of its own.
 | Posture | E10 | 06 §11.1 | Changing posture scales height, bands, speed and signature as defined; a posture that holds leg slots makes leg actions unavailable; a body with nobody acting for it takes its `limp` posture; `set_posture` forces one. |
 | Exposure by route | E2, E8 | 02 §16; 06 §9.1 | Test script `gas_mask`: in a gas that exposes by breath, an unprotected character's pool rises, a masked one's rises by the share the mask lets through, one in a sealed suit's does not rise until the suit's air is gone, and a body that does not breathe is untouched. |
 | Signals that expose | S2 | 15 §3.1 | Test script `behind_lead`: a standing source adds to the pool of someone in the open by strength over distance, and adds less behind a wall by that wall's blocking. With nobody in reach the emitter schedules nothing. |
+| Looks on traits and postures | E3, E10 | 06 §5, §11.1; 12 §4.4 | A trait and a posture may carry a `look`; it is reported with the events that give and remove them. |
+| Colour and unknown names on items | E8 | 06 §9.1 | An item made from a definition with a list of colours carries one of them, chosen by positional seed; `set_color` changes it; `unknown_name` is stored for text. |
+| Pronouns | S6 | 15 §8.1; 05 §4.6 | A persona carries a pronoun set from its template or a creation choice; a second persona of the same character may carry another. |
+| Colours, fallbacks and inline styles | U1, U2 | 12 §4.3 | `color` definitions load with a word and a fallback; the terminal frontend uses the fallback; `<name>…</>` styles text; the linter warns on glyph states that differ in colour alone (invariant V10). |
+| Looks, shapes, own colour and ambience | U4, U5 | 12 §4.1, §4.4, §6.4 | Frame tests: a holder of a look is drawn with it from the moment the event is played and only to viewers with the needed sense; a creature of several cells is drawn by its shape for its facing; two cloaks of one definition are drawn in their own colours, and a witness's description names the same colour; rain is drawn only on cells known to be open to the sky. |

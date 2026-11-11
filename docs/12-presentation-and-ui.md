@@ -92,10 +92,19 @@ Anything drawable carries a `glyph`:
 ```
 
 - `ch` is one Unicode character of single width.
-- `fg` and `bg` are a theme colour name, `#rrggbb`, or `"material"`, which
-  takes the colour of the thing's material.
+- `fg` and `bg` are a colour name, `#rrggbb`, `"material"`, which takes
+  the colour of the thing's material, `"own"`, which takes the colour this
+  particular thing carries (06 §9.1), or `"dress"`, which takes the colour
+  of what a creature is seen to be wearing.
 - `by_state` and `by_level` vary the glyph by element state or by field or
   damage level.
+- A thing that fills several cells may give a `shape`: rows of characters,
+  one per cell of its footprint, for a facing. Other facings are turned
+  from it unless given. Without a shape every cell shows `ch`.
+
+```json
+"glyph": { "fg": "own", "shape": { "north": ["/^\\", "|#|", "o o"] } }
+```
 
 ### 4.2 Frames
 
@@ -130,6 +139,50 @@ conveyed only by something a terminal cannot draw.
 Colour names used by glyphs and widgets resolve through the active theme.
 The terminal frontend maps colours to what the terminal supports and
 ignores `font`.
+
+**Colours.** A colour is a definition:
+
+```json
+{ "type": "color", "id": "crimson", "rgb": "#a01828", "word": "red", "fallback": "red" }
+```
+
+`word` is how text names it, so that what a witness describes and what is
+drawn agree (15 §8.4). `fallback` is one of the sixteen terminal colours,
+used when the frontend cannot show `rgb`. A theme may override `rgb`. A
+bare `#rrggbb` is mapped to the nearest of the sixteen.
+
+Colour must not be the only thing that tells two things apart. The linter
+warns when two states or levels of one glyph, or two entries of one
+legend, differ in colour alone.
+
+**Inline styles.** In any `Text`, `<name>…</>` applies a theme style or a
+colour to what it encloses: `"<blood>You are bleeding.</>"`. `<<` is a
+literal angle bracket. An unknown name is a load error.
+
+### 4.4 Looks
+
+A trait, an ability's mode, a posture, a device's mode or something worn
+may carry a **look**: how its holder appears for as long as it lasts.
+
+```json
+"look": { "fg": "orange", "anim": "flicker",
+          "aura": { "ch": "*", "fg": "red", "radius": 1 },
+          "label": "burning", "priority": 3, "seen_by": "sight" }
+```
+
+| Part | Does |
+|------|------|
+| `ch`, `fg`, `bg`, `bold` | Replace those parts of the holder's glyph |
+| `anim` | An animation that repeats on the holder and follows it |
+| `aura` | Glyphs drawn on the cells around it |
+| `label` | A word shown beside it and in what `look` reports |
+| `priority` | Which look wins where two set the same part. Animations and auras all play. |
+| `seen_by` | The sense needed to see it. An aura visible only to those with the right sight. |
+
+A look is applied when the event that gave it is played, to viewers who
+perceive the holder, and removed the same way. Something meant to be
+hidden has no look. A burning man, a held guard, a charged blade, a
+transformed state and a shield of force are looks.
 
 ## 5. The view model
 
@@ -166,8 +219,10 @@ The first of these that applies:
 7. For an open cell, the cell below, dimmed; and so on down for
    `look_down` storeys (default 8); then the stratum's backdrop.
 
-Then, in order: decals tint; light scales brightness; cells remembered but
-not currently seen are desaturated and dimmed. Subgrids are composited as
+Then, in order: decals tint; light scales brightness, and with the
+experimental coloured light (15 §3.3) tints toward the light's colour;
+ambience (section 6.4) tints the whole view; cells remembered but not
+currently seen are desaturated and dimmed. Subgrids are composited as
 the world does (02 §18.1).
 
 A creature is drawn as the persona the viewer perceives.
@@ -211,6 +266,24 @@ truth. Mods add overlays as definitions.
 The camera follows the active controlled character, or a free cursor in
 look and targeting modes. The viewed storey follows the character and can
 be shifted up and down. Cutscenes move the camera (section 8).
+
+### 6.4 Ambience
+
+```json
+{ "type": "ambience", "id": "heavy_rain", "tint": "#8090a0", "dim": 0.2,
+  "particles": { "ch": ["|", "'"], "density": 0.08, "dir": "wind", "speed": 18 } }
+```
+
+An **ambience** is how a condition looks: a tint, a dimming, and particles
+that fall or drift. It is named by a weather state (09 §14.1), a medium
+(11 §4: under water), a stratum's sky by time of day, or an area kind. The
+scene draws the ambience of where the viewed character is. Weather
+particles are drawn only on cells the character knows to be open to the
+sky.
+
+Ambience is presentation only. What rain and dusk do to perception is
+already in the simulation, as light and signals (15). On a terminal it is
+the tint and the dimming.
 
 ## 7. Playback
 
@@ -597,9 +670,10 @@ A third, **null** frontend records frames for tests.
 
 ## 13. Modding surface
 
-**Definition types**: `screen`, `ui_part`, `theme`, `figure`, `keymap`,
-`control`, `show`, `anim`, `cutscene`. The `glyph` field on everything
-drawable. The `cutscene` field on actions.
+**Definition types**: `screen`, `ui_part`, `theme`, `color`, `ambience`,
+`figure`, `keymap`, `control`, `show`, `anim`, `cutscene`. The `glyph`
+field on everything drawable. The `look` field on traits, modes, postures
+and worn items. The `cutscene` field on actions.
 
 **Simulation effect**: `play_cutscene`. **Rule field**: `ui_callable`.
 **Command**: `Ui { rule, args }`.
@@ -619,6 +693,8 @@ drawable. The `cutscene` field on actions.
 | V6 | A cutscene never alters, drops or reorders events in simulation time. |
 | V7 | Every bundled screen is a definition that a mod can override. |
 | V8 | With a fixed time step and input script, frames are reproducible. |
+| V9 | Text shown to a player names others only as the reader knows them. |
+| V10 | Nothing in bundled content is told apart by colour alone. |
 
 ## 15. Budgets
 

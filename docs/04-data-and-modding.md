@@ -383,7 +383,8 @@ change incompatibly or be removed, and nothing bundled depends on it.
 
 Bundled mods name none, and a test fails if one does.
 
-Experimental features at present: `world_rewind` (13 §9.5).
+Experimental features at present: `world_rewind` (13 §9.5) and
+`coloured_light` (15 §3.3).
 
 ## 9. Registries
 

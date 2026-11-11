@@ -701,6 +701,65 @@ a ramp. It is separate from item conduits (section 9.2), whose goods are a
 queue and are not in the world while they travel. A line that must carry
 both goods and people uses moving floors, with movers at its ends.
 
+### 9.5 Substances
+
+A **substance** is one stuff, whatever form it is in.
+
+```json
+{ "type": "substance", "id": "nightshade", "name": "nightshade extract",
+  "unknown_name": "a dark liquid", "color": "violet", "taste": 0.6,
+  "forms": { "loose": "nightshade_spill", "vapour": null, "piped": null, "still": null },
+  "in_body": { "routes": { "ingest": 1.0, "inject": 1.5, "skin": 0.05 },
+               "adds": [ { "pool": "nightshade", "per_ml": 1.0 } ] } }
+```
+
+| `forms` | The substance as |
+|---------|------------------|
+| `loose` | A field (02 §16): spilled, splashed, sprayed |
+| `vapour` | A field in the air |
+| `piped` | A resource in pipes and tanks (section 5) |
+| `still` | A material: standing liquid, or frozen solid (02 §5.4) |
+
+Amounts carry over between forms by volume. A breached pipe spills its
+substance as its loose field with no rule written. A drain takes the field
+back. A field that is a form of a substance exposes those in it by the
+substance's routes (02 §16) without an `expose` rule of its own.
+
+**Containers.** An item, a device or a body part that `contains` a volume
+holds amounts of any substances as a mixture. A drink is an item filled
+when it is made: `"filled": { "water": 290, "ethanol": 40 }`.
+
+| Verb | Does |
+|------|------|
+| `pour { from, to, amount }` | Moves a share of a mixture into another container, into a tank, or onto a cell, where it is loose |
+| `fill { container, from }` | Takes from a cell's field, from standing liquid, or from a tap |
+| `dose { who, from, amount, route }` | Puts it into a body |
+| `coat { surface, from, amount }` | Puts it on a striking surface (07 §3.2) |
+
+**In a body.** A dose adds to the pools the substance names, times the
+factor for its route. What the pool then does is the pool's own rates,
+thresholds and rules (06 §4.2). An antidote is a substance that adds a
+negative amount to another's pool. The hook `exposure_incoming` runs for
+every route.
+
+| Route | How it happens |
+|-------|----------------|
+| `ingest` | Eating and drinking: interactions whose effect is `dose` from the container |
+| `inject` | A needle; or a coated surface whose hit breaches the outermost living layer (06 §7.2). A share of the coating goes in, and every hit wipes some off. |
+| `skin`, `breath` | From a field, as 02 §16 |
+
+A venomous bite is a gland that contains venom and a fang that is coated
+from it. Blood that burns is a pool that names a substance (06 §6.1).
+
+**Still water.** Poured into a cell of standing liquid, a substance is
+recorded on that cell, and whatever is drawn from the cell takes its
+share. A well can be poisoned. Spreading through a lake is not modelled.
+
+Recipes may take substances as inputs and give them as outputs, by
+volume, from and into containers at the station. Brewing, distilling and
+alchemy are recipes. What something tastes of when swallowed is raised as
+`tasted`, with the strongest `taste` in the mixture, for rules to notice.
+
 ## 10. Construction
 
 ### 10.1 Building is a recipe
@@ -985,7 +1044,7 @@ changing costs nothing. Warm and hot tracts run devices identically.
 ## 14. Modding surface
 
 **Definition types**: `interaction`, `device`, `resource`, `conduit`,
-`recipe`, `know_how`. `structure`, `provides` and `teaches` on devices and
+`recipe`, `know_how`, `substance`. `structure`, `provides` and `teaches` on devices and
 items. Fields `interactions`, `device`, `load`, `when_supplied`,
 `conveys` on elements; `loss` on conduits; config kind `logic` and
 `stand_alone` on devices; `account` and `floor` on resources; `qualities`
@@ -1000,7 +1059,7 @@ and `worth` on items; `services` on tract definitions.
 `module_unsupplied`, `suit_breached`, `service_changed`, `paid`,
 `payment_started`, `payment_stopped`, `account_exhausted`, `traded`,
 `stood_up`, `stood_down`, `structure_formed`, `structure_broken`,
-`know_how_gained`.
+`know_how_gained`, `poured`, `dosed`, `tasted`.
 
 **Hooks**: `interaction_starting`, `interaction_reach`,
 `network_overloaded`, `recipe_completing`, `job_starting`,
@@ -1012,7 +1071,7 @@ and `worth` on items; `services` on tract definitions.
 `create_job`, `cancel_job`, `plan_from_map`, `install`, `uninstall`,
 `plug_in`, `unplug`, `set_service`, `hold_ticket`, `trade`, `pay`,
 `start_payment`, `stop_payment`, `deposit`, `withdraw`, `stand_up`,
-`stand_down`, `teach`, `unlearn`.
+`stand_down`, `teach`, `unlearn`, `pour`, `fill`, `dose`, `coat`.
 
 **Queries**: `interactions`, `devices`, `networks`, `members`, `jobs`,
 `modules`, `recipes`, `offers`, `payments`.
@@ -1043,6 +1102,7 @@ minds, `knows(what)`.
 | G12 | A trade happens wholly or not at all. |
 | G13 | An assembly is one entity whether worn, lying or standing. Its damage, stores and modules are the same in each. |
 | G14 | A device with a structure is formed exactly when the cells in its box match one of its maps in some turn. |
+| G15 | A substance is conserved across its forms: what is poured, spilled, drained or drawn is neither made nor lost, except by what a body takes in and what a field's own rules remove. |
 
 ## 16. Budgets
 

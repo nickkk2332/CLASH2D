@@ -156,9 +156,40 @@ and always name the rule, the JSON path and the position in the string.
 
 ### 4.6 Text
 
-`Text` fields are templates: `"{self.name} staggers back."`. Anything in
+`Text` fields are templates: `"{the(self)} staggers back."`. Anything in
 braces is an expression. `{{` is a literal brace. Numbers may be formatted:
-`{event.energy:.0}`.
+`{event.energy:.0}`. Inline styles are written as tags (12 §4.3).
+
+**Who is reading.** Text shown to a player is written for a **reader**:
+the controlled character in whose log or on whose screen it appears. The
+same line may read differently to different readers, because they know
+different things.
+
+| Helper | Gives |
+|--------|-------|
+| `name(x)` | What the reader calls `x`. "you" if `x` is the reader. The name of the persona the reader perceives `x` as, if the reader knows it. Otherwise a description of what the reader made out (15 §8.4): "a tall figure in red". For a thing whose kind the reader has not learned, its definition's `unknown_name`. |
+| `the(x)`, `a(x)` | The same with an article where one belongs: "the guard", "a guard", "Mara", "you" |
+| `they(x)`, `them(x)`, `their(x)`, `themself(x)` | Pronouns, from the persona's set (15 §8.1); "you" and "your" for the reader |
+| `verb(x, word)` | The verb agreeing with `x`: "you hit", "the guard hits" |
+| `count(n, word)`, `plural(word)` | "3 arrows", "arrows" |
+| `list(xs)` | "a knife, a rope and two coins" |
+| `cap(text)` | A capital first letter. The first letter of a finished line is capitalised without it. |
+
+```json
+"log": "{the(self)} {verb(self, 'drive')} {their(self)} blade into {the(target)}."
+```
+
+reads "You drive your blade into the guard" to the one doing it, and "A
+tall figure in red drives their blade into Mara" to someone watching who
+knows only one of them.
+
+`x.name` is the true name. Reading it for anyone but the reader in a
+message, a log line, a caption or a line of speech is a lint warning: it
+tells the player something their character may not know (01 R11). Debug
+screens may use it freely.
+
+Articles, plurals and verb forms come from a `language` definition. One is
+bundled for English. Translation (04 §20) would supply others.
 
 ### 4.7 Built-in functions
 
@@ -166,7 +197,7 @@ braces is an expression. `{{` is a literal brace. Numbers may be formatted:
 |-------|-----------|
 | Maths | `min` `max` `clamp` `abs` `sign` `floor` `ceil` `round` `sqrt` `exp` `ln` `log10` `sin` `cos` `atan2` `lerp` `div` |
 | Random | `rand(a, b)` `rand_int(a, b)` `chance(p)` `pick(list)` |
-| Lists, maps and text | `len` `contains` `first` `last` `sum` `str` `keys` `values` `has` |
+| Lists, maps and text | `len` `contains` `first` `last` `sum` `str` `keys` `values` `has`; the text helpers of section 4.6 |
 | Space | `dist(a, b)` `dir(a, b)` `offset(loc, dx, dy, dz)` `los(a, b)` |
 | Time | `now()` `local_now(subject)` |
 | Data | `setting(id)` `has_def(type, id)` |

@@ -34,6 +34,7 @@ Vehicle package V5 depends on it.
 | G16 | Structures | M | G2, G4, WG1 | todo |
 | G17 | Know-how | S | G6, E7 | todo |
 | G18 | Screens for making, building and work | L | G6, G8, G5, U9, U4 | todo |
+| G19 | Substances | M | G6, G3, W16, E2, C2 | todo |
 
 ## Order and parallelism
 
@@ -45,7 +46,7 @@ Vehicle package V5 depends on it.
 | 4 | G5, G7, G8, G10, G11 |
 | 5 | G13, G15 |
 | 6 | G14 |
-| any, once their dependencies are done | G16, G17, G18 |
+| any, once their dependencies are done | G16, G17, G18, G19 |
 
 G13 to G15 were added after the first review of what the design supports
 (decisions D-198 to D-200). G14 needs the cold layer's shipments (ai
@@ -380,6 +381,35 @@ Done when
 - Know-how moves with a transferred mind and stays out of the body left
   behind.
 
+### G19 — Substances
+
+**Spec** 16 §9.5; 02 §16; 06 §6.1, §9.1 · **Size** M · Added by the review
+of substances (decision D-223)
+
+Build
+- The `substance` type and its forms; amounts carried between field,
+  resource, material and container by volume; fields that are forms
+  exposing by the substance's routes.
+- `contains` on items, devices and body parts; mixtures; `pour`, `fill`,
+  `dose`, `coat`; `filled` on items.
+- Routes `ingest` and `inject`; coatings delivered by hits that breach the
+  outermost living layer; wiping.
+- Additives on cells of standing liquid; substances as recipe inputs and
+  outputs; `tasted`; pools that name a substance spilling it on a leak.
+
+Done when
+- A substance is conserved across forms (invariant G15): a litre poured
+  out, drained back and drawn again is a litre.
+- Test script `spiked`: a poison poured into a cup of wine is drunk with
+  it and adds to the drinker's pool by the ingest factor; the same amount
+  on the skin adds by the skin factor; an antidote lowers the pool.
+- Test script `envenomed`: a coated blade doses by injection only when its
+  hit breaches the skin, loses coating with every hit, and doses nothing
+  through armour that is not breached.
+- A well poisoned at one cell poisons what is drawn from that cell.
+- A breached pipe of a substance spills its loose field with no rule
+  written for it.
+
 ### G18 — Screens for making, building and work
 
 **Spec** 12 §6.2, §10.7; 16 §4.2, §8, §10 · **Size** L
@@ -424,6 +454,8 @@ Under `scenarios/devices/`.
 | `mail_order` | G14 | S26 | Delivery by shipment; interception |
 | `come_here` | G15 | S26 | A suit that acts unworn |
 | `firebrick` | G16 | S24 | A machine made of cells in a shape |
+| `spiked` | G19 | — | Mixtures, ingestion, antidotes |
+| `envenomed` | G19 | — | Coatings and injection |
 
 ## Review additions
 

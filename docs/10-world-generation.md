@@ -712,6 +712,22 @@ that long when the realm is created, before anyone arrives, so routines are
 out of step, a few incidents have happened and are known about, and stocks
 are no longer at their starting values.
 
+### 11.5 Names
+
+```json
+{ "type": "names", "id": "coast_folk",
+  "patterns": [ { "is": "{given} {family}", "weight": 4 }, { "is": "{given} of {place}" } ],
+  "parts": { "given":  { "list": ["Mara", "Tobin", "Ysolde"] },
+             "family": { "join": [["Ash", "Hal", "Wen"], ["wick", "more", "by"]] } } }
+```
+
+A **names** definition makes names from patterns and parts: lists, pieces
+joined together, or a file of one name per line. Templates name their
+people from one, and settlements, sites and vessels may too. `{place}` and
+the like are filled by whoever asks. A name is drawn from a positional
+seed, so the same world has the same names. `make_name(names, seed)` is
+available to rules.
+
 ## 12. Tools
 
 All in `clash-tools`.
@@ -731,7 +747,7 @@ seen in a running game.
 
 **Definition types**: `map`, `palette`, `ground`, `tract`, `building`,
 `assembly`, `region_kind`, `settlement`, `site`, `worldgen`,
-`map_transform`, `path_kind`. Field `presence` on populations.
+`map_transform`, `path_kind`, `names`. Field `presence` on populations.
 
 **Events**: `realm_planned`, `region_surveyed`, `tract_realized`,
 `site_created`, `map_applied`.

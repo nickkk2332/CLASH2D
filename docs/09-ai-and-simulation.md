@@ -827,7 +827,8 @@ A camp, a homestead, a hideout, a workshop and a colony begin this way.
 ```
 
 Each region has a weather state from its climate's definition. It changes
-by the given chances each step. The state sets values on the region: light
+by the given chances each step. A state may name an `ambience`: how it
+looks (12 §6.4). The state sets values on the region: light
 (15 §3.3), wind and sea state (11 §4.3), temperature, and fields laid on
 loaded cells open to the sky.
 
