@@ -228,6 +228,16 @@ fn nothing_but_relocate_changes_a_place() {
         sim.truth().cosmos().occupant(guard).unwrap().footprint,
         Footprint::new(2, 1, 1)
     );
+    // A footprint that does not fit where it stands is refused.
+    let hash = sim.state_hash();
+    let huge = Presence::new(OccupantKind::Creature).with_footprint(Footprint::new(16, 16, 1));
+    let edge = spawn(&mut sim, creature(), on(SIDE - 3, SIDE - 3));
+    sim.pump();
+    let before = sim.state_hash();
+    assert_ne!(before, hash);
+    let refused = sim.set_presence(edge, huge, Cause::DEBUG).unwrap_err();
+    assert_eq!(refused.code, codes::WORLD_NOT_LOADED);
+    assert_eq!(sim.state_hash(), before);
     // A refused move leaves it where it was.
     let refused = sim
         .relocate(guard, on(SIDE + 40, 0), Cause::DEBUG)
@@ -353,9 +363,24 @@ fn leaving_the_world_cancels_wake_ups() {
     sim.relocate(cart, Place::Stored, Cause::DEBUG).unwrap();
     assert_eq!(sim.timeline().wake_count(), 1);
     assert_eq!(sim.truth().wakes_of(other).len(), 1);
-    // And there is no clock for a stored entity to wait on.
+    // Nothing can be scheduled for an entity that is not in the world,
+    // even one with a clock of its own.
     let refused = sim
         .schedule_for(rat, Dur::from_secs(1), common::walk_wake(rat, 0))
+        .unwrap_err();
+    assert_eq!(refused.code, codes::ENTITY_STORED);
+    sim.set_time_rate(other, Some(clash_core::Real::of(2.0)), Cause::DEBUG)
+        .unwrap();
+    assert_eq!(
+        sim.timeline().wake_count(),
+        1,
+        "its wake-up moved to its own clock"
+    );
+    sim.relocate(other, Place::Stored, Cause::DEBUG).unwrap();
+    assert_eq!(sim.timeline().wake_count(), 0);
+    assert!(sim.truth().clock_of(other).is_some());
+    let refused = sim
+        .schedule_for(other, Dur::from_secs(1), common::walk_wake(other, 0))
         .unwrap_err();
     assert_eq!(refused.code, codes::ENTITY_STORED);
 }

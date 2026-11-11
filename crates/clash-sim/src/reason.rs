@@ -188,7 +188,7 @@ pub const KERNEL_REASONS: &[ReasonInfo] = &[
     },
     ReasonInfo {
         code: codes::ENTITY_STORED,
-        doc: "The entity is not in the world, so it has no clock to wait on. Values: `entity`.",
+        doc: "The entity is not in the world, so nothing can be scheduled for it. Values: `entity`.",
     },
     ReasonInfo {
         code: codes::ENTITY_IDS_EXHAUSTED,

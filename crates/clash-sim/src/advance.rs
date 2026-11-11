@@ -20,10 +20,10 @@
 //! A wake-up carries a [`WakeDomain`], and the kernel hands it to that
 //! domain's handler: a plain function `fn(&mut Sim, WakeId, Wake)`.
 //! A package that schedules wake-ups writes one and registers it in
-//! [`Handlers::default`], beside the others, so that every simulation
-//! has it from the start:
+//! `Handlers::default` in this file, beside the others, so that every
+//! simulation has it from the start:
 //!
-//! ```ignore
+//! ```text
 //! handlers.set(WakeDomain::Action, crate::action::on_wake);
 //! ```
 //!

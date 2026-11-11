@@ -101,6 +101,48 @@ fn a_wake_up_nothing_handles_is_a_reported_fault() {
     assert_eq!(reason.value("id"), Some(&clash_core::Value::Int(7)));
 }
 
+/// Invariant T7: `advance` always returns. A wake-up that schedules
+/// itself again without letting time move is contained: the advance
+/// reports a fault and yields, and goes on doing so however often it is
+/// called.
+#[test]
+fn a_wake_up_that_never_lets_time_move_is_contained() {
+    fn again(sim: &mut Sim, _id: WakeId, wake: Wake) {
+        let _ = sim.schedule_on(clash_time::ClockId::UNIVERSAL, Dur::ZERO, wake);
+    }
+    let mut sim = common::sim(8);
+    sim.set_wake_handler(WakeDomain::Timer, again);
+    sim.schedule_on(
+        clash_time::ClockId::UNIVERSAL,
+        Dur::from_secs(1),
+        Wake::new(WakeDomain::Timer, 0, 0),
+    )
+    .unwrap();
+    for round in 1..=2_u64 {
+        assert_eq!(sim.advance(AdvanceLimit::UntilDecision), Advance::Yielded);
+        assert_eq!(
+            sim.now(),
+            Tick(SECOND),
+            "time is stuck, and the caller is told"
+        );
+        assert_eq!(
+            sim.steps(),
+            round * u64::from(clash_sim::MAX_WAKES_PER_TICK)
+        );
+        let events = sim.drain_events();
+        let [fault] = events.as_slice() else {
+            panic!("one fault expected, got {} events", events.len());
+        };
+        assert!(matches!(
+            &fault.body,
+            EventBody::Fault { reason } if reason.code == codes::ADVANCE_TICK_LIMIT
+        ));
+    }
+    // A limit on work still cuts in first.
+    assert_eq!(sim.advance(AdvanceLimit::Work(10)), Advance::Yielded);
+    assert!(sim.drain_events().is_empty());
+}
+
 /// A world process for a test: at each wake it raises a wall one cell
 /// further east, through the world's own edit path, and sleeps again
 /// until its count runs out. `id` is the row, `arg` the cells left.

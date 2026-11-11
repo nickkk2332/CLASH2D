@@ -6,7 +6,7 @@
 //! | An entity without a personal clock | The clock of its location |
 //! | An entity with a personal clock | Its own, a child of its location's clock, or of its anchor if it has one |
 //! | A contained entity | The clock of its outermost container, unless it has a personal clock |
-//! | An entity that is not in the world | None, unless it has a personal clock |
+//! | An entity that is not in the world | Its personal clock if it has one, else none. Nothing can be scheduled for it |
 //!
 //! The kernel does not store which clock an entity is on: it works it
 //! out from where the entity is, every time. What it stores is which
@@ -224,7 +224,8 @@ impl Sim {
     /// removed.
     ///
     /// Refused for an unknown entity, and for one that is not in the
-    /// world and has no clock of its own: there is no clock to wait on.
+    /// world, even if it has a clock of its own: nothing waits on behalf
+    /// of an entity that has left the simulation (invariant T9).
     pub fn schedule_for(
         &mut self,
         entity: EntityId,
@@ -232,15 +233,21 @@ impl Sim {
         wake: Wake,
     ) -> Result<WakeId, Reason> {
         self.known(entity)?;
-        let clock = self.clock_of(entity).ok_or_else(|| {
-            Reason::new(
-                codes::ENTITY_STORED,
-                format!(
-                    "entity {entity} is not in the world, so there is no clock for it to wait on"
-                ),
-            )
-            .with("entity", entity.to_string())
-        })?;
+        // Nothing waits on behalf of an entity that is not in the world,
+        // even one with a clock of its own (invariant T9).
+        let clock = self
+            .entities
+            .location(entity)
+            .and_then(|_| self.clock_of(entity))
+            .ok_or_else(|| {
+                Reason::new(
+                    codes::ENTITY_STORED,
+                    format!(
+                        "entity {entity} is not in the world, so nothing can be scheduled for it"
+                    ),
+                )
+                .with("entity", entity.to_string())
+            })?;
         let id = self
             .timeline
             .schedule(clock, after, wake)
