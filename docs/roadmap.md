@@ -17,9 +17,9 @@ Document numbers are stable. Other documents refer to them by number.
 | 04 | [Data and modding pipeline](04-data-and-modding.md) | Written |
 | 05 | [Expressions and EOC](05-expressions-and-eoc.md) | Written |
 | 06 | [Entities, bodies, species and items](06-entities-and-bodies.md) | Written |
-| 07 | Combat, techniques and clashes | Next |
-| 08 | Abilities and powers | After 07 |
-| 09 | AI and the layered simulation | After 07 |
+| 07 | [Combat, techniques and clashes](07-combat.md) | Written |
+| 08 | Abilities and powers | Next |
+| 09 | AI and the layered simulation | Next |
 | 10 | World generation and map format | Any time |
 | 11 | [Vehicles, mounts, the sea, space and travel](11-vehicles-and-travel.md) | Written |
 | 12 | [Presentation and the UI toolkit](12-presentation-and-ui.md) | Written |
@@ -35,6 +35,7 @@ Document numbers are stable. Other documents refer to them by number.
 | [world-model](plans/world-model.md) | 01 (foundation), 02 | M0, M1 |
 | [sim-kernel](plans/sim-kernel.md) | 03, 04, 05 | M2 |
 | [first-playable](plans/first-playable.md) | 06, 15, 12 | M3 |
+| [combat](plans/combat.md) | 07 | M3 |
 | [devices](plans/devices.md) | 16 | M4 |
 | [vehicles](plans/vehicles.md) | 11 | M6 |
 
@@ -43,32 +44,6 @@ Document numbers are stable. Other documents refer to them by number.
 "Fixed" items are already decided and are not reopened without a new entry
 in [decisions.md](decisions.md). Every document must respect rule R10 of the
 architecture: mechanism, not meaning.
-
-### 07 — Combat, techniques and clashes
-
-Scope: strikes, grapples, throws and weapons as actions that emit damage
-packets; techniques and styles as data; stances; targeting; defence and
-reactions; clash detection and resolution; paired actions for takedowns and
-executions; knockback into the world's body system; ranged weapons across
-technology levels.
-
-Fixed:
-- Attacks, defences and reactions are actions, windows and joint actions
-  as specified in 03. Combat adds definitions and verbs, not a second
-  timing system.
-- An attack ends in a `Hit` (06 §7). Combat's job is to turn a technique, a
-  striking surface (06 §9.1) and the attacker's attributes into the hit's
-  energy, intensity, area and target part.
-- Signature moves name their cutscene (12 §8.1).
-- Weapons are items and may be assemblies (16 §11): a magazine is a store,
-  a shot is an action with a cost, a scope is a module.
-- Outcomes come from packets against materials and bodies. There is no
-  separate layer of hit points and damage rolls.
-- Simple defaults for every exchange, with full control of technique and
-  target for players who want it.
-- Hitting several foes in one action is something an ability does, defined
-  in data. The engine has no "weak enemy" shortcut.
-- Nothing is scaled for fairness.
 
 ### 08 — Abilities and powers
 
@@ -90,6 +65,11 @@ Fixed:
 - An ability may come from equipment: modules confer traits and actions
   while supplied (16 §11.2). Innate and equipped abilities are the same
   kind of thing.
+- Abilities that harm do so through attacks, shots and energy releases
+  (07; 02 §13), so they can be aimed, defended against, held back by
+  `effort`, previewed, and can clash.
+- Power that outruns durability hurts its user (07 §6.3). Content that
+  wants otherwise supplies the durability.
 
 ### 09 — AI and the layered simulation
 
@@ -111,6 +91,10 @@ Fixed:
 - Work is taken from the job list (16 §10.2). This document decides who
   does which job, hauling to supply jobs, and how storage areas are used.
 - Tract services (16 §4.4) are switched by the cold simulation.
+- Choosing techniques, targets and effort uses `strike_preview` (07 §13),
+  which sees only what the character could know.
+- Fights between warm entities are resolved in bulk from previews
+  (07 §15). Battles between cold ones are events with outcomes.
 
 ### 10 — World generation and map format
 
@@ -153,7 +137,7 @@ Fixed:
 | M0 | Foundation (plan: world-model, F1–F4) | Workspace, data loading, timeline |
 | M1 | World model (plan: world-model, W1–W23) | A world that can be generated, viewed, wrecked and saved from a console |
 | M2 | Data, rules and actions (plan: sim-kernel) | Actions on the timeline; mods and EOC complete |
-| M3 | Entities, perception, presentation (plan: first-playable), then document 07 | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
+| M3 | Entities, perception, presentation (plan: first-playable) and combat (plan: combat) | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
 | M4 | Devices (plan: devices), then documents 08 and 09 | Interactions, power, crafting, base building, automation, gadgets and suits; abilities; characters with lives; large groups |
 | M5 | Documents 10, 13 | Generated worlds; scenarios and modes |
 | M6 | Vehicles (plan: vehicles) | Mounts, craft, ships, submarines, aircraft, spacecraft, journeys |
@@ -161,7 +145,8 @@ Fixed:
 The water and hull physics in the vehicles plan (V1, V3, V4) depend only on
 the world model and can be built much earlier than M6.
 
-The next document to write is 07 (combat), then 08, 09, 10 and 13.
+The documents still to write are 08 (abilities), 09 (AI and the layered
+simulation), 10 (world generation), 13 (scenarios) and 14 (tooling).
 
 From M3 onward, each stage adds to a set of small **reference mods** in
 different genres (for example a modern block with supers, a fantasy dungeon,

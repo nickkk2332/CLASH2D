@@ -948,7 +948,7 @@ Callers compute intensity. Conventions:
 
 | Source | Intensity |
 |--------|-----------|
-| Strike with a body part or weapon | Force over contact area (document 07) |
+| Strike with a body part or weapon | `energy / (surface area × give)` (07 §6.1) |
 | Kinetic impact of a body | `KE / (area × depth)`, section 15 |
 | Pressure wave | Energy density at that distance, section 13 |
 | Field contact | Per field definition, section 16 |

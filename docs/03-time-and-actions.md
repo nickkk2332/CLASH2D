@@ -401,7 +401,7 @@ target or body part can be as clever as content wants.
 | `on_exit` | Effects run when the phase ends normally. |
 | `tick` | Effects repeated at an interval while the phase lasts. |
 | `until`, `max` | For held phases: end when the condition is true (checked at ticks) or the maximum is reached. A `Cancel` command also ends a held phase and counts as release, not as cancellation. |
-| `cancel` | Whether the actor may abandon the action during this phase. Default false. |
+| `cancel` | Whether the actor may abandon the action during this phase. Default false. A list of action tags instead of `true` allows abandoning it only to start an action with one of those tags: a recovery that can be cut short by a follow-up and nothing else. |
 | `uninterruptible` | The `interrupt` effect cannot end the action during this phase. |
 | `fixed` | Tempo does not apply to this phase. |
 | `window` | Opens a reaction window when the phase starts (section 7). |
@@ -691,8 +691,7 @@ measured figures.
    mechanism is undecided. (08)
 2. **Windows without named candidates.** Bystanders reacting to something
    not aimed at them needs perception. (15)
-3. **Clash detection.** Two impacts that coincide within a tolerance should
-   resolve together. The hook is `ActionStarting` and phase tags; the rule
-   is combat's. (07)
+3. **Clash detection.** Settled in 07 §8: strikes at each other due within
+   a tolerance are brought together and resolved once.
 4. **Warm fidelity.** Whether warm entities should keep windows for attacks
    from other warm entities. Decide with measurements. (09)

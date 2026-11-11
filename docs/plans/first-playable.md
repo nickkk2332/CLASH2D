@@ -11,8 +11,9 @@ are those of [world-model.md](world-model.md) and
 
 When this plan is complete there is a game to sit down at: a window, a
 character built from templates, a destructible place with people in it who
-must notice you before they can respond to you. Combat proper arrives with
-document 07; until then attacks in tests are single actions that call `hit`.
+must notice you before they can respond to you. Fighting is added by
+[combat.md](combat.md); within this plan, attacks in tests are single
+actions that call `hit`.
 
 ## Status
 

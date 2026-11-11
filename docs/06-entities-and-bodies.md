@@ -179,6 +179,7 @@ a species feature, a mutation, a perk, a blessing, a curse, a drug, a stun.
 | `on_apply`, `on_remove` | Effect lists, which may edit the body |
 | `duration` | If present, the trait ends by itself. A timer (03 §9). |
 | `stacking` | `none`, `refresh`, or `stack` with a `max`; a stacked trait has a `stacks` count its expressions can read |
+| `group` | Traits in the same group exclude each other: adding one removes the others. Stances, forms, moods. |
 
 There is no separate concept of "status effect", "mutation" or "perk".
 A trait with a duration is a status. Without one it lasts until removed.
@@ -198,6 +199,8 @@ A trait with a duration is a status. Without one it lasts until removed.
   "provides": { "manipulation": 0.4 },
   "channels": { "arm": 1 },
   "sockets": { "wrist": { "count": 1, "accepts": ["hand"] } },
+  "surfaces": [ { "id": "elbow", "kind": "impact", "area": 1.2e-3, "give": 0.01, "span": 0.04 } ],
+  "band": [0.55, 0.85],
   "tags": ["limb"],
   "exposure": 1.0 }
 ```
@@ -209,6 +212,8 @@ A trait with a duration is a status. Without one it lasts until removed.
 | `channels` | Channel slots this part supplies (03 §6.2) |
 | `sockets` | Where other parts may attach, how many, and which kinds |
 | `exposure` | Relative likelihood of being struck by an unaimed hit |
+| `surfaces` | What the part can strike with: fists, feet, claws, teeth, horns (07 §3.2) |
+| `band` | The share of the body's height the part occupies, from the ground up. Decides what a shot at a given height can hit, and what cover protects (07 §11.1). |
 | `inside` | For organs: listed under the part that contains them |
 
 Materials used as tissue carry three optional extras:
@@ -315,6 +320,7 @@ pub struct Hit {
     pub part: Option<PartKey>,     // None: spread over the body
     pub packet: DamagePacket,      // kind, energy, intensity, cause (02 §12.1)
     pub area: Real,                // m² of contact
+    pub span: Real,                // m of contact across the part (07 §3.2)
     pub dir: Option<[Real; 3]>,
 }
 ```
@@ -344,9 +350,9 @@ If every layer is breached:
 
 - Parts `inside` this one may be struck with what remains, each with a
   chance in proportion to its size.
-- If the damage type is flagged `severs` and `area` covers enough of the
-  part's cross-section, the part is **severed**: it and everything on it
-  become an item, and the wound is on the parent.
+- If the damage type is flagged `severs` and the hit's `span` is at least
+  the part's girth, the part is **severed**: it and everything on it become
+  an item, and the wound is on the parent.
 - Otherwise what remains exits, and may strike whatever is behind.
 
 A worn layer's damage is damage to that item.
@@ -465,9 +471,10 @@ can be carried, searched, eaten, raised, or have its mind taken. The
 { "type": "item", "id": "longsword", "name": "longsword",
   "material": "steel", "mass": "1.4 kg", "volume": 0.0006, "length": "1.1 m",
   "surfaces": [
-    { "id": "edge",   "kind": "cut",    "area": 2.0e-5 },
-    { "id": "point",  "kind": "pierce", "area": 4.0e-6 },
-    { "id": "pommel", "kind": "impact", "area": 9.0e-4 }
+    { "id": "edge",   "kind": "cut",    "area": 2.0e-5, "give": 0.002, "span": 0.9 },
+    { "id": "point",  "kind": "pierce", "area": 4.0e-6, "give": 0.002, "span": 0.03 },
+    { "id": "flat",   "kind": "impact", "area": 1.0e-3, "give": 0.005, "span": 0.9 },
+    { "id": "pommel", "kind": "impact", "area": 9.0e-4, "give": 0.005, "span": 0.03 }
   ],
   "grip": { "arm": 1 },
   "grants": ["slash", "thrust"],
@@ -480,7 +487,7 @@ material and volume. Weapons notch and break; armour wears through.
 
 | Field | Meaning |
 |-------|---------|
-| `surfaces` | Parts of the item that can be brought to bear, each with a damage type and contact area. Combat (07) turns force over that area into intensity. |
+| `surfaces` | Parts of the item that can be brought to bear, each with a damage type, contact area, give and span (07 §3.2). Combat turns energy over that area into intensity. |
 | `grip` | Channel slots needed to wield it |
 | `wear` | Which body parts it covers, in which layer order, its thickness there and its coverage (the fraction of hits it intercepts) |
 | `holds` | Capacity as a container: volume, mass, what kinds |
