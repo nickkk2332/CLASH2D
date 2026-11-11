@@ -156,6 +156,10 @@ pub struct Cosmos {
     tickets: TicketTable,
     bodies: BodyTable,
     portals: PortalTable,
+    areas: AreaTable,                          // every area, of every grid (section 8.3)
+    sites: SiteTable,                          // every site, of every realm (section 8.4)
+    occupants: LookupMap<EntityId, OccupantRecord>,   // where each occupant is (section 8.1); not state
+    stability: StabilityQueue,                 // checks asked for and not yet made (section 14.2)
     vars: VarMap,                              // global variables
 }
 
@@ -167,14 +171,17 @@ pub struct Realm {
     pub base_grid: GridId,
     pub regions: BTreeMap<RegionPos, RegionRecord>,   // only surveyed regions
     pub stamps: Vec<Stamp>,                    // realm-wide stamps (section 17)
-    pub areas: AreaTable,
-    pub sites: SiteTable,
     pub travelers: TravelerTable,
     pub vars: VarMap,
     pub plan: RealmPlan,                       // computed once when the realm is made (10 §9.2)
     pub state: RealmState,                     // Active | Destroyed
 }
 ```
+
+Areas and sites are tables of the cosmos, not of each realm: an area
+names its grid and a site its realm. Reading a cell's ambient conditions
+must find the areas that cover it without first finding its realm, and an
+area that moves with its anchor can follow it into another grid.
 
 ### 4.1 Realm definitions
 
@@ -695,17 +702,18 @@ The error values are `WorldError::NotLoaded` with the normalised location,
 need its tract loaded. `obstacle_height` is the height of the tallest block
 or fixture in the cell that is not `passable`. Also read through `Cosmos`
 and `GridView`: `is_open`, `height` (the heightmap), `under_open_sky`,
-`damage`, `decals` and `var`. A `GridView` is a read-only handle on one
-grid for code that reads many of its cells.
+`damage`, `decals`, `var`, `element` (the state on one layer) and
+`areas_at`. A `GridView` is a read-only handle on one
+grid for code that reads many of its cells. `ambient` gives what the
+stratum says with what the areas covering the cell change (section 8.3).
 
 ### 7.2 Edits
 
 ```rust
 pub struct WorldCtx<'a> {
-    pub cosmos: &'a mut Cosmos,
+    pub cosmos: &'a mut Cosmos,                // which holds the definitions it was made from
     pub timeline: &'a mut Timeline,
     pub events: &'a mut EventSink<WorldEvent>,
-    pub defs: &'a Defs,
 }
 
 impl WorldCtx<'_> {
@@ -713,15 +721,21 @@ impl WorldCtx<'_> {
 }
 
 impl WorldEdit<'_> {
-    pub fn set_floor(&mut self, loc: Location, s: FloorState) -> Result<(), WorldError>;
-    pub fn set_block(&mut self, loc: Location, s: BlockState) -> Result<(), WorldError>;
-    pub fn set_fixture(&mut self, loc: Location, s: FixtureState) -> Result<(), WorldError>;
-    pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> DamageOutcome;
-    pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16);
-    pub fn lay_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;
+    // Each returns what was there before.
+    pub fn set_floor(&mut self, loc: Location, s: FloorState) -> Result<FloorState, WorldError>;
+    pub fn set_block(&mut self, loc: Location, s: BlockState) -> Result<BlockState, WorldError>;
+    pub fn set_fixture(&mut self, loc: Location, s: FixtureState) -> Result<FixtureState, WorldError>;
+    pub fn set_element(&mut self, loc: Location, layer: Layer, s: ElementState) -> Result<ElementState, WorldError>;
+    pub fn set_material(&mut self, loc: Location, layer: Layer, m: MaterialId) -> Result<ElementState, WorldError>;
+    pub fn set_damage(&mut self, loc: Location, layer: Layer, damage: u8) -> Result<u8, WorldError>;
+    pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> DamageOutcome;      // section 12
+    pub fn add_field(&mut self, loc: Location, field: FieldId, amount: i16);                       // section 16
+    pub fn lay_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;         // 16 §6
     pub fn cut_conduit(&mut self, loc: Location, c: ConduitId) -> Result<(), WorldError>;
-    pub fn add_decal(&mut self, loc: Location, decal: Decal);
-    pub fn set_var(&mut self, loc: Location, key: VarKey, value: Value);
+    pub fn add_decal(&mut self, loc: Location, kind: DecalId, amount: u8) -> Result<(), WorldError>;
+    pub fn remove_decals(&mut self, loc: Location, kind: DecalId) -> Result<usize, WorldError>;
+    pub fn set_var(&mut self, loc: Location, key: VarKey, value: Value) -> Result<Option<Value>, WorldError>;
+    pub fn clear_var(&mut self, loc: Location, key: VarKey) -> Result<Option<Value>, WorldError>;
 }
 ```
 
@@ -732,6 +746,33 @@ impl WorldEdit<'_> {
 3. queues a stability check if a structural element was removed or weakened
    (section 14);
 4. emits a `WorldEvent` carrying old state, new state and cause.
+
+An edit that changes nothing does none of this: it emits nothing and bumps
+nothing. Every edit normalises its location first and is refused, changing
+nothing, for a cell outside its grid, a cell that is not loaded, or a cell
+further from the stored cells of its tract than a column will stretch
+(`COLUMN_MAX_CHUNKS`, about 780 km of height): `WorldError::OutOfReach`.
+An edit is never refused because someone is standing there (section 23).
+
+- **A replaced element starts undamaged.** Setting a floor, block or
+  fixture clears the accumulated damage of that layer. `set_material`
+  transmutes: the element keeps its definition, its state and its damage.
+- **`set_damage`** writes an element's accumulated damage, in 255ths and
+  at most 254, and emits `ElementDamaged`. It is what `damage` and
+  destruction are built on (section 12); where there is no element it
+  does nothing.
+- **Removed or weakened** means, for a block or floor: it was removed,
+  replaced by another definition or made of another material; or it
+  changed state and with that stopped being `load_bearing` or an `anchor`,
+  or lost volume; or it took more damage. Putting an element where there
+  was none asks for no check, and nor does a door opening.
+- **The queue** holds one request for each cell, the first made, with its
+  tick and cause, in order of location. Edits only add to it;
+  `Cosmos::take_stability_requests` hands the requests to the collapse
+  process (section 14.2). It is state: it is hashed and saved.
+- **Marks and variables** are not structure. `add_decal` stamps the mark
+  with the edit's cause and the tick. Each emits its own event when it
+  changes something.
 
 Field value changes are too numerous to report per cell. They bump the field
 revision; events are emitted only when a field appears in or vanishes from a
@@ -757,7 +798,8 @@ matter (01 R11, document 15), and the two can differ.
 
 ### 7.4 World events
 
-`ElementChanged`, `ElementDamaged`, `ElementDestroyed`, `ConduitChanged`,
+`ElementChanged`, `ElementDamaged`, `ElementDestroyed`, `DecalAdded`,
+`DecalsRemoved`, `CellVarChanged`, `ConduitChanged`,
 `FieldAppeared`,
 `FieldVanished`, `FieldContact`, `EnergyReleased`, `CollapseStarted`,
 `CollapseSettled`, `BodyLaunched`, `BodyImpact`, `BodyHitOccupant`,
@@ -766,13 +808,32 @@ matter (01 R11, document 15), and the two can differ.
 `TremorStarted`, `TremorEnded`, `StateChanged` (an element or field
 changed state by temperature), `OccupantDisplaced`, `OccupantEntombed`,
 `LeftRealm` (something crossed a `void` edge and is gone),
-`FieldBudgetExceeded`, `TicketRefused`, `AreaBreached`, `TractLoaded`,
+`FieldBudgetExceeded`, `TicketRefused`, `AreaBreached`, `AreaClosed`, `TractLoaded`,
 `TractUnloading`, `TractDevastated`, `RegionDevastated`, `AreaEntered`,
 `AreaExited`, `PortalTraversed`, `RealmCreated`, `RealmDestroyed`,
 `SubgridMoved`, `SubgridDetached`, `SubgridMerged`.
 
 Each carries the tick, location, cause and type-specific data. The simulation
 forwards them to the EOC runtime and the presentation stream.
+
+`WorldEvent` is an enum, and the world puts events into an
+`EventSink<WorldEvent>`: a list in the order they were emitted, which
+whoever owns it drains. Rules name an event in snake case
+(`element_changed`). The fields of those built so far, besides `tick` and
+`cause`:
+
+| Event | Fields | Emitted when |
+|-------|--------|--------------|
+| `ElementChanged` | `loc`, `layer`, `old`, `new` (states) | A floor, block or fixture was set, replaced, transmuted or removed |
+| `ElementDamaged` | `loc`, `layer`, `state`, `old`, `new` (255ths) | An element's accumulated damage changed and the element did not |
+| `DecalAdded` | `loc`, `decal` (kind, amount, cause, tick) | A mark was left |
+| `DecalsRemoved` | `loc`, `kind`, `count` | Every mark of a kind was removed from a cell that had some |
+| `CellVarChanged` | `loc`, `key`, `old`, `new` (each a value or nothing) | A cell variable was set, changed or cleared |
+| `AreaEntered`, `AreaExited` | `area`, `occupant`, `loc` (where the occupant is), `clock` (the area's, if it has one) | An occupant came to be inside an area or stopped being (section 8.3) |
+| `AreaBreached` | `area`, `leak` (a cell) | An enclosed area no longer closes |
+| `AreaClosed` | `area`, `loc` (where it was enclosed from) | A breached area closes again |
+| `OccupantDisplaced` | `occupant`, `from`, `to` | An edit left an occupant no room and it was moved (section 23) |
+| `OccupantEntombed` | `occupant`, `loc` | An edit left an occupant no room and there was nowhere to go |
 
 Events that sum many changes (`EnergyReleased`, `CollapseSettled`,
 `TractDevastated`) carry totals by instigator: elements destroyed, mass
@@ -789,15 +850,34 @@ The world does not own entities. It owns an index from cells to occupants.
 pub struct Occupant {
     pub id: EntityId,
     pub kind: OccupantKind,      // Creature | Item | Device | Other
-    pub plane: PlaneMask,        // u8 bitmask; default bit 0
+    pub plane: PlaneMask,        // u32 bitmask, a bit for each plane; default bit 0
     pub mass: Real,              // kg, for collisions with bodies
     pub flags: OccupantFlags,    // BLOCKS_MOVE, BLOCKS_SIGHT, COLLIDES
+}
+
+pub struct Footprint { pub x: u8, pub y: u8, pub z: u8 }   // cells east, south and up; each at least 1
+
+pub struct OccupantRecord {      // what Cosmos::occupant(id) gives
+    pub occupant: Occupant,
+    pub loc: Location,           // the footprint's corner with the lowest coordinates, normalised
+    pub footprint: Footprint,
+    pub areas: Vec<AreaId>,      // the areas it is inside, in id order
 }
 ```
 
 Each chunk's `OccupantIndex` maps `CellIdx` to a small list. Large occupants
 register a box footprint and appear in every cell of it. Anything larger than
-a few cells per side should be a subgrid.
+a few cells per side should be a subgrid: a footprint is at most
+`FOOTPRINT_MAX_SIDE` (16) cells along a side.
+
+The index is a list of `(cell, occupant)` pairs kept in order of cell and
+then id, each with the occupant's kind, planes and flags, so that a query
+filters without looking anything up. What it holds never depends on the
+order things arrived in. An occupant standing or flying where its tract has
+no stored chunk is indexed beside the chunks and needs no storage; the
+index moves into the chunk if one is created. The cosmos keeps each
+occupant's record by id. None of this is state: it is not hashed and not
+saved, and the simulation places its entities again after a load.
 
 Only entities that are in the world appear in the index. An entity inside
 another (01 §6) does not: a rider on a mount, a passenger, an item in a pack,
@@ -808,9 +888,55 @@ Queries: at a cell, in a box, within a radius, along a ray, each with an
 optional plane mask and kind filter. Results are returned in a defined order
 (by cell, then by id).
 
-The index is changed only by `place`, `relocate` and `remove` on `Cosmos`,
-called from the simulation's single relocation function. `relocate` computes
-area and portal crossings and emits their events.
+```rust
+impl Cosmos {
+    pub fn occupant(&self, id: EntityId) -> Option<&OccupantRecord>;
+    pub fn occupants_at(&self, loc: Location, filter: &OccupantFilter) -> Result<Vec<Occupied>, WorldError>;
+    pub fn is_occupied(&self, loc: Location, filter: &OccupantFilter) -> Result<bool, WorldError>;   // allocates nothing
+    pub fn occupants_in_box(&self, grid: GridId, cells: CellBox, filter: &OccupantFilter) -> Result<Vec<Occupied>, WorldError>;
+    pub fn occupants_within(&self, centre: Location, radius_m: Real, filter: &OccupantFilter) -> Result<Vec<Occupied>, WorldError>;
+    pub fn occupants_along(&self, from: PointM, to: [Real; 3], filter: &OccupantFilter) -> Result<Vec<Occupied>, WorldError>;
+}
+```
+
+- A result lists pairs: an occupant that fills several cells is listed
+  once for each of them the query covers. `distinct_ids` reduces a result
+  to one entry for each occupant, in the order they first appear.
+- A box and a radius answer by cell (storey by storey, row by row), then
+  by id. A radius is in metres between cell centres, a storey counting
+  three, the shorter way round. Along a line the cells are those of the
+  segment walk of section 3.3, in the order the line reaches them, and
+  occupants within a cell by id.
+- An `OccupantFilter` asks for a plane mask (occupants sharing a bit with
+  it; with none, every occupant whatever its planes), a set of kinds,
+  flags an occupant must all have, and one occupant to leave out, usually
+  the one asking.
+- Every occupant is in loaded space (W4), so a query needs nothing
+  loaded: a cell that is not loaded or lies outside the realm holds no
+  one. Only an unknown grid is an error. A box over more than
+  `QUERY_MAX_TRACTS` (4096) tracts, or a line through more than
+  `QUERY_MAX_LINE_CELLS` (65,536) cells, is refused.
+
+The index is changed only by `place`, `relocate` and `remove`, called from
+the simulation's single relocation function. They are functions of
+`WorldCtx`, because they emit events and stamp them with the tick:
+
+```rust
+impl WorldCtx<'_> {
+    pub fn place(&mut self, occupant: Occupant, at: Location, footprint: Footprint, cause: Cause) -> Result<(), WorldError>;
+    pub fn relocate(&mut self, id: EntityId, to: Location, cause: Cause) -> Result<Location, WorldError>;   // returns where it was
+    pub fn relocate_as(&mut self, id: EntityId, to: Location, footprint: Footprint, cause: Cause) -> Result<Location, WorldError>;
+    pub fn remove(&mut self, id: EntityId, cause: Cause) -> Result<OccupantRecord, WorldError>;
+    pub fn update_occupant(&mut self, occupant: Occupant) -> Result<(), WorldError>;   // kind, planes, mass, flags; not position
+}
+```
+
+Every cell of the footprint must be inside the grid and loaded, or the call
+is refused and nothing changes. `relocate` to another grid is the same
+call. `relocate_as` also changes the footprint, for something that turns,
+grows or lies down. A move to where the occupant already is does nothing.
+`relocate` computes area crossings and emits their events (section 8.3);
+portal crossings join it with portals (section 19).
 
 ### 8.2 Planes
 
@@ -823,21 +949,29 @@ Planes are named by definitions (`{ "type": "plane", "id": "astral" }`;
 at most thirty-two). `set_plane { who, planes }` sets which an occupant
 is on, and `who.planes` reads it.
 
+A plane's id is the number of its bit in a `PlaneMask`. Plane 0 is built
+in, `engine:default`: what everything is on unless it says otherwise. It
+counts among the thirty-two, so data may define thirty-one, which are
+numbered in order of id. A plane definition may carry `tags` and nothing
+else. An occupant whose mask is empty interacts with nothing.
+
 ### 8.3 Areas
 
 ```rust
 pub struct Area {
-    pub id: AreaId,
+    pub id: AreaId,                  // unique in the cosmos, never reused
     pub kind: Option<AreaKindId>,    // definition supplying defaults and attached rules
-    pub shape: AreaShape,            // Box { min, max } | Cells(sorted Vec<CellPos>) | Radius(m)
+    pub grid: GridId,
+    pub shape: AreaShape,            // Box(CellBox) | Cells(sorted Vec<CellPos>) | Radius { centre, radius }
     pub anchor: Option<AreaAnchor>,  // an entity or subgrid it moves with
     pub ambient: Option<AmbientOverride>,   // gravity inside it, as a scale or a vector; drift (11 §4.7)
     pub journal: Option<Dur>,        // keep cell changes made inside it for this long (08 §7.4)
-    pub grid: GridId,
-    pub tags: TagSet,
+    pub tags: Vec<String>,           // sorted
     pub vars: VarMap,
     pub clock: Option<ClockId>,      // things inside run on this clock
     pub site: Option<SiteId>,
+    pub priority: i32,               // which applies where areas overlap: the highest
+    pub enclosure: Option<Enclosure>,       // how it was made, if by enclosing: { from, limit, breached, leak }
 }
 ```
 
@@ -846,22 +980,78 @@ no-fly zone, a bubble of stopped time. They are created by generation, by
 EOCs and by powers. Lookup is by a per-tract list. Entering and leaving emit
 events.
 
+A shape is in its grid's coordinates. A box may reach across a wrapped
+edge. A radius is in metres from the centre of a cell, a storey counting
+three, the shorter way round. An area may touch at most `AREA_MAX_TRACTS`
+(4096) tracts and list at most `AREA_MAX_CELLS` (65,536) cells: something
+larger is a realm, or a change to a realm's clock.
+
+```rust
+impl WorldCtx<'_> {
+    pub fn create_area(&mut self, spec: AreaSpec, cause: Cause) -> Result<AreaId, WorldError>;
+    pub fn remove_area(&mut self, id: AreaId, cause: Cause) -> Result<Area, WorldError>;
+    pub fn move_area(&mut self, id: AreaId, by: IVec3, cause: Cause) -> Result<(), WorldError>;
+    pub fn set_area_shape(&mut self, id: AreaId, shape: AreaShape, cause: Cause) -> Result<(), WorldError>;
+    pub fn set_area_clock_rate(&mut self, id: AreaId, rate: Option<Real>) -> Result<(), WorldError>;
+    pub fn enclose(&mut self, from: Location, kind: Option<AreaKindId>, limit: u32, cause: Cause) -> Result<AreaId, WorldError>;
+}
+```
+
+An `AreaSpec` gives the grid and the shape, and optionally a kind, an
+anchor, an ambient override, a journal span, tags, variables, a clock rate,
+a priority and a site. Tags, variables and the override are changed in
+place through `Cosmos` (`set_area_tag`, `set_area_var`, `set_area_ambient`,
+`set_area_priority`, `set_area_anchor`). `Cosmos::areas_at` lists the areas
+that cover a cell and `Cosmos::occupants_in_area` who is inside one.
+
+**Inside.** An occupant is inside an area when any cell of its footprint
+is. `AreaEntered` and `AreaExited` are emitted when that changes, whichever
+of the two moved: the occupant, by `place`, `relocate` or `remove`; or the
+area, by being made, removed, moved or reshaped. When an occupant moves,
+the areas it left are reported first and then those it entered, each in id
+order. When an area changes, the occupants it left are reported first and
+then those it came over, each in id order. Each event carries the area's
+clock.
+
 An area may have a kind. An `area_kind` definition supplies default tags,
 variables, an optional clock rate and priority, and rules attached to every
 area of that kind (05 §9.3). A kind flagged `sealed` gives its areas a
 sealed volume with compartments and pressure (11 §10).
 
+| Field of `area_kind` | Meaning |
+|----------------------|---------|
+| `tags` | Tags every area of the kind carries. The area's own are added. |
+| `vars` | Variables every area of the kind starts with: each a boolean, a number or a text. The area's own are laid over them. |
+| `clock_rate` | The rate of a clock of the area's own, relative to its realm's. Absent: no clock. |
+| `priority` | Which area applies where several overlap. Default 0. |
+| `sealed` | The area is a sealed volume (11 §10). The world stores the flag. |
+| `leak` | How fast a sealed area's held temperature moves toward the outside (11 §4.6). Stored as written. |
+| `ambience` | How it looks inside (12 §6.4). Stored as written. |
+| `rules` | Rule ids or inline rules (05 §9.3). The world carries them as written for the rule runtime. |
+
 An area with a clock is how scene S10 works. Occupants, bodies and processes
 inside it are re-parented to the area's clock on entry and back on exit.
+The world makes the clock, under its realm's, and says which clock applies:
+`Cosmos::ambient` gives it for a cell, and `AreaEntered` and `AreaExited`
+carry it. Whoever schedules for an occupant moves its wake-ups across.
+Removing an area destroys its clock, and whatever was still waiting on it
+goes back to the clock above.
 
 An **anchored** area moves with its anchor. When it moves, what it now
 covers and no longer covers is worked out, and the same enter and exit
 events are raised as when an occupant moves. Auras, carried fields and
-bubbles around a person are anchored areas (08 §7.2).
+bubbles around a person are anchored areas (08 §7.2). An area anchored to
+an entity moves when `relocate` moves that entity, by as much, and into
+another grid if the entity goes there; the entity itself neither leaves
+nor enters it. An area that cannot follow, because it would leave the
+grid, stays where it is. An entity that is not an occupant is moved for
+with `move_area`. An anchor that is a subgrid is stored until subgrids are
+built (section 18).
 
 An area with a **journal** keeps, for the stated span of local time, every
 cell change made inside it together with the state before the change. They
 can be undone in reverse order (08 §7.4). An area without one keeps nothing.
+The span is stored on the area; the journal itself is built with 08 §7.4.
 
 **Enclosing.** `enclose { from, kind, limit }` makes an area out of a
 closed space. It fills outward from a cell through open cells, stopped by
@@ -870,6 +1060,19 @@ floors. If the space closes within `limit` cells, an area of that kind is
 created over it. If not, it is refused, and the refusal names a cell
 through which it leaks.
 
+- The fill steps north, east, south, west, up and down, in that order,
+  breadth first. It does not enter a cell whose block has a `coverage` of
+  0.95 or more (`FIELD_BLOCK_COVERAGE`), and it passes between two storeys
+  only where the upper cell has no floor or a floor that is a `grate`.
+  Fixtures and occupants do not stop it. A barrier edge of the realm
+  closes a space like a wall.
+- The leak named is the cell from which the fill would cross a `void` edge
+  or a boundary link; or else the first cell under open sky that the fill
+  reached; or else the first cell past the limit.
+- Also refused: a starting cell that is itself covered (there is no space
+  there), a fill that reaches a cell that is not loaded (there is no
+  telling), and a `limit` above `AREA_MAX_CELLS`.
+
 An area made this way remembers how it was made. When an element inside
 it or on its edge changes, its shape is worked out again. If it no longer
 closes, it keeps its last shape and is marked `breached`, and a sealed
@@ -877,25 +1080,73 @@ kind treats the gap as any opening (11 §10.2). A room built by hand
 becomes a room when someone encloses it, and stops holding its air when
 the wall is knocked through.
 
+- Only a change that matters to the fill counts: a block starting or
+  ceasing to cover its cell, or a floor starting or ceasing to stop what
+  passes it. A cell is on an area's edge when it is beside, above or below
+  a cell of the area.
+- The fill starts again from the cell it first started from, or, if that
+  cell has been walled up, from the first cell of the area that is still
+  open. Occupants who are no longer inside, or newly are, get the usual
+  events.
+- When it first fails to close, `AreaBreached` is emitted with the leak.
+  When it closes again the mark is cleared and `AreaClosed` is emitted. A
+  change that only opens a cell of an area that is already breached is
+  not looked at: it cannot close it.
+- If part of the space is not loaded when a change is made, the area is
+  left as it was.
+
 An area's **ambient override** replaces the stratum's gravity inside it.
 It may also set how the medium inside it is moving (11 §4.7): a steady
 flow, or a vortex.
 `Cosmos::ambient` consults areas before strata. Where areas overlap, the
 one with the highest priority applies.
 
+```rust
+pub struct AmbientOverride {
+    pub gravity: Option<GravityOverride>,   // Scale(Real) | Vector([Real; 3])
+    pub drift: Option<Drift>,               // Flow([Real; 3]) | Vortex { speed, inflow, lift }
+}
+
+pub struct Ambient {                        // what Cosmos::ambient gives
+    pub gravity: Real,                      // m/s² along −z
+    pub atmosphere: Option<AtmosphereId>,
+    pub clock: ClockId,
+    pub gravity_vector: [Real; 3],          // m/s² east, south and up
+    pub drift: Option<AreaDrift>,           // { area, drift, centre }: as the area set it
+}
+```
+
+- A gravity scale multiplies the stratum's gravity; a vector replaces it,
+  and `gravity` is then what is left of it along −z.
+- Gravity, drift and the clock are each decided separately, among the
+  areas covering the cell that set that thing: the highest priority, and
+  of equals the area made first.
+- `ambient` reports the drift as the area set it, with the area and the
+  middle of its shape, which a vortex turns about. What velocity that is
+  at a given cell is worked out with the medium (11 §4.7).
+
 ### 8.4 Sites
 
 ```rust
 pub struct Site {
-    pub id: SiteId,
+    pub id: SiteId,                  // unique in the cosmos, never reused
     pub def: SiteDefId,
     pub name: String,
-    pub tracts: Vec<TractPos>,
+    pub realm: RealmId,
+    pub tracts: Vec<TractPos>,       // sorted
     pub anchor: CellPos,
     pub vars: VarMap,
-    pub tags: TagSet,
+    pub tags: Vec<String>,           // sorted
 }
 ```
+
+A tract belongs to at most one site: making a site over a tract that has
+one, or claiming such a tract, is refused and names the site.
+`Cosmos::create_site` and `remove_site` make and remove sites,
+`claim_site_tract` and `release_site_tract` change what a site spans,
+`set_site_name`, `set_site_tag` and `set_site_var` change the rest, and
+`site_at(realm, tract)` and `site_of(location)` read the map. Sites raise
+no world events.
 
 The simulation attaches to a site what the cold layer needs: its people,
 its stocks, its jobs, and its **local knowledge**, which is what the people
@@ -2081,10 +2332,27 @@ occupy within `edit.displace_range` (default 2 cells), with
 `OccupantDisplaced`. If there is none it stays where it is and
 `OccupantEntombed` is raised; what being walled in does is for rules.
 
+The world knows no mover, so its rule is plain. A block or fixture that
+makes a cell `walk_blocked` (section 6.2), where it was not before, leaves
+no room for the creatures, items and other occupants in that cell. A
+device stays: it stands in the cell of its own element. Each occupant, in
+id order, goes to the first position, by rings of growing distance and
+within a ring storey by storey and row by row, at which none of its cells
+is `walk_blocked`, none holds an occupant on a shared plane that
+`BLOCKS_MOVE`, and which can be stood in if where it stands now can be.
+It is moved by `relocate`, so area events follow.
+
 **Errors.** World operations that cannot be done return one of: not
 loaded; outside the realm; a barrier; not connected (for `detach`); too
 deeply nested (subgrids nest four deep); over budget. `detach` and
 `transfer` report them as refusals with reasons (14 §5).
+
+Also: an unknown grid, realm, area, area kind, site or occupant; an
+occupant already placed; a tract that already has a site; a space that
+does not close, with its leak, or a cell with no space to enclose;
+something larger than the engine allows, naming what and the limit; a
+value that makes no sense, saying why; a cell out of reach of its tract's
+storage.
 
 **What a mind may read** (05 §7.3). Safe for belief: the shape of the
 world, meaning what a cell's elements are made of and whether they can be
@@ -2131,7 +2399,14 @@ materials carrying the tag its `needs` names. `catch_up` is one of
 `sight.portal_depth`, and the debris budget of section 12.3
 (`debris.max_bodies`).
 
-Nothing in this document is reachable only from Rust.
+Reachable only from Rust so far, each wanting a verb or a property when
+the rule runtime binds this document: giving an area another shape
+(`set_area_shape`), override, priority or anchor after it is made; an
+occupant's footprint (`relocate_as`) and its mass and flags
+(`update_occupant`); writing an element's damage directly (`set_damage`);
+the fill that `enclose` uses, as a query (`enclosed_cells`); and the
+occupant queries of section 8.1, which rules reach only through their
+own queries over entities (05).
 
 ## 24. Invariants
 

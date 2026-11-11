@@ -18,6 +18,13 @@
 //! | The state of an element | [`FloorState`], [`BlockState`], [`FixtureState`], [`ElementState`] |
 //! | Stored cells | [`Chunk`], [`Column`], [`Grid`]; built with [`ColumnBuilder`] |
 //! | The world, and reading it | [`Cosmos`], [`GridView`], [`CellView`], [`CellFlags`], [`Ambient`] |
+//! | Changing cells | [`WorldCtx::edit`] gives a [`WorldEdit`]: the only way cells change |
+//! | What happened | [`WorldEvent`], put into an [`EventSink`] |
+//! | Who and what did it | [`Cause`] |
+//! | Who is where | [`WorldCtx::place`], [`WorldCtx::relocate`], [`WorldCtx::remove`]; [`Occupant`], [`Footprint`], [`PlaneMask`]; [`Cosmos::occupants_at`] and the other queries with an [`OccupantFilter`] |
+//! | Volumes that mean something | [`Area`], [`AreaSpec`], [`AreaShape`]; [`WorldCtx::create_area`], [`WorldCtx::enclose`]; [`Cosmos::areas_at`] |
+//! | Places with identity | [`Site`], [`Cosmos::create_site`], [`Cosmos::site_of`] |
+//! | Stability checks waiting | [`Cosmos::stability_requests`] |
 //! | Why something could not be done | [`WorldError`] |
 //! | A world for a test | [`test_support`] |
 //!
@@ -27,6 +34,9 @@
 //!   different places in different grids.
 //! - Reading a cell that is not loaded is an error value
 //!   ([`WorldError::NotLoaded`]). It never loads and never panics.
+//! - Cells change only through [`WorldEdit`], and an occupant's position
+//!   only through [`WorldCtx::relocate`]. Whatever changes emits an
+//!   event; the world never calls upward.
 //! - Results come in a defined order: cells storey by storey, row by row.
 //! - Nothing here names a material or a block. What exists is what the
 //!   definitions say.

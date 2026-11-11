@@ -33,8 +33,8 @@ Section references such as "02 §14" point into those documents.
 | W3 | Cell definitions | M | F4, W1 | beta |
 | W4 | Chunks and grids | M | W2, W3 | beta |
 | W5 | Cosmos, realms, views | M | W4, F3 | beta |
-| W6 | Edits, causes, events | M | W5 | in progress |
-| W7 | Occupancy, planes, areas, sites | M | W6 | in progress |
+| W6 | Edits, causes, events | M | W5 | beta |
+| W7 | Occupancy, planes, areas, sites | M | W6 | beta |
 | W8 | Tracts, regions, generation, loading | L | W7 | todo |
 | W9 | Tickets and activity | M | W8 | todo |
 | W10 | Persistence | M | W8 | todo |
@@ -375,6 +375,20 @@ Done when
 - Chunk mutation is not reachable from outside the crate except through
   `WorldEdit`.
 
+Status `beta` (decisions D-300, D-301, D-305). Built as 02 §7.2 to §7.4
+now read: `WorldCtx`, `WorldEdit` with the element setters, `set_material`,
+`set_damage`, marks and cell variables; `WorldEvent` and `EventSink`; the
+bookkeeping, with a stability queue that W13 empties; and what 02 §23 says
+of an edit that meets an occupant. Whole columns still enter and leave the
+world through `test_support`, until tracts load (W8). Stubbed:
+
+- No benchmark for the single-edit budget (W23).
+- `damage` with a packet, `add_field` and the conduit edits are W12's,
+  W16's and the devices plan's.
+- `edit.displace_range` is a named constant until settings are bound (P6).
+- Events state their fields in 02 §7.4; the generated reference that would
+  check them is tooling package TL9's.
+
 ### W7 — Occupancy, planes, areas, sites
 
 **Spec** 02 §8 · **Size** M
@@ -394,6 +408,26 @@ Done when
 - Enter and exit events are correct for diagonal moves and multi-cell
   footprints.
 - Occupants on disjoint planes are invisible to each other's queries.
+
+Status `beta` (decisions D-302 to D-304, D-306). Built as 02 §8 now
+reads: the occupant index with `place`, `relocate`, `remove`, box
+footprints and the four queries; planes; the area table with its per-tract
+lists, enter and exit events, clocks, ambient overrides and anchors; the
+`area_kind` and `plane` definition types; the site table; and the two
+review additions, drift in areas and `enclose`. Stubbed:
+
+- `relocate` computes no portal crossings (W19).
+- An area's journal span and a subgrid anchor are stored and do nothing
+  (08 §7.4; W20a). A `sealed` kind is a flag: sealed volumes are the
+  vehicles plan's.
+- `Cosmos::ambient` reports an area's drift as set. The velocity at a
+  cell, and drift from wind and current, come with the medium (V1).
+- `area_kind` and `plane` are in the same state as the definitions of W3:
+  built by `WorldDefs::build`, not registered with the loader. The `site`
+  definition type is document 10's: a site holds a bare `SiteDefId`.
+- A change of ambient gravity over an area asks for no stability check
+  yet (02 §14.5; W13).
+- No benchmarks (W23).
 
 ### W8 — Tracts, regions, generation, loading
 
