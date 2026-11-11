@@ -66,8 +66,8 @@ use clash_world::WorldDefs;
 pub use ascii::{ASCII_EMPTY, ASCII_NO_GLYPH};
 pub use compile::{
     ClearedLayer, CompiledMap, CompiledParam, DEFAULT_MAX_NESTING, ItemSource, JointDir, LEAVE,
-    MAX_MAP_LEVELS, MAX_MAP_SIDE, MapDefs, MapDevice, MapLimits, PRESET_ROOF, PRESETS, ParamType,
-    PatternMatch, PortalTo, Sit, SpawnWho,
+    MAX_MAP_CELLS, MAX_MAP_LEVELS, MAX_MAP_SIDE, MapDefs, MapDevice, MapLimits, PRESET_ROOF,
+    PRESETS, ParamType, PatternMatch, PortalTo, Sit, SpawnWho,
 };
 pub use def::{
     AREA_PREFIX, AltDef, AreaDef, Base, BerthDef, CountDef, DeviceDef, EntryDef, ItemsDef,

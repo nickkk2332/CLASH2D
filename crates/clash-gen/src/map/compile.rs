@@ -28,6 +28,10 @@ pub const MAX_MAP_SIDE: i64 = 512;
 /// The most storeys a map may have.
 pub const MAX_MAP_LEVELS: i64 = 256;
 
+/// The most cells a map may have in all, over every storey: what
+/// resolving one map may be asked to hold.
+pub const MAX_MAP_CELLS: i64 = 1 << 20;
+
 /// How deep maps may nest unless a limit says otherwise: the default of
 /// the setting `gen.max_nesting` (10 §3.7).
 pub const DEFAULT_MAX_NESTING: u32 = 8;
@@ -1433,7 +1437,7 @@ impl<'a> Builder<'a> {
             let inferred = match &param.rule {
                 ParamRule::Expr(expr) => expr
                     .compiled()
-                    .map(|code| self.defs.expr_registry().type_name(code.ty()))
+                    .map(|code| self.defs.expr_registry().type_name(code.ty().non_null()))
                     .or_else(|| {
                         expr.constant().and_then(|value| match value {
                             clash_expr::Value::Bool(_) => Some("bool".to_owned()),
@@ -1445,9 +1449,24 @@ impl<'a> Builder<'a> {
                     }),
                 _ => param.rule_type(),
             };
-            let ty = declared
-                .or_else(|| inferred.as_deref().and_then(ParamType::from_name))
-                .unwrap_or(ParamType::Real);
+            let found = inferred.as_deref().and_then(ParamType::from_name);
+            let ty = declared.or(found).unwrap_or(ParamType::Real);
+            if let (Some(declared), Some(found), ParamRule::Expr(_)) =
+                (declared, found, &param.rule)
+                && declared != found
+                && !(declared == ParamType::Real && found == ParamType::Int)
+            {
+                self.error(
+                    &label,
+                    &param.site,
+                    format!(
+                        "the parameter `${param_name}` is declared a {}, and its expression \
+                         gives a {}",
+                        declared.name(),
+                        found.name()
+                    ),
+                );
+            }
             let mismatch = |builder: &mut Builder<'a>, value: &clash_core::Value| {
                 if ty.accept(value).is_none() {
                     builder.error(
@@ -1595,6 +1614,16 @@ impl<'a> Builder<'a> {
                     "a map has at most {MAX_MAP_LEVELS} storeys from its lowest to its highest"
                 ),
             );
+        } else if span_levels * i64::from(size.x) * i64::from(size.y) > MAX_MAP_CELLS {
+            self.error(
+                &label,
+                &def.size.site,
+                format!(
+                    "this map has {} cells over its {span_levels} storeys, and a map has at \
+                     most {MAX_MAP_CELLS}: build a larger place from several maps",
+                    span_levels * i64::from(size.x) * i64::from(size.y)
+                ),
+            );
         } else {
             for z in lowest..=highest {
                 let level = match written.get(&z) {
@@ -1711,6 +1740,19 @@ impl<'a> Builder<'a> {
 
         let default = def.default.as_ref().map(|entry| self.entry(&mut cx, entry));
         let roof = def.roof.as_ref().map(|entry| self.entry(&mut cx, entry));
+        if roof.is_none()
+            && default.is_none()
+            && let Some(LevelDef::Preset(_, site)) = written
+                .values()
+                .find(|level| matches!(level, LevelDef::Preset(..)))
+        {
+            self.error(
+                &label,
+                site,
+                "this level is a roof, and the map says what a roof is made of with neither \
+                 `roof` nor `default`",
+            );
+        }
 
         // Marks written out.
         for (mark, cells) in &def.marks {
@@ -2200,6 +2242,14 @@ impl<'a> Builder<'a> {
                 }
             };
             let Some(at) = at else { continue };
+            if matches!(at, PlaceAt::Cell(_)) && (item.count.is_some() || item.apart.is_some()) {
+                self.error(
+                    &label,
+                    item.map.site(),
+                    "`count` and `apart` scatter copies through an area and belong with `in`; \
+                     a map placed with `at` is placed once",
+                );
+            }
             if candidates.is_empty() {
                 continue;
             }

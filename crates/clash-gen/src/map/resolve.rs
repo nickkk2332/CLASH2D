@@ -37,7 +37,8 @@ use super::compile::{
 };
 use super::def::MapId;
 
-/// The domain of the draws that give parameters their values.
+/// The domain of the draws that give a parameter its value by `pick`
+/// or `range`.
 const PARAM_DOMAIN: HashDomain = HashDomain::new("gen.map.param");
 /// The domain of the generator the random functions of an expression
 /// draw from.
@@ -355,20 +356,31 @@ pub struct MapVehicle {
 ///
 /// # What placing a map reads
 ///
-/// - [`size`](ResolvedMap::size) and the storeys of
-///   [`levels`](ResolvedMap::levels): the box the placement fills.
-/// - [`levels`](ResolvedMap::levels): for each cell and each of floor,
+/// Putting a resolved map into the world is not done in this module.
+/// The step that does it (10 §4) is given a `ResolvedMap` and reads:
+///
+/// - [`size`](ResolvedMap::size) and
+///   [`level_range`](ResolvedMap::level_range): the box the placement
+///   fills, for the overlap test and for the window each tract takes.
+/// - [`written_cells`](ResolvedMap::written_cells), or
+///   [`cell`](ResolvedMap::cell) for one position: for each of floor,
 ///   block and fixture, `None` to leave the layer or a state to write
-///   through `WorldEdit`.
+///   through `WorldEdit`. A state of nothing empties the layer; the
+///   modes of `apply_map` decide which of these writes are made.
 /// - [`anchor_cell`](ResolvedMap::anchor_cell): the cell that goes
-///   where the placement says. The north-west corner at level 0 unless
-///   the map names an anchor.
+///   where the placement says. The world position of a map cell is the
+///   placement's origin, less the anchor cell, plus the cell.
+/// - [`front`](ResolvedMap::front): which side faces a street.
 /// - [`areas`](ResolvedMap::areas), [`marks`](ResolvedMap::marks):
 ///   areas to create and named cells to record with the site.
 /// - Everything else is carried for later packages: spawns and items
 ///   (entities), conduits, fields, devices and links (devices),
 ///   berths, watched cells, variables, decals, patterns, joints,
 ///   portals and vehicles.
+///
+/// The same seed always gives the same `ResolvedMap`, so each tract a
+/// map covers may resolve it again and take its own window, or one
+/// resolution may be shared: the result is the same either way.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ResolvedMap {
     /// The map.
@@ -493,6 +505,24 @@ impl ResolvedMap {
             .and_then(|level| level.cells.get((y * self.size.x + x) as usize))
             .copied()
             .unwrap_or(ResolvedCell::LEAVE)
+    }
+
+    /// Every cell the map writes to, with its position: storey by
+    /// storey upward, row by row, west to east. Cells the map leaves
+    /// alone are passed over.
+    pub fn written_cells(&self) -> impl Iterator<Item = (IVec3, ResolvedCell)> + '_ {
+        let width = self.size.x.max(1);
+        self.levels.iter().flat_map(move |level| {
+            level
+                .cells
+                .iter()
+                .enumerate()
+                .filter(|(_, cell)| !cell.is_leave())
+                .map(move |(index, cell)| {
+                    let index = index as i32;
+                    (IVec3::new(index % width, index / width, level.z), *cell)
+                })
+        })
     }
 
     /// Puts every list in its fixed order.

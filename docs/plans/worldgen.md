@@ -18,7 +18,7 @@ plan's scenarios. The test generators stay, as fixtures.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| WG1 | Map format | L | W3, X4 | todo |
+| WG1 | Map format | L | W3, X4 | beta |
 | WG2 | Placing and applying maps | L | WG1, W8, W17 | todo |
 | WG3 | Ground | M | WG1 | todo |
 | WG4 | Tract definitions and realisation | M | WG2, WG3 | todo |
@@ -78,6 +78,20 @@ Done when
   order cells are evaluated (invariant X6).
 - A random function in a map draws from the placement, not the simulation
   stream, shown by an unchanged simulation hash.
+
+Built (beta), in `clash_gen::map`: the `map` and `palette` types, compiled
+maps (`MapDefs`, a build stage beside `Defs`, D-390), resolution to a
+`ResolvedMap`, turning, the checks of 10 §3.7, three maps in `mods/core`,
+and `cargo run -p clash-gen --example map_ascii`. Every "Done when" above
+has a test; with no simulation yet, the last is shown on the hash of the
+simulation's random streams. Stubbed: `region.*` in the generation context
+(waits for WG7); `gen.max_nesting` is a limit passed to the build, not a
+setting (waits for P6); spawns, items, conduits, links, fields, devices,
+berths, watched cells, variables, decals, patterns, joints, portals and
+vehicles are checked and carried in the resolved map as data with ids as
+written, for the packages that own them, and berths and watched cells are
+not yet recorded on a site (WG9); a link cannot join devices of two nested
+maps; `map show` and `map check` are WG12's.
 
 ### WG2 — Placing and applying maps
 

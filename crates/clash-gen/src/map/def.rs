@@ -1379,15 +1379,15 @@ impl Def for MapDef {
                 .map(|ty| ty.value.clone());
             let ty = match &mut param.rule {
                 ParamRule::Expr(expr) => {
-                    // A parameter sees those declared before it.
-                    gen_cx.scope = match &declared {
-                        Some(declared) => params.clone().expecting(declared.as_str()),
-                        None => params.clone(),
-                    };
+                    // A parameter sees those declared before it. Its
+                    // text is an expression whatever type it is
+                    // declared with, so the field is not told to expect
+                    // a text: building the maps compares the types.
+                    gen_cx.scope = params.clone();
                     gen_cx.expr(expr);
                     let found = expr
                         .compiled()
-                        .map(|code| gen_cx.cx.registry().type_name(code.ty()))
+                        .map(|code| gen_cx.cx.registry().type_name(code.ty().non_null()))
                         .or_else(|| {
                             expr.constant()
                                 .and_then(|value| value_type(value).map(str::to_owned))

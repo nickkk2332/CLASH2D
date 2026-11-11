@@ -75,6 +75,16 @@ fn a_character_replaces_a_cell_and_a_space_leaves_it() {
     // Outside the map nothing is touched either.
     assert_eq!(room.cell(4, 0, 0), ResolvedCell::LEAVE);
     assert_eq!(room.cell(0, 0, 1), ResolvedCell::LEAVE);
+    // What is written, in order: every cell but the one left alone.
+    let written: Vec<IVec3> = room.written_cells().map(|(at, _)| at).collect();
+    assert_eq!(written.len(), 11);
+    assert_eq!(written[0], cell(0, 0, 0));
+    assert_eq!(written[6], cell(2, 1, 0));
+    assert_eq!(written[7], cell(0, 2, 0));
+    assert!(
+        room.written_cells()
+            .all(|(at, what)| room.cell(at.x, at.y, at.z) == what)
+    );
 
     // `.` says nothing itself: the default's floor, and the other two
     // layers emptied. Everything but a space replaces.
@@ -273,6 +283,49 @@ fn parameters_are_given_or_drawn_and_checked() {
         maps.resolve(clash_gen::map::MapId::new(99), &given, SEED, Turn::IDENTITY),
         Err(ResolveError::UnknownMap(_))
     ));
+}
+
+#[test]
+fn a_parameter_drawn_by_an_expression_takes_its_type_from_it() {
+    let maps = build(
+        r##"[
+  { "type": "map", "id": "post", "size": [1, 1],
+    "params": { "roll": "rand_int(1, 6)",
+                "wall": { "expr": "pick(['stone', 'oak'])", "type": "string" },
+                "tall": "$roll > 3",
+                "half": "$roll / 2" },
+    "palette": [ { "W": "wall@$wall",
+                   "t": { "items": { "item": "die", "count": "$roll" } } } ],
+    "levels": { "0": [ "W" ] },
+    "set": [ { "at": [0, 0, 0], "spec": { "items": { "item": "die", "count": "$roll" } } } ] }
+]"##,
+    );
+    let post = id(&maps, "post");
+    let types: Vec<(&str, &str)> = maps
+        .get(post)
+        .unwrap()
+        .params()
+        .iter()
+        .map(|param| (param.name.as_str(), param.ty.name()))
+        .collect();
+    assert_eq!(
+        types,
+        [
+            ("roll", "int"),
+            ("wall", "string"),
+            ("tall", "bool"),
+            ("half", "real")
+        ]
+    );
+    let mut walls = BTreeSet::new();
+    let mut rolls = BTreeSet::new();
+    for seed in 0..60 {
+        let map = resolve(&maps, "post", seed);
+        walls.insert(map.cell(0, 0, 0).block.unwrap());
+        rolls.insert(map.items[0].count);
+    }
+    assert_eq!(walls.len(), 2);
+    assert_eq!(rolls, BTreeSet::from([1, 2, 3, 4, 5, 6]));
 }
 
 #[test]

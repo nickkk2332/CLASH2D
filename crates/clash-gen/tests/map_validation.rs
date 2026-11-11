@@ -467,3 +467,54 @@ fn a_map_with_no_sound_shape_is_reported_and_does_not_panic() {
     in_map(&diagnostics, "`ground` is not one", "flat");
     in_map(&diagnostics, "a roof covers the storey below it", "lid");
 }
+
+#[test]
+fn a_map_says_what_its_roof_is_and_how_large_it_may_be() {
+    let maps = r##"[
+  { "type": "map", "id": "bare", "size": [1, 1],
+    "palette": [ { "W": "wall" } ],
+    "levels": { "0": [ "W" ], "1": "roof" } },
+  { "type": "map", "id": "vast", "size": [512, 512],
+    "palette": [ { "W": "wall" } ],
+    "levels": { "0": [], "8": [] } },
+  { "type": "map", "id": "dot", "size": [1, 1],
+    "palette": [ { "W": "wall" } ],
+    "levels": { "0": [ "W" ] } },
+  { "type": "map", "id": "twice", "size": [2, 2],
+    "palette": [ { "W": "wall" } ],
+    "levels": { "0": [ "WW", "WW" ] },
+    "place": [ { "map": "dot", "at": [0, 0, 0], "count": 3 } ] }
+]"##;
+    let diagnostics = build_errors(maps);
+    in_map(&diagnostics, "this level is a roof", "bare");
+    in_map(&diagnostics, "a map has at most 1048576", "vast");
+    in_map(&diagnostics, "`count` and `apart` scatter copies", "twice");
+    assert_eq!(diagnostics.len(), 3, "{}", diagnostics.render());
+}
+
+#[test]
+fn a_parameter_is_held_to_its_type() {
+    let maps = r##"[
+  { "type": "map", "id": "muddle", "size": [1, 1],
+    "params": { "n": { "expr": "1 > 0", "type": "int" },
+                "m": { "pick": [1, "two"] },
+                "k": { "default": "three", "type": "int" },
+                "r": { "range": [5, 1] },
+                "q": { "type": "list" },
+                "post": 3 },
+    "palette": [ { "W": "wall@$post" } ],
+    "levels": { "0": [ "W" ] } }
+]"##;
+    let diagnostics = build_errors(maps);
+    for needle in [
+        "the parameter `$n` is declared a int, and its expression gives a bool",
+        "the parameter `$m` is a real, and `two` is a string",
+        "the parameter `$k` is a int, and `three` is a string",
+        "`range` is `[low, high]`, two numbers with `low` first",
+        "`list` is not a type a parameter can have",
+        "the parameter `$post` is a int, and a state is written with a text",
+    ] {
+        in_map(&diagnostics, needle, "muddle");
+    }
+    assert_eq!(diagnostics.len(), 6, "{}", diagnostics.render());
+}
