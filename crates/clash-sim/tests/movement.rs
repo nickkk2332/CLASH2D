@@ -766,16 +766,52 @@ fn a_walker_whose_floor_is_removed_falls_to_the_storey_below() {
         },
     )
     .unwrap();
+    // It is falling: the world carries it as a body, and it cannot step
+    // until it lands.
+    assert_eq!(loc_of(&sim, walker), above);
+    assert!(sim.truth().cosmos().body_of(walker).is_some());
+    assert_eq!(
+        step(&mut sim, walker, "east").unwrap_err().code,
+        codes::IN_FLIGHT
+    );
+    let started = sim.now();
+    let events = run(&mut sim);
     assert_eq!(loc_of(&sim, walker), below);
-    let events = heard(&mut sim);
+    assert!(sim.truth().cosmos().body_of(walker).is_none());
+    // A free fall of a storey takes sqrt(2 h / g), about 0.78 s, and the
+    // world looks at a body every 20 ms.
+    let took = sim.now().since(started).as_secs_real();
+    assert!(
+        took > Real::of(0.75) && took < Real::of(0.9),
+        "the fall took {took} s"
+    );
     let order: Vec<&str> = names(&events)
         .into_iter()
-        .filter(|name| ["entity_unsupported", "fell", "entity_relocated", "landed"].contains(name))
+        .filter(|name| {
+            [
+                "entity_unsupported",
+                "fell",
+                "body_launched",
+                "entity_relocated",
+                "body_landed",
+                "landed",
+            ]
+            .contains(name)
+        })
         .collect();
     assert_eq!(
         order,
-        ["entity_unsupported", "fell", "entity_relocated", "landed"]
+        [
+            "entity_unsupported",
+            "fell",
+            "body_launched",
+            "entity_relocated",
+            "body_landed",
+            "landed"
+        ]
     );
+    // Landed, it walks again.
+    step(&mut sim, walker, "east").unwrap();
     let fell = of_name(&events, "fell")[0];
     assert_eq!(fell.subject("here"), Some(Subject::Loc(above)));
     let landed = of_name(&events, "landed")[0];
@@ -826,11 +862,25 @@ fn what_can_stay_in_the_air_does_not_fall_and_a_step_off_an_edge_needs_to_be_mea
     assert_eq!(step(&mut sim, flier, "up").unwrap().to, hole);
     step(&mut sim, flier, "east").unwrap();
     heard(&mut sim);
-    // Meaning to drop, the walker steps off, and falls.
+    // Meaning to drop, the walker steps off, and falls. It has no mass
+    // of its own, so the world will not carry it as a body: it comes
+    // down at once.
     let dropped = movement::step(&mut sim, walker, StepKind::ALL[2], true, cause(walker)).unwrap();
     assert!(dropped.fell);
     assert_eq!(loc_of(&sim, walker), cell(11, 9, 0));
     let events = heard(&mut sim);
+    assert_eq!(of_name(&events, "landed").len(), 1);
+    assert!(of_name(&events, "body_launched").is_empty());
+    // Given a mass, it is carried down as a body, and lands in time.
+    shape(&mut sim, walker, 70.0, 1.8);
+    sim.relocate(walker, Place::at(above), Cause::DEBUG)
+        .unwrap();
+    let dropped = movement::step(&mut sim, walker, StepKind::ALL[2], true, cause(walker)).unwrap();
+    assert!(dropped.fell);
+    assert_eq!(loc_of(&sim, walker), hole);
+    let events = run(&mut sim);
+    assert_eq!(loc_of(&sim, walker), cell(11, 9, 0));
+    assert_eq!(of_name(&events, "body_landed").len(), 1);
     assert_eq!(of_name(&events, "landed").len(), 1);
     // The flier's own floor is taken away: it stays where it is.
     debug(
@@ -846,6 +896,44 @@ fn what_can_stay_in_the_air_does_not_fall_and_a_step_off_an_edge_needs_to_be_mea
     let events = heard(&mut sim);
     assert_eq!(of_name(&events, "entity_unsupported").len(), 1);
     assert!(of_name(&events, "fell").is_empty());
+}
+
+#[test]
+fn a_save_and_a_load_in_the_middle_of_a_fall_change_nothing() {
+    let above = cell(10, 9, 1);
+    let fall = |save_after: Option<u32>| {
+        let (mut sim, walker) = city(above);
+        shape(&mut sim, walker, 70.0, 1.8);
+        debug(
+            &mut sim,
+            DebugCommand::SetElement {
+                loc: above,
+                layer: Layer::Floor,
+                state: FloorState::NONE.raw(),
+            },
+        )
+        .unwrap();
+        if let Some(steps) = save_after {
+            assert!(matches!(
+                sim.advance(AdvanceLimit::Work(steps)),
+                clash_sim::Advance::Yielded
+            ));
+            assert!(sim.truth().cosmos().body_of(walker).is_some());
+            let mut loaded = save_and_load(&sim);
+            assert_eq!(loaded.hashes(), sim.hashes());
+            loaded.set_wake_handler(WakeDomain::Stepper, phase_ends);
+            sim = loaded;
+        }
+        let events = run(&mut sim);
+        assert_eq!(loc_of(&sim, walker), cell(10, 9, 0));
+        let landed = of_name(&events, "landed");
+        assert_eq!(landed.len(), 1);
+        assert_eq!(real_field(landed[0], "height"), STOREY_M);
+        (sim.state_hash(), sim.now())
+    };
+    let straight = fall(None);
+    assert_eq!(fall(Some(10)), straight);
+    assert_eq!(fall(Some(30)), straight);
 }
 
 // ---- postures --------------------------------------------------------------

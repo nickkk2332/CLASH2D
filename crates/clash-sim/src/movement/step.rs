@@ -17,7 +17,7 @@ use crate::reason::Reason;
 use crate::sim::unknown_entity;
 
 use super::defs::{MovementDef, MovementId};
-use super::fall::fall;
+use super::fall::{fall, in_flight};
 use super::mover::Mover;
 use super::rules::{MoverRules, StepFault, mover_rules};
 use super::{PASSAGE_REQUESTED, STEP_REFUSED, YIELDS_FIELD, codes};
@@ -85,7 +85,8 @@ pub struct Stepped {
     pub mode: MovementId,
     /// Who the mover changed places with, if it did.
     pub swapped: Option<EntityId>,
-    /// Whether the mover stepped off into nothing and fell.
+    /// Whether the mover stepped off into nothing and began to fall: the
+    /// world carries it from there.
     pub fell: bool,
 }
 
@@ -109,6 +110,12 @@ pub(super) fn cannot_move(entity: EntityId) -> Reason {
         format!("entity {entity} has no way of moving that works now"),
     )
     .with("entity", entity.to_string())
+}
+
+/// The reason a mover the world is carrying cannot step.
+fn flying(entity: EntityId) -> Reason {
+    Reason::new(codes::IN_FLIGHT, format!("entity {entity} is in the air"))
+        .with("entity", entity.to_string())
 }
 
 /// The reason for a fault the geometry of a step gave.
@@ -259,7 +266,8 @@ fn yields(sim: &mut Sim, mover: EntityId, other: EntityId, at: Location, cause: 
 ///
 /// Checked, in order, against the world as it is now:
 ///
-/// 1. The mover stands in the world and has a way of moving that works.
+/// 1. The mover stands in the world, the world is not carrying it as a
+///    body, and it has a way of moving that works.
 /// 2. There is a cell there: loaded, inside the realm.
 /// 3. One of its ways of moving makes the step
 ///    ([`MoverRules::judge`]): nothing in the way, footing or whatever
@@ -271,7 +279,8 @@ fn yields(sim: &mut Sim, mover: EntityId, other: EntityId, at: Location, cause: 
 ///    yield the two change places.
 ///
 /// With `drop`, a step on the level into a cell with nothing to stand
-/// on is made all the same, and the mover falls ([`fall`]).
+/// on is made all the same, and the mover falls ([`fall`]): the world
+/// carries it from there.
 ///
 /// The mover is relocated through [`Sim::relocate`], which emits
 /// `entity_relocated`. Nothing here takes time: the action that calls
@@ -299,6 +308,9 @@ fn try_step(
     cause: Cause,
 ) -> Result<Stepped, Reason> {
     let (from, alt_mm) = standing(sim, entity)?;
+    if in_flight(sim, entity) {
+        return Err(flying(entity));
+    }
     let presence = *sim.known(entity)?.presence();
     let rules = mover_rules(sim, entity);
     if !rules.can_move() {
@@ -414,8 +426,9 @@ pub fn step_time(sim: &Sim, entity: EntityId, kind: StepKind) -> Result<Dur, Rea
 /// without a step's adjacency and without time: for rules that place
 /// someone (06 §11). Returns where it was.
 ///
-/// Refused, raising `step_refused` and changing nothing, if the cell
-/// cannot be read, something stands in it that the entity does not step
+/// Refused, raising `step_refused` and changing nothing, if the world
+/// is carrying the entity as a body, the cell cannot be read, something
+/// stands in it that the entity does not step
 /// over (for something with no way of moving: that ordinary walking
 /// does not), it does not fit, or someone who blocks movement fills it
 /// on a plane it shares. Nobody is asked to yield. If nothing holds it
@@ -441,6 +454,9 @@ fn try_move_to(
 ) -> Result<Place, Reason> {
     let known = sim.known(entity)?;
     let (presence, was) = (*known.presence(), known.place());
+    if in_flight(sim, entity) {
+        return Err(flying(entity));
+    }
     let rules = mover_rules(sim, entity);
     let here = sim
         .truth()

@@ -1312,12 +1312,19 @@ under it (`entity_unsupported`, 02 §14.3), a mover that can stay where it
 is, by flying or swimming, stays; anything else falls. An entity that
 falls becomes a world body (02 §15) and is the world's until it lands or
 is caught; so is one struck hard enough. `fell` is raised where it lost
-its footing and `landed` where it came to rest, with the height, the speed
-and the energy of the fall. What the landing does to it is the hit that
-an impact makes (section 7). Until bodies in flight are built, a fall is
-over at once: the entity is put where something dropped from its cell
-comes to rest (`resting_cell`) and `landed` follows straight away.
-Where there is no gravity, or nowhere below to come to rest, it stays.
+its footing, and the entity is launched (02 §15) at rest from the middle
+of its cell, with its mass, volume, cross-section and planes. The world
+carries the occupant down, and the kernel follows each cell as
+`entity_relocated`; while it is carried it cannot step or be placed
+(`move.in_flight`). When the world reports `body_landed`, `landed` is
+raised where it came to rest, with the height below where it set off,
+and the speed and energy of a free fall that far. So is any entity the
+world carries, whoever launched it. What the landing does to it is the
+hit that the world's `body_impact` makes (section 7). Where there is no
+gravity, or nowhere below to come to rest, it stays; one the world will
+not take as a body, having no mass, is put where something dropped from
+its cell comes to rest (`resting_cell`) at once, and `landed` follows
+straight away.
 
 | Verb | Arguments | Does |
 |------|-----------|------|
@@ -1347,8 +1354,8 @@ The bundled mod defines the actions the play screen's controls name
 | `step_refused` | `self`: entity | `dir`: string, empty for a placement; `code`, `message`: string, the reason | A step, or a placement by `move_to`, was refused. The mover is where it was |
 | `path_failed` | `self`: entity; `here`: loc, the goal, if it is a cell | `code`, `message`: string | No path could be planned. Whatever path the mover followed is forgotten |
 | `posture_changed` | `self`: entity | `from`, `to`: string, qualified ids of the postures, empty for none; `look`: string, the new posture's | An entity's posture changed |
-| `fell` | `self`: entity; `here`: loc | none | An entity lost its footing where it could not stay, and began to fall from `here` |
-| `landed` | `self`: entity; `here`: loc | `height`: real, metres; `speed`: real, metres a second, `sqrt(2 g h)`; `energy`: real, joules, its mass with what it carries times gravity times the height | A fall ended at `here` |
+| `fell` | `self`: entity; `here`: loc | none | An entity lost its footing where it could not stay, and began to fall from `here`: the world carries it as a body |
+| `landed` | `self`: entity; `here`: loc | `height`: real, metres below where it set off, zero if higher; `speed`: real, metres a second, `sqrt(2 g h)`; `energy`: real, joules, its mass with what it carries times gravity times the height | The world stopped carrying an entity as a body: it came to rest at `here`, after a fall or a throw |
 
 Moving itself is the kernel's `entity_relocated` (03 §13).
 
@@ -1396,6 +1403,7 @@ taken.
 | `move.goal_blocked` | The mover believes it cannot be in the goal cell |
 | `move.other_grid` | The goal is in another grid |
 | `move.no_path` | `follow_path` for a mover that follows no path |
+| `move.in_flight` | The world is carrying the mover as a body: it is falling or thrown. Carries `entity` |
 | `move.off_path` | The mover is not where its path left it, or a step of it was refused: plan again |
 | `move.unknown_movement` | A way of moving no loaded definition has |
 | `posture.unknown` | A posture no loaded definition has |
@@ -1593,9 +1601,9 @@ spills.
 Movement and posture are built with their definition types, verbs,
 properties, events, hooks and reasons (section 11), and the bundled
 `step`, `go_to` and `set_posture` actions are data that calls them. Not
-yet: the verbs `sweep`, `leap`, `set_altitude` and `teleport`; a fall as
-a world body, which is dropped to where it comes to rest at once; what
-a mover believes, which reads truth behind one seam until perception is
+yet: the verbs `sweep`, `leap`, `set_altitude` and `teleport`; catching
+a falling entity, and a body that leaves loaded space; what a mover
+believes, which reads truth behind one seam until perception is
 built; a posture's effect on a body's part bands, its `traits` and the
 `limp` posture, and the slots it `occupies` being held against actions,
 which is a function in Rust (`posture_occupies`) until the action

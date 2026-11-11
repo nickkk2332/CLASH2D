@@ -15,7 +15,7 @@
 //! | To follow a path | [`plan_path`], then [`follow_path`] once for each step; [`clear_path`] |
 //! | What a mover believes | [`belief`]: [`believed_rules`], [`believed_step`], [`believed_path`], [`believed_step_time`] |
 //! | Postures | [`set_posture`], [`posture_of`], [`posture_occupies`], [`signature_factor`] |
-//! | Losing one's footing | [`lose_footing`], [`fall`] |
+//! | Losing one's footing | [`lose_footing`], [`fall`]; [`launched`] and [`take_back`] as the world carries a body |
 //! | The ways of moving an entity has | [`set_modes`] |
 //! | The definition types | [`MovementDef`], [`PostureDef`] |
 //! | The component | [`Mover`] |
@@ -48,18 +48,16 @@
 //!
 //! | When | The kernel |
 //! |------|-----------|
-//! | An event has been delivered to its handlers | Calls [`on_event`]: `entity_unsupported` makes a mover that cannot stay where it is fall |
+//! | An event has been delivered to its handlers | Calls [`on_event`]: `entity_unsupported` makes a mover that cannot stay where it is fall; `body_launched` and `body_landed` of an entity's body measure the fall and raise `landed` |
 //! | Building its registry | Calls [`register_types`], and lists [`verbs`] and [`properties`] |
 //! | Building its event bus | Enters [`hook_types`] |
 //!
 //! # What is not built here
 //!
-//! - **Flight as a body** (02 §15). A mover that falls is dropped to
-//!   where it comes to rest at once, and `landed` carries the height,
-//!   the speed and the energy of the fall; handing it to the world as a
-//!   body and taking it back on `body_landed` waits for the flight
-//!   package. `sweep` and `leap` wait for the same, `teleport` for
-//!   realm transfer (02 §19) and `set_altitude` for fliers.
+//! - **Moving as a body** (02 §15). A mover that falls is a body of the
+//!   world's until it lands; `sweep` and `leap`, which launch a mover on
+//!   purpose, are not built, `teleport` waits for realm transfer
+//!   (02 §19) and `set_altitude` for fliers.
 //! - **Belief.** [`belief`] reads truth until perception is built.
 //! - **A body's height.** A posture scales the height of the entity's
 //!   `Physical`; a body's own height factor
@@ -84,6 +82,7 @@ mod verbs;
 
 use clash_data::{Def, DefTypes};
 use clash_expr::{EventSpec, Registry, Type};
+use clash_world::{BodyOwner, WorldEvent};
 
 use crate::bus::{EventType, FieldType};
 use crate::event::{CAUSE_SUBJECTS, EventBody, EventInfo, SimEvent};
@@ -92,8 +91,8 @@ use crate::sim::Sim;
 
 pub use belief::{believed_path, believed_rules, believed_step, believed_step_time};
 pub use defs::{MovementDef, MovementId, PostureDef, PostureId, Surface};
-pub use fall::{Landing, fall, lose_footing};
-pub use mover::{Journey, Mover};
+pub use fall::{Fall, Landing, fall, launched, lose_footing, take_back};
+pub use mover::{Flight, Journey, Mover};
 pub use path::{Planned, clear_path, follow_path, path_cost, plan_path};
 pub use posture::{posture_occupies, posture_of, set_posture, signature_factor};
 pub use props::properties;
@@ -173,25 +172,29 @@ pub const MOVEMENT_EVENTS: &[EventInfo] = &[
         name: FELL,
         subjects: &[("self", "entity"), ("here", "loc")],
         fields: &[],
-        doc: "An entity had nothing under it where it could not stay and began to fall from `here`. `landed` follows.",
+        doc: "An entity had nothing under it where it could not stay and began to fall from `here`: the world carries it as a body from now on. `landed` follows when it comes to rest.",
     },
     EventInfo {
         name: LANDED,
         subjects: &[("self", "entity"), ("here", "loc")],
         fields: &[
-            ("height", "real", "How far it fell, in metres."),
+            (
+                "height",
+                "real",
+                "How far below where it set off it came to rest, in metres; zero if it came to rest higher.",
+            ),
             (
                 "speed",
                 "real",
-                "How fast it was falling when it landed, in metres a second.",
+                "How fast something falling that far lands, in metres a second: `sqrt(2 g h)`, with nothing taken off for the air.",
             ),
             (
                 "energy",
                 "real",
-                "The energy of the fall, in joules: its mass, with what it carries, times gravity times the height.",
+                "The energy of a fall that far, in joules: its mass, with what it carries, times gravity times the height.",
             ),
         ],
-        doc: "A fall ended at `here`. What the landing does to the entity is for whoever turns impacts into hits (06 §7).",
+        doc: "The world has stopped carrying an entity as a body: it came to rest at `here`, after a fall or after being thrown. What the landing does to it is for whoever turns impacts into hits (06 §7); the blows themselves are the world's `body_impact`.",
     },
 ];
 
@@ -282,12 +285,31 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<MovementDef>().register::<PostureDef>();
 }
 
-/// What movement does about an event once its handlers have run: an
-/// entity whose footing has gone falls, unless it can stay where it is
-/// (06 §11). Called by the kernel for every delivered event.
+/// What movement does about an event once its handlers have run (06
+/// §11): an entity whose footing has gone falls, unless it can stay
+/// where it is; an entity the world begins to carry as a body is noted
+/// where it set off; and one whose body has come to rest is taken back,
+/// raising `landed`. Called by the kernel for every delivered event.
 pub fn on_event(sim: &mut Sim, event: &SimEvent) {
-    if let EventBody::EntityUnsupported { entity, .. } = &event.body {
-        let _ = lose_footing(sim, *entity, event.cause);
+    match &event.body {
+        EventBody::EntityUnsupported { entity, .. } => {
+            let _ = lose_footing(sim, *entity, event.cause);
+        }
+        EventBody::World(WorldEvent::BodyLaunched {
+            owner: BodyOwner::Entity(entity),
+            loc,
+            pos,
+            ..
+        }) => launched(sim, *entity, *loc, pos[2]),
+        EventBody::World(WorldEvent::BodyLanded {
+            owner: BodyOwner::Entity(entity),
+            loc,
+            pos,
+            ..
+        }) => {
+            let _ = take_back(sim, *entity, *loc, pos[2], event.cause);
+        }
+        _ => {}
     }
 }
 
@@ -330,6 +352,8 @@ pub mod codes {
     pub const OTHER_GRID: &str = "move.other_grid";
     /// The mover is following no path.
     pub const NO_PATH: &str = "move.no_path";
+    /// The world is carrying the mover as a body.
+    pub const IN_FLIGHT: &str = "move.in_flight";
     /// The mover is not where its path left it.
     pub const OFF_PATH: &str = "move.off_path";
     /// No such posture.
@@ -415,6 +439,10 @@ pub const MOVEMENT_REASONS: &[ReasonInfo] = &[
     ReasonInfo {
         code: codes::OFF_PATH,
         doc: "The mover is not where its path left it, or an earlier step of the path was refused: the path must be planned again.",
+    },
+    ReasonInfo {
+        code: codes::IN_FLIGHT,
+        doc: "The world is carrying the mover as a body (02 §15): it is falling or thrown, and steps and placements wait until it lands. Carries `entity`.",
     },
     ReasonInfo {
         code: codes::POSTURE_UNKNOWN,

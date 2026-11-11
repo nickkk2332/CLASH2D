@@ -335,24 +335,26 @@ Done when
 - Scenario `dash_through_wall`: a sweep at high speed strikes a wall as a
   body impact.
 
-Beta: built ahead of the action runtime and of bodies in flight, in
+Beta: built ahead of the action runtime, in
 `clash_sim::movement` (decisions D-570 to D-576). Built: the `movement`
 and `posture` definition types with every field of 06 §11 and §11.1;
-the `mover` component (ways of moving, posture, path), saved and hashed;
+the `mover` component (ways of moving, posture, path, where a fall set
+off), saved and hashed;
 a mover's rules as the world's `MoveRules`, from its definitions, its
 posture, its body's slots and its `speed` expressions; the verbs `step`
 (06 §11's `move`), `move_to`, `set_posture`, `plan_path`, `follow_path`,
 `clear_path` and `set_movement`; `step_time` and the properties, events,
 hooks and reasons tabled in 06 §11; the occupancy rule and the swap
 through `passage_requested`; paths planned from belief behind
-`movement::belief`; loss of footing on `entity_unsupported`; and the
+`movement::belief`; loss of footing on `entity_unsupported` into a world
+body (W14) and back on `body_landed`; and the
 actions `step`, `go_to` and `set_posture` in `mods/core/data/movement.json`.
 Step legality is tested against a table in `movement::rules`, the rest in
 `crates/clash-sim/tests/movement.rs` over the test city. Stubbed, each
 waiting for the package that owns it: `sweep`, `leap` and the scenario
-`dash_through_wall`, `set_altitude` and `teleport` (bodies in flight,
-W14, and realm transfer); a fall is a drop to the cell where it comes to
-rest, not a world body; belief reads truth (perception, S2); a posture
+`dash_through_wall` (they launch a mover on purpose, as a fall now
+does), `set_altitude` and `teleport` (realm transfer); catching a
+falling entity; belief reads truth (perception, S2); a posture
 scales the `Physical` height but not a body's bands, and gives no traits
 (bodies in the simulation); the tests drive `step` and `go_to` through
 the verbs and a hand-made loop until the action runtime (T3) runs them.

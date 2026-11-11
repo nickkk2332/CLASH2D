@@ -2,6 +2,9 @@
 //! entity (06 §11): the ways of moving it has, the posture it is in and
 //! the path it is following.
 //!
+//! It also keeps where an entity the world carries as a body set off
+//! from, until it lands.
+//!
 //! An entity with no `Mover` is a plain mover: it moves by the
 //! definitions flagged `default`, is in no posture and follows no path.
 //! The component is made the first time something is said about one of
@@ -68,6 +71,19 @@ impl Journey {
     }
 }
 
+/// Where an entity the world carries as a body set off from (02 §15),
+/// kept from `body_launched` until `body_landed` so that the fall can
+/// be measured.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Flight {
+    /// The cell it set off from.
+    pub(super) from: Location,
+    /// Its height there, in metres in its grid.
+    pub(super) z_m: Real,
+}
+
+impl_state_hash!(Flight { from, z_m });
+
 /// What movement keeps about an entity (06 §11).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Mover {
@@ -81,13 +97,16 @@ pub struct Mover {
     pub(super) height_factor: Real,
     /// The path it is following.
     pub(super) journey: Option<Journey>,
+    /// Where it set off from, while the world carries it as a body.
+    pub(super) flight: Option<Flight>,
 }
 
 impl_state_hash!(Mover {
     modes,
     posture,
     height_factor,
-    journey
+    journey,
+    flight
 });
 
 impl Default for Mover {
@@ -97,6 +116,7 @@ impl Default for Mover {
             posture: None,
             height_factor: Real::ONE,
             journey: None,
+            flight: None,
         }
     }
 }
