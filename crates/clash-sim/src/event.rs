@@ -291,7 +291,10 @@ impl EventBody {
                 "new" => Some(FieldValue::text(control_name(*new))),
                 _ => None,
             },
-            EventBody::ClockRateChanged { old, new, .. } => match name {
+            EventBody::ClockRateChanged {
+                clock, old, new, ..
+            } => match name {
+                "clock" => Some(FieldValue::from(i64::from(clock.raw()))),
                 "old" => old.map(FieldValue::from),
                 "new" => new.map(FieldValue::from),
                 _ => None,
@@ -558,7 +561,7 @@ pub const KERNEL_EVENTS: &[EventInfo] = &[
                 "Why, as the handler that cancelled it said.",
             ),
         ],
-        doc: "A hook was cancelled: what it preceded did not happen. Also binds the subjects of the hook under their own names.",
+        doc: "A hook was cancelled: what it preceded did not happen. The hook's own subjects are not bound; its cause is carried.",
     },
 ];
 
@@ -699,6 +702,16 @@ mod tests {
             let info = listed(body.name())
                 .unwrap_or_else(|| panic!("`{}` is not in KERNEL_EVENTS", body.name()));
             assert!(!info.doc.is_empty());
+            // Every plain field the table lists can be read by name.
+            for (field, ty, _) in info.fields {
+                if matches!(*ty, "string" | "int") {
+                    assert!(
+                        body.field(field).is_some(),
+                        "`{}` lists `{field}` but it cannot be read",
+                        info.name
+                    );
+                }
+            }
             for (name, subject) in body.subjects() {
                 let declared = info
                     .subjects
