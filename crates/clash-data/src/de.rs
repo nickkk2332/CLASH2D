@@ -18,7 +18,11 @@
 //!
 //! The field types of [`crate::fields`] (`Ref`, quantities, `Tag`,
 //! `Inline`, `Located`, `Gated`) ask for themselves under reserved names
-//! that this deserialiser answers from the tree and the link tables.
+//! that this deserialiser answers from the tree and the link tables. The
+//! expression fields (`Expr`, `Cond`, `Text`) ask, through
+//! [`by_site`](crate::by_site), for where they were written and at what
+//! JSON path, which is what lets a mistake found when they are compiled
+//! be reported like one found here.
 //!
 //! # What a definition type must avoid
 //!

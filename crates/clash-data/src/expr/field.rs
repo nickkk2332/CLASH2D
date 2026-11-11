@@ -13,9 +13,9 @@ use serde::de::{self, Deserializer, MapAccess};
 
 use super::ExprRegistry;
 use super::codes;
-use super::eval::Evaluator;
+use super::eval::{Evaluator, Runner};
 use super::scope::{CompileCx, Scope, SpanMap};
-use crate::defs::Def;
+use crate::defs::{Def, Defs};
 use crate::diag::{Diagnostic, closest, did_you_mean};
 use crate::fields::{FromSite, Kind, KindValue, Located, Site, Text, by_site};
 use crate::source::Span;
@@ -618,6 +618,13 @@ impl<T: ExprType> Expr<T> {
     pub fn eval<H: Host + ?Sized>(&self, eval: &mut Evaluator<'_, H>) -> Option<T::Out> {
         T::from_value(self.value(eval))
     }
+
+    /// Evaluates the field once against a host, with a [`Runner`] made
+    /// for the occasion. For tools and tests; where fields are evaluated
+    /// over and over, keep a runner and use [`Expr::eval`].
+    pub fn eval_on<H: Host + ?Sized>(&self, defs: &Defs, host: &mut H) -> Option<T::Out> {
+        self.eval(&mut Runner::new().on(defs, host))
+    }
 }
 
 impl<T: ExprType> Clone for Expr<T> {
@@ -1122,6 +1129,12 @@ impl Cond {
         }
     }
 
+    /// Whether the condition holds, asked once against a host, with a
+    /// [`Runner`] made for the occasion. For tools and tests.
+    pub fn holds_on<H: Host + ?Sized>(&self, defs: &Defs, host: &mut H) -> bool {
+        self.holds(&mut Runner::new().on(defs, host))
+    }
+
     /// Whether the condition holds. Null counts as false, and so does a
     /// condition that was never compiled.
     pub fn holds<H: Host + ?Sized>(&self, eval: &mut Evaluator<'_, H>) -> bool {
@@ -1241,5 +1254,11 @@ impl Text {
             Some(compiled) => eval.text(compiled),
             None => self.raw.clone(),
         }
+    }
+
+    /// Renders the text once against a host, with a [`Runner`] made for
+    /// the occasion. For tools and tests.
+    pub fn render_on<H: Host + ?Sized>(&self, defs: &Defs, host: &mut H) -> String {
+        self.render(&mut Runner::new().on(defs, host))
     }
 }

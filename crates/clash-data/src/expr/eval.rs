@@ -13,7 +13,7 @@ use clash_expr::{
     RuntimeWarning, Span, Value,
 };
 
-use super::defs::{CompiledFunction, ExprDefs};
+use super::defs::{CompiledFunction, ExprDefs, FunctionDefId};
 use super::field::Ready;
 use crate::defs::Defs;
 
@@ -179,6 +179,18 @@ impl<'a, H: Host + ?Sized> Evaluator<'a, H> {
     pub fn call_named(&mut self, name: &str, args: &[Value]) -> Value {
         match self.exprs.registry().function_id(name) {
             Some(function) => Host::call(self, function, args),
+            None => Value::Null,
+        }
+    }
+
+    /// Calls the function of a `function` definition by its dense id.
+    /// This is how one written in place inside another definition, which
+    /// has no name to be called by, is run. Null if the id is not one of
+    /// these definitions'.
+    pub fn call_def(&mut self, function: FunctionDefId, args: &[Value]) -> Value {
+        let exprs = self.exprs;
+        match exprs.functions().of(function) {
+            Some(defined) => self.run_function(defined, args),
             None => Value::Null,
         }
     }

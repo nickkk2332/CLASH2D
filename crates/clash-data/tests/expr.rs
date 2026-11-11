@@ -1105,6 +1105,29 @@ fn a_mod_with_a_function_a_variable_and_a_definition_using_both_evaluates() {
     assert_eq!(diagnostic.path, "extra.nearby");
     assert_eq!(diagnostic.definition.as_ref().unwrap().id, "ashlands:vent");
 
+    // Once, without keeping a runner; and a function by its definition.
+    assert_eq!(
+        vent.count.as_ref().unwrap().eval_on(&defs, &mut host),
+        Some(3)
+    );
+    assert!(!vent.when.holds_on(&defs, &mut host));
+    assert!(
+        vent.log
+            .as_ref()
+            .unwrap()
+            .render_on(&defs, &mut host)
+            .starts_with("You feel ")
+    );
+    let fall = defs
+        .lookup::<clash_data::expr::FunctionDef>("core:fall_energy")
+        .unwrap();
+    assert_eq!(
+        runner
+            .on(&defs, &mut host)
+            .call_def(fall, &[Value::Int(1), Value::Int(2)]),
+        TestHost::real(2.0 * 9.81)
+    );
+
     // What `Defs` offers the simulation.
     let scorch = defs
         .functions()
