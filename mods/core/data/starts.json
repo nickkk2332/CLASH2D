@@ -1,0 +1,16 @@
+[
+  { "//": "Ways a game can begin, until game scenarios exist (13 §3): each names a realm definition, where the player's character begins in it and how the character is drawn. The application lists them on the new-game screen. `at` is `[x, y]`, the highest cell of that column a walker can stand in, or `[x, y, z]`, exactly that cell.",
+    "type": "start", "id": "town", "name": "The town",
+    "doc": "A grid of streets. Every door stands open.",
+    "realm": "open_town", "at": [9, 17],
+    "glyph": { "ch": "@", "fg": "bright_white", "bold": true } },
+
+  { "type": "start", "id": "wayside", "name": "The lane",
+    "doc": "Houses between fields. Their doors are shut.",
+    "realm": "countryside", "at": [39, 45],
+    "glyph": { "ch": "@", "fg": "bright_white", "bold": true } },
+
+  { "//": "The test town with its doors open, so that it can be walked through before anything can open a door.",
+    "type": "realm", "id": "open_town", "copy_from": "test_city",
+    "generator_params": { "door": "door#open" } }
+]

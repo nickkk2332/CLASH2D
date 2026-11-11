@@ -1,0 +1,16 @@
+[
+  { "//": "Development keys, for a development profile. Until the `tools` mod of 04 §3.5 exists they live here, behind the preference `development`, which no screen offers and a profile sets: `profiles/dev.json` does. Elsewhere F12 does nothing.",
+    "type": "preference", "id": "development", "kind": "flag", "default": false,
+    "name": "Development keys",
+    "doc": "Whether the development keys work. Set by a development profile; no screen offers it." },
+
+  { "//": "The omniscient view (12 §3.2, §5): the play screen's map drawn from what is really there, not from what the character has seen. The application acts on the preference named `omniscient` wherever a mod defines it, never keeps it between runs, and empties the character's map memory whenever it changes, so that nothing learnt from truth is left behind.",
+    "type": "preference", "id": "omniscient", "kind": "flag", "default": false,
+    "name": "See everything",
+    "doc": "Draw the world as it really is, whatever the character could see. For development." },
+
+  { "//": "F12 in play. Outside a development profile it leaves the view as it is.",
+    "type": "control", "id": "omniscient", "name": "See everything",
+    "doc": "Switch between what the character sees and what is really there, in a development profile.",
+    "do": { "set": { "pref.omniscient": "app.pref('ui:development') and not app.pref('ui:omniscient')" } } }
+]

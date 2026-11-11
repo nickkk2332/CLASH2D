@@ -2,8 +2,8 @@
 //!
 //! The definition types of this crate (`color`, `theme`, `keymap`,
 //! `control`, `figure`, `screen`, `ui_part`, `preference`, `ambience`,
-//! `overlay`, `show` and `anim`) are registered with `clash-data` by
-//! [`register_defs`],
+//! `overlay`, `start`, `show` and `anim`) are registered with `clash-data`
+//! by [`register_defs`],
 //! which also adds the step that puts `app` into the expression
 //! registry and the check that every `ui_part` has its slot.
 //! [`UiDefs`] is the one way from
@@ -236,8 +236,8 @@ pub fn engine_loader(types: &DefTypes) -> clash_data::Loader<'_> {
 
 /// Registers this crate's definition types with the loader: `color`,
 /// `theme`, `keymap`, `control`, `figure`, `screen`, `ui_part`,
-/// `preference`, `ambience`, `overlay`, `show` and `anim`. It also adds
-/// the step that puts `app` and
+/// `preference`, `ambience`, `overlay`, `start`, `show` and `anim`. It
+/// also adds the step that puts `app` and
 /// what is read through it into the expression registry
 /// ([`crate::app::register_expr`]), so that bindings are checked against
 /// it, and the check that every `ui_part` is aimed at a slot some screen
@@ -256,10 +256,12 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<PreferenceDef>();
     types.register::<AmbienceDef>();
     types.register::<OverlayDef>();
+    types.register::<crate::start::StartDef>();
     types.register::<ShowDef>();
     types.register::<AnimDef>();
     types.add_registry_step(register_app);
     types.add_cross_check(check_parts);
+    types.add_cross_check(crate::start::check_starts);
     types.add_cross_check(check_shows);
 }
 
@@ -1278,6 +1280,7 @@ mod tests {
                 "preference",
                 "screen",
                 "show",
+                "start",
                 "theme",
                 "ui_part"
             ]
