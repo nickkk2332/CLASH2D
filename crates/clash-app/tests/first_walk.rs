@@ -219,3 +219,25 @@ fn a_game_is_left_from_the_pause_menu() {
     press(&mut run, &["down", "down"]);
     assert!(!run.keys(&["enter"]).unwrap(), "quit ends the run");
 }
+
+#[test]
+fn a_shut_door_stops_the_character() {
+    let mut run = start("shut");
+    // The second start: the lane, whose doors are shut.
+    press(&mut run, &["enter", "tab", "tab", "down", "enter"]);
+    assert!(run.game().playing());
+    let (begin, _) = player(&run);
+    // Across the lane to the door of the house south of it.
+    press(&mut run, &["j", "j", "j", "l", "l"]);
+    let (at_door, then) = player(&run);
+    assert_eq!(
+        (at_door.cell.x, at_door.cell.y),
+        (begin.cell.x + 2, begin.cell.y + 3)
+    );
+    press(&mut run, &["j"]);
+    assert_eq!(
+        last_log(&run),
+        "You cannot go south: something closed is in the way."
+    );
+    assert_eq!(player(&run), (at_door, then));
+}
