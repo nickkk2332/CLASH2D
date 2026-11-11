@@ -1,0 +1,9 @@
+{
+  "id": "other",
+  "name": "Another game",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "A total conversion for the application's tests: a screen of its own and nothing of the bundled mods.",
+  "authors": ["CLASH2D contributors"],
+  "requires": []
+}

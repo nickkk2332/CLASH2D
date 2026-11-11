@@ -27,6 +27,7 @@
 //! | Definitions from mods | [`register_defs`], then [`UiDefs`]; see [`defs`] |
 //! | The picture of the world | [`view`]: [`ViewModel`], [`WorldView`], [`Camera`], [`WorldGlyphs`] |
 //! | How a condition looks; shading over a map | the `ambience` and `overlay` definitions: [`AmbienceDef`], [`OverlayDef`] |
+//! | A way a game can begin, until game scenarios exist | the `start` definition: [`StartDef`] |
 //!
 //! # Outside the simulation
 //!
@@ -60,6 +61,7 @@ pub mod golden;
 pub mod input;
 pub mod picker;
 pub mod scene;
+pub mod start;
 pub mod testing;
 pub mod text;
 pub mod theme;
@@ -90,6 +92,7 @@ pub use scene::{
     NoHost, NoReader, NoSimulation, PREF_KEYMAP, PREF_THEME, ROLE_CONFIRM, ROLE_PICK_LIST, Scene,
     SceneHost, Turn, UiCommand, UiOutcome,
 };
+pub use start::{StartDef, StartId};
 pub use text::{RichText, TextError};
 pub use theme::{BordersDef, FontDef, Style, StyleDef, Theme, ThemeDef, ThemeError};
 pub use view::{
