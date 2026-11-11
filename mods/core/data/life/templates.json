@@ -1,0 +1,33 @@
+[
+  { "//": "Someone. Made with a name, a stature, a build and some training.",
+    "type": "template", "id": "person", "kind": "species", "name": "Person",
+    "body": "humanoid",
+    "pools": ["blood", "pain"],
+    "tags": ["person"],
+    "mind": true,
+    "glyph": { "ch": "@", "fg": "white" },
+    "choices": [
+      { "id": "name", "name": "Name", "kind": "text", "sets": "name", "max_length": 32,
+        "suggestions": ["Ada", "Bram", "Cora", "Dov", "Esme", "Finn"] },
+      { "id": "stature", "name": "Stature", "kind": "range", "sets": "scale",
+        "min": 0.9, "max": 1.1, "default": 1.0 },
+      { "id": "build", "name": "Build", "kind": "pick", "default": ["average"],
+        "options": [
+          { "id": "slight", "name": "Slight", "attributes": { "strength": 8 } },
+          { "id": "average", "name": "Average" },
+          { "id": "heavy", "name": "Heavy", "attributes": { "strength": 12 } } ] },
+      { "id": "training", "name": "Training", "kind": "points", "budget": 3,
+        "options": [
+          { "id": "runner", "name": "Runner", "cost": 2, "tracks": { "athletics": 100 } },
+          { "id": "reader", "name": "Reader", "cost": 1, "tracks": { "lore": 100 } } ] }
+    ] },
+
+  { "//": "An animal that follows, guards and bites.",
+    "type": "template", "id": "dog", "kind": "species", "name": "Dog",
+    "body": "quadruped",
+    "pools": ["blood", "pain"],
+    "attributes": { "strength": 6, "wits": 3 },
+    "tags": ["animal"],
+    "mind": true,
+    "glyph": { "ch": "d", "fg": "yellow" } }
+]

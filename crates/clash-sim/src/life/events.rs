@@ -520,7 +520,6 @@ pub(crate) fn dir_field(dir: Option<[Real; 3]>) -> FieldValue {
 }
 
 /// A list of texts as an event's field.
-#[allow(dead_code)] // Used once templates are built (06 §10).
 pub(crate) fn texts_field(texts: &[String]) -> FieldValue {
     FieldValue::Plain(Value::List(
         texts.iter().map(|text| Value::Str(text.clone())).collect(),

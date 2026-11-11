@@ -270,6 +270,9 @@ impl Sim {
             };
             for request in loaded.spawns {
                 let loc = Location::new(grid, request.at);
+                // A request that names a template is answered here
+                // (06 §10.3), after the event that reports it.
+                let honour = request.clone();
                 self.emit(
                     Where::Loc(loc),
                     ACTIVITY_CAUSE,
@@ -279,6 +282,7 @@ impl Sim {
                         request,
                     },
                 );
+                self.honour_spawn_request(loc, &honour);
             }
         }
         for failure in reconciled.failed {

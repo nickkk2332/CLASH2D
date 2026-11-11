@@ -65,7 +65,13 @@ pub fn types() -> DefTypes {
 /// The world definition files of `mods/core`, as paths within the mod
 /// and their text, in file-name order.
 fn core_files() -> Vec<(String, String)> {
-    let dir = mods_dir().join("core/data/world");
+    core_dir_files("world")
+}
+
+/// The definition files of one directory under `mods/core/data`, as
+/// paths within the mod and their text, in file-name order.
+fn core_dir_files(sub: &str) -> Vec<(String, String)> {
+    let dir = mods_dir().join("core/data").join(sub);
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -81,7 +87,7 @@ fn core_files() -> Vec<(String, String)> {
             let name = file.file_name().unwrap_or_default().to_string_lossy();
             let text = std::fs::read_to_string(file)
                 .unwrap_or_else(|error| panic!("{}: {error}", file.display()));
-            (format!("data/world/{name}"), text)
+            (format!("data/{sub}/{name}"), text)
         })
         .collect()
 }
@@ -102,6 +108,30 @@ pub fn try_defs(extra: &str) -> Result<Arc<Defs>, String> {
         .load_mods(&["core"])
         .into_result()
         .map_err(|diagnostics| diagnostics.render())
+}
+
+/// Loads `mods/core`'s world content and its living things (bodies,
+/// stats, templates), with one more file of definitions.
+pub fn life_defs(extra: &str) -> Arc<Defs> {
+    let types = types();
+    let mut files = core_files();
+    files.extend(core_dir_files("life"));
+    files.push(("data/test/extra.json".to_owned(), extra.to_owned()));
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect();
+    Loader::new(&types)
+        .expr_registry(&clash_sim::engine_registry())
+        .memory_mod("core", r#"{ "id": "core" }"#, &files)
+        .load_mods(&["core"])
+        .into_result()
+        .unwrap_or_else(|diagnostics| {
+            panic!(
+                "the test definitions do not load:\n{}",
+                diagnostics.render()
+            )
+        })
 }
 
 /// The definitions every test here runs on.

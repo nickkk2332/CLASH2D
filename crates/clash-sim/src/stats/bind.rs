@@ -400,8 +400,12 @@ impl Sim {
     }
 
     /// Works an entity's stats out again because one of its variables
-    /// changed, if a stat's expression reads that variable directly.
+    /// changed, if a stat's expression reads that variable directly, and
+    /// makes it notable.
     pub(crate) fn life_var_changed(&mut self, entity: EntityId, name: &str, cause: Cause) {
+        // A variable set on an anonymous individual makes it notable
+        // (06 §12.2).
+        self.make_notable(entity, cause);
         if self.components.stats.contains(entity)
             && self.life.reads_variable(name)
             && let Err(reason) = self.refresh_stats(entity, cause)

@@ -519,6 +519,7 @@ impl Sim {
         let kind =
             |kind: clash_world::defs::DamageTypeId| id_field(types.damage_type, kind.index());
         let mut refresh = false;
+        let mut wounded = false;
         for change in changes {
             let payload = match change {
                 Change::HitLanded {
@@ -541,12 +542,15 @@ impl Sim {
                     kind: of,
                     depth,
                     area,
-                } => about(props::WOUND_INFLICTED, entity)
-                    .with("wound", wound(entity, id))
-                    .with("part", part(entity, on))
-                    .with("kind", kind(of))
-                    .with("depth", i64::from(depth))
-                    .with("area", area),
+                } => {
+                    wounded = true;
+                    about(props::WOUND_INFLICTED, entity)
+                        .with("wound", wound(entity, id))
+                        .with("part", part(entity, on))
+                        .with("kind", kind(of))
+                        .with("depth", i64::from(depth))
+                        .with("area", area)
+                }
                 Change::WoundClosed {
                     entity,
                     wound: id,
@@ -645,6 +649,10 @@ impl Sim {
             if let Err(reason) = self.raise(Where::Entity(entity), cause, payload) {
                 self.fault(reason);
             }
+        }
+        if wounded {
+            // A wounded anonymous individual is notable (06 §12.2).
+            self.make_notable(entity, cause);
         }
         if refresh
             && self.components.stats.contains(entity)

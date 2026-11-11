@@ -97,6 +97,16 @@ pub enum DebugCommand {
         /// What the handler is given.
         wake: Wake,
     },
+    /// Makes an entity from templates and puts it somewhere (06 §10.3).
+    /// Its id is the one
+    /// [`EntityTable::next_id`](crate::EntityTable::next_id) gave before
+    /// the command, and `entity_spawned` reports it.
+    Spawn {
+        /// The templates and what was selected within them.
+        spec: crate::template::CharacterSpec,
+        /// Where to put it.
+        place: Place,
+    },
 }
 
 /// A command was refused. The state is as it was.
@@ -190,6 +200,9 @@ impl Sim {
         match command {
             DebugCommand::CreateEntity { spec, place } => {
                 self.spawn(spec, place, cause).map(|_| ())
+            }
+            DebugCommand::Spawn { spec, place } => {
+                self.spawn_template(&spec, place, cause).map(|_| ())
             }
             DebugCommand::MoveEntity { entity, to } => self.relocate(entity, to, cause).map(|_| ()),
             DebugCommand::RemoveEntity { entity } => self.remove_entity(entity, cause),

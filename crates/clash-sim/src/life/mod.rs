@@ -14,7 +14,7 @@
 //! | To harm a body | [`Sim::hit`] with a [`Hit`](crate::body::Hit): the hook `hit_incoming`, the layers, the events, what exits and what came off |
 //! | What the world did to an occupant | [`harm`]: `occupant_exposed` and `occupant_dosed` become hits and doses as the world's events are passed on |
 //! | Minds, death and waking | [`mind`](crate::mind): [`Sim::die`], [`Sim::revive`], [`Sim::vital`], [`Sim::can_act`] |
-//! | To make a creature from data | [`template`](crate::template): `Sim::spawn_template` |
+//! | To make a creature from data | [`template`](crate::template): [`Sim::spawn_template`] |
 //! | The events and hooks of all of it | [`events::LIFE_EVENTS`] |
 //!
 //! # What is not state
@@ -152,7 +152,6 @@ pub struct Life {
     /// What stops a creature, by its definitions (06 §8.3).
     vital: Arc<VitalDefs>,
     /// The templates' tables.
-    #[allow(dead_code)] // Read once templates are built (06 §10).
     templates: Arc<TemplateDefs>,
     /// The qualified names of the variables a stat's expression reads
     /// directly.
@@ -212,7 +211,6 @@ impl Life {
     }
 
     /// The templates' tables.
-    #[allow(dead_code)] // Read once templates are built (06 §10).
     pub(crate) fn templates(&self) -> &Arc<TemplateDefs> {
         &self.templates
     }
