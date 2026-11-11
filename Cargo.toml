@@ -62,10 +62,10 @@ disallowed_types = "deny"
 disallowed_methods = "deny"
 
 # Debug information is the larger part of a debug build's size, and many
-# copies of this workspace are built side by side. Line tables are enough
-# for a backtrace.
+# copies of this workspace are built side by side on one disk. A panic
+# still names its file and line without it.
 [profile.dev]
-debug = "line-tables-only"
+debug = false
 
 [profile.test]
-debug = "line-tables-only"
+debug = false
