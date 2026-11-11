@@ -21,7 +21,7 @@ plan's scenarios. The test generators stay, as fixtures.
 | WG1 | Map format | L | W3, X4 | beta |
 | WG2 | Placing and applying maps | L | WG1, W8, W17 | beta |
 | WG3 | Ground | M | WG1 | beta |
-| WG4 | Tract definitions and realisation | M | WG2, WG3 | in progress |
+| WG4 | Tract definitions and realisation | M | WG2, WG3 | beta |
 | WG5 | Transforms and ruin | M | WG4, W22 | todo |
 | WG6 | World generators and realm plans | L | WG4 | todo |
 | WG7 | Region kinds and surveys | L | WG6 | todo |
@@ -172,6 +172,24 @@ Done when
   shuffled and multi-threaded test as world package W8.
 - Precedence is ground, placements in order, transforms (invariant X5).
 - The budget for a settled tract is benchmarked.
+
+Built (beta), in `clash_gen::tractdef` and `clash_gen::realize`: the
+`tract` type; `GenDefs`, the build stage of maps, grounds and tract
+definitions; the generator `standard` (10 §6.2), which a realm
+definition names and which surveys regions and realises tracts in the
+order of 10 §6.1; placements kept in region records; the realm
+`core:countryside` with a ground, three tract definitions and a lane
+map in `mods/core`; `cargo run -p clash-gen --example tract_ascii`.
+The first two "Done when" items have tests in
+`crates/clash-gen/tests/standard.rs`, with golden pictures of two
+tracts that must also stand. Stubbed: transforms are a function that
+does nothing (WG5); the budget is not benchmarked (WG13); the surveyor
+gives tracts their definitions by an authored layout or a weighted
+choice, with no region kinds, sites or settlements, and writes no
+paths (WG6 to WG8: the seam is `StandardGenerator::tract_def` and
+`placements_of`, decision D-511); a tract definition's placements lie
+inside their tract; `ruin`, `bands` and `glyph` are carried; a
+record's `rot` and `variant` are not used.
 
 ### WG5 — Transforms and ruin
 
