@@ -506,7 +506,11 @@ exist. Section references are where the mechanism is specified.
 | Power | Built from |
 |-------|-----------|
 | Fire, frost, lightning, acid, gas | Fields (02 §16) placed with `add_field`; releases of those damage types. What they do to each other is field reactions (02 §16). |
+| Freezing, melting, boiling | Fields that warm or cool; materials and fields change state by temperature (02 §5.4) |
 | Moving water, air, smoke | `move_field` (section 7.6) |
+| Wind, whirlwinds, whirlpools | An area whose ambient override sets a drift (11 §4.7) |
+| Shaking the ground | `tremor` (02 §14.6) |
+| A great wave, an avalanche, a wall of force | A `release` shaped as a front (02 §13.5) |
 | Raising walls, pillars, bridges | `conjure` (section 7.3); or a map fragment stamped in place (02 §23) |
 | Moving earth and stone | `detach` a piece, move it as a subgrid, `merge` (02 §18.3) |
 | Throwing things by will | A grip at range (section 7.7), then `throw`; or `impulse` (02 §15) |

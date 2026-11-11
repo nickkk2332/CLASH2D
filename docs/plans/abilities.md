@@ -277,3 +277,4 @@ small package of its own.
 | Addition | Package | Spec | Done when |
 |----------|---------|------|-----------|
 | Field reactions in reference abilities | A10 | 02 §16; 08 §8 | The reference elemental abilities rely on field reactions (world-model package W16) for what fire, water and lightning do to each other, and define none of it themselves. |
+| Elemental reference abilities | A10 | 08 §8.4 | The reference mod includes a freezing power that lays a sheet a person can walk on over water, a quake, a wave and a gust, each built only from the mechanisms the catalogue names. |

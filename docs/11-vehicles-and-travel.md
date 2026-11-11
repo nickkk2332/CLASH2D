@@ -91,6 +91,8 @@ pub struct Medium {
     pub sound_speed: Real,           // m/s
     pub clarity: Real,               // fraction of light passing per metre
     pub breathable: Option<AtmosphereId>,
+    pub temperature: Real,           // K (section 4.6)
+    pub drift: [Real; 3],            // m/s: how the medium itself is moving (section 4.7)
 }
 
 impl Cosmos { pub fn medium(&self, loc: Location) -> Medium; }
@@ -104,7 +106,8 @@ impl Cosmos { pub fn medium(&self, loc: Location) -> Medium; }
 | Otherwise | The stratum's atmosphere, or vacuum (02 §4.1) |
 
 Materials used as liquids carry a `fluid` block: sound speed, clarity,
-drag factor. Atmospheres carry the same.
+drag factor, and the temperature of their depths. Atmospheres carry the
+first three.
 
 ### 4.2 Pressure
 
@@ -138,7 +141,7 @@ Bodies in flight (02 §15) gain a `volume`. In any medium:
 
 ```
 buoyancy = −gravity × medium.density × volume / mass
-drag     = −½ · medium.density · drag · area · |v| · v / mass
+drag     = −½ · medium.density · drag · area · |w| · w / mass     (w = v − medium.drift)
 ```
 
 Wood floats, stone sinks, a corpse sinks slowly, and a person thrown into
@@ -154,6 +157,67 @@ Light falls with depth by the medium's clarity (15 §3.3), so deep water is
 dark. Sound travels in liquid at the medium's speed and with its own
 falloff (15 §3.1), which is why hearing reaches much further than sight
 underwater and why sonar is a sense worth having.
+
+### 4.6 Temperature
+
+Temperature is worked out when it is asked for, from things already known.
+Nothing conducts heat and nothing is stepped.
+
+| The cell | Its temperature |
+|----------|-----------------|
+| In gas, in the open | The region's temperature (09 §14.1), adjusted by its stratum (02 §4.1) |
+| In liquid | Between the region's temperature at the surface and the liquid's `deep` temperature, by depth |
+| In vacuum | The stratum's |
+| Inside a sealed volume or a sealed area (section 10) | The volume's **held** temperature |
+
+To any of these is added what the fields in the cell contribute: each
+level of a field with `warms` (02 §16). Standing by a fire is warm because
+its heat is there.
+
+**Held temperature.** A sealed volume that is open to the outside holds
+the outside temperature. Closed, it keeps what it had and moves toward the
+outside at the `leak` rate of its area kind or vehicle. A device with
+`climate` moves it toward a set point instead, while supplied:
+
+```json
+"climate": { "to": "self.config.setpoint", "rate": "0.02 K/s", "serves": 400 }
+```
+
+`serves` is the volume, in cubic metres, that the device can condition at
+that rate; a larger volume changes proportionally more slowly. A held
+temperature is a straight line between changes, with one wake-up when it
+arrives, as a store's level is (16 §5.4). A sealed suit is conditioned the
+same way by a module.
+
+Rules read `here.temperature`. What cold and heat do to a body is content:
+usually a pool (06 §4.2) whose rate depends on the temperature and on what
+is worn. Materials and fields change state by it (02 §5.4).
+
+Temperatures are kept in kelvin. Definitions may write `"-5 C"`.
+
+### 4.7 Drift
+
+The medium may itself be moving. Its **drift** at a cell is:
+
+| The cell | Drift |
+|----------|-------|
+| In gas with nothing overhead | The region's wind (09 §14.1) |
+| In a sea or a lake | The region's current |
+| In a watercourse laid by a path (10 §8.5) | The path kind's `current`, along its line and downhill |
+| Inside an area whose ambient override sets one (02 §8.3) | That: a steady flow, or a `vortex` with a speed, an inflow and a lift |
+| Under cover, indoors, in a sealed volume | None |
+
+| What | What drift does to it |
+|------|-----------------------|
+| Vehicles | As their motion models say (section 5.2) |
+| Bodies in flight | Drag is measured against the moving medium (section 4.4), so light things are carried and an arrow falls short into a headwind |
+| Fields with the `drift` rule | Their contents move with it, and fire spreads faster downwind (02 §16) |
+| Anything afloat or swimming | Carried at the drift's speed on top of its own movement, as on a moving floor (16 §9.4) |
+| Occupants in gas | Each step, a push from the force `½ · ρ · drift² · area`. Below the stagger speed of 07 §7 it does nothing, which is nearly always. In a great storm it staggers people and carries off what is light enough. |
+
+A whirlwind and a whirlpool are anchored areas with a vortex. A gust
+thrown by a power is an area with a flow that lasts a moment. A river
+carries a swimmer downstream.
 
 ## 5. Motion
 
@@ -687,7 +751,8 @@ loaded tract. Crews in warm tracts are stepped as 03 §10.
 **Definition types**: `vehicle`, `travel_band`. `drives` and `uses` on seat
 holds. The `part` block on `device`
 (16 §4.2). Resources are defined in 16 §5. The `fluid` block on `material` and `atmosphere`. `sea_level`
-on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
+on `realm`. `sealed` and `leak` on `area_kind`. `lanes` on `chart`.
+`climate` on `device`.
 
 **Events**: `vehicle_moved`, `vehicle_collided`, `vehicle_mode_changed`,
 `part_installed`, `part_removed`, `resource_exhausted`,
@@ -711,6 +776,7 @@ on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
 `capsized`,
 `resource(id)`, `crew`, `station(id).operator`; on any location,
 `medium.phase`, `medium.pressure`, `medium.density`, `medium.breathable`,
+`temperature`, `drift`,
 `compartment`, `compartment.pressure`, `compartment.flooded`; on a body,
 `driver`; on a character, `driving`.
 

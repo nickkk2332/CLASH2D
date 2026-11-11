@@ -331,7 +331,8 @@ cell removed.
 ```
 
 A **tract definition** says what the ground of a tract is, which travel
-bands may cross it (11 §13.2), what it becomes when ruined (section 10.2),
+bands may cross it (11 §13.2), what it becomes when ruined (section 10.2;
+`ruin` may instead be keyed by kind of devastation, 02 §17.2),
 and how it is drawn on the region map (12 §6.2). What stands on it is in
 placements.
 
@@ -525,6 +526,9 @@ stretch.
 | `cutting` | Cuts the ground down to the path's grade, open to the sky |
 | `embankment` | Fills under the path up to its grade |
 
+A path kind that is a watercourse may state a `current`: the speed at
+which its water moves along its line (11 §4.7).
+
 Crossings are decided in the survey from the line and the height field,
 which neighbouring regions share, so both sides of an edge choose alike.
 Map crossings are written as placements. The others are part of the path
@@ -641,7 +645,8 @@ A **transform** rewrites cells after a tract is realised.
 
 | Use | How |
 |-----|-----|
-| **Ruin variants** | A tract definition's `ruin` names a transform or a substitute definition, used when a never-realised tract is totally devastated (02 §17.2) |
+| **Ruin variants** | A tract definition's `ruin` names a transform or a substitute definition, used when a never-realised tract is totally devastated (02 §17.2). It may give one for each kind of devastation: scorched, drowned, shaken, buried. |
+| **Lesser devastation** | A devastation kind's `apply` transform is run on tracts that were devastated by something other than a blast, scaled by how badly (02 §17.2) |
 | **Derived realms** | A derived realm's `transform` (02 §21) is applied to every tract it copies. The same city, a century abandoned. The same city, wrong. |
 | **Variation** | A region kind or placement may apply a transform: a snowbound village, a burnt quarter |
 | **Rules** | `transform_area` applies one to loaded cells |

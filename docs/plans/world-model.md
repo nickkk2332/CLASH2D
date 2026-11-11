@@ -52,6 +52,8 @@ Section references such as "02 §14" point into those documents.
 | W21 | Travelers, carriers, charts | M | W19, W20b, W17 | todo |
 | W22 | Derived realms and realm lifecycle | S | W19, W10 | todo |
 | W23 | Benchmarks and budget gate | S | W4, then recurring | todo |
+| W24 | Fronts, tremors and kinds of devastation | M | W15, W17 | todo |
+| W25 | Change of state | M | W16, W13, V1 | todo |
 
 ## Order and parallelism
 
@@ -73,7 +75,12 @@ built at the same time.
 | 11 | W13, W14, W23 |
 | 12 | W15, W19, W20a |
 | 13 | W17, W20b, W22 |
-| 14 | W21 |
+| 14 | W21, W24 |
+| 15 | W25 |
+
+W24 and W25 were added after a review of what the design supports for the
+elements and disasters (decisions D-202 to D-207). W25 needs temperature
+from vehicles package V1, which itself depends only on W14 and W16.
 
 ## Milestones
 
@@ -82,6 +89,7 @@ built at the same time.
 | **M0 Foundation** | F1–F4 | `cargo xtask check` passes; a mod with a mistake produces a precise error. |
 | **M1a A world you can look at** | W1–W11 | Generate the test city, browse it storey by storey in the terminal viewer, save, load, same hash. |
 | **M1b A world you can wreck** | W12–W18 | From the viewer console: punch out a wall, drop a tower, set off a car bomb, throw a body through three buildings, start a fire. |
+| **M1d A world with weather in it** | W24, W25 | Shake a district and watch the buildings nearest their limits fall. Send a wave up a street from the shore. Freeze a lake, walk across it, and go through where a cart is too heavy. Melt a wall of ice with a fire. |
 | **M1c A world that connects** | W19–W22 | Walk through a portal to another realm, ride a moving subgrid, tear off and throw a building top, scar a continent and visit the damage, fly from a roof to another world. |
 
 ## Foundation
@@ -620,6 +628,57 @@ Build
 Done when
 - Every row of the table has a benchmark and a recorded figure.
 
+### W24 — Fronts, tremors and kinds of devastation
+
+**Spec** 02 §13.5, §14.6, §17.2 · **Size** M
+
+Build
+- `ReleaseShape::Front`: intensity by swept volume; a base that follows
+  the surface; `downhill`; the transmission map laid across the front; the
+  push along `dir`; `leaves`; stamps for fronts in unloaded tracts.
+- `tremor`: the process, the factor on span and bearing, checks spread
+  within the edit budget, `OccupantShaken`, devastation for unloaded
+  tracts.
+- The `devastation_kind` type; `devastate`; `PendingEdit::Devastation`;
+  the kind on `RegionDevastated`; ruin variants chosen by kind.
+
+Done when
+- Energy absorbed by a front never exceeds energy released (invariant W8),
+  and a wall that survives shelters what is behind it.
+- Test script `the_wave`: a front runs up a street from the shore, breaks
+  what its intensity exceeds, pushes occupants along its direction, leaves
+  water behind it and stops at ground higher than itself. An unloaded
+  tract in its path shows the same devastation when loaded.
+- Test script `the_tremor`: in a district of mixed buildings, those
+  nearest their span and load limits fall and the rest stand. When it ends
+  a building that stood is as strong as before. Anchored rock does not
+  fall.
+- A tract devastated while unloaded and one devastated identically while
+  loaded end with the same value and kind (invariant W12).
+
+### W25 — Change of state
+
+**Spec** 02 §5.4, §12.3, §14.1, §16; 11 §4.6 · **Size** M
+
+Build
+- `changes` on materials and fields; the three moments at which they are
+  tested; the scheduled crossing and the sweep within the edit budget;
+  `cover`.
+- Rubble by damage type, including fields.
+- `warms` on fields; `leave` on reactions.
+- Floating floors as supports, and what they can carry.
+
+Done when
+- Nothing is scheduled for temperature while no threshold is near
+  (invariant W11), shown by a benchmark of an idle frozen region.
+- Test script `the_thaw`: the region cools below the threshold and open
+  water gains a sheet of ice; a person crosses a wide sheet and a loaded
+  cart goes through it; the region warms and the sheet goes. A tract
+  loaded only afterwards matches one that was loaded throughout.
+- Test script `ice_wall`: a fire's heat melts a wall of ice into water,
+  which quenches part of the fire; lava reaching water leaves rock.
+- Ice destroyed by heat leaves water, and by impact leaves broken ice.
+
 ## Scenario catalogue
 
 Each scenario is a console script with a golden hash, run in all four modes.
@@ -639,6 +698,10 @@ Each scenario is a console script with a golden hash, run in all four modes.
 | `time_stop_street` | W14 | S10 | Bodies freeze in a rate-0 area and resume |
 | `thrown_building` | W20b | S11 | Detach, flight, merge |
 | `rooftop_to_orbit` | W21 | S9 | Strata, edge exit, carrier, arrival |
+| `the_wave` | W24 | S8 | A front: intensity, shelter, push, what it leaves |
+| `the_tremor` | W24 | — | Weakened span and bearing; devastation by kind |
+| `the_thaw` | W25 | — | State change by region temperature; floating floors |
+| `ice_wall` | W25 | — | State change by fields; rubble by damage type |
 
 ## Review additions
 
@@ -652,3 +715,5 @@ small package of its own.
 |----------|---------|------|-----------|
 | Field reactions | W16 | 02 §16 | Test script `quench`: water and fire in one cell leave steam in the stated amounts; a field meeting a tagged material reacts; a shock packet arriving in water reaches every connected water cell within reach at the stated share. A field's own `convert` gives the same result as the equivalent reaction. |
 | Liquid level as a pending edit | W17 | 02 §17.3; 11 §4.3 | A tract given `PendingEdit::Liquid` while unloaded loads filled or drained to that storey, with the same state hash as the same change made while it was loaded. |
+| Drift in areas | W7 | 02 §8.3; 11 §4.7 | An area's ambient override may set a steady flow or a vortex, and `Cosmos::ambient` returns it. |
+| Drift on bodies and fields | W14, W16 | 02 §15.1, §16; 11 §4.7 | A light body thrown across a wind lands downwind of where it lands in still air. Smoke with the `drift` rule moves downwind, and fire spreads further downwind than upwind in the same time. Until vehicles package V1 exists, drift is supplied by a test fixture. |

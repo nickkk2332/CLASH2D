@@ -789,11 +789,13 @@ and a lord with manors are holders of sites.
 
 ```json
 { "type": "weather", "id": "temperate_coast",
+  "temperature": { "mean": "11 C", "season": 8, "day": 4 },
+  "lasting": ["snow", "wet"],
   "states": {
     "clear": { "light": 1.0, "wind": [0, 6],  "sea": 2, "to": { "cloud": 0.3 } },
     "cloud": { "light": 0.7, "wind": [2, 10], "sea": 3, "to": { "clear": 0.3, "rain": 0.25 } },
     "rain":  { "light": 0.5, "wind": [4, 14], "sea": 4, "field": { "rain": 30 }, "to": { "cloud": 0.4, "storm": 0.1 } },
-    "storm": { "light": 0.3, "wind": [12, 28], "sea": 7, "field": { "rain": 80 }, "to": { "rain": 0.5 } } },
+    "storm": { "light": 0.3, "wind": [12, 28], "sea": 7, "temp": -3, "field": { "rain": 80 }, "to": { "rain": 0.5 } } },
   "step": "1 h" }
 ```
 
@@ -803,6 +805,21 @@ by the given chances each step. The state sets values on the region: light
 loaded cells open to the sky.
 
 Rules may set a region's weather. A power over storms does.
+
+**Temperature.** A region's temperature is its climate's `mean`, plus a
+seasonal swing by the calendar (section 14.2), plus a daily swing by the
+time of day, plus the current state's `temp`. Between weather steps it is
+a known function of time, so the moment it will cross any given value can
+be computed in advance (02 §5.4). The temperature of a particular cell
+follows from it (11 §4.6).
+
+**What lies.** Each field named in `lasting` is kept for the region as one
+number, its **cover**. It rises while a state lays the field, and falls
+by the field's `cover_loss`, an expression that may read the region's
+temperature: snow goes when it thaws, wet ground dries. When a tract
+loads, cells with nothing overhead are given the field at the region's
+cover. Snow that fell while nobody was there is lying when someone
+arrives.
 
 ### 14.2 Calendars
 
@@ -819,6 +836,15 @@ populations and agents in proportion to devastation; services lost;
 survivors migrating; groups whose goals accept disasters responding. The
 bundled content supplies a plain set. A mod about the aftermath supplies a
 richer one.
+
+Devastation has a kind (02 §17.2), carried by the event, so rules may
+answer a flood differently from a blast.
+
+Natural disasters are incidents (section 11). Their stages call what the
+world offers: `tremor`, a `release` shaped as a front, `set_liquid_level`,
+`set_weather`, fields, and `devastate` for wherever nobody is looking. The
+reference content includes an earthquake, a flood, a wildfire, an
+eruption, a great storm and a falling star, as examples to copy.
 
 ## 16. Explaining
 
@@ -842,6 +868,7 @@ views are how it is found.
 
 **Definition types**: `mind`, `goal`, `tactics`, `collective`, `formation`,
 `routine`, `incident`, `weather`, `channel`. Fields `calendar` on realms;
+`cover_loss` on fields;
 `stocks` and `supplies` on site definitions; `cold` on goals; `intent`
 and `value` on grants (08 §11).
 
@@ -874,7 +901,8 @@ and `value` on grants (08 §11).
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
 sites, `locals`, `stock(what)`, `population(kind)`, `holder`; on regions,
-`weather`, `wind`, `sea_state`; on realms, `time_of_day`, `day`, `season`;
+`weather`, `wind`, `current`, `sea_state`, `temperature`, `cover(field)`;
+on realms, `time_of_day`, `day`, `season`;
 on incidents, `stage`, `cast(role)`.
 
 ## 18. Invariants

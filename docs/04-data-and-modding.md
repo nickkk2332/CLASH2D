@@ -280,7 +280,7 @@ knows the current path and source location at every point.
 | Rust type | In JSON |
 |-----------|---------|
 | `bool`, integers, `Real` | Literals |
-| `Dur`, `Length`, `Mass`, `Energy`, `Pressure`, `Speed`, `Temperature` | A number in SI units, or a string with a unit: `"250 ms"`, `"70 kPa"`, `"1.5 MJ"` |
+| `Dur`, `Length`, `Mass`, `Energy`, `Pressure`, `Speed`, `Temperature` | A number in SI units, or a string with a unit: `"250 ms"`, `"70 kPa"`, `"1.5 MJ"`, `"-5 C"` |
 | `Ref<T>` | An id of a definition of type `T`. Resolved to a dense id during loading. |
 | `StateRef` | An element state such as `"wall@brick#open"` (02 §5.1) |
 | `Tag`, `TagSet` | Free-form strings; interned |

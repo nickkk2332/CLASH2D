@@ -230,6 +230,7 @@ movement mode.
 | `inputs`, `outputs` | Signals (section 7) |
 | `slots`, `bus`, `module` | Assemblies (section 11) |
 | `part` | What it adds to a vehicle (11 §6.1) |
+| `climate` | Warms or cools the sealed volume it stands in (11 §4.6) |
 | `rules` | Attached rules (05 §9.3) |
 
 A generic configuration screen (12) is built from `config`, so a new machine
@@ -851,7 +852,7 @@ for authors.
 |------|-----------|
 | Hunger, thirst, fatigue, warmth | Pools with rates and threshold rules (06 §4.2) |
 | Food, drink, medicine | Items whose interactions add to pools, add traits, treat wounds |
-| Cold, heat, bad air | The medium (11 §4) and fields (02 §16) read by rules; shelter is a sealed area with a heater |
+| Cold, heat, bad air | Temperature (11 §4.6) and the medium (11 §4) read by rules; shelter is a sealed area with a `climate` device |
 | Light | Light sources (15 §3.3), including powered ones |
 | Tools and crafting | Recipes, qualities, stations |
 | Farming, brewing, curing | Recipes with a condition on the place (section 8.4) |

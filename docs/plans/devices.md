@@ -368,3 +368,4 @@ small package of its own.
 | Logic tables | G5 | 16 §7 | A controller's table edited in play drives its outputs as its rows say, re-evaluates when an input changes, and survives save and load. A row cannot name anything the device's definition does not expose. |
 | Moving floors | G7 | 16 §9.4 | Test script `walkway`: a creature and a crate on a supplied moving floor are carried along at its speed; unsupplied, they are not; something anchored against a push stays put. |
 | Fitting screen | G9 | 12 §10.7 | One screen shows the slots, contents, candidates and resource budget of a torch, a suit and a vehicle, with no screen written for any of them. Built when first-playable package U9 exists. |
+| Climate devices | G2 | 16 §4.2; 11 §4.6 | A heater with `climate` warms the sealed area it stands in while supplied and stops when its supply does. Needs vehicles package V3. |

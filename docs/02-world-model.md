@@ -176,8 +176,8 @@ A realm has no hard-coded "kind". What a realm is follows from its properties.
   "fill": { "below": "solid@granite", "above": null },
   "strata": [
     { "from_z": -256,  "gravity": 9.81, "atmosphere": "air",      "sky": "day_night" },
-    { "from_z": 4000,  "gravity": 9.81, "atmosphere": "thin_air", "sky": "high_altitude" },
-    { "from_z": 33000, "gravity": 0.0,  "atmosphere": null,       "sky": "orbit" }
+    { "from_z": 4000,  "gravity": 9.81, "atmosphere": "thin_air", "sky": "high_altitude", "temp_offset": -40 },
+    { "from_z": 33000, "gravity": 0.0,  "atmosphere": null,       "sky": "orbit", "temp": "-120 C" }
   ],
   "time_rate": 1.0,
   "edges": {
@@ -198,7 +198,7 @@ A realm has no hard-coded "kind". What a realm is follows from its properties.
 | `z_range` | Lowest and highest storey. Storage is sparse, so a tall range costs nothing. |
 | `generator` | Which world generator plans the realm, surveys regions and realises tracts (section 9; 10 §9). |
 | `fill` | What implicit cells contain below and above the generated range of a tract. |
-| `strata` | Ambient conditions by altitude: gravity (m/s², along −z), atmosphere (a definition giving density, pressure, sound speed, breathability; `null` is vacuum), and sky (a presentation hint). |
+| `strata` | Ambient conditions by altitude: gravity (m/s², along −z), atmosphere (a definition giving density, pressure, sound speed, breathability; `null` is vacuum), sky (a presentation hint), and temperature: `temp_offset` added to the region's, or `temp` replacing it (11 §4.6). |
 | `time_rate` | Rate of the realm's clock relative to universal time. |
 | `edges` | Per face: `"barrier"` (impassable and indestructible), `"void"` (whatever leaves is removed and an event is emitted), or a boundary link (section 19). Wrapped axes have no edges. |
 
@@ -339,7 +339,43 @@ decided by the movement rules in the simulation, which know the mover.
 | `resist.<type>.factor` | — | Multiplier on energy that gets through. Default 1. |
 | `span` | cells | How far an element of this material can reach sideways from support (section 14). |
 | `bearing` | Pa | The stress it can carry in compression before it is crushed (section 14.5). Absent means it is never crushed. |
-| `rubble` | fixture id | What destroyed elements of this material leave behind. |
+| `rubble` | fixture id | What destroyed elements of this material leave behind. May be given per damage type, and may be a field: ice destroyed by heat leaves water. |
+| `changes` | — | What it becomes by temperature. See below. |
+
+**Change of state.** A material may say what it becomes when the
+temperature of its cell (11 §4.6) passes a threshold.
+
+```json
+[
+  { "type": "material", "id": "ice",
+    "changes": [ { "above": "0 C", "to": { "field": "water", "amount": 200 } } ] },
+  { "type": "material", "id": "water",
+    "changes": [ { "below": "-2 C", "cover": "ice_sheet" } ] },
+  { "type": "material", "id": "basalt",
+    "changes": [ { "above": "1100 C", "to": { "block": "liquid@lava" } } ] }
+]
+```
+
+| Outcome | Does |
+|---------|------|
+| `to` a material | The element stays, made of the other material |
+| `to` a floor, block or fixture state | Replaces the element |
+| `to` a field | Removes the element and adds the field |
+| `cover` | Lays a floor on top and leaves the element as it is. The floor goes when the condition stops holding. A frozen lake is water with a sheet of ice on it. |
+
+Nothing polls temperature. A change is tested at three moments only, and
+made through `WorldEdit`:
+
+- when a field that warms or cools (section 16) changes level in the cell;
+- when the region's temperature crosses a threshold that some loaded
+  material uses. Region temperature is a known function of time
+  (09 §14.1), so the crossing is one scheduled wake-up. It is followed by
+  a sweep, within the edit budget, of the elements of that material that
+  are open to the weather;
+- when a tract loads, for elements open to the weather.
+
+Fields change state in the same way (section 16). A material and what it
+turns into should not share a threshold; the linter warns when they do.
 
 **Blocks, floors and fixtures**:
 
@@ -601,7 +637,8 @@ matter (01 R11, document 15), and the two can differ.
 `FieldAppeared`,
 `FieldVanished`, `FieldContact`, `EnergyReleased`, `CollapseStarted`,
 `CollapseSettled`, `BodyLaunched`, `BodyImpact`, `BodyHitOccupant`,
-`BodyLanded`, `OccupantUnsupported`, `OccupantExposed`, `TractLoaded`,
+`BodyLanded`, `OccupantUnsupported`, `OccupantExposed`, `OccupantShaken`,
+`TremorStarted`, `TremorEnded`, `StateChanged`, `TractLoaded`,
 `TractUnloading`, `TractDevastated`, `RegionDevastated`, `AreaEntered`,
 `AreaExited`, `PortalTraversed`, `RealmCreated`, `RealmDestroyed`,
 `SubgridMoved`, `SubgridDetached`, `SubgridMerged`.
@@ -662,7 +699,7 @@ pub struct Area {
     pub kind: Option<AreaKindId>,    // definition supplying defaults and attached rules
     pub shape: AreaShape,            // Box { min, max } | Cells(sorted Vec<CellPos>) | Radius(m)
     pub anchor: Option<AreaAnchor>,  // an entity or subgrid it moves with
-    pub ambient: Option<AmbientOverride>,   // gravity inside it, as a scale or a vector
+    pub ambient: Option<AmbientOverride>,   // gravity inside it, as a scale or a vector; drift (11 §4.7)
     pub journal: Option<Dur>,        // keep cell changes made inside it for this long (08 §7.4)
     pub grid: GridId,
     pub tags: TagSet,
@@ -695,6 +732,8 @@ cell change made inside it together with the state before the change. They
 can be undone in reverse order (08 §7.4). An area without one keeps nothing.
 
 An area's **ambient override** replaces the stratum's gravity inside it.
+It may also set how the medium inside it is moving (11 §4.7): a steady
+flow, or a vortex.
 `Cosmos::ambient` consults areas before strata. Where areas overlap, the
 one with the highest priority applies.
 
@@ -988,8 +1027,8 @@ Callers compute intensity. Conventions:
 When an element is destroyed:
 
 1. It is replaced by its `on_destroy` state, or removed.
-2. Its material's rubble fixture is added to the cell (or the nearest
-   standable cell below). Rubble amounts add up; a full cell of rubble becomes
+2. Its material's rubble for the damage type that destroyed it is added to
+   the cell (or the nearest standable cell below): a fixture, or a field. Rubble amounts add up; a full cell of rubble becomes
    the fixture's `heap` block.
 3. If the packet passed energy on and the debris budget allows, part of the
    element's mass is launched as debris bodies along the direction of the hit
@@ -1004,7 +1043,7 @@ pub struct EnergyRelease {
     pub origin_alt_mm: u16,
     pub energy: Real,                 // J
     pub kind: DamageTypeId,
-    pub shape: ReleaseShape,          // Sphere | Cone { dir, half_angle } | Beam { dir, radius, range }
+    pub shape: ReleaseShape,          // Sphere | Cone { dir, half_angle } | Beam { dir, radius, range } | Front { … } (section 13.5)
     pub speed: Real,                  // m/s of the front; defaults to the local sound speed
     pub cause: Cause,
 }
@@ -1102,6 +1141,34 @@ without the timeline (section 14.4). One `TractDevastated` event is emitted.
 Resolve mode is used when loading a tract with stamps, when a release exceeds
 its budget, and when a process is force-resolved.
 
+### 13.5 Fronts
+
+A **front** is a release shaped as a wall that advances in one direction: a
+great wave, an avalanche, a flow of ash, a wall of force.
+
+```json
+{ "release": { "at": "$shore", "kind": "impact", "energy": "4e12 J", "speed": "40 m/s",
+    "shape": { "front": { "dir": "east", "width": 2000, "height": 9, "range": 3000,
+                          "leaves": { "field": "water", "amount": 255 } } } } }
+```
+
+- Intensity at distance `d` is the energy spread over the volume swept, as
+  for a sphere: `I(d) = E / (width × height × d)`, for `d` of a metre or
+  more. It falls with distance, not with its cube, so a front carries far.
+- Its base in each column is the top of the ground or of still liquid
+  there. It does not enter a column whose surface stands more than
+  `height` above the one it came from. With `"downhill": true` it enters
+  only columns no higher than the last.
+- Shadowing is as in section 13.2, with the transmission map laid across
+  the front instead of around a point. What survives shelters what is
+  behind it.
+- Occupants and bodies it reaches are exposed as by any release, and are
+  pushed along `dir`.
+- `leaves` adds a field at the base of each column it passes. What that
+  field does next is its own rules.
+- Unloaded tracts in its path receive a stamp, applied in resolve mode by
+  distance along `dir`.
+
 ## 14. Structural support and collapse
 
 The model is deliberately simple: no stress analysis. It answers two
@@ -1128,6 +1195,13 @@ bottom up. Within a storey `z`:
 So a slab reaches `span` cells from the walls or columns under it, a wall
 stands on the wall below it or on a supported slab, and knocking out a column
 drops whatever was relying on it alone.
+
+**Floating.** A floor lying on still liquid denser than its own material is
+a source: it floats. It carries no blocks. It holds up occupants, items
+and fixtures up to the mass that it and the floating floors joined to it
+within its `span` can float: the liquid they would displace, less their
+own mass. Past that it gives way as if destroyed. A wide sheet of ice
+bears a cart. A single floe does not bear a person.
 
 ### 14.2 When it runs
 
@@ -1207,6 +1281,28 @@ cell, a fifth as thick, bears a fifth as much.
 
 Resolve mode (section 14.4) includes this pass.
 
+### 14.6 Tremors
+
+`tremor { at, strength, radius, time, kind }` shakes the ground.
+
+For its duration it is a process that lowers the `span` and `bearing` of
+every structural element in loaded tracts within its radius, by a factor
+that is `strength` at the centre and falls to nothing at the edge. It
+queues stability checks for them, spread over steps within the edit
+budget. What no longer holds falls (section 14.3). What can no longer bear
+its load is crushed (section 14.5). When it ends the factor is removed,
+and what fell stays fallen.
+
+- Occupants standing in it receive `OccupantShaken` with the local
+  strength. Whether they keep their feet is the simulation's business.
+- Blocks flagged `anchor` do not fall. Ground that does not anchor
+  (10 §5.2) can come down: a landslide, a cave-in.
+- Unloaded tracts within the radius are given devastation of the named
+  kind by the same falloff (section 17.2).
+
+A tremor does not move the ground. It finds out what was only just
+standing.
+
 ## 15. Bodies
 
 A **body** is anything in uncontrolled flight: a character who has just been
@@ -1243,7 +1339,8 @@ boundary to cell boundary, with a maximum step of 20 ms local so that gravity
 and drag integrate accurately:
 
 ```
-a   = gravity(strata) − ½ · ρ_air · drag · area · |v| · v / mass
+w   = v − drift                    (the medium's own movement, 11 §4.7)
+a   = gravity(strata) − ½ · ρ_air · drag · area · |w| · w / mass
 v  += a · dt
 pos += v · dt
 ```
@@ -1320,6 +1417,13 @@ Built-in rules, implemented natively and configured by data:
 | `emit` | Add to another field in the same cell. |
 | `convert` | React with another field: water and fire make steam. |
 | `damage` | Send packets to elements in the cell and exposure events to occupants. |
+| `drift` | Be carried by the movement of the medium (11 §4.7). Contents move downwind or downstream, and `spread` is likelier that way. |
+
+A field may state `warms`: the kelvin each level adds to the temperature
+of its cell (11 §4.6), negative to cool. A field may have `changes` like a
+material's (section 5.4), tested on its active cells: lava that cools
+below its threshold leaves rock, and standing water that freezes leaves
+ice.
 
 Anything more exotic subscribes an EOC to `FieldContact` or `FieldAppeared`.
 
@@ -1362,6 +1466,9 @@ written once, as **field reactions**, not separately in each field.
 | Two fields | Each step, in every cell where both are present |
 | A field and a material tag | Each step, where the field shares a cell with an element or item of a material so tagged |
 | A damage type and a field | When a packet of that type arrives in a cell holding the field. `spreads` passes a share of the packet to every connected cell of that field within reach. |
+
+A reaction may also `leave` an element in the cell: lava meeting water
+gives steam and leaves basalt.
 
 Reactions are compiled into the field stepper and follow its rules:
 buffered writes and positional randomness. The `convert` rule in a field's
@@ -1422,6 +1529,29 @@ When a tract that has never been realized has total devastation, loading it
 skips normal generation and stamp application and asks the generator for the
 tract definition's ruin variant, or the realm's wasteland definition.
 
+**Kinds.** Devastation has a kind. A release gives the kind its damage
+type names, `blast` unless it says otherwise. Other causes write
+devastation directly:
+
+```json
+{ "type": "devastation_kind", "id": "flood", "apply": "flood_damage", "ruin": "drowned" }
+```
+
+`devastate { where, amount, kind, cause }` raises the devastation of
+tracts to at least `amount` and records the kind. `where` is a list of
+tracts, a region, or a centre with a radius and a falloff.
+`RegionDevastated` is raised as in section 17.4, carrying the kind.
+
+| The tract is | What happens to it |
+|--------------|--------------------|
+| Loaded | The kind's `apply` transform (10 §10) is run on it through `WorldEdit`, scaled by the amount, unless the caller says the damage was already done |
+| Unloaded, realised before | A pending edit does the same when it next loads |
+| Never realised | Generated, then the same; at total devastation, generated from the tract's ruin variant for that kind |
+
+An earthquake, a flood, a wildfire and a fall of ash each leave their own
+mark on places nobody was watching, and the cold layer (09 §15) reads one
+number and one kind for all of them.
+
 ### 17.3 Other pending edits
 
 ```rust
@@ -1431,6 +1561,7 @@ pub enum PendingEdit {
     Map { map: MapId, at: CellPos, turn: Turn, params: VarMap, mode: MapMode },   // 10 §4.3
     Spawn(SpawnRequest),
     Liquid { level: i32, block: BlockState },   // fill or drain to a storey (11 §4.3)
+    Devastation { kind: DevastationKindId, amount: u8 },   // section 17.2
     Eoc { id: EocId, context: VarMap },     // run when the tract loads
 }
 ```
@@ -1696,8 +1827,8 @@ update a hierarchical path graph incrementally.
 ## 23. Modding surface
 
 **Definition types**: `material`, `damage_type`, `atmosphere`, `floor`,
-`block`, `fixture`, `conduit` (16), `field`, `field_reaction`, `realm`,
-`area_kind`, `chart`,
+`block`, `fixture`, `conduit` (16), `field`, `field_reaction`,
+`devastation_kind`, `realm`, `area_kind`, `chart`,
 `site`, `tract` (document 10).
 Elements may declare `interactions` and a `device` (section 5.5).
 
@@ -1709,7 +1840,9 @@ Elements may declare `interactions` and a `device` (section 5.5).
 |--------|----------|
 | Set or transmute an element | `set_floor`, `set_block`, `set_fixture` |
 | Damage a cell | `damage` |
-| Explosion, shockwave, beam | `release` |
+| Explosion, shockwave, beam, advancing front | `release` |
+| Shake the ground | `tremor` |
+| Devastate a place by other means | `devastate` |
 | Add or remove a field | `add_field` |
 | Mark a cell | `add_decal`, `set_var` |
 | Throw, push, catch | `launch`, `impulse`, `arrest` |
@@ -1724,7 +1857,8 @@ Elements may declare `interactions` and a `device` (section 5.5).
 
 **Queries** available to expressions: element definition, material, state,
 flags and tags at a location; field value; damage; standable; obstacle
-height; ambient gravity and atmosphere; distance; line of sight; area and
+height; ambient gravity, atmosphere, temperature and drift; distance; line
+of sight; area and
 site membership; tract devastation; variables at cell, area, site, tract,
 region, realm and global scope.
 
@@ -1744,6 +1878,8 @@ Nothing in this document is reachable only from Rust.
 | W8 | Energy absorbed by a release or impact never exceeds energy delivered. |
 | W9 | No definition id appears in engine code. Fills, rubble and placeholders are named by data. |
 | W10 | Reading unloaded space returns an error value. It never loads and never panics. |
+| W11 | Temperature is never polled. A change of state happens only at the three moments of section 5.4. |
+| W12 | A tract's devastation and its kind are the same whether the cause was played out while it was loaded or applied when it next loaded. |
 
 ## 25. Budgets
 
@@ -1765,6 +1901,8 @@ this table is revised and enforced.
 | Detailed release reaching 100,000 non-empty cells | under 30 ms in total |
 | Body step | under 500 ns |
 | Field step, 50,000 active cells | under 5 ms |
+| Front reaching 100,000 non-empty cells | under 30 ms in total |
+| One step of a state-change sweep or a tremor over the default loaded set | under 2 ms |
 | Save with 50 dirty tracts | under 50 ms |
 
 ## 26. Open questions

@@ -85,7 +85,7 @@ The ones most likely to change something once code exists:
 | Stage | Contents | Result |
 |-------|----------|--------|
 | M0 | Foundation (plan: world-model, F1–F4) | Workspace, data loading, timeline |
-| M1 | World model (plan: world-model, W1–W23) | A world that can be generated, viewed, wrecked and saved from a console |
+| M1 | World model (plan: world-model, W1–W24; W25 once vehicles package V1 exists) | A world that can be generated, viewed, wrecked and saved from a console |
 | M2 | Data, rules and actions (plan: sim-kernel) | Actions on the timeline; mods and EOC complete |
 | M3 | Entities, perception, presentation (plan: first-playable) and combat (plan: combat) | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
 | M4 | Devices (plan: devices), abilities (plan: abilities), AI and the layered simulation (plan: ai) | Interactions, power, crafting, base building, automation, gadgets and suits, accounts and trade; abilities of every family; characters who decide for themselves; large groups; a world that carries on unobserved |
