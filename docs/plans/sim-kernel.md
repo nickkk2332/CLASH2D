@@ -43,10 +43,10 @@ start while the world model is being built.
 | K4 | Subjects, properties, variable storage | L | K1, X3 | beta |
 | K5 | Rule runtime | L | K3, K4, X4 | beta |
 | K6 | Queries and value sources | M | K5 | todo |
-| K7 | Timers, continuations, simulation saves | L | K5, W10 | todo |
+| K7 | Timers, continuations, simulation saves | L | K5, W10 | beta |
 | K8 | World verbs | M | K5 | todo |
 | K9 | Messages and choices | S | K5 | todo |
-| K10 | Tracing, explain, profile, console | M | K5, W11 | todo |
+| K10 | Tracing, explain, profile, console | M | K5, W11 | beta |
 | T1 | Clock assignment | M | K1 | beta |
 | T2 | Action definitions | M | X4 | beta |
 | T3 | Action runtime | L | T2, K5 | todo |
@@ -569,6 +569,16 @@ Done when
 - `Pause` and `Elapse` behave as 03 §9 specifies across an unload.
 - A thousand owners of one recurring rule do not fire on the same tick.
 
+Beta: the saving part is built. `clash-save` saves the whole game (the
+world through the W10 store and the simulation's own blob, with metadata)
+into one file and loads it back, invisibly (01 §11.2, D-580), and the
+scenario runner's save-and-load mode runs through it for every script
+under `scenarios/world/`. Not built here: timers and continuations,
+`after`, `every`, `cancel_timer`, recurring rules with staggering and
+`while_unloaded`; the three "Done when" items wait for them. No
+benchmark: the budget "save with 50 dirty tracts" (02 §25) is measured by
+W23.
+
 ### K8 — World verbs
 
 **Spec** 02 §23 · **Size** M
@@ -605,6 +615,14 @@ Done when
 - A trace of `rule_alarm` shows trigger, bindings, condition values,
   effects with arguments, and raised events.
 - With tracing off, the rule benchmarks are unchanged.
+
+Beta: the console part is built. The console's host evaluates expressions
+against the simulation with `self` bound (the subject given, else the
+active character), and test scripts assert expressions (`assert`,
+`until`). Effect lists (`do`, `run`, verbs) reach one function of the host,
+`GameHost::run_verb`, which refuses with `console.rules_unbound` until the
+rule runtime is bound to the simulation. Not built: traces, `explain`,
+`profile`; both "Done when" items wait for them.
 
 ## Time and actions
 
