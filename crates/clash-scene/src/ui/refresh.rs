@@ -375,6 +375,18 @@ impl Screen {
             refresher.node(nodes, 0);
         }
         self.pull_vars();
+        if let Some(row) = self.start_row {
+            let listing = self.nodes.iter_mut().find_map(|node| match &mut node.kind {
+                Kind::Listing(listing) if listing.dynamic.is_some() => Some(listing),
+                _ => None,
+            });
+            if let Some(listing) = listing
+                && let Some(at) = listing.shown.iter().position(|shown| *shown == row)
+            {
+                listing.sel = at;
+                self.start_row = None;
+            }
+        }
         self.stale = true;
     }
 

@@ -1,0 +1,8 @@
+[
+  { "type": "material", "id": "stone", "density": 2000, "toughness": 1.0e6, "color": "#808080" },
+  { "type": "material", "id": "oak", "density": 600, "toughness": 3.0e5, "color": "#c8a060" },
+  { "type": "floor", "id": "boards", "material": "oak", "thickness": 0.1,
+    "glyph": { "ch": ".", "fg": "material" } },
+  { "type": "block", "id": "wall", "material": "stone", "height": 3.0, "fill": 0.2,
+    "flags": ["opaque"], "glyph": { "ch": "#", "fg": "material" } }
+]

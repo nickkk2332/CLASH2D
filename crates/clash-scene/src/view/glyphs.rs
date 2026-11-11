@@ -44,6 +44,9 @@ pub const MARK_BACKDROP: &str = "backdrop";
 /// The theme mark whose character a floor is drawn with in a section
 /// view, where it is seen edge on.
 pub const MARK_SECTION_FLOOR: &str = "section_floor";
+/// The theme mark drawn on the cells between the followed character and
+/// the cursor while something is being aimed.
+pub const MARK_LINE: &str = "line";
 /// The theme style the cell under the cursor is drawn in.
 pub const STYLE_CURSOR: &str = "cursor";
 /// The theme colour the built-in `light` overlay shades with.
@@ -104,6 +107,8 @@ pub struct ViewMarks {
     pub backdrop: GlyphPart,
     /// The character a floor is drawn with in a section view.
     pub section_floor: char,
+    /// A cell on the line from the followed character to the cursor.
+    pub line: GlyphPart,
 }
 
 /// The default character of the `pile` mark.
@@ -116,6 +121,8 @@ const DEFAULT_HEARD: char = '!';
 const DEFAULT_BACKDROP: char = ' ';
 /// The default character of the `section_floor` mark.
 const DEFAULT_SECTION_FLOOR: char = '_';
+/// The default character of the `line` mark.
+const DEFAULT_LINE: char = '*';
 
 impl ViewMarks {
     fn new(theme: &Theme) -> ViewMarks {
@@ -138,6 +145,7 @@ impl ViewMarks {
             section_floor: mark(MARK_SECTION_FLOOR, DEFAULT_SECTION_FLOOR, false)
                 .ch
                 .unwrap_or(DEFAULT_SECTION_FLOOR),
+            line: mark(MARK_LINE, DEFAULT_LINE, false),
         }
     }
 }

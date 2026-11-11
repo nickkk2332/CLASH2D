@@ -1,8 +1,8 @@
 //! Joining this crate's definitions to the mod loader (04 §7 to §9).
 //!
 //! The definition types of this crate (`color`, `theme`, `keymap`,
-//! `figure`, `screen`, `ui_part`, `preference`, `ambience` and
-//! `overlay`) are registered with `clash-data` by [`register_defs`],
+//! `control`, `figure`, `screen`, `ui_part`, `preference`, `ambience`
+//! and `overlay`) are registered with `clash-data` by [`register_defs`],
 //! which also adds the step that puts `app` into the expression
 //! registry and the check that every `ui_part` has its slot.
 //! [`UiDefs`] is the one way from
@@ -76,12 +76,13 @@ use clash_data::{
 use clash_world::WorldDefs;
 
 use crate::color::ColorDef;
+use crate::control::ControlDef;
 use crate::input::KeymapDef;
 use crate::scene::{NoHost, Scene, SceneHost};
 use crate::theme::{Theme, ThemeDef, ThemeError};
 use crate::ui::{
-    FigureDef, NodeDef, NodeKind, PreferenceDef, Screen, ScreenDef, SlotParts, UiEnv, UiError,
-    UiPartDef, UiProblem,
+    FigureDef, NodeDef, NodeKind, PreferenceDef, Screen, ScreenDef, SlotParts, UiEffects, UiEnv,
+    UiError, UiPartDef, UiProblem,
 };
 use crate::view::{Ambience, AmbienceDef, GlyphProblem, Overlay, OverlayDef, WorldGlyphs};
 
@@ -92,6 +93,8 @@ define_id! {
     pub struct ThemeId(u16);
     /// A `keymap` definition.
     pub struct KeymapId(u16);
+    /// A `control` definition.
+    pub struct ControlId(u16);
     /// A `figure` definition.
     pub struct FigureId(u16);
     /// A `screen` definition.
@@ -123,6 +126,16 @@ impl Def for KeymapDef {
     type Id = KeymapId;
     const TYPE: &'static str = "keymap";
     const DOC: &'static str = "For each context, the name each key has in it (12 §9.2).";
+}
+
+impl Def for ControlDef {
+    type Id = ControlId;
+    const TYPE: &'static str = "control";
+    const DOC: &'static str = "Something the player can do, by a name a keymap gives to a key: interface effects to run (12 §9.2).";
+
+    fn compile(&mut self, cx: &mut CompileCx<'_>) {
+        self.compile_bindings(cx);
+    }
 }
 
 impl Def for FigureDef {
@@ -218,8 +231,8 @@ pub fn engine_loader(types: &DefTypes) -> clash_data::Loader<'_> {
 }
 
 /// Registers this crate's definition types with the loader: `color`,
-/// `theme`, `keymap`, `figure`, `screen`, `ui_part`, `preference`,
-/// `ambience` and `overlay`. It also adds the step that puts `app` and
+/// `theme`, `keymap`, `control`, `figure`, `screen`, `ui_part`,
+/// `preference`, `ambience` and `overlay`. It also adds the step that puts `app` and
 /// what is read through it into the expression registry
 /// ([`crate::app::register_expr`]), so that bindings are checked against
 /// it, and the check that every `ui_part` is aimed at a slot some screen
@@ -231,6 +244,7 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<ColorDef>();
     types.register::<ThemeDef>();
     types.register::<KeymapDef>();
+    types.register::<ControlDef>();
     types.register::<FigureDef>();
     types.register::<ScreenDef>();
     types.register::<UiPartDef>();
@@ -697,6 +711,17 @@ impl UiDefs {
         })
     }
 
+    /// The control a key's name means, seen from a keymap in
+    /// `namespace` (12 §9.2): its qualified id and what it does. A
+    /// qualified name means exactly that control; a bare one the control
+    /// of that name in the keymap's own namespace, or else the first of
+    /// that name in order of qualified id.
+    pub fn control(&self, name: &str, namespace: &str) -> Option<(String, UiEffects)> {
+        let id = self.resolve::<ControlDef>(name, namespace)?;
+        let effects = self.get::<ControlDef>(&id)?.effects.clone();
+        Some((id, effects))
+    }
+
     /// The keymap with this qualified id.
     pub fn keymap(&self, id: &str) -> Result<&KeymapDef, Diagnostics> {
         let defs = &*self.defs;
@@ -728,9 +753,9 @@ impl UiDefs {
         let built = self.theme(theme);
         let found = self.keymap(keymap);
         match (built, found) {
-            (Ok(theme), Ok(keymap)) => {
-                Ok(Scene::new(host, theme, keymap.clone()).with_defs(self.clone()))
-            }
+            (Ok(theme), Ok(found)) => Ok(Scene::new(host, theme, found.clone())
+                .with_keymap_id(keymap)
+                .with_defs(self.clone())),
             (theme, keymap) => {
                 let mut diagnostics = Diagnostics::new();
                 if let Err(errors) = theme {
@@ -1078,6 +1103,7 @@ mod tests {
             [
                 "ambience",
                 "color",
+                "control",
                 "figure",
                 "keymap",
                 "overlay",

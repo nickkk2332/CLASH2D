@@ -48,7 +48,7 @@ actions that call `hit`.
 | U5 | Playback | L | U4 | todo |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
-| U7 | Input, controls, pickers | M | U6b, T5 | todo |
+| U7 | Input, controls, pickers | M | U6b, T5 | beta |
 | U8 | Slots and theming | S | U6b | done |
 | U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
 | U10 | Cutscenes | M | U5, T6 | todo |
@@ -670,6 +670,30 @@ Done when
 - One control starts an action from defaults in one key press; its precise
   twin asks for every parameter with defaults pre-filled.
 - Rebinding a key changes behaviour without touching controls.
+
+Beta: the `control` definition type, run after a screen's `keys` and
+before the toolkit; keymap contexts `play` and `targeting`; `rebind`
+at once, reported to the application, with `Scene::rebind` to give
+stored bindings back. `act` with `"needed"` and `"all"` reads the
+action's parameter list from `clash_sim::action::ActionDef`, works
+defaults out in the actor's mind through the host, opens one picker for
+each parameter asked for and submits one whole command; closing a
+picker abandons it. Pickers in `mods/ui` for an entity and a cell (a
+cursor over the map with reach, sight and the line), a direction, a
+number, a text, one of a list and several of a list; the `camera` and
+`picker` effects; clicks and the wheel on a map view; prompts for
+reactions and choices from a `PendingDecision` the host hands over; the
+play screen, look mode and placeholder screens; the default profile's
+roles. Tested through the null frontend with scripted input and golden
+frames against the fake host, with actions from a fixture mod, since
+the action runtime (T3, T4) does not exist. Stubbed: several characters
+at once (12 §9.6) and the route picker's numbered path with `check`
+beside each step (review additions; a list of cells is asked for with
+the cell picker, one step at a time); the inspection tooltip on the map
+(U9); the simulation's side of `pending_decision`, `candidates` and
+the `react`, `pass` and `choose` commands (T4, T5, K9); a keymap name
+that nothing uses and a control's missing action are not reported at
+load. Decisions D-530 to D-537.
 
 ### U8 — Slots and theming
 

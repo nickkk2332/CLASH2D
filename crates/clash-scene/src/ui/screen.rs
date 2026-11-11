@@ -193,14 +193,52 @@ pub enum UiEvent {
         /// What changed.
         var: VarRef,
     },
+    /// A key whose name no widget and no entry of the screen's `keys`
+    /// used is the name of a `control` (12 §9.2).
+    Control {
+        /// The control's qualified id.
+        id: String,
+        /// The control's `do`.
+        effects: UiEffects,
+    },
+    /// A place in a view of the world was picked: with the mouse, or
+    /// with `accept` while the view has the focus (12 §9.4). The scene
+    /// works out which cell that is and runs the effects with the place
+    /// as `it`.
+    ViewPick {
+        /// The view's `id`, if it has one.
+        id: Option<String>,
+        /// Which view.
+        kind: ViewKind,
+        /// The view's own `zoom`.
+        zoom: u32,
+        /// The view's rectangle in the frame.
+        area: Rect,
+        /// The cell of the frame that was clicked. `None` for the
+        /// keyboard: the place is where the cursor is.
+        at: Option<(i32, i32)>,
+        /// Whether it was the second mouse button.
+        second: bool,
+        /// The view's `on_pick`.
+        effects: UiEffects,
+    },
+    /// The wheel was turned over a view of the world: the scene zooms
+    /// it.
+    ViewWheel {
+        /// How far, in notches: positive zooms out.
+        notches: i16,
+    },
 }
 
 impl UiEvent {
     /// The effects the event asks to be run, if it carries any.
     pub fn effects(&self) -> Option<&UiEffects> {
         match self {
-            UiEvent::Key { effects, .. } | UiEvent::Widget { effects, .. } => Some(effects),
-            UiEvent::Changed { .. } => None,
+            UiEvent::Key { effects, .. }
+            | UiEvent::Widget { effects, .. }
+            | UiEvent::Control { effects, .. }
+            | UiEvent::ViewPick { effects, .. } => Some(effects),
+            UiEvent::Changed { .. } | UiEvent::ViewWheel { .. } => None,
         }
     }
 
@@ -835,6 +873,9 @@ pub struct Screen {
     pub(super) size: (u16, u16),
     /// Whether something changed that the layout depends on.
     pub(super) stale: bool,
+    /// The row the first list with rows from an expression is to start
+    /// on, once its rows are known.
+    pub(super) start_row: Option<usize>,
 }
 
 /// The widgets other definitions put into a screen's slots (12 §10.6).
@@ -1625,6 +1666,7 @@ impl Screen {
             hover: None,
             size: (0, 0),
             stale: true,
+            start_row: None,
         };
         screen.pull_vars();
         Ok(screen)
@@ -1643,6 +1685,32 @@ impl Screen {
     /// The keymap context the screen's keys are named in.
     pub fn context(&self) -> &str {
         &self.context
+    }
+
+    /// Makes the first `list`, `menu`, `tree` or `table` whose rows come
+    /// from an expression start with this row selected, once its rows
+    /// are known: a picker starts on the value it is filled in with.
+    pub fn start_on_row(&mut self, row: usize) {
+        self.start_row = Some(row);
+    }
+
+    /// Whether the screen declares a variable of this name.
+    pub fn has_var(&self, name: &str) -> bool {
+        self.vars.contains(name)
+    }
+
+    /// Whether the screen has a `map_view`: a picker with one has the
+    /// cursor to move in it.
+    pub fn has_map_view(&self) -> bool {
+        self.nodes.iter().any(|node| {
+            matches!(
+                node.kind,
+                Kind::View {
+                    kind: ViewKind::Map,
+                    ..
+                }
+            )
+        })
     }
 
     /// The smallest grid the screen can be shown on, in columns and rows.

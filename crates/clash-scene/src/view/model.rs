@@ -538,6 +538,22 @@ impl ViewModel {
         object
     }
 
+    /// The number of the sprite drawn in a cell: the one
+    /// [`ViewModel::top_sprite_at`] gives.
+    pub fn top_sprite_id_at(&self, grid: GridId, cell: CellPos) -> Option<SpriteId> {
+        let lo = (grid, cell, SpriteId::new(u64::MIN));
+        let hi = (grid, cell, SpriteId::new(u64::MAX));
+        let mut object = None;
+        for (_, _, id) in self.sprites_at.range(lo..=hi) {
+            match self.sprites.get(id).map(|sprite| sprite.kind) {
+                Some(SpriteKind::Creature) => return Some(*id),
+                Some(SpriteKind::Object) => object = object.or(Some(*id)),
+                None => {}
+            }
+        }
+        object
+    }
+
     // -----------------------------------------------------------------
     // Heard
     // -----------------------------------------------------------------
