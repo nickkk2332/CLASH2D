@@ -142,6 +142,7 @@ pub use physical::{
 pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::body::Body;
+use crate::item::{Holds, Item};
 use crate::stats::Stats;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
@@ -486,6 +487,12 @@ components! {
     stats: Stats = "stats";
     /// Parts, wounds and what the body can do. On creatures.
     body: Body = "body";
+    /// What makes a thing an item: its definition, material, count,
+    /// damage and colour (06 §9.1). On items.
+    item: Item = "item";
+    /// How an entity holds what is inside it: in a grasp, worn, stowed
+    /// (06 §9.2). On whatever holds something in particular.
+    holds: Holds = "holds";
 }
 
 // A `ComponentKinds` has one bit for each kind.
