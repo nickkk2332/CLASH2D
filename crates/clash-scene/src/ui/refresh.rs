@@ -318,15 +318,13 @@ impl Refresher<'_> {
             Kind::Figure {
                 region_names,
                 shades,
-                shade_from,
+                shade_from: Some(binding),
                 ..
             } => {
-                if let Some(binding) = shade_from {
-                    for (region, shade) in region_names.iter().zip(shades.iter_mut()) {
-                        let it = ExprValue::text(region);
-                        if let Some(value) = self.value(binding, Some(&it)) {
-                            *shade = value.as_str().and_then(|name| self.theme.style(name));
-                        }
+                for (region, shade) in region_names.iter().zip(shades.iter_mut()) {
+                    let it = ExprValue::text(region);
+                    if let Some(value) = self.value(binding, Some(&it)) {
+                        *shade = value.as_str().and_then(|name| self.theme.style(name));
                     }
                 }
             }

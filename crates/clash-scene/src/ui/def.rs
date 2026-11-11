@@ -205,9 +205,10 @@ impl<'de> FromSite<'de> for Prop<bool> {
             Kind::Bool => value.read::<bool>().map(Prop::Static),
             Kind::Null => value.read::<IgnoredAny>().map(|_| Prop::Static(true)),
             Kind::String | Kind::Object => sited_expr(site, kind, value),
-            other => Err(other.unexpected(
-                "true, false, or a condition as a string or `{ \"expr\": … }`",
-            )),
+            other => {
+                Err(other
+                    .unexpected("true, false, or a condition as a string or `{ \"expr\": … }`"))
+            }
         }
     }
 }
@@ -248,8 +249,9 @@ impl<'de> FromSite<'de> for Prop<f64> {
             Kind::Number => value.read::<f64>().map(Prop::Static),
             Kind::Null => value.read::<IgnoredAny>().map(|_| Prop::Static(0.0)),
             Kind::String | Kind::Object => sited_expr(site, kind, value),
-            other => Err(other
-                .unexpected("a number, or an expression as a string or `{ \"expr\": … }`")),
+            other => {
+                Err(other.unexpected("a number, or an expression as a string or `{ \"expr\": … }`"))
+            }
         }
     }
 }
@@ -310,9 +312,7 @@ impl<'de> FromSite<'de> for Prop<BTreeMap<String, String>> {
         value: KindValue<'_, A>,
     ) -> Result<Self, A::Error> {
         match kind {
-            Kind::Object => value
-                .read::<BTreeMap<String, String>>()
-                .map(Prop::Static),
+            Kind::Object => value.read::<BTreeMap<String, String>>().map(Prop::Static),
             Kind::Null => value
                 .read::<IgnoredAny>()
                 .map(|_| Prop::Static(BTreeMap::new())),
@@ -364,9 +364,7 @@ impl<'de> FromSite<'de> for Prop<Literal> {
         match kind {
             Kind::Bool | Kind::Number => value.read::<Literal>().map(Prop::Static),
             Kind::String | Kind::Object => sited_expr(site, kind, value),
-            other => {
-                Err(other.unexpected("true, false, a number, or an expression as a string"))
-            }
+            other => Err(other.unexpected("true, false, a number, or an expression as a string")),
         }
     }
 }
@@ -574,9 +572,7 @@ impl<'de> FromSite<'de> for RowsDef {
             Kind::Object => value
                 .read::<serde_json::Value>()
                 .map(|query| RowsDef::Bound(Binding::query(query.to_string(), site))),
-            other => {
-                Err(other.unexpected("a list of rows, or a query as a string or an object"))
-            }
+            other => Err(other.unexpected("a list of rows, or a query as a string or an object")),
         }
     }
 }
@@ -2053,7 +2049,10 @@ impl ScreenDef {
                 (entity.clone(), true)
             } else {
                 let path = format!("params.{name}");
-                (cx.parse_type(written, None, &path).unwrap_or(Type::Any), false)
+                (
+                    cx.parse_type(written, None, &path).unwrap_or(Type::Any),
+                    false,
+                )
             };
             params.push(ParamType {
                 name: name.clone(),

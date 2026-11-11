@@ -62,9 +62,11 @@ fn types() -> DefTypes {
 fn try_load(mods: &[(&str, &str)]) -> Result<Arc<Defs>, Diagnostics> {
     let types = types();
     let registry = clash_scene::testing::registry();
-    let mut loader = Loader::new(&types)
-        .expr_registry(&registry)
-        .memory_mod("base", r#"{ "id": "base" }"#, &[("data/ui.json", BASE)]);
+    let mut loader = Loader::new(&types).expr_registry(&registry).memory_mod(
+        "base",
+        r#"{ "id": "base" }"#,
+        &[("data/ui.json", BASE)],
+    );
     let mut ids = vec!["base"];
     for (id, text) in mods {
         let manifest = format!(r#"{{ "id": "{id}" }}"#);
@@ -190,10 +192,7 @@ fn bound_widgets_show_what_the_host_says() {
 
     // Nothing is evaluated again until the host says the simulation has
     // advanced.
-    let blood = clash_expr::Handle::new(
-        stage.host.registry().unwrap().kind_id("pool").unwrap(),
-        1,
-    );
+    let blood = clash_expr::Handle::new(stage.host.registry().unwrap().kind_id("pool").unwrap(), 1);
     stage
         .host
         .set(blood, "value", ExprValue::Real(clash_core::Real::of(1.0)));
@@ -226,10 +225,7 @@ fn a_screen_variable_that_changes_is_seen_by_what_reads_it() {
             UiOutcome::Changed(VarRef::Screen("tab".into())),
         ]
     );
-    assert_eq!(
-        stage.rows()[..2],
-        ["Tab 2 of 3: turned", "the second"]
-    );
+    assert_eq!(stage.rows()[..2], ["Tab 2 of 3: turned", "the second"]);
     stage.press(&["f2", "f2"]);
     assert_eq!(stage.rows()[..2], ["Tab 1 of 3: turned", ""]);
     assert_eq!(stage.scene.top().unwrap().var("tab"), Some(&Value::Int(0)));
@@ -432,7 +428,10 @@ fn a_binding_that_is_wrong_is_reported_inside_its_string() {
     assert!(text.contains("ui.json:10:"), "{text}");
     assert!(text.contains("at keys.more"), "{text}");
     // The caret is under the name, not under the whole string.
-    assert!(text.contains("\n  |                 ^^^^^\n") || text.contains("^^^^^ "), "{text}");
+    assert!(
+        text.contains("\n  |                 ^^^^^\n") || text.contains("^^^^^ "),
+        "{text}"
+    );
 }
 
 // ---------------------------------------------------------------------
@@ -504,8 +503,10 @@ fn a_run_effect_reaches_submit_as_a_whole_command() {
     assert_eq!(submitted, expected);
     assert_eq!(
         commands[0].to_string(),
-        "run demo:ring_bell by=entity#2 loud=true times=6"
-            .replace("entity#2", &ExprValue::Subject(FakeHost::new().entity(2)).to_string())
+        "run demo:ring_bell by=entity#2 loud=true times=6".replace(
+            "entity#2",
+            &ExprValue::Subject(FakeHost::new().entity(2)).to_string()
+        )
     );
     // The same input gives the same commands, every time.
     assert_eq!(run(), run());
@@ -685,7 +686,10 @@ fn confirm_asks_before_the_rest_of_the_list_runs() {
     // No: the popup closes and nothing else happens.
     let out = stage.press(&["right", "enter"]);
     assert_eq!(out, [UiOutcome::Closed("base:confirm".into())]);
-    assert_eq!(stage.scene.top().unwrap().var("count"), Some(&Value::Int(0)));
+    assert_eq!(
+        stage.scene.top().unwrap().var("count"),
+        Some(&Value::Int(0))
+    );
     assert!(!stage.scene.quit_requested());
     assert!(stage.app.requests().is_empty());
 
@@ -696,7 +700,10 @@ fn confirm_asks_before_the_rest_of_the_list_runs() {
     assert_eq!(out[0], UiOutcome::Closed("base:confirm".into()));
     assert_eq!(out[1], UiOutcome::Changed(VarRef::Screen("count".into())));
     assert!(matches!(&out[2], UiOutcome::Service(request) if request.service == AppService::Quit));
-    assert_eq!(stage.scene.top().unwrap().var("count"), Some(&Value::Int(10)));
+    assert_eq!(
+        stage.scene.top().unwrap().var("count"),
+        Some(&Value::Int(10))
+    );
     assert!(stage.scene.quit_requested());
     assert_eq!(stage.app.requests().len(), 1);
 
@@ -705,7 +712,10 @@ fn confirm_asks_before_the_rest_of_the_list_runs() {
     assert_eq!(stage.scene.screens().len(), 2);
     let out = stage.press(&["escape"]);
     assert_eq!(out, [UiOutcome::Closed("base:confirm".into())]);
-    assert_eq!(stage.scene.top().unwrap().var("count"), Some(&Value::Int(10)));
+    assert_eq!(
+        stage.scene.top().unwrap().var("count"),
+        Some(&Value::Int(10))
+    );
 }
 
 #[test]
@@ -752,11 +762,11 @@ fn app_services_reach_the_application_and_failures_say_why() {
     assert!(stage.scene.top_mut().unwrap().set_focus("save"));
     let out = stage.press(&["enter"]);
     assert_eq!(out.len(), 3, "{out:?}");
+    assert!(matches!(&out[0], UiOutcome::Service(request)
+            if request.service == AppService::Save && request.text("name") == Some("Mara")));
     assert!(
-        matches!(&out[0], UiOutcome::Service(request)
-            if request.service == AppService::Save && request.text("name") == Some("Mara"))
+        matches!(&out[1], UiOutcome::Service(request) if request.service == AppService::DeleteSave)
     );
-    assert!(matches!(&out[1], UiOutcome::Service(request) if request.service == AppService::DeleteSave));
     assert_eq!(
         out[2],
         UiOutcome::Failed {
@@ -871,9 +881,14 @@ fn preferences_are_kept_by_the_scene_and_edited_by_widgets() {
             if reason == "the preference `demo:speed` cannot be 9: 9 is above the most it may be"),
         "{out:?}"
     );
-    assert!(matches!(&out[2], UiOutcome::Changed(VarRef::Pref(id)) if id == "demo:cutscenes")
-        || matches!(&out[2], UiOutcome::Service(_)), "{out:?}");
-    assert!(matches!(&out[3], UiOutcome::Service(request) if request.service == AppService::Rebind));
+    assert!(
+        matches!(&out[2], UiOutcome::Changed(VarRef::Pref(id)) if id == "demo:cutscenes")
+            || matches!(&out[2], UiOutcome::Service(_)),
+        "{out:?}"
+    );
+    assert!(
+        matches!(&out[3], UiOutcome::Service(request) if request.service == AppService::Rebind)
+    );
     assert_eq!(
         stage.scene.pref("base:theme"),
         Some(&Value::Str("base:plain".into()))
@@ -883,7 +898,11 @@ fn preferences_are_kept_by_the_scene_and_edited_by_widgets() {
         stage.scene.pref("demo:cutscenes"),
         Some(&Value::Str("none".into()))
     );
-    assert_eq!(stage.rows()[3], "< none >", "the widget shows the new value");
+    assert_eq!(
+        stage.rows()[3],
+        "< none >",
+        "the widget shows the new value"
+    );
     assert_eq!(
         stage.scene.set_pref("demo:numbers", Value::Int(1)),
         Err("the preference `demo:numbers` cannot be 1: it holds true or false, not int".into())
@@ -915,16 +934,29 @@ fn switching_theme_restyles_every_open_screen() {
         .unwrap();
     let after = stage.draw().clone();
     for row in (0..10).filter(|row| *row != 4) {
-        assert_eq!(after.row_text(row), before.row_text(row), "the same characters");
+        assert_eq!(
+            after.row_text(row),
+            before.row_text(row),
+            "the same characters"
+        );
     }
     assert_eq!(after.row_text(4).trim_end(), "< base:night >");
     // Both screens are drawn in the new theme: text, background and the
     // `title` style of each.
     assert_eq!(title(&after, 0, 0), night.color("blood").unwrap());
     assert_eq!(title(&after, 29, 1), night.color("blood").unwrap());
-    assert_eq!(after.get(0, 5).unwrap().bg, night.color("background").unwrap());
+    assert_eq!(
+        after.get(0, 5).unwrap().bg,
+        night.color("background").unwrap()
+    );
     assert_eq!(after.get(12, 0).unwrap().fg, night.color("text").unwrap());
-    assert!(after.get(0, 0).unwrap().attrs.contains(clash_scene::Attrs::UNDERLINE));
+    assert!(
+        after
+            .get(0, 0)
+            .unwrap()
+            .attrs
+            .contains(clash_scene::Attrs::UNDERLINE)
+    );
     // What the screens held is kept: the popup is still on top, and the
     // one beneath has its focus and its values.
     assert_eq!(stage.scene.top().unwrap().id(), "demo:over");
@@ -991,10 +1023,7 @@ fn a_part_from_another_mod_appears_in_a_slot_in_order_while_its_condition_holds(
     stage.scene.simulation_advanced();
     assert_eq!(stage.rows()[..3], ["Status", "Mana of Mara", "End"]);
     assert!(stage.scene.top_mut().unwrap().set_var("tab", Value::Int(1)));
-    assert_eq!(
-        stage.rows()[..4],
-        ["Status", "Mana of Mara", "Zeal", "End"]
-    );
+    assert_eq!(stage.rows()[..4], ["Status", "Mana of Mara", "Zeal", "End"]);
 
     // Without the second mod the slot is empty and takes no room.
     let alone = load(&[("hud", HUD)]);
@@ -1017,7 +1046,10 @@ fn a_part_aimed_at_a_slot_that_is_missing_is_a_load_error_unless_it_need_not_be_
     "widget": { "text": "{view.seen[0].health}" } } ]"#,
         ),
     ]);
-    assert!(text.contains("no screen places a slot `hud:hud.barz`"), "{text}");
+    assert!(
+        text.contains("no screen places a slot `hud:hud.barz`"),
+        "{text}"
+    );
     assert!(text.contains("did you mean `hud:hud.bars`?"), "{text}");
     assert!(text.contains("--> mods/adds/data/ui.json:2:"), "{text}");
     assert!(text.contains("= in: ui_part adds:lost, at into"), "{text}");
@@ -1027,5 +1059,62 @@ fn a_part_aimed_at_a_slot_that_is_missing_is_a_load_error_unless_it_need_not_be_
         text.contains("`entity.health` is not safe for belief"),
         "{text}"
     );
-    assert!(text.contains("= in: ui_part adds:nosy, at widget.text"), "{text}");
+    assert!(
+        text.contains("= in: ui_part adds:nosy, at widget.text"),
+        "{text}"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Widgets
+// ---------------------------------------------------------------------
+
+#[test]
+fn a_number_can_be_typed() {
+    let ui = load(&[(
+        "demo",
+        &screen(
+            r#""vars": { "n": 5, "r": 0.5, "max": 50 },
+               "layout": { "rows": [
+                 { "number": { "id": "n", "bind": "n", "min": 0, "max": "screen.max" } },
+                 { "number": { "id": "r", "bind": "r" } },
+                 { "text": "n is {screen.n}, r is {screen.r}" } ] }"#,
+        ),
+    )]);
+    let mut stage = Stage::new(&ui, "demo:s");
+    assert_eq!(stage.rows()[..3], ["< 5 >", "< 0.5 >", "n is 5, r is 0.5"]);
+
+    // Digits are kept until the number is taken; nothing changes yet.
+    let out = stage.press(&["4", "2"]);
+    assert!(out.is_empty());
+    assert_eq!(stage.rows()[0], "< 42_ >");
+    assert_eq!(stage.scene.top().unwrap().var("n"), Some(&Value::Int(5)));
+    // Erase takes the last digit back; accept takes the number.
+    stage.press(&["backspace", "7"]);
+    assert_eq!(stage.rows()[0], "< 47_ >");
+    let out = stage.press(&["enter"]);
+    assert_eq!(out, [UiOutcome::Changed(VarRef::Screen("n".into()))]);
+    assert_eq!(
+        stage.rows()[..3],
+        ["< 47 >", "< 0.5 >", "n is 47, r is 0.5"]
+    );
+
+    // A number past its bounds is brought within them, and moving on
+    // takes what was typed as well. The bound is itself a binding.
+    let out = stage.press(&["9", "9", "tab"]);
+    assert_eq!(out, [UiOutcome::Changed(VarRef::Screen("n".into()))]);
+    assert_eq!(stage.scene.top().unwrap().var("n"), Some(&Value::Int(50)));
+    assert_eq!(stage.scene.top().unwrap().focus(), Some("r"));
+
+    // A whole number takes no point; one that is not whole does, once.
+    stage.press(&["-", "1", ".", "2", ".", "5", "enter"]);
+    assert_eq!(
+        stage.rows()[..3],
+        ["< 50 >", "< -1.2 >", "n is 50, r is -1.25"]
+    );
+    stage.press(&["shift+tab", ".", "-", "3", "enter"]);
+    assert_eq!(stage.rows()[0], "< 0 >", "minus three is below the least");
+    // A step takes what was typed first, then steps.
+    stage.press(&["7", "right"]);
+    assert_eq!(stage.rows()[0], "< 8 >");
 }

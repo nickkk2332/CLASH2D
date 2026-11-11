@@ -4,7 +4,7 @@
 //!
 //! A [`Binding`] holds what was written and where. The definition type
 //! that owns it (`screen`, `ui_part`) compiles it in `Def::compile`,
-//! through a [`BindCx`] that knows what the place offers:
+//! with a context that knows what the place offers:
 //!
 //! | Name | Is | Slot |
 //! |------|----|------|
@@ -313,9 +313,7 @@ impl BindCx<'_, '_> {
     fn context(&mut self, site: &Site) -> Context {
         let registry = self.cx.registry();
         let entity = self.entity_type();
-        let app = registry
-            .kind_id(KIND_APP)
-            .map_or(Type::Any, Type::Subject);
+        let app = registry.kind_id(KIND_APP).map_or(Type::Any, Type::Subject);
         let party = Type::list(entity.clone());
         let mut scope = Scope::new().pure();
         scope = if self.debug {
@@ -388,7 +386,8 @@ impl BindCx<'_, '_> {
     /// Reports a mistake that is not an expression's, at a JSON path of
     /// the definition being compiled.
     pub(crate) fn mistake(&mut self, site: &Site, message: String) {
-        let mut diagnostic = Diagnostic::new(code::VALIDATION, message).with_path(site.path.clone());
+        let mut diagnostic =
+            Diagnostic::new(code::VALIDATION, message).with_path(site.path.clone());
         if let Some(span) = site.span {
             diagnostic = diagnostic.at(self.cx.sources(), span);
         }

@@ -56,9 +56,7 @@ impl Run {
             .running_effects();
         scene.set_role(ROLE_CONFIRM, "ui:confirm");
         scene.set_role(ROLE_PICK_LIST, "ui:pick_list");
-        scene
-            .open_screen("ui:gallery", Default::default())
-            .unwrap();
+        scene.open_screen("ui:gallery", Default::default()).unwrap();
         let mut run = Run {
             scene,
             front: NullFrontend::new(80, 24),
@@ -176,7 +174,10 @@ fn the_second_gallery_shows_bindings_effects_a_popup_a_preference_and_a_slot() {
     assert_golden(golden("gallery_more_night"), run.shown());
     let after = run.shown().clone();
     assert_ne!(after.get(0, 0).unwrap().fg, before.get(0, 0).unwrap().fg);
-    assert_ne!(after.get(40, 23).unwrap().bg, before.get(40, 23).unwrap().bg);
+    assert_ne!(
+        after.get(40, 23).unwrap().bg,
+        before.get(40, 23).unwrap().bg
+    );
     assert!(after.text().contains("Theme < Night >"));
     assert!(after.text().contains('╔'), "the night theme's borders");
     assert_eq!(

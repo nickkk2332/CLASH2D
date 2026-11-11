@@ -674,7 +674,9 @@ mod tests {
             wrong(r#"[ { "app": { "quit": { "hard": true } } } ]"#)
                 .contains("takes no argument `hard`")
         );
-        assert!(wrong(r#"[ { "act": { "action": "step", "params": "some" } } ]"#).contains("needed"));
+        assert!(
+            wrong(r#"[ { "act": { "action": "step", "params": "some" } } ]"#).contains("needed")
+        );
         assert!(wrong(r#"[ { "open": { "scren": "x" } } ]"#).contains("scren"));
         assert!(wrong(r#"[ "close" ]"#).contains("an effect"));
         for service in AppService::ALL {

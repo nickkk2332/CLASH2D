@@ -583,10 +583,9 @@ impl Listing {
     pub(super) fn it_of(&self, row: usize) -> ExprValue {
         match self.values.get(row) {
             Some(value) => value.clone(),
-            None => self
-                .rows
-                .get(row)
-                .map_or(ExprValue::Null, |row| ExprValue::text(row.label.text.plain())),
+            None => self.rows.get(row).map_or(ExprValue::Null, |row| {
+                ExprValue::text(row.label.text.plain())
+            }),
         }
     }
 }

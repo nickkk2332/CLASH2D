@@ -28,9 +28,7 @@ use std::time::{Duration, Instant};
 use clash_data::{DefTypes, Diagnostics, Loader};
 use clash_front_term::{TermError, TermFrontend};
 use clash_scene::testing::{FakeApp, FakeHost};
-use clash_scene::{
-    Frame, NullFrontend, ROLE_CONFIRM, ROLE_PICK_LIST, RichText, Scene, UiDefs,
-};
+use clash_scene::{Frame, NullFrontend, ROLE_CONFIRM, ROLE_PICK_LIST, RichText, Scene, UiDefs};
 
 /// How long the loop rests between frames.
 const FRAME_TIME: Duration = Duration::from_millis(16);

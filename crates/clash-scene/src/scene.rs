@@ -159,7 +159,12 @@ impl Host for NoReader {
         ExprValue::Null
     }
 
-    fn property(&mut self, _property: PropertyId, _subject: Handle, _args: &[ExprValue]) -> ExprValue {
+    fn property(
+        &mut self,
+        _property: PropertyId,
+        _subject: Handle,
+        _args: &[ExprValue],
+    ) -> ExprValue {
         ExprValue::Null
     }
 
@@ -887,7 +892,10 @@ impl<H: SceneHost> Scene<H> {
 
     /// Runs `f` with something to evaluate bindings with and the
     /// screens. `None` if the scene has no definitions.
-    fn with_reader<R>(&mut self, f: impl FnOnce(&mut Reader<'_>, &mut Vec<Screen>) -> R) -> Option<R> {
+    fn with_reader<R>(
+        &mut self,
+        f: impl FnOnce(&mut Reader<'_>, &mut Vec<Screen>) -> R,
+    ) -> Option<R> {
         let Scene {
             host,
             app,
@@ -1071,10 +1079,12 @@ where
         f: impl FnOnce(&mut Reader<'_>, &BindScope<'_>) -> R,
     ) -> R {
         let none = VarMap::new();
-        self.with_reader(|reader, screens| match origin.and_then(|at| screens.get(at)) {
-            Some(screen) => f(reader, &scope_of(screen, it)),
-            None => f(reader, &no_screen(&none, it)),
-        })
+        self.with_reader(
+            |reader, screens| match origin.and_then(|at| screens.get(at)) {
+                Some(screen) => f(reader, &scope_of(screen, it)),
+                None => f(reader, &no_screen(&none, it)),
+            },
+        )
         .unwrap_or_default()
     }
 
@@ -1155,8 +1165,7 @@ where
                 }
                 UiEffect::Set(entries) => {
                     for (name, value) in entries {
-                        let value =
-                            self.eval(origin, it.as_ref(), |r, scope| r.arg(value, scope));
+                        let value = self.eval(origin, it.as_ref(), |r, scope| r.arg(value, scope));
                         match self.assign(&VarRef::parse(name), &value, origin) {
                             Ok(var) => out.push(UiOutcome::Changed(var)),
                             Err(reason) => out.push(failed(reason)),
@@ -1321,9 +1330,7 @@ where
         match var {
             VarRef::Screen(name) => {
                 let Some(screen) = origin.and_then(|at| self.screens.get_mut(at)) else {
-                    return Err(format!(
-                        "the screen that would hold `{name}` is closed"
-                    ));
+                    return Err(format!("the screen that would hold `{name}` is closed"));
                 };
                 if !screen.set_var(name, held) {
                     return Err(format!("the screen has no variable `{name}`"));

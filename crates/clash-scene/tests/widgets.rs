@@ -1431,11 +1431,7 @@ fn bound_properties_show_placeholders_until_an_evaluator_fills_them() {
                 _ => None,
             }
         }
-        fn value(
-            &mut self,
-            binding: &Binding,
-            scope: &BindScope<'_>,
-        ) -> Option<clash_expr::Value> {
+        fn value(&mut self, binding: &Binding, scope: &BindScope<'_>) -> Option<clash_expr::Value> {
             match binding.source() {
                 "$who.pool.blood.frac" => Some(clash_expr::Value::Real(Real::of(0.5))),
                 "screen.tab == 1" => Some(clash_expr::Value::Bool(scope.screen == "nope")),
