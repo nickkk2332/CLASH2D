@@ -12,56 +12,36 @@ Document numbers are stable. Other documents refer to them by number.
 |---|----------|--------|
 | 00 | [Vision](00-vision.md) | Written |
 | 01 | [Architecture](01-architecture.md) | Written |
-| 02 | [World model](02-world-model.md) and [plan](plans/world-model.md) | Written |
+| 02 | [World model](02-world-model.md) | Written |
 | 03 | [Time, clocks and actions](03-time-and-actions.md) | Written |
 | 04 | [Data and modding pipeline](04-data-and-modding.md) | Written |
 | 05 | [Expressions and EOC](05-expressions-and-eoc.md) | Written |
-| — | [Plan for 03–05](plans/sim-kernel.md) | Written |
-| 06 | Entities, bodies, species and items | Next |
-| 07 | Combat, techniques and clashes | After 06 |
+| 06 | [Entities, bodies, species and items](06-entities-and-bodies.md) | Written |
+| 07 | Combat, techniques and clashes | Next |
 | 08 | Abilities and powers | After 07 |
-| 09 | AI and the layered simulation | After 06, 15 |
-| 10 | World generation and map format | After 04 |
-| 11 | Vehicles, mounts, travel, space and dimensions | After 06, 10 |
-| 12 | Presentation and the UI toolkit | Next; needed for the first playable build |
-| 13 | Scenarios, modes and events | After 05, 09 |
+| 09 | AI and the layered simulation | After 07 |
+| 10 | World generation and map format | Any time |
+| 11 | [Vehicles, mounts, the sea, space and travel](11-vehicles-and-travel.md) | Written |
+| 12 | [Presentation and the UI toolkit](12-presentation-and-ui.md) | Written |
+| 13 | Scenarios, modes and events | After 09 |
 | 14 | Tooling: console, inspector, profiler, mod tools | Grows with everything |
-| 15 | Perception, belief and social behaviour | Next, with 06 |
-| 16 | Interaction, devices and machines | After 05, 06 |
+| 15 | [Perception, belief and social behaviour](15-perception-and-social.md) | Written |
+| 16 | Interaction, devices and machines | Next |
+
+## Plans
+
+| Plan | Covers | Milestone |
+|------|--------|-----------|
+| [world-model](plans/world-model.md) | 01 (foundation), 02 | M0, M1 |
+| [sim-kernel](plans/sim-kernel.md) | 03, 04, 05 | M2 |
+| [first-playable](plans/first-playable.md) | 06, 15, 12 | M3 |
+| [vehicles](plans/vehicles.md) | 11 | M6 |
 
 ## What each remaining document must settle
 
 "Fixed" items are already decided and are not reopened without a new entry
 in [decisions.md](decisions.md). Every document must respect rule R10 of the
 architecture: mechanism, not meaning.
-
-### 06 — Entities, bodies, species and items
-
-Scope: the component store; containment; creature definitions; **species**
-as composable definitions (body plan, tissues, senses, innate abilities,
-variants, player-facing choices at creation); bodies as live data (parts,
-tissue layers, wounds, bleeding, pain, severing, healing, runtime reshaping);
-how damage packets act on bodies; minds and the relations that attach them to
-bodies; ownership and command relations; attributes, pools and counters as
-general-purpose primitives for progression; items and inventories; promotion
-between statistical population, cold agent and full entity.
-
-Fixed:
-- The kernel entity of 03 §4.2 is extended, not replaced.
-- Body parts supply the channel slots of 03 §6.2; disabling a part disables
-  its slots.
-- Everything an entity has is reachable as properties and variables (05 §5,
-  §6), and everything that can be done to it is a verb.
-- Anatomical, data-defined bodies sharing the world's material table and
-  damage rule (02 §5.4, §12).
-- No hit-point cushion. Wounds impair function, and impairment compounds
-  (scene S14).
-- Containment, mind and body separation, editable instances (01 §6).
-- Progression schemes are data; the engine supplies primitives and events.
-- Species must give players a great deal of expressive room.
-
-To confirm when written: default level of injury description, and whether it
-is a player setting.
 
 ### 07 — Combat, techniques and clashes
 
@@ -75,6 +55,10 @@ Fixed:
 - Attacks, defences and reactions are actions, windows and joint actions
   as specified in 03. Combat adds definitions and verbs, not a second
   timing system.
+- An attack ends in a `Hit` (06 §7). Combat's job is to turn a technique, a
+  striking surface (06 §9.1) and the attacker's attributes into the hit's
+  energy, intensity, area and target part.
+- Signature moves name their cutscene (12 §8.1).
 - Outcomes come from packets against materials and bodies. There is no
   separate layer of hit points and damage rolls.
 - Simple defaults for every exchange, with full control of technique and
@@ -93,8 +77,13 @@ matter, bodies and time, and **non-violent** abilities: stealth, illusion,
 disguise, mind influence, command, summoning and binding, reading and
 planting beliefs.
 
-Fixed: abilities act through the same effects as everything else. "Magic",
-"superpower", "skill" and "technology" are labels chosen by content.
+Fixed:
+- Abilities act through the same effects as everything else. "Magic",
+  "superpower", "skill" and "technology" are labels chosen by content.
+- An ability is conferred by a trait (06 §5): its actions are grants, its
+  costs are pools, its growth is a track.
+- Abilities over minds and perception use the verbs of 15: personas,
+  memories, relations, signals, orders.
 
 ### 09 — AI and the layered simulation
 
@@ -105,8 +94,14 @@ throttling; cold agents and coarse steps; populations, organisations and
 economies as statistics; incidents as generated events with real
 consequences; promotion and demotion.
 
-Fixed: tickets (02 §10); pending edits and stamps (02 §17); characters act
-on belief (01 R11).
+Fixed:
+- Tickets (02 §10); pending edits and stamps (02 §17).
+- Decisions read beliefs, tracks, memories, relations and group knowledge
+  (15). Static geometry is common knowledge; nothing else is.
+- Characters act through plans of actions (03 §5.3) like the player.
+- Anonymous, notable and agent forms are as 06 §12; this document gives
+  agents their behaviour.
+- Crews work stations (11 §7); orders must be heard (15 §10).
 
 ### 10 — World generation and map format
 
@@ -119,32 +114,9 @@ Fixed:
 - Generation is pure and per tract (02 §9.3).
 - World size and shape are properties of each realm definition. There is no
   default planet. Reference mods use small realms.
-
-### 11 — Vehicles, mounts, travel, space and dimensions
-
-Scope: mounts as creatures that carry riders; vehicles as multi-cell
-occupants or subgrids; driving and flight models; turning; boarding and
-interiors; travel rules, interception and encounters; chart content; ships
-and combat between them; dimension travel conditions.
-
-Fixed: subgrids (02 §18); travelers, carriers, encounters and charts
-(02 §20); containment (01 §6).
-
-### 12 — Presentation and the UI toolkit
-
-Scope: the scene model; camera and multi-storey view; event playback over
-real time; cutscene definitions and matching; the window renderer; the
-terminal renderer; input and key binding; and the **UI toolkit**: the widget
-set, layout, data binding to expressions, actions bound to commands and EOC
-effects, and how mods define screens, HUD elements and menus.
-
-Fixed:
-- Screen contents are pure expressions (05 §7.3); screen actions are
-  commands (03 §4.4) and effects.
-- A profile names its boot screen (04 §3.3).
-- Presentation never changes outcomes (01 §10).
-- Glyph grid only.
-- The engine's own screens are built with the toolkit and ship as a mod.
+- The map format also describes vessels (11 §12.1), places devices
+  (02 §5.5), areas and sites, and fills seas to `sea_level` (11 §4.3).
+- Populations and content tables (06 §12, §9.3) are assigned by generation.
 
 ### 13 — Scenarios, modes and events
 
@@ -153,24 +125,12 @@ goals, win and loss conditions, save policy); sandbox starts; roguelike
 runs; single battles; the random event director; investigations built on
 causes, decals and witness beliefs.
 
-Fixed: a mode such as "roguelike" is a set of scenario rules, not an engine
-feature.
-
-### 15 — Perception, belief and social behaviour
-
-Scope: senses as data (sight, hearing, smell, and whatever mods add);
-detection and stealth; what a character knows and how it becomes stale or
-wrong; perceived identity versus true identity; disguise and illusion;
-memory of events; relations between characters (trust, fear, loyalty, debt,
-ownership); **reaction rules** that authors write to make characters
-respond to what they perceive; short exchanges and barks; how beliefs
-spread (witnesses, reports, rumour).
-
 Fixed:
-- Supplies `noticed_if` tests for windows (03 §7.2) and the `perceived`
-  event (05 §8.5).
-- The world records truth; characters hold beliefs (01 R11).
-- No dialogue-tree system. Responses are rules.
+- A mode such as "roguelike" is a set of scenario rules, not an engine
+  feature.
+- A scenario supplies character specs or the templates a player may choose
+  from (06 §10.3), the screens to use (12), and the profile settings.
+- Journeys raise `travel_step` for the event director (11 §13.3).
 
 ### 16 — Interaction, devices and machines
 
@@ -180,26 +140,32 @@ mechanical) and how networks are evaluated on the timeline; locks, traps,
 switches, terminals, lights; tools; how devices are built, broken, repaired
 and tampered with.
 
-Fixed: interactive elements promote to devices on demand (02 §5.5); every
-verb is bound to rules, never to engine code.
+Fixed:
+- Interactive elements promote to devices on demand (02 §5.5). The minimal
+  device of plans/first-playable E12 is extended, not replaced.
+- Every verb is bound to rules, never to engine code.
+- Vehicle parts are devices with a `part` block, and a vehicle is one
+  resource bus by default (11 §6). This document adds wiring finer than
+  that.
+- Devices may carry senses (15 §4) and stations (11 §7).
 
 ## Suggested build order
 
 | Stage | Contents | Result |
 |-------|----------|--------|
 | M0 | Foundation (plan: world-model, F1–F4) | Workspace, data loading, timeline |
-| M1 | World model (W1–W23) | A world that can be generated, viewed, wrecked and saved from a console |
-| M2 | Documents 03, 04, 05 (plan: sim-kernel) | Actions on the timeline; mods and EOC complete |
-| M3 | Documents 06, 12, 15, 07 | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
+| M1 | World model (plan: world-model, W1–W23) | A world that can be generated, viewed, wrecked and saved from a console |
+| M2 | Data, rules and actions (plan: sim-kernel) | Actions on the timeline; mods and EOC complete |
+| M3 | Entities, perception, presentation (plan: first-playable), then document 07 | First playable build: in a window, a character in a destructible building with others who must notice them before they can fight them |
 | M4 | Documents 16, 08, 09 | Devices and machines; abilities; characters with lives; large groups |
 | M5 | Documents 10, 13 | Generated worlds; scenarios and modes |
-| M6 | Document 11 | Mounts, vehicles, space, dimensions |
+| M6 | Vehicles (plan: vehicles) | Mounts, craft, ships, submarines, aircraft, spacecraft, journeys |
 
-Much of M2 can be built alongside M1: the data pipeline and the expression
-compiler need only the foundation packages.
+The water and hull physics in the vehicles plan (V1, V3, V4) depend only on
+the world model and can be built much earlier than M6.
 
-The next documents to write are 06, 15 and 12, which M3 needs, followed by
-07.
+The next documents to write are 07 (combat) and 16 (devices), then 08, 09,
+10 and 13.
 
 From M3 onward, each stage adds to a set of small **reference mods** in
 different genres (for example a modern block with supers, a fantasy dungeon,

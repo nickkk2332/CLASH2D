@@ -562,6 +562,8 @@ Done when
 
 Build
 - `chart` definition type; traveler table and its coarse stepping process.
+  A traveler's band is an opaque id here; bands, routing and journeys are
+  built by package V11 of [vehicles.md](vehicles.md).
 - Arrival with a ticket; carrier realm creation and subgrid transfer; the
   chart exit of realm edges.
 

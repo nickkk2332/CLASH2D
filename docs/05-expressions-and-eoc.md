@@ -429,6 +429,7 @@ it.
 | `once` | Run at most once per owner. |
 | `cooldown` | Minimum local time between runs per owner. |
 | `skip_if_consumed` | Section 8.3. |
+| `ui_callable` | The rule may be run from a screen through the `Ui` command (12 §10.5). Default false. |
 | `doc` | Shown in the reference and the trace. |
 
 ### 9.2 Global rules

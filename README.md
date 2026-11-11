@@ -17,8 +17,14 @@ specification that implementation work follows.
 | [docs/03-time-and-actions.md](docs/03-time-and-actions.md) | Timeline, clocks, actions, reactions, decisions |
 | [docs/04-data-and-modding.md](docs/04-data-and-modding.md) | Mods, profiles, inheritance and patching, diagnostics, hot reload |
 | [docs/05-expressions-and-eoc.md](docs/05-expressions-and-eoc.md) | The rule system: expressions, events, effects, queries |
+| [docs/06-entities-and-bodies.md](docs/06-entities-and-bodies.md) | Bodies, wounds, minds, items, species and character creation |
+| [docs/11-vehicles-and-travel.md](docs/11-vehicles-and-travel.md) | Mounts, craft, vessels, the sea, submarines, space, journeys |
+| [docs/12-presentation-and-ui.md](docs/12-presentation-and-ui.md) | Playback, cutscenes, input, the UI toolkit, frontends |
+| [docs/15-perception-and-social.md](docs/15-perception-and-social.md) | Senses, stealth, beliefs, disguise, relations, speech |
 | [docs/plans/world-model.md](docs/plans/world-model.md) | Work packages for the foundation and the world model |
 | [docs/plans/sim-kernel.md](docs/plans/sim-kernel.md) | Work packages for data, rules and actions |
+| [docs/plans/first-playable.md](docs/plans/first-playable.md) | Work packages for entities, perception and presentation |
+| [docs/plans/vehicles.md](docs/plans/vehicles.md) | Work packages for vehicles, water and travel |
 | [docs/roadmap.md](docs/roadmap.md) | What is designed, what is next, open questions |
 | [docs/decisions.md](docs/decisions.md) | Settled decisions and their reasons |
 | [CLAUDE.md](CLAUDE.md) | Working rules for agents contributing to this repository |

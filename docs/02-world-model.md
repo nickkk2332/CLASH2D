@@ -192,6 +192,7 @@ A realm has no hard-coded "kind". What a realm is follows from its properties.
 | Property | Meaning |
 |----------|---------|
 | `size_regions` | Horizontal extent. The example is about 1050 km × 525 km. |
+| `sea_level` | Optional. The storey up to which ocean tracts are filled with still liquid (11 §4.3). |
 | `wrap` | Axes that wrap around. A planet wraps `x`. A torus wraps both. |
 | `z_range` | Lowest and highest storey. Storage is sparse, so a tall range costs nothing. |
 | `generator` | Which generator surveys regions and realises tracts (section 9). |
@@ -658,7 +659,8 @@ events.
 
 An area may have a kind. An `area_kind` definition supplies default tags,
 variables, an optional clock rate and priority, and rules attached to every
-area of that kind (05 §9.3).
+area of that kind (05 §9.3). A kind flagged `sealed` gives its areas a
+sealed volume with compartments and pressure (11 §10).
 
 An area with a clock is how scene S10 works. Occupants, bodies and processes
 inside it are re-parented to the area's clock on entry and back on exit.
@@ -1132,6 +1134,7 @@ pub struct Body {
     pub vel: [Real; 3],          // m/s
     pub mass: Real,              // kg
     pub area: Real,              // m², cross-section
+    pub volume: Real,            // m³, for buoyancy (11 §4.4)
     pub drag: Real,              // drag coefficient
     pub depth: Real,             // m, stopping distance for impact intensity; default 0.1
     pub restitution: Real,       // 0..1
@@ -1340,6 +1343,8 @@ pub struct Subgrid {
     pub rot: Rot4,                 // 0, 90, 180, 270 degrees about z
     pub mass: Real,                // maintained from its elements
     pub body: Option<BodyId>,      // present while in free flight
+    pub entity: Option<EntityId>,  // its hull entity, if it is a vehicle (11 §3)
+    pub sealed: Option<SealedId>,  // its sealed volume, if it has an enclosed interior (11 §10)
     pub vars: VarMap,
 }
 ```
@@ -1355,7 +1360,9 @@ of the world that have been torn loose.
 
 - Each parent chunk keeps a list of subgrids overlapping it.
 - A read of a parent cell first checks overlapping subgrids. A non-empty
-  subgrid cell **shadows** the parent cell.
+  subgrid cell **shadows** the parent cell. So does every cell of a sealed
+  subgrid's envelope, empty or not (11 §10.1): the sea outside a submarine
+  is not inside it.
 - Occupants standing in a subgrid have locations in the subgrid's `GridId`.
   When the subgrid moves, they move with it and nothing about them needs
   updating. This is what makes fighting on a moving train or inside a ship
@@ -1399,6 +1406,18 @@ Scene S11 is `detach`, `launch`, and `merge` on landing.
 
 Something bigger inside than outside is not a subgrid interior. It is a
 separate realm reached by a portal.
+
+### 18.5 Loading and storing
+
+- A subgrid is stored with the tract that contains its origin, its
+  **anchor** tract.
+- Every tract a stored subgrid overlaps records a reference to it. Loading
+  any of those tracts loads the subgrid.
+- A loaded subgrid holds a warm ticket over its whole footprint, so it is
+  never half-present.
+- A subgrid is unloaded when its anchor tract is, provided nothing on it is
+  holding it loaded.
+- Occupants standing in a subgrid are stored with it.
 
 ## 19. Portals and boundary links
 
@@ -1446,7 +1465,7 @@ pub struct Traveler {
     pub position: ChartPos,              // on a realm's tract grid, or on a chart
     pub route: Route,
     pub speed: Real,
-    pub band: TravelBand,                // Ground | Air | Orbit; who can see and intercept it
+    pub band: TravelBandId,              // data-defined: road, sea, undersea, air, orbit, … (11 §13.2)
 }
 ```
 
@@ -1546,6 +1565,10 @@ impl Cosmos {
   through see-through portals.
 - Results that are cached are keyed on chunk revisions.
 
+Illumination (`Cosmos::light`) is specified in 15 §3.3 and the medium of a
+cell (`Cosmos::medium`) in 11 §4. Both are world queries with caches keyed
+on chunk revisions.
+
 Path-finding is specified in document 09. The world's obligations are the
 `neighbours` query, revision counters, and change events precise enough to
 update a hierarchical path graph incrementally.
@@ -1633,8 +1656,8 @@ settle it.
    wrong without it. (This document, after the first collapse scenarios run.)
 2. **Cave-ins.** Natural ground is `anchor` and never collapses. Decide
    whether tunnelling should be able to bring down what is above. (10)
-3. **Turning subgrids.** Quarter-turns are exact. Decide whether vehicles
-   need eighth-turns and how. (11)
+3. **Turning subgrids.** Settled in 11 §5.5: motion is in any direction;
+   the grid itself swings in quarter-turns.
 4. **Very large creatures.** Decide whether a creature tens of metres tall is
    a multi-cell occupant or a subgrid with a body plan mapped onto its cells.
    (06, 11)

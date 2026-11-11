@@ -138,6 +138,13 @@ states which scenes it serves.
 | S20 | **Cheat skill.** A character arrives in a fantasy world as a custom species chosen at creation, with an overpowered ability and a status screen, all from one mod. | Species, progression and screens are data. |
 | S21 | **A different game.** A total-conversion mod replaces the main menu, character creation, HUD and rules, and ships a roguelike with permadeath. | The engine's own screens and modes are built from the same toolkit mods use. |
 
+### Vehicles
+
+| # | Scene | What must be true |
+|---|-------|-------------------|
+| S22 | **The deep.** A submarine dives past what its hull can take. A seam fails, a compartment floods, the crew seal the bulkhead and blow ballast. | Pressure rises with depth. Hulls are materials with limits. Water enters through holes at a rate, compartment by compartment, and the boat's weight decides whether it comes back up. |
+| S23 | **The chase.** A rider on a galloping horse trades blows with a pursuer on a motorbike, weaving through traffic. | Riding and driving occupy some of a character's channels and leave others free. A mount has a mind of its own. Vehicles have speed, grip and momentum. |
+
 ## 5. Decisions made with the project owner
 
 | Topic | Decision |

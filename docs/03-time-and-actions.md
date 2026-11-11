@@ -241,6 +241,7 @@ pub enum Command {
     Pass    { entity: EntityId, window: WindowId },
     Choose  { entity: EntityId, choice: ChoiceId, option: u32 },
     Setting { key: VarKey, value: Value },
+    Ui      { rule: EocId, args: Params },     // a rule marked ui_callable, run from a screen (12 §10.5)
     Debug(DebugCommand),
 }
 ```

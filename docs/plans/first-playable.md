@@ -1,0 +1,548 @@
+# Plan — First Playable: Entities, Perception, Presentation
+
+Implements [06-entities-and-bodies.md](../06-entities-and-bodies.md),
+[15-perception-and-social.md](../15-perception-and-social.md) and
+[12-presentation-and-ui.md](../12-presentation-and-ui.md).
+
+Packages prefixed F and W are in [world-model.md](world-model.md); P, X, K
+and T are in [sim-kernel.md](sim-kernel.md). The rules for taking a package
+are those of [world-model.md](world-model.md) and
+[CLAUDE.md](../../CLAUDE.md).
+
+When this plan is complete there is a game to sit down at: a window, a
+character built from templates, a destructible place with people in it who
+must notice you before they can respond to you. Combat proper arrives with
+document 07; until then attacks in tests are single actions that call `hit`.
+
+## Status
+
+| WP | Title | Size | Depends on | Status |
+|----|-------|------|------------|--------|
+| E1 | Component store and core components | M | K1, K7 | todo |
+| E2 | Attributes, pools, tracks | M | E1, K5 | todo |
+| E3 | Traits | M | E2 | todo |
+| E4 | Bodies | L | E2, T3 | todo |
+| E5 | Hits and wounds | L | E4, W12 | todo |
+| E6 | Body editing | M | E4 | todo |
+| E7 | Minds and vital state | M | E1, T4 | todo |
+| E8 | Items and holds | L | E5 | todo |
+| E9 | Templates and creation | L | E3, E6, E8 | todo |
+| E10 | Movement | M | E4, W14, W18 | todo |
+| E11 | Coming and going | L | E9, W8 | todo |
+| E12 | Minimal devices | M | E8 | todo |
+| S1 | Light | M | W18 | todo |
+| S2 | Signals and senses | M | E3 | todo |
+| S3 | Detection | L | S1, S2, E10 | todo |
+| S4 | Percepts | M | S3, K3 | todo |
+| S5 | Beliefs | M | S4, E7 | todo |
+| S6 | Personas | M | S5 | todo |
+| S7 | Relations, groups, orders | M | S6, T4 | todo |
+| S8 | Speech | M | S7, T6 | todo |
+| S9 | Party perception | M | S5 | todo |
+| U1 | Scene skeleton, frames, themes | M | K2 | todo |
+| U2 | Terminal frontend | S | U1 | todo |
+| U3 | Window frontend | L | U1 | todo |
+| U4 | View model and world drawing | L | U1, S9 | todo |
+| U5 | Playback | L | U4 | todo |
+| U6a | Toolkit: layout and widgets | L | U1 | todo |
+| U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | todo |
+| U7 | Input, controls, pickers | M | U6b, T5 | todo |
+| U8 | Slots and theming | S | U6b | todo |
+| U9 | Bundled screens | L | U7, E9 | todo |
+| U10 | Cutscenes | M | U5, T6 | todo |
+| U11 | Application | M | U3, U9, P3 | todo |
+| Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
+
+## Order and parallelism
+
+The three tracks share few dependencies. U1 to U3 and U6a need only the
+kernel and can start as soon as K2 is done.
+
+| Wave | Entities | Perception | Presentation |
+|------|----------|------------|--------------|
+| 1 | E1 | S1 | U1 |
+| 2 | E2, E7 | — | U2, U3, U6a |
+| 3 | E3, E4 | — | U6b |
+| 4 | E5, E6, E10 | S2 | U7, U8 |
+| 5 | E8 | S3 | — |
+| 6 | E9, E12 | S4 | — |
+| 7 | E11 | S5 | — |
+| 8 | — | S6, S9 | U9 |
+| 9 | — | S7 | U4, U11 |
+| 10 | — | S8 | U5 |
+| 11 | — | — | U10 |
+
+## Milestones
+
+| Milestone | Packages | What can be shown |
+|-----------|----------|-------------------|
+| **M3a People** | E1–E12 | From the console: build a character from templates with choices, cut it and watch the arm stop working and the blood pool fall, reshape its body, move its mind to another body, have it hide in a locker. |
+| **M3b Awareness** | S1–S9 | A guard hears a window break and goes to look. Someone in shadow goes unnoticed; someone in a locker is not seen. A crime done in another's face is remembered as theirs. |
+| **M3c A window** | U1–U11 | Launch the game, pick a profile, build a character on the creation screen, walk around a building in a window with mouse and keys, watch a wall break in playback, read it in the log, see a takedown as a cutscene. |
+
+## Entities
+
+### E1 — Component store and core components
+
+**Spec** 06 §3 · **Size** M
+
+Build
+- `ComponentStore<C>`, registration, saved dense order.
+- `Identity` and `Physical` with derived, cached mass and size.
+- Component saving and loading through the K7 path.
+
+Done when
+- Store operations match a simple model (property test); iteration order
+  survives save and load (invariant B8).
+- `Physical` equals a from-scratch recomputation after random changes.
+
+### E2 — Attributes, pools, tracks
+
+**Spec** 06 §4 · **Size** M
+
+Build
+- The three definition types; modifiers with sources; derived attributes
+  with dependency invalidation.
+- Pools with rates and scheduled threshold crossings.
+- Tracks with level curves.
+
+Done when
+- Cached attributes equal recomputation under random modifier changes.
+- A pool crossing fires at the analytically correct tick, including across
+  a clock rate change, and an idle pool schedules nothing.
+- `track_advanced` fires once per level.
+
+### E3 — Traits
+
+**Spec** 06 §5 · **Size** M
+
+Build
+- The `trait` type; add and remove; stacking modes; durations as timers;
+  everything a trait confers; the hook `trait_adding`.
+
+Done when
+- Removing a trait removes exactly what it added.
+- Durations behave across unloading as 03 §9 specifies.
+
+### E4 — Bodies
+
+**Spec** 06 §6.1–6.4 · **Size** L
+
+Build
+- `body_part`, `body_plan`, `body_function`; tissue extras on materials.
+- The body instance, condition, functions, scale.
+- Channel slots supplied by parts.
+
+Done when
+- Functions and slots equal recomputation (invariants B2, B3).
+- Disabling a part interrupts an action using its slot.
+- Doubling scale doubles thickness, quadruples area, multiplies mass by
+  eight.
+
+### E5 — Hits and wounds
+
+**Spec** 06 §7 · **Size** L
+
+Build
+- `Hit`, `hit_incoming`, layer resolution, organs, severing, exits.
+- Wounds; leaks and signals into pools; healing.
+- Spread hits; conversion of world impact and exposure events into hits.
+- Destruction and remains.
+
+Done when
+- At equal energy, a small contact area goes deeper than a large one.
+- Hits below a layer's threshold never accumulate.
+- A severing cut produces an item and a wound on the parent.
+- Scenario `one_bad_cut`: one cut to an arm disables it, starts a drain on
+  a pool, and the pool's threshold event fires.
+- Scenario `through_the_wall`: a hit launches a creature, the wall breaks by
+  02 §12, and the creature's injuries come from the impact events.
+
+### E6 — Body editing
+
+**Spec** 06 §6.5 · **Size** M
+
+Build
+- Every verb of 06 §6.5, with socket validation and recomputation.
+
+Done when
+- Invariants B2 and B3 hold after random sequences of edits (property
+  test).
+- Scenario `reshaping_touch`: a rule adds, removes, replaces and
+  re-materials parts of a target.
+
+### E7 — Minds and vital state
+
+**Spec** 06 §8 · **Size** M
+
+Build
+- `Mind`; seated attributes and tracks; the four mind verbs; drivers.
+- `die` and `revive` with `entity_dying`.
+
+Done when
+- A transferred mind takes control mode and mind-seated values and leaves
+  body-seated ones.
+- A driven body acts; a mindless undriven one does not.
+- A cancelled `entity_dying` prevents death.
+
+### E8 — Items and holds
+
+**Spec** 06 §9 · **Size** L
+
+Build
+- The `item` type and component; surfaces; item damage; stacks.
+- `Holds`, the holding verbs, capacity and grasp checks.
+- Worn items as outer layers in hit resolution.
+- Latent contents.
+
+Done when
+- A worn layer absorbs by the packet rule and is itself damaged.
+- A held item is dropped when the holding part's slot is disabled.
+- Latent contents are identical whenever they are first materialised.
+- Invariant B6 holds under random holding operations.
+
+### E9 — Templates and creation
+
+**Spec** 06 §10 · **Size** L
+
+Build
+- `template` and `creature`; every choice kind; character specs.
+- Validation of `assemble`; default and random selection.
+
+Done when
+- The same spec and seed give the same entity hash (invariant B4).
+- Each choice kind has passing and failing fixtures.
+- A fixture species with its own choices builds without engine changes.
+
+### E10 — Movement
+
+**Spec** 06 §11 · **Size** M
+
+Build
+- `movement`; `move`, `sweep`, `leap`, `set_altitude`, `teleport`; the
+  occupancy rule; loss of footing into a world body and back.
+
+Done when
+- Step legality is tested against a table of geometry cases.
+- A leap lands where the analytic trajectory says.
+- Scenario `dash_through_wall`: a sweep at high speed strikes a wall as a
+  body impact.
+
+### E11 — Coming and going
+
+**Spec** 06 §12 · **Size** L
+
+Build
+- `population`; anonymous instantiation; the notable triggers; storage
+  with tracts; the agent record; `remember` and `forget`.
+
+Done when
+- Reloading a tract shows the same anonymous individuals (invariant B7).
+- Each trigger of 06 §12.2 makes an individual notable.
+- Stored individuals round-trip with identical hashes.
+
+### E12 — Minimal devices
+
+**Spec** 02 §5.5; 06 §9.2 · **Size** M
+
+Build
+- The `Device` component; promotion of an interactive element to a device
+  on demand and demotion at default state; contents; the `Inside` hold.
+- Enough interaction to open, close, put in, take out and hide inside.
+
+Document 16 extends this with links, verbs and tools.
+
+Done when
+- Ten thousand unused lockers create no entities.
+- Destroying an element with a device spills its contents and exposes
+  anyone inside.
+
+## Perception
+
+### S1 — Light
+
+**Spec** 15 §3.3 · **Size** M
+
+Build
+- `Cosmos::light`; sky spread; fixed sources; the per-chunk cache; moving
+  sources at query time.
+
+Done when
+- The cache equals recomputation after edits (invariant P5).
+- A room is lit near its windows and dark beyond the cap.
+
+### S2 — Signals and senses
+
+**Spec** 15 §3.1, §3.2, §4 · **Size** M
+
+Build
+- `signal_kind`, `sense`, `event_signal`; the three propagation models;
+  delay; signatures; `emit_signal`; facing.
+
+Done when
+- Each model matches hand-computed cases, including blocking by materials.
+- Scenario `slow_sound`: a sound arrives after distance over speed, and an
+  entity on a fast clock gets there first.
+
+### S3 — Detection
+
+**Spec** 15 §5 · **Size** L
+
+Build
+- Awareness storage and update; the triggers of 15 §5.2; events;
+  concealment through the existing factors.
+
+Done when
+- Results do not depend on evaluation order (invariant P4).
+- A strong signal detects at once; a marginal one takes the time the rates
+  imply.
+- Scenario `the_locker`: a hidden character is not seen, is heard if it
+  makes noise, and the searcher's track ends at the last known position.
+
+### S4 — Percepts
+
+**Spec** 15 §6 · **Size** M
+
+Build
+- The `perceived` event and its filters; `perceives`, `could_perceive`;
+  use by window kinds.
+
+Done when
+- Scenario `heard_not_seen`: a rule on `perceived` sends a character to
+  investigate a sound it could not see the cause of.
+- A window is noticed only by candidates who perceive its source.
+
+### S5 — Beliefs
+
+**Spec** 15 §7 · **Size** M
+
+Build
+- Tracks and bounded memories; staleness; the properties of 15 §7.2.
+- The linter check of 15 §7.3 and the `hidden` tag rule.
+
+Done when
+- Belief properties are `null` for the never-perceived.
+- The linter flags a direct read of another entity's location in a rule
+  attached to a creature.
+
+### S6 — Personas
+
+**Spec** 15 §8 · **Size** M
+
+Build
+- Personas, presentation, appearance; `identity_check`; the persona verbs;
+  illusions.
+
+Done when
+- Scenario `frame_job`: witnesses' memories name the copied persona while
+  the world's cause names the actor.
+- Seeing through a disguise links the two personas in that observer only.
+
+### S7 — Relations, groups, orders
+
+**Spec** 15 §9, §10 · **Size** M
+
+Build
+- `relation_kind`, `group`; relation storage and fade; group fallback and
+  claims; group knowledge; `order` and `order_received`.
+
+Done when
+- A member with no personal relation uses its group's; a claimed uniform
+  applies the group's stance until seen through.
+- Scenario `minion_orders`: a created servant obeys while the relation
+  holds, must hear the order, and stops obeying when the relation is
+  removed.
+
+### S8 — Speech
+
+**Spec** 15 §11 · **Size** M
+
+Build
+- `say`, `lines`, `message_kind`; `message_heard`; `understands`; reports
+  transferring beliefs; exchanges; `talk_options`.
+
+Done when
+- A report gives the hearer the memory at reduced confidence and marks its
+  source.
+- Knowledge reaches a group and is used by a third member.
+
+### S9 — Party perception
+
+**Spec** 15 §13 · **Size** M
+
+Build
+- Tagging of output events by how the party perceived them; map memory; the
+  omniscient switch.
+
+Done when
+- An event out of sight and earshot is tagged unperceived.
+- Map memory records what was there when last seen, not what is there now.
+
+## Presentation
+
+### U1 — Scene skeleton, frames, themes
+
+**Spec** 12 §3, §4 · **Size** M
+
+Build
+- `clash-scene`: `Frame`, sprites, effects; glyph resolution; `theme`; the
+  `Frontend` trait; the null frontend; the golden-frame harness.
+
+Done when
+- A frame serialises to text and compares with a stored one.
+- The scene type exposes no route to the simulation except `submit`
+  (invariant V1), shown by a compile-fail test.
+
+### U2 — Terminal frontend
+
+**Spec** 12 §11 · **Size** S
+
+Done when
+- A frame is displayed in a terminal with colour mapping; sprites snap to
+  cells; keys arrive as input events.
+
+### U3 — Window frontend
+
+**Spec** 12 §11 · **Size** L
+
+Build
+- Window, glyph atlas from the theme font, grid and sprite quads, frame
+  effects, keyboard and mouse with cell coordinates.
+
+Done when
+- The same frame renders in both frontends with the same characters in the
+  same cells.
+- The quad budget of 12 §15 is benchmarked.
+
+### U4 — View model and world drawing
+
+**Spec** 12 §5, §6 · **Size** L
+
+Build
+- The view model from map memory and percepts; cell composition; look-down;
+  light and memory tint; subgrid compositing.
+- `map_view`, `section_view`, `region_map`; camera.
+
+Done when
+- Golden frames for the test city at several storeys and in section.
+- Unperceived changes do not appear; the omniscient mode shows them.
+
+### U5 — Playback
+
+**Spec** 12 §7 · **Size** L
+
+Build
+- Event ingestion; pacing; gliding and trails; `show` and `anim`; the log;
+  skipping.
+
+Done when
+- After any scripted playback the view model equals a fresh one
+  (invariant V4).
+- Golden frames for `wall_punch` at fixed time steps.
+- Every shown event has a log line (invariant V5).
+
+### U6a — Toolkit: layout and widgets
+
+**Spec** 12 §10.1–10.3 · **Size** L
+
+Build
+- The `screen` type; layout containers; every widget of 12 §10.3 with
+  static content; focus and navigation.
+
+Done when
+- Layout fixtures at several sizes have golden frames.
+- Each widget has a golden frame and a navigation test.
+
+### U6b — Toolkit: binding and UI effects
+
+**Spec** 12 §10.4, §10.5 · **Size** M
+
+Build
+- Pure-context bindings with the names of 12 §10.4; re-evaluation; the
+  perceived-only rule for ordinary screens; UI effects; the `Ui` command
+  and `ui_callable`.
+
+Done when
+- A binding that would read truth about a non-party entity is a load error
+  outside `debug` screens.
+- A `run` effect appears in the input log and replays.
+
+### U7 — Input, controls, pickers
+
+**Spec** 12 §9 · **Size** M
+
+Build
+- `keymap`, `control`; `act` with `needed` and `all`; pickers; mouse
+  behaviour; decision screens.
+
+Done when
+- One control starts an action from defaults in one key press; its precise
+  twin asks for every parameter with defaults pre-filled.
+- Rebinding a key changes behaviour without touching controls.
+
+### U8 — Slots and theming
+
+**Spec** 12 §10.6, §4.3 · **Size** S
+
+Done when
+- A `ui_part` from a second mod appears in a slot in order, subject to its
+  condition; switching theme restyles every screen.
+
+### U9 — Bundled screens
+
+**Spec** 12 §10.7 · **Size** L
+
+Build
+- The `ui` mod's screens, including character creation driven by template
+  data.
+
+Done when
+- Scripted input goes from title to a created character in play; golden
+  frames along the way.
+- A fixture species with every choice kind is fully usable on the creation
+  screen without a new screen.
+
+### U10 — Cutscenes
+
+**Spec** 12 §8 · **Size** M
+
+Build
+- Cues from actions, definitions and the effect; shots; `release`; skip;
+  tier and cooldown preferences.
+
+Done when
+- Scenario `cutscene_takedown`: golden frames; skipping yields the same
+  final view model (invariant V6).
+
+### U11 — Application
+
+**Spec** 12 §3; 04 §3.3 · **Size** M
+
+Build
+- `clash-app`: the loop, profile boot, saves, preferences, frontend choice.
+
+Done when
+- Launching with a profile shows its boot screen; a session can be saved,
+  quit and resumed.
+
+### Z1 — Benchmarks and budget gate
+
+**Spec** 06 §15, 15 §17, 12 §15 · **Size** S, recurring
+
+## Scenario catalogue
+
+Under `scenarios/people/`. Presentation scenarios also have golden frames.
+
+| Scenario | Package | Serves | What it checks |
+|----------|---------|--------|----------------|
+| `one_bad_cut` | E5 | S14 | Wound to impairment to drain |
+| `through_the_wall` | E5 | S1 | Launch, wall, impact injuries |
+| `reshaping_touch` | E6 | S17 | Runtime body edits |
+| `dash_through_wall` | E10 | S3 | Sweep as impact |
+| `slow_sound` | S2 | S3 | Signal delay against a fast clock |
+| `the_locker` | S3 | S13 | Hiding, last known position |
+| `heard_not_seen` | S4 | S18 | Reaction to a percept |
+| `frame_job` | S6 | S15 | Persona against cause |
+| `minion_orders` | S7 | S16 | Command relation, orders must be heard |
+| `cutscene_takedown` | U10 | S6 | Choreography over decided events |
+| `creation_flow` | U9 | S20 | Data-driven character creation |
