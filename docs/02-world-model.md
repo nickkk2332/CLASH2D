@@ -731,6 +731,20 @@ An area with a **journal** keeps, for the stated span of local time, every
 cell change made inside it together with the state before the change. They
 can be undone in reverse order (08 §7.4). An area without one keeps nothing.
 
+**Enclosing.** `enclose { from, kind, limit }` makes an area out of a
+closed space. It fills outward from a cell through open cells, stopped by
+whatever stops a field (section 16): blocks that cover the cell, and
+floors. If the space closes within `limit` cells, an area of that kind is
+created over it. If not, it is refused, and the refusal names a cell
+through which it leaks.
+
+An area made this way remembers how it was made. When an element inside
+it or on its edge changes, its shape is worked out again. If it no longer
+closes, it keeps its last shape and is marked `breached`, and a sealed
+kind treats the gap as any opening (11 §10.2). A room built by hand
+becomes a room when someone encloses it, and stops holding its air when
+the wall is knocked through.
+
 An area's **ambient override** replaces the stratum's gravity inside it.
 It may also set how the medium inside it is moving (11 §4.7): a steady
 flow, or a vortex.
@@ -1851,6 +1865,7 @@ Elements may declare `interactions` and a `device` (section 5.5).
 | Open or close a portal | portal table |
 | Create or destroy a realm | `create_realm`, `destroy_realm` |
 | Create an area; set its clock rate | area table, clock |
+| Make an area from a closed space | `enclose` |
 | Keep somewhere loaded | ticket |
 | Change somewhere unloaded | `PendingEdit` |
 | Teleport or transfer | realm transfer |

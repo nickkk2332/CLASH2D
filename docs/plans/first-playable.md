@@ -570,3 +570,5 @@ small package of its own.
 | Sound cue names | U5 | 12 §7.3 | A `show` definition's `sound` loads, is validated as a name, appears in the event the frontend receives, and plays nothing. |
 | Several at once | U7 | 12 §9.6 | With three controlled characters selected, one move command gives each its own action in entity order, and one answer settles the same pending decision for all three. |
 | Roles that spend | S7 | 15 §9.2; 16 §5.6 | A role flagged `spends` is recorded on the group definition and readable by rules. Used by devices package G13. |
+| Ageing | E8 | 06 §9.4 | Test script `the_larder`: meat in the open reaches its stage and turns at the times its rate gives; the same meat in a cold box lasts longer by the stated factor; when the box loses power the wake-up moves earlier. Two items in the same stage stack. Needs temperature (vehicles package V1); until then it is supplied by a test fixture. |
+| Overlays | U4 | 12 §6.2 | A `map_view` draws an overlay defined by a test mod. Ordinary overlays read the view model only. |

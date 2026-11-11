@@ -717,3 +717,4 @@ small package of its own.
 | Liquid level as a pending edit | W17 | 02 §17.3; 11 §4.3 | A tract given `PendingEdit::Liquid` while unloaded loads filled or drained to that storey, with the same state hash as the same change made while it was loaded. |
 | Drift in areas | W7 | 02 §8.3; 11 §4.7 | An area's ambient override may set a steady flow or a vortex, and `Cosmos::ambient` returns it. |
 | Drift on bodies and fields | W14, W16 | 02 §15.1, §16; 11 §4.7 | A light body thrown across a wind lands downwind of where it lands in still air. Smoke with the `drift` rule moves downwind, and fire spreads further downwind than upwind in the same time. Until vehicles package V1 exists, drift is supplied by a test fixture. |
+| Enclosing | W7 | 02 §8.3 | `enclose` in a closed room creates an area over exactly its open cells; in an open one it is refused and names a leak. Removing a wall cell marks the area `breached`; replacing it clears the mark. |

@@ -582,6 +582,42 @@ something looks. It keeps a reference to a content table and the positional
 seed. The first search, opening or hit materialises the items, and they are
 always the same items. A city of unopened drawers costs nothing.
 
+### 9.4 Ageing
+
+An item may age.
+
+```json
+{ "type": "item", "id": "raw_meat", "name": "raw meat",
+  "ages": { "life": "2 d",
+            "rate": "clamp((here.temperature - 271) / 20, 0.02, 3)",
+            "stages": [ { "at": 0.7, "trait": "going_off" } ],
+            "into": "rotten_meat" } }
+```
+
+Its **age** runs from 0 to 1. Between changes it is a straight line:
+`rate × time / life`. Reaching a stage, and reaching 1, are each one
+scheduled wake-up, moved when the rate changes. At 1 the item becomes
+`into`, or is removed.
+
+- `rate` is evaluated for where the item is. In the open that is its cell.
+  In a container that states what it `keeps`, it is that instead:
+
+```json
+"when_supplied": { "keeps": { "temperature": "3 C" } }
+```
+
+  A cold box with power keeps its contents cold. Without, it keeps nothing
+  and they read the room. A container may also keep `ageing` at a factor:
+  a sealed jar, a stasis locker.
+- The rate is worked out again when the item is moved, when its container
+  changes what it keeps, and at each weather step of its region. For time
+  spent unloaded, the rate found at loading is used for the whole span.
+- For stacking (section 9.1), ages in the same stage count as equal, and
+  a stack takes the age of its oldest member.
+
+Food spoiling, iron rusting in the wet, wine improving, medicine expiring,
+ice melting in a pack and a corpse going over are items that age.
+
 ## 10. Templates, choices and creation
 
 ### 10.1 Templates
@@ -736,6 +772,7 @@ A stored entity keeps every component. Its timers follow 03 §9. Its place is
 **Definition types**: `attribute`, `pool`, `track`, `trait`, `body_part`,
 `body_plan`, `body_function`, `template`, `creature`, `mind`, `item`,
 `movement`, `population`, `content_table`. Tissue extras on `material`.
+`ages` on items and `keeps` on containers.
 Body flags on `damage_type` (`severs`).
 
 **Events**: `entity_created`, `entity_destroyed`, `entity_died`,
@@ -744,7 +781,8 @@ Body flags on `damage_type` (`severs`).
 `part_severed`, `part_destroyed`, `body_changed`, `function_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
 `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
-`item_broken`, `contents_materialised`, `became_notable`.
+`item_broken`, `item_stage_reached`, `item_turned`,
+`contents_materialised`, `became_notable`.
 
 **Hooks**: `hit_incoming`, `entity_dying`, `trait_adding`, `pool_changing`,
 `item_taking`, `passage_requested`.
@@ -760,7 +798,7 @@ Body flags on `damage_type` (`severs`).
 `volume`, `scale`, `part(key)` and its `condition`, `state`, `layers`,
 `exposed`; `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
-`templates`, `name`.
+`templates`, `name`; on items, `age`.
 
 ## 14. Invariants
 

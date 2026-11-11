@@ -31,6 +31,9 @@ Vehicle package V5 depends on it.
 | G13 | Accounts and standing payments | M | G3, K7, S7 | todo |
 | G14 | Trade and delivery | M | G13, G1, E8, L5, U9 | todo |
 | G15 | Assemblies that stand alone | M | G10, E6, E7, I3 | todo |
+| G16 | Structures | M | G2, G4, WG1 | todo |
+| G17 | Know-how | S | G6, E7 | todo |
+| G18 | Screens for making, building and work | L | G6, G8, G5, U9, U4 | todo |
 
 ## Order and parallelism
 
@@ -42,10 +45,15 @@ Vehicle package V5 depends on it.
 | 4 | G5, G7, G8, G10, G11 |
 | 5 | G13, G15 |
 | 6 | G14 |
+| any, once their dependencies are done | G16, G17, G18 |
 
 G13 to G15 were added after the first review of what the design supports
 (decisions D-198 to D-200). G14 needs the cold layer's shipments (ai
-package L5).
+package L5). G16 to G18 were added after the review of technology,
+factories and bases (decisions D-208 to D-214). G16 needs the map format
+(worldgen package WG1). G18 should be built as early as its dependencies
+allow: without it the rest of this plan can be reached only from the
+console.
 
 ## Milestones
 
@@ -57,6 +65,8 @@ package L5).
 | **M4d Kit** | G9, G10 | A torch dies when its cell does and lives when the cell is swapped. A suit grants strength and flight while powered, keeps its wearer alive in vacuum, loses a module to a hit, and becomes dead weight when the core fails. |
 
 | **M4e Means** | G13–G15 | Buy a rifle at a counter and be refused when the balance is short. Order a vehicle through a terminal and find it in the berth next day, or find the lorry robbed. Stop being able to pay the staff and watch them leave. Call a suit from its bay and have it walk to you, then step into it. |
+
+| **M4f A base you can run** | G16–G18 | Open the make screen at a bench and see why a recipe cannot be started. Lay out a room in build mode, be warned that its roof will not stand, fix it, and watch helpers build it. Stack firebrick in the right shape and have it become a furnace; knock one brick out and have it stop. Read a manual and find a new recipe on the list. Turn on the power overlay and see which half of the base is dark. |
 
 ## Work packages
 
@@ -330,6 +340,67 @@ Done when
 - A standing suit whose core is destroyed stands down where it is.
 - Three standing suits in a collective hold a formation and fight.
 
+### G16 — Structures
+
+**Spec** 16 §4.5 · **Size** M
+
+Build
+- `structure` on devices: maps as patterns with exact, tagged and free
+  entries; turns; several structures in order.
+- Testing on placement and on element changes inside the box, merged per
+  step; `formed`; what is missing and where.
+- Interactions on member cells reaching the device; ports and holds at
+  marked cells; `structure_formed` and `structure_broken`.
+
+Done when
+- A device is formed exactly when its box matches (invariant G14), in
+  every turn the map allows.
+- Test script `firebrick`: a furnace core placed in a half-built shell is
+  unformed and names the missing cells; the last brick forms it; a pipe
+  joins at the marked tap and a loader feeds the marked door; destroying a
+  member stops it and raises the event.
+- A thousand formed structures with nothing changing near them schedule
+  nothing.
+- A larger structure listed first gives the capacity its expression says.
+
+### G17 — Know-how
+
+**Spec** 16 §8.5 · **Size** S
+
+Build
+- The `know_how` type; the set on a mind; `teach` with prerequisites,
+  `unlearn`; `knows`; `provides` at a station and `teaches` on items;
+  know-how on templates.
+
+Done when
+- A recipe that needs know-how is unavailable with a reason until the
+  worker knows it or something at the station provides it.
+- A machine working unattended runs a recipe only with a pattern loaded.
+- `teach` is refused, with a reason, when a prerequisite is missing.
+- Know-how moves with a transferred mind and stays out of the body left
+  behind.
+
+### G18 — Screens for making, building and work
+
+**Spec** 12 §6.2, §10.7; 16 §4.2, §8, §10 · **Size** L
+
+Build
+- In the `ui` mod: make, build, work, device and know-how screens, and
+  the `networks`, `areas`, `jobs`, `temperature` and `light` overlays.
+- Build mode: placing recipes and designs with a ghost, the standing
+  check, marking storage, enclosing rooms, setting site roles, cancelling
+  and dismantling.
+
+Done when
+- A recipe, a device and a piece of know-how defined by a test mod appear
+  in the screens with no screen written for them.
+- The make screen shows, for a recipe that cannot be started, the same
+  reason `explain` gives.
+- Build mode warns before confirming a floor that would fall.
+- In an ordinary screen the `networks` overlay shows only conduits the
+  character has perceived; in the debug context it shows all of them.
+- Frame tests cover each screen at the smallest supported size.
+
 ## Scenario catalogue
 
 Under `scenarios/devices/`.
@@ -352,6 +423,7 @@ Under `scenarios/devices/`.
 | `the_till` | G14 | S26 | Trade against a site's stock; refusal |
 | `mail_order` | G14 | S26 | Delivery by shipment; interception |
 | `come_here` | G15 | S26 | A suit that acts unworn |
+| `firebrick` | G16 | S24 | A machine made of cells in a shape |
 
 ## Review additions
 
@@ -369,3 +441,6 @@ small package of its own.
 | Moving floors | G7 | 16 §9.4 | Test script `walkway`: a creature and a crate on a supplied moving floor are carried along at its speed; unsupplied, they are not; something anchored against a push stays put. |
 | Fitting screen | G9 | 12 §10.7 | One screen shows the slots, contents, candidates and resource budget of a torch, a suit and a vehicle, with no screen written for any of them. Built when first-playable package U9 exists. |
 | Climate devices | G2 | 16 §4.2; 11 §4.6 | A heater with `climate` warms the sealed area it stands in while supplied and stops when its supply does. Needs vehicles package V3. |
+| Rates from the place | G3 | 16 §5.2 | A producer whose rate reads light gives more at noon than at dusk and nothing at night, with one rebalance at each change of the region's light and none between. Needs reactive expressions (abilities package A1). |
+| Containers that keep | G2 | 06 §9.4 | A powered cold box states what it `keeps`; unpowered, it keeps nothing. Used by first-playable addition "Ageing". |
+| Jobs at founded sites | G8 | 09 §13.5; 16 §10.2 | Jobs created in a founded site are on its board and are taken by characters who belong to it. |

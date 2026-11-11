@@ -300,3 +300,4 @@ small package of its own.
 | Placement overlap | WG7 | 10 §4.1 | A survey never writes two placements whose boxes overlap in three dimensions unless the later map is marked `over` (invariant X10). A sewer piece that would pass through a cellar is moved or dropped, and the survey's report says which. |
 | Ruin by kind | WG5 | 10 §6, §10.2; 02 §17.2 | A never-realised tract at total flood devastation is generated from its drowned variant, and at total blast from its scorched one. Lesser devastation applies the kind's transform, scaled. |
 | Watercourse current | WG7 | 10 §8.5; 11 §4.7 | A river's path record carries its `current`, pointing downhill along its line. |
+| Site definitions for founding | WG9 | 10 §11.1 | A site definition flagged `founded` loads without a map (invariant X7 exempts it) and cannot be placed by generation. |

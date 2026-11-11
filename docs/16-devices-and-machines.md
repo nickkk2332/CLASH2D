@@ -233,8 +233,8 @@ movement mode.
 | `climate` | Warms or cools the sealed volume it stands in (11 §4.6) |
 | `rules` | Attached rules (05 §9.3) |
 
-A generic configuration screen (12) is built from `config`, so a new machine
-needs no new screen.
+The device screen (12 §10.7) is built from `config` and the rest of the
+definition, so a new machine needs no new screen.
 
 ### 4.3 Promotion and passive loads
 
@@ -259,6 +259,43 @@ in its record: mains power, water, data. A **service entry** is a device
 that offers a service to its local network for as long as the tract has it.
 The cold simulation (09) and rules turn services on and off. A blackout is
 one value changing on some tracts.
+
+### 4.5 Structures
+
+A device is bound to one element in one cell. A machine that is larger, or
+that works only when built in the right shape, has a **structure**.
+
+```json
+{ "type": "device", "id": "blast_furnace", "name": "blast furnace",
+  "structure": { "map": "blast_furnace_shape", "core": "mark:core",
+                 "ports": { "mark:tuyere": "air", "mark:tap": "out" },
+                 "holds": { "mark:charge_door": "in" } } }
+```
+
+The map (10 §3) draws what must stand around the device, storey by storey.
+A palette entry may ask for an exact element, anything with a tag
+(`{ "block_tag": "refractory" }`) or anything at all.
+
+- The device is **formed** while the cells around it match the map in one
+  of its turns. It works only while formed. An unformed one can say what
+  is missing, and where.
+- The match is tested when the device is placed and whenever an element
+  inside the map's box changes. Changes in one step are tested once.
+- While formed, the cells of the structure are the machine. An
+  interaction on any of them reaches the device. Ports and holds named by
+  marks are at those cells, so a pipe joins at the tap and a loader feeds
+  the charge door.
+- Destroying or removing a member un-forms it and raises
+  `structure_broken`. What follows is for rules: a kiln goes cold, and a
+  reactor does something worse.
+- A device may list several structures. The first that matches is the one
+  it has, and `self.structure` names it, so a larger build can give more
+  capacity or speed.
+
+Building one cell by cell and placing one whole are the same thing: its
+map is a design (section 10.3). A furnace of firebrick, a ritual circle of
+candles and chalk, a reactor, a gate that needs its pillars and a windmill
+with its sails are structures.
 
 ## 5. Resources and networks
 
@@ -292,6 +329,20 @@ second. Whatever else a mod defines works the same way.
 ```json
 "converts": { "from": { "diesel": "0.012 kg/s" }, "to": { "power": "220 kW" }, "throttles": true }
 ```
+
+A rate, a capacity or a speed may be an expression of the device and the
+place it stands:
+
+```json
+"produces": { "power": { "rate": "250 * light(here) * self.condition" } }
+```
+
+Such an expression is reactive (05 §7.5): the network balances again when
+what it reads changes. Light, wind, current and temperature are region
+values that change at known moments, so a field of panels or a row of
+mills costs one rebalance when the weather turns and nothing in between.
+A sun panel, a windmill, a water wheel in a river's current (11 §4.7) and
+a boiler that needs heat are written this way.
 
 ### 5.3 Ports
 
@@ -561,6 +612,39 @@ condition on the place instead of a resource: enough light (15 §3.3), a
 field of water, warmth. A planted fixture is a small device running such a
 recipe through its growth states. Harvesting is an interaction.
 
+### 8.5 Know-how
+
+What someone knows how to make is **know-how**: a set of named things held
+by a mind (06 §8). It goes where the mind goes.
+
+```json
+{ "type": "know_how", "id": "smelting", "name": "Smelting",
+  "needs": ["fire_making"], "group": "metalwork" }
+```
+
+A recipe's `needs` asks for it: `"needs": "knows('smelting')"`. It is met
+by the worker, or by something at the station that `provides` it: a manual
+on the bench, a pattern loaded into a machine. A machine working
+unattended has only what is loaded into it.
+
+| Gained by | How |
+|-----------|-----|
+| Birth, upbringing, a trade | Listed on a template (06 §10) |
+| Being taught | A `talk` option or a joint action whose effect is `teach` |
+| Reading | An interaction on an item that `teaches` |
+| Research | A recipe whose `result` teaches, or whose output is a pattern that provides |
+
+`teach { who, what }` adds it, and is refused with a reason if what it
+`needs` is not already known. `unlearn` removes it.
+
+Abilities (08), trade offers and anything else with a condition can ask
+`knows` in the same way. The engine attaches no ladder to this (01 R10).
+An age of bronze and an age of starships are two sets of definitions that
+one world may hold side by side.
+
+The **know-how** screen (12 §10.7) lists what a character knows, what each
+thing lets them make, and what is now within reach.
+
 ## 9. Moving items
 
 ### 9.1 Movers
@@ -692,7 +776,8 @@ Bases use what already exists:
 | Need | Mechanism |
 |------|-----------|
 | Storage with rules about what goes where | Areas (02 §8.3) of a storage kind, with filters in their variables |
-| Rooms that hold warmth or air | Sealed areas (11 §10) and fields |
+| Rooms that hold warmth or air | Sealed areas (11 §10) and fields. `enclose` makes one from a closed space (02 §8.3). |
+| A base the world knows about | `found_site` (09 §13.5): a job board, staff, stock, a holder, and a place for things to happen to |
 | Ownership and who may use what | Sites, groups and relations (15 §9), checked by hooks |
 | Keeping a base running while away | Section 13 |
 
@@ -900,7 +985,8 @@ changing costs nothing. Warm and hot tracts run devices identically.
 ## 14. Modding surface
 
 **Definition types**: `interaction`, `device`, `resource`, `conduit`,
-`recipe`. Fields `interactions`, `device`, `load`, `when_supplied`,
+`recipe`, `know_how`. `structure`, `provides` and `teaches` on devices and
+items. Fields `interactions`, `device`, `load`, `when_supplied`,
 `conveys` on elements; `loss` on conduits; config kind `logic` and
 `stand_alone` on devices; `account` and `floor` on resources; `qualities`
 and `worth` on items; `services` on tract definitions.
@@ -913,7 +999,8 @@ and `worth` on items; `services` on tract definitions.
 `job_cancelled`, `module_installed`, `module_removed`, `module_supplied`,
 `module_unsupplied`, `suit_breached`, `service_changed`, `paid`,
 `payment_started`, `payment_stopped`, `account_exhausted`, `traded`,
-`stood_up`, `stood_down`.
+`stood_up`, `stood_down`, `structure_formed`, `structure_broken`,
+`know_how_gained`.
 
 **Hooks**: `interaction_starting`, `interaction_reach`,
 `network_overloaded`, `recipe_completing`, `job_starting`,
@@ -925,7 +1012,7 @@ and `worth` on items; `services` on tract definitions.
 `create_job`, `cancel_job`, `plan_from_map`, `install`, `uninstall`,
 `plug_in`, `unplug`, `set_service`, `hold_ticket`, `trade`, `pay`,
 `start_payment`, `stop_payment`, `deposit`, `withdraw`, `stand_up`,
-`stand_down`.
+`stand_down`, `teach`, `unlearn`.
 
 **Queries**: `interactions`, `devices`, `networks`, `members`, `jobs`,
 `modules`, `recipes`, `offers`, `payments`.
@@ -935,7 +1022,8 @@ and `worth` on items; `services` on tract definitions.
 `recipe` and `progress`, `input(name)`, `slot(id)`, `bearer`, `assembly`;
 on networks, `offered`, `wanted`, `stored`, `fraction`; on elements,
 section 3.5; on any bearer, `supplied(module)`; on characters, groups and
-sites, `balance(resource)`.
+sites, `balance(resource)`; on devices, `formed` and `structure`; on
+minds, `knows(what)`.
 
 ## 15. Invariants
 
@@ -954,6 +1042,7 @@ sites, `balance(resource)`.
 | G11 | A payment between two holders conserves the total. A balance at any time equals its last recorded value plus the net rate of its standing payments times elapsed universal time. |
 | G12 | A trade happens wholly or not at all. |
 | G13 | An assembly is one entity whether worn, lying or standing. Its damage, stores and modules are the same in each. |
+| G14 | A device with a structure is formed exactly when the cells in its box match one of its maps in some turn. |
 
 ## 16. Budgets
 
@@ -971,6 +1060,8 @@ Targets, unmeasured.
 | Memory per promoted device | under 600 bytes |
 | A payment, or a trade of ten entries | under 10 µs |
 | 10,000 standing payments with nothing changing | no cost |
+| Testing a structure of 200 cells | under 20 µs |
+| 1,000 formed structures with nothing changing near them | no cost |
 
 ## 17. Open questions
 

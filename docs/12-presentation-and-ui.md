@@ -193,6 +193,19 @@ A `map_view` can zoom out by whole factors, showing the most significant
 glyph of each block of cells. The window frontend can also change glyph
 size.
 
+A `map_view` may draw an **overlay** on top of the cells:
+
+| Overlay | Draws |
+|---------|-------|
+| `networks` | The conduits of one resource, coloured by network, with each network's supply |
+| `areas` | Areas by kind: storage, rooms, whatever content defines |
+| `jobs` | Planned work as ghosts, with its state |
+| `temperature`, `light` | The value at each cell, as shading |
+
+In an ordinary screen an overlay is drawn from the view model, so it shows
+what the character has perceived. In the debug context it shows the
+truth. Mods add overlays as definitions.
+
 ### 6.3 Camera
 
 The camera follows the active controlled character, or a free cursor in
@@ -512,7 +525,34 @@ The `ui` mod provides: title, profile and mod list, new game and scenario
 choice, character creation, the play screen (map, log, status, slots),
 inventory, condition, abilities, look and inspect, the reaction prompt, the
 choice prompt, the pickers, options and key binding, save and load, trade
-(16 §3.6) and fitting.
+(16 §3.6), fitting, make, build, work, device and know-how.
+
+**Make** lists the recipes the character knows that could be done here:
+by hand, and at each station within reach. Each shows what it takes, what
+of that is at hand, and what it gives. One that cannot be started says
+why (14 §5). Choosing one starts the work, or queues it at the station as
+a job.
+
+**Build** is a mode over the map. The player picks a building recipe or a
+design (16 §10), places and turns it, and sees its ghost and a warning
+wherever what is planned would not stand (02 §14). Confirming creates the
+jobs. The same mode marks storage areas, encloses rooms (02 §8.3), sets a
+site's roles, and cancels or dismantles.
+
+**Work** lists a site's jobs with their state, who has claimed them and
+what blocks them, and lets the player set priorities and each helper's
+preference for kinds of work (09 §7).
+
+**Device** is one screen for every device. It shows its mode, its
+settings by kind (flags, numbers, choices, filters, links, logic tables),
+its stores, how well each resource is supplied, what it is making and how
+far along, and its structure if it has one (16 §4.5).
+
+**Know-how** lists what the character knows, what each thing lets them
+make, and what they could learn next (16 §8.5).
+
+All five are built from definitions, so a mod's machines, recipes and
+know-how appear in them with no screen written.
 
 **Fitting** shows an assembly (16 §11): its slots, what is in each, what
 could go in each from what is at hand, and what the whole offers and draws

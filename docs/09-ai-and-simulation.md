@@ -783,6 +783,33 @@ written with what already exists:
 Someone with factories, a guild with chapter houses, a gang with fronts
 and a lord with manors are holders of sites.
 
+### 13.5 Founding a site
+
+Sites usually come from generation (10 §11). One can also be founded in
+play.
+
+`found_site { def, over, name, holder }` creates a site of the given
+definition over an area or a list of tracts. `set_site_role { site, role,
+at }` names places in it, as a map's marks would. `dissolve_site` ends it.
+
+From then on it is a site like any other:
+
+- It has a job board (section 7.1), and those who belong to it take its
+  jobs.
+- It has a holder (section 13.4), local knowledge (section 12) and tags,
+  so incidents may choose it. A raid on a base is an incident whose `at`
+  matches it.
+- Its stock is what lies in its storage areas (16 §10.4). While it is
+  unloaded the stock is kept as numbers, changed by shipments and trade
+  and by the rates its machines had when it unloaded (16 §13.1). When it
+  loads, its machines catch up first (16 §13.2); then whatever was shipped
+  or traded away is taken out of storage, and nothing else is altered.
+
+A definition meant for founding is flagged `founded`. It names roles that
+may be filled later and need not have a map.
+
+A camp, a homestead, a hideout, a workshop and a colony begin this way.
+
 ## 14. Weather and time of day
 
 ### 14.1 Weather
@@ -878,6 +905,7 @@ and `value` on grants (08 §11).
 `incident_stage`, `incident_ended`, `responder_arrived`,
 `knowledge_added`, `published`, `population_changed`, `stock_changed`,
 `shipment_sent`, `shipment_arrived`, `site_changed_hands`,
+`site_dissolved`,
 `weather_changed`, `day_part_changed`.
 
 **Hooks**: `goal_scoring` (adjust a score), `option_scoring`,
@@ -885,7 +913,8 @@ and `value` on grants (08 §11).
 
 **Effects**: `think`, `set_goal`, `clear_goal`, `claim_job`, `release_job`,
 `form_up`, `disband`, `start_incident`, `end_incident`, `advance_stage`,
-`casualties`, `set_agent`, `make_agent`, `fold_agent`, `add_knowledge`,
+`casualties`, `set_agent`, `make_agent`, `fold_agent`, `found_site`,
+`set_site_role`, `dissolve_site`, `add_knowledge`,
 `share_knowledge`, `publish`, `migrate`, `move_stock`, `set_stock`,
 `send_shipment`, `set_weather`.
 

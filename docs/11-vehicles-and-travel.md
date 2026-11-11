@@ -254,6 +254,13 @@ Implemented natively and configured by data.
 | `thrust` | Anything | Force and inertia only. With `damped: false`, velocity persists when thrust stops. With `damped: true`, it decays: the convention of most space fiction. |
 | `burrow` | Solid | Moves through blocks, removing them or not, at a rate set by their material |
 
+**Lifts.** Track may run up a shaft as well as along the ground. A lift is
+a small vessel, a platform or a car, whose `rail` mode follows vertical
+track. A hoist part drives it, and a rule sends it to the storey a signal
+names (16 §7). The doors at each storey are doors. With its hoist
+destroyed it is an unsupported piece of world with people standing in it
+(02 §18), and falls.
+
 ### 5.3 The motion process
 
 A moving vehicle has a process on its own clock.

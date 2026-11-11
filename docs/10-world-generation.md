@@ -683,6 +683,9 @@ and turns into records (09).
 Marks are known from the map and the placement alone, so a site's roles
 exist before any of it is realised.
 
+A definition flagged `founded` is for sites made in play (09 §13.5). It
+needs no map, and its roles are given places afterwards.
+
 ### 11.2 People
 
 - **Homes.** A map's bed marks give it a capacity. A settlement's
@@ -756,7 +759,7 @@ in assemblies; `rand`, `chance`, `pick` seeded by placement and cell.
 | X4 | The same realm definition and seed give the same world, in every order of exploration and on every thread count. |
 | X5 | Each cell's content is decided by exactly one rule of precedence: ground, then placements in order, then transforms. |
 | X6 | Random choices in generation come only from positional seeds. |
-| X7 | Every role a site definition names is supplied by its map, or the definition fails to load. |
+| X7 | Every role a site definition names is supplied by its map, or the definition fails to load. Definitions flagged `founded` are exempt. |
 | X8 | A map applied to the live world changes it only through `WorldEdit`. |
 | X9 | Nothing is unsupported or overloaded (02 §14) when a tract is first realised from ground steps alone. Placed maps are checked by `map check`. |
 | X10 | No two placements written by one survey overlap in three dimensions unless the later one's map is marked `over`. |
