@@ -85,6 +85,7 @@ The wave list is a plan, not a promise. It is revised here as work lands.
 
 Newest first. One line per merge: wave, what landed, what is stubbed.
 
+- B3 (part): action definitions (T2, beta): the `channel`, `action` and `window_kind` types with parameters, list parameters, roles, phases, transitions, windows and their expression scopes; `ChannelSet` and the dense ids; 23 documented refusal reasons; `clash_sim::register_defs`. Stubbed: effect lists are carried as written until the rule runtime (K5); nothing runs yet (T3).
 - B3 (part): the view model and world drawing (U4, beta): `ViewModel` as plain data fed by observe calls or, for debugging, an omniscient fill; cell composition with look-down, light, memory and ambience; `map_view` and `section_view` through a `WorldView` painter with a camera and zoom; the `ambience` and `overlay` definition types; `cargo run -p clash-front-term --example worldview`. Stubbed: region map, chart view, subgrids, portals, particles, multi-cell shapes.
 - B3 (part): the component store (E1, beta): `ComponentStore<C>` in saved dense order, the `Components` aggregate, `Identity`, `Physical` with cached mass over containment. Waits for the kernel to hold it and call it.
 - B2 (part): the console language, command table (one command per registered verb), the `ConsoleHost` trait, sessions, the `.scn` test-script format and the four-mode runner with `--bless`, all in `clash_sim::console` against a fake host (TL1, TL6, beta); `clash-tools scenario run`. Waits for the simulation to implement `ConsoleHost`.
