@@ -426,8 +426,10 @@ Beta: built ahead of the simulation (K2). Stubbed: the scene's link to
 the simulation is the `SceneHost` trait with `submit` and nothing else, so
 there is no `SimView` and the compile-fail tests show only that the host
 cannot be reached; they must be joined by tests against the real handle.
-Definitions are read by `clash_scene::defs`, a small reader, until
-`clash-data` is joined to the crate. The linter's warning for glyph states
+Definitions come from the mod loader (decision D-322):
+`clash_scene::register_defs` registers `color`, `theme`, `keymap`,
+`figure` and `screen`, and `UiDefs::from_defs` makes themes and scenes
+from what loaded, by qualified id. The linter's warning for glyph states
 that differ in colour alone (invariant V10) waits for the linter. A
 glyph's `shape` is checked and can be read by facing; drawing by it is U4.
 
@@ -508,7 +510,10 @@ place, focus and fields and draw an empty area unless given a
 (U5); `slot` holds its name (U8); `console`, `canvas` and `trace_view`
 have their place and focus only (tooling plan); rebuilding the screen
 stack on reload (12 §10.3) is not built; a `number` is stepped, not
-typed.
+typed. Screens are made from loaded definitions by `UiDefs::screen` and
+checked by the linter against every loaded theme; the figures and art a
+screen names are plain text, not references the loader resolves, until
+U6b (decision D-322).
 
 ### U6b — Toolkit: binding and UI effects
 

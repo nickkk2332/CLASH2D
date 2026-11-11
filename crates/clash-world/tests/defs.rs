@@ -1,4 +1,4 @@
-//! Tests for W3: the definition types, the content of `mods/core/world`,
+//! Tests for W3: the definition types, the content of `mods/core/data/world`,
 //! the derived per-state tables and the state reference parser.
 //!
 //! The engine names no material or block. These tests and the JSON they
@@ -451,14 +451,16 @@ fn every_mistake_is_reported_and_none_panics() {
           { "type": "fixture", "id": "pile", "material": "soil", "height": 1.0, "fill": 0.5,
             "heap": "mountain", "coverage": 2.0 },
           { "type": "floor", "id": "film", "material": "soil", "thickness": "-1 mm" },
-          { "type": "damage_type", "id": "shove", "kinetic": true },
-          { "type": "material", "id": "core:concrete", "density": 1, "toughness": 1 },
-          { "type": "material", "id": "engine:void", "density": 1, "toughness": 1 }
+          { "type": "damage_type", "id": "shove", "kinetic": true }
         ]"#,
         "inline",
     );
-    raw.materials
-        .push(("Not An Id".to_owned(), raw.materials[0].1.clone()));
+    // The loader refuses these ids before the tables are built. Building
+    // refuses them too, for whoever hands it raw definitions.
+    for id in ["core:concrete", "engine:void", "Not An Id"] {
+        raw.materials
+            .push((id.to_owned(), raw.materials[0].1.clone()));
+    }
     let errors = build_err(raw);
     let has = |needle: &str| errors.iter().any(|error| error.contains(needle));
     assert!(

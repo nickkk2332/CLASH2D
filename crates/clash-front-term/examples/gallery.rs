@@ -7,8 +7,9 @@
 //!
 //! Tab and Shift-Tab move the focus, the arrow keys act on whatever has
 //! it, and `q` or Esc quits. The screen, the theme and the keymap are
-//! read from `mods/ui`; a different mod directory may be given as the
-//! first argument.
+//! those of the `ui` mod, read by the mod loader from the `mods`
+//! directory beside the crates; a different directory of mods may be
+//! given as the first argument.
 //!
 //! Without a terminal (input or output redirected) the example checks
 //! that the definitions load, prints the first frame as plain text and
@@ -18,33 +19,55 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
+use clash_data::{DefTypes, Diagnostics, Loader};
 use clash_front_term::{TermError, TermFrontend};
-use clash_scene::defs::{DefError, UiDefs};
-use clash_scene::{Frame, NoHost, NullFrontend, RichText, Scene};
+use clash_scene::{Frame, NoHost, NullFrontend, RichText, Scene, UiDefs};
 
 /// How long the loop rests between frames.
 const FRAME_TIME: Duration = Duration::from_millis(16);
 /// The grid of the frame printed when there is no terminal.
 const HEADLESS_SIZE: (u16, u16) = (80, 24);
 
-fn mod_dir() -> PathBuf {
+/// The mod that holds the gallery.
+const GALLERY_MOD: &str = "ui";
+/// The theme the gallery is shown with.
+const GALLERY_THEME: &str = "ui:default";
+/// The keymap the gallery is used with.
+const GALLERY_KEYMAP: &str = "ui:default";
+/// The gallery's screen.
+const GALLERY_SCREEN: &str = "ui:gallery";
+
+fn mods_dir() -> PathBuf {
     match std::env::args_os().nth(1) {
         Some(dir) => PathBuf::from(dir),
-        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mods/ui"),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mods"),
     }
 }
 
-fn describe(errors: Vec<DefError>) -> String {
-    let lines: Vec<String> = errors.iter().map(ToString::to_string).collect();
-    lines.join("\n")
+fn describe(diagnostics: Diagnostics) -> String {
+    diagnostics.render()
 }
 
 /// Builds the scene with the gallery screen open and a few lines in the
 /// log for the `log` widget to show.
 fn gallery() -> Result<Scene<NoHost>, String> {
-    let defs = UiDefs::load_mod(&mod_dir()).map_err(describe)?;
-    let mut scene = defs.scene("default", "default").map_err(describe)?;
-    let screen = defs.screen("gallery", scene.theme()).map_err(describe)?;
+    // The types of every crate whose definitions the mod, or a mod it
+    // requires, may hold.
+    let mut types = DefTypes::new();
+    clash_world::register_defs(&mut types);
+    clash_scene::register_defs(&mut types);
+    let loaded = Loader::new(&types)
+        .search_path(mods_dir())
+        .load_mod_with_requirements(GALLERY_MOD)
+        .into_result()
+        .map_err(describe)?;
+    let defs = UiDefs::from_defs(&loaded).map_err(describe)?;
+    let mut scene = defs
+        .scene(GALLERY_THEME, GALLERY_KEYMAP)
+        .map_err(describe)?;
+    let screen = defs
+        .screen(GALLERY_SCREEN, scene.theme())
+        .map_err(describe)?;
     scene.open(screen);
     for n in 1..=12 {
         let line = format!("Log line {n}.");

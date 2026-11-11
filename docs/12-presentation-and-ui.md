@@ -190,6 +190,15 @@ sixteen. `word` left out is the definition's id; `fallback` left out is
 the nearest of the sixteen. With 256 colours the terminal frontend shows
 the nearest entry of that palette to `rgb`.
 
+A `color` definition has a qualified id like any other definition
+(04 §4.1): `ui:crimson`. A colour name is written by many mods, in glyphs,
+styles and inline tags, and is resolved by whichever theme is active, so
+it cannot be read through the imports of one mod. A qualified name means
+exactly that definition. A bare name means the `color` definition of that
+name in the theme's own namespace, or else the first of that name in
+order of qualified id. A theme, a keymap and a screen are asked for by
+their qualified ids: `ui:default`.
+
 Colour must not be the only thing that tells two things apart. The linter
 warns when two states or levels of one glyph, or two entries of one
 legend, differ in colour alone.
@@ -714,6 +723,14 @@ through the whole of a tree, and unchanged by a table's sorting.
 
 `rows` is the drawing. `map` has the same shape and says, by a character
 that `regions` names, which region each cell belongs to; a space is none.
+
+A `figure` widget names its figure by qualified id, or by a bare name,
+which means the figure of that name in the screen's own namespace or
+else the first of that name in order of qualified id. An `art` widget
+names a file of the mod that defines the screen: every file under a
+mod's `assets/` whose name ends in `.txt` is art. A screen is checked
+against every loaded theme, because the player may choose any of them: a
+style that one of them lacks is an error naming that theme.
 
 **Focus and keys.** One widget has the focus. A key press is named by the
 keymap in the screen's context and then offered, in order, to the widget

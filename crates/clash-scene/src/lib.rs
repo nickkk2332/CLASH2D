@@ -19,7 +19,7 @@
 //! | Golden frames | [`golden`] |
 //! | Screens and widgets | [`ui`]: [`ui::ScreenDef`], [`ui::Screen`] |
 //! | The scene itself | [`Scene`], over a [`SceneHost`] |
-//! | Reading definition files, for now | [`defs`] |
+//! | Definitions from mods | [`register_defs`], then [`UiDefs`]; see [`defs`] |
 //!
 //! # Outside the simulation
 //!
@@ -50,6 +50,7 @@ pub mod theme;
 pub mod ui;
 
 pub use color::{Ansi16, Color, ColorDef, ColorError, ColorRef, Rgb, ansi256};
+pub use defs::{ColorId, FigureId, KeymapId, ScreenId, ThemeId, UiDefs, check_defs, register_defs};
 pub use frame::{
     Attrs, Borders, Canvas, CellStyle, Frame, FrameCell, FrameFx, Rect, Sprite, Wash,
     is_single_width,

@@ -1,0 +1,5 @@
+{
+  "id": "default",
+  "name": "CLASH2D",
+  "mods": ["core", "ui"]
+}

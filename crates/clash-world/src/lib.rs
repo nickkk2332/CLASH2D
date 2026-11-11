@@ -15,6 +15,7 @@
 //! | Cells in a defined order: neighbours, shells, a segment | [`iter`] |
 //! | What a chunk is made of | [`storage`]: `Paletted`, `SparseCells`, `CellBits` |
 //! | Definitions: materials, blocks, floors, fixtures, realms | [`defs`], built into [`WorldDefs`] |
+//! | Definitions from mods | [`register_defs`], then [`WorldDefs::from_defs`]; see [`load`] |
 //! | The state of an element | [`FloorState`], [`BlockState`], [`FixtureState`], [`ElementState`] |
 //! | Stored cells | [`Chunk`], [`Column`], [`Grid`]; built with [`ColumnBuilder`] |
 //! | The world, and reading it | [`Cosmos`], [`GridView`], [`CellView`], [`CellFlags`], [`Ambient`] |
@@ -39,6 +40,7 @@ pub mod dims;
 mod error;
 mod grid;
 pub mod iter;
+pub mod load;
 mod pos;
 pub mod storage;
 pub mod test_support;
@@ -57,6 +59,7 @@ pub use defs::{
 };
 pub use error::WorldError;
 pub use grid::{CellView, Column, ColumnBuilder, Grid, HEIGHT_FULL, HEIGHT_NONE};
+pub use load::{check_defs, register_defs};
 pub use pos::{
     CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,
     distance_sq_cells,

@@ -1,379 +1,810 @@
-//! A small reader for definition files, until the mod loader is joined
-//! to this crate.
+//! Joining this crate's definitions to the mod loader (04 §7 to §9).
 //!
-//! `clash-data` is the engine's loader (document 04): it merges mods,
-//! resolves ids and reports every mistake with file, line and JSON path.
-//! This module does none of that. It reads files in the format of 04 §5
-//! (a JSON array of objects, or one object, each with `"type"` and
-//! `"id"`), drops `"//"` comments, and deserialises the definition types
-//! of this crate, so that tests and the widget gallery can load the `ui`
-//! mod. It is to be replaced by the real loader, at which point the
-//! definition types here are handed to it unchanged.
+//! The definition types of this crate (`color`, `theme`, `keymap`,
+//! `figure` and `screen`) are registered with `clash-data` by
+//! [`register_defs`], and [`UiDefs`] is the one way from loaded
+//! definitions to a [`Theme`], a [`Scene`] and a [`Screen`]:
 //!
-//! The reader gives a definition's object to its type without the
-//! `"type"` and `"id"` keys.
+//! ```no_run
+//! use clash_data::{DefTypes, Loader};
+//! use clash_scene::defs::UiDefs;
+//!
+//! let mut types = DefTypes::new();
+//! clash_scene::register_defs(&mut types);
+//! // ... every other crate's `register_defs` ...
+//! let defs = Loader::new(&types)
+//!     .search_path("mods")
+//!     .load_profile("default")
+//!     .into_result()
+//!     .map_err(|diagnostics| diagnostics.render())?;
+//! let ui = UiDefs::from_defs(&defs).map_err(|diagnostics| diagnostics.render())?;
+//! let mut scene = ui
+//!     .scene("mymod:night", "mymod:keys")
+//!     .map_err(|diagnostics| diagnostics.render())?;
+//! let screen = ui
+//!     .screen("mymod:title", scene.theme())
+//!     .map_err(|diagnostics| diagnostics.render())?;
+//! scene.open(screen);
+//! # Ok::<(), String>(())
+//! ```
+//!
+//! A definition is asked for by its qualified id, `namespace:name`
+//! (04 §4.1).
+//!
+//! # What is checked where
+//!
+//! The loader reads each definition into its struct: unknown keys, wrong
+//! types and keys that are not keys are its diagnostics. What needs more
+//! than one definition is checked when a theme or a screen is made: a
+//! colour a theme names, a style, a figure or an art asset a screen
+//! names. A mistake found then is a [`Diagnostic`] at the value in the
+//! file that wrote it, found through the finished tree the loader keeps
+//! for every definition. [`check_defs`] makes every theme, and every
+//! screen with every theme, for a tool that only wants the mistakes: the
+//! linter runs it after a load that had no errors.
+//!
+//! # Bare names
+//!
+//! A theme and a screen name colours, figures and art by plain text, not
+//! yet by reference fields the loader resolves. Until they do (package
+//! U6b), a bare name is read from the namespace of the definition that
+//! is being made (decision D-322):
+//!
+//! - A `color` or `figure` definition is known by its qualified id. Its
+//!   bare name means the one in the namespace of the theme or screen
+//!   being made, or else the first in order of qualified id.
+//! - An art asset is a path within the mod that defines the screen:
+//!   `assets/title.txt`. Every file under a mod's `assets/` whose name
+//!   ends in `.txt` is read as art when a [`UiDefs`] is made.
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
-use serde::de::DeserializeOwned;
-use serde_json::Value;
-use thiserror::Error;
+use clash_core::define_id;
+use clash_data::{Def, DefLabel, DefTypes, Defs, Diagnostic, Diagnostics, Span, code};
 
 use crate::color::ColorDef;
 use crate::input::KeymapDef;
 use crate::scene::{NoHost, Scene};
-use crate::theme::{Theme, ThemeDef};
-use crate::ui::{FigureDef, Screen, ScreenDef, UiEnv};
+use crate::theme::{Theme, ThemeDef, ThemeError};
+use crate::ui::{FigureDef, Screen, ScreenDef, UiEnv, UiError, UiProblem};
 
-/// A mistake in a definition file.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-#[error("{file}: {what}: {message}")]
-pub struct DefError {
-    /// The file, as it was named to the reader.
-    pub file: String,
-    /// Which definition, such as ``screen `gallery` ``, or `file` for a
-    /// mistake in the file as a whole.
-    pub what: String,
-    /// What is wrong.
-    pub message: String,
+define_id! {
+    /// A `color` definition.
+    pub struct ColorId(u16);
+    /// A `theme` definition.
+    pub struct ThemeId(u16);
+    /// A `keymap` definition.
+    pub struct KeymapId(u16);
+    /// A `figure` definition.
+    pub struct FigureId(u16);
+    /// A `screen` definition.
+    pub struct ScreenId(u16);
 }
 
-/// One object of a definition file, not yet interpreted.
-#[derive(Debug, Clone, PartialEq)]
-pub struct RawDef {
-    /// The value of `"type"`.
-    pub kind: String,
-    /// The value of `"id"`.
-    pub id: String,
-    /// The rest of the object, without comments.
-    pub body: Value,
+impl Def for ColorDef {
+    type Id = ColorId;
+    const TYPE: &'static str = "color";
+    const DOC: &'static str = "A colour: its `rgb`, the word text uses for it and the terminal colour shown in its place (12 §4.3).";
 }
 
-fn strip_comments(value: &mut Value) {
-    match value {
-        Value::Object(map) => {
-            map.remove("//");
-            map.values_mut().for_each(strip_comments);
-        }
-        Value::Array(items) => items.iter_mut().for_each(strip_comments),
-        _ => {}
-    }
+impl Def for ThemeDef {
+    type Id = ThemeId;
+    const TYPE: &'static str = "theme";
+    const DOC: &'static str =
+        "Colours and styles by name, border characters, a font and the engine's marks (12 §4.3).";
 }
 
-/// Reads a definition file into its objects. Mistakes are collected; the
-/// objects that could be read are returned alongside them.
-pub fn read_defs(file: &str, text: &str) -> (Vec<RawDef>, Vec<DefError>) {
-    let error = |what: String, message: String| DefError {
-        file: file.to_owned(),
-        what,
-        message,
+impl Def for KeymapDef {
+    type Id = KeymapId;
+    const TYPE: &'static str = "keymap";
+    const DOC: &'static str = "For each context, the name each key has in it (12 §9.2).";
+}
+
+impl Def for FigureDef {
+    type Id = FigureId;
+    const TYPE: &'static str = "figure";
+    const DOC: &'static str =
+        "Rows of character art with named regions, drawn by the `figure` widget (12 §10.3).";
+}
+
+impl Def for ScreenDef {
+    type Id = ScreenId;
+    const TYPE: &'static str = "screen";
+    const DOC: &'static str =
+        "A screen of the interface: its variables, its layout tree and its keys (12 §10.1).";
+}
+
+/// Registers this crate's definition types with the loader: `color`,
+/// `theme`, `keymap`, `figure` and `screen`.
+///
+/// The application and the tools call this, with every other crate's
+/// function of the same name, before they load (04 §9).
+pub fn register_defs(types: &mut DefTypes) {
+    types.register::<ColorDef>();
+    types.register::<ThemeDef>();
+    types.register::<KeymapDef>();
+    types.register::<FigureDef>();
+    types.register::<ScreenDef>();
+}
+
+/// The directory of a mod that holds its assets.
+const ASSETS_DIR: &str = "assets";
+/// The extension of an asset that is art: rows of characters.
+const ART_EXTENSION: &str = "txt";
+
+/// The namespace of a qualified id, or `""` if it has none.
+fn namespace_of(id: &str) -> &str {
+    id.split_once(':').map_or("", |(namespace, _)| namespace)
+}
+
+/// The definitions of one type by the names a definition in `namespace`
+/// knows them by: every qualified id, and each bare name for the one in
+/// `namespace` itself or else the first in order of qualified id.
+fn seen_from<T: Def + Clone>(defs: &Defs, namespace: &str) -> BTreeMap<String, T> {
+    let mut seen = BTreeMap::new();
+    let Some(registry) = defs.try_registry::<T>() else {
+        return seen;
     };
-    let parsed: Value = match serde_json::from_str(text) {
-        Ok(value) => value,
-        Err(e) => return (Vec::new(), vec![error("file".to_owned(), e.to_string())]),
-    };
-    let objects = match parsed {
-        Value::Array(items) => items,
-        object @ Value::Object(_) => vec![object],
-        _ => {
-            let message = "a definition file is a list of objects, or one object".to_owned();
-            return (Vec::new(), vec![error("file".to_owned(), message)]);
-        }
-    };
-    let mut defs = Vec::new();
-    let mut errors = Vec::new();
-    for (index, mut object) in objects.into_iter().enumerate() {
-        let what = format!("object {index}");
-        strip_comments(&mut object);
-        let Value::Object(map) = &mut object else {
-            errors.push(error(what, "not an object".to_owned()));
+    let mut own = Vec::new();
+    for (id, def) in registry.iter() {
+        let qualified = registry.name(id);
+        seen.insert(qualified.to_owned(), def.clone());
+        let Some((home, bare)) = qualified.split_once(':') else {
             continue;
         };
-        let mut take = |key: &str| match map.remove(key) {
-            Some(Value::String(text)) => Ok(text),
-            Some(_) => Err(format!("`{key}` must be a text")),
-            None => Err(format!("missing `{key}`")),
-        };
-        match (take("type"), take("id")) {
-            (Ok(kind), Ok(id)) => defs.push(RawDef {
-                kind,
-                id,
-                body: object,
-            }),
-            (Err(message), _) | (_, Err(message)) => errors.push(error(what, message)),
+        if home == namespace {
+            own.push((bare, def));
+        } else {
+            seen.entry(bare.to_owned()).or_insert_with(|| def.clone());
         }
     }
-    (defs, errors)
-}
-
-/// The definitions of this crate's types read so far, by id.
-#[derive(Debug, Clone, Default)]
-pub struct UiDefs {
-    /// `color` definitions.
-    pub colors: BTreeMap<String, ColorDef>,
-    /// `theme` definitions.
-    pub themes: BTreeMap<String, ThemeDef>,
-    /// `screen` definitions.
-    pub screens: BTreeMap<String, ScreenDef>,
-    /// `keymap` definitions.
-    pub keymaps: BTreeMap<String, KeymapDef>,
-    /// `figure` definitions.
-    pub figures: BTreeMap<String, FigureDef>,
-    /// The text of each art asset, by its path within the mod, such as
-    /// `assets/title.txt`.
-    pub art: BTreeMap<String, String>,
-}
-
-fn typed<T: DeserializeOwned>(
-    def: &RawDef,
-    file: &str,
-    into: &mut BTreeMap<String, T>,
-) -> Result<(), DefError> {
-    let what = format!("{} `{}`", def.kind, def.id);
-    let error = |message: String| DefError {
-        file: file.to_owned(),
-        what: what.clone(),
-        message,
-    };
-    if into.contains_key(&def.id) {
-        return Err(error("defined twice".to_owned()));
+    for (bare, def) in own {
+        seen.insert(bare.to_owned(), def.clone());
     }
-    let value = serde_json::from_value(def.body.clone()).map_err(|e| error(e.to_string()))?;
-    into.insert(def.id.clone(), value);
-    Ok(())
+    seen
+}
+
+/// One step of a path into a definition.
+enum Step<'a> {
+    Key(&'a str),
+    Index(usize),
+}
+
+/// The steps of a path such as `layout.cols[1].bar.label`.
+fn steps(path: &str) -> Vec<Step<'_>> {
+    let mut out = Vec::new();
+    for part in path.split('.').filter(|part| !part.is_empty()) {
+        let (key, mut rest) = match part.find('[') {
+            Some(at) => part.split_at(at),
+            None => (part, ""),
+        };
+        if !key.is_empty() {
+            out.push(Step::Key(key));
+        }
+        while let Some(inner) = rest.strip_prefix('[') {
+            let Some((index, after)) = inner.split_once(']') else {
+                break;
+            };
+            match index.parse() {
+                Ok(index) => out.push(Step::Index(index)),
+                Err(_) => break,
+            }
+            rest = after;
+        }
+    }
+    out
+}
+
+/// Where the value at a path of a definition was written, as far along
+/// the path as the finished tree goes.
+fn locate(defs: &Defs, type_name: &str, id: &str, path: &str) -> Option<Span> {
+    let tree = defs.tree(type_name, id)?;
+    let mut node = &tree.tree;
+    // The whole definition: point at its opening brace, not at every line.
+    let mut span = Span::new(node.span.file, node.span.start, node.span.start + 1);
+    for step in steps(path) {
+        let next = match step {
+            Step::Key(key) => node.get(key),
+            Step::Index(index) => node.as_array().and_then(|items| items.get(index)),
+        };
+        let Some(next) = next else {
+            break;
+        };
+        node = next;
+        span = node.span;
+    }
+    Some(span)
+}
+
+/// A mistake in a definition as a diagnostic at the value that is wrong.
+fn mistake(defs: &Defs, type_name: &str, id: &str, path: &str, message: String) -> Diagnostic {
+    let label = DefLabel::new(type_name, id);
+    let mut diagnostic = Diagnostic::new(code::VALIDATION, message)
+        .in_def(Some(&label))
+        .with_path(path);
+    if let Some(span) = locate(defs, type_name, id, path) {
+        diagnostic = diagnostic.at(defs.sources(), span);
+    }
+    diagnostic
+}
+
+/// The diagnostic for an id that names no definition of a type.
+fn unknown<T: Def>(defs: &Defs, id: &str) -> Diagnostic {
+    let mut diagnostic = Diagnostic::new(
+        code::UNKNOWN_REFERENCE,
+        format!("there is no {} `{id}`", T::TYPE),
+    );
+    let known = defs.try_registry::<T>().map(|registry| registry.names());
+    let near = known.and_then(|names| {
+        clash_data::diag::closest(id, names.iter().map(String::as_str)).map(str::to_owned)
+    });
+    diagnostic = match near {
+        Some(near) => diagnostic.suggest(format!("did you mean `{near}`?")),
+        None if !id.contains(':') => {
+            diagnostic.suggest("an id is written in full: `namespace:name`")
+        }
+        None => diagnostic,
+    };
+    diagnostic
+}
+
+/// Where in a theme a mistake is.
+fn theme_error_path(error: &ThemeError) -> String {
+    match error {
+        ThemeError::UnknownColor { at, .. } | ThemeError::NotInAGlyph { at, .. } => at.clone(),
+        ThemeError::ColorCycle { name } => format!("colors.{name}"),
+        ThemeError::WideBorder { .. } => "borders".to_owned(),
+        ThemeError::Mark { mark, .. } => format!("marks.{mark}"),
+    }
+}
+
+/// The definitions of this crate out of a finished load, with the art
+/// assets of the loaded mods: what themes, scenes and screens are made
+/// from.
+#[derive(Debug, Clone)]
+pub struct UiDefs {
+    defs: Arc<Defs>,
+    /// The text of each art asset, by the id of its mod and then by its
+    /// path within the mod, such as `assets/title.txt`.
+    art: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+/// Collects the art files under a directory, in sorted order, as paths
+/// from `prefix` with forward slashes.
+fn read_art(
+    dir: &Path,
+    prefix: &str,
+    into: &mut BTreeMap<String, String>,
+    diagnostics: &mut Diagnostics,
+) {
+    let unreadable = |path: &Path, error: std::io::Error| {
+        Diagnostic::new(
+            code::UNREADABLE_FILE,
+            format!("cannot read `{}`: {error}", path.display()),
+        )
+    };
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error) => {
+            diagnostics.push(unreadable(dir, error));
+            return;
+        }
+    };
+    let mut paths: Vec<_> = entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect();
+    paths.sort();
+    for path in paths {
+        let Some(name) = path.file_name().map(|name| name.to_string_lossy()) else {
+            continue;
+        };
+        // As for definition files: a name that starts with a dot is not
+        // read (04 §3.1).
+        if name.starts_with('.') {
+            continue;
+        }
+        let shown = format!("{prefix}/{name}");
+        if path.is_dir() {
+            read_art(&path, &shown, into, diagnostics);
+        } else if path.extension().and_then(|e| e.to_str()) == Some(ART_EXTENSION) {
+            match std::fs::read_to_string(&path) {
+                Ok(text) => {
+                    into.insert(shown, text);
+                }
+                Err(error) => diagnostics.push(unreadable(&path, error)),
+            }
+        }
+    }
 }
 
 impl UiDefs {
-    /// Reads one definition file. Every mistake is reported; definitions
-    /// without mistakes are kept.
-    pub fn add_file(&mut self, file: &str, text: &str) -> Vec<DefError> {
-        let (defs, mut errors) = read_defs(file, text);
-        for def in defs {
-            let result = match def.kind.as_str() {
-                "color" => typed(&def, file, &mut self.colors),
-                "theme" => typed(&def, file, &mut self.themes),
-                "screen" => typed(&def, file, &mut self.screens),
-                "keymap" => typed(&def, file, &mut self.keymaps),
-                "figure" => typed(&def, file, &mut self.figures),
-                other => Err(DefError {
-                    file: file.to_owned(),
-                    what: format!("{other} `{}`", def.id),
-                    message: format!(
-                        "this reader knows the types color, theme, screen, keymap and figure, not `{other}`"
-                    ),
-                }),
-            };
-            errors.extend(result.err());
-        }
-        errors
-    }
-
-    /// Reads a mod directory: every `.json` file under `data/` as
-    /// definitions and every file under `assets/` whose name ends in
-    /// `.txt` as art, in sorted order.
-    pub fn load_mod(dir: &Path) -> Result<UiDefs, Vec<DefError>> {
-        fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> std::io::Result<()> {
-            let mut entries: Vec<_> = std::fs::read_dir(dir)?.collect::<Result<_, _>>()?;
-            entries.sort_by_key(std::fs::DirEntry::path);
-            for entry in entries {
-                let path = entry.path();
-                if path.is_dir() {
-                    walk(&path, out)?;
-                } else {
-                    out.push(path);
-                }
-            }
-            Ok(())
-        }
-        let io_error = |path: &Path, error: std::io::Error| DefError {
-            file: path.display().to_string(),
-            what: "file".to_owned(),
-            message: error.to_string(),
-        };
-        let mut defs = UiDefs::default();
-        let mut errors = Vec::new();
-        for (sub, extension) in [("data", "json"), ("assets", "txt")] {
-            let root = dir.join(sub);
-            if !root.is_dir() {
+    /// Takes this crate's definitions out of a finished load and reads
+    /// the art assets of its mods: every file under a mod's `assets/`
+    /// whose name ends in `.txt`.
+    ///
+    /// An asset that cannot be read is reported. Nothing else is checked
+    /// here; a theme or a screen is checked when it is made.
+    pub fn from_defs(defs: &Arc<Defs>) -> Result<UiDefs, Diagnostics> {
+        let mut diagnostics = Diagnostics::new();
+        let mut art = BTreeMap::new();
+        for loaded in defs.mods() {
+            let assets = Path::new(&loaded.root).join(ASSETS_DIR);
+            if !assets.is_dir() {
                 continue;
             }
-            let mut files = Vec::new();
-            if let Err(error) = walk(&root, &mut files) {
-                errors.push(io_error(&root, error));
-                continue;
-            }
-            for path in files {
-                if path.extension().and_then(|e| e.to_str()) != Some(extension) {
-                    continue;
-                }
-                let text = match std::fs::read_to_string(&path) {
-                    Ok(text) => text,
-                    Err(error) => {
-                        errors.push(io_error(&path, error));
-                        continue;
-                    }
-                };
-                // Name files relative to the mod, with forward slashes,
-                // so that messages and asset names do not depend on
-                // where the mod is installed.
-                let name = path
-                    .strip_prefix(dir)
-                    .unwrap_or(&path)
-                    .components()
-                    .map(|part| part.as_os_str().to_string_lossy())
-                    .collect::<Vec<_>>()
-                    .join("/");
-                if extension == "json" {
-                    errors.extend(defs.add_file(&name, &text));
-                } else {
-                    defs.art.insert(name, text);
-                }
-            }
+            let mut files = BTreeMap::new();
+            read_art(&assets, ASSETS_DIR, &mut files, &mut diagnostics);
+            art.insert(loaded.manifest.id.clone(), files);
         }
-        if errors.is_empty() {
-            Ok(defs)
-        } else {
-            Err(errors)
+        if diagnostics.has_errors() {
+            return Err(diagnostics);
         }
+        Ok(UiDefs {
+            defs: Arc::clone(defs),
+            art,
+        })
     }
 
-    /// Builds the theme with this id against the colours read.
-    pub fn theme(&self, id: &str) -> Result<Theme, Vec<DefError>> {
-        let what = format!("theme `{id}`");
-        let error = |message: String| DefError {
-            file: "definitions".to_owned(),
-            what: what.clone(),
-            message,
+    /// The loaded definitions these were taken from.
+    pub fn defs(&self) -> &Arc<Defs> {
+        &self.defs
+    }
+
+    /// Adds an art asset to a mod, as if it had been read from the mod's
+    /// directory: for a mod that is not on disk.
+    pub fn add_art(&mut self, mod_id: &str, path: &str, text: &str) {
+        self.art
+            .entry(mod_id.to_owned())
+            .or_default()
+            .insert(path.to_owned(), text.to_owned());
+    }
+
+    /// The qualified ids of the definitions of one of this crate's types,
+    /// in id order.
+    pub fn ids<T: Def>(&self) -> &[String] {
+        self.defs
+            .try_registry::<T>()
+            .map_or(&[], |registry| registry.names())
+    }
+
+    /// Builds the theme with this qualified id against the `color`
+    /// definitions.
+    pub fn theme(&self, id: &str) -> Result<Theme, Diagnostics> {
+        let defs = &*self.defs;
+        let mut diagnostics = Diagnostics::new();
+        let Some(def) = defs
+            .lookup::<ThemeDef>(id)
+            .map(|found| defs.get::<ThemeDef>(found))
+        else {
+            diagnostics.push(unknown::<ThemeDef>(defs, id));
+            return Err(diagnostics);
         };
-        let def = self
-            .themes
-            .get(id)
-            .ok_or_else(|| vec![error("not defined".to_owned())])?;
-        Theme::build(def, &self.colors)
-            .map_err(|errors| errors.iter().map(|e| error(e.to_string())).collect())
+        let colors = seen_from::<ColorDef>(defs, namespace_of(id));
+        Theme::build(def, &colors).map_err(|errors| {
+            for error in &errors {
+                let path = theme_error_path(error);
+                diagnostics.push(mistake(defs, ThemeDef::TYPE, id, &path, error.to_string()));
+            }
+            diagnostics.sort();
+            diagnostics
+        })
+    }
+
+    /// The keymap with this qualified id.
+    pub fn keymap(&self, id: &str) -> Result<&KeymapDef, Diagnostics> {
+        let defs = &*self.defs;
+        match defs.lookup::<KeymapDef>(id) {
+            Some(found) => Ok(defs.get::<KeymapDef>(found)),
+            None => {
+                let mut diagnostics = Diagnostics::new();
+                diagnostics.push(unknown::<KeymapDef>(defs, id));
+                Err(diagnostics)
+            }
+        }
     }
 
     /// A scene with no simulation behind it, using the theme and the
-    /// keymap with these ids.
-    pub fn scene(&self, theme: &str, keymap: &str) -> Result<Scene<NoHost>, Vec<DefError>> {
-        let theme = self.theme(theme)?;
-        let keymap = self.keymaps.get(keymap).cloned().ok_or_else(|| {
-            vec![DefError {
-                file: "definitions".to_owned(),
-                what: format!("keymap `{keymap}`"),
-                message: "not defined".to_owned(),
-            }]
-        })?;
-        Ok(Scene::new(NoHost, theme, keymap))
+    /// keymap with these qualified ids.
+    pub fn scene(&self, theme: &str, keymap: &str) -> Result<Scene<NoHost>, Diagnostics> {
+        let built = self.theme(theme);
+        let found = self.keymap(keymap);
+        match (built, found) {
+            (Ok(theme), Ok(keymap)) => Ok(Scene::new(NoHost, theme, keymap.clone())),
+            (theme, keymap) => {
+                let mut diagnostics = Diagnostics::new();
+                if let Err(errors) = theme {
+                    diagnostics.extend(errors.iter().cloned());
+                }
+                if let Err(errors) = keymap {
+                    diagnostics.extend(errors.iter().cloned());
+                }
+                Err(diagnostics)
+            }
+        }
     }
 
-    /// Makes the screen with this id, styled by `theme`.
-    pub fn screen(&self, id: &str, theme: &Theme) -> Result<Screen, Vec<DefError>> {
-        let what = format!("screen `{id}`");
-        let error = |message: String| DefError {
-            file: "definitions".to_owned(),
-            what: what.clone(),
-            message,
+    /// Makes the screen with this qualified id, styled by `theme`.
+    pub fn screen(&self, id: &str, theme: &Theme) -> Result<Screen, Diagnostics> {
+        self.make_screen(id, theme, true)
+    }
+
+    /// Makes a screen. Without `styled`, what depends on the theme is
+    /// not reported: for checking a screen when no theme could be built.
+    fn make_screen(&self, id: &str, theme: &Theme, styled: bool) -> Result<Screen, Diagnostics> {
+        let defs = &*self.defs;
+        let mut diagnostics = Diagnostics::new();
+        let Some(def) = defs
+            .lookup::<ScreenDef>(id)
+            .map(|found| defs.get::<ScreenDef>(found))
+        else {
+            diagnostics.push(unknown::<ScreenDef>(defs, id));
+            return Err(diagnostics);
         };
-        let def = self
-            .screens
-            .get(id)
-            .ok_or_else(|| vec![error("not defined".to_owned())])?;
+        let namespace = namespace_of(id);
+        let figures = seen_from::<FigureDef>(defs, namespace);
+        let no_art = BTreeMap::new();
         let env = UiEnv {
             theme,
-            figures: &self.figures,
-            art: &self.art,
+            figures: &figures,
+            art: self.art.get(namespace).unwrap_or(&no_art),
         };
         Screen::new(id, def, &env).map_err(|errors| {
-            errors
-                .iter()
-                .map(|e| error(format!("at `{}`: {}", e.path, e.problem)))
-                .collect()
+            for UiError { path, problem, .. } in &errors {
+                let of_theme =
+                    matches!(problem, UiProblem::UnknownStyle { .. } | UiProblem::Text(_));
+                if of_theme && !styled {
+                    continue;
+                }
+                diagnostics.push(mistake(
+                    defs,
+                    ScreenDef::TYPE,
+                    id,
+                    path,
+                    problem.to_string(),
+                ));
+            }
+            diagnostics.sort();
+            diagnostics
         })
+    }
+
+    /// Makes every theme, and every screen with every theme, and returns
+    /// what is wrong with them. With no theme loaded, screens are made
+    /// with the engine's plain one. When no loaded theme can be built,
+    /// screens are checked for everything but their styles.
+    ///
+    /// A screen must stand with every loaded theme, because the player
+    /// may choose any of them: a style one theme lacks is reported with
+    /// that theme named.
+    pub fn check(&self) -> Diagnostics {
+        let mut diagnostics = Diagnostics::new();
+        let mut themes: Vec<(&str, Theme)> = Vec::new();
+        for id in self.ids::<ThemeDef>() {
+            match self.theme(id) {
+                Ok(theme) => themes.push((id, theme)),
+                Err(errors) => diagnostics.extend(errors.iter().cloned()),
+            }
+        }
+        let styled = !themes.is_empty() || self.ids::<ThemeDef>().is_empty();
+        if themes.is_empty() {
+            themes.push(("", Theme::default()));
+        }
+        let several = themes.len() > 1;
+        for id in self.ids::<ScreenDef>() {
+            let mut found: Vec<Diagnostic> = Vec::new();
+            for (theme_id, theme) in &themes {
+                let Err(errors) = self.make_screen(id, theme, styled) else {
+                    continue;
+                };
+                for error in errors.iter() {
+                    if found.iter().any(|seen| seen == error) {
+                        continue;
+                    }
+                    found.push(error.clone());
+                    diagnostics.push(if several {
+                        error.clone().note(format!("with the theme `{theme_id}`"))
+                    } else {
+                        error.clone()
+                    });
+                }
+            }
+        }
+        diagnostics.sort();
+        diagnostics
+    }
+}
+
+/// Everything wrong with this crate's definitions that only shows when
+/// themes and screens are made (see the module documentation). Empty
+/// when they can all be made.
+pub fn check_defs(defs: &Arc<Defs>) -> Diagnostics {
+    match UiDefs::from_defs(defs) {
+        Ok(ui) => ui.check(),
+        Err(diagnostics) => diagnostics,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use clash_data::Loader;
+
     use super::*;
 
-    #[test]
-    fn a_file_is_a_list_or_one_object_and_comments_are_dropped() {
-        let (defs, errors) = read_defs(
-            "a.json",
-            r##"[ { "//": "a comment", "type": "color", "id": "crimson", "rgb": "#a01828" },
-                 { "type": "theme", "id": "default", "colors": { "//": "inner comment", "text": "#c8c8c8" } } ]"##,
-        );
-        assert!(errors.is_empty(), "{errors:?}");
-        assert_eq!(defs.len(), 2);
-        assert_eq!(
-            (defs[0].kind.as_str(), defs[0].id.as_str()),
-            ("color", "crimson")
-        );
-        assert_eq!(defs[0].body, serde_json::json!({ "rgb": "#a01828" }));
-        assert_eq!(
-            defs[1].body,
-            serde_json::json!({ "colors": { "text": "#c8c8c8" } })
-        );
+    fn types() -> DefTypes {
+        let mut types = DefTypes::new();
+        register_defs(&mut types);
+        types
+    }
 
-        let (one, errors) = read_defs(
-            "b.json",
-            r##"{ "type": "color", "id": "x", "rgb": "#000000" }"##,
+    /// Loads mods given as `(id, text of data/ui.json)`, in that order.
+    fn load(mods: &[(&str, &str)]) -> Arc<Defs> {
+        let types = types();
+        let mut loader = Loader::new(&types);
+        for (id, text) in mods {
+            let manifest = format!(r#"{{ "id": "{id}" }}"#);
+            loader = loader.memory_mod(id, &manifest, &[("data/ui.json", text)]);
+        }
+        let ids: Vec<&str> = mods.iter().map(|(id, _)| *id).collect();
+        match loader.load_mods(&ids).into_result() {
+            Ok(defs) => defs,
+            Err(diagnostics) => panic!("the mods do not load:\n{}", diagnostics.render()),
+        }
+    }
+
+    const PLAIN: &str = r##"[
+  { "type": "color", "id": "crimson", "rgb": "#a01828", "word": "red", "fallback": "red" },
+  { "type": "theme", "id": "plain",
+    "colors": { "text": "#c8c8c8", "blood": "crimson" },
+    "styles": { "title": { "fg": "blood", "bold": true } } },
+  { "type": "keymap", "id": "keys", "menu": { "enter": "accept", "q": "back" } },
+  { "type": "figure", "id": "dot", "rows": ["o"] },
+  { "type": "screen", "id": "hello",
+    "layout": { "rows": [
+      { "text": "<title>Hello.</>" },
+      { "figure": { "figure": "dot" } } ] } }
+]"##;
+
+    #[test]
+    fn the_types_are_registered_with_their_documentation() {
+        let types = types();
+        assert_eq!(
+            types.names(),
+            ["color", "figure", "keymap", "screen", "theme"]
         );
-        assert!(errors.is_empty());
-        assert_eq!(one.len(), 1);
+        for info in types.infos() {
+            assert!(!info.doc.is_empty(), "`{}` has no documentation", info.name);
+        }
     }
 
     #[test]
-    fn mistakes_are_reported_with_file_and_definition() {
-        let mut defs = UiDefs::default();
-        let errors = defs.add_file(
-            "mods/x/data/ui.json",
-            r##"[ { "type": "color", "id": "good", "rgb": "#102030" },
-                 { "type": "color", "id": "bad", "rgb": "#nothex" },
-                 { "type": "color", "rgb": "#000000" },
-                 { "type": "screen", "id": "s", "layout": { "lst": {} } },
-                 { "type": "material", "id": "ash" },
-                 { "type": "color", "id": "good", "rgb": "#000000" },
-                 7 ]"##,
-        );
-        let text: Vec<String> = errors.iter().map(ToString::to_string).collect();
-        assert_eq!(text.len(), 6, "{text:#?}");
-        let has = |needle: &str| text.iter().any(|line| line.contains(needle));
-        assert!(
-            has("mods/x/data/ui.json: color `bad`: `#nothex` is not a colour"),
-            "{text:#?}"
-        );
-        assert!(has("object 2: missing `id`"), "{text:#?}");
-        assert!(has("screen `s`: unknown key `lst`"), "{text:#?}");
-        assert!(has("material `ash`"), "{text:#?}");
-        assert!(has("color `good`: defined twice"), "{text:#?}");
-        assert!(has("object 6: not an object"), "{text:#?}");
-        assert_eq!(defs.colors.len(), 1);
+    fn a_theme_a_scene_and_a_screen_are_made_from_loaded_definitions() {
+        let defs = load(&[("demo", PLAIN)]);
+        let ui = UiDefs::from_defs(&defs).unwrap();
+        assert_eq!(ui.ids::<ScreenDef>(), ["demo:hello"]);
+        let theme = ui.theme("demo:plain").unwrap();
+        // A bare colour name finds the definition in the theme's own mod,
+        // and so does its qualified id.
+        assert_eq!(theme.color("blood"), theme.color("crimson"));
+        assert_eq!(theme.color("crimson"), theme.color("demo:crimson"));
+        assert_eq!(theme.color_word("crimson"), Some("red"));
+        let mut scene = ui.scene("demo:plain", "demo:keys").unwrap();
+        let screen = ui.screen("demo:hello", scene.theme()).unwrap();
+        scene.open(screen);
+        assert!(ui.check().is_empty(), "{}", ui.check().render());
+        assert!(check_defs(&defs).is_empty());
+    }
 
-        let errors = UiDefs::default().add_file("broken.json", "[ {");
-        assert_eq!(errors.len(), 1);
-        assert!(
-            errors[0].to_string().starts_with("broken.json: file: "),
+    #[test]
+    fn an_id_that_names_nothing_is_an_error_with_a_suggestion() {
+        let defs = load(&[("demo", PLAIN)]);
+        let ui = UiDefs::from_defs(&defs).unwrap();
+        let text = ui.theme("demo:plian").unwrap_err().render();
+        assert!(text.contains("there is no theme `demo:plian`"), "{text}");
+        assert!(text.contains("did you mean `demo:plain`?"), "{text}");
+        let text = ui.keymap("keys").unwrap_err().render();
+        assert!(text.contains("there is no keymap `keys`"), "{text}");
+        let text = ui.screen("hello", &Theme::default()).unwrap_err().render();
+        assert!(text.contains("there is no screen `hello`"), "{text}");
+        let text = ui.scene("nope:theme", "nope:keys").unwrap_err().render();
+        assert!(text.contains("there is no theme `nope:theme`"), "{text}");
+        assert!(text.contains("there is no keymap `nope:keys`"), "{text}");
+    }
+
+    #[test]
+    fn mistakes_are_reported_where_they_are_written() {
+        let defs = load(&[(
+            "bad",
+            r##"[
+  { "type": "theme", "id": "plain",
+    "colors": { "text": "#c8c8c8", "glow": "octarine" },
+    "styles": { "title": { "fg": "nothing" } } },
+  { "type": "screen", "id": "hello",
+    "layout": { "rows": [
+      { "text": "Fine." },
+      { "text": "Styled.", "style": "sparkly" },
+      { "figure": { "figure": "nobody" } },
+      { "art": { "value": "assets/missing.txt" } } ] } }
+]"##,
+        )]);
+        let diagnostics = check_defs(&defs);
+        let found: Vec<(u32, &str, &str, &str)> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let location = diagnostic.location.as_ref().expect("a place");
+                assert_eq!(location.file, "mods/bad/data/ui.json");
+                (
+                    location.line,
+                    diagnostic.definition.as_ref().unwrap().id.as_str(),
+                    diagnostic.path.as_str(),
+                    diagnostic.message.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            found,
+            [
+                (
+                    3,
+                    "bad:plain",
+                    "colors.glow",
+                    "unknown colour `octarine` in `colors.glow`"
+                ),
+                (
+                    4,
+                    "bad:plain",
+                    "styles.title.fg",
+                    "unknown colour `nothing` in `styles.title.fg`"
+                ),
+                (
+                    9,
+                    "bad:hello",
+                    "layout.rows[2].figure",
+                    "unknown figure `nobody`"
+                ),
+                (
+                    10,
+                    "bad:hello",
+                    "layout.rows[3].art.value",
+                    "unknown art asset `assets/missing.txt`"
+                ),
+            ],
             "{}",
-            errors[0]
+            diagnostics.render()
+        );
+        let text = diagnostics.render();
+        assert!(text.contains("--> mods/bad/data/ui.json:9:"), "{text}");
+        assert!(
+            text.contains("= in: screen bad:hello, at layout.rows[2].figure"),
+            "{text}"
+        );
+        // The style is not reported while no theme stands: with one that
+        // does, it is.
+        let ui = UiDefs::from_defs(&defs).unwrap();
+        let text = ui
+            .screen("bad:hello", &Theme::default())
+            .unwrap_err()
+            .render();
+        assert!(text.contains("unknown style or colour `sparkly`"), "{text}");
+        assert!(
+            text.contains("= in: screen bad:hello, at layout.rows[1].text.style"),
+            "{text}"
         );
     }
 
     #[test]
-    fn a_missing_theme_or_screen_is_an_error() {
-        let defs = UiDefs::default();
+    fn what_the_loader_reads_is_reported_by_the_loader() {
+        let types = types();
+        let outcome = Loader::new(&types)
+            .memory_mod(
+                "bad",
+                r#"{ "id": "bad" }"#,
+                &[(
+                    "data/ui.json",
+                    r##"[
+  { "type": "color", "id": "off", "rgb": "#nothex" },
+  { "type": "color", "id": "pale", "rgb": "#102030", "fallback": "pink" },
+  { "type": "theme", "id": "plain", "colours": {} },
+  { "type": "keymap", "id": "keys", "menu": { "retrun": "accept" } },
+  { "type": "screen", "id": "s", "layout": { "lst": {} } },
+  { "type": "screen", "id": "t", "layout": { "list": { "rows": [ { "lable": "x" } ] } } },
+  { "type": "screen", "id": "u" }
+]"##,
+                )],
+            )
+            .load_all();
+        assert!(outcome.defs.is_none());
+        let text = outcome.diagnostics.render();
+        for needle in [
+            "`#nothex` is not a colour",
+            "\"pink\" is not one of the values allowed here",
+            "unknown key \"colours\"",
+            "did you mean \"colors\"?",
+            "retrun",
+            "unknown key `lst` in a layout node",
+            "lable",
+            "= in: screen bad:t, at layout.list.rows[0]",
+            "missing field \"layout\"",
+        ] {
+            assert!(text.contains(needle), "missing `{needle}` in:\n{text}");
+        }
         assert!(
-            defs.theme("default").unwrap_err()[0]
-                .to_string()
-                .contains("theme `default`: not defined")
+            outcome
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.location.is_some())
         );
-        let errors = defs.screen("title", &Theme::default()).unwrap_err();
+    }
+
+    #[test]
+    fn a_bare_name_means_the_definition_in_the_same_mod_first() {
+        let defs = load(&[
+            (
+                "alpha",
+                r##"[ { "type": "color", "id": "glow", "rgb": "#111111" },
+                     { "type": "color", "id": "dusk", "rgb": "#333333" } ]"##,
+            ),
+            (
+                "beta",
+                r##"[ { "type": "color", "id": "glow", "rgb": "#222222" },
+                     { "type": "theme", "id": "night", "colors": { "text": "glow", "dim": "dusk" } } ]"##,
+            ),
+        ]);
+        let ui = UiDefs::from_defs(&defs).unwrap();
+        let theme = ui.theme("beta:night").unwrap();
+        let rgb = |name: &str| theme.color(name).unwrap().rgb.to_string();
+        assert_eq!(rgb("text"), "#222222");
+        assert_eq!(rgb("glow"), "#222222");
+        assert_eq!(rgb("alpha:glow"), "#111111");
+        // A name the theme's own mod does not define is found elsewhere.
+        assert_eq!(rgb("dim"), "#333333");
+    }
+
+    #[test]
+    fn a_screen_must_stand_with_every_loaded_theme() {
+        let defs = load(&[(
+            "demo",
+            r##"[
+  { "type": "theme", "id": "rich", "styles": { "fancy": { "bold": true } } },
+  { "type": "theme", "id": "poor" },
+  { "type": "screen", "id": "hello", "layout": { "text": "Hi.", "style": "fancy" } }
+]"##,
+        )]);
+        let diagnostics = check_defs(&defs);
+        assert_eq!(diagnostics.len(), 1, "{}", diagnostics.render());
+        let text = diagnostics.render();
+        assert!(text.contains("unknown style or colour `fancy`"), "{text}");
+        assert!(text.contains("with the theme `demo:poor`"), "{text}");
+    }
+
+    #[test]
+    fn art_is_read_by_mod_and_may_be_added() {
+        let defs = load(&[(
+            "demo",
+            r#"[ { "type": "screen", "id": "title",
+                   "layout": { "art": { "value": "assets/title.txt" } } } ]"#,
+        )]);
+        let mut ui = UiDefs::from_defs(&defs).unwrap();
+        let theme = Theme::default();
+        let text = ui.screen("demo:title", &theme).unwrap_err().render();
         assert!(
-            errors[0]
-                .to_string()
-                .contains("screen `title`: not defined")
+            text.contains("unknown art asset `assets/title.txt`"),
+            "{text}"
         );
+        ui.add_art("demo", "assets/title.txt", "CLASH\n");
+        assert!(ui.screen("demo:title", &theme).is_ok());
+    }
+
+    #[test]
+    fn paths_are_followed_into_lists() {
+        let steps: Vec<String> = steps("layout.cols[1].bar[0][2].label")
+            .iter()
+            .map(|step| match step {
+                Step::Key(key) => (*key).to_owned(),
+                Step::Index(index) => format!("#{index}"),
+            })
+            .collect();
+        assert_eq!(steps, ["layout", "cols", "#1", "bar", "#0", "#2", "label"]);
     }
 }

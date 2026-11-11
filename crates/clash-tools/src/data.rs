@@ -4,9 +4,11 @@
 //! into strings, so that it can be tested without starting a process.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use clash_data::{
-    CODES, CodeInfo, DefTypes, Defs, FinishedTree, LoadOutcome, Loader, Node, NodeKind, Severity,
+    CODES, CodeInfo, DefTypes, Defs, Diagnostics, FinishedTree, LoadOutcome, Loader, Node,
+    NodeKind, Severity,
 };
 
 /// The process exit code for success.
@@ -19,6 +21,13 @@ pub const EXIT_USAGE: u8 = 2;
 
 /// The directory mods are searched for in when none is named.
 pub const DEFAULT_MODS_DIR: &str = "mods";
+
+/// A check a crate runs over loaded definitions: what it finds wrong when
+/// it builds its own tables from them, as located diagnostics
+/// (04 §8.1, the build stage). Each crate that builds something from
+/// definitions offers one, and `lint` runs them all after a load that
+/// had no errors.
+pub type BuildCheck = fn(&Arc<Defs>) -> Diagnostics;
 
 /// What a command wrote and how it ended.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -45,7 +54,8 @@ impl Output {
 pub const USAGE: &str = "\
 data commands:
   lint <profile or dir> [--mods <dir>]... [--lenient] [--json]
-        Run the whole loading pipeline and print every diagnostic.
+        Run the whole loading pipeline, build what the engine builds from
+        the definitions, and print every diagnostic.
         <dir> is a directory of mods or one mod's directory; a profile is
         a file, or a name looked for in profiles/. Exits 1 on errors.
   explain <code>
@@ -64,6 +74,8 @@ struct Options {
     profile: Option<String>,
     lenient: bool,
     json: bool,
+    /// What `lint` runs once the definitions are loaded.
+    checks: Vec<BuildCheck>,
 }
 
 fn parse_options(args: &[String]) -> Result<Options, String> {
@@ -89,8 +101,14 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
 }
 
 /// Runs a data subcommand. `command` is its name and `args` what follows
-/// it. Returns `None` if `command` is not one of them.
-pub fn run(types: &DefTypes, command: &str, args: &[String]) -> Option<Output> {
+/// it. `checks` are run by `lint` over definitions that loaded. Returns
+/// `None` if `command` is not one of the data subcommands.
+pub fn run(
+    types: &DefTypes,
+    checks: &[BuildCheck],
+    command: &str,
+    args: &[String],
+) -> Option<Output> {
     let run: fn(&DefTypes, &Options) -> Output = match command {
         "lint" => lint,
         "explain" => explain,
@@ -99,7 +117,10 @@ pub fn run(types: &DefTypes, command: &str, args: &[String]) -> Option<Output> {
         _ => return None,
     };
     Some(match parse_options(args) {
-        Ok(options) => run(types, &options),
+        Ok(mut options) => {
+            options.checks = checks.to_vec();
+            run(types, &options)
+        }
         Err(message) => Output::usage(message),
     })
 }
@@ -136,8 +157,9 @@ fn load_profile(types: &DefTypes, options: &Options, profile: &str) -> LoadOutco
     }
 }
 
-/// `lint <profile or dir>`: runs the pipeline and prints every
-/// diagnostic. Non-zero exit on errors.
+/// `lint <profile or dir>`: runs the pipeline, then each crate's build
+/// check over what loaded, and prints every diagnostic. Non-zero exit on
+/// errors.
 fn lint(types: &DefTypes, options: &Options) -> Output {
     let [target] = options.positional.as_slice() else {
         return Output::usage("`lint` takes one profile or directory");
@@ -152,15 +174,33 @@ fn lint(types: &DefTypes, options: &Options) -> Output {
     } else {
         load_profile(types, options, target)
     };
-    let failed = outcome.has_errors() || outcome.defs.is_none();
+    let loaded = !outcome.has_errors();
+    let mut diagnostics = outcome.diagnostics;
+    // What is built from the definitions is checked once they have all
+    // loaded: a placeholder would only add mistakes of its own.
+    if let Some(defs) = &outcome.defs
+        && loaded
+    {
+        for check in &options.checks {
+            diagnostics.extend(check(defs).iter().cloned());
+        }
+        diagnostics.sort();
+    }
+    let failed = diagnostics.has_errors() || outcome.defs.is_none();
     let mut out = String::new();
     if options.json {
-        out.push_str(&outcome.diagnostics.to_json());
+        out.push_str(&diagnostics.to_json());
         out.push('\n');
     } else {
-        out.push_str(&outcome.diagnostics.render());
+        out.push_str(&diagnostics.render());
         match &outcome.defs {
-            Some(defs) if !outcome.has_errors() => out.push_str(&summary(defs)),
+            Some(defs) if !failed => out.push_str(&summary(defs)),
+            Some(defs) if loaded => {
+                out.push_str(
+                    "loaded, but what the engine builds from the definitions has errors\n",
+                );
+                out.push_str(&summary(defs));
+            }
             Some(defs) => {
                 out.push_str("loaded leniently, with placeholders for what is broken\n");
                 out.push_str(&summary(defs));
@@ -518,17 +558,108 @@ mod tests {
 
     fn run_with(types: &DefTypes, words: &[&str]) -> Output {
         let args: Vec<String> = words[1..].iter().map(|word| (*word).to_owned()).collect();
-        run(types, words[0], &args).expect("a data command")
+        run(types, &[], words[0], &args).expect("a data command")
+    }
+
+    /// Runs a command with the engine's own types and build checks, as
+    /// the binary does.
+    fn run_engine(words: &[&str]) -> Output {
+        let args: Vec<String> = words[1..].iter().map(|word| (*word).to_owned()).collect();
+        run(
+            &crate::engine_types(),
+            crate::ENGINE_CHECKS,
+            words[0],
+            &args,
+        )
+        .expect("a data command")
     }
 
     #[test]
-    #[ignore = "until the definition types of clash-world and clash-scene are registered with the loader"]
     fn lint_passes_on_the_repository_as_it_stands() {
-        // The engine's own types, whatever is registered so far.
-        let output = run_with(&crate::engine_types(), &["lint", "../../mods"]);
+        // Every mod in the directory, then the default profile, then each
+        // bundled mod by itself: no errors and no warnings.
+        for target in [
+            "../../mods",
+            "../../profiles/default.json",
+            "../../mods/core",
+        ] {
+            let output = run_engine(&["lint", target]);
+            assert_eq!(
+                output.code, EXIT_OK,
+                "{target}:\n{}{}",
+                output.out, output.err
+            );
+            assert!(output.out.starts_with("ok: "), "{target}:\n{}", output.out);
+        }
+        let output = run_engine(&["lint", "../../mods"]);
+        assert!(output.out.contains("(core, ui)"), "{}", output.out);
+        let output = run_engine(&["lint", "../../mods/ui"]);
         assert_eq!(output.code, EXIT_OK, "{}{}", output.out, output.err);
         assert!(output.out.starts_with("ok: "), "{}", output.out);
+    }
+
+    #[test]
+    fn show_prints_a_bundled_definition_with_its_origins() {
+        let output = run_engine(&["show", "block", "core:wall", "--mods", "../../mods"]);
+        assert_eq!(output.code, EXIT_OK, "{}{}", output.out, output.err);
+        assert!(
+            output.out.starts_with("block core:wall\n"),
+            "{}",
+            output.out
+        );
+        assert!(
+            output
+                .out
+                .contains("<- ../../mods/core/data/world/blocks.json:"),
+            "{}",
+            output.out
+        );
         assert!(output.out.contains("(core)"), "{}", output.out);
+        // A screen of the interface mod is shown the same way.
+        let output = run_engine(&["show", "theme", "ui:default", "--mods", "../../mods"]);
+        assert_eq!(output.code, EXIT_OK, "{}{}", output.out, output.err);
+        assert!(output.out.contains("(ui)"), "{}", output.out);
+    }
+
+    #[test]
+    fn lint_reports_what_only_shows_when_the_engine_builds_its_tables() {
+        // A mod that loads, and whose block names a material that does
+        // not exist: found when the world's tables are built.
+        let dir = std::env::temp_dir().join(format!("clash-tools-lint-{}", std::process::id()));
+        let data = dir.join("mods/broken/data");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(dir.join("mods/broken/mod.json"), r#"{ "id": "broken" }"#).unwrap();
+        std::fs::write(
+            data.join("blocks.json"),
+            "[\n  { \"type\": \"block\", \"id\": \"gate\", \"height\": 3.0, \"fill\": 0.1,\n    \"material\": \"unobtainium\" }\n]\n",
+        )
+        .unwrap();
+        let mods = dir.join("mods");
+        let output = run_engine(&["lint", &mods.to_string_lossy()]);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(output.code, EXIT_FAILED, "{}", output.out);
+        assert!(
+            output.out.contains("there is no material `unobtainium`"),
+            "{}",
+            output.out
+        );
+        assert!(
+            output.out.contains("broken/data/blocks.json:3:17"),
+            "{}",
+            output.out
+        );
+        assert!(
+            output.out.contains("= in: block broken:gate, at material"),
+            "{}",
+            output.out
+        );
+        assert!(
+            output
+                .out
+                .contains("loaded, but what the engine builds from the definitions has errors"),
+            "{}",
+            output.out
+        );
     }
 
     #[test]
@@ -702,7 +833,7 @@ material ash:cinder
             assert_eq!(output.code, EXIT_USAGE, "{words:?}");
             assert!(output.err.contains("data commands:"), "{words:?}");
         }
-        assert!(run(&types(), "worldview", &[]).is_none());
+        assert!(run(&types(), &[], "worldview", &[]).is_none());
         let schema = run_with(&types(), &["schema", "--json"]);
         assert_eq!(schema.code, EXIT_USAGE);
         assert!(schema.err.contains("not built yet"));

@@ -9,6 +9,10 @@
 //! tables derived. `WorldDefs` is immutable, `Send + Sync`, and shared
 //! behind an `Arc`.
 //!
+//! The structs are registered with the mod loader, and
+//! [`WorldDefs::from_defs`] builds the tables from what it loaded: see
+//! [`crate::load`].
+//!
 //! Nothing here names a particular material or block. What exists is
 //! whatever the definitions say.
 

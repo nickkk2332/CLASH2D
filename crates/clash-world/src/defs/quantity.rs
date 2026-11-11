@@ -4,7 +4,10 @@
 //! The unit list is that of 04 §7.1, with the compound units this crate's
 //! definitions need.
 
-// replaced by clash-data quantity types in wave B2
+// Kept when the loader was joined to this crate (decision D-321): these
+// types read under the loader and under plain `serde`, and the loader has
+// no density or energy per volume. To be replaced by the quantity types
+// of `clash-data` for the dimensions it has.
 
 use core::fmt;
 
