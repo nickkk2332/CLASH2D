@@ -145,6 +145,7 @@ saves and rate changes.
 | Entity with a personal clock | Its own, child of its location's clock, or of its **anchor** if it has one |
 | Body in flight, world process | The clock of its location |
 | A contained entity | As its outermost container, unless it has a personal clock |
+| An entity that is not in the world | Its personal clock if it has one, else none. Nothing can be scheduled for it (invariant T9) |
 
 When an entity, body or process moves to a location with a different clock,
 its wake-ups are rehomed. Movement goes through the single relocation
@@ -153,6 +154,32 @@ function (01 R3), which does this.
 An **anchor** pins an entity's personal clock to a chosen parent regardless
 of where the entity is. Anchoring to the realm clock is how someone keeps
 moving inside a bubble of stopped time.
+
+As built (decision D-363):
+
+- The kernel does not store which clock an entity is on. It works the
+  answer out from where the entity is, every time, and stores only which
+  wake-ups are an entity's. Whatever schedules for an entity does it
+  through `Sim::schedule_for`, so that the wake-up follows the entity from
+  clock to clock; one put on the timeline directly stays where it was put.
+- A contained entity without a personal clock is on the clock its
+  outermost container is on, which is that container's personal clock if
+  it has one. What a hasted courier carries is hasted with them.
+- An area that is made, moved, reshaped or removed over an entity rehomes
+  it exactly as a move does: the kernel follows the world's `area_entered`
+  and `area_exited`. `set_clock_rate` on an area that gains or loses its
+  clock puts whoever is inside on the clock that now applies. A change of
+  an area's priority is not reported by the world, so it takes effect for
+  an entity the next time one of those happens.
+- Anchoring an entity that has no personal clock gives it one at rate 1.
+  Taking the personal clock away (`set_time_rate` with no rate) lifts the
+  anchor too. An anchor whose clock has been destroyed counts as none.
+- An entity has **own time**: the local time that has passed for it, on
+  whatever clocks it has been on, while it was in the world. It is what
+  `DecisionRequest.elapsed` is measured in. Time spent on an area's clock
+  that was destroyed by removing the area, rather than through
+  `set_clock_rate`, is counted only up to the entity's last change of
+  clock.
 
 ### 3.5 Two kinds of fast
 
@@ -222,21 +249,51 @@ document builds on.
 
 ```rust
 pub struct Sim {
-    pub defs: Arc<Defs>,
-    pub cosmos: Cosmos,              // 02
-    pub timeline: Timeline,
-    pub entities: EntityTable,
+    defs: Arc<Defs>,
+    cosmos: Cosmos,                  // 02
+    timeline: Timeline,
+    entities: EntityTable,
     pub actions: ActionTable,
     pub windows: WindowTable,
     pub rules: RuleState,            // 05: attachments, continuations, cooldowns
-    pub settings: VarMap,            // 04 §10
+    settings: VarMap,                // 04 §10
     pub rng: RngStreams,
     events: EventQueue,              // 05 §8
     decisions: DecisionQueue,
+    requests: VecDeque<AppRequest>,  // 13 §9.1
     out: Vec<SimEvent>,              // for presentation
     log: InputLog,
 }
 ```
+
+As built (decisions D-360, D-369):
+
+- The world, the timeline and the entity table are private, because
+  changing them behind the kernel's back breaks what it keeps true. They
+  are read through `Sim::truth()`, which gives a `Truth`: the one type
+  through which ground truth is read (01 R11). Nothing a character decides
+  by may hold one. `Sim::timeline()` and `Sim::now()` read time.
+- Simulation code changes the world with `Sim::world(|ctx| ...)`, which
+  hands out the world's `WorldCtx` and, when the closure returns, passes
+  on what the world reported and brings the kernel into step with it.
+- `Sim::new(defs, seed)` makes an empty world. `Sim::from_parts(defs,
+  cosmos, timeline, seed)` takes a world that has already been made, which
+  is how a generated world is handed over.
+- The simulation also keeps which entity each of its wake-ups belongs to
+  and how many wake-ups it has handled. The handlers of wake-up domains
+  and of events are not state: they are set up with the simulation and
+  again after a load.
+- `Sim::state_hash()` is the total of `Sim::hashes()`, which gives one hash
+  for each of: the world, the timeline, the entities, actions with windows
+  and rule state, settings, the random streams, and the kernel's own
+  queues. The output waiting to be drained and the input log are records
+  of what has happened, not state that decides what will: they are saved
+  and not hashed.
+- `Sim::save()` writes everything but the definitions and the world, which
+  have stores of their own, as one blob. `Sim::load(defs, cosmos, blob)`
+  reads it back over the world it was saved with, and `Sim::reindex()`
+  then places every entity in the world's occupant index again, which the
+  world neither saves nor hashes (02 §8.1).
 
 ### 4.2 Kernel entities
 
@@ -266,6 +323,62 @@ the world: it is cold, or saved with an unloaded tract.
 world's occupant index, rehomes wake-ups when the clock changes, and emits
 movement, area and portal events.
 
+As built (decisions D-361, D-362):
+
+- The kernel entity also holds a **presence**: what the world is told
+  about it (kind, planes, mass, flags, footprint). The world does not save
+  occupants, so the kernel keeps this to place the entity again after a
+  load. Document 06's `Physical` component writes it with
+  `Sim::set_presence`.
+- `tags` are strings, kept in order, not the numbers the loader interns: a
+  rule may give an entity a tag no definition carries, and a save names
+  tags by their strings.
+- `place`, `presence`, `control`, `clock` and `anchor` are read through
+  accessors and changed only by `relocate`, `set_presence`, `set_control`,
+  `set_time_rate` and `anchor_clock`. `place` is private to the module
+  that holds `relocate`, and no owned kernel entity ever leaves the crate,
+  so nothing else can change it. The rest (`tags`, `vars`, `channels`,
+  `actions`, `plan`, `attached`) is open to whoever holds the entity
+  mutably until its packages give it owners.
+- `actions` is a plain list. `ChannelSet`, `Plan`, the action table, the
+  window table and the rule state are empty typed placeholders that
+  already serialise and hash.
+- Ids are generational. A freed slot is reused, lowest slot first, a
+  generation on. The table visits entities in id order.
+- `create_entity` makes an entity that is `Stored` and emits
+  `entity_created`; `spawn` makes one and puts it somewhere, or makes
+  nothing if it cannot be put there. `remove_entity` first puts what the
+  entity held where the entity was (what cannot stand there leaves the
+  world), then takes the entity out of the world, cancels its wake-ups,
+  destroys its personal clock, forgets any decision it was asked for, and
+  emits `entity_removed`. A component store follows those two events.
+
+What `relocate` does, in full:
+
+- It refuses, changing nothing and with a reason, an unknown entity or
+  container, a container that is the entity itself or inside it, nesting
+  deeper than 64, and a cell the world refuses: outside the realm, or
+  with any cell of the footprint not loaded. A move to where the entity
+  already is does nothing at all.
+- Only an entity `At` a cell is in the occupant index, at that cell. What
+  is inside it is wherever it is, moves with it, and is not reported
+  separately.
+- The entity and everything inside it are put on the clocks that now
+  apply (section 3.4), each wake-up keeping its remaining local time.
+- An entity that leaves the world (`Stored`, or inside something that
+  is), and everything inside it, has its wake-ups cancelled (invariant
+  T9). Whoever stores an entity takes what should survive, such as
+  timers, off the timeline first (section 9).
+- It emits `entity_relocated` after the world's own `area_exited` and
+  `area_entered`. Portal crossings wait for the world to have portals.
+- When the world moves an occupant out of the way of an edit (02 §23),
+  the kernel follows: the entity's place becomes where the world put it,
+  and `entity_relocated` is emitted after the world's
+  `occupant_displaced`.
+- After a load, `reindex` rebuilds the occupant index from the places. An
+  entity that cannot be placed where its place says leaves the world,
+  with `entity_relocated`, and is listed in what `reindex` returns.
+
 ### 4.3 Advance
 
 ```rust
@@ -285,9 +398,11 @@ pub enum Advance {
 
 One iteration of `advance`:
 
-1. If a decision is pending for a directly controlled entity, return
-   `NeedInput`.
-2. Pop the next wake-up within the limit. If there is none, return.
+1. If a rule has asked the application for something, return `Request`.
+2. Pop the next wake-up within the limit. While a decision is pending for
+   a directly controlled entity, only what is still due at the current
+   tick is popped. If there is none, return: `NeedInput` if a decision is
+   pending, else `Reached`.
 3. Dispatch it to its domain's handler.
 4. **Pump events.** Drain world events into the event queue, then deliver
    queued events in order to rules (05 §8). Rules may change state and emit
@@ -302,6 +417,35 @@ Everything between two pops happens at one tick.
 If one pump delivers more than `rules.max_cascade` events (default 10,000),
 the remainder is dropped, the offending rule chain is reported with its
 trace, and the simulation carries on. Content cannot hang the engine.
+
+As built (decision D-364):
+
+- **Limits.** `UntilDecision` runs until a decision is needed or nothing
+  is left to happen, and does not move time when nothing is scheduled.
+  `Until(tick)` also moves time on to the tick. `Work(n)` handles at most
+  `n` wake-ups and returns `Yielded` if more is due, else `Reached`. A run
+  made of many `Work(n)` calls handles the same wake-ups in the same order
+  as one long call. `Reached` carries the current time.
+- **Domain handlers.** A wake-up's domain picks its handler: a plain
+  function given the simulation, the wake-up's handle and what it carried.
+  A package that schedules wake-ups adds its handler to the defaults every
+  simulation starts with; a test or a tool registers one with
+  `Sim::set_wake_handler`. The world's wake-ups (the `World` domain) go
+  through the same loop: their handler hands the wake-up to the world
+  through `Sim::world`. A wake-up whose domain has no handler is dropped
+  and reported as a fault.
+- **Faults.** What the engine contains (an unhandled wake-up, a limit
+  exceeded) is reported as a `fault` event that goes straight to the
+  output and is not delivered to handlers.
+- **One tick.** If one call handles 100,000 wake-ups without time moving,
+  it reports a fault and returns `Yielded`. Putting the rest off to the
+  next tick (05 §13.2) is not built.
+- **The pump** also runs when a command is accepted, so events are never
+  left waiting between calls. A cut-off cascade's report lists the last
+  eight events delivered.
+- **The safe point** calls `reconcile_activity`, which does nothing until
+  tickets and activity (02 §10.2) are joined to the kernel. Requested
+  saves are returned to the application as `Advance::Request`.
 
 ### 4.4 Commands
 
@@ -326,6 +470,29 @@ pub enum Command {
 - Every accepted command is appended to the **input log** with its tick. A
   save plus its input log replays to the same state.
 - Commands are the only way anything outside the simulation changes it.
+
+As built (decision D-365):
+
+- `Command` and `DebugCommand` are open sets. The kernel honours the debug
+  commands: `CreateEntity { spec, place }`, `MoveEntity { entity, to }`,
+  `RemoveEntity { entity }`, `SetElement { loc, layer, state }`,
+  `SetControl { entity, control }` and `Schedule { entity, after, wake }`.
+  The rest of the list above arrives with the packages that can honour
+  each. A debug command is a command like any other: validated, logged
+  and replayed.
+- A `CommandError` holds a `Reason` (14 §5): a stable code, a sentence and
+  the values involved. A refused command leaves the state exactly as it
+  was and is not logged.
+- A log entry carries the tick and the number of wake-ups the simulation
+  had handled when the command was accepted. The two together fix the
+  command's place among the wake-ups of its tick, so a session that
+  yielded in the middle of a tick replays exactly.
+- `Sim::replay(log)` advances to each entry's place and submits its
+  command. Run on a simulation set up as the logged one was, it ends in
+  the state the session was in when its last command was accepted. An
+  entry that cannot be reached or is refused stops the replay with a
+  reason that names it. `take_input_log` starts a new log, as a save does.
+  The log does not yet carry state hashes at intervals (14 §8.1).
 
 ## 5. Control, decisions and plans
 
@@ -364,6 +531,23 @@ It does not need one merely because a channel is idle.
 If several entities need decisions at the same tick, requests are returned
 one at a time in entity id order, and time does not move until each has been
 answered. `Wait` is an answer.
+
+As built (decision D-364). The kernel owns the queue and its order, and
+packages T4, T5 and K9 add what raises requests and the commands that
+answer them:
+
+- `Sim::request_decision(entity, kind, cause)` asks an entity under
+  `Direct` control and emits `decision_requested`. For any other entity it
+  asks nothing and says so, and the caller turns to the AI layer.
+  `Sim::answer_decision(entity)` takes the entity's oldest request as
+  answered; the commands that answer call it.
+- So that every request raised at one tick is there to be returned in
+  entity order, `advance` runs what is still due at the current tick
+  before it returns `NeedInput`. Time does not move.
+- `elapsed` is the entity's own time (section 3.4) since it last answered.
+- Of the kinds, only `Free` exists yet. `PlanEmpty` carries the reason a
+  step could not be started, if that is why. An entity that stops being
+  directly controlled, or is removed, is no longer waiting for anything.
 
 ### 5.3 Plans
 
@@ -836,6 +1020,13 @@ for the neighbourhood. Any interruption restores them.
   since it last chose.
 - Phase events carry start and scheduled end, so motion can be interpolated.
 
+As built: a `SimEvent` is a stamp and a body. The stamp is the universal
+tick, the clock the event happened on with that clock's local time, and
+the cause. The clock is the entity's for an event about an entity, the
+location's for one about a place, and universal time otherwise. The body
+says what happened and names its subjects in order; `actor` and
+`instigator` are added from the cause when it names them.
+
 How a thousand actions between two decisions are shown (played, blurred or
 summarised) is document 12's concern, constrained by what the viewing
 character could perceive (15).
@@ -863,6 +1054,49 @@ Every event and hook is registered with its subjects and fields
 (05 §8.1), and the generated reference lists them (04 §13). Where this
 document names one without them, the package that builds it writes them
 here.
+
+The kernel's events, as built. Each also binds `actor` and `instigator`
+from its cause where the cause names them, and carries what section 12
+lists. A subject marked `?` is bound only when there is one.
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `entity_created` | `self`: entity | none | An entity came to exist. It is not yet anywhere |
+| `entity_removed` | `self`: entity | none | An entity ceased to exist. What it held was put where it was first |
+| `entity_relocated` | `self`: entity; `here?`: loc | `from`, `to`: a place (a cell and a height, a container, or not in the world) | An entity's place changed. `here` is bound when `to` is a cell. What it holds moves with it and is not reported |
+| `control_changed` | `self`: entity | `old`, `new`: `none`, `direct` or `delegated` | Who decides for an entity changed |
+| `clock_rate_changed` | `self?`: entity; `area?`: area | `clock`: int; `old`, `new`: real, or null where there was or is no such clock | The rate of a personal, area or realm clock changed, or a clock was given or taken away |
+| `decision_requested` | `self`: entity | `kind`: what is asked | A directly controlled entity must choose |
+| `fault` | none | `code`, `message`: string | The engine contained a fault. Goes straight to the output; no handler receives it |
+| `event_cancelled` | none | `event`, `code`, `message`: string | A hook was cancelled (05 §8.2) |
+
+The world's events (02 §7.4) are passed on under their own names. Their
+subjects are: `here` for a cell; for `area_entered` and `area_exited`,
+`area`, then `target` (the occupant), then `here`; for `area_breached` and
+`area_closed`, `area` and `here`; for `occupant_displaced` and
+`occupant_entombed`, `target` and `here`. The fields a filter can test
+are `layer` on `element_changed` and `element_damaged`, `old` and `new`
+on `element_damaged`, `count` on `decals_removed`, and `key`, `old` and
+`new` on `cell_var_changed`.
+
+**Reasons** (14 §5) of the kernel, by code: `entity.unknown`,
+`entity.stored`, `entity.ids_exhausted`, `relocate.inside_itself`,
+`relocate.too_deep`, `world.not_loaded`, `world.outside_realm`,
+`world.unknown_grid`, `world.unknown_area`, `world.unknown_realm`,
+`world.refused`, `clock.unknown`, `clock.bad_rate`, `clock.loop`,
+`time.refused`, `advance.unhandled_wake`, `advance.tick_limit`,
+`events.cascade_limit`, `events.hook_depth`, `events.unknown_type`,
+`events.bad_payload`, `events.field_fixed`, `events.cancelled`,
+`decision.none_pending`, `replay.diverged`. Each is documented in the
+table the generated reference reads.
+
+**Not yet reachable from data.** The operations `set_time_rate`,
+`anchor_clock`, `set_clock_rate` and `set_control` are kernel functions;
+their effects are bound by the rule runtime. The queries of this section
+(`now`, local time and clock rate at a subject, control mode) are not
+registered as properties until subjects are. The debug commands are not
+yet console commands. A handler of an event can only be written in Rust
+until rules exist.
 
 **Settings**: `rules.max_cascade`, `rules.max_transitions` (zero-duration
 phase changes in one tick, default 1,000). `WARM_STEP` is a named

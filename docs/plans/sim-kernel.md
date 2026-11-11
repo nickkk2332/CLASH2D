@@ -37,9 +37,9 @@ start while the world model is being built.
 | X2 | Registry, contexts, type checking | L | X1, F4 | done |
 | X3 | Bytecode and evaluation | M | X2 | beta |
 | X4 | Expression fields, functions, variables | M | X3, P4 | beta |
-| K1 | Simulation skeleton and kernel entities | M | W7, F3 | todo |
-| K2 | Advance, commands, input log | M | K1, W9 | todo |
-| K3 | Events and hooks | M | K2, X2 | todo |
+| K1 | Simulation skeleton and kernel entities | M | W7, F3 | done |
+| K2 | Advance, commands, input log | M | K1, W9 | beta |
+| K3 | Events and hooks | M | K2, X2 | beta |
 | K4 | Subjects, properties, variable storage | L | K1, X3 | todo |
 | K5 | Rule runtime | L | K3, K4, X4 | todo |
 | K6 | Queries and value sources | M | K5 | todo |
@@ -47,7 +47,7 @@ start while the world model is being built.
 | K8 | World verbs | M | K5 | todo |
 | K9 | Messages and choices | S | K5 | todo |
 | K10 | Tracing, explain, profile, console | M | K5, W11 | todo |
-| T1 | Clock assignment | M | K1 | todo |
+| T1 | Clock assignment | M | K1 | beta |
 | T2 | Action definitions | M | X4 | beta |
 | T3 | Action runtime | L | T2, K5 | todo |
 | T4 | Control, plans, free decisions | M | T3 | todo |
@@ -375,6 +375,18 @@ Done when
   location.
 - Nothing outside `relocate` can change `place`.
 
+As built (decisions D-360 to D-363, D-366, D-367, D-369). Everything above,
+with entity creation and removal, the `Reason` type the whole simulation
+uses, saving and loading of the simulation's own state, and `reindex`,
+which rebuilds the world's occupant index after a load. The world, the
+timeline and the entity table are read through `Sim::truth()`. Action
+table, window table, rule state, channel set and plan are empty typed
+placeholders. Tests are in `crates/clash-sim/tests/kernel.rs`; that
+nothing outside `relocate` can change `place` is a privacy argument, with
+two `compile_fail` examples in `clash_sim::entity`. Not built: portal
+events, which wait for the world to have portals (W19). There is no test
+script under `scenarios/` until the runner exists (W11).
+
 ### K2 — Advance, commands, input log
 
 **Spec** 03 §4.3, §4.4, §5.2 · **Size** M
@@ -390,6 +402,22 @@ Done when
   an unchanged hash.
 - Replaying an input log reproduces the hash (invariant T6).
 - `Work(n)` returns `Yielded` and resumes exactly.
+
+As built (decisions D-364, D-365). Beta: the loop with its three limits,
+handlers by wake-up domain, the pump, commands with reasons, the input
+log, replay and the decision queue are built and tested
+(`crates/clash-sim/tests/advance.rs`), with the review addition "What
+presentation is given" except phase events, which are T3's. Replay, the
+exact resumption of `Work(n)` and saving in the middle of a session are
+property tests over random sessions. Stubbed: no world scenario exists
+to run under `advance` until the runner does (W11); a world wake-up is
+shown running under the loop by a test's own handler, and the `World`
+domain's default handler does nothing until the world has a process
+(W13). `reconcile_activity` at the safe point does nothing until tickets
+(W9) are joined. The commands are the debug commands; the rest arrive
+with their packages. Past 100,000 wake-ups at one tick `advance` reports
+and yields rather than putting the rest off to the next tick. The log
+does not carry state hashes at intervals.
 
 ### K3 — Events and hooks
 
@@ -407,6 +435,16 @@ Done when
   a cancelled hook prevents it.
 - Scenario `rule_cascade_limit`: a self-raising event is cut off, reported
   with a trace, and the simulation continues.
+
+As built (decision D-368). Beta: everything in the list is built and
+tested (`crates/clash-sim/tests/events.rs`), with handlers as Rust
+closures registered through `Sim::on` and `Sim::on_subject`, which the
+rule runtime (K5) will use for rules. Stubbed: `rule_cascade_limit` is a
+test of that name, not yet a test script, until the runner exists. Event
+types are kept by the simulation (`Sim::event_types`) and are not yet
+entered in the expression registry, which needs the subject kinds of K4.
+A field's value is null, a plain value or a subject. `clash-tools` must
+call `clash_sim::register_defs` for the linter to know the `event` type.
 
 ### K4 — Subjects, properties, variable storage
 
@@ -526,6 +564,12 @@ Done when
   with remaining local time preserved.
 - An anchored entity is unaffected by the area it stands in.
 - Overlapping areas resolve by priority, then id.
+
+As built (decision D-363). Beta: clock assignment, rehoming and the three
+operations are built and tested (`crates/clash-sim/tests/clocks.rs`).
+Stubbed: `set_time_rate`, `anchor_clock` and `set_clock_rate` are kernel
+functions; their effects are bound by the rule runtime (K5). Bodies in
+flight and world processes are rehomed by the world, when it has them.
 
 ### T2 — Action definitions
 

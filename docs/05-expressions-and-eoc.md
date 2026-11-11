@@ -691,6 +691,25 @@ source, `emit` gives back the fields as the handlers left them and a
 { "if": "not $r.cancelled", "then": [ … ] }
 ```
 
+As built (decision D-368):
+
+- An `event` definition has `subjects` (name to kind, in the order they
+  are written, which is delivery order), `fields` (name to `bool`, `int`,
+  `real`, `string` or `any`), `hook`, `mutable` and `doc`. A subject of an
+  unknown kind, a field of an unknown type, a name used for both, a
+  mutable field that is not declared, and mutable fields on something
+  that is not a hook are load errors. The event's name is its qualified
+  id: `mymod:ritual_completed`.
+- What is raised is checked against the type: every declared subject must
+  be given, of its kind; nothing undeclared may be; a field must be of its
+  type, where an integer serves as a real. A declared field left out is
+  null. The engine's own events cannot be raised by content.
+- A field's value is null, a plain value (a truth value, a number, a
+  text) or a reference to a subject. Lists, maps and ids as field values
+  wait for the rule runtime.
+- Every event also binds `actor` and `instigator` from its cause where the
+  cause names them, after its own subjects.
+
 ### 8.2 Notifications and hooks
 
 | | Notification | Hook |
@@ -708,6 +727,15 @@ Hooks exist only for operations the simulation layer performs. Operations
 inside the world crate (02) cannot be vetoed by rules (decision D-017);
 content shapes those through definitions.
 
+As built (decision D-368). Whoever performs an operation raises its hook
+and is given back the fields as the handlers left them and, if one
+cancelled, the reason. A cancellation stops delivery: no later handler
+runs. It is reported as the notification `event_cancelled` (03 §13).
+Changing a field the hook does not declare mutable, or cancelling a
+notification, is refused to the handler with a reason and reported as a
+fault. A hook raised from inside eight others is skipped, with a fault
+(section 13.2).
+
 ### 8.3 Delivery
 
 For each event, handlers run in this order:
@@ -724,6 +752,16 @@ Notifications raised while handling an event join the back of the queue.
 The pump of 03 §4.3 delivers until the queue is empty, subject to the
 cascade limit.
 
+As built (decision D-368). Handlers are registered through two calls,
+which the rule runtime will use for rules: one for a global handler of an
+event type, one for a handler attached to a subject. Each states a
+priority, an order (the rule's id), a filter, whether it is skipped once
+the event is consumed and, for an attached one, `as`. Among handlers of
+equal priority and order, the one registered first runs first. Who is
+called for an event is settled before anyone is: a handler that registers
+or removes another does not change the delivery under way. Handlers are
+not state and are registered again after a load.
+
 ### 8.4 Filters
 
 `"filter"` on a rule is a cheap test on an event's discrete fields, applied
@@ -734,6 +772,12 @@ before the condition and used to index handlers:
 ```
 
 A rule should filter on what it can, and leave the rest to `if`.
+
+As built: handlers are indexed by the first entry of their filter. An
+event looks at the handlers with no filter and at those whose first entry
+names a field the event has with that value; the rest of each filter is
+then tested. A thousand handlers filtered on other values cost an event
+nothing.
 
 ### 8.5 Perceived events
 
@@ -1065,7 +1109,7 @@ A run evaluates `filter`, then `if`, then executes `do` or `else`.
 | Call depth | 32 | Call refused; error reported |
 | Hook nesting depth | 8 | Inner hook skipped; error reported |
 | Events per pump | 10,000 | 03 §4.3 |
-| Wake-ups handled at one tick | 100,000 | The rest are put off to the next tick; error reported |
+| Wake-ups handled at one tick | 100,000 | The rest are put off to the next tick; error reported. As built, `advance` reports the error and yields instead (03 §4.3) |
 | Size of one value (a list, a map or a text) | 65,536 elements, or bytes of text | In an effect: the effect fails; error reported. In an expression: the operation gives null, with a warning (section 4.5) |
 
 Exceeding a limit is always an error report with a trace, and never a hang
