@@ -131,6 +131,7 @@ dependencies = [
  "clash-data",
  "clash-expr",
  "clash-gen",
+ "clash-time",
  "clash-world",
  "proptest",
  "serde",

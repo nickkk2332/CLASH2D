@@ -10,3 +10,12 @@
 
 pub mod component;
 pub mod console;
+pub mod stats;
+
+/// Registers the definition types of this crate with the loader, with
+/// the checks and registry steps that go with them. The application and
+/// the tools call this beside each other crate's function of the same
+/// name.
+pub fn register_defs(types: &mut clash_data::DefTypes) {
+    stats::register_defs(types);
+}
