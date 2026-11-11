@@ -1,0 +1,15 @@
+[package]
+name = "clash-app"
+description = "The game binary."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+clash-front-term.workspace = true
+clash-front-window.workspace = true
+clash-save.workspace = true
+
+[lints]
+workspace = true

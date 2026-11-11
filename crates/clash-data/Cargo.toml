@@ -1,0 +1,13 @@
+[package]
+name = "clash-data"
+description = "Mod loading, JSON to typed definitions, registries and schemas."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+clash-core.workspace = true
+
+[lints]
+workspace = true

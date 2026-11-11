@@ -55,8 +55,8 @@ Crate `clash-time`. Depends only on `clash-core`.
 ```rust
 pub struct Tick(pub i64);      // universal time, microseconds
 pub struct Dur(pub i64);       // a span of local time on some clock, microseconds
-pub struct ClockId(u32);       // ClockId::UNIVERSAL is the root
-pub struct WakeId(u64);        // stable handle; survives rescheduling
+pub struct ClockId(u32);       // ClockId::UNIVERSAL is the root; ids are never reused
+pub struct WakeId(u64);        // stable handle; survives rescheduling; it is the sequence number
 
 pub struct Wake {
     pub domain: WakeDomain,    // who handles it: World, Action, Timer, Rule, Stepper, …
@@ -66,22 +66,37 @@ pub struct Wake {
 
 impl Timeline {
     pub fn now(&self) -> Tick;
-    pub fn local_now(&self, clock: ClockId) -> Dur;
+    pub fn local_now(&self, clock: ClockId) -> Result<Dur, TimeError>;
 
-    pub fn schedule(&mut self, clock: ClockId, after: Dur, wake: Wake) -> WakeId;
+    pub fn schedule(&mut self, clock: ClockId, after: Dur, wake: Wake) -> Result<WakeId, TimeError>;
     pub fn cancel(&mut self, id: WakeId) -> bool;
-    pub fn remaining(&self, id: WakeId) -> Option<Dur>;         // local time left
-    pub fn rehome(&mut self, id: WakeId, to: ClockId);          // keeps remaining local time
+    pub fn remaining(&self, id: WakeId) -> Option<Dur>;         // local time left, rounded up
+    pub fn rehome(&mut self, id: WakeId, to: ClockId) -> Result<(), TimeError>;   // keeps remaining local time
 
     pub fn peek(&self) -> Option<Tick>;
-    pub fn pop(&mut self, limit: Tick) -> Option<(WakeId, Wake)>;   // advances now
+    pub fn pop(&mut self, limit: Tick) -> Option<(WakeId, Wake)>;   // advances now to the wake-up's due tick
+    pub fn advance_to(&mut self, tick: Tick) -> Tick;               // advances now; never passes a queued wake-up
 
-    pub fn create_clock(&mut self, parent: ClockId, rate: Real) -> ClockId;
-    pub fn set_rate(&mut self, clock: ClockId, rate: Real);
-    pub fn reparent(&mut self, clock: ClockId, parent: ClockId);
-    pub fn destroy_clock(&mut self, clock: ClockId);            // its wake-ups rehome to the parent
+    pub fn create_clock(&mut self, parent: ClockId, rate: Real) -> Result<ClockId, TimeError>;
+    pub fn set_rate(&mut self, clock: ClockId, rate: Real) -> Result<(), TimeError>;
+    pub fn reparent(&mut self, clock: ClockId, parent: ClockId) -> Result<(), TimeError>;
+    pub fn destroy_clock(&mut self, clock: ClockId) -> Result<(), TimeError>;   // its wake-ups and child clocks go to the parent
 }
 ```
+
+The timeline never panics on what it is given. An unknown clock or wake-up,
+a rate that is negative or not finite, an attempt to change, move or destroy
+the universal clock, and a move that would put a clock under itself are
+refused with a `TimeError` that says which, and change nothing.
+
+`pop` returns `None` and leaves `now` where it is when nothing is due by the
+limit. The kernel then calls `advance_to(limit)` to finish an advance to a
+tick. An advance with no limit must not move time when the queue is empty,
+which is why `pop` does not do it.
+
+Read-only queries complete the interface: a clock's `parent`, `rate` and
+`effective_rate`; a wake-up's payload, clock and due tick, and whether it is
+parked; the clocks, and the wake-ups on a clock, in order.
 
 ### 3.2 Ordering
 
@@ -93,8 +108,9 @@ saves and rate changes.
 ### 3.3 Clocks
 
 - A clock has a parent and a rate ≥ 0. Its **effective rate** is the product
-  of rates up to the root.
-- A clock keeps its own local time, which advances at its effective rate.
+  of rates up to the root. The universal clock's rate is always 1.
+- A clock keeps its own local time, which starts at zero when the clock is
+  created and advances at its effective rate.
 - `schedule(clock, after, …)` means "when `after` more local time has passed
   on this clock". The universal due tick is
   `now + ceil(after / effective_rate)`.
@@ -102,10 +118,21 @@ saves and rate changes.
   first bring their local time up to date at the old rate, then every
   wake-up on them gets a new universal due tick from its remaining local
   time. Relative order on one clock is preserved.
+- Setting the rate a clock already has, or the parent it already has,
+  changes nothing.
 - At effective rate 0 a clock's wake-ups are **parked**: they are not in the
   queue and never fire. Raising the rate re-queues them with their remaining
-  local time intact.
-- Rounding may shift a wake-up by at most one tick per rate change.
+  local time intact. A wake-up with no local time left is due now whatever
+  the rate.
+- Destroying a clock moves its wake-ups to its parent, each keeping its
+  remaining local time, and makes its child clocks children of its parent,
+  each keeping its own rate and local time.
+- A wake-up's remaining local time is kept exactly, as a real number of
+  microseconds. Only its universal due tick is rounded, up to a whole tick,
+  and it is worked out afresh at each change. So a wake-up fires within one
+  tick of the exact moment however many times its clocks change. A clock
+  keeps the fraction of a microsecond of its local time for the same reason:
+  bringing it up to date never loses time.
 
 ### 3.4 Which clock a thing is on
 
@@ -140,6 +167,51 @@ A character a thousand times faster than a person takes a third of a
 millisecond over a punch that takes someone else a third of a second.
 Nothing else is needed for scene S3: the pressure wave is on the realm
 clock, the speedster is quicker than it.
+
+### 3.6 Processes
+
+A process (01 §5.1) is plain state that the timeline wakes. Each wake it
+does some work and says what comes next.
+
+```rust
+pub struct ProcessId(u32);     // never reused within one table
+
+pub enum Next {
+    Sleep(Dur),                // wake me after this much local time on my clock
+    Done,                      // I have finished; forget me
+}
+
+impl<P> ProcessTable<P> {      // P is the owning crate's process type, usually an enum
+    pub fn new(domain: WakeDomain) -> Self;
+    pub fn spawn(&mut self, timeline: &mut Timeline, clock: ClockId, first_wake: Dur, process: P)
+        -> Result<ProcessId, TimeError>;
+    pub fn process_of(&self, wake: &Wake) -> Option<ProcessId>;   // which process a popped wake-up is for
+
+    // Run in place, when the work needs nothing that holds the table.
+    pub fn wake(&mut self, timeline: &mut Timeline, id: ProcessId, step: impl FnOnce(&mut P) -> Next)
+        -> Result<Option<Next>, TimeError>;
+
+    // Or take the state out, run it against the state that holds the table, and hand it back.
+    pub fn take(&mut self, timeline: &mut Timeline, id: ProcessId) -> Option<P>;
+    pub fn settle(&mut self, timeline: &mut Timeline, id: ProcessId, process: P, next: Next)
+        -> Result<(), TimeError>;
+
+    pub fn remove(&mut self, timeline: &mut Timeline, id: ProcessId) -> Option<P>;   // force-resolve
+    pub fn rehome(&mut self, timeline: &mut Timeline, id: ProcessId, to: ClockId) -> Result<(), TimeError>;
+}
+```
+
+- The table keeps exactly one wake-up scheduled for each process, carrying
+  the table's domain and the process's id. It is saved and hashed with the
+  rest of the state.
+- `remove` is how a process is **force-resolved** (02 §10.3): its wake-up
+  is cancelled and its state is returned, for its owner to finish at once.
+- A process runs on the clock it was spawned on until `rehome` moves it.
+  The owner rehomes the processes of a clock before destroying the clock.
+  One that is missed still wakes, because the timeline moves its wake-up to
+  the parent clock, but it cannot be put back to sleep on a clock that is
+  gone: the table reports the error and leaves it unscheduled, for the
+  owner to rehome or remove.
 
 ## 4. The simulation kernel
 

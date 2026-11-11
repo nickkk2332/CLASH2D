@@ -1,0 +1,15 @@
+[package]
+name = "clash-world"
+description = "Cosmos, realms, grids, fields, damage, collapse and bodies in flight."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+clash-core.workspace = true
+clash-time.workspace = true
+clash-data.workspace = true
+
+[lints]
+workspace = true

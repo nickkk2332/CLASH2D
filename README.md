@@ -4,9 +4,12 @@ An engine kit: a turn-based ASCII immersive sim and superpower sandbox. Every
 world, creature, power, rule and screen is a JSON mod. The engine provides
 tools; creators provide the results.
 
-**Status: design complete, nothing built.** There is no engine code yet.
-The documents below are the specification that implementation work follows.
-Building starts with package F1 in `docs/plans/world-model.md`.
+**Status: design complete, the build has begun.** The foundation is in
+place: the workspace and its gate (`cargo xtask check`), `clash-core` and
+`clash-time`. Every other crate is a stub. The documents below are the
+specification that implementation work follows, and
+[docs/plans/beta.md](docs/plans/beta.md) says what is being built and in
+what order.
 
 ## Documents
 

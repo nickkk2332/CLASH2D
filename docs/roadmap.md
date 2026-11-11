@@ -2,7 +2,8 @@
 
 What has been designed and in what order to build it. Every subsystem has
 a specification and an implementation plan under `docs/plans/`. The design
-is complete; no engine code exists yet.
+is complete and building has begun: [plans/beta.md](plans/beta.md) records
+what has landed.
 
 Document numbers are stable. Other documents refer to them by number.
 
@@ -47,8 +48,9 @@ Document numbers are stable. Other documents refer to them by number.
 
 ## What remains
 
-Nothing remains to design before building can start. The first package is
-F1 in [plans/world-model.md](plans/world-model.md).
+Nothing remained to design before building could start. The foundation
+(packages F1 to F3 in [plans/world-model.md](plans/world-model.md)) is
+built; the waves that follow are in [plans/beta.md](plans/beta.md).
 
 Each specification ends with its open questions. All have been reviewed
 with the project owner and the answers written back into the

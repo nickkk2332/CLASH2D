@@ -68,7 +68,7 @@ Each of these keeps its typed stub and a note where the beta stops.
 
 | Wave | Work | Status |
 |------|------|--------|
-| B0 | Foundation: F1, F2, F3 | todo |
+| B0 | Foundation: F1, F2, F3 | done |
 | B1 | Data v0 and diagnostics (F4, P1); expressions (X1 to X3); world storage (W1 to W5); frames, themes, terminal frontend (U1, U2) | todo |
 | B2 | Edits, occupancy, queries (W6, W7, W18); tracts, tickets, persistence (W8 to W10); data merging, profiles, typed loading, settings (P2 to P4, P6); expression fields (X4); map format and placing (WG1, WG2); toolkit layout and widgets (U6a) | todo |
 | B3 | Kernel (K1 to K4); damage and collapse (W12, W13); bodies and releases (W14, W15); fields (W16); ground and tracts (WG3, WG4); world viewer (W11) | todo |
@@ -84,4 +84,6 @@ The wave list is a plan, not a promise. It is revised here as work lands.
 ## Log
 
 Newest first. One line per merge: wave, what landed, what is stubbed.
+
+- B0: the workspace with every crate of 01 §3, the lints and `cargo xtask check` (F1); `clash-core` (F2); `clash-time` with the timeline, clocks and process table (F3). Stubbed: every other crate is a doc comment and its dependency edges; the size-literal check waits for W1; no benchmarks.
 

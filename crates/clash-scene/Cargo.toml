@@ -1,0 +1,13 @@
+[package]
+name = "clash-scene"
+description = "The presentation model: camera, interface state and the cutscene director."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+clash-sim.workspace = true
+
+[lints]
+workspace = true

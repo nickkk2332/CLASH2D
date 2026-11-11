@@ -24,9 +24,9 @@ Section references such as "02 §14" point into those documents.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| F1 | Workspace and gates | S | — | todo |
-| F2 | `clash-core` | M | F1 | todo |
-| F3 | `clash-time` | M | F2 | todo |
+| F1 | Workspace and gates | S | — | done |
+| F2 | `clash-core` | M | F1 | done |
+| F3 | `clash-time` | M | F2 | done |
 | F4 | `clash-data` v0 | L | F2 | todo |
 | W1 | Dimensions and coordinates | S | F2 | todo |
 | W2 | Paletted storage | S | F2 | todo |
@@ -118,6 +118,14 @@ Done when
 - The change description shows clippy rejecting a hash-map iteration and an
   `f64::sin` call placed in `clash-world`.
 
+As built (decision D-250). The workspace holds every crate of 01 §3, the
+ones not yet started as compiling stubs with their dependency edges, so
+that later packages fill a crate in rather than add one. The disallow lists
+are in the root `clippy.toml`; the frontends, `clash-app`, `clash-tools`
+and `xtask` opt out with a `clippy.toml` of their own. The check that size
+literals appear only in `clash_world::dims` is not in `cargo xtask check`
+yet: W1 adds it with the module.
+
 ### F2 — `clash-core`
 
 **Spec** 01 §4 · **Size** M
@@ -140,6 +148,12 @@ Done when
   the hasher pass on CI. These vectors are the cross-platform contract.
 - `LookupMap` cannot be iterated (shown by a compile-fail test).
 - Property tests cover vector and rotation algebra.
+
+As built (decisions D-244 to D-248). `Rot4` is the four quarter-turns and
+`Turn` adds the mirror (10 §3.3). The positional hash takes a typed
+`HashDomain`. `Value` is `#[non_exhaustive]` so that document 05 can add
+kinds. A `VarMap` is keyed by `VarKey`, a qualified name. Parsing of
+quantities and durations from text is left to `clash-data`.
 
 ### F3 — `clash-time`
 
@@ -164,6 +178,15 @@ Done when
 - A property test drives random schedule, cancel, rate and reparent
   operations against a naive reference model.
 - Saving and loading mid-run preserves pop order.
+
+As built (decision D-249). The interface is in 03 §3.1 and §3.6. Besides
+the naive model, a second property test counts time one tick at a time in
+integers and requires the timeline to agree to the tick. No benchmark is
+committed: the budgets of 03 §15 are measured by W23, which the beta plan
+leaves for later. A rough timing on the build machine gave about 250 ns
+for schedule plus pop with 1,000 wake-ups pending and 340 ns with 10,000
+(target 300 ns), and about 135 µs for a rate change on a clock with 1,000
+wake-ups (target 200 µs).
 
 ### F4 — `clash-data` v0
 

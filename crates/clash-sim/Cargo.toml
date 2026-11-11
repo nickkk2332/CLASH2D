@@ -1,0 +1,15 @@
+[package]
+name = "clash-sim"
+description = "Entities, actions, combat, powers, AI, the rule runtime and the cold simulation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+clash-world.workspace = true
+clash-gen.workspace = true
+clash-expr.workspace = true
+
+[lints]
+workspace = true

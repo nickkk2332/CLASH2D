@@ -1,0 +1,13 @@
+[package]
+name = "clash-save"
+description = "The save container, versioning and migration."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+clash-sim.workspace = true
+
+[lints]
+workspace = true

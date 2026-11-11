@@ -1,0 +1,92 @@
+# The determinism contract of docs/01-architecture.md section 4, as lints.
+#
+# These lists apply to every crate in the workspace that does not carry a
+# clippy.toml of its own. The simulation crates (clash-core, clash-time,
+# clash-data, clash-expr, clash-world, clash-gen, clash-sim) must never opt
+# out. A crate outside the simulation that needs the wall clock (the
+# frontends, clash-app, clash-tools, xtask) carries a clippy.toml beside its
+# Cargo.toml, which replaces this one for that crate.
+#
+# Inside the simulation, one place may use a disallowed item behind a local
+# `#[allow(..., reason = "...")]`: the wrapper that makes it safe. Today that
+# is `clash_core::LookupMap`, which wraps a hash map and offers no iteration.
+
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "iteration order is not deterministic; use clash_core::LookupMap (no iteration), BTreeMap or a sorted Vec (01 §4)" },
+    { path = "std::collections::HashSet", reason = "iteration order is not deterministic; use BTreeSet or a sorted Vec (01 §4)" },
+    { path = "std::hash::RandomState", reason = "seeded from OS randomness; simulation state must not depend on it (01 §4)" },
+    { path = "std::hash::DefaultHasher", reason = "its algorithm is not fixed across Rust releases; use clash_core::StateHasher (01 §4)" },
+    { path = "std::time::Instant", reason = "the simulation never reads the wall clock; use clash_core::Tick (01 R5)" },
+    { path = "std::time::SystemTime", reason = "the simulation never reads the wall clock; use clash_core::Tick (01 R5)" },
+]
+
+disallowed-methods = [
+    # Wall clock.
+    { path = "std::time::Instant::now", reason = "the simulation never reads the wall clock; use clash_core::Tick (01 R5)" },
+    { path = "std::time::SystemTime::now", reason = "the simulation never reads the wall clock; use clash_core::Tick (01 R5)" },
+
+    # Randomness that is not a saved stream or a positional hash.
+    { path = "std::hash::RandomState::new", reason = "seeded from OS randomness; use clash_core::RngStreams or clash_core::pos_hash (01 §4)" },
+    { path = "rand::rng", reason = "thread-local randomness; use clash_core::RngStreams or clash_core::pos_hash (01 §4)", allow-invalid = true },
+    { path = "rand::thread_rng", reason = "thread-local randomness; use clash_core::RngStreams or clash_core::pos_hash (01 §4)", allow-invalid = true },
+    { path = "rand::random", reason = "thread-local randomness; use clash_core::RngStreams or clash_core::pos_hash (01 §4)", allow-invalid = true },
+    { path = "getrandom::getrandom", reason = "OS randomness; use clash_core::RngStreams or clash_core::pos_hash (01 §4)", allow-invalid = true },
+    { path = "getrandom::fill", reason = "OS randomness; use clash_core::RngStreams or clash_core::pos_hash (01 §4)", allow-invalid = true },
+
+    # Float functions whose results differ between platforms and C libraries.
+    # `+ - * /`, `sqrt`, `abs`, `floor`, `ceil`, `round` and `trunc` are exact
+    # everywhere and are not listed.
+    { path = "f64::sin", reason = "not bit-identical across platforms; use clash_core::Real::sin (01 §4)" },
+    { path = "f64::cos", reason = "not bit-identical across platforms; use clash_core::Real::cos (01 §4)" },
+    { path = "f64::tan", reason = "not bit-identical across platforms; use clash_core::Real::tan (01 §4)" },
+    { path = "f64::sin_cos", reason = "not bit-identical across platforms; use clash_core::Real::sin and Real::cos (01 §4)" },
+    { path = "f64::asin", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::acos", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::atan", reason = "not bit-identical across platforms; use clash_core::Real::atan2 (01 §4)" },
+    { path = "f64::atan2", reason = "not bit-identical across platforms; use clash_core::Real::atan2 (01 §4)" },
+    { path = "f64::sinh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::cosh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::tanh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::asinh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::acosh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::atanh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f64::exp", reason = "not bit-identical across platforms; use clash_core::Real::exp (01 §4)" },
+    { path = "f64::exp2", reason = "not bit-identical across platforms; use clash_core::Real::powf (01 §4)" },
+    { path = "f64::exp_m1", reason = "not bit-identical across platforms; use clash_core::Real::exp (01 §4)" },
+    { path = "f64::ln", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f64::ln_1p", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f64::log", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f64::log2", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f64::log10", reason = "not bit-identical across platforms; use clash_core::Real::log10 (01 §4)" },
+    { path = "f64::powf", reason = "not bit-identical across platforms; use clash_core::Real::powf (01 §4)" },
+    { path = "f64::powi", reason = "not bit-identical across platforms; use clash_core::Real::powi (01 §4)" },
+    { path = "f64::cbrt", reason = "not bit-identical across platforms; use clash_core::Real::cbrt (01 §4)" },
+    { path = "f64::hypot", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+
+    { path = "f32::sin", reason = "not bit-identical across platforms; use clash_core::Real::sin (01 §4)" },
+    { path = "f32::cos", reason = "not bit-identical across platforms; use clash_core::Real::cos (01 §4)" },
+    { path = "f32::tan", reason = "not bit-identical across platforms; use clash_core::Real::tan (01 §4)" },
+    { path = "f32::sin_cos", reason = "not bit-identical across platforms; use clash_core::Real::sin and Real::cos (01 §4)" },
+    { path = "f32::asin", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::acos", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::atan", reason = "not bit-identical across platforms; use clash_core::Real::atan2 (01 §4)" },
+    { path = "f32::atan2", reason = "not bit-identical across platforms; use clash_core::Real::atan2 (01 §4)" },
+    { path = "f32::sinh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::cosh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::tanh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::asinh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::acosh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::atanh", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+    { path = "f32::exp", reason = "not bit-identical across platforms; use clash_core::Real::exp (01 §4)" },
+    { path = "f32::exp2", reason = "not bit-identical across platforms; use clash_core::Real::powf (01 §4)" },
+    { path = "f32::exp_m1", reason = "not bit-identical across platforms; use clash_core::Real::exp (01 §4)" },
+    { path = "f32::ln", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f32::ln_1p", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f32::log", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f32::log2", reason = "not bit-identical across platforms; use clash_core::Real::ln (01 §4)" },
+    { path = "f32::log10", reason = "not bit-identical across platforms; use clash_core::Real::log10 (01 §4)" },
+    { path = "f32::powf", reason = "not bit-identical across platforms; use clash_core::Real::powf (01 §4)" },
+    { path = "f32::powi", reason = "not bit-identical across platforms; use clash_core::Real::powi (01 §4)" },
+    { path = "f32::cbrt", reason = "not bit-identical across platforms; use clash_core::Real::cbrt (01 §4)" },
+    { path = "f32::hypot", reason = "not bit-identical across platforms; use clash_core::Real (01 §4)" },
+]

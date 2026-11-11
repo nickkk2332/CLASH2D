@@ -97,8 +97,14 @@ mechanical and enforced by lints and tests.
   IEEE-exact on the supported targets (x86-64, aarch64). Anything else
   (`sin`, `pow`, `exp`, `ln`, …) goes through wrappers backed by the pure-Rust
   `libm` crate. Calling the `std` float functions directly is denied by lint.
-- `Real` never holds NaN. Constructors and division check and return an error
-  or a defined fallback.
+- `Real` never holds NaN. Where IEEE arithmetic would give NaN (`0/0`,
+  `∞ − ∞`, the square root of a negative number), the plain operators and
+  functions give zero: that is the defined fallback. `Real::new` and the
+  `try_` functions return an error instead. Infinities are allowed. `Real`
+  compares as IEEE does, so the two zeros are equal, and with no NaN the
+  order is total.
+- A `Real` survives saving and loading bit for bit. For JSON this needs
+  `serde_json` built with `float_roundtrip`, which the workspace turns on.
 - The energy range the engine must handle is about 1 J to 10^33 J. `f64`
   covers this with margin. Do not introduce a logarithmic "power level"
   representation in the engine; a derived tier for UI and AI is fine.
@@ -109,14 +115,21 @@ mechanical and enforced by lints and tests.
   `(seed, domain, coordinates, salt)` seeds a local generator. The result
   depends only on where and what, never on when or in what order.
 - *Stream* randomness for simulation: named generator streams stored in
-  simulation state and saved. Systems draw from their own stream.
+  simulation state and saved. Systems draw from their own stream. A
+  stream's seed depends only on the simulation's seed and the stream's
+  name, never on which other streams exist or when it was first used.
 - No thread-local or OS randomness anywhere in the simulation.
+- The algorithms are fixed: xoshiro256\*\* seeded through SplitMix64 for
+  the generator, rounds of the SplitMix64 mixer for the positional hash,
+  and FNV-1a for turning a domain or stream name into a number.
 
 **Ordering**
 
 - Simulation state never iterates a hash map. Use `Vec`, `BTreeMap`,
   `IndexMap`, or `LookupMap` (a hash map wrapper in `clash-core` that offers
-  lookup, insert and remove but no iteration).
+  lookup, insert and remove but no iteration). So that what it holds can
+  still be saved, hashed and now and then swept, a `LookupMap` can hand out
+  its contents sorted by key, and it serialises and hashes in that order.
 - Simultaneous events are ordered by `(tick, sequence number)`.
 - Parallelism is allowed only where the result is independent of scheduling:
   pure generation of tracts, compression, read-only queries, and two-phase
@@ -124,11 +137,29 @@ mechanical and enforced by lints and tests.
 
 **Hashing**
 
-- Every state type implements `StateHash`, feeding a stable hasher in a fixed
-  order. The simulation exposes a total hash and per-subsystem hashes so a
-  divergence can be localised.
+- Every state type implements the `StateHash` trait, feeding a stable hasher
+  in a fixed order. The result is a `Hash128`. The simulation exposes a
+  total hash and per-subsystem hashes so a divergence can be localised.
+- The hasher is fixed: MurmurHash3 (`x64_128`, seed 0) over the bytes fed
+  to it. Integers are fed little-endian at their own width, anything of
+  variable length is fed its length first, and a `Real` is fed by its exact
+  bits.
 - Golden-hash tests run scripted scenarios and compare hashes. A change that
   alters a golden hash must say why in its description.
+
+**Enforcement**
+
+- The workspace's `clippy.toml` disallows std hash maps and sets, the std
+  float functions whose results differ between platforms, `std::time` and
+  thread-local randomness. `cargo xtask check` denies warnings, so a use of
+  any of them does not pass. A crate outside the simulation (section 2)
+  that needs the wall clock carries a `clippy.toml` of its own, which
+  replaces the workspace's for that crate. Inside the simulation, only a
+  wrapper that makes a disallowed item safe may allow it, with a reason:
+  `LookupMap` is the one such place.
+- Reference vectors for the `Real` functions, the generator, the positional
+  hash and the hasher are committed as tests in `clash-core`. They are the
+  cross-platform contract: a vector is never changed to make a test pass.
 
 ## 5. Time
 
@@ -191,7 +222,7 @@ impl Sim {
     pub fn advance(&mut self, limit: AdvanceLimit) -> Advance;
     pub fn drain_events(&mut self) -> Vec<SimEvent>;
     pub fn view(&self) -> SimView<'_>;
-    pub fn state_hash(&self) -> StateHash;
+    pub fn state_hash(&self) -> Hash128;
 }
 ```
 

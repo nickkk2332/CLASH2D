@@ -1,0 +1,50 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+# The arrows in docs/01-architecture.md section 3 are the only dependency
+# edges allowed between these crates. A lower crate never depends on a higher
+# one.
+[workspace.dependencies]
+clash-core = { path = "crates/clash-core" }
+clash-time = { path = "crates/clash-time" }
+clash-data = { path = "crates/clash-data" }
+clash-expr = { path = "crates/clash-expr" }
+clash-world = { path = "crates/clash-world" }
+clash-gen = { path = "crates/clash-gen" }
+clash-sim = { path = "crates/clash-sim" }
+clash-save = { path = "crates/clash-save" }
+clash-scene = { path = "crates/clash-scene" }
+clash-front-term = { path = "crates/clash-front-term" }
+clash-front-window = { path = "crates/clash-front-window" }
+
+# External crates. Each is listed in docs/01-architecture.md section 13.
+# Adding one that is not listed there needs an entry in docs/decisions.md.
+libm = "0.2"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+# `float_roundtrip` is required, not optional: without it serde_json may read
+# a float back one unit in the last place away from what it wrote, and a
+# `Real` that passed through JSON would no longer be bit-identical (01 R1, R7).
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+# Tests only.
+proptest = { version = "1", default-features = false, features = ["std"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+# The determinism contract (docs/01-architecture.md section 4). What is
+# disallowed, and how a crate outside the simulation opts out, is in
+# clippy.toml.
+[workspace.lints.clippy]
+disallowed_types = "deny"
+disallowed_methods = "deny"

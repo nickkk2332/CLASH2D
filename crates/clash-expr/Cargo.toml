@@ -1,0 +1,13 @@
+[package]
+name = "clash-expr"
+description = "The expression language: parse, check, compile, evaluate."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+clash-core.workspace = true
+
+[lints]
+workspace = true
