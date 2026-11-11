@@ -126,7 +126,7 @@ const PURPOSE_WARP_X: u64 = 5;
 const PURPOSE_WARP_Y: u64 = 6;
 const PURPOSE_WARP_Z: u64 = 7;
 /// Where the purpose sits in a salt.
-const PURPOSE_SHIFT: u32 = 32;
+const PURPOSE_SHIFT: u32 = u32::BITS;
 
 const fn salt(purpose: u64, octave: u32) -> u64 {
     (purpose << PURPOSE_SHIFT) | octave as u64
