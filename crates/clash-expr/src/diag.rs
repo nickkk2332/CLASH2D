@@ -214,6 +214,12 @@ pub mod codes {
     /// Run time: a random function was called with no stream to draw
     /// from.
     pub const RUN_NO_RANDOM: Code = Code("X907");
+    /// Run time: functions defined in data called each other deeper than
+    /// calls may nest.
+    pub const RUN_CALL_DEPTH: Code = Code("X908");
+    /// Run time: something was asked for that the engine does not offer
+    /// yet.
+    pub const RUN_UNAVAILABLE: Code = Code("X909");
 
     /// Every code with its one-line explanation, in order of code.
     pub const ALL: &[(Code, &str)] = &[
@@ -346,6 +352,14 @@ pub mod codes {
         (
             RUN_NO_RANDOM,
             "run time: a random function was called with no stream",
+        ),
+        (
+            RUN_CALL_DEPTH,
+            "run time: functions called each other deeper than calls may nest",
+        ),
+        (
+            RUN_UNAVAILABLE,
+            "run time: something was asked for that the engine does not offer yet",
         ),
     ];
 }

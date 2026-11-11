@@ -36,7 +36,7 @@ start while the world model is being built.
 | X1 | Expression parser | M | F2 | done |
 | X2 | Registry, contexts, type checking | L | X1, F4 | done |
 | X3 | Bytecode and evaluation | M | X2 | beta |
-| X4 | Expression fields, functions, variables | M | X3, P4 | todo |
+| X4 | Expression fields, functions, variables | M | X3, P4 | beta |
 | K1 | Simulation skeleton and kernel entities | M | W7, F3 | todo |
 | K2 | Advance, commands, input log | M | K1, W9 | todo |
 | K3 | Events and hooks | M | K2, X2 | todo |
@@ -339,6 +339,24 @@ Done when
   its context fails to load, pointing at the name.
 - Functions call functions; recursion past the depth limit is an error.
 - A random function cannot be used where purity is required.
+
+As built (decisions D-330 to D-336), in `clash_data::expr`. Beta: every
+item above is built and tested in `crates/clash-data/tests/expr.rs`, with
+the map variables of the review addition, the mind context, the
+conversion of the compiler's diagnostics to group `06` and of run-time
+warnings to their definition and JSON path. A definition type states the
+scope of each field in `Def::compile`; the registry is given to the
+loader with `Loader::expr_registry`; a crate adds what its own
+definitions declare with `DefTypes::add_registry_step`. Stubbed: queries,
+so a value source over a query, `{ "exists": query }` and `{ "run": … }`
+are read, kept and give null with a run-time warning (K6); `Effects`
+fields (K5); the reactive-context check (abilities A1). Which queries a
+character may make is not decided: a function whose value is a query
+counts as not safe for belief. The test script `who_did_it` and the lint
+warning for another's `.name` in a message are K9's. `function` and
+`variable` have no placeholder, so a lenient load stops at a broken one.
+The application and the tools must call `clash_data::expr::register_defs`
+beside the other crates' functions of that name.
 
 ## Kernel
 

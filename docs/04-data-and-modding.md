@@ -81,6 +81,7 @@ a warning. Files and directories whose names start with a dot are not read.
 | `conflicts` | Mods that may not be loaded alongside. |
 | `imports` | Namespaces searched for bare references, in order (section 4.3). Defaults to the ids in `requires`. |
 | `experimental` | Experimental features this mod opts in to (section 8.4). Empty by default. |
+| `strict_vars` | `true` makes a variable that no definition declares an error in everything this mod writes, where it is otherwise a warning (05 §6). |
 
 Only `id` is required. `name` defaults to the id and `version` to `0`. An
 entry of `requires` is a mod id, or an object with `id` and `version`. A
@@ -366,7 +367,7 @@ knows the current path and source location at every point.
 | `StateRef` | An element state such as `"wall@brick#open"` (02 §5.1) |
 | `Tag`, `TagSet` | Free-form strings; interned |
 | `Text` | Player-facing text. May contain `{expression}` templates (05 §4.6) |
-| `Expr<T>` | A literal of type `T`, an expression string, or `{ "expr": "…" }` (05 §7) |
+| `Expr<T>` | A literal of type `T`, an expression string, `{ "expr": "…" }` or a value source (05 §7). `T` is `Number`, `Int`, `Bool`, `Str`, `Any` or `IdOf<D>` for the id of a definition of type `D` |
 | `Cond` | A condition (05 §7.2) |
 | `Effects` | A list of effects (05 §10) |
 | `Inline<T>` | An id, or an inline definition of type `T` |
@@ -475,6 +476,71 @@ its definition is read, through the same lookup a `Ref` uses.
 an expression that refers to something unavailable there fails at load, not
 in play.
 
+**How a field declares its scope.** An expression field holds what was
+written, where it was written and its JSON path. Its definition type
+implements `Def::compile`, which the loader calls once on each definition
+after every definition has been read. There the type builds a **scope**
+for each field and hands the field over:
+
+```rust
+fn compile(&mut self, cx: &mut CompileCx<'_>) {
+    let scope = Scope::new().subject("self", "entity").subject("here", "loc");
+    cx.compile(&mut self.when, &scope);                 // a Cond
+    cx.compile(&mut self.energy, &scope);               // an Expr<Number>
+    cx.compile(&mut self.shown, &scope.clone().pure()); // what a screen shows
+}
+```
+
+A scope states, in order: the subjects bound there with their kinds; the
+locals with their types; the event whose fields can be read; whether the
+value must be pure; whether it is a mind context, and which subject is
+the character whose mind it is (05 §7.3); and, where the Rust type does
+not say, the type the value must have. Kinds and types are named as a
+mod writes them (`"entity"`, `"real"`, `"id<material>"`, `"entity?"`),
+because the crate that owns a definition type need not know the
+registry's numbers. Subjects and locals take slots in the order they are
+added, which is the order their values are supplied in when the field is
+evaluated. `cx.compile` takes a field, or an `Option`, a list or a map of
+them. A field that is not handed over is not compiled: it evaluates to
+null and a text renders as written.
+
+Bare names in an expression (functions, variables, ids) are looked up in
+the namespace of the mod that wrote the string, then its imports, then
+`engine` (section 4.3), wherever patching and inheritance carried the
+value.
+
+**The registry.** Expressions are checked against the registry of 05
+§5.3. The loader is given one already filled with the engine's kinds of
+subject, properties, functions, events and verbs
+(`Loader::expr_registry`); the simulation fills it. Before compiling, the
+loader adds to a copy of it what the mods define:
+
+1. the ids of every definition type, so that a text compared with an id
+   is checked and a misspelling is an error with the closest id;
+2. whatever a crate's own definitions declare, through a step the crate
+   adds with `DefTypes::add_registry_step` (the events mods define, for
+   one);
+3. `variable` declarations (05 §6);
+4. `function` definitions (05 §12), by signature first so that bodies may
+   call each other in any order.
+
+`function` and `variable` are definition types of the data layer itself,
+registered with `clash_data::expr::register_defs`. The finished registry,
+the compiled functions and the variable declarations are part of `Defs`.
+
+**Diagnostics.** What the expression compiler reports is given the form
+of section 8.2: a code of group `06`, the file, the line and the column
+inside the string with its escapes accounted for, the definition and the
+JSON path. An error breaks the definition it is in.
+
+**Evaluating.** A compiled field is evaluated against a host, which
+supplies the values of subjects and locals and answers properties
+(05 §5.3). A `Runner` holds what evaluation reuses, and
+`runner.on(&defs, &mut host)` gives the evaluator a field takes:
+`Expr::eval` gives the typed value, `Cond::holds` a boolean and
+`Text::render` the text. The evaluator runs the functions mods define
+and passes everything else to the host.
+
 ## 8. Validation and diagnostics
 
 ### 8.1 Stages
@@ -486,9 +552,9 @@ in play.
 | Merge | Bad `extend`, `delete`, `scale`, `add`; inheritance cycles; type mismatch with parent |
 | Typed load | Unknown keys; wrong types; bad units; missing required fields |
 | Link | Unknown references |
-| Compile | Expression syntax and type errors; unknown verbs, events, properties, variables |
+| Compile | Expression syntax and type errors; unknown verbs, events, properties, functions and ids; undeclared variables; purity and belief; malformed functions and variable declarations (section 7.3) |
 | Semantic | Each type's own `validate`: ranges, mutually exclusive fields, limits such as 65,536 states |
-| Cross | Whole-set checks: unreachable abstract definitions, references to obsolete definitions, shadowed imports, undeclared variables, disputed fields (section 6.3) |
+| Cross | Whole-set checks: unreachable abstract definitions, references to obsolete definitions, shadowed imports, disputed fields (section 6.3) |
 | Build | What a crate finds when it builds its own tables from the loaded definitions: the world's references and ranges, a theme's colours, a screen's styles, figures and art |
 
 A stage runs for every definition that survived the previous one. Loading
@@ -544,6 +610,13 @@ definition carries, `04` merging, `05` references, `06` expressions, `07` a
 type's own checks, `08` whole-set checks, `09` lenient loading. A crate that
 adds a stage declares its codes with their explanations in a table of its
 own, which `explain` and the reference read.
+
+The compile stage has such a table. Each code of the expression compiler
+(05 §14) has a code in group `06`: `060` and `061` for syntax, `062` and
+`063` for names, `064` for types, `066` for purity and belief. `067` is
+what the stage finds itself (a bad type name, a function that always
+calls itself, a malformed function, variable or value source), and `069`
+stands for what goes wrong while an expression runs.
 
 ### 8.3 Outcome
 
@@ -602,10 +675,13 @@ type, its JSON name, its validation function and its documentation.
 A type implements the `Def` trait: its dense id type and its JSON name, and
 where it has them its documentation, the defaults a mod may `scale` or
 `add` to (section 6.1), a `finish` that resolves what plain reading cannot,
-a `validate`, a placeholder (section 8.3), the engine's own definitions
-(section 4.4) and the experimental feature it is part of. Each crate
-offers one function that registers its types in a `DefTypes`, and may add
-whole-set checks to it. The application and the tools call each crate's
+a `compile` that says what is in scope in each expression field
+(section 7.3), a `validate`, a placeholder (section 8.3), the engine's own
+definitions (section 4.4) and the experimental feature it is part of. Each
+crate offers one function that registers its types in a `DefTypes`, and may
+add whole-set checks and registry steps (section 7.3) to it. The data layer
+has such a function itself, for `function` and `variable`
+(`clash_data::expr::register_defs`). The application and the tools call each crate's
 function in turn and load with the result, so both read mods with the same
 types. A crate that keeps tables of its own, as the world does, builds
 them from the `Defs` with the loader's dense ids (section 8.1, the build

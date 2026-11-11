@@ -27,6 +27,7 @@ use crate::defs::{
     StageEntry, StageEnv, TagTable,
 };
 use crate::diag::{DefLabel, Diagnostic, Diagnostics, closest, code, did_you_mean};
+use crate::expr::{ExprRegistry, StageInput, compile_stage};
 use crate::json::{Limits, Node, NodeKind, Num, parse_json};
 use crate::merge::{Finished, Key, LoadedMod, MergeCx, ModTable, ParsedFile, collect, merge};
 use crate::mods::{
@@ -104,6 +105,7 @@ pub struct Loader<'t> {
     memory_profiles: Vec<(String, String)>,
     lenient: bool,
     limits: Limits,
+    registry: Option<Arc<ExprRegistry>>,
 }
 
 /// Which mods to load.
@@ -126,7 +128,24 @@ impl<'t> Loader<'t> {
             memory_profiles: Vec::new(),
             lenient: false,
             limits: Limits::default(),
+            registry: None,
         }
+    }
+
+    /// Gives the loader the registry expressions are compiled against
+    /// (04 §7.3; 05 §5.3): the kinds of subject, properties, functions,
+    /// events and verbs of the engine, which the simulation registers.
+    /// The loader works on a copy, to which it adds what the mods
+    /// define: the ids of every definition type, `function` definitions
+    /// and `variable` declarations. The finished registry is in
+    /// [`Defs::expr_registry`].
+    ///
+    /// A loader that is given none uses the built-in functions of the
+    /// expression language alone, which is enough for definitions that
+    /// hold no expressions about subjects.
+    pub fn expr_registry(mut self, registry: &ExprRegistry) -> Loader<'t> {
+        self.registry = Some(Arc::new(registry.clone()));
+        self
     }
 
     /// Adds a directory that mods are searched for in: each of its
@@ -760,6 +779,22 @@ impl<'t> Loader<'t> {
         }
         drop(link);
 
+        // The compile stage (04 §8.1): expressions, conditions and text
+        // templates, against the registry completed from the mods.
+        let exprs = compile_stage(
+            &StageInput {
+                base: self.registry.as_deref(),
+                types: self.types,
+                ids: &ids,
+                sources: &sources,
+                mods: &table,
+                tags: &tags,
+                lenient: self.lenient,
+            },
+            &mut staged,
+            &mut diagnostics,
+        );
+
         // Semantic and cross stages, for what survived (04 §8.1).
         {
             let view = DefsView {
@@ -822,6 +857,7 @@ impl<'t> Loader<'t> {
                     profile,
                     trees,
                     experimental: experimental.into_iter().collect(),
+                    exprs,
                 })));
             }
         }

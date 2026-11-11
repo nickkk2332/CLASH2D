@@ -13,8 +13,10 @@
 //! | [`Ref<T>`] | The id of a definition of type `T`, resolved to its dense id |
 //! | [`Inline<T>`] | An id, or a definition of type `T` written in place |
 //! | [`Tag`], [`TagSet`] | Free-form strings, interned |
-//! | [`Text`] | Player-facing text |
+//! | [`Text`] | Player-facing text, with `{expression}` templates |
+//! | [`Expr<T>`](crate::Expr), [`Cond`](crate::Cond) | An expression, a condition (see [`crate::expr`]) |
 //! | [`Located<T>`] | Any value, together with where it was written |
+//! | a type read with [`by_site`] | A value that needs its place and its JSON path |
 //! | [`Gated<F, T>`] | A field that is an experimental feature (04 §8.4) |
 //! | a type read with [`by_kind`] | More than one shape: an id or an object, a number or a string |
 //!
@@ -32,7 +34,7 @@ use serde::ser::{Serialize, Serializer};
 
 use crate::de::{
     GATED_MAGIC, INLINE_MAGIC, KIND_FIELDS, KIND_MAGIC, LOCATED_FIELDS, LOCATED_MAGIC,
-    MICROS_MAGIC, REF_MAGIC, TAG_MAGIC,
+    MICROS_MAGIC, REF_MAGIC, SITE_FIELDS, SITE_MAGIC, TAG_MAGIC,
 };
 use crate::defs::Def;
 use crate::source::{FileId, Span};
@@ -782,19 +784,116 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Located<T> {
     }
 }
 
+/// Where a value was written: its place in a file and its JSON path in
+/// the definition that holds it (04 §8.2).
+///
+/// A field that is compiled after loading keeps one, so that what the
+/// compiler finds can be reported with file, line, column, definition
+/// and path. Read one with [`by_site`].
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Site {
+    /// Where the value was written, if it was read from a file.
+    pub span: Option<Span>,
+    /// The JSON path inside the definition: `phases.windup.damage`.
+    /// Empty at the definition's top level.
+    pub path: String,
+}
+
+impl Site {
+    /// The site of a value inside this one, under `key`.
+    #[must_use]
+    pub fn child(&self, key: &str) -> Site {
+        let path = if self.path.is_empty() {
+            key.to_owned()
+        } else {
+            format!("{}.{key}", self.path)
+        };
+        Site {
+            span: self.span,
+            path,
+        }
+    }
+}
+
+/// A field type that needs to know where it was written and at what
+/// JSON path, as well as what kind of JSON it was given. Implement this
+/// and let `Deserialize` call [`by_site`]. The expression fields
+/// ([`Expr`](crate::Expr), [`Cond`](crate::Cond), [`Text`]) are read
+/// this way.
+pub trait FromSite<'de>: Sized {
+    /// Builds the value, given where it is and what kind of JSON is
+    /// there.
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Self, A::Error>;
+}
+
+struct BySiteVisitor<T>(PhantomData<fn() -> T>);
+
+impl<'de, T: FromSite<'de>> Visitor<'de> for BySiteVisitor<T> {
+    type Value = T;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a value read by the mod loader")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<T, A::Error> {
+        let missing =
+            || <A::Error as de::Error>::custom("this field can only be read by the mod loader");
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        let file = map.next_value::<u32>()?;
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        let start = map.next_value::<u32>()?;
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        let end = map.next_value::<u32>()?;
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        let path = map.next_value::<String>()?;
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        let kind = map.next_value::<Kind>()?;
+        map.next_key::<IgnoredAny>()?.ok_or_else(missing)?;
+        let site = Site {
+            span: Some(Span::new(FileId(file), start, end)),
+            path,
+        };
+        T::from_site(site, kind, KindValue { map: &mut map })
+    }
+}
+
+/// Reads a field that needs its [`Site`], keeping positions. Like
+/// [`by_kind`], with the place and the JSON path as well.
+pub fn by_site<'de, T: FromSite<'de>, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<T, D::Error> {
+    deserializer.deserialize_struct(SITE_MAGIC, SITE_FIELDS, BySiteVisitor(PhantomData))
+}
+
 /// Player-facing text (04 §7.1).
 ///
 /// All player-facing strings use `Text`, so that a translation layer can
 /// be added later without touching definitions. A text may contain
 /// `{expression}` templates (05 §4.6).
 ///
-/// This is the loaded form only: the string as written and where it was
-/// written. Templates are compiled by the expression stage, which reads
-/// [`Text::raw`] and reports errors through [`Text::span`].
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
+/// A text holds the string as written, where it was written and, once
+/// its definition has compiled it, the compiled template. A definition
+/// type compiles its texts in [`Def::compile`], saying what is in scope
+/// there:
+///
+/// ```ignore
+/// fn compile(&mut self, cx: &mut CompileCx<'_>) {
+///     let scope = Scope::new().subject("self", "entity");
+///     cx.compile(&mut self.log, &scope);
+/// }
+/// ```
+///
+/// and renders one with [`Text::render`]. A text that was never compiled
+/// renders as it was written.
+#[derive(Clone, Debug, Default)]
 pub struct Text {
-    raw: String,
-    span: Option<Span>,
+    pub(crate) raw: String,
+    pub(crate) site: Site,
+    pub(crate) compiled: Option<clash_expr::CompiledText>,
 }
 
 impl Text {
@@ -802,7 +901,8 @@ impl Text {
     pub fn plain(raw: impl Into<String>) -> Text {
         Text {
             raw: raw.into(),
-            span: None,
+            site: Site::default(),
+            compiled: None,
         }
     }
 
@@ -813,14 +913,34 @@ impl Text {
 
     /// Where the string was written, if it was read from a file.
     pub fn span(&self) -> Option<Span> {
-        self.span
+        self.site.span
+    }
+
+    /// Where the string was written and at what JSON path.
+    pub fn site(&self) -> &Site {
+        &self.site
     }
 
     /// Whether the string holds a `{`, and so may hold a template.
     pub fn may_have_templates(&self) -> bool {
         self.raw.contains('{')
     }
+
+    /// The compiled template, once the definition has compiled it.
+    pub fn compiled(&self) -> Option<&clash_expr::CompiledText> {
+        self.compiled.as_ref()
+    }
 }
+
+/// Two texts are equal when they were written the same in the same
+/// place. Whether one has been compiled yet does not count.
+impl PartialEq for Text {
+    fn eq(&self, other: &Text) -> bool {
+        self.raw == other.raw && self.site.span == other.site.span
+    }
+}
+
+impl Eq for Text {}
 
 impl fmt::Display for Text {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -828,13 +948,25 @@ impl fmt::Display for Text {
     }
 }
 
+impl<'de> FromSite<'de> for Text {
+    fn from_site<A: MapAccess<'de>>(
+        site: Site,
+        _kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Text, A::Error> {
+        // Whatever the kind, it is read as a string, so that a value of
+        // another kind is reported as any wrong value is.
+        Ok(Text {
+            raw: value.read::<String>()?,
+            site,
+            compiled: None,
+        })
+    }
+}
+
 impl<'de> Deserialize<'de> for Text {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Text, D::Error> {
-        let located = Located::<String>::deserialize(deserializer)?;
-        Ok(Text {
-            raw: located.value,
-            span: Some(located.span),
-        })
+        by_site(deserializer)
     }
 }
 

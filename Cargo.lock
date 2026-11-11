@@ -57,6 +57,7 @@ name = "clash-data"
 version = "0.1.0"
 dependencies = [
  "clash-core",
+ "clash-expr",
  "serde",
  "serde_json",
 ]

@@ -18,7 +18,11 @@
 //!
 //! The field types of [`crate::fields`] (`Ref`, quantities, `Tag`,
 //! `Inline`, `Located`, `Gated`) ask for themselves under reserved names
-//! that this deserialiser answers from the tree and the link tables.
+//! that this deserialiser answers from the tree and the link tables. The
+//! expression fields (`Expr`, `Cond`, `Text`) ask, through
+//! [`by_site`](crate::by_site), for where they were written and at what
+//! JSON path, which is what lets a mistake found when they are compiled
+//! be reported like one found here.
 //!
 //! # What a definition type must avoid
 //!
@@ -62,6 +66,12 @@ pub(crate) const GATED_MAGIC: &str = "$clash_data::Gated";
 pub(crate) const KIND_MAGIC: &str = "$clash_data::ByKind";
 /// What [`by_kind`](crate::by_kind) is fed, in order.
 pub(crate) const KIND_FIELDS: &[&str] = &["kind", "value"];
+/// The reserved name [`by_site`](crate::by_site) asks under.
+pub(crate) const SITE_MAGIC: &str = "$clash_data::BySite";
+/// What [`by_site`](crate::by_site) is fed, in order: where the value
+/// was written, its JSON path in the definition, what kind of value it
+/// is and the value itself.
+pub(crate) const SITE_FIELDS: &[&str] = &["file", "start", "end", "path", "kind", "value"];
 /// The reserved name a duration asks for itself under. It is answered in
 /// whole microseconds.
 pub(crate) const MICROS_MAGIC: &str = "$clash_data::quantity::micros";
@@ -1226,6 +1236,12 @@ impl<'de, 'c> Deserializer<'de> for NodeDe<'c> {
                 root: self.root,
                 at: 0,
             }),
+            SITE_MAGIC => visitor.visit_map(SiteDe {
+                node: self.node,
+                cx: self.cx,
+                root: self.root,
+                at: 0,
+            }),
             _ => self.visit_object(Some(fields), visitor),
         }
     }
@@ -1462,6 +1478,87 @@ impl<'de> MapAccess<'de> for KindDe<'_> {
                 root: self.root,
                 key: false,
             })
+        }
+    }
+}
+
+/// Feeds [`by_site`](crate::by_site): the span, the JSON path, the kind
+/// of value and then the value itself.
+struct SiteDe<'c> {
+    node: &'c Node,
+    cx: &'c DeCx<'c>,
+    root: bool,
+    at: usize,
+}
+
+impl<'de> MapAccess<'de> for SiteDe<'_> {
+    type Error = DeError;
+
+    fn next_key_seed<K: DeserializeSeed<'de>>(
+        &mut self,
+        seed: K,
+    ) -> Result<Option<K::Value>, DeError> {
+        match SITE_FIELDS.get(self.at) {
+            Some(&field) => seed
+                .deserialize(IntoDeserializer::<DeError>::into_deserializer(field))
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+
+    fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value, DeError> {
+        let at = self.at;
+        self.at += 1;
+        let span = self.node.span;
+        let number = |value: u32| IntoDeserializer::<DeError>::into_deserializer(value);
+        match at {
+            0 => seed.deserialize(number(span.file.0)),
+            1 => seed.deserialize(number(span.start)),
+            2 => seed.deserialize(number(span.end)),
+            3 => seed.deserialize(IntoDeserializer::<DeError>::into_deserializer(
+                self.cx.path_string(),
+            )),
+            4 => seed.deserialize(IntoDeserializer::<DeError>::into_deserializer(kind_word(
+                self.node,
+            ))),
+            _ => seed.deserialize(NodeDe {
+                node: self.node,
+                cx: self.cx,
+                root: self.root,
+                key: false,
+            }),
+        }
+    }
+}
+
+/// Feeds [`by_site`](crate::by_site) a stand-in: `null`, written nowhere.
+struct SiteStandIn {
+    at: usize,
+}
+
+impl<'de> MapAccess<'de> for SiteStandIn {
+    type Error = DeError;
+
+    fn next_key_seed<K: DeserializeSeed<'de>>(
+        &mut self,
+        seed: K,
+    ) -> Result<Option<K::Value>, DeError> {
+        match SITE_FIELDS.get(self.at) {
+            Some(&field) => seed
+                .deserialize(IntoDeserializer::<DeError>::into_deserializer(field))
+                .map(Some),
+            None => Ok(None),
+        }
+    }
+
+    fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value, DeError> {
+        let at = self.at;
+        self.at += 1;
+        match at {
+            0..=2 => seed.deserialize(IntoDeserializer::<DeError>::into_deserializer(0_u32)),
+            3 => seed.deserialize(IntoDeserializer::<DeError>::into_deserializer("")),
+            4 => seed.deserialize(IntoDeserializer::<DeError>::into_deserializer("null")),
+            _ => seed.deserialize(StandIn),
         }
     }
 }
@@ -1779,6 +1876,7 @@ impl<'de> Deserializer<'de> for StandIn {
             GATED_MAGIC => visitor.visit_newtype_struct(self),
             LOCATED_MAGIC => visitor.visit_map(LocatedStandIn { at: 0 }),
             KIND_MAGIC => visitor.visit_map(KindStandIn { at: 0 }),
+            SITE_MAGIC => visitor.visit_map(SiteStandIn { at: 0 }),
             _ => visitor.visit_map(NoEntries),
         }
     }

@@ -42,6 +42,13 @@ pub enum Fault {
     /// A random function was called and the host has no stream to draw
     /// from.
     NoRandom,
+    /// A function defined in data called itself, directly or through
+    /// others, deeper than calls may nest (05 §13.2). Raised by the host
+    /// that runs such functions; the call gave null.
+    CallDepth,
+    /// Something was asked for that the engine does not offer yet. The
+    /// text says what: "queries". Raised by the host; the value is null.
+    Unavailable(&'static str),
 }
 
 impl Fault {
@@ -55,6 +62,8 @@ impl Fault {
             Fault::Type { .. } => codes::RUN_TYPE,
             Fault::TooLarge => codes::RUN_TOO_LARGE,
             Fault::NoRandom => codes::RUN_NO_RANDOM,
+            Fault::CallDepth => codes::RUN_CALL_DEPTH,
+            Fault::Unavailable(_) => codes::RUN_UNAVAILABLE,
         }
     }
 }
@@ -69,6 +78,8 @@ impl fmt::Display for Fault {
             Fault::Type { wanted, found } => write!(f, "{wanted} was needed and this is a {found}"),
             Fault::TooLarge => f.write_str("the value would be larger than a value may be"),
             Fault::NoRandom => f.write_str("there is no random stream to draw from"),
+            Fault::CallDepth => f.write_str("functions call each other too deeply"),
+            Fault::Unavailable(what) => write!(f, "{what} are not available yet"),
         }
     }
 }
@@ -240,6 +251,27 @@ mod tests {
             .to_string(),
             "a number was needed and this is a string"
         );
+    }
+
+    #[test]
+    fn the_faults_a_host_raises_have_codes_and_messages() {
+        let faults = [
+            (
+                Fault::CallDepth,
+                "X908",
+                "functions call each other too deeply",
+            ),
+            (
+                Fault::Unavailable("queries"),
+                "X909",
+                "queries are not available yet",
+            ),
+        ];
+        for (fault, code, message) in faults {
+            assert_eq!(fault.code().as_str(), code);
+            assert_eq!(fault.to_string(), message);
+            assert!(!fault.code().explanation().is_empty());
+        }
     }
 
     #[test]
