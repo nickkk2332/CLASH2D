@@ -817,6 +817,7 @@ A camp, a homestead, a hideout, a workshop and a colony begin this way.
 ```json
 { "type": "weather", "id": "temperate_coast",
   "temperature": { "mean": "11 C", "season": 8, "day": 4 },
+  "wind_from": "west", "current": { "speed": 0.4, "toward": "east" },
   "lasting": ["snow", "wet"],
   "states": {
     "clear": { "light": 1.0, "wind": [0, 6],  "sea": 2, "to": { "cloud": 0.3 } },
@@ -833,6 +834,10 @@ looks (12 §6.4). The state sets values on the region: light
 loaded cells open to the sky.
 
 Rules may set a region's weather. A power over storms does.
+
+Wind blows from the climate's `wind_from`, turned at each step by a draw
+within `wind_swing`, at the speed the state gives. `current` is the
+steady movement of the region's sea (11 §4.7).
 
 **Temperature.** A region's temperature is its climate's `mean`, plus a
 seasonal swing by the calendar (section 14.2), plus a daily swing by the

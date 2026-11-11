@@ -231,6 +231,8 @@ A creature is drawn as the persona the viewer perceives.
 (02 §22) is drawn beyond the portal, in the direction they are looking, in
 place of what is physically there. One portal deep by default.
 
+A capsized vessel (11 §10.6) is drawn with a mark from the theme.
+
 **Vessels from a distance.** At cell scale a vessel is drawn as its grid
 lies, at a quarter-turn (11 §5.5). In a view zoomed out far enough that a
 vessel is an outline, the outline is drawn at its true heading.

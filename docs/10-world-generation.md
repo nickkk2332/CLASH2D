@@ -150,6 +150,10 @@ A bare string is short for the layer its definition belongs to:
 one of floor, block and fixture, the short form is a load error asking for
 the long one.
 
+In a map used as a pattern (16 §4.5) an entry may instead ask for any
+element carrying a tag (`block_tag`, `floor_tag`, `fixture_tag`) or for
+anything at all (`"any": true`).
+
 A palette value may be a list of weighted alternatives, chosen per cell,
 or once for the whole placement with `"once": true`.
 

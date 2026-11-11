@@ -267,9 +267,9 @@ that works only when built in the right shape, has a **structure**.
 
 ```json
 { "type": "device", "id": "blast_furnace", "name": "blast furnace",
-  "structure": { "map": "blast_furnace_shape", "core": "mark:core",
-                 "ports": { "mark:tuyere": "air", "mark:tap": "out" },
-                 "holds": { "mark:charge_door": "in" } } }
+  "structure": [ { "id": "small", "map": "blast_furnace_shape", "core": "mark:core",
+                   "ports": { "mark:tuyere": "air", "mark:tap": "out" },
+                   "holds": { "mark:charge_door": "in" } } ] }
 ```
 
 The map (10 §3) draws what must stand around the device, storey by storey.
@@ -289,8 +289,9 @@ A palette entry may ask for an exact element, anything with a tag
   `structure_broken`. What follows is for rules: a kiln goes cold, and a
   reactor does something worse.
 - A device may list several structures. The first that matches is the one
-  it has, and `self.structure` names it, so a larger build can give more
-  capacity or speed.
+  it has, and `self.structure` is its id, so a larger build can give more
+  capacity or speed. `self.missing` lists the cells an unformed device
+  still wants, and what it wants there.
 
 Building one cell by cell and placing one whole are the same thing: its
 map is a design (section 10.3). A furnace of firebrick, a ritual circle of
@@ -584,6 +585,9 @@ Progress is `work done / work needed`. Completion is one scheduled wake-up,
 moved whenever the rate changes. A furnace on half power takes twice as
 long and nothing checks on it in between.
 
+Where several qualify, the first in the device's list is taken, unless
+its configuration names one.
+
 A machine with `auto` starts a recipe whenever one of its recipes has its
 inputs in the machine's input holds, room for its outputs, and nothing
 forbidding it (its `enable` input, its `config`). It stops when that ceases
@@ -601,8 +605,11 @@ A requirement names a quality and a level. Qualities are data.
 
 Inputs and tools are looked for, in order: in the worker's holds; in the
 station's holds; in containers and storage areas within `supply_range`
-(default 6 cells) that the worker may use; and in any item network the
-station is on (section 9). Crafting at a bench draws on the shelves around
+(default 6 cells) that the worker may use and knows the contents of; and
+in any item network the station is on (section 9). A worker knows what is
+in its own site's storage areas and in containers it has looked into
+(15 §7.3). Looking for inputs opens nothing and does not create latent
+contents (06 §9.3). Crafting at a bench draws on the shelves around
 it.
 
 ### 8.4 Growing things
@@ -622,7 +629,7 @@ by a mind (06 §8). It goes where the mind goes.
   "needs": ["fire_making"], "group": "metalwork" }
 ```
 
-A recipe's `needs` asks for it: `"needs": "knows('smelting')"`. It is met
+A recipe's `needs` asks for it: `"needs": "knows_how('smelting')"`. It is met
 by the worker, or by something at the station that `provides` it: a manual
 on the bench, a pattern loaded into a machine. A machine working
 unattended has only what is loaded into it.
@@ -638,7 +645,7 @@ unattended has only what is loaded into it.
 `needs` is not already known. `unlearn` removes it.
 
 Abilities (08), trade offers and anything else with a condition can ask
-`knows` in the same way. The engine attaches no ladder to this (01 R10).
+`knows_how` in the same way. The engine attaches no ladder to this (01 R10).
 An age of bronze and an age of starships are two sets of definitions that
 one world may hold side by side.
 
@@ -691,10 +698,12 @@ direction.
   "load": { "power": "200 W" }, "when_supplied": "conveys" }
 ```
 
-Each step, whatever stands or lies on it is pushed along (07 §7) by its
-speed times the step: creatures, loose items, a crate, a body. It is a
-push like any other, made through the relocation functions, and what can
-resist a push resists it.
+Every `conveyance.step` (default 250 ms), whatever stands or lies on it is
+carried along by its speed times the step: creatures, loose items, a
+crate, a body. This is a relocation, not a blow: it does not stagger.
+Something braced against being moved (a rule on `passage_requested`,
+06 §13) stays put, and something that cannot go further because the next
+cell is blocked stays where it is.
 
 This is a walkway, a belt that can be ridden, a treadmill, an escalator on
 a ramp. It is separate from item conduits (section 9.2), whose goods are a
@@ -1062,8 +1071,43 @@ and `worth` on items; `services` on tract definitions.
 `know_how_gained`, `poured`, `dosed`, `tasted`.
 
 **Hooks**: `interaction_starting`, `interaction_reach`,
-`network_overloaded`, `recipe_completing`, `job_starting`,
-`module_installing`, `trade_offers`, `trade_agreeing`.
+`network_overloaded`, `recipe_starting`, `recipe_completing`,
+`job_starting`, `module_installing`, `trade_offers`, `trade_agreeing`,
+`payment_making`, `standing_up`.
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `interaction_starting` | An interaction's action begins | Cancel, with a reason: a lock, a permission |
+| `interaction_reach` | Reach is tested | Extend or deny it |
+| `network_overloaded` | A network or junction is asked for more than it carries | Decide what gives: limit, trip, burn |
+| `recipe_starting` | A recipe begins, by hand or by machine | Cancel, with a reason |
+| `recipe_completing` | Its outputs are made | Change or spoil them |
+| `job_starting` | Work begins on a job | Cancel, with a reason |
+| `module_installing` | A module goes into a slot | Cancel, with a reason |
+| `trade_offers` | Offers are shown | Add, remove and reprice offers |
+| `trade_agreeing` | A trade is carried out | Cancel, with a reason |
+| `payment_making` | `pay`, `deposit`, `withdraw`, or the start of a standing payment | Change the amount (a tax, a fee); cancel (a frozen account) |
+| `standing_up` | An assembly stands alone | Cancel |
+
+`job_blocked` is raised when a job cannot go on, with why.
+
+**Further fields.** A device may `transmit` a resource over a range, for
+ports that connect by range. A `service_entry` names the tract service it
+offers. A signal port may be `wireless`, on a channel set in `config`. An
+output may have a `delay`, of at least `signal.min_delay`. An item
+conduit `carries` items at a `speed`; receiving ports state what they
+`accept` and a `priority`. An `intake` takes a named field from its cell
+into a network. A device may `act_for` a character, group or site in
+trades. `priority` on a consumer may be an expression. A passive `load`
+has a `priority` and is cut or kept as one consumer. `min_supply`
+defaults to 0. A recipe's `salvage` may state its own `work`, `tools` and
+`needs`; a recipe with `repairs` restores damage for a share of its
+inputs. A substance states what `share` of a coating a breaching hit
+delivers and what each hit `wipes`; what is wiped is lost, which is the
+one exception to invariant G15.
+
+On an element, `when_supplied` is a small map of what it gains (`light`,
+`conveys`). On a module it is the conferral block of section 11.2.
 
 **Effects**: `interact`, `set_state`, `set_mode`, `set_config`,
 `add_resource`, `drain_resource`, `link`, `unlink`, `lay_conduit`,
@@ -1073,10 +1117,12 @@ and `worth` on items; `services` on tract definitions.
 `start_payment`, `stop_payment`, `deposit`, `withdraw`, `stand_up`,
 `stand_down`, `teach`, `unlearn`, `pour`, `fill`, `dose`, `coat`.
 
-**Queries**: `interactions`, `devices`, `networks`, `members`, `jobs`,
-`modules`, `recipes`, `offers`, `payments`.
+**Queries**: `interactions`, `devices`, `networks`, `network_members`,
+`jobs`, `modules`, `recipes`, `offers`, `payments`.
 
-**Settings**: `supply_range`.
+**Settings**: `supply_range`, `network.max_loop_rounds` (how many times a
+loop of converters is iterated before it is reported and left as it
+stands), `signal.min_delay`, `conveyance.step`.
 
 **Properties**: on devices, `mode`, `config.*`, `supply(resource)`,
 `store(resource)` with `level` and `frac`, `network(port)`, `process` with
@@ -1084,7 +1130,10 @@ and `worth` on items; `services` on tract definitions.
 on networks, `offered`, `wanted`, `stored`, `fraction`; on elements,
 section 3.5; on any bearer, `supplied(module)`; on characters, groups and
 sites, `balance(resource)`; on devices, `formed` and `structure`; on
-minds, `knows(what)`.
+minds, `knows_how(what)`; on devices, `condition` (0 to 1, from damage).
+`interactions_for(who, target)` lists what applies. In a mind context it
+and an interaction's `if` are worked out from what `who` believes; truth
+is tested when the interaction is attempted (05 §7.3).
 
 ## 15. Invariants
 

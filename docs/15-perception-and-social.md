@@ -61,7 +61,7 @@ has and the events to hang reactions on.
 | `field` | The observer reads a field (02 §16) in its own cell. Direction comes from which neighbouring cell has more. |
 
 With `"delay": true` the signal arrives after `distance / speed`, where
-speed is the medium's (02 §4.1; 11 §7). Sound is slower than a fast enough
+speed is the medium's (02 §4.1; 11 §4.1). Sound is slower than a fast enough
 character.
 
 Mods add kinds: heat, vibration, a magical aura, radio.
@@ -85,7 +85,7 @@ aura and a cold that goes through stone are made.
 | Source | How |
 |--------|-----|
 | **Presence** | Every entity in the world has a standing signature per signal kind, an expression on its templates and traits: how visible it is, how much noise it makes standing still. |
-| **Actions** | An action or phase may declare `signals`, emitted when it starts. Movement definitions declare `noise` (06 §11). |
+| **Actions** | An action or phase may declare `signals`, emitted when it starts. Movement definitions declare `noise` (06 §11). A bare `noise` number, wherever a definition has one, is the strength of a signal of the kind flagged `"noise": true`. |
 | **Events** | An `event_signal` definition maps an event type to a signal: breaking glass makes a sound in proportion to the energy involved. |
 | **Rules** | The `emit_signal` effect, with any strength and any payload, true or not. |
 
