@@ -415,18 +415,46 @@ action does".
 
 | Field | Meaning |
 |-------|---------|
-| `uses` | Channels occupied for the whole action (section 6.2). |
-| `params` | Typed parameters. Each may have a `default`, an expression evaluated when the command omits it (section 6.3). |
-| `requires` | Condition that must hold to start. `fail_text` gives the reason shown when it does not. |
-| `requires_at_start` | A condition tested only when the action begins, and never shown beforehand. If it fails the action is interrupted at once and says why. For things the actor cannot know in advance (01 R11): whether a victim has noticed them. |
-| `tempo` | Expression dividing phase durations (section 6.5). Default 1. |
+| `name` | What the action is called, shown to players. A text. Optional. |
+| `uses` | Channels occupied for the whole action (section 6.2): an object of channel ids, each with a number of slots or `"all"`. Default none. Not allowed beside `roles`. |
+| `params` | Typed parameters, by name. Each may have a `default`, an expression evaluated when the command omits it (section 6.3). |
+| `vars` | The action's own variables, by name, each with a type and a starting value (section 6.4). |
+| `requires` | Condition that must hold to start. Default true. |
+| `fail_text` | The text shown when `requires` does not hold. Optional. |
+| `requires_at_start` | A condition tested only when the action begins, and never shown beforehand. If it fails the action is interrupted at once and says why. For things the actor cannot know in advance (01 R11): whether a victim has noticed them. Default true. |
+| `tempo` | Expression dividing phase durations (section 6.5): a number above zero. Default 1. |
 | `foreground` | Whether finishing this action can prompt a decision. Default true. A sustained aura or a conversation is background. |
 | `footing` | Whether the actor must be standing on something. Default true. An action without it can be done in the air (07 §7.1). |
-| `reaction_to` | Window kinds this action may answer (section 7). |
+| `reaction_to` | Window kinds this action may answer (section 7): a list of `window_kind` ids. Default none. |
 | `on_behalf` | Whether, as a reaction, it may answer a window aimed at someone else. Default false. |
-| `phases` | Section 6.4. |
-| `on_start`, `on_finish`, `on_cancel`, `on_interrupt` | Effect lists. |
+| `ready` | For a reaction: the id of the phase from which it counts as ready (section 7.3). Optional. |
+| `phases` | Section 6.4. A list of at least one phase. Required. |
+| `on_start`, `on_finish`, `on_cancel`, `on_interrupt`, `on_abandon` | Effect lists (section 6.6; `on_abandon` section 9). Default empty. |
 | `roles` | Present on joint actions (section 8). |
+| `tags` | Free-form tags, queryable by rules and named by a phase's `cancel`. Default none. |
+| `low_attention` | Section 11. Default false. |
+
+**What an action's expressions may name.** Every expression of an action
+binds one subject, `self`, the actor, and the action's **locals**, written
+`$name`: the window being answered (`$window`, on an action with
+`reaction_to`; null when it was not started as a reaction), then the roles,
+the parameters and the variables, each in the order written. A running
+action keeps one value for each. The names must differ from each other,
+start with a lowercase letter, hold lowercase letters, digits and `_`, and
+not be a word of the expression language. A local that is none of these is
+a load error where it is read.
+
+| Field | Reads (05 §7.3) | Pure |
+|-------|-----------------|------|
+| `requires`, `fail_text`, a parameter's `check`, `name` | Belief: the mind context of the actor | Yes |
+| A parameter's `default` | Belief | No |
+| `requires_at_start`, `tempo`, a phase's `time`, `max` and `until`, a tick's `every`, the conditions of `next`, a window's `for` | Truth | No |
+| A variable's `default` | Nothing: it is a constant | Yes |
+| Effect lists | Truth | No |
+
+`name` sees no locals: it is shown before any are chosen. `requires` is
+compiled in the mind context so that it can be previewed, and is tested
+against truth only when the action is started (05 §7.3).
 
 ### 6.2 Channels
 
@@ -436,6 +464,12 @@ A **channel** is something an action needs exclusive use of.
 { "type": "channel", "id": "arm" }
 ```
 
+A channel has one field, `name`: a text, what the channel is called where
+a player is told of it, as in the reason an action cannot start. It is
+optional; without it the id is shown. There may be at most 256 channel
+definitions, so that a set of channels is a small fixed bitset; one more
+is a load error.
+
 An entity has a set of channel **slots**. Document 06 derives them from the
 body: two arms give two `arm` slots, a mouth gives `voice`, a mind gives
 `focus`. A creature with six arms has six. A device has whatever its
@@ -443,7 +477,8 @@ definition gives it.
 
 - `"uses": { "arm": 2, "legs": 1 }` needs two free arm slots and one legs
   slot. `{ "arm": "all" }` needs every arm slot the entity has, and at least
-  one.
+  one. A number of slots is a whole number of at least one, and a channel
+  is named once.
 - A parameter of type `part` may name which slot is used; otherwise any free
   one is taken.
 - Actions whose slots do not overlap run at the same time.
@@ -473,6 +508,21 @@ or nothing when it is. It is advice: pickers show it as the value is built
 (12 §9.3). Whether an unsound value is refused is for `requires`, and what
 happens to someone who goes ahead anyway is for the action's own effects.
 
+A parameter is written as its type alone, `"target": "entity"`, or as an
+object:
+
+| Field | Meaning |
+|-------|---------|
+| `type` | The type of the value, as 05 §3 writes types: `entity`, `part`, `real`, `id<material>`, `entity?`. `cell` is a location, the kind `loc`. `list` is a list of what `of` says. Required. |
+| `of` | For `list`: the type of the elements. A list may also be written whole, `list<loc>`, without it. |
+| `min`, `max` | For a list: the least and the greatest number of values. `min` defaults to 0. With no `max` a list is as long as any value may be (`rules.max_value_size`). |
+| `default` | An expression of the parameter's type, in the mind context of the actor (05 §7.3). It may read the parameters, and roles, written before it: defaults are worked out in the order the parameters are written. A parameter with none must be given by the command. |
+| `check` | An expression in the mind context of the actor, pure, that may read the parameter and those before it. It gives null when the value is sound; anything else is the reason shown: a text, or the id of a `reason` definition (14 §15). |
+
+A type that is not one, a default that cannot give a value of the
+parameter's type, `of`, `min` or `max` on something that is not a list and
+a `max` below its `min` are load errors.
+
 ### 6.4 Phases
 
 ```json
@@ -485,31 +535,58 @@ happens to someone who goes ahead anyway is for the action's own effects.
 
 | Field | Meaning |
 |-------|---------|
-| `time` | Duration expression, or `"hold"`. Evaluated when the phase starts. `0` runs and moves on within the same tick. |
+| `id` | The phase's name within its action: lowercase letters, digits and `_`, starting with a letter. No two phases of an action share one. Required. |
+| `time` | Duration expression, in seconds of the actor's local time, or `"hold"`. Evaluated when the phase starts. `0` runs and moves on within the same tick. It cannot be below zero. Required. |
 | `do` | Effects run when the phase starts. |
 | `on_exit` | Effects run when the phase ends normally. |
-| `tick` | Effects repeated at an interval while the phase lasts. |
-| `until`, `max` | For held phases: end when the condition is true (checked at ticks) or the maximum is reached. A `Cancel` command also ends a held phase and counts as release, not as cancellation. `Cancel` with `abandon` gives it up instead, where the phase allows `cancel`. |
+| `tick` | Effects repeated at an interval while the phase lasts: `every`, a duration expression above zero, evaluated when the phase starts, and `do`, the effects, which may be left out for a tick that only tests `until`. |
+| `until`, `max` | For held phases: end when the condition is true (checked at ticks, so a phase with `until` has a `tick`) or the maximum, a duration expression, is reached. A `Cancel` command also ends a held phase and counts as release, not as cancellation. `Cancel` with `abandon` gives it up instead, where the phase allows `cancel`. |
 | `cancel` | Whether the actor may abandon the action during this phase. Default false. A list of action tags instead of `true` allows abandoning it only to start an action with one of those tags: a recovery that can be cut short by a follow-up and nothing else. |
-| `uninterruptible` | The `interrupt` effect cannot end the action during this phase. |
-| `fixed` | Tempo does not apply to this phase. |
-| `window` | Opens a reaction window when the phase starts (section 7). |
+| `uninterruptible` | The `interrupt` effect cannot end the action during this phase. Default false. |
+| `fixed` | Tempo does not apply to this phase. Default false. |
+| `window` | Opens a reaction window when the phase starts (section 7.1). |
 | `tags` | Free-form, queryable by rules: `vulnerable`, `telegraph`, `airborne`. |
 | `next` | Where to go afterwards: the first entry whose condition holds. Default is the following phase; after the last, the action finishes. |
+
+An entry of `next` has `if`, a condition, which may be left out for an
+entry that always holds, and says where to go: `goto` with the id of a
+phase, or `"finish": true`, which ends the action there. If no entry holds,
+the default applies: the following phase. So a branch that is not the last
+phase written ends the action with `"next": [ { "finish": true } ]`.
 
 `next` makes an action a small state machine: follow-ups that branch on
 whether a blow landed, charge-and-release, loops that repeat while a
 condition holds. More than 1,000 zero-duration transitions in one tick ends
 the action with an error.
 
+These are load errors: a `goto` that names no phase of the action; a phase
+that no path from the first phase leads to; `max` or `until` on a phase
+that is not held; `until` on a phase with no `tick`. An entry written after
+one that always holds is never tried, which is a warning.
+
 Action instances have local variables (`$name`), shared by all their phases
-and effects.
+and effects. Those that are not parameters or roles are declared in the
+action's `vars`, each as its type or as an object with `type` and
+`default`, a constant of that type:
+
+```json
+"vars": { "power": { "type": "int", "default": 0 }, "landed": "bool" }
+```
+
+A variable starts as its default when the action starts, and as null if it
+has none; its type is then "the declared type, or null". Effects assign it
+with `set` and `add` (05 §10.3). A verb that leaves results in locals of
+the action, as `strike` does (07 §3.4), needs them declared like any
+other.
 
 ### 6.5 Tempo
 
 `duration = time / tempo`, with `tempo` evaluated at the start of each
 phase. Once a phase is scheduled, a later change of tempo does not move it.
 A change of clock rate does.
+
+Tempo divides `time` and nothing else: a held phase's `max` and a tick's
+`every` are local time as written.
 
 ### 6.6 Lifecycle
 
@@ -567,6 +644,28 @@ A phase's `window` field opens one when the phase starts. `for` names
 those it is aimed at. `closes` names the later phase whose start is the
 deadline. The `open_window` effect opens one from any rule; having no
 phase to close it, it states how long it stays open.
+
+| Field of a `window_kind` | Meaning |
+|--------------------------|---------|
+| `notice` | How long a candidate takes to notice: a duration expression, in seconds of the candidate's own local time. Default 0: noticed the moment the window opens. It cannot be below zero. |
+| `noticed_if` | Whether a candidate can notice at all: a condition. Default true. |
+| `reach` | How far, in metres, a candidate the window does not name may be from the source or from someone it names. Default 0. |
+
+`notice` and `noticed_if` are evaluated once for each candidate when a
+window of the kind opens (section 7.2). They read truth and bind three
+subjects, in this order: `self`, the candidate, an `entity`; `source`,
+whose action or rule opened the window, an `entity` or null; and `window`,
+the window. Which actions may answer a window of a kind is said by the
+actions, in `reaction_to`.
+
+| Field of a phase's `window` | Meaning |
+|-----------------------------|---------|
+| `kind` | The id of a `window_kind`. Required. |
+| `for` | Those it is aimed at: a list of expressions in the action's scope, each giving an entity. One that comes to null names nobody. Default empty. |
+| `closes` | The id of a phase of the same action. It must be another phase than the one that opens the window, and one that some path from that phase leads to; otherwise the window could never close, which is a load error. Required. |
+
+If the action ends without entering that phase, the window closes when the
+action ends.
 
 **Candidates.** A window is offered to:
 
@@ -651,6 +750,12 @@ A **joint action** is one action instance with several participants.
 
 `perceives` is supplied by document 15 and `takedown_result` by content.
 
+- A role has two fields: `uses`, the slots claimed on its participant,
+  written as an action's `uses` is (default none), and `forced` (default
+  false). A joint action has at least two roles and no `uses` of its own.
+- The first role written is whoever starts the action: its participant is
+  `self`, and it cannot be `forced`. The participants of the other roles
+  are given with the command, by the role's name, as parameters are.
 - Each role claims slots on its own participant. Phases run once, on the
   clock of the first role.
 - A role marked `forced` is entered without that participant's consent. The
@@ -763,10 +868,32 @@ here.
 phase changes in one tick, default 1,000). `WARM_STEP` is a named
 constant.
 
-**Further action fields**: `tags` (free-form, queryable), `low_attention`
-(section 11), `on_abandon` (effects run when an action ends because its
-actor left the simulation, section 9), and `ready` on a reaction
-(section 7.3).
+**Fields**: every field of the three types is in a table of this
+document: an action's in section 6.1, a parameter's in 6.3, a phase's, an
+entry of `next`'s and a variable's in 6.4, a channel's in 6.2, a window
+kind's and a phase's window's in 7.1, and a role's in section 8. Fields
+that later documents add to an action (`attacks` and `defence` in 07,
+`cutscene` in 12, the `choice` parameter type in 08 §9.2) are added by the
+packages that build them. A cost, a cooldown and a rank belong to a grant
+(08 §5.1), not to the action.
+
+**Reasons** (14 §5), each with the values it carries, in the `engine`
+namespace:
+
+| Reason | Given when |
+|--------|-----------|
+| `action_parameter_missing`, `action_parameter_invalid`, `action_list_length` | A command leaves out a parameter that has no default, gives one a value of the wrong type, or gives a list outside its `min` and `max` |
+| `action_requires` | `requires` does not hold when the action is to start, or when a step of a plan comes due. The action's `fail_text` is the sentence shown |
+| `action_no_footing` | `footing` is true and nothing is under the actor |
+| `action_channel_busy`, `action_channel_lacking`, `action_slot_unavailable` | Too few slots of a channel are free; too few are enabled at all; the slot a parameter names cannot be used |
+| `action_vetoed` | A handler of `ActionStarting` cancels without a reason of its own |
+| `action_start_condition` | `requires_at_start` does not hold: the action is interrupted at once |
+| `action_cannot_cancel`, `action_cancel_only_for` | `Cancel` in a phase that does not allow it, or allows it only for other tags |
+| `action_transition_limit` | `rules.max_transitions` is passed |
+| `action_channel_disabled` | A slot the action held is disabled |
+| `reaction_not_listed`, `reaction_not_on_behalf`, `reaction_cannot_cancel` | A reaction does not list the window's kind; the window names someone else and the reaction does not allow `on_behalf`; the reactor's own actions hold the slots and cannot be cancelled |
+| `window_not_noticed`, `window_noticed_late`, `window_closed` | A candidate never noticed, noticed after the window closed, or answers a window that has closed |
+| `role_unfilled`, `role_declined`, `role_participant_left` | A role has nobody in it; an offered role was declined or not answered; a participant left a joint action |
 
 **Effects**:
 

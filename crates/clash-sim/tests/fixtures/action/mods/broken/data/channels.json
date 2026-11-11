@@ -1,0 +1,87 @@
+[
+  { "type": "action", "id": "channel_unknown",
+    "uses": { "amr": 1 },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "no_slots",
+    "uses": { "arm": 0 },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "slots_in_words",
+    "uses": { "arm": "both" },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "channel_twice",
+    "uses": { "arm": 1, "spec:arm": 2 },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "window_kind_unknown",
+    "phases": [
+      { "id": "windup", "time": "100 ms", "window": { "kind": "stirke", "closes": "impact" } },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "reaction_to_unknown",
+    "reaction_to": ["strike", "shove"],
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "ready_nowhere",
+    "reaction_to": ["strike"],
+    "ready": "guard",
+    "phases": [ { "id": "set", "time": "80 ms" } ] },
+
+  { "type": "action", "id": "ready_for_nothing",
+    "ready": "set",
+    "on_behalf": true,
+    "phases": [ { "id": "set", "time": "80 ms" } ] },
+
+  { "type": "action", "id": "reaction_twice",
+    "reaction_to": ["strike", "spec:strike"],
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "one_role",
+    "roles": { "attacker": { "uses": { "arm": "all" } } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "uses_beside_roles",
+    "uses": { "arm": 1 },
+    "roles": { "attacker": {}, "victim": { "forced": true } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "first_role_forced",
+    "roles": { "attacker": { "forced": true }, "victim": {} },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "role_and_parameter",
+    "roles": { "attacker": {}, "victim": {} },
+    "params": { "victim": "entity" },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "role_channel_unknown",
+    "roles": { "attacker": {}, "victim": { "uses": { "tail": 1 } } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "role_unknown",
+    "roles": { "attacker": {}, "victim": {} },
+    "requires_at_start": "not perceives($victm, $attacker)",
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "key_unknown",
+    "footting": false,
+    "phases": [ { "id": "act", "time": 0, "uninterruptable": true } ] },
+
+  { "type": "window_kind", "id": "reach_backwards",
+    "reach": -2 },
+
+  { "type": "window_kind", "id": "notice_backwards",
+    "notice": "-250 ms" },
+
+  { "type": "window_kind", "id": "notice_of_whom",
+    "notice": "target.attr.reaction_time" },
+
+  { "type": "window_kind", "id": "window_key_unknown",
+    "reech": 6 },
+
+  { "type": "channel", "id": "channel_key_unknown",
+    "slots": 2 }
+]

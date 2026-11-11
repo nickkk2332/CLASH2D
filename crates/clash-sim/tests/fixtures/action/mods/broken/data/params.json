@@ -1,0 +1,82 @@
+[
+  { "type": "action", "id": "type_unknown",
+    "params": { "target": { "type": "entty" } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "list_of_what",
+    "params": { "route": { "type": "list" } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "of_without_list",
+    "params": { "target": { "type": "entity", "of": "cell" } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "element_unknown",
+    "params": { "route": { "type": "list", "of": "sell" } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "length_of_one",
+    "params": { "target": { "type": "entity", "max": 3 } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "length_backwards",
+    "params": { "route": { "type": "list", "of": "cell", "min": 5, "max": 2 } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "default_of_wrong_type",
+    "params": { "part": { "type": "part", "default": 3 } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "default_gives_wrong_type",
+    "params": {
+      "target": "entity",
+      "part": { "type": "part", "default": "dist(self, $target)" } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "default_reads_ahead",
+    "params": {
+      "part": { "type": "part", "default": "auto_part($target)" },
+      "target": "entity" },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "default_reads_truth",
+    "params": {
+      "target": "entity",
+      "spot": { "type": "cell", "default": "$target.loc" } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "requires_reads_truth",
+    "params": { "target": "entity" },
+    "requires": "not perceives($target, self)",
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "requires_draws",
+    "requires": "chance(0.5)",
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "name_not_a_local",
+    "params": { "Target": "entity" },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "name_reserved",
+    "vars": { "if": "bool" },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "name_taken",
+    "params": { "power": "real" },
+    "vars": { "power": { "type": "int", "default": 0 } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "name_is_the_window",
+    "reaction_to": ["strike"],
+    "params": { "window": "entity" },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "var_of_wrong_type",
+    "vars": { "power": { "type": "int", "default": true } },
+    "phases": [ { "id": "act", "time": 0 } ] },
+
+  { "type": "action", "id": "var_type_unknown",
+    "vars": { "power": "integer" },
+    "phases": [ { "id": "act", "time": 0 } ] }
+]

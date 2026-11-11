@@ -8,5 +8,12 @@
 //!
 //! This is a stub. It is filled in by K1 onward of `docs/plans/sim-kernel.md` and the plans that follow it.
 
+pub mod action;
 pub mod component;
 pub mod console;
+
+/// Registers every definition type the simulation owns with the loader.
+/// The application and the tools call this once (04 §9).
+pub fn register_defs(types: &mut clash_data::DefTypes) {
+    action::register_defs(types);
+}
