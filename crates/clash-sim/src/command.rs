@@ -32,6 +32,17 @@ use crate::reason::{Reason, codes};
 pub enum Command {
     /// A tool's command.
     Debug(DebugCommand),
+    /// Answers a choice put by a rule's `ask` (05 §10.6) with the
+    /// position of an option, from zero. Refused if the entity is not
+    /// waiting for that choice, or the option is not one it may take.
+    Choose {
+        /// Who chooses.
+        entity: EntityId,
+        /// The choice, as the decision named it.
+        choice: crate::decision::ChoiceId,
+        /// The position of the option taken.
+        option: u32,
+    },
 }
 
 /// What a tool or a test may do to the simulation directly. These are
@@ -182,6 +193,11 @@ impl Sim {
     fn apply(&mut self, command: Command) -> Result<(), Reason> {
         match command {
             Command::Debug(debug) => self.apply_debug(debug),
+            Command::Choose {
+                entity,
+                choice,
+                option,
+            } => self.choose(entity, choice, option),
         }
     }
 

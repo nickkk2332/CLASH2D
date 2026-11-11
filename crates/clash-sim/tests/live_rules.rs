@@ -229,18 +229,25 @@ fn each_kernel_verb_goes_through_the_engines_own_function() {
     let half = Value::Real(Real::of(0.5));
 
     // set_time_rate: a personal clock, its rate, and none again.
-    let events = verb(&mut sim, "haste", who, &[("rate", Value::Real(Real::of(2.0)))]);
+    let events = verb(
+        &mut sim,
+        "haste",
+        who,
+        &[("rate", Value::Real(Real::of(2.0)))],
+    );
     assert_eq!(names(&events), ["clock_rate_changed"]);
     assert_eq!(events[0].cause.kind, clash_world::CauseKind::Eoc);
     assert_eq!(events[0].cause.actor, Some(who));
     let clock = sim.truth().entity(who).unwrap().clock().unwrap();
     assert_eq!(sim.timeline().rate(clock), Some(Real::of(2.0)));
-    assert_eq!(names(&verb(&mut sim, "haste", who, &[("rate", half.clone())])), [
-        "clock_rate_changed"
-    ]);
-    assert_eq!(names(&verb(&mut sim, "unhaste", who, &[])), [
-        "clock_rate_changed"
-    ]);
+    assert_eq!(
+        names(&verb(&mut sim, "haste", who, &[("rate", half.clone())])),
+        ["clock_rate_changed"]
+    );
+    assert_eq!(
+        names(&verb(&mut sim, "unhaste", who, &[])),
+        ["clock_rate_changed"]
+    );
     assert!(sim.truth().entity(who).unwrap().clock().is_none());
 
     // anchor_clock: gives a clock at rate 1 under the realm's, and lifts.
@@ -322,8 +329,8 @@ fn every_kernel_verb_is_registered_with_its_arguments() {
             );
         }
     }
-    let document = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../docs/03-time-and-actions.md");
+    let document =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/03-time-and-actions.md");
     let text = std::fs::read_to_string(document).unwrap();
     for verb in clash_sim::kernel_verbs::kernel_verbs() {
         assert!(

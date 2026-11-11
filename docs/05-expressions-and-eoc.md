@@ -288,6 +288,25 @@ screens may use it freely.
 Articles, plurals and verb forms come from a `language` definition. One is
 bundled for English. Translation (04 §20) would supply others.
 
+As built (decision D-542), in `clash_sim::reader`:
+
+- A text has a reader while the `message` and `ask` effects render it
+  (section 10.6): the entity it is for. Anywhere else nobody is "you"
+  and everything goes by its own name.
+- What a reader knows of another entity is asked of a **reader lens**,
+  a function the simulation holds (`Sim::set_reader_lens`): a proper
+  name, which takes no article, a description, which does, or nothing,
+  which reads "something". Until perception and personas are built
+  (15 §8) the lens every simulation starts with answers with the truth,
+  the entity's own name; a package or a test puts another in its place.
+  The lens is not state: a loaded simulation has the plain one.
+- The English forms are built in until the `language` definition type
+  exists: `verb` adds `s`, `es` after a hiss and `ies` after a consonant
+  and `y`, with `be`, `have`, `do` and `go` irregular; `plural` follows
+  the same endings with a short list of irregular nouns; `a` uses `an`
+  before a vowel; `list` joins with commas and a last `and`, each entry
+  with its article. A line a `message` delivers starts with a capital.
+
 ### 4.7 Built-in functions
 
 | Group | Functions |
@@ -1346,6 +1365,44 @@ whose `to` is not bound in the rule's context is a load error.
 Opening screens and other interface effects belong to document 12. A rule
 asks for a screen with `show_screen` (12 §10.5).
 
+As built (decision D-542):
+
+- `message` and `ask` are effects of the rule system, not verbs: a
+  verb's argument is one value, and these take a text template rendered
+  for a reader and lists of effects to run later.
+- **`message`** takes `text`, a template; `to`, an entity, by default
+  `self`; and `style`, a text the interface reads, by default empty.
+  `{ "message": "…" }` gives the text alone. The text is rendered with
+  `to` as its reader (section 4.6) and raised as the event `message`
+  (03 §13), about `to`, caused as anything the rule does is. Where `to`
+  is left out and no `self` is bound, or `text` is missing, it is a
+  load error. A `to` that is not an entity that exists is reported
+  (`rule.message_refused`) and nothing is shown.
+- **`ask`** takes `who`, by default `self`; `prompt`, a template; and
+  `options`, a list of at least one, each with `label`, a template, `if`,
+  a condition, and `do`. The prompt and labels are rendered for `who`,
+  and each `if` is tested when the effect runs. An entity that is
+  directly controlled is asked: the choice is kept in the rule state
+  with where the `ask` is written (the definition and the JSON path),
+  the subjects, locals and event fields bound there and the cause, and
+  a `Choice` decision is requested (03 §5.2), which stops time. The
+  `Choose` command answers with the position of an option; it is
+  refused (`rule.choice_refused`) for one that is not there or whose
+  `if` did not hold, and the choice still waits. Anyone else takes the
+  first option whose `if` held, at once, and none if none did. Either
+  way `choice_made` is raised and the option's `do` then runs with what
+  was bound where the `ask` is written; a choice taken at once runs it
+  in the list the `ask` is in. Its `set` and `add` on locals change the
+  copy the choice kept, not the list that asked.
+- `options` written as an expression gives a list of maps, each with
+  `label`, `eoc` (a rule's qualified id) and `with` (its parameters by
+  name); one whose `eoc` names no rule may not be taken.
+- A kept choice survives a save. If the `ask` is no longer where it was
+  written when the choice is answered, nothing runs and the fault
+  `rule.choice_lost` is reported. A choice whose chooser stops being
+  directly controlled is settled as anyone else's is, then; one whose
+  chooser is removed is forgotten.
+
 ### 10.7 Subsystem verbs
 
 Everything else is registered by the subsystem that implements it and listed
@@ -1595,6 +1652,9 @@ As built (decision D-475):
 | `rule.queries_unavailable` | `for_each` was given a query; queries are not built yet. |
 | `rule.verb_unbound` | An effect called a verb that is registered and that nothing in the engine carries out. Nothing was done. |
 | `rule.expression_warning` | An expression a rule or a list of effects evaluated gave a run-time warning (section 4.5). The operation gave null. |
+| `rule.message_refused` | A `message` was for something that is not an entity that exists. Nothing was shown. |
+| `rule.choice_refused` | `Choose` named an option the choice does not have, or one whose `if` did not hold. The choice still waits. A refusal of a command, not a fault. |
+| `rule.choice_lost` | A kept choice was answered and its `ask` is no longer where it was written. Nothing ran. |
 
 In every case but the first the rule carries on with its next effect.
 
@@ -1798,7 +1858,12 @@ are read and kept, and schedule nothing. A `run` source is taken by a
 are read from the rule host, which the simulation answers from its
 settings once it is bound to the rule runtime; until then they are the
 defaults. A verb's argument is an expression of a declared type: one
-that is a text template, or a list of effects, cannot be declared yet.
+that is a text template, or a list of effects, cannot be declared yet;
+`message` and `ask` are effects of the rule system for that reason. What
+a reader knows of others is the simulation's reader lens, which a mod
+cannot supply until perception and personas are built; the English
+forms of the text helpers are built in until the `language` definition
+type exists.
 What `run` gives a `let` is typed `any`, whatever the rule's `returns`.
 
 ## 18. Invariants

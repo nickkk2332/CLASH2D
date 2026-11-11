@@ -38,15 +38,21 @@ use clash_expr::{
 };
 use clash_world::{Cause, CauseKind};
 
-use super::host::{FaultLimiter, Raise, Raised, RuleFault, RuleHost, RuleLimits, RunView, VerbCall};
+use super::host::{
+    FaultLimiter, Message, Offer, Offered, Raise, Raised, RuleFault, RuleHost, RuleLimits, RunView,
+    VerbCall,
+};
 use super::interp::RunOutcome;
-use super::state::{Occurrence, RuleSet, RuleState};
+use super::state::{Occurrence, PendingChoice, RuleSet, RuleState, StoredOption, SubjectKey};
 use super::{Effects, EocId, reason};
 use crate::Sim;
+use crate::action::ActEvent;
 use crate::bus::{Delivery, EventPayload, Handler};
-use crate::event::{CAUSE_SUBJECTS, Subject, Where};
+use crate::decision::{ChoiceId, ChoiceOption, DecisionKind};
+use crate::entity::Control;
+use crate::event::{CAUSE_SUBJECTS, EventBody, Subject, Where};
 use crate::host::RULE_STREAM;
-use crate::reason::Reason;
+use crate::reason::{Reason, codes};
 use crate::verb::{VerbFn, engine_verbs};
 
 /// What the simulation sets up beside its state so that rules run: the
@@ -64,6 +70,9 @@ pub(crate) struct Runtime {
     /// How many faults and warnings were reported, counting those that
     /// were thinned out.
     pub(crate) fault_count: u64,
+    /// What a reader knows of others, for text written for a reader
+    /// ([`reader`](crate::reader)).
+    pub(crate) lens: crate::reader::ReaderLens,
 }
 
 impl Runtime {
@@ -87,11 +96,14 @@ impl Runtime {
             }
         }
         Runtime {
-            rules: Arc::new(RuleSet::new(Arc::clone(defs))),
+            rules: Arc::new(
+                RuleSet::new(Arc::clone(defs)).with_roots(vec![crate::action::effect_roots]),
+            ),
             verbs,
             faults: FaultLimiter::new(),
             warnings: WarningLimiter::new(),
             fault_count: 0,
+            lens: crate::reader::plain_lens,
         }
     }
 
@@ -389,6 +401,114 @@ impl RuleHost for SimRules<'_> {
             self.sim.fault(reason);
         }
     }
+
+    fn set_reader(&mut self, reader: Option<Handle>) {
+        self.reader = reader
+            .and_then(|handle| self.named(handle))
+            .and_then(|subject| subject.entity());
+    }
+
+    fn message(&mut self, message: &Message<'_>) -> Result<(), Reason> {
+        let to = self
+            .named(message.to)
+            .and_then(|subject| subject.entity())
+            .filter(|id| self.sim.entities.contains(*id))
+            .ok_or_else(|| {
+                Reason::new(
+                    reason::MESSAGE_REFUSED,
+                    "a message is for an entity that exists",
+                )
+            })?;
+        let cause = self.cause(&message.by);
+        self.sim.emit(
+            Where::Entity(to),
+            cause,
+            EventBody::Act(ActEvent::Message {
+                to,
+                text: crate::reader::capitalised(message.text),
+                style: message.style.to_owned(),
+            }),
+        );
+        Ok(())
+    }
+
+    fn offer(&mut self, offer: &Offer<'_>) -> Offered {
+        let who = self
+            .named(offer.who)
+            .and_then(|subject| subject.entity())
+            .filter(|id| self.sim.entities.contains(*id));
+        let cause = self.cause(&offer.by);
+        let site = self.rules.site_of(offer.origin);
+        let direct = who.is_some_and(|id| {
+            self.sim
+                .entities
+                .get(id)
+                .is_some_and(|entity| entity.control() == Control::Direct)
+        });
+        let (Some(who), Some(site), true) = (who, site, direct) else {
+            // Nobody to ask: the first option that may be taken is.
+            let taken = offer.options.iter().position(|option| option.available);
+            if let (Some(who), Some(index)) = (who, taken) {
+                let choice = self.sim.rules.next_choice();
+                let label = offer
+                    .options
+                    .get(index)
+                    .map_or_else(String::new, |option| option.label.clone());
+                self.sim.made_choice(who, choice, index, label, cause);
+            }
+            return Offered::Taken(taken);
+        };
+        let registry = Arc::clone(self.rules.defs().expr_registry());
+        let options: Vec<StoredOption> = offer
+            .options
+            .iter()
+            .map(|option| StoredOption {
+                label: option.label.clone(),
+                available: option.available,
+                rule: option
+                    .run
+                    .as_ref()
+                    .filter(|_| option.available)
+                    .and_then(|(id, _)| self.rules.name(*id).map(str::to_owned)),
+                with: option
+                    .run
+                    .as_ref()
+                    .map_or(clash_core::Value::Null, |(_, with)| with.to_stored()),
+            })
+            .collect();
+        let shown: Vec<ChoiceOption> = options
+            .iter()
+            .map(|option| ChoiceOption {
+                label: option.label.clone(),
+                available: option.available,
+            })
+            .collect();
+        let pending = PendingChoice {
+            who: SubjectKey::from(offer.who),
+            prompt: offer.prompt.to_owned(),
+            options,
+            site,
+            owner: offer.by.owner.map(SubjectKey::from),
+            names: offer.by.names.iter().map(|name| name.to_string()).collect(),
+            subjects: offer.by.values.iter().map(Value::to_stored).collect(),
+            locals: offer.locals.iter().map(Value::to_stored).collect(),
+            event: offer.event.and_then(|(event, fields)| {
+                let name = registry.event(event)?.spec.name.clone();
+                Some((name, fields.iter().map(Value::to_stored).collect()))
+            }),
+            cause,
+        };
+        let choice = self.sim.rules.next_choice();
+        self.sim.rules.keep_choice(choice, pending);
+        let kind = DecisionKind::Choice {
+            choice,
+            prompt: offer.prompt.to_owned(),
+            options: shown,
+        };
+        // The entity was found directly controlled just above.
+        let _ = self.sim.request_decision(who, kind, cause);
+        Offered::Pending
+    }
 }
 
 /// The reason for a handle that names nothing of the simulation's.
@@ -534,6 +654,120 @@ impl Sim {
 }
 
 impl Sim {
+    /// Answers a choice put by a rule's `ask` (05 §10.6): the `Choose`
+    /// command. The option's effects run with the subjects and locals of
+    /// where the `ask` is written, caused as the `ask` was.
+    ///
+    /// Refused if the entity is not waiting for that choice
+    /// (`decision.none_pending`), or the choice has no such option or
+    /// that option may not be taken (`rule.choice_refused`); the choice
+    /// then still waits.
+    pub(crate) fn choose(
+        &mut self,
+        entity: EntityId,
+        choice: ChoiceId,
+        option: u32,
+    ) -> Result<(), Reason> {
+        self.known(entity)?;
+        let waiting = self
+            .decisions
+            .choices_of(entity)
+            .any(|waiting| waiting == choice);
+        let pending = self
+            .rules
+            .choice(choice)
+            .filter(|_| waiting)
+            .ok_or_else(|| {
+                Reason::new(
+                    codes::DECISION_NONE_PENDING,
+                    format!("entity {entity} is not waiting for choice {choice}"),
+                )
+                .with("entity", entity.to_string())
+                .with("choice", i64::try_from(choice.raw()).unwrap_or(i64::MAX))
+            })?;
+        let index = usize::try_from(option).unwrap_or(usize::MAX);
+        let label = match pending.options.get(index) {
+            Some(stored) if stored.available => stored.label.clone(),
+            found => {
+                let why = if found.is_some() {
+                    "may not be taken"
+                } else {
+                    "is not one of its options"
+                };
+                return Err(Reason::new(
+                    reason::CHOICE_REFUSED,
+                    format!("option {option} of choice {choice} {why}"),
+                )
+                .with("choice", i64::try_from(choice.raw()).unwrap_or(i64::MAX))
+                .with("option", i64::from(option)));
+            }
+        };
+        self.answer_which(
+            entity,
+            |kind| matches!(kind, DecisionKind::Choice { choice: asked, .. } if *asked == choice),
+        );
+        if let Some(pending) = self.rules.take_choice(choice) {
+            self.made_choice(entity, choice, index, label, pending.cause);
+            self.resume(&pending, index);
+        }
+        Ok(())
+    }
+
+    /// Reports that a choice was made: `choice_made`.
+    fn made_choice(
+        &mut self,
+        who: EntityId,
+        choice: ChoiceId,
+        option: usize,
+        label: String,
+        cause: Cause,
+    ) {
+        self.emit(
+            Where::Entity(who),
+            cause,
+            EventBody::Act(ActEvent::ChoiceMade {
+                who,
+                choice,
+                option: u32::try_from(option).unwrap_or(u32::MAX),
+                label,
+            }),
+        );
+    }
+
+    /// Runs the effects of the option taken of a choice that was kept.
+    /// What cannot be run is reported as a fault.
+    fn resume(&mut self, pending: &PendingChoice, option: usize) {
+        let rules = Arc::clone(&self.rt.rules);
+        if let Err(reason) =
+            rules.resume_choice(&mut self.rule_host(pending.cause), pending, option)
+        {
+            self.fault(reason);
+        }
+    }
+
+    /// Settles the choices an entity was asked to make and can no longer
+    /// be asked: it is not directly controlled any more. The first
+    /// option that may be taken is, as for anyone not under direct
+    /// control (05 §10.6).
+    pub(crate) fn settle_choices(&mut self, entity: EntityId) {
+        let Some(handle) = self.exprs.kinds().handle(Subject::Entity(entity)) else {
+            return;
+        };
+        for choice in self.rules.choices_of(handle) {
+            let Some(pending) = self.rules.take_choice(choice) else {
+                continue;
+            };
+            if let Some(index) = pending.options.iter().position(|option| option.available) {
+                let label = pending
+                    .options
+                    .get(index)
+                    .map_or_else(String::new, |option| option.label.clone());
+                self.made_choice(entity, choice, index, label, pending.cause);
+                self.resume(&pending, index);
+            }
+        }
+    }
+
     /// Ends what an entity that is about to be removed was part of and
     /// forgets what rules kept for it: the rules attached to it and
     /// when rules last ran for it (05 §9.3).

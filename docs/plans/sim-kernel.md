@@ -45,7 +45,7 @@ start while the world model is being built.
 | K6 | Queries and value sources | M | K5 | todo |
 | K7 | Timers, continuations, simulation saves | L | K5, W10 | todo |
 | K8 | World verbs | M | K5 | todo |
-| K9 | Messages and choices | S | K5 | todo |
+| K9 | Messages and choices | S | K5 | beta |
 | K10 | Tracing, explain, profile, console | M | K5, W11 | todo |
 | T1 | Clock assignment | M | K1 | beta |
 | T2 | Action definitions | M | X4 | beta |
@@ -592,6 +592,21 @@ Done when
 - A choice offered to a directly controlled entity stops time until
   answered; the chosen option's effects run with the original subjects.
 - A choice offered to another entity takes the first available option.
+
+As built (decision D-542). Beta: both items are built and tested in
+`crates/clash-sim/tests/messages.rs` with the fixture mod `talk` under
+`crates/clash-sim/tests/fixtures/act/mods/`: `message` and `ask` are
+effects of the rule compiler, a kept choice is plain rule state that
+survives a save and a replay, `Choose` answers it, and anyone not
+directly controlled takes the first available option at once. Of the
+review addition "Text for a reader", the K9 half is built as the test
+`who_did_it`, with what a reader knows supplied by a fixture lens
+(`Sim::set_reader_lens`) and the grammar helpers in `clash_sim::reader`
+with unit tests. Stubbed: the `language` definition type (the English
+forms are built in), the lint warning for reading another's `.name` in
+a message (no such property is registered yet), and the `.scn` form of
+`who_did_it`, which waits for the simulation to implement the console's
+host.
 
 ### K10 — Tracing, explain, profile, console
 

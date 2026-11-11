@@ -153,6 +153,69 @@ pub struct Raise<'a> {
     pub by: RunView<'a>,
 }
 
+/// A line a rule's `message` puts in someone's log (05 §10.6).
+#[derive(Clone, Copy, Debug)]
+pub struct Message<'a> {
+    /// Who it is for: the reader it was rendered for.
+    pub to: Handle,
+    /// The line.
+    pub text: &'a str,
+    /// How it is to be shown; empty if the effect did not say.
+    pub style: &'a str,
+    /// What is running.
+    pub by: RunView<'a>,
+}
+
+/// One option of a choice a rule's `ask` puts (05 §10.6).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct OfferOption {
+    /// What it says, rendered for the one who chooses.
+    pub label: String,
+    /// Whether it may be taken.
+    pub available: bool,
+    /// For an option gathered when the effect ran: the rule to run if
+    /// it is chosen and the values to run it with, a map by parameter
+    /// name or null. `None` for an option written in the `ask`, whose
+    /// effects are found where it is written.
+    pub run: Option<(EocId, Value)>,
+}
+
+/// A choice being offered by the `ask` effect, with what its options'
+/// effects need to run later: where the effect is written and what was
+/// bound there.
+#[derive(Clone, Copy, Debug)]
+pub struct Offer<'a> {
+    /// Who chooses.
+    pub who: Handle,
+    /// The question, rendered for the one who chooses.
+    pub prompt: &'a str,
+    /// The options, in the order written.
+    pub options: &'a [OfferOption],
+    /// The origin number of the `ask` effect: from it
+    /// [`ExprDefs::origin`](clash_data::ExprDefs::origin) knows the
+    /// definition and the JSON path it is written at.
+    pub origin: u64,
+    /// The locals of the list the `ask` is written in, by slot.
+    pub locals: &'a [Value],
+    /// The event being handled where the `ask` is written, and its
+    /// fields.
+    pub event: Option<(EventId, &'a [Value])>,
+    /// What is running: the rule, its owner and its subjects.
+    pub by: RunView<'a>,
+}
+
+/// What a host did with a choice.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Offered {
+    /// It was settled at once: the option at this position is taken,
+    /// or none is.
+    Taken(Option<usize>),
+    /// The host keeps it: whoever chooses will be asked, and the
+    /// option's effects run when they answer
+    /// ([`RuleSet::resume_choice`](super::RuleSet::resume_choice)).
+    Pending,
+}
+
 /// What came of raising an event.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Raised {
@@ -274,6 +337,29 @@ pub trait RuleHost: clash_expr::Host {
     /// Receives a fault. The host decides, usually through a
     /// [`FaultLimiter`], whether to report it.
     fn fault(&mut self, fault: RuleFault);
+
+    /// Says who the text about to be rendered is for, or with `None`
+    /// that the rendering is over (05 §4.6). The text helpers the host
+    /// answers (`name`, `the`, `they`, `verb`) read as that reader
+    /// would read them.
+    fn set_reader(&mut self, reader: Option<Handle>) {
+        let _ = reader;
+    }
+
+    /// Delivers a line of the `message` effect to whoever shows it. A
+    /// host with nowhere to show it drops it.
+    fn message(&mut self, message: &Message<'_>) -> Result<(), Reason> {
+        let _ = message;
+        Ok(())
+    }
+
+    /// Offers a choice of the `ask` effect. A host that can ask keeps
+    /// what the offer carries and answers `Pending`; one that cannot
+    /// takes the first option that is available, which is what this
+    /// does.
+    fn offer(&mut self, offer: &Offer<'_>) -> Offered {
+        Offered::Taken(offer.options.iter().position(|option| option.available))
+    }
 }
 
 /// How many times a site may report before its reports are thinned out.

@@ -551,6 +551,12 @@ As built (decision D-365):
   The rest of the list above arrives with the packages that can honour
   each. A debug command is a command like any other: validated, logged
   and replayed.
+- `Choose { entity, choice, option }` (package K9, decision D-542)
+  answers a choice put by a rule's `ask` (05 §10.6) with the position of
+  an option, from zero. It is refused with `decision.none_pending` if
+  the entity is not waiting for that choice, and with
+  `rule.choice_refused` for an option the choice does not have or may
+  not take.
 - A `CommandError` holds a `Reason` (14 §5): a stable code, a sentence and
   the values involved. A refused command leaves the state exactly as it
   was and is not logged.
@@ -616,9 +622,14 @@ answer them:
   entity order, `advance` runs what is still due at the current tick
   before it returns `NeedInput`. Time does not move.
 - `elapsed` is the entity's own time (section 3.4) since it last answered.
-- Of the kinds, only `Free` exists yet. `PlanEmpty` carries the reason a
-  step could not be started, if that is why. An entity that stops being
-  directly controlled, or is removed, is no longer waiting for anything.
+- Of the kinds, `Free` and `Choice` exist. `PlanEmpty` carries the
+  reason a step could not be started, if that is why. An entity that
+  stops being directly controlled, or is removed, is no longer waiting
+  for anything; a choice it was asked is then settled with its first
+  option that may be taken, or forgotten if it was removed (05 §10.6).
+- `Choice { choice, prompt, options }`: `choice` is a `ChoiceId`, never
+  given twice in one simulation; `prompt` and each option's `label` are
+  rendered for the entity; each option says whether it may be taken.
 
 ### 5.3 Plans
 
@@ -1150,6 +1161,36 @@ lists. A subject marked `?` is bound only when there is one.
 | `var_changed` | `self?`: entity; `here?`: loc; `area?`; `site?`; `tract?`; `realm?` | `name`, `scope`: string; `old`, `new`: any | A variable declared with `"watch": true` changed (05 §6). What it lives on is bound under the name of its kind |
 | `fault` | none | `code`, `message`: string | The engine contained a fault. Goes straight to the output; no handler receives it |
 | `event_cancelled` | none | `event`, `code`, `message`: string | A hook was cancelled (05 §8.2) |
+
+The events of acting, as built (decisions D-541 to D-545). Each binds
+the entity it is about as `self`, and `actor` and `instigator` from its
+cause. `action` is the qualified id of the action's definition, `id`
+the number of the running action (an int no other action of the
+simulation ever has), `phase` the id of a phase, and `code` and
+`message` the reason's code and sentence.
+
+| Event | Fields | Raised when |
+|-------|--------|-------------|
+| `action_started` | `action`, `id` | An action began: its slots are claimed and its `on_start` is about to run |
+| `phase_entered` | `action`, `id`, `phase`; `held`: bool; `duration`: real?, seconds of the actor's clock; `due`: int?, the universal tick in microseconds it is due to end at as the clocks now run | A phase began. Its stamp is the start; `duration` and `due` are null for a held phase with no `max` (section 12) |
+| `phase_exited` | `action`, `id`, `phase` | A phase ended normally: its `on_exit` has run |
+| `action_finished` | `action`, `id` | An action ran to its end: `on_finish` has run and its slots are free |
+| `action_cancelled` | `action`, `id`, `phase` | The actor abandoned an action in a phase that allows it: `on_cancel` has run |
+| `action_interrupted` | `action`, `id`, `phase`, `code`, `message` | An action was ended against the actor's will: `on_interrupt` has run |
+| `action_abandoned` | `action`, `id` | An action ended because its actor left the world or was removed (section 9): `on_abandon` has run |
+| `action_refused` | `action`, `code`, `message` | An action that an effect or a plan asked for did not start, or a handler of `action_starting` refused one a command asked for |
+| `plan_cleared` | `code?`, `message?` | A plan was emptied, with the reason if a step could not start or a rule interrupted it |
+| `window_opened` | `action`, `id`; `kind`: string; `closes`: string, a phase id; `count`: int, how many it is aimed at | A phase that opens a window began. Until windows are built (T5) nobody is offered it |
+| `decision_needed` | `control`: `none` or `delegated`; `why`: `started`, `finished`, `interrupted`, `plan_empty` or `waited` | An entity that is not directly controlled is free to act (section 5.2) |
+| `message` | `text`: string, rendered for `self` as its reader; `style`: string | A rule's `message` (05 §10.6): a line for the log of whoever controls `self` |
+| `choice_made` | `choice`: int; `option`: int, from zero; `label`: string | A choice put by `ask` was answered, by `Choose` or at once; the option's effects run next |
+| `tag_changed` | `tag`: string; `added`: bool | An entity was given a tag it did not have, or lost one it had |
+
+The two hooks, as built: `action_starting` binds `self` and has the
+fields `action` and `params`, the parameters by name as a map with the
+defaults filled in, which a handler may change; `phase_timing` binds
+`self` and has `action`, `id`, `phase` and `duration`, seconds after
+tempo, which a handler may change (a value below zero counts as zero).
 
 The world's events (02 §7.4) are passed on under their own names. Their
 subjects are: `here` for a cell; for `area_entered` and `area_exited`,

@@ -747,11 +747,10 @@ impl Bus {
     /// or any attached one. Whoever raises a hook that nothing listens
     /// for may skip it.
     pub(crate) fn has_listeners(&self, event: &str) -> bool {
-        self.global.get(event).is_some_and(|listeners| listeners.len() > 0)
-            || self
-                .attached
-                .keys()
-                .any(|(_, name)| name == event)
+        self.global
+            .get(event)
+            .is_some_and(|listeners| listeners.len() > 0)
+            || self.attached.keys().any(|(_, name)| name == event)
     }
 }
 

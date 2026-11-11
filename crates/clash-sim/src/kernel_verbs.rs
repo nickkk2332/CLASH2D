@@ -87,7 +87,11 @@ fn rate_arg(call: &VerbCall<'_>, at: usize, verb: &str) -> Result<Option<Real>, 
     match arg(call, at) {
         Value::Null => Ok(None),
         value => value.as_number().map(Some).ok_or_else(|| {
-            bad_argument(verb, "rate", "`rate` must be a number, or null for no clock")
+            bad_argument(
+                verb,
+                "rate",
+                "`rate` must be a number, or null for no clock",
+            )
         }),
     }
 }

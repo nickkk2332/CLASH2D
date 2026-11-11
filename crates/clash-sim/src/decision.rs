@@ -198,9 +198,11 @@ impl DecisionQueue {
 
     /// Whether an entity is being asked what to do next.
     pub fn has_free(&self, entity: EntityId) -> bool {
-        self.pending
-            .get(&entity)
-            .is_some_and(|kinds| kinds.iter().any(|kind| matches!(kind, DecisionKind::Free { .. })))
+        self.pending.get(&entity).is_some_and(|kinds| {
+            kinds
+                .iter()
+                .any(|kind| matches!(kind, DecisionKind::Free { .. }))
+        })
     }
 
     /// The choices an entity is being asked to make, oldest first.

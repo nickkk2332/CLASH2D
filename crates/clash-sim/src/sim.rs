@@ -476,6 +476,10 @@ impl Sim {
                 new: control,
             },
         );
+        if control != Control::Direct {
+            // Nobody will be asked: what it was asked is settled now.
+            self.settle_choices(id);
+        }
         Ok(old)
     }
 

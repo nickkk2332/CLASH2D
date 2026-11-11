@@ -26,12 +26,14 @@ use clash_expr::{
 };
 
 use super::compile::{EMIT_CANCELLED, EMIT_REASON};
-use super::def::{EocDef, SubjectSource};
+use super::def::{EOC_TYPE, EocDef, OWNER_SUBJECT, SubjectSource};
 use super::effects::Effects;
-use super::host::{Raise, RuleFault, RuleHost, RuleLimits, RunView, VerbCall};
+use super::host::{
+    Message, Offer, OfferOption, Offered, Raise, RuleFault, RuleHost, RuleLimits, RunView, VerbCall,
+};
 use super::reason;
-use super::state::{Occurrence, Queued, RuleSet};
-use super::tree::{Arg, Block, Call, Effect, EffectKind, Items, Target};
+use super::state::{Occurrence, PendingChoice, Queued, RuleSet};
+use super::tree::{Arg, Ask, AskOptions, Block, Call, Effect, EffectKind, Items, Target};
 use super::value::{self, ValueFault, conforms, measure};
 use super::{EocId, RuleGroupId};
 use crate::reason::{Reason, codes as kernel_codes};
@@ -908,7 +910,251 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
                 origin,
                 "a timer effect ran: timers are not available yet, so nothing was scheduled",
             ),
+            EffectKind::Message { text, to, style } => {
+                let Some(reader) = self.who(to.as_ref(), origin, "message") else {
+                    return;
+                };
+                self.host.set_reader(Some(reader));
+                let line = self.render(text);
+                self.host.set_reader(None);
+                let style = match style.as_ref().map(|style| self.eval(style)) {
+                    Some(Value::Str(style)) => style.to_string(),
+                    _ => String::new(),
+                };
+                let result = match self.frames.last() {
+                    Some(frame) => self.host.message(&Message {
+                        to: reader,
+                        text: &line,
+                        style: &style,
+                        by: RunView {
+                            rule: frame.rule.map(|(id, _)| id),
+                            owner: frame.owner,
+                            names: &frame.names,
+                            values: &frame.subjects,
+                        },
+                    }),
+                    None => return,
+                };
+                if let Err(refusal) = result {
+                    self.fault_with(
+                        reason::MESSAGE_REFUSED,
+                        origin,
+                        "the message was not delivered",
+                        Some(refusal),
+                    );
+                }
+            }
+            EffectKind::Ask(ask) => self.ask(ask, origin),
         }
+    }
+
+    /// Who a `message` or an `ask` is for: what its argument gives, or
+    /// `self` where it has none.
+    fn who(&mut self, arg: Option<&Arg>, origin: u64, what: &str) -> Option<Handle> {
+        let value = match arg {
+            Some(arg) => self.eval(arg),
+            None => self
+                .frames
+                .last()
+                .and_then(|frame| {
+                    let at = frame
+                        .names
+                        .iter()
+                        .rposition(|name| &**name == OWNER_SUBJECT)?;
+                    frame.subjects.get(at).cloned()
+                })
+                .unwrap_or_default(),
+        };
+        match value {
+            Value::Subject(handle) => Some(handle),
+            other => {
+                self.fault(
+                    reason::NO_SUBJECT,
+                    origin,
+                    format!(
+                        "`{what}` is for someone, and this is {}",
+                        if other.is_null() {
+                            "null".to_owned()
+                        } else {
+                            format!("a {}", other.type_name())
+                        }
+                    ),
+                );
+                None
+            }
+        }
+    }
+
+    /// `ask`: renders the question and the options for whoever chooses
+    /// and offers the choice to the host. An option taken at once runs
+    /// here, in the list the `ask` is written in.
+    fn ask(&mut self, ask: &'r Ask, origin: u64) {
+        let Some(who) = self.who(ask.who.as_ref(), origin, "ask") else {
+            return;
+        };
+        let set = self.set;
+        self.host.set_reader(Some(who));
+        let prompt = self.render(&ask.prompt);
+        let mut options: Vec<OfferOption> = Vec::new();
+        match &ask.options {
+            AskOptions::Listed(listed) => {
+                for option in listed {
+                    let label = self.render(&option.label);
+                    let available = option.cond.as_ref().is_none_or(|cond| self.holds(cond));
+                    options.push(OfferOption {
+                        label,
+                        available,
+                        run: None,
+                    });
+                }
+            }
+            AskOptions::Computed(gathered) => match self.eval(gathered) {
+                Value::List(items) => {
+                    for item in items.iter() {
+                        let entry = |key: &str| item.as_map().and_then(|map| map.get(key));
+                        let label = match entry("label") {
+                            Some(Value::Str(label)) => label.to_string(),
+                            Some(other) => other.to_string(),
+                            None => String::new(),
+                        };
+                        let rule = entry("eoc").and_then(|named| match named {
+                            Value::Str(name) => set.lookup(name),
+                            other => set.rule_of(other),
+                        });
+                        let with = entry("with").cloned().unwrap_or_default();
+                        options.push(OfferOption {
+                            label,
+                            available: rule.is_some(),
+                            run: Some((rule.unwrap_or(EocId::new(0)), with)),
+                        });
+                    }
+                }
+                Value::Null => {}
+                other => {
+                    self.host.set_reader(None);
+                    self.fault(
+                        reason::TYPE_MISMATCH,
+                        origin,
+                        format!(
+                            "the options of `ask` are a list of maps, and this is a {}",
+                            other.type_name()
+                        ),
+                    );
+                    return;
+                }
+            },
+        }
+        self.host.set_reader(None);
+        let offered = match self.frames.last() {
+            Some(frame) => {
+                let event = match self.occurrence.as_deref() {
+                    Some(occurrence) if frame.event => {
+                        Some((occurrence.event, occurrence.fields.as_slice()))
+                    }
+                    _ => None,
+                };
+                self.host.offer(&Offer {
+                    who,
+                    prompt: &prompt,
+                    options: &options,
+                    origin,
+                    locals: &frame.locals,
+                    event,
+                    by: RunView {
+                        rule: frame.rule.map(|(id, _)| id),
+                        owner: frame.owner,
+                        names: &frame.names,
+                        values: &frame.subjects,
+                    },
+                })
+            }
+            None => return,
+        };
+        let Offered::Taken(Some(index)) = offered else {
+            return;
+        };
+        match (&ask.options, options.get(index)) {
+            (AskOptions::Listed(listed), _) => {
+                if let Some(option) = listed.get(index) {
+                    self.push_seq(&option.body);
+                }
+            }
+            (AskOptions::Computed(_), Some(option)) => {
+                if let Some((rule, with)) = &option.run {
+                    self.run_given(*rule, with, origin);
+                }
+            }
+            (AskOptions::Computed(_), None) => {}
+        }
+    }
+
+    /// Calls a rule that was named when an effect ran, with the values
+    /// of a map as its parameters.
+    fn run_given(&mut self, id: EocId, with: &Value, origin: u64) {
+        let set = self.set;
+        let Some(rule) = set.rule(id) else {
+            self.fault(
+                reason::UNKNOWN_RULE,
+                origin,
+                "the rule an option names did not load",
+            );
+            return;
+        };
+        let name = set.name(id).unwrap_or("?");
+        let given: Vec<(&str, Value)> = match with.as_map() {
+            Some(map) => map
+                .iter()
+                .map(|(key, value)| (&**key, value.clone()))
+                .collect(),
+            None => Vec::new(),
+        };
+        let locals = match bind_params(rule, name, &given) {
+            Ok(locals) => locals,
+            Err(message) => {
+                self.fault(reason::BAD_ARGUMENT, origin, message);
+                return;
+            }
+        };
+        let subjects = self.call_subjects(rule, name, origin);
+        self.enter_rule(id, rule, None, subjects, locals, false, None, origin);
+    }
+
+    /// The subjects a rule that is called is given: each from the
+    /// subject bound under the same name where the call is made, and
+    /// `global` from the host.
+    fn call_subjects(&mut self, rule: &EocDef, name: &str, origin: u64) -> Vec<Value> {
+        let global = self.global_for(rule);
+        let mut mismatched: Option<Arc<str>> = None;
+        let subjects: Vec<Value> = rule
+            .subjects()
+            .iter()
+            .map(|subject| {
+                if subject.source == SubjectSource::Global {
+                    return global.clone();
+                }
+                let found = self.frames.last().and_then(|frame| {
+                    let at = frame.names.iter().rposition(|name| *name == subject.name)?;
+                    frame.subjects.get(at).cloned()
+                });
+                match (found, subject.kind) {
+                    (Some(Value::Subject(handle)), Some(kind)) if handle.kind != kind => {
+                        mismatched = Some(subject.name.clone());
+                        Value::Null
+                    }
+                    (found, _) => found.unwrap_or_default(),
+                }
+            })
+            .collect();
+        if let Some(subject) = mismatched {
+            self.fault(
+                reason::BAD_ARGUMENT,
+                origin,
+                format!(
+                    "the subject `{subject}` bound where `{name}` is called is of another kind than the rule takes; the rule was given null"
+                ),
+            );
+        }
+        subjects
     }
 
     // ---- particular effects ----------------------------------------------
@@ -1206,37 +1452,7 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
         };
         // A called rule takes each of its subjects from the subject its
         // caller binds under the same name.
-        let global = self.global_for(rule);
-        let mut mismatched: Option<Arc<str>> = None;
-        let subjects: Vec<Value> = rule
-            .subjects()
-            .iter()
-            .map(|subject| {
-                if subject.source == SubjectSource::Global {
-                    return global.clone();
-                }
-                let found = self.frames.last().and_then(|frame| {
-                    let at = frame.names.iter().rposition(|name| *name == subject.name)?;
-                    frame.subjects.get(at).cloned()
-                });
-                match (found, subject.kind) {
-                    (Some(Value::Subject(handle)), Some(kind)) if handle.kind != kind => {
-                        mismatched = Some(subject.name.clone());
-                        Value::Null
-                    }
-                    (found, _) => found.unwrap_or_default(),
-                }
-            })
-            .collect();
-        if let Some(subject) = mismatched {
-            self.fault(
-                reason::BAD_ARGUMENT,
-                origin,
-                format!(
-                    "the subject `{subject}` bound where `{name}` is called is of another kind than the rule takes; the rule was given null"
-                ),
-            );
-        }
+        let subjects = self.call_subjects(rule, name, origin);
         Some((id, rule, subjects, locals))
     }
 
@@ -1572,6 +1788,108 @@ impl RuleSet {
         let value = core::mem::take(&mut exec.returned);
         self.leave(host);
         Ok(value)
+    }
+
+    /// Runs the effects of an option of a choice that was kept until it
+    /// was answered (05 §10.6): with the subjects, the locals and the
+    /// event fields that were bound where the `ask` is written.
+    ///
+    /// An option written in the `ask` is found again from where the
+    /// `ask` is written; one gathered when it ran names the rule to
+    /// run. Refused, running nothing, if the choice has no such option
+    /// or the `ask` is no longer there.
+    pub fn resume_choice<H: RuleHost + ?Sized>(
+        &self,
+        host: &mut H,
+        choice: &PendingChoice,
+        option: usize,
+    ) -> Result<(), Reason> {
+        let Some(stored) = choice.options.get(option) else {
+            return Err(Reason::new(
+                reason::CHOICE_REFUSED,
+                format!("the choice has no option {option}"),
+            )
+            .with("option", i64::try_from(option).unwrap_or(i64::MAX)));
+        };
+        let lost = || {
+            Reason::new(
+                reason::CHOICE_LOST,
+                format!(
+                    "the `ask` at `{}` of {} `{}` is no longer there, so what was chosen cannot be run",
+                    choice.site.path, choice.site.def_type, choice.site.def
+                ),
+            )
+            .with("definition", choice.site.def.as_str())
+            .with("path", choice.site.path.as_str())
+        };
+        // What will run is found before anything is set going.
+        enum Chosen<'a> {
+            Body(&'a Block),
+            Rule(EocId, &'a EocDef, Vec<Value>),
+        }
+        let chosen = match &stored.rule {
+            Some(name) => {
+                let (id, rule) = self
+                    .lookup(name)
+                    .and_then(|id| Some((id, self.rule(id)?)))
+                    .ok_or_else(lost)?;
+                let with = Value::from(&stored.with);
+                let given: Vec<(&str, Value)> = match with.as_map() {
+                    Some(map) => map
+                        .iter()
+                        .map(|(key, value)| (&**key, value.clone()))
+                        .collect(),
+                    None => Vec::new(),
+                };
+                let locals = bind_params(rule, name, &given).map_err(|message| {
+                    Reason::new(reason::BAD_ARGUMENT, message).with("rule", name.as_str())
+                })?;
+                Chosen::Rule(id, rule, locals)
+            }
+            None => match self.ask_at(&choice.site).map(|ask| &ask.options) {
+                Some(AskOptions::Listed(listed)) => {
+                    Chosen::Body(&listed.get(option).ok_or_else(lost)?.body)
+                }
+                _ => return Err(lost()),
+            },
+        };
+        let rule = (choice.site.def_type == EOC_TYPE)
+            .then(|| self.lookup(&choice.site.def))
+            .flatten()
+            .and_then(|id| Some((id, self.rule(id)?)));
+        let mut occurrence = choice.event.as_ref().and_then(|(name, fields)| {
+            let event = self.defs().expr_registry().event_id(name)?;
+            Some(Occurrence::new(
+                event,
+                Vec::new(),
+                fields.iter().map(Value::from).collect(),
+            ))
+        });
+        let handling = occurrence.is_some();
+        host.rule_state().running.depth += 1;
+        let mut exec = Exec::new(self, host, occurrence.as_mut());
+        exec.frames.push(Frame {
+            rule,
+            owner: choice.owner.map(Handle::from),
+            names: choice.names.iter().map(|name| Arc::from(&**name)).collect(),
+            subjects: choice.subjects.iter().map(Value::from).collect(),
+            locals: choice.locals.iter().map(Value::from).collect(),
+            event: handling,
+            base: 0,
+            ret: None,
+        });
+        match chosen {
+            Chosen::Body(body) => exec.push_seq(body),
+            Chosen::Rule(id, rule, locals) => {
+                let name = self.name(id).unwrap_or("?");
+                let subjects = exec.call_subjects(rule, name, 0);
+                exec.enter_rule(id, rule, None, subjects, locals, false, None, 0);
+            }
+        }
+        exec.run();
+        drop(exec);
+        self.leave(host);
+        Ok(())
     }
 
     /// Ends an outermost run: once nothing is running, the rules that

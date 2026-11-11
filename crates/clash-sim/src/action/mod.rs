@@ -160,3 +160,26 @@ pub fn register_defs(types: &mut DefTypes) {
         .register::<WindowKindDef>()
         .register::<ActionDef>();
 }
+
+/// Finds the compiled effect lists of an action by its qualified id, so
+/// that the rule runtime can find an effect written in one again from
+/// where it is written ([`EffectRoots`](crate::rule::EffectRoots)): a
+/// choice an action's `ask` put is answered after a save too.
+pub(crate) fn effect_roots<'a>(
+    defs: &'a clash_data::Defs,
+    def_type: &str,
+    def: &str,
+    out: &mut Vec<&'a crate::rule::Block>,
+) {
+    use clash_data::Def;
+    if def_type != ActionDef::TYPE {
+        return;
+    }
+    let Some(registry) = defs.try_registry::<ActionDef>() else {
+        return;
+    };
+    let Some(action) = registry.lookup(def).and_then(|id| registry.try_get(id)) else {
+        return;
+    };
+    out.extend(action.effect_lists().filter_map(Effects::block));
+}

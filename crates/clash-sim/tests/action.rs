@@ -503,13 +503,14 @@ fn an_action_uses_several_channels_and_every_slot_of_one() {
     assert_eq!(bellow.on_interrupt.len(), 1);
     assert_eq!(bellow.on_abandon.len(), 1);
     assert_eq!(Effects::empty().len(), 0);
-    // And each is compiled: a call of the verb, with its one argument.
+    // And each is compiled: `message` is an effect of the rule system
+    // (05 §10.6), for `self`, with its text.
     let block = bellow.on_start.block().expect("the list is compiled");
     assert_eq!(block.len(), 1);
     assert_eq!(block.path(), "on_start");
     assert!(matches!(
         &block.effects()[0].kind,
-        EffectKind::Verb { args, .. } if args.len() == 1 && args[0].is_some()
+        EffectKind::Message { to: None, style: None, .. }
     ));
     assert!(
         bellow

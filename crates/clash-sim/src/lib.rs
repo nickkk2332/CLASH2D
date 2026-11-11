@@ -70,6 +70,7 @@ pub mod kernel_verbs;
 pub mod later;
 pub mod mass;
 mod props;
+pub mod reader;
 pub mod reason;
 pub mod registry;
 pub mod rule;

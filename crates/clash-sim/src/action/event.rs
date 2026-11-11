@@ -592,7 +592,11 @@ pub const ACT_EVENTS: &[EventInfo] = &[
         name: "message",
         subjects: ACTOR,
         fields: &[
-            ("text", "string", "The line, rendered for `self` as its reader."),
+            (
+                "text",
+                "string",
+                "The line, rendered for `self` as its reader.",
+            ),
             (
                 "style",
                 "string",
@@ -606,7 +610,11 @@ pub const ACT_EVENTS: &[EventInfo] = &[
         subjects: ACTOR,
         fields: &[
             ("choice", "int", "The number of the choice."),
-            ("option", "int", "The position of the option taken, from zero."),
+            (
+                "option",
+                "int",
+                "The position of the option taken, from zero.",
+            ),
             ("label", "string", "Its label, as it was shown."),
         ],
         doc: "A choice put by a rule's `ask` was answered (05 §10.6): by the `Choose` command, or at once for an entity that is not directly controlled. The option's effects run next.",
