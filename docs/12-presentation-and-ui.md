@@ -570,8 +570,10 @@ faster character reads on screen as fast instead of as teleporting. The
 camera may be told to follow one sprite as playback moves it.
 
 Relocation events do not yet carry how long the move took, so a glide
-lasts its show's `time` (decision D-606). Bodies in flight (02 §15) do
-not report their paths yet and are not drawn along them.
+lasts its show's `time` (decision D-606). Bodies in flight (02 §15)
+report where they start, what they strike and where they come to rest,
+and the bundled shows draw them there; no event carries the path between,
+so they are not drawn along it.
 
 ### 7.3 Showing events
 

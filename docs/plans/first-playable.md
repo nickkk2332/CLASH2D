@@ -659,7 +659,8 @@ projectile, and a property test that caught-up playback equals a fresh
 view (D-608). Stubbed, each waiting for what it needs: perception
 answers through a stand-in in `clash_scene::testing` (S9); events carry
 no duration, so a glide lasts its show's `time`, and bodies in flight are
-not drawn along their paths (W14); floating text, particles and effects
+drawn where they start, strike and land and not along their paths, which
+no event carries (W14); floating text, particles and effects
 shaped by an event's fields are not built; cutscenes cannot yet choose
 when the events of their span are played (U10); `message` effects reach
 the log only through `Scene::log_mut` until the simulation reports them

@@ -78,7 +78,8 @@
 //!   until settings exist.
 //! - Events carry no duration, so a sprite glides for its show's `time`
 //!   and not for as long as the move took (12 §7.2), and bodies in
-//!   flight are not drawn along their paths.
+//!   flight are drawn where they start, strike and land, not along
+//!   their paths, which no event carries.
 //! - Cutscenes (package U10) will choose when the pending events of
 //!   their span are played; the queue has no way to be told yet.
 //! - `message` effects of rules reach the log through

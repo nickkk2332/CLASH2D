@@ -33,8 +33,8 @@ use clash_scene::{
 use clash_sim::{EventBody, Place, SimEvent};
 use clash_time::ClockId;
 use clash_world::{
-    BlockState, Cause, CellPos, DamageTypeId, Destruction, ElementState, FloorState, GridId, Layer,
-    Location, WorldDefs, WorldEvent,
+    BlockState, BodyId, BodyOwner, Cause, CellPos, DamageTypeId, Destruction, ElementState,
+    FloorState, GridId, Layer, Location, WorldDefs, WorldEvent,
 };
 use proptest::prelude::*;
 
@@ -681,6 +681,57 @@ fn sound_cues_are_handed_on_and_played_by_nobody() {
     assert_eq!(cues[1].at, Some(at(4, 0)));
     assert!(!cues[1].heard);
     assert!(run.scene.take_sound_cues().is_empty());
+}
+
+#[test]
+fn someone_thrown_goes_flying_and_lands_where_the_party_sees_them() {
+    let mut run = Run::new();
+    run.host.read_as(Some(run.host.entity(MARA)));
+    let jonas = id(JONAS);
+    let body = BodyId::new(1);
+    let owner = BodyOwner::Entity(jonas);
+    let zero = [Real::ZERO; 3];
+    run.set_look(JONAS, Some(creature('j', (6, 5))));
+    run.scene.push_events([
+        event(
+            T,
+            Cause::DEBUG,
+            EventBody::World(WorldEvent::BodyLaunched {
+                tick: Tick(T),
+                body,
+                owner,
+                loc: at(JONAS_AT.0, JONAS_AT.1),
+                pos: zero,
+                vel: zero,
+                mass: Real::ONE,
+                cause: Cause::DEBUG,
+            }),
+        ),
+        event(
+            T + 400_000,
+            Cause::DEBUG,
+            EventBody::World(WorldEvent::BodyLanded {
+                tick: Tick(T + 400_000),
+                body,
+                owner,
+                loc: at(6, 5),
+                pos: zero,
+                cause: Cause::DEBUG,
+            }),
+        ),
+    ]);
+    run.turns(1);
+    assert_eq!(run.lines(), ["Jonas goes flying."]);
+    // Dust where he was, and his sprite still there until he lands.
+    assert_eq!(run.ch(JONAS_AT), ':');
+    assert_eq!(
+        run.model().sprite(SpriteId::new(JONAS)).unwrap().loc,
+        at(JONAS_AT.0, JONAS_AT.1)
+    );
+    run.until_idle();
+    assert_eq!(run.lines(), ["Jonas goes flying.", "Jonas lands hard."]);
+    assert_eq!(run.ch((6, 5)), 'j');
+    run.check();
 }
 
 /// A test mod's shows: a bolt that flies from whoever broke a wall to
