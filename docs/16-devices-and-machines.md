@@ -1,0 +1,797 @@
+# 16 — Interaction, Devices, Machines and Building
+
+Status: design complete, ready for implementation.
+Implementation plan: [plans/devices.md](plans/devices.md).
+Serves scenes S13, S18, S24 and S25 of [00-vision.md](00-vision.md).
+
+## 1. Scope
+
+This document specifies how characters use the world and how the world is
+made to do work: interactions, devices, resources and the networks that
+carry them, conduits, signals and control, recipes for crafting and
+automatic processing, moving items about, construction and base building,
+and assemblies: gadgets, powered suits, implants and anything else built
+from modules.
+
+It is the engine side of survival, building and automation play in the
+manner of CDDA bases, RimWorld colonies and the tech and magic mods of
+Minecraft, and of the equipment a superpowered setting needs.
+
+It extends the minimal device of plans/first-playable E12, and supplies the
+resource bus that vehicles use (11 §6.2). It adds one sparse layer to cells
+(02 §5.1).
+
+Names of resources, machines and modules in examples are illustrative
+content. The engine does not know what electricity is (01 R10).
+
+## 2. The picture
+
+A character acts on the world through **interactions**: open, pull, load,
+hack, drink from. An interaction is a definition with a reach, a duration
+and effects. Elements, items, devices and creatures offer them.
+
+A **device** is anything with behaviour: a lamp, a generator, a furnace, a
+door actuator, a pressure plate, a pocket torch, a suit of armour. Devices
+have **ports**. Ports join **networks**.
+
+A **resource** is anything that is produced, moved, stored and used up:
+power, fuel, water, steam, mana, data, torque. Resources are data, so a mod
+defines its own. A **network** is the set of devices sharing one resource:
+because they are wired together with **conduits**, because they are parts
+of one **assembly**, or because they are in range of each other. A network
+balances what is offered against what is wanted, sheds load by priority
+when there is not enough, and fills or drains its stores. A device that
+needs forty kilowatts does not run without forty kilowatts.
+
+**Signals** carry values instead of quantities: this plate is pressed, that
+tank is full. Devices drive them and respond to them. That is all the logic
+a trap, an alarm or an automated factory needs.
+
+A **recipe** turns inputs into outputs over time. A character follows one
+at a workbench; a machine follows one unattended; and when the output is a
+wall where there was none, the recipe is **construction**. Unfinished work
+is kept as a **job** that anyone may continue.
+
+An **assembly** is a device with **slots** for modules that share its
+resources. A torch with a battery is an assembly. So is a rifle with a
+scope, a powered suit, an implant set, and a vehicle.
+
+Nothing here runs every tick. Stores change at known rates, processes
+finish at known times, and the timeline holds one wake-up for each.
+
+## 3. Interactions
+
+### 3.1 Definition
+
+```json
+{ "type": "interaction", "id": "open", "name": "Open",
+  "reach": "adjacent",
+  "uses": { "arm": 1 }, "time": "600 ms", "noise": 0.2,
+  "if": "target.state == 'closed'",
+  "do": [ { "set_state": { "of": "target", "state": "open" } } ],
+  "default": true }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `reach` | How close the user must be (section 3.3) |
+| `uses`, `time`, `noise` | Channel slots (03 §6.2), duration and sound of doing it |
+| `tools` | Tool qualities required (section 8.3) |
+| `if` | Whether it can be done now. `shown_if` decides whether it is listed at all. |
+| `do` | Effects, with `self` the user and `target` the thing |
+| `default` | Used when the thing is bumped into or clicked without choosing |
+
+The engine has no built-in "open" or "use". Every interaction is content.
+
+### 3.2 Who offers what
+
+| Source | How |
+|--------|-----|
+| Elements | `interactions` on floors, blocks and fixtures (02 §5.5) |
+| Devices and items | `interactions` on their definitions |
+| Creatures | `interactions` on templates: talk, search, ride, feed |
+| Anything | An interaction with `"offered_by": "any"` and a condition: examine, smash, climb |
+
+`interactions_for(who, target)` lists what applies. The context menu
+(12 §9.4) shows it.
+
+### 3.3 Reach
+
+| Reach | Means |
+|-------|-------|
+| `held` | The target is in the user's hold |
+| `same_cell`, `adjacent` | By position. Adjacent includes diagonals and the cells above and below where there is a connection. |
+| `{ "range": 6 }` | Within a distance, with line of sight |
+| `network` | Through a device the user is operating that shares a network with the target: a terminal, a remote |
+
+The hook `interaction_reach` lets traits change reach: telekinesis, a long
+tongue, a hacking implant.
+
+### 3.4 Doing it
+
+The `interact` verb starts an action (03 §6) built from the interaction:
+its channels, a single phase of its duration that may be cancelled, then
+its effects. The hook `interaction_starting` runs first and may cancel with
+a reason. Locks, alarms, permissions and traps are rules on that hook.
+
+A device can interact too. An actuator that opens a door, an arm that loads
+a furnace and a turret that pulls a trigger are devices whose rules call
+`interact`.
+
+### 3.5 Elements as subjects
+
+A floor, block or fixture is a subject of kind `element` (05 §5.1), reached
+as `here.block` and so on. Its properties are its definition, material,
+state, damage, tags, and its device if it has one. `set_state`,
+`set_material` and `damage` act on it through `WorldEdit`.
+
+## 4. Devices
+
+### 4.1 What a device is
+
+```rust
+pub struct Device {
+    def: DeviceDefId,
+    bound: Option<ElementRef>,         // the element it gives behaviour to, if any (02 §5.5)
+    mode: ModeIdx,                     // off, idle, running, broken: named by the definition
+    ports: SmallVec<[PortState; 2]>,
+    stores: SmallVec<[Store; 2]>,
+    process: Option<Running>,          // section 8
+    config: VarMap,                    // what its user has set
+    slots: SmallVec<[SlotState; 2]>,   // section 11
+}
+```
+
+A device is an entity (06 §3). It may be:
+
+| Kind | Example | Where it is |
+|------|---------|-------------|
+| Bound to an element | Furnace, door, lamp, terminal | In that element's cell |
+| An item | Torch, radio, grapple gun, suit | Held, worn, stowed or lying about |
+| A module | Battery, scope, thruster, engine | Fixed in an assembly's slot |
+| Free-standing | Drone, turret on a tripod | In the world like any entity |
+
+A device may have senses (15 §4), channels and a mind (06 §8). A turret is
+a device with a sense, a mounted weapon and a simple mind. A drone adds a
+movement mode.
+
+### 4.2 Definition
+
+```json
+{ "type": "device", "id": "arc_furnace", "name": "arc furnace",
+  "material": "steel", "mass": "1200 kg",
+  "tags": ["furnace"],
+  "modes": ["off", "idle", "running"],
+  "ports": [ { "id": "mains", "resource": "power", "connect": "conduit" } ],
+  "consumes": { "power": { "rate": "40 kW", "when": "running", "priority": 2 } },
+  "holds": { "in":  { "volume": 0.2, "accepts": ["ore", "flux"] },
+             "out": { "volume": 0.2 } },
+  "auto": true, "speed": 1.0,
+  "config": [ { "id": "enabled", "kind": "flag", "default": true } ],
+  "outputs": { "busy": "self.mode == 'running'" },
+  "interactions": ["toggle", "load", "unload", "configure"],
+  "light": null,
+  "rules": [] }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `modes` | Named operating states. Fields that say `when` apply in those modes. |
+| `ports` | Section 5.3 |
+| `produces`, `consumes`, `stores`, `converts` | Section 5 |
+| `holds` | Item storage with filters (06 §9.2) |
+| `auto`, `speed` | Whether it runs recipes by itself, and how fast (section 8) |
+| `config` | Settings a user may change: flags, numbers, choices, filters, a linked target. Read as `self.config.enabled`. |
+| `inputs`, `outputs` | Signals (section 7) |
+| `slots`, `bus`, `module` | Assemblies (section 11) |
+| `part` | What it adds to a vehicle (11 §6.1) |
+| `rules` | Attached rules (05 §9.3) |
+
+A generic configuration screen (12) is built from `config`, so a new machine
+needs no new screen.
+
+### 4.3 Promotion and passive loads
+
+An interactive element becomes a device entity only when it needs state of
+its own (02 §5.5). To keep large places cheap, an element may also declare a
+**passive load**:
+
+```json
+{ "type": "fixture", "id": "ceiling_lamp", "load": { "power": "60 W" },
+  "when_supplied": { "light": 0.8 }, "glyph": { "ch": "°" } }
+```
+
+Passive loads on a network are counted, not instantiated. They are all
+supplied or all not, with the network. A building with four hundred lamps
+has one number, until someone smashes a lamp or switches one off, and that
+one becomes a device.
+
+### 4.4 Services
+
+Whole-city grids are not wired cell by cell. A tract may carry **services**
+in its record: mains power, water, data. A **service entry** is a device
+that offers a service to its local network for as long as the tract has it.
+The cold simulation (09) and rules turn services on and off. A blackout is
+one value changing on some tracts.
+
+## 5. Resources and networks
+
+### 5.1 Resources
+
+```json
+[
+  { "type": "resource", "id": "power",  "unit": "J",  "name": "Power" },
+  { "type": "resource", "id": "diesel", "unit": "kg", "name": "Diesel",
+    "on_breach": [ { "add_field": { "at": "here", "field": "fuel_spill", "amount": "event.rate * 40" } } ] },
+  { "type": "resource", "id": "mana",   "unit": "thaum", "name": "Mana" },
+  { "type": "resource", "id": "rounds", "unit": "count", "discrete": true }
+]
+```
+
+A resource has a quantity, in its unit, and a rate, which is quantity per
+second. Power is joules and watts. Fuel is kilograms and kilograms per
+second. Whatever else a mod defines works the same way.
+
+`discrete` resources come in whole units and move one at a time.
+
+### 5.2 What devices do with them
+
+| Field | Meaning |
+|-------|---------|
+| `produces` | Offers up to a rate, from nothing: a solar panel, a ley line tap, a service entry |
+| `consumes` | Wants a rate, with a `priority` and the modes in which it applies |
+| `stores` | Holds up to a capacity; charges and discharges up to given rates |
+| `converts` | A continuous conversion: takes rates of some resources and gives rates of others, in proportion. A generator, a pump, a transformer, a mana altar. With `throttles`, it runs only as hard as demand requires. |
+
+```json
+"converts": { "from": { "diesel": "0.012 kg/s" }, "to": { "power": "220 kW" }, "throttles": true }
+```
+
+### 5.3 Ports
+
+A port is where a device meets a network.
+
+| `connect` | Joins |
+|-----------|-------|
+| `conduit` | The network of any conduit of that resource in the device's own cell |
+| `adjacent` | As `conduit`, and directly to devices with matching ports in neighbouring cells |
+| `{ "range": 8 }` | The nearest transmitter of that resource within range: wireless power, an aura |
+| `link` | One other device, paired explicitly by an interaction or rule |
+| `bus` | The assembly it is installed in (section 11) |
+
+### 5.4 Balancing
+
+Each network balances rates. At any moment:
+
+1. Total what producers and converters offer and what consumers want.
+2. If there is a surplus, it charges stores, up to their charge rates.
+   Anything left is not produced: throttling converters ease off and the
+   rest is wasted.
+3. If there is a shortfall, stores discharge to cover it, up to their rates
+   and while they hold anything.
+4. If there is still a shortfall, consumers are cut in order of priority,
+   lowest first. The class at the margin receives a fraction, and devices
+   in it run at that fraction.
+
+Then every store's level is a straight line until something changes. The
+moment the first store empties or fills is scheduled as one wake-up, and
+the network balances again then.
+
+A network is also rebalanced when a member changes mode, is damaged, joins
+or leaves, or when a converter's own supply changes. A converter is a
+member of two networks, so shortage propagates: no fuel, no power, no
+pump, no fuel. Chains are evaluated in dependency order; loops are iterated
+a fixed number of times.
+
+Each consumer knows its **supply fraction**. A machine at half supply works
+at half speed. A device may state a `min_supply` below which it does not
+run at all.
+
+### 5.5 Limits
+
+Stores and ports have maximum rates. A conduit has a `capacity`. When what
+a network carries exceeds the capacity of its weakest conduit, the hook
+`network_overloaded` runs. Whether a breaker trips, a fuse blows or a cable
+burns is a rule.
+
+## 6. Conduits
+
+### 6.1 The layer
+
+Cells gain a fourth, sparse layer: **conduits**. A cell may hold several.
+
+```json
+{ "type": "conduit", "id": "copper_cable", "name": "cable",
+  "carries": ["power"], "capacity": "50 kW",
+  "material": "copper", "host": "any",
+  "glyph": { "ch": "·", "fg": "orange" } }
+```
+
+Conduits are cables, pipes, ducts, shafts, belts, ley lines and control
+wire. They run through the cell without occupying its floor, block or
+fixture, so a wire can pass under a floor or inside a wall.
+
+- A conduit is hosted by a floor or a block. If its host is destroyed, it
+  is severed. It can also be cut by an interaction.
+- Conduits change only through `WorldEdit`, like every other layer, and
+  emit `conduit_changed`.
+- Subgrids have the layer too. A vessel may be wired instead of using one
+  bus (11 §6.2).
+
+### 6.2 Networks from conduits
+
+Conduits carrying the same resource in neighbouring cells (the four sides,
+above and below) are connected. Each connected set is one network. Devices
+join through their ports.
+
+When a conduit is added, removed or severed, the affected networks are
+split or merged by searching outward from the change. Cutting one wire in a
+wall can leave half a building dark.
+
+### 6.3 Breaches
+
+When a conduit carrying a resource with `on_breach` is severed while the
+network is active, those effects run at the break: fuel spills, steam
+escapes as a field, a live cable arcs. What escapes comes off the network's
+stores.
+
+## 7. Signals
+
+A **signal** is a value on a network rather than a quantity. Signal
+resources are declared with `"signal": true` and a rule for combining
+several drivers (`max`, `sum`, `any`).
+
+```json
+{ "type": "resource", "id": "control", "signal": true, "combine": "max" }
+```
+
+- A device **drives** a signal with an `outputs` entry: a pure expression
+  over the device, re-evaluated when anything it reads changes. A pressure
+  plate drives 1 when something stands on it. A tank gauge drives its fill
+  fraction.
+- A device **reads** a signal with an `inputs` entry, bound to a name its
+  fields and rules can use: `"enable": "in"` makes a machine run only while
+  the signal is non-zero. A change raises `signal_changed` on every reader.
+- Signals travel in conduits that carry them, or wirelessly on a channel
+  number set in `config`.
+- A device may delay its output by a duration. With delay, loops make
+  clocks and latches. A loop with no delay anywhere is cut by the cascade
+  limit (03 §4.3) and the linter warns about it.
+
+Sensors are devices with senses (15 §4) whose rules drive a signal on a
+percept. Gates, comparators, timers and counters are small devices defined
+in content with expressions. The bundled `core` mod supplies a basic set.
+
+Scene S18 is three networks: power from a generator to a door actuator, a
+signal from a lever to the same actuator, and a terminal whose `network`
+reach lets its user operate both.
+
+## 8. Recipes
+
+### 8.1 Definition
+
+```json
+{ "type": "recipe", "id": "smelt_iron", "name": "Smelt iron",
+  "at": ["furnace"],
+  "inputs":  [ { "item": "iron_ore", "count": 2 }, { "resource": "flux", "amount": "0.1 kg" } ],
+  "tools":   [ { "quality": "tongs", "level": 1 } ],
+  "while":   { "power": "40 kW" },
+  "work": "30 s",
+  "outputs": [ { "item": "iron_bar", "count": 1 }, { "item": "slag", "count": 1, "chance": 0.5 } ],
+  "emits":   { "field": { "heat": 20 }, "noise": 0.4 },
+  "auto": true }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `at` | Tags of the station it needs; `"hand"` for none |
+| `inputs` | Items and resource amounts used up |
+| `tools` | Qualities that must be present and are not used up (section 8.3) |
+| `needs` | A condition on the worker: knowledge, a track level, a trait |
+| `while` | Resource rates required for as long as the work goes on |
+| `work` | How much work it takes, as time at a work rate of 1 |
+| `outputs` | Items and resource amounts produced, with optional chances |
+| `result` | Effects run on completion: anything outputs cannot express |
+| `emits` | Fields, light and noise while under way |
+| `auto` | Whether a machine may run it unattended |
+| `builds`, `on`, `salvage` | Construction (section 10) |
+
+One definition type covers crafting by hand, processing by machine, cooking,
+brewing, charging, growing, research and construction.
+
+### 8.2 Doing the work
+
+A recipe needs an amount of **work**. Work is done at a **rate**.
+
+| Worker | Rate |
+|--------|------|
+| A character | An expression set by content (skill, tools, light, injuries) times the station's `speed`, for as long as their work action continues |
+| A machine | Its `speed` times its supply fraction for the `while` resources |
+
+Progress is `work done / work needed`. Completion is one scheduled wake-up,
+moved whenever the rate changes. A furnace on half power takes twice as
+long and nothing checks on it in between.
+
+A machine with `auto` starts a recipe whenever one of its recipes has its
+inputs in the machine's input holds, room for its outputs, and nothing
+forbidding it (its `enable` input, its `config`). It stops when that ceases
+to be true.
+
+Interrupted work is not lost. It stays on the machine, or on the **job**
+(section 10.2).
+
+The hook `recipe_completing` lets rules alter or spoil the result.
+
+### 8.3 Tools and supply
+
+Items declare **qualities**: `"qualities": { "cutting": 2, "hammering": 1 }`.
+A requirement names a quality and a level. Qualities are data.
+
+Inputs and tools are looked for, in order: in the worker's holds; in the
+station's holds; in containers and storage areas within `supply_range`
+(default 6 cells) that the worker may use; and in any item network the
+station is on (section 9). Crafting at a bench draws on the shelves around
+it.
+
+### 8.4 Growing things
+
+A crop, a culture and a slow reaction are recipes whose `while` is a
+condition on the place instead of a resource: enough light (15 §3.3), a
+field of water, warmth. A planted fixture is a small device running such a
+recipe through its growth states. Harvesting is an interaction.
+
+## 9. Moving items
+
+### 9.1 Movers
+
+A **mover** is a device that transfers items between two holds next to it.
+
+```json
+{ "type": "device", "id": "loader_arm",
+  "moves": { "from": "back", "to": "front", "every": "1 s", "accepts": "self.config.filter" },
+  "consumes": { "power": { "rate": "200 W", "when": "running" } } }
+```
+
+It takes one matching item (or one stack unit) from the hold on one side and
+puts it in the hold on the other, at its interval, while supplied and while
+there is something to take and room to put it. Each transfer is one
+wake-up. Hoppers, inserters, sorters and dispensers are movers.
+
+### 9.2 Item conduits
+
+Belts, tubes and chutes are conduits that carry items. An item put on an
+item network at one device arrives at another after
+`path length / speed`. Items in transit are held by the network as a queue
+with arrival times. They are not moved cell by cell. Presentation draws
+them where they would be.
+
+Routing is by filter and priority at the receiving ports. A full
+destination blocks, and the queue backs up.
+
+Severing an item conduit drops what was in transit near the break.
+
+### 9.3 Fluids and gases
+
+Fluids and gases are ordinary resources in pipes and tanks. Released into
+the world, deliberately or by a breach, they become fields (02 §16), and a
+drain or intake takes a field back into a network.
+
+## 10. Construction
+
+### 10.1 Building is a recipe
+
+```json
+{ "type": "recipe", "id": "build_brick_wall", "name": "Brick wall",
+  "at": ["hand"],
+  "inputs": [ { "item": "brick", "count": 40 }, { "item": "mortar", "count": 2 } ],
+  "tools":  [ { "quality": "trowel", "level": 1 } ],
+  "work": "20 min",
+  "on":     { "block": "none" },
+  "builds": { "block": "wall@brick" },
+  "salvage": [ { "item": "brick", "count": 30 } ] }
+```
+
+`on` says what must be at the target. `builds` says what is there
+afterwards:
+
+| `builds` | Result |
+|----------|--------|
+| A floor, block or fixture state | The element is placed or replaced |
+| A conduit | Laid in the cell |
+| A device | Its element is placed and the device installed and connected |
+| A module or part | Installed in an assembly or vehicle (11 §12.2) |
+| `none` for a layer | The element is removed: digging, dismantling |
+
+For every building recipe with `salvage`, a dismantling recipe exists
+without being written. Repair restores an element's damage for a share of
+its inputs in proportion.
+
+What is built is real. A floor built with nothing under it falls
+(02 §14). A wall of mud is as strong as mud.
+
+### 10.2 Jobs
+
+```rust
+pub struct Job {
+    pub id: JobId,
+    pub recipe: RecipeId,
+    pub target: Location,
+    pub params: VarMap,
+    pub supplied: Vec<EntityId>,       // inputs already delivered
+    pub done: Real,                    // work done so far
+    pub state: JobState,               // Planned | Supplied | Under way | Blocked(reason)
+    pub priority: u8,
+    pub cause: Cause,
+}
+```
+
+A **job** is a piece of work to be done somewhere. Designating a wall,
+queueing a bill at a workbench and ordering a repair all create jobs.
+
+- Jobs belong to a site or an area and are saved.
+- Anyone who may can deliver inputs and do work. Several workers add their
+  rates. Work done stays if they are interrupted.
+- The player works a job with an action. Who else works which jobs is
+  decided by the AI layer (09) from priorities and orders (15 §10). The job
+  list is the interface between this document and that one.
+- A planned job is drawn as a ghost of what it will build.
+
+### 10.3 Designs
+
+`plan_from_map` creates jobs for every cell in which a map piece
+(document 10) differs from what is there. A design for a room, a workshop
+or a whole base is a map piece, and a mod may ship them.
+
+### 10.4 Places
+
+Bases use what already exists:
+
+| Need | Mechanism |
+|------|-----------|
+| Storage with rules about what goes where | Areas (02 §8.3) of a storage kind, with filters in their variables |
+| Rooms that hold warmth or air | Sealed areas (11 §10) and fields |
+| Ownership and who may use what | Sites, groups and relations (15 §9), checked by hooks |
+| Keeping a base running while away | Section 13 |
+
+## 11. Assemblies
+
+### 11.1 Slots and modules
+
+```json
+[
+  { "type": "device", "id": "hand_torch", "name": "torch",
+    "item": { "mass": "0.2 kg", "grip": { "arm": 1 } },
+    "slots": [ { "id": "cell", "accepts": ["small_cell"] } ],
+    "bus": ["power"],
+    "consumes": { "power": { "rate": "3 W", "when": "on" } },
+    "modes": ["off", "on"],
+    "when_supplied": { "light": 1.2 },
+    "interactions": ["toggle", "swap_cell"] },
+
+  { "type": "device", "id": "small_cell", "name": "power cell",
+    "module": { "fits": ["small_cell"] },
+    "stores": { "power": { "capacity": "40 kJ", "rate": "50 W" } } }
+]
+```
+
+An **assembly** is a device with `slots`. A **module** is a device that
+fits a slot. Everything in an assembly shares one network for each resource
+in its `bus`.
+
+An assembly may have a port to the outside. Plugged in, its bus joins that
+network and its stores charge.
+
+A vehicle is an assembly whose slots are wherever its parts are installed
+(11 §6). The vehicle bus and the torch's are the same mechanism.
+
+### 11.2 What modules give
+
+A module, or the assembly itself, may confer things on its **bearer** (the
+one holding, wearing or implanted with it), conditionally:
+
+```json
+{ "type": "device", "id": "repulsor", "name": "repulsor",
+  "module": { "fits": ["arm_mount"], "exposure": 0.6 },
+  "consumes": { "power": { "rate": "2 kW", "when": "idle" } },
+  "when_supplied": {
+    "grants": [ { "action": "repulsor_blast", "cost": { "power": "150 kJ" } } ],
+    "traits": ["repulsor_ready"] } }
+```
+
+| Field | Gives the bearer |
+|-------|------------------|
+| `when_supplied` | While the module's supply fraction meets its `min_supply` |
+| `when_unsupplied` | While it does not |
+| `always` | While installed |
+
+Each may list traits (06 §5), granted actions, senses (15 §4), attribute
+modifiers and interface parts (12 §10.6).
+
+A granted action may have a `cost`: an amount drawn from the assembly's
+stores when the action starts. If it is not there, the action is
+unavailable and says why. A gadget with three charges is a module with a
+store of three and a cost of one.
+
+### 11.3 Gadgets
+
+A gadget is a small assembly that is an item: a torch, a radio, a grapple
+gun, a stun baton, a jet pack, a wand with a crystal in it. Nothing further
+is needed to define one. Cells are swapped by an interaction, recharged in a
+charger (a device that moves a resource between stores), or refilled by
+whatever the content says refills them.
+
+### 11.4 Powered suits
+
+A suit is an assembly that is worn.
+
+```json
+{ "type": "device", "id": "assault_frame", "name": "assault frame",
+  "item": { "wear": { "parts": "all", "layer": 3, "material": "alloy", "thickness": "12 mm", "coverage": 0.95 } },
+  "slots": [ { "id": "core",  "accepts": ["suit_core"],  "on_part": "torso" },
+             { "id": "arm_l", "accepts": ["arm_mount"],  "on_part": "l_arm" },
+             { "id": "back",  "accepts": ["back_mount"], "on_part": "torso" },
+             { "id": "helm",  "accepts": ["helm_system"],"on_part": "head" } ],
+  "bus": ["power", "coolant", "air"],
+  "sealed": { "atmosphere": "air", "volume": 0.12 },
+  "when_supplied":   { "traits": ["frame_assist"] },
+  "when_unsupplied": { "traits": ["dead_weight"] } }
+```
+
+Everything a suit does is something already specified:
+
+| The suit | Is |
+|----------|----|
+| Armour | Worn layers (06 §9.2), hit before the wearer's own |
+| Strength, speed | Traits with attribute modifiers, conferred while supplied |
+| Flight | A thruster module granting a movement mode (06 §11) |
+| Weapons, tools | Modules granting actions with costs |
+| Sensors, a display | Modules granting senses and interface parts |
+| Life support | A `sealed` assembly is a one-compartment sealed volume around its wearer (11 §10). The wearer's medium is the suit's gas, not the sea's or the vacuum's, for as long as its `air` lasts and its layers hold. A breach is an opening and leaks at the rate 11 §10.2 gives. Outside pressure beyond what its layers can take crushes it by 11 §10.4. |
+| Taking damage | A hit that breaches a worn layer may strike a module mounted `on_part` there, by its `exposure`. A damaged module works in proportion to its condition. A destroyed core is a suit with no power. |
+| Running out | `when_unsupplied`: the wearer is inside a great weight of metal that does nothing |
+| An onboard intelligence | A mind on the suit. As a driver (06 §8.2) it can walk an unconscious wearer home. |
+| Putting it on | An action; or a joint action with the suit if it assembles itself |
+
+A suit one wears augments one's own body and actions. A machine one sits
+in and operates from a station is a craft or vessel (11 §3).
+
+### 11.5 Implants
+
+An implant set is an assembly whose host is a body, with slots on parts and
+modules held `Fixed`. A store may be backed by a pool (06 §4.2), so
+implants can run on the body's own reserves.
+
+Installing and removing are recipes whose `result` uses the body verbs of
+06 §6.5.
+
+## 12. Survival and bases
+
+No part of survival play needs a mechanism of its own. This table is a map
+for authors.
+
+| Need | Built from |
+|------|-----------|
+| Hunger, thirst, fatigue, warmth | Pools with rates and threshold rules (06 §4.2) |
+| Food, drink, medicine | Items whose interactions add to pools, add traits, treat wounds |
+| Cold, heat, bad air | The medium (11 §4) and fields (02 §16) read by rules; shelter is a sealed area with a heater |
+| Light | Light sources (15 §3.3), including powered ones |
+| Tools and crafting | Recipes, qualities, stations |
+| Farming, brewing, curing | Recipes with a condition on the place (section 8.4) |
+| Shelter and fortification | Construction; real materials with real strength |
+| Power, water, heat distribution | Resources, conduits, networks |
+| Automation | Machines with `auto`, movers, item conduits, signals |
+| Defence | Devices with senses and minds; signals; traps on hooks |
+| Helpers | Characters under orders working jobs (15 §10; 09) |
+| Magic workshops, ritual circles, ley lines | The same, with different names |
+
+## 13. Away from the player
+
+### 13.1 Storage
+
+Devices are notable entities (06 §12.2) and are stored with their tracts.
+Networks, jobs and queued items are stored with their site or subgrid.
+
+A network that crosses into an unloaded tract keeps a frozen summary of
+that part: what it offered, wanted and stored when it unloaded.
+
+### 13.2 Catching up
+
+When a site loads after time has passed, its machines **catch up**: the
+same event-driven logic that runs them live is run on a private timeline
+for the elapsed local time, with no world effects other than their own
+stores, holds and jobs. Runs of identical consecutive cycles are applied in
+one step, so a day of smelting costs a handful of operations, not
+thousands. Emissions that would have gone into the world (heat, smoke) are
+handled by the fields' own catch-up rules (02 §16).
+
+Catch-up is deterministic, and for machines that depend only on their own
+networks it gives the same stores and outputs as having stayed.
+
+### 13.3 Staying loaded
+
+A device or rule may hold a ticket (02 §10) to keep its surroundings
+loaded, at the cost of the loaded-tract budget. Content decides whether to
+offer such a device.
+
+### 13.4 Detail
+
+Everything in this document is event-driven. A loaded base with nothing
+changing costs nothing. Warm and hot tracts run devices identically.
+
+## 14. Modding surface
+
+**Definition types**: `interaction`, `device`, `resource`, `conduit`,
+`recipe`. Fields `interactions`, `device`, `load`, `when_supplied` on
+elements; `qualities` on items; `services` on tract definitions.
+
+**Events**: `interacted`, `device_mode_changed`, `device_configured`,
+`network_changed`, `network_supplied`, `network_starved`,
+`store_emptied`, `store_filled`, `conduit_changed`, `conduit_breached`,
+`signal_changed`, `recipe_started`, `recipe_completed`, `recipe_stalled`,
+`item_moved`, `job_created`, `job_supplied`, `job_completed`,
+`job_cancelled`, `module_installed`, `module_removed`, `module_supplied`,
+`module_unsupplied`, `suit_breached`, `service_changed`.
+
+**Hooks**: `interaction_starting`, `interaction_reach`,
+`network_overloaded`, `recipe_completing`, `job_starting`,
+`module_installing`.
+
+**Effects**: `interact`, `set_state`, `set_mode`, `set_config`,
+`add_resource`, `drain_resource`, `link`, `unlink`, `lay_conduit`,
+`cut_conduit`, `drive_signal`, `work`, `start_recipe`, `cancel_recipe`,
+`create_job`, `cancel_job`, `plan_from_map`, `install`, `uninstall`,
+`plug_in`, `unplug`, `set_service`, `hold_ticket`.
+
+**Queries**: `interactions`, `devices`, `networks`, `members`, `jobs`,
+`modules`, `recipes`.
+
+**Properties**: on devices, `mode`, `config.*`, `supply(resource)`,
+`store(resource)` with `level` and `frac`, `network(port)`, `process` with
+`recipe` and `progress`, `input(name)`, `slot(id)`, `bearer`, `assembly`;
+on networks, `offered`, `wanted`, `stored`, `fraction`; on elements,
+section 3.5; on any bearer, `supplied(module)`.
+
+## 15. Invariants
+
+| # | Invariant |
+|---|-----------|
+| G1 | Resources are conserved. A network never delivers more than is offered and discharged. |
+| G2 | A store's level at any time equals its last recorded level plus its rate times elapsed local time, within its bounds. |
+| G3 | A consumer's supply fraction is a function of its network's state and its priority. |
+| G4 | Network membership always equals a from-scratch computation from conduits, ports, links and assemblies. |
+| G5 | A recipe's progress equals work done over work needed, and its completion is always scheduled at the right time for its current rate. |
+| G6 | Work done on a job is never lost by interruption, saving or unloading. |
+| G7 | Devices, networks, movers and recipes schedule nothing while nothing about them is changing. |
+| G8 | Conduits change only through `WorldEdit`. |
+| G9 | Catch-up for a machine that depends only on its own networks gives the same result as staying loaded. |
+| G10 | Everything a module confers is removed when it is removed, destroyed or unsupplied. |
+
+## 16. Budgets
+
+Targets, unmeasured.
+
+| Operation | Target |
+|-----------|--------|
+| Rebalance a network of 200 members | under 50 µs |
+| Split or merge after one conduit change in a 5,000-cell network | under 1 ms |
+| Recipe start or completion | under 3 µs |
+| One mover transfer | under 2 µs |
+| Listing interactions for a target | under 5 µs |
+| 10,000 idle devices | no cost |
+| Catch-up of a 100-machine base over a day | under 20 ms |
+| Memory per promoted device | under 600 bytes |
+
+## 17. Open questions
+
+1. **True flow limits.** Capacity is checked per network, not per segment.
+   A thin wire feeding a heavy load at the far end of a thick network is
+   not caught. Segment-level flow is possible and costs more.
+2. **Loss over distance.** Not modelled. A per-metre loss on conduits would
+   make layout matter more.
+3. **Programmable devices.** Logic is built from devices and expressions.
+   Whether players should be able to write rules for a controller in play
+   is undecided.
+4. **Belts you can stand on.** Item conduits are abstract. A belt that also
+   moves creatures standing on it would be a field or a subgrid.
+5. **Catch-up across sites.** A machine fed by another site's output
+   catches up from that site's summary, which may itself be stale.
