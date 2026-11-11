@@ -407,6 +407,7 @@ pub fn register_engine(registry: &mut Registry) {
             let _ = registry.add_function(spec);
         }
     }
+    crate::verb::register_engine_verbs(registry);
     for info in KERNEL_EVENTS.iter().chain(WORLD_EVENTS) {
         mirror_event(registry, info);
     }
