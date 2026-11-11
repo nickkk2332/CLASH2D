@@ -85,6 +85,8 @@ The wave list is a plan, not a promise. It is revised here as work lands.
 
 Newest first. One line per merge: wave, what landed, what is stubbed.
 
+- B1 (part): world storage in `clash-world`: coordinates and topology (W1), paletted storage (W2), cell definitions and `WorldDefs::build` (W3, beta), chunks, columns and grids (W4, beta), cosmos, realms and the read API (W5, beta); the size-literal step of `cargo xtask check`. Stubbed: definitions are not yet fed by the loader; fields and occupants are placeholders; no chunk serialisation.
+- B1 (part): frames, colours, themes, glyphs, styled text, input events, the `Frontend` trait, golden frames and the scene seam (U1, beta); the terminal frontend (U2); the toolkit's layout and every widget with static content (U6a, beta); `mods/ui` with a default theme and a widget gallery (`cargo run -p clash-front-term --example gallery`). Stubbed: bindings and effects (U6b), views, log, slots, popups over a play screen.
 - B1 (part): the binary codec and blob frame in `clash_core::codec` (decision D-251) and lattice noise with field shapes in `clash_gen::noise` (D-252). No benchmarks.
 - B0: the workspace with every crate of 01 §3, the lints and `cargo xtask check` (F1); `clash-core` (F2); `clash-time` with the timeline, clocks and process table (F3). Stubbed: every other crate is a doc comment and its dependency edges; the size-literal check waits for W1; no benchmarks.
 
