@@ -28,7 +28,7 @@ actions that call `hit`.
 | E7 | Minds and vital state | M | E1, T4 | todo |
 | E8 | Items and holds | L | E5 | todo |
 | E9 | Templates and creation | L | E3, E6, E8 | todo |
-| E10 | Movement | M | E4, W14, W18 | in progress |
+| E10 | Movement | M | E4, W14, W18 | beta |
 | E11 | Coming and going | L | E9, W8 | todo |
 | E12 | Minimal devices | M | E8 | todo |
 | S1 | Light | M | W18 | beta |
@@ -334,6 +334,28 @@ Done when
   hook does not grant it.
 - Scenario `dash_through_wall`: a sweep at high speed strikes a wall as a
   body impact.
+
+Beta: built ahead of the action runtime and of bodies in flight, in
+`clash_sim::movement` (decisions D-570 to D-576). Built: the `movement`
+and `posture` definition types with every field of 06 §11 and §11.1;
+the `mover` component (ways of moving, posture, path), saved and hashed;
+a mover's rules as the world's `MoveRules`, from its definitions, its
+posture, its body's slots and its `speed` expressions; the verbs `step`
+(06 §11's `move`), `move_to`, `set_posture`, `plan_path`, `follow_path`,
+`clear_path` and `set_movement`; `step_time` and the properties, events,
+hooks and reasons tabled in 06 §11; the occupancy rule and the swap
+through `passage_requested`; paths planned from belief behind
+`movement::belief`; loss of footing on `entity_unsupported`; and the
+actions `step`, `go_to` and `set_posture` in `mods/core/data/movement.json`.
+Step legality is tested against a table in `movement::rules`, the rest in
+`crates/clash-sim/tests/movement.rs` over the test city. Stubbed, each
+waiting for the package that owns it: `sweep`, `leap` and the scenario
+`dash_through_wall`, `set_altitude` and `teleport` (bodies in flight,
+W14, and realm transfer); a fall is a drop to the cell where it comes to
+rest, not a world body; belief reads truth (perception, S2); a posture
+scales the `Physical` height but not a body's bands, and gives no traits
+(bodies in the simulation); the tests drive `step` and `go_to` through
+the verbs and a hand-made loop until the action runtime (T3) runs them.
 
 ### E11 — Coming and going
 
