@@ -64,7 +64,7 @@ use clash_time::ClockId;
 use clash_world::{Footprint, Location, Occupant, OccupantFlags, OccupantKind, PlaneMask};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::later::{ActionId, ChannelSet, EocId, Plan};
+use crate::later::{ActionId, ChannelSlots, EocId, Plan};
 
 /// How deeply things may be nested inside one another: a coin in a purse
 /// in a pack on a rider on a mount is five. Deeper nesting is refused, so
@@ -411,7 +411,7 @@ pub struct KernelEntity {
     /// Variables that content stores on the entity (05 §6).
     pub vars: VarMap,
     /// Its channel slots (03 §6.2).
-    pub channels: ChannelSet,
+    pub channels: ChannelSlots,
     /// Its running actions.
     pub actions: Vec<ActionId>,
     /// What it will do next (03 §5.3).
@@ -433,7 +433,7 @@ impl KernelEntity {
             time: OwnTime::default(),
             tags: spec.tags,
             vars: spec.vars,
-            channels: ChannelSet::default(),
+            channels: ChannelSlots::default(),
             actions: Vec::new(),
             plan: Plan::default(),
             attached: Vec::new(),

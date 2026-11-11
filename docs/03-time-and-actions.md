@@ -295,6 +295,31 @@ As built (decisions D-360, D-369):
   then places every entity in the world's occupant index again, which the
   world neither saves nor hashes (02 §8.1).
 
+As joined to the packages built beside it (decisions D-460 to D-462):
+
+- The simulation holds every component of every entity (06 §3) in one
+  `Components`, read with `Sim::components()`. It is saved in the blob and
+  hashed as a part of its own, `SimHashes::components`;
+  `Sim::component_hash(kind)` gives one store's hash.
+- The simulation owns what loading a tract needs besides the world: the
+  generators and a tract store (02 §9.4). Neither is state. A new
+  simulation has the generators of `clash-gen` bound to its world's
+  definitions and a store in memory; `Sim::with_io(generators, store)`
+  gives it others, and a loaded simulation is given the store it was
+  saved with. A store is anything that implements the world's
+  `TractStore` and can be copied and printed (`SimStore`).
+- The blob also carries what the world has under way: its processes and
+  the collapses they belong to (`Cosmos::processes`), because the
+  timeline that holds their wake-ups is the simulation's. `Sim::load`
+  puts it back into the cosmos it is given. It refuses a blob that holds
+  a component of an entity that does not exist.
+- The blob carries the entities shelved with unloaded tracts (section
+  4.3). They are hashed with the kernel's own queues.
+- After a load, what is not state is as a new simulation has it: the
+  default wake-up handlers and the event types of the definitions.
+  Handlers and event types registered on top, the generators and the
+  store are set up again by whoever set them up.
+
 ### 4.2 Kernel entities
 
 Document 06 specifies entities in full. The kernel fixes the part that time,
@@ -309,7 +334,7 @@ pub struct KernelEntity {
     pub control: Control,              // None | Direct | Delegated
     pub clock: Option<ClockId>,        // personal clock
     pub anchor: Option<ClockId>,
-    pub channels: ChannelSet,          // section 6.2
+    pub channels: ChannelSlots,        // section 6.2
     pub actions: SmallVec<[ActionId; 2]>,
     pub plan: Plan,                    // section 5.3
     pub attached: Vec<EocId>,          // 05 §9.3
@@ -340,9 +365,11 @@ As built (decisions D-361, D-362):
   so nothing else can change it. The rest (`tags`, `vars`, `channels`,
   `actions`, `plan`, `attached`) is open to whoever holds the entity
   mutably until its packages give it owners.
-- `actions` is a plain list. `ChannelSet`, `Plan`, the action table, the
-  window table and the rule state are empty typed placeholders that
-  already serialise and hash.
+- `actions` is a plain list. `ChannelSlots` (an entity's slots and who
+  holds each), `Plan`, the action table, the window table and the rule
+  state are empty typed placeholders that already serialise and hash. A
+  set of channel ids, which is what an action definition uses, is the
+  action module's `ChannelSet`.
 - Ids are generational. A freed slot is reused, lowest slot first, a
   generation on. The table visits entities in id order.
 - `create_entity` makes an entity that is `Stored` and emits
@@ -351,7 +378,8 @@ As built (decisions D-361, D-362):
   entity held where the entity was (what cannot stand there leaves the
   world), then takes the entity out of the world, cancels its wake-ups,
   destroys its personal clock, forgets any decision it was asked for, and
-  emits `entity_removed`. A component store follows those two events.
+  emits `entity_removed`. Its components are removed with it, before its
+  slot can be given out again.
 
 What `relocate` does, in full:
 
@@ -365,6 +393,12 @@ What `relocate` does, in full:
   separately.
 - The entity and everything inside it are put on the clocks that now
   apply (section 3.4), each wake-up keeping its remaining local time.
+- The container it left and the container it entered have their mass
+  worked out again, and so has every container round them (06 §3.1). Each
+  of those that stands in the world has the new mass written to the
+  world's occupant record.
+- An entity that is given a place is no longer waiting for an unloaded
+  tract (section 4.3).
 - An entity that leaves the world (`Stored`, or inside something that
   is), and everything inside it, has its wake-ups cancelled (invariant
   T9). Whoever stores an entity takes what should survive, such as
@@ -443,9 +477,41 @@ As built (decision D-364):
 - **The pump** also runs when a command is accepted, so events are never
   left waiting between calls. A cut-off cascade's report lists the last
   eight events delivered.
-- **The safe point** calls `reconcile_activity`, which does nothing until
-  tickets and activity (02 §10.2) are joined to the kernel. Requested
-  saves are returned to the application as `Advance::Request`.
+- **The safe point** reconciles tickets with what is loaded
+  (`Sim::reconcile_activity`, 02 §10.2) and then delivers whatever that
+  reported. It follows every wake-up, and every accepted command, so that
+  a ticket follows what a command moved. Requested saves are returned to
+  the application as `Advance::Request`.
+- **The world's wake-ups.** The handler of the `World` domain hands the
+  wake-up to `WorldCtx::handle_wake` inside `Sim::world`. A stability
+  check and every step of a collapse run under `advance` like anything
+  else, and what they report comes out of `drain_events`. A process the
+  world could not carry on is reported as a fault.
+
+What the safe point does about entities (decision D-461). The world
+cannot take entities out of a tract it wants to unload (02 §9.5): it
+says so, and the simulation answers.
+
+| The world says | The simulation |
+|----------------|----------------|
+| `tract_unloading` | Takes every entity with a cell in the tract out of the world. Its place becomes `Stored`, and where it stood is kept on the **shelf** under that tract. `entity_relocated` is emitted for each; what an entity holds stays inside it |
+| `tract_loaded` | Puts back the entities shelved under the tract, each where it stood, with `entity_relocated`. One whose footprint reaches into a tract that is not loaded goes back on the shelf, under that tract |
+| A loaded tract's spawn requests | Emits `spawn_requested` for each, for the package that makes entities from definitions |
+| A tract that could not be loaded or unloaded | Reports a fault with the reason `world.tract_failed` |
+
+A shelved entity keeps its id, its components and its contents. Its
+wake-ups are cancelled as for any entity that leaves the world (T9):
+taking timers off the timeline first and catching up on return is
+section 9's, and not built. One safe point reconciles up to four times,
+so that a tract announced as going is gone before anything else runs.
+
+`Sim::start_session(entity, at, cause)` starts a session at a place that
+may not be loaded: it holds a fixed ticket over the place, reconciles,
+puts the entity there, holds the ticket of a controlled character for it
+(`Ticket::player`) and releases the fixed one. An entity's ticket covers
+nothing until the entity has been seen in the world, which is why the
+fixed ticket comes first. `Sim::hold_ticket` and `Sim::release_ticket`
+hold and release any other.
 
 ### 4.4 Commands
 
@@ -476,7 +542,10 @@ As built (decision D-365):
 - `Command` and `DebugCommand` are open sets. The kernel honours the debug
   commands: `CreateEntity { spec, place }`, `MoveEntity { entity, to }`,
   `RemoveEntity { entity }`, `SetElement { loc, layer, state }`,
-  `SetControl { entity, control }` and `Schedule { entity, after, wake }`.
+  `SetControl { entity, control }`, `StartSession { entity, at }` and
+  `Schedule { entity, after, wake }`. `StartSession` is refused for an
+  unknown entity or a place outside its realm; once tracts have been
+  surveyed and loaded for it, a failure is a fault, not a refusal.
   The rest of the list above arrives with the packages that can honour
   each. A debug command is a command like any other: validated, logged
   and replayed.
@@ -1067,23 +1136,36 @@ lists. A subject marked `?` is bound only when there is one.
 | `control_changed` | `self`: entity | `old`, `new`: `none`, `direct` or `delegated` | Who decides for an entity changed |
 | `clock_rate_changed` | `self?`: entity; `area?`: area | `clock`: int; `old`, `new`: real, or null where there was or is no such clock | The rate of a personal, area or realm clock changed, or a clock was given or taken away |
 | `decision_requested` | `self`: entity | `kind`: what is asked | A directly controlled entity must choose |
+| `entity_unsupported` | `self`: entity; `here`: loc | none | What held an entity up has gone (02 §14.3). It is where it was: what falling does is for the movement package. Follows the world's `occupant_unsupported` |
+| `entity_exposed` | `self`: entity; `here`: loc | `kind`: string, the qualified id of a damage type; `energy`: real, joules; `intensity`: real, pascals | Something struck the cell an entity is in (02 §14.3). What that does to it is for the body model. Follows the world's `occupant_exposed` |
+| `spawn_requested` | `here`: loc | `what`: string, the id the request names; `realm`: int | A tract that has just been loaded asks for something to be put at `here` (02 §9.4) |
 | `fault` | none | `code`, `message`: string | The engine contained a fault. Goes straight to the output; no handler receives it |
 | `event_cancelled` | none | `event`, `code`, `message`: string | A hook was cancelled (05 §8.2) |
 
 The world's events (02 §7.4) are passed on under their own names. Their
 subjects are: `here` for a cell; for `area_entered` and `area_exited`,
 `area`, then `target` (the occupant), then `here`; for `area_breached` and
-`area_closed`, `area` and `here`; for `occupant_displaced` and
-`occupant_entombed`, `target` and `here`. The fields a filter can test
-are `layer` on `element_changed` and `element_damaged`, `old` and `new`
-on `element_damaged`, `count` on `decals_removed`, and `key`, `old` and
-`new` on `cell_var_changed`.
+`area_closed`, `area` and `here`; for `occupant_displaced`,
+`occupant_entombed`, `occupant_unsupported` and `occupant_exposed`,
+`target` and `here`. For `tract_loaded`, `tract_unloading` and
+`ticket_refused`, `here` is the tract's cell with the lowest horizontal
+coordinates at storey 0; for `collapse_started` and `collapse_settled`,
+the cell whose change started the collapse. The fields a filter can test
+are `layer` on `element_changed`, `element_damaged` and
+`element_destroyed`; `old` and `new` on `element_damaged`; `how`
+(`damage`, `crushed` or `fell`), `absorbed` and `passed` on
+`element_destroyed`; `count` on `decals_removed`; `key`, `old` and `new`
+on `cell_var_changed`; `collapse` (int) on the two collapse events;
+`energy` and `intensity` on `occupant_exposed`; `realm` (int) on the
+tract and ticket events, with `first` (bool) on `tract_loaded` and
+`ticket` (int) on `ticket_refused`.
 
 **Reasons** (14 §5) of the kernel, by code: `entity.unknown`,
 `entity.stored`, `entity.ids_exhausted`, `relocate.inside_itself`,
 `relocate.too_deep`, `world.not_loaded`, `world.outside_realm`,
 `world.unknown_grid`, `world.unknown_area`, `world.unknown_realm`,
-`world.refused`, `clock.unknown`, `clock.bad_rate`, `clock.loop`,
+`world.refused`, `world.tract_failed`, `component.missing`,
+`physical.bad_measure`, `clock.unknown`, `clock.bad_rate`, `clock.loop`,
 `time.refused`, `advance.unhandled_wake`, `advance.tick_limit`,
 `events.cascade_limit`, `events.hook_depth`, `events.unknown_type`,
 `events.bad_payload`, `events.field_fixed`, `events.cancelled`,

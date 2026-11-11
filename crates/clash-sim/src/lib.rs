@@ -42,6 +42,7 @@
 //! - What a character decides by never reads a [`Truth`].
 
 pub mod action;
+pub mod activity;
 pub mod advance;
 pub mod bus;
 pub mod clock;
@@ -52,9 +53,12 @@ pub mod decision;
 pub mod entity;
 pub mod event;
 pub mod later;
+pub mod mass;
 pub mod reason;
 mod sim;
 
+pub use action::{ActionDefId, ChannelId, ChannelSet};
+pub use activity::{Shelf, Shelved, SimStore, debug_ticket};
 pub use advance::{
     Advance, AdvanceLimit, AppRequest, DEFAULT_MAX_CASCADE, MAX_CASCADE_SETTING,
     MAX_WAKES_PER_TICK, WakeHandler,
@@ -73,7 +77,7 @@ pub use entity::{
 pub use event::{
     CAUSE_SUBJECTS, EventBody, EventInfo, KERNEL_EVENTS, SimEvent, Subject, WORLD_EVENTS, Where,
 };
-pub use later::{ActionId, ActionTable, ChannelSet, EocId, Plan, RuleState, WindowTable};
+pub use later::{ActionId, ActionTable, ChannelSlots, EocId, Plan, RuleState, WindowTable};
 pub use reason::{KERNEL_REASONS, Reason, ReasonInfo, codes};
 pub use sim::{LoadError, SAVE_KIND, SAVE_VERSION, Sim, SimHashes, Truth};
 

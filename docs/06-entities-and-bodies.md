@@ -87,6 +87,22 @@ pub struct ComponentStore<C> {
 - Mods do not add component types. They add variables (05 §6), attributes,
   traits and rules, which cover the same ground with full tooling support.
 
+As held by the simulation (decision D-460). `Sim::components()` reads
+every store and `Sim::components_mut()` hands them out to change. A
+`Physical` is the exception: the masses of the containers round it and
+the world's occupant record depend on it, so it is given and changed
+only through `Sim::set_shape(entity, shape, cause)` and
+`Sim::set_own_mass(entity, mass, cause)`. Both work out again the mass of
+the entity and of every container round it and write each new mass to
+the kernel's record of the entity and, for one that stands in the world,
+to the world's occupant record (02 §8.1); `set_shape` also gives the
+entity the shape's footprint and is refused if that does not fit where
+it stands. Relocation does the same for the container an entity left and
+the one it entered. Removing an entity removes its components. An entity
+shelved with an unloaded tract (03 §4.3) keeps its id, so its components
+stay where they are. The reasons are `component.missing` and
+`physical.bad_measure` (03 §13).
+
 ### 3.1 Components
 
 | Component | On | Holds |

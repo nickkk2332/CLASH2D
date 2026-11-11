@@ -77,6 +77,16 @@ pub enum DebugCommand {
         /// The new mode.
         control: Control,
     },
+    /// Starts a session for an entity at a place that may not be loaded
+    /// yet: loads the tracts round it, puts the entity there and holds
+    /// the ticket of a controlled character for it
+    /// ([`Sim::start_session`]).
+    StartSession {
+        /// Who.
+        entity: EntityId,
+        /// Where.
+        at: Location,
+    },
     /// Schedules a wake-up: for an entity, on the entity's clock, or
     /// with none, on universal time. For poking a domain's handler.
     Schedule {
@@ -161,6 +171,9 @@ impl Sim {
         self.apply(command)?;
         self.log.entries.push(entry);
         self.pump();
+        // An accepted command leaves the simulation at a safe point: a
+        // ticket that follows what the command moved is reconciled now.
+        self.safe_point();
         Ok(())
     }
 
@@ -186,6 +199,16 @@ impl Sim {
                 .map_err(|error| Reason::from_world(&error)),
             DebugCommand::SetControl { entity, control } => {
                 self.set_control(entity, control, cause).map(|_| ())
+            }
+            DebugCommand::StartSession { entity, at } => {
+                // What can be refused without a trace is refused here.
+                // Past this point tracts have been surveyed and loaded,
+                // so a failure is reported, not refused.
+                self.check_session(entity, at)?;
+                if let Err(reason) = self.start_session(entity, at, cause) {
+                    self.fault(reason);
+                }
+                Ok(())
             }
             DebugCommand::Schedule {
                 entity,

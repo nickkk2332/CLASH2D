@@ -117,6 +117,13 @@ it (the body in E4, the item in E8) and is not derived here. No test
 script, since nothing here can be reached from the console until the
 kernel holds it, and no benchmark (Z1).
 
+Joined to the kernel since (decision D-460): the simulation holds the
+`Components`, saves them in its blob, hashes them as a part of its own,
+implements `Containment` over places, refreshes masses on relocation and
+removal and writes changed masses to the world's occupant records
+(`Sim::set_shape`, `Sim::set_own_mass`). Still stubbed: definition ids
+in saved components go through no id table (K7).
+
 ### E2 — Attributes, pools, tracks
 
 **Spec** 06 §4 · **Size** M

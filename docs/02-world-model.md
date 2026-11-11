@@ -1487,6 +1487,10 @@ record becomes `Realized { pristine: false }`. One that has not is not
 written. The checks for bodies and processes come with them (sections 14
 and 15).
 
+The simulation's side of this, and of `TractLoaded`, is 03 §4.3: it
+reconciles at every safe point, shelves the entities of a tract that is
+to go and puts them back when the tract is loaded again.
+
 ## 10. Activity
 
 ### 10.1 Tickets

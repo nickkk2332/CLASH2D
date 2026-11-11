@@ -8,14 +8,19 @@ use clash_core::codec::{self, CodecError};
 use clash_core::{Dur, EntityId, Hash128, RngStreams, StateHash, StateHasher, Tick, Value, VarMap};
 use clash_data::{Defs, Diagnostics};
 use clash_time::{ClockId, Timeline};
-use clash_world::{Cause, Cosmos, EventSink, Location, WorldCtx, WorldDefs, WorldEvent};
+use clash_world::{
+    Cause, Cosmos, EventSink, Generators, Location, MemoryStore, RealmId, TractPos, WorldActivity,
+    WorldCtx, WorldDefs, WorldEvent,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::activity::{Shelf, SimStore};
 use crate::advance::{AppRequest, Handlers};
 use crate::bus::Bus;
 use crate::clock::WakeOwners;
 use crate::command::InputLog;
+use crate::component::{ComponentKind, Components};
 use crate::decision::DecisionQueue;
 use crate::entity::{Control, EntitySpec, EntityTable, KernelEntity, Place};
 use crate::event::{EventBody, SimEvent, Where};
@@ -27,7 +32,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 1;
+pub const SAVE_VERSION: u32 = 2;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -50,16 +55,21 @@ pub const SAVE_VERSION: u32 = 1;
 ///
 /// # What is state
 ///
-/// Everything except the definitions, the wake-up handlers and the event
-/// handlers, which are fixed when the simulation is set up and must be
-/// set up the same way again after a load. The world's occupant index is
-/// derived: [`reindex`](Sim::reindex) rebuilds it.
+/// Everything except the definitions, the generators, the tract store,
+/// the wake-up handlers and the event handlers, which are fixed when the
+/// simulation is set up and must be set up the same way again after a
+/// load. The world's occupant index is derived:
+/// [`reindex`](Sim::reindex) rebuilds it.
 #[derive(Clone, Debug)]
 pub struct Sim {
     pub(crate) defs: Arc<Defs>,
     pub(crate) cosmos: Cosmos,
     pub(crate) timeline: Timeline,
     pub(crate) entities: EntityTable,
+    /// Every component of every entity (06 §3).
+    pub(crate) components: Components,
+    /// The entities that left the world with their tracts (02 §9.5).
+    pub(crate) shelf: Shelf,
     /// Every running action. A placeholder until package T3.
     pub actions: ActionTable,
     /// Every open window. A placeholder until package T5.
@@ -88,6 +98,12 @@ pub struct Sim {
     pub(crate) handlers: Handlers,
     /// Not state: the event types and who listens for them.
     pub(crate) bus: Bus,
+    /// Not state: what makes the cells of a tract that is loaded for
+    /// the first time (02 §9.3).
+    pub(crate) generators: Generators,
+    /// Not state of the simulation's own: where changed tracts are kept
+    /// while they are not loaded (02 §11).
+    pub(crate) store: Box<dyn SimStore>,
 }
 
 /// Why saved state could not be loaded.
@@ -107,6 +123,18 @@ pub enum LoadError {
         /// The version this build reads.
         expected: u32,
     },
+    /// The blob holds a component of an entity that does not exist.
+    #[error(
+        "the saved simulation holds {count} components without an owner; the first is a `{kind}` of entity {owner}"
+    )]
+    Orphan {
+        /// The kind of the first such component.
+        kind: &'static str,
+        /// The entity it names.
+        owner: EntityId,
+        /// How many there are.
+        count: usize,
+    },
 }
 
 /// The simulation's hashes: one for each part of its state, so that a
@@ -119,6 +147,9 @@ pub struct SimHashes {
     pub timeline: Hash128,
     /// The entity table.
     pub entities: Hash128,
+    /// Every component store (06 §3). One store's hash is
+    /// [`Sim::component_hash`].
+    pub components: Hash128,
     /// Actions, windows and rule state.
     pub rules: Hash128,
     /// Settings.
@@ -126,7 +157,8 @@ pub struct SimHashes {
     /// The random streams.
     pub rng: Hash128,
     /// The kernel's own: events and decisions waiting, application
-    /// requests, who owns which wake-up, the count of wake-ups handled.
+    /// requests, who owns which wake-up, the entities shelved with
+    /// unloaded tracts, the count of wake-ups handled.
     pub kernel: Hash128,
     /// All of the above.
     pub total: Hash128,
@@ -136,7 +168,12 @@ pub struct SimHashes {
 #[derive(Serialize)]
 struct SavedRef<'a> {
     timeline: &'a Timeline,
+    /// The world's processes, whose wake-ups the timeline holds
+    /// (decision D-385).
+    activity: &'a WorldActivity,
     entities: &'a EntityTable,
+    components: &'a Components,
+    shelf: &'a Shelf,
     actions: &'a ActionTable,
     windows: &'a WindowTable,
     rules: &'a RuleState,
@@ -156,7 +193,10 @@ struct SavedRef<'a> {
 #[derive(Deserialize)]
 struct Saved {
     timeline: Timeline,
+    activity: WorldActivity,
     entities: EntityTable,
+    components: Components,
+    shelf: Shelf,
     actions: ActionTable,
     windows: WindowTable,
     rules: RuleState,
@@ -191,13 +231,21 @@ impl Sim {
     /// A simulation over a world that has already been made: a cosmos
     /// and the timeline its clocks are on. This is how a generated or
     /// hand-built world is handed to the simulation.
+    ///
+    /// Tracts are generated by the generators of `clash-gen`, bound to
+    /// the world's definitions, and changed tracts are kept in memory
+    /// while they are not loaded. [`with_io`](Sim::with_io) gives the
+    /// simulation others.
     pub fn from_parts(defs: Arc<Defs>, cosmos: Cosmos, timeline: Timeline, seed: u64) -> Sim {
         let bus = Bus::for_defs(&defs);
+        let generators = clash_gen::generators(cosmos.defs());
         Sim {
             defs,
             cosmos,
             timeline,
             entities: EntityTable::new(),
+            components: Components::new(),
+            shelf: Shelf::default(),
             actions: ActionTable::default(),
             windows: WindowTable::default(),
             rules: RuleState::default(),
@@ -213,7 +261,21 @@ impl Sim {
             steps: 0,
             handlers: Handlers::default(),
             bus,
+            generators,
+            store: Box::new(MemoryStore::new()),
         }
+    }
+
+    /// This simulation with other generators and another tract store:
+    /// what loading and unloading tracts needs besides the world
+    /// (02 §9.4). Neither is state. Give a loaded simulation the store
+    /// it was saved with, which holds the tracts that were changed and
+    /// unloaded.
+    #[must_use]
+    pub fn with_io(mut self, generators: Generators, store: Box<dyn SimStore>) -> Sim {
+        self.generators = generators;
+        self.store = store;
+        self
     }
 
     /// The definitions the simulation runs on.
@@ -352,6 +414,10 @@ impl Sim {
         self.relocate(id, Place::Stored, cause)?;
         self.drop_wakes(id);
         self.decisions.forget(id);
+        self.shelf.forget(id);
+        // Before the slot can be given out again (decision D-420). The
+        // container it was in has been brought up to date by `relocate`.
+        self.components.remove_entity(id);
         if let Some(clock) = self.entities.get(id).and_then(KernelEntity::clock) {
             // A clock that is already gone needs no destroying.
             let _ = self.timeline.destroy_clock(clock);
@@ -446,6 +512,8 @@ impl Sim {
         }
         for event in self.world_events.drain() {
             let mut relocated = None;
+            // What the kernel does once the world's own event is queued.
+            let mut then = Follow::Nothing;
             match &event {
                 WorldEvent::OccupantDisplaced {
                     occupant,
@@ -459,6 +527,48 @@ impl Sim {
                 }
                 WorldEvent::AreaEntered { occupant, .. }
                 | WorldEvent::AreaExited { occupant, .. } => self.sync_clocks_under(*occupant),
+                WorldEvent::TractUnloading { realm, tract, .. } => {
+                    then = Follow::Shelve(*realm, *tract);
+                }
+                WorldEvent::TractLoaded { realm, tract, .. } => {
+                    then = Follow::Unshelve(*realm, *tract);
+                }
+                WorldEvent::OccupantUnsupported {
+                    occupant,
+                    loc,
+                    cause,
+                    ..
+                } if self.entities.contains(*occupant) => {
+                    then = Follow::Emit(
+                        *occupant,
+                        *cause,
+                        EventBody::EntityUnsupported {
+                            entity: *occupant,
+                            loc: *loc,
+                        },
+                    );
+                }
+                WorldEvent::OccupantExposed {
+                    occupant,
+                    loc,
+                    kind,
+                    energy,
+                    intensity,
+                    cause,
+                    ..
+                } if self.entities.contains(*occupant) => {
+                    then = Follow::Emit(
+                        *occupant,
+                        *cause,
+                        EventBody::EntityExposed {
+                            entity: *occupant,
+                            loc: *loc,
+                            kind: self.cosmos.defs().damage_types().name(*kind).to_owned(),
+                            energy: *energy,
+                            intensity: *intensity,
+                        },
+                    );
+                }
                 _ => {}
             }
             let (cause, loc) = (event.cause(), event.location());
@@ -475,6 +585,15 @@ impl Sim {
                     EventBody::EntityRelocated { entity, from, to },
                 );
                 self.events.push_back(event);
+            }
+            match then {
+                Follow::Nothing => {}
+                Follow::Shelve(realm, tract) => self.shelve_tract(realm, tract),
+                Follow::Unshelve(realm, tract) => self.unshelve_tract(realm, tract),
+                Follow::Emit(entity, cause, body) => {
+                    let event = self.stamped(Where::Entity(entity), cause, body);
+                    self.events.push_back(event);
+                }
             }
         }
     }
@@ -507,6 +626,7 @@ impl Sim {
         let cosmos = Hash128::of(&self.cosmos);
         let timeline = Hash128::of(&self.timeline);
         let entities = Hash128::of(&self.entities);
+        let components = Hash128::of(&self.components);
         let rules = Hash128::of(&(&self.actions, &self.windows, &self.rules));
         let settings = Hash128::of(&self.settings);
         let rng = Hash128::of(&self.rng);
@@ -516,13 +636,17 @@ impl Sim {
         self.decisions.state_hash(&mut kernel);
         self.requests.state_hash(&mut kernel);
         self.wakes.state_hash(&mut kernel);
+        self.shelf.state_hash(&mut kernel);
         kernel.write_u64(self.steps);
         let kernel = kernel.finish();
-        let total = Hash128::of(&[cosmos, timeline, entities, rules, settings, rng, kernel]);
+        let total = Hash128::of(&[
+            cosmos, timeline, entities, components, rules, settings, rng, kernel,
+        ]);
         SimHashes {
             cosmos,
             timeline,
             entities,
+            components,
             rules,
             settings,
             rng,
@@ -531,17 +655,30 @@ impl Sim {
         }
     }
 
+    /// The hash of one component store, to find which store two
+    /// simulations differ in.
+    pub fn component_hash(&self, kind: ComponentKind) -> Hash128 {
+        self.components.hash_of(kind)
+    }
+
     /// The simulation's own state as a blob: everything but the
     /// definitions and the world, which have stores of their own
     /// (02 §11). Save at a safe point: between two calls of
     /// [`advance`](Sim::advance).
+    ///
+    /// The blob also carries what the world has under way, its
+    /// processes and the collapses they belong to, because the timeline
+    /// that holds their wake-ups is saved here (decision D-385).
     pub fn save(&self) -> Result<Vec<u8>, CodecError> {
         codec::encode_blob(
             SAVE_KIND,
             SAVE_VERSION,
             &SavedRef {
                 timeline: &self.timeline,
+                activity: self.cosmos.processes(),
                 entities: &self.entities,
+                components: &self.components,
+                shelf: &self.shelf,
                 actions: &self.actions,
                 windows: &self.windows,
                 rules: &self.rules,
@@ -564,9 +701,23 @@ impl Sim {
     ///
     /// The world does not store who occupies it. Once the cosmos holds
     /// its loaded tracts, call [`reindex`](Sim::reindex) to place every
-    /// entity again. Wake-up handlers and event handlers are not state:
-    /// register them again as they were.
-    pub fn load(defs: Arc<Defs>, cosmos: Cosmos, blob: &[u8]) -> Result<Sim, LoadError> {
+    /// entity again.
+    ///
+    /// What is not state is as a new simulation has it, and whatever
+    /// was set up on top must be set up again as it was:
+    ///
+    /// - the generators and the tract store: give the store the
+    ///   simulation was saved with to [`with_io`](Sim::with_io);
+    /// - wake-up handlers registered with
+    ///   [`set_wake_handler`](Sim::set_wake_handler), beyond the
+    ///   defaults;
+    /// - event handlers registered with [`on`](Sim::on) and
+    ///   [`on_subject`](Sim::on_subject), and event types registered
+    ///   with [`register_event`](Sim::register_event).
+    ///
+    /// What the world had under way when it was saved is put back into
+    /// the cosmos given ([`Cosmos::restore_activity`]).
+    pub fn load(defs: Arc<Defs>, mut cosmos: Cosmos, blob: &[u8]) -> Result<Sim, LoadError> {
         let (version, body) = codec::open_blob(SAVE_KIND, blob)?;
         if version != SAVE_VERSION {
             return Err(LoadError::Version {
@@ -575,12 +726,26 @@ impl Sim {
             });
         }
         let saved: Saved = codec::from_bytes(&body)?;
+        let orphans = saved
+            .components
+            .orphans(|owner| saved.entities.contains(owner));
+        if let Some((kind, owner)) = orphans.first() {
+            return Err(LoadError::Orphan {
+                kind: kind.name(),
+                owner: *owner,
+                count: orphans.len(),
+            });
+        }
+        cosmos.restore_activity(saved.activity);
         let bus = Bus::for_defs(&defs);
+        let generators = clash_gen::generators(cosmos.defs());
         Ok(Sim {
             defs,
             cosmos,
             timeline: saved.timeline,
             entities: saved.entities,
+            components: saved.components,
+            shelf: saved.shelf,
             actions: saved.actions,
             windows: saved.windows,
             rules: saved.rules,
@@ -596,8 +761,25 @@ impl Sim {
             steps: saved.steps,
             handlers: Handlers::default(),
             bus,
+            generators,
+            store: Box::new(MemoryStore::new()),
         })
     }
+}
+
+/// What the kernel does about one of the world's events, once that
+/// event is in the queue.
+enum Follow {
+    /// Nothing more.
+    Nothing,
+    /// Take the entities of a tract that is to be unloaded out of the
+    /// world.
+    Shelve(RealmId, TractPos),
+    /// Put the entities that were waiting for a tract back.
+    Unshelve(RealmId, TractPos),
+    /// Report what the world said about an occupant as an event about
+    /// the entity.
+    Emit(EntityId, Cause, EventBody),
 }
 
 /// The reason for an id that names no entity.

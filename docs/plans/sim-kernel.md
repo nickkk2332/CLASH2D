@@ -419,6 +419,18 @@ with their packages. Past 100,000 wake-ups at one tick `advance` reports
 and yields rather than putting the rest off to the next tick. The log
 does not carry state hashes at intervals.
 
+Joined since (decisions D-460 to D-462), tested in
+`crates/clash-sim/tests/handoffs.rs`: the `World` domain's handler calls
+the world's `handle_wake`, so a tower knocked out by debug commands comes
+down under `advance`, and a save in the middle with the world's process
+state in the blob ends in the same hash; the safe point reconciles
+tickets, shelves and restores the entities of tracts that unload and
+load, and reports spawn requests; `Sim::start_session` and the debug
+command of that name start a session at a place that is not loaded yet.
+Still stubbed: world scenarios as test scripts (W11); timers of a
+shelved entity (T7); the cosmos has no store of its own, so a test of
+saving copies it (W10).
+
 ### K3 — Events and hooks
 
 **Spec** 05 §8; 03 §4.3 step 4 · **Size** M

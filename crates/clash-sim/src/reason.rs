@@ -149,6 +149,12 @@ pub mod codes {
     pub const WORLD_UNKNOWN_REALM: &str = "world.unknown_realm";
     /// The world refused for another reason.
     pub const WORLD_REFUSED: &str = "world.refused";
+    /// A tract could not be loaded or unloaded.
+    pub const WORLD_TRACT_FAILED: &str = "world.tract_failed";
+    /// The entity has no component of the kind the change needs.
+    pub const COMPONENT_MISSING: &str = "component.missing";
+    /// A mass, volume, height or cross-section is negative or not finite.
+    pub const PHYSICAL_BAD_MEASURE: &str = "physical.bad_measure";
     /// No clock has this id.
     pub const CLOCK_UNKNOWN: &str = "clock.unknown";
     /// A clock's rate must be zero or more, and finite.
@@ -225,6 +231,18 @@ pub const KERNEL_REASONS: &[ReasonInfo] = &[
     ReasonInfo {
         code: codes::WORLD_REFUSED,
         doc: "The world refused the change; the message says why.",
+    },
+    ReasonInfo {
+        code: codes::WORLD_TRACT_FAILED,
+        doc: "A tract could not be loaded or unloaded at a safe point; the message says why. It is tried again when something changes. Values: `realm`, `x`, `y`.",
+    },
+    ReasonInfo {
+        code: codes::COMPONENT_MISSING,
+        doc: "The entity has no component of the kind the change needs.",
+    },
+    ReasonInfo {
+        code: codes::PHYSICAL_BAD_MEASURE,
+        doc: "A mass, volume, height or cross-section is negative or not finite.",
     },
     ReasonInfo {
         code: codes::CLOCK_UNKNOWN,
