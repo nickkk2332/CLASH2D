@@ -716,6 +716,13 @@ impl Bus {
             bus.types
                 .insert(info.name.to_owned(), EventType::of_engine(info));
         }
+        for info in crate::movement::MOVEMENT_EVENTS {
+            bus.types
+                .insert(info.name.to_owned(), EventType::of_engine(info));
+        }
+        for hook in crate::movement::hook_types() {
+            bus.types.insert(hook.name.clone(), hook);
+        }
         if let Some(registry) = defs.try_registry::<EventDef>() {
             for (id, def) in registry.iter() {
                 let name = registry.name(id).to_owned();

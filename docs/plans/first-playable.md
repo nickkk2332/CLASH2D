@@ -28,7 +28,7 @@ actions that call `hit`.
 | E7 | Minds and vital state | M | E1, T4 | todo |
 | E8 | Items and holds | L | E5 | todo |
 | E9 | Templates and creation | L | E3, E6, E8 | todo |
-| E10 | Movement | M | E4, W14, W18 | todo |
+| E10 | Movement | M | E4, W14, W18 | in progress |
 | E11 | Coming and going | L | E9, W8 | todo |
 | E12 | Minimal devices | M | E8 | todo |
 | S1 | Light | M | W18 | beta |
