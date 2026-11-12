@@ -32,6 +32,57 @@ use crate::reason::{Reason, codes};
 pub enum Command {
     /// A tool's command.
     Debug(DebugCommand),
+    /// Answers a choice put by a rule's `ask` (05 §10.6) with the
+    /// position of an option, from zero. Refused if the entity is not
+    /// waiting for that choice, or the option is not one it may take.
+    Choose {
+        /// Who chooses.
+        entity: EntityId,
+        /// The choice, as the decision named it.
+        choice: crate::decision::ChoiceId,
+        /// The position of the option taken.
+        option: u32,
+    },
+    /// Starts an action, or puts it at the end of the entity's plan
+    /// (03 §4.4, §6.6). Answers a free decision. Refused, with the
+    /// reason, if the action cannot start now; a handler of
+    /// `action_starting` that refuses it raises `action_refused`
+    /// instead, the command having been taken.
+    Act {
+        /// Who acts: an entity under direct or delegated control.
+        entity: EntityId,
+        /// What it does.
+        action: crate::action::ActionDefId,
+        /// The parameters, by name; those left out take their defaults.
+        params: crate::action::Params,
+        /// Now, or after what is planned.
+        how: crate::action::How,
+    },
+    /// Occupies an entity doing nothing for a length of its own time,
+    /// then asks again (03 §5.2). Answers a free decision; a wait of no
+    /// length answers and asks nothing more.
+    Wait {
+        /// Who waits.
+        entity: EntityId,
+        /// How long.
+        dur: Dur,
+    },
+    /// Ends an action at the actor's wish (03 §6.4): a held phase is let
+    /// go, and anything else is abandoned where the phase allows it.
+    /// With `abandon`, a held phase is abandoned too.
+    Cancel {
+        /// Whose action.
+        entity: EntityId,
+        /// Which.
+        action: crate::later::ActionId,
+        /// Whether to give it up rather than let a held phase go.
+        abandon: bool,
+    },
+    /// Empties an entity's plan (03 §5.3).
+    ClearPlan {
+        /// Whose.
+        entity: EntityId,
+    },
 }
 
 /// What a tool or a test may do to the simulation directly. These are
@@ -194,6 +245,24 @@ impl Sim {
     fn apply(&mut self, command: Command) -> Result<(), Reason> {
         match command {
             Command::Debug(debug) => self.apply_debug(debug),
+            Command::Choose {
+                entity,
+                choice,
+                option,
+            } => self.choose(entity, choice, option),
+            Command::Act {
+                entity,
+                action,
+                params,
+                how,
+            } => self.command_act(entity, action, params, how),
+            Command::Wait { entity, dur } => self.command_wait(entity, dur),
+            Command::Cancel {
+                entity,
+                action,
+                abandon,
+            } => self.command_cancel(entity, action, abandon),
+            Command::ClearPlan { entity } => self.command_clear_plan(entity),
         }
     }
 

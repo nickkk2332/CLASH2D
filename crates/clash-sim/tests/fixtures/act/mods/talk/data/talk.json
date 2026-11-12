@@ -1,0 +1,51 @@
+[
+  { "type": "variable", "id": "paid", "scope": "entity", "value": "int", "default": 0,
+    "doc": "What an entity paid when it was asked to." },
+  { "type": "variable", "id": "said", "scope": "entity", "value": "string",
+    "doc": "What an entity answered last." },
+  { "type": "variable", "id": "shouts", "scope": "global", "value": "int", "default": 0,
+    "doc": "How often anyone shouted." },
+
+  { "type": "eoc", "id": "ring",
+    "subjects": { "self": "entity" },
+    "params": { "readers": "list<entity>" },
+    "doc": "Tells each reader, as that reader would put it, that the bell was rung.",
+    "do": [ { "for_each": "$readers", "as": "reader", "do": [
+      { "message": { "to": "$reader", "text": "{the(self)} {verb(self, 'ring')} the bell.", "style": "sound" } }
+    ] } ] },
+
+  { "type": "eoc", "id": "note",
+    "subjects": { "self": "entity" },
+    "doc": "A message with only its text: it is for `self`.",
+    "do": [ { "message": "{name(self)} {verb(self, 'be')} ready." } ] },
+
+  { "type": "eoc", "id": "haggle",
+    "on": "tag_changed", "filter": { "tag": "approached", "added": true },
+    "doc": "Asks whoever was approached what to do. The answer runs where the question is written.",
+    "do": [
+      { "let": { "price": 5 } },
+      { "ask": { "prompt": "Pay {$price} coins?", "options": [
+        { "label": "Haggle", "if": "$price < 3",
+          "do": [ { "set": { "self.var.said": "haggled" } } ] },
+        { "label": "Pay {$price}",
+          "do": [ { "set": { "self.var.paid": "$price", "self.var.said": { "expr": "event.tag" } } } ] },
+        { "label": "Leave",
+          "do": [ { "set": { "self.var.said": "left" } } ] }
+      ] } }
+    ] },
+
+  { "type": "eoc", "id": "shout",
+    "subjects": { "self": "entity" },
+    "params": { "loud": "bool" },
+    "doc": "What an option gathered at run time runs.",
+    "do": [
+      { "add": { "global.var.shouts": 1 } },
+      { "if": "$loud", "then": [ { "set": { "self.var.said": "LOUD" } } ] }
+    ] },
+
+  { "type": "eoc", "id": "cornered",
+    "on": "tag_changed", "filter": { "tag": "cornered", "added": true },
+    "doc": "Offers options gathered when the effect runs.",
+    "do": [ { "ask": { "who": "self", "prompt": "Shout?",
+      "options": "[{'label': 'Mumble', 'eoc': 'talk:no_such_rule'}, {'label': 'Shout', 'eoc': 'talk:shout', 'with': {'loud': true}}]" } } ] }
+]

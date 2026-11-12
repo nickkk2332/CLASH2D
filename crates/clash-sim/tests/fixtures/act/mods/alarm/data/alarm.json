@@ -1,0 +1,69 @@
+[
+  { "type": "variable", "id": "tripped", "scope": "cell", "value": "bool", "default": false,
+    "doc": "Set once the alarm of a cell has gone off." },
+  { "type": "variable", "id": "alarms", "scope": "global", "value": "int", "default": 0,
+    "doc": "How many alarms have been raised anywhere." },
+  { "type": "variable", "id": "squads", "scope": "global", "value": "int", "default": 0,
+    "doc": "How many squads have been sent out." },
+  { "type": "variable", "id": "refused", "scope": "global", "value": "string",
+    "doc": "The code of the reason reinforcements were last refused for." },
+  { "type": "variable", "id": "alerted", "scope": "entity", "value": "bool", "default": false,
+    "doc": "Whether this one has been told of an alarm." },
+  { "type": "variable", "id": "steps", "scope": "entity", "value": "int", "default": 0,
+    "doc": "How often the one a rule is attached to has moved." },
+
+  { "type": "event", "id": "reinforcements_due",
+    "subjects": { "here": "loc" },
+    "fields": { "squads": "int" },
+    "hook": true, "mutable": ["squads"],
+    "doc": "Reinforcements are about to be sent for. A handler may change how many, or refuse." },
+
+  { "type": "reason", "id": "no_one_left",
+    "text": "There is nobody left to send.",
+    "doc": "Given when reinforcements are asked for a second time." },
+
+  {
+    "//": "05 §2: when a thief steps into the vault, if its alarm has not gone off, raise it.",
+    "type": "eoc", "id": "vault_alarm",
+    "on": "entity_relocated",
+    "if": { "all": [ "self.has_tag('thief')", "exists(here)", "here.x >= 10", "not here.var.tripped" ] },
+    "doc": "Raises the alarm of the cell, once.",
+    "do": [
+      { "set": { "here.var.tripped": true } },
+      { "add": { "global.var.alarms": 1 } },
+      { "run": { "eoc": "alert", "with": { "whom": "self" } } },
+      { "let": { "sent": { "emit": { "event": "reinforcements_due", "here": "here", "squads": 2 } } } },
+      { "if": "$sent.cancelled",
+        "then": [ { "set": { "global.var.refused": { "expr": "$sent.reason" } } } ],
+        "else": [ { "add": { "global.var.squads": "$sent.squads" } } ] }
+    ]
+  },
+
+  {
+    "type": "eoc", "id": "alert",
+    "params": { "whom": "entity" },
+    "doc": "Tells someone of the alarm.",
+    "do": [ { "set": { "$whom.var.alerted": true } } ]
+  },
+
+  {
+    "type": "eoc", "id": "double_up",
+    "on": "reinforcements_due", "priority": 1,
+    "doc": "Twice as many are sent as were asked for.",
+    "do": [ { "modify": { "event.squads": "event.squads * 2" } } ]
+  },
+  {
+    "type": "eoc", "id": "strike",
+    "on": "reinforcements_due",
+    "if": "global.var.alarms > 1",
+    "doc": "After the first alarm nobody is left.",
+    "do": [ { "cancel_event": { "reason": "no_one_left" } } ]
+  },
+
+  {
+    "type": "eoc", "id": "count_steps",
+    "on": "entity_relocated", "attached": true,
+    "doc": "Attached to someone: counts how often they move.",
+    "do": [ { "add": { "self.var.steps": 1 } } ]
+  }
+]

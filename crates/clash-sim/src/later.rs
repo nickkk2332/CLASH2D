@@ -19,10 +19,9 @@ define_id! {
 /// package K5, in [`rule`](crate::rule).
 pub use crate::rule::EocId;
 
-/// Every running action (03 §6). Built by package T3.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct ActionTable {}
-impl_state_hash!(ActionTable {});
+/// Every running action (03 §6). Built by package T3, in
+/// [`action`](crate::action).
+pub use crate::action::ActionTable;
 
 /// Every open reaction window (03 §7). Built by package T5.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
@@ -35,16 +34,10 @@ impl_state_hash!(WindowTable {});
 /// package K7's.
 pub use crate::rule::RuleState;
 
-/// An entity's channel slots and which action holds each (03 §6.2).
-/// Built by package T3; document 06 derives the slots from the body.
-///
-/// Not to be confused with [`ChannelSet`](crate::action::ChannelSet),
-/// which is a set of channel ids: what an action definition uses.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct ChannelSlots {}
-impl_state_hash!(ChannelSlots {});
+/// An entity's channel slots (03 §6.2). Built by package T3, in
+/// [`action`](crate::action).
+pub use crate::action::ChannelSlots;
 
-/// The things an entity will do next (03 §5.3). Built by package T4.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct Plan {}
-impl_state_hash!(Plan {});
+/// The things an entity will do next (03 §5.3). Built by package T4, in
+/// [`action`](crate::action).
+pub use crate::action::Plan;
