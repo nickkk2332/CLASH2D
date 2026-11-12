@@ -24,8 +24,8 @@ plan's scenarios. The test generators stay, as fixtures.
 | WG4 | Tract definitions and realisation | M | WG2, WG3 | beta |
 | WG5 | Transforms and ruin | M | WG4, W22 | todo |
 | WG6 | World generators and realm plans | L | WG4 | todo |
-| WG7 | Region kinds and surveys | L | WG6 | todo |
-| WG8 | Settlements | L | WG7 | todo |
+| WG7 | Region kinds and surveys | L | WG6 | beta |
+| WG8 | Settlements | L | WG7 | beta |
 | WG9 | Sites and the simulation seed | M | WG8, L1, L5 | todo |
 | WG10 | Stacks and assemblies | L | WG2 | todo |
 | WG11 | Vessels, designs and wiring from maps | M | WG2, V10, G8 | todo |
@@ -246,6 +246,30 @@ Done when
 - Surveys are pure (invariant X2).
 - Site counts and spacing hold over many seeds.
 
+Built (beta), in `clash_gen::region` and the `standard` generator
+(decisions D-670 to D-674), ahead of WG6: the `region_kind`,
+`path_kind` and `site` types (the last in the part generation needs);
+regions given kinds by the generator's `regions` until realm plans
+exist; tract definitions in patches by weight; paths across region
+edges at points drawn from the edge's hash, each in two stretches to
+the region's hub; the ground's `paths` step; a region kind's sites by
+count, `apart` and `near` (`road`, `centre`, `edge`); region plans kept
+by the generator, from which realisers take every lot, site and path
+within reach (the seam of D-511); a survey's record with the region's
+kind, placements, path lines and sites; `StandardGenerator::survey_report`
+for what a survey dropped, could not place, or placed too few of. Every
+"Done when" above has a test in `crates/clash-gen/tests/settlements.rs`:
+`edges_agree` is an integration test, since test scripts have no world
+to run in yet. Stubbed: planned paths, rivers and the realm plan's
+kinds and sites (WG6); `near: coast` and `near: river` fail to load;
+crossings, `max_grade` and `current` are carried, not built, so the
+review additions "Path kinds and crossings" (`road_over_water`) and
+"Watercourse current" are not built; a region kind's weights are
+numbers, not expressions over `region.*`, and its `settlements`,
+`weather` and `population` are carried; overlapping placements are
+dropped and reported, never moved; the budget is not benchmarked
+(WG13).
+
 ### WG8 — Settlements
 
 **Spec** 10 §8.4 · **Size** L
@@ -260,6 +284,27 @@ Done when
 - Every building entrance is reachable from every other by walking
   (checked with world package W18's geometry).
 - A settlement spanning two regions has continuous streets.
+
+Built (beta), in `clash_gen::settlement` (decisions D-675 to D-679): the
+`settlement` type; settlements placed by the generator's `settlements`
+until realm plans exist; the `grid` and `organic` patterns with main
+roads; blocks and rows of lots; zones by distance from the centre with
+the tags of the maps that fill their lots; maps chosen to fit each lot
+and turned to front its street; `must_have` sites, one to a tract;
+people for each lot of a zone and each site (the part of WG9 below);
+the bundled `core:town` with a market town across a region's edge, a
+village and farmsteads, five maps and the start `wold_market`; golden
+pictures of a block of the town in `crates/clash-gen/tests/golden/town.txt`
+that must stand, printed by `cargo run -p clash-gen --example
+tract_ascii -- town 1 62 30 0 3 2`. Every "Done when" above has a test
+in `crates/clash-gen/tests/settlements.rs`. Stubbed: walls and gates
+(a settlement with a `wall` fails to load; they wait for WG10's
+assemblies); the patterns `radial`, `linear` and `scatter` fail to
+load; a lot is filled by a map, never by a site chosen by tag; a
+placement's `site` is not set; `groups`, `population` and `home_mark`
+are carried for WG9; streets follow the ground while lots are levelled,
+so a door can stand a storey off its street on rolling ground; the
+budget is not benchmarked (WG13).
 
 ### WG9 — Sites and the simulation seed
 
@@ -277,6 +322,13 @@ Done when
 - Scenario `town_day`: a generated town's notable staff are at work by
   day and at home by night; its streets' anonymous population follows the
   presence table.
+
+Begun with WG8 (decisions D-677, D-678): the `site` type's `map`,
+`roles` (invariant X7 is checked at load, and has a test), `staff`,
+`name`, `tags` and `founded`; a zone's `people` and a site's `staff`
+become spawn requests naming templates in the lots and sites a tract
+realises, which the simulation answers. Everything else of WG9 is to
+do.
 - Groups own the sites the definitions say they own.
 - After a settling time, routines are out of step and at least one
   incident is known about somewhere.

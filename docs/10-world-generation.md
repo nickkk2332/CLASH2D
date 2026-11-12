@@ -678,8 +678,15 @@ wide as its `width`.
 | `apart` | How many cells must lie between two of them, up to 8, across the edges of tracts as within them | 0 |
 | `where`, `if` | As above | everywhere; always |
 
-**`paths`** takes no fields. Nothing records paths until regions are
-surveyed (section 8.3), so it draws nothing yet.
+**`paths`** takes no fields. In the surface cell of each column a path
+crosses it lays the path's floor (section 8.5: its surface, or the strip
+along a side) and empties the fixture there, so a tree scattered before
+it is cleared; a block there, such as a ramp, is kept, so a path follows
+the ground. Nothing is laid under a map that levels or founds its ground.
+The paths are the streets of the settlements near the tract and the
+paths that cross the edges of the regions it touches (section 8.3), all
+worked out from position, so two tracts agree on a path across their
+edge. A ground without the step lays no path.
 
 **`float`** is not built: a ground that uses it fails to load.
 
@@ -830,6 +837,8 @@ realm definition names the generator `standard` and says in its
 | `height` | The surface: a noise field (section 9.1), sampled at each cell column at its position in tracts and rounded to the nearest storey | flat |
 | `surface_z` | The storey the surface is counted from: added to `height` | 0 |
 | `place` | Maps placed by hand anywhere in the realm (section 9.3): each `{ "map": id, "at": [x, y] }`, or `[x, y, z]` to say the storey of its level 0, with `turn` in degrees clockwise, `mirror`, `seed`, `params` (plain values) and `order` (its position in the list if left out). A seed left out is the positional hash of the cell. | none |
+| `regions` | The region kinds (section 8.1) the realm's regions are given, each `{ "kind": id, "weight": number }`: every region is given one by weighted choice, from the positional hash of the region. A region of a kind takes its tracts' definitions from the kind, in place of `tracts`. Until world generators are built (section 9) this is the realm plan's choice of kinds. | Regions with no kind |
+| `settlements` | Settlements (section 8.4) placed by hand, each `{ "settlement": id, "at": [x, y] }` with `at` its north-west tract, and `seed` (drawn from the realm's seed and `at` if left out). Each must lie inside the realm and meet no other. Until realm plans are built this is the plan's list of settlements. | none |
 
 The sea is the realm definition's own `sea_level` (02 §4.1). A wrong
 parameter is reported when the generators are bound, with the realm
@@ -847,6 +856,17 @@ placements. Whatever replaces them must stay a pure function of the
 seed and the position, and must give a tract's realiser every placement
 that overlaps the tract or lies within 12 cells of it, so that a
 levelled lot beside the tract can shape a ramp inside it.
+
+As built, the generator works out a **region plan** (a region's kind,
+the paths crossing its edges and its kind's sites) and a **settlement
+plan** (streets, blocks, lots and sites) as pure functions of the seed
+and the position, and keeps those it has worked out. A realiser asks
+for the plans of the regions and settlements near its tract and takes
+every lot, site and path within reach; a survey asks for the same plans
+and writes them into the region's record. A tract's definition is, in
+order: the `layout`'s; the `tract` of a settlement whose extent holds
+it; the region kind's; the realm's `tracts`. A tract definition places
+nothing on a tract inside a settlement: the lots are what stands there.
 
 ## 7. Building large places from parts
 
@@ -931,6 +951,23 @@ patches of each are, which sites occur in it and how often, which
 settlements it may hold, its climate (09 §14.1), and its thin scattering of
 people outside any site.
 
+**As built** (decision D-670). The size of a patch is `patch_size`: `patch` is a word the
+loader keeps for merging definitions (04 §6.3). A weight is a number
+until world generators give fields (section 9.1); the example's
+expressions wait for them.
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `tracts` | The tract definitions its ground is made of: each `{ "tract": id, "weight": number }`, a weight not negative, one if left out. Every tract is given one by weighted choice from the positional hash of its patch. | Tracts with no definition |
+| `patch_size` | Tracts along the side of a patch, from 1 to 64: the tracts of a patch are given the same definition | 1 |
+| `sites` | The sites it holds: each `{ "site": id, "per_region": count, "apart": tracts, "near": where }`. `per_region` is a whole number or `[low, high]`, drawn for each region. `apart` (0 to 64) is how many tracts must lie between two sites of the entry: their tracts differ by more than that, east to west or north to south. `near` is `road` (within a tract of a path, and never on one), `centre` (in the middle half of the region) or `edge` (in its outer eighth); `coast` and `river` wait for realm plans and fail to load. | none |
+| `settlements` | The settlements a realm plan may put in a region of the kind, by id. Carried until realm plans are built (WG6); the realm generator's `settlements` place them meanwhile. | none |
+| `paths` | The paths that cross its edges (section 8.3): `{ "path": path kind, "per_edge": count }`, the count a whole number or `[low, high]`, at most 8 | none |
+| `weather` | Its climate (09 §14.1), by id as written. Carried. | none |
+| `population` | People outside any site, by population id and density. Carried for WG9. | none |
+| `glyph` | How it is drawn on the realm map: `ch`, `fg`, `bg` | none |
+| `tags` | Free-form tags | none |
+
 ### 8.2 Surveying a region
 
 As a pure function of the realm's seed, the region's position and the realm
@@ -949,6 +986,29 @@ Sites created by a region's survey lie wholly inside it. A site that
 crosses regions comes from the realm plan, and every region it touches
 reads the same record.
 
+**As built** (`clash_gen::region`, decisions D-670 and D-672 to D-674): there is no
+realm plan yet. The region's kind comes from the realm generator's
+`regions` and its settlements from the generator's `settlements`
+(section 6.2). Paths are laid out before the kind's sites, so that a
+site can be `near` a road: step 5 comes before step 4. A site of the
+kind is tried in the region's tracts in an order drawn from their
+positional hashes; it is placed in a tract no other site takes, outside
+every settlement and the tracts beside one, not crossed by a path, and
+apart from the sites of its entry as the entry says; its map, chosen
+among the site's by the positional hash, turned a quarter-turn the hash
+chooses, lies in the middle of the tract and must meet nothing the
+tract's definition or the realm places (invariant X10). Fewer placed
+than drawn is a shortfall in the survey's report. The record lists the
+region's kind, every tract's definition, the placements (the realm's,
+the tract definitions', the lots of every settlement that reaches the
+region and the kind's sites), the path lines that cross it (each the
+cells of its centre line inside the region, at the surface the height
+field gives) and the sites: the kind's, and the `must_have` sites of
+settlements whose box begins in the region.
+`StandardGenerator::survey_report` gives the report: placements dropped
+for overlap, `must_have` sites that could not be placed, and
+shortfalls.
+
 ### 8.3 Agreeing at the edges
 
 Two neighbouring regions are surveyed separately and must match.
@@ -960,6 +1020,25 @@ Two neighbouring regions are surveyed separately and must match.
 - **Street grids** of a settlement spanning regions are keyed to the
   settlement's own origin and angle, so they line up.
 - **Height and other fields** are functions of position.
+
+**As built** (decision D-672). A path between two neighbouring regions crosses their
+edge at points drawn from the positional hash of the edge itself (the
+eastern or southern region's position and which way the edge runs), at
+least an eighth of a region from either corner. How many cross is drawn
+between the lower of the two kinds' `per_edge` lows and the lower of
+their highs; the path is of the western or northern region's kind; a
+region whose kind has no `paths`, and an edge of the realm, has none.
+Each region lays its own part: from the crossing, straight in from the
+edge to the row or column of the region's **hub**, then along it to
+the hub. The hub is the centre of the first settlement whose centre
+lies in the region, or else a cell of the region's middle half drawn
+from its hash. A path is not laid inside a settlement, whose ring of
+streets it meets. Neighbours never read each other, and agree because
+both work out both kinds and the edge's hash alike (invariant X3).
+
+A path's line is kept as straight stretches of its centre line, each
+running east to west or north to south; the path is as wide as its
+kind, about the line.
 
 ### 8.4 Settlements
 
@@ -997,6 +1076,82 @@ entry.
 A hamlet, a walled city, a space colony's dome, a goblin warren and a
 military camp are settlement definitions with different patterns and maps.
 
+**As built** (`clash_gen::settlement`, decisions D-675 and D-676):
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `size` | `[width, depth]`: its extent in tracts, each from 1 to 64 | required |
+| `tract` | The tract definition its tracts are given, in place of the region's choice | the region's |
+| `streets` | Its streets (below) | required |
+| `gap` | Cells left between two buildings side by side, from 0 to 8 | 1 |
+| `zones` | Its rings, from the centre out (below) | required |
+| `must_have` | Sites every instance has: a site id, or `{ "site": id, "at": where }` with `at` one of `centre`, `edge` and `anywhere` | none |
+| `wall` | A wall round it. Not built: a settlement with one fails to load. | none |
+| `groups` | The bodies that exist here (section 11.3). Carried for WG9. | none |
+| `population` | How many people live here. Carried for WG9. | none |
+| `home_mark` | The mark that counts as a home's bed (section 13). Carried for WG9. | none |
+| `tags` | Free-form tags | none |
+
+| Field of `streets` | Meaning | Default |
+|--------------------|---------|---------|
+| `pattern` | `grid` or `organic`. `radial`, `linear` and `scatter` are not built and fail to load. | required |
+| `spacing` | `[low, high]`: cells from one street to the next. `low` is at least the widest street's width and four cells more. | required |
+| `path` | The kind of path (section 8.5) its streets are | required |
+| `main` | How many main roads cross it through its centre: 0, 1 (east to west) or 2 (and north to south) | 0 |
+| `main_path` | The kind of path its main roads are | `path` |
+
+| Field of a zone | Meaning | Default |
+|-----------------|---------|---------|
+| `zone` | Its name | required |
+| `to` | How far out it reaches: a share of the way from the centre to the edge, measured as the larger of the two, above the zone before it and at most 1. The last zone's is 1. | required |
+| `lots` | The tags of the maps that may fill its lots. A map fills a lot only if it carries one of them and names a `front`. | required |
+| `people` | Who lives or works in each of its lots (section 11.2) | none |
+
+The layout, a pure function of the definitions, the settlement's
+position and its seed:
+
+1. **Streets.** Streets running east to west cross the whole extent,
+   the first and last along its north and south edges, as many between
+   as the spacing allows. Between two of them lies a row of blocks, cut
+   by streets running north to south, the first and last along the west
+   and east edges. With `grid` every row is cut at the same places and
+   the spacing is even, one spacing drawn for each direction. With
+   `organic` each row draws a spacing of its own and every street
+   between the first and the last is moved by up to a fifth of the
+   spacing, so junctions are staggered and blocks differ; a move that
+   would leave a block too small is not made. Every street meets one
+   that runs the whole width, so all streets join. The middle street of
+   each direction is a main road; with `organic` the main road north to
+   south runs straight through every row.
+2. **Blocks and lots.** The land between streets is a block; one of
+   fewer than four cells either way is left open. A block deep enough
+   for its zone's shallowest map twice over has a row of lots along its
+   north side, fronting the street to the north, and one along its
+   south side, fronting the street to the south; another has one row,
+   fronting north. A block's zone is the first whose `to` its centre
+   lies within.
+3. **Sites.** Each `must_have` site, in order, takes the start of a row:
+   the row nearest the centre for `centre`, the farthest for `edge`,
+   one drawn from the seed for `anywhere`. A tract holds one site at
+   most (02 §8.4), so a site takes every tract its map covers, and is
+   put only where no site before it took one of them, where its map
+   lies in one region, and where it meets nothing the realm places. A
+   site that cannot be placed is reported, and the settlement is laid
+   out without it.
+4. **Filling.** Along each row, from its west end, a map is drawn by
+   the positional hash among the zone's maps that fit what is left of
+   the row, turned so that its `front` faces the street (never
+   mirrored); its front edge lies on the street. Then `gap` cells are
+   left and the next is drawn, until none fits. Every map's level 0 is
+   set by its `base`, at its anchor; one that meets a placement the
+   realm makes by hand is dropped and reported.
+
+A settlement's streets are path lines of its kinds, laid by the
+`paths` step of its tracts' ground (section 5.1). Its lots and sites
+are placements. Every region it reaches and every tract near it works
+out the same plan, so a settlement across a region's edge has the same
+streets on both sides.
+
 ### 8.5 Path kinds and crossings
 
 What a path is made of, and what it does when it meets something, is a
@@ -1032,6 +1187,22 @@ Crossings are decided in the survey from the line and the height field,
 which neighbouring regions share, so both sides of an edge choose alike.
 Map crossings are written as placements. The others are part of the path
 record and are cut or filled by the `paths` step.
+
+**As built** (decision D-671):
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `width` | How many cells across its surface is, from 1 to 15 | required |
+| `surface` | `{ "floor": state }`: the floor laid along it | required |
+| `edge` | `{ "floor": state, "width": cells }`: a strip of another floor along each side, 1 to 8 cells across (one if `width` is left out): a pavement | none |
+| `max_grade` | The steepest it follows the ground. Carried: crossings are not built. | none |
+| `crossings` | Carried as written: crossings are not built, and a path lies on the ground whatever it meets | none |
+| `current` | For a watercourse, metres a second. Carried. | none |
+| `glyph` | How it is drawn on the region map | none |
+| `tags` | Free-form tags | none |
+
+A path is its surface with an edge strip on each side, centred on its
+line; an even width leans east or south.
 
 ## 9. Realms
 
@@ -1229,6 +1400,18 @@ exist before any of it is realised.
 A definition flagged `founded` is for sites made in play (09 §13.5). It
 needs no map, and its roles are given places afterwards.
 
+**As built** (decision D-677), the part generation needs. `map` is a map
+id or `{ "tag": … }`; a map stands for a site only if it names a
+`front` and every role is one of its marks that is the same in every
+placement (section 3.7), and a map named by id that lacks one fails to
+load at the role (invariant X7). `roles` maps a name to `"mark:name"`.
+`staff` lists people as section 11.2 does. `name` is how it is shown,
+its id if left out. `founded` sites have no map and cannot be placed by
+a survey or a settlement. `owner`, `stocks`, `supplies`, `incidents`,
+`building` and `assembly` are carried for WG9 and WG10. A site the
+world makes spans every tract its map covers, and its anchor is where
+its map's anchor goes.
+
 ### 11.2 People
 
 - **Homes.** A map's bed marks give it a capacity. A settlement's
@@ -1241,6 +1424,20 @@ needs no map, and its roles are given places afterwards.
   morning.
 - **Agents.** Notable staff are created as stored agents with their
   routine, home and workplace.
+
+**As built** (decision D-678): a zone's `people` and a site's `staff`
+ask for people in each lot of the zone and in the site's map. Each entry
+is `{ "creature": id, "count": n or [low, high], "chance": share,
+"in": area, "at": "mark:name", "role": text }`: one if `count` is left
+out, always if `chance` is; in the areas of that name of the map, or at
+the first cell of the mark, or anywhere in the map if it has no such
+area or mark, or if neither is given. How many, and whether any, are
+drawn from the placement's seed. The realiser adds them to the placed
+map's own spawns (section 4.1), so each becomes a spawn request at a
+cell of open floor, handed over by the tract the cell is in, `what`
+being the id as written. The simulation answers a request that names a
+template with an anonymous individual (06 §10.4). `role` is carried in
+the definition; homes, presence and agents wait for WG9.
 
 ### 11.3 Groups
 
@@ -1309,6 +1506,8 @@ cargo run -p clash-gen --example tract_ascii -- <realm id> [seed] [tract x] [tra
 and `height` how many tracts are printed east and south from it (2 and
 1 if left out). `storey` counts up from the surface of each cell
 column, so 0 is what stands on the ground however the ground rolls.
+The generated town of `core:town` lies across tracts 60 to 67 east and
+28 to 35 south: `tract_ascii -- town 1 62 30 0 3 2` prints its centre.
 
 ## 13. Modding surface
 
@@ -1362,6 +1561,23 @@ ground's parameters are plain values with a default, not the rules a
 map's may be. The ids of the areas a realm's maps ask for are given out
 in the order its tracts first load; the cells are the same in every
 order.
+
+Gaps of regions and settlements (decisions D-670 to D-679): there is no realm
+plan, so a realm's regions are given kinds by the `standard` generator's
+`regions` and its settlements are placed by hand with its `settlements`;
+a region kind's `settlements`, `weather` and `population` are carried.
+A weight in a region kind is a number. `near: coast` and `near: river`,
+the street patterns `radial`, `linear` and `scatter`, and a
+settlement's `wall` fail to load. Crossings are not built: a path lies
+on the ground whatever it meets. A path between regions runs in two
+straight stretches from its crossing to the region's hub. A lot is
+filled by a map of its zone, never by a site chosen by tag; a site is
+placed only as a `must_have` or by a region kind. A site takes every
+tract its map covers, and a placement's `site` is not set, because the
+world gives a site its id after the survey. The street of a lot follows
+the ground while the lot is levelled, so on rolling ground a door can
+stand a storey off its street (the bundled town is flat). A lot is
+dropped when it meets a placement the realm makes by hand, never moved.
 
 Gaps of the map format: a state has a facing by its name alone, and a
 definition cannot say that its numbered bits are a facing (section 3.3).

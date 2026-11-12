@@ -10,6 +10,12 @@
     "realm": "countryside", "at": [39, 45],
     "glyph": { "ch": "@", "fg": "bright_white", "bold": true } },
 
+  { "//": "On the street along the north edge of the generated market town, which lies across the edge between the realm's two regions.",
+    "type": "start", "id": "wold_market", "name": "The market town",
+    "doc": "A generated town and its people. Its doors are shut.",
+    "realm": "town", "at": [2040, 898],
+    "glyph": { "ch": "@", "fg": "bright_white", "bold": true } },
+
   { "//": "The test town with its doors open, so that it can be walked through before anything can open a door.",
     "type": "realm", "id": "open_town", "copy_from": "test_city",
     "generator_params": { "door": "door#open" } }
