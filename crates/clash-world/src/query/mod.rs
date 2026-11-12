@@ -5,7 +5,7 @@
 //! | Need | Use |
 //! |------|-----|
 //! | What a ray meets, where and how far along | [`Cosmos::raycast`], [`Cosmos::raycast_into`] with a [`RayFilter`]; the answer is a [`RayHits`] |
-//! | Whether one point can be seen from another | [`Cosmos::line_of_sight`], [`Cosmos::line_of_sight_between`] |
+//! | Whether one point can be seen from another | [`Cosmos::line_of_sight`], [`Cosmos::line_of_sight_between`]; several heights over one cell at once with [`Cosmos::sight_to_heights`] |
 //! | Every cell a viewer sees | [`Cosmos::field_of_view`] into a [`FovSet`] kept between calls |
 //! | The geometry round a cell, for movement rules | [`Cosmos::neighbours`], a [`NeighbourGeometry`] |
 //! | What holds up someone in a cell, if anything | [`Cosmos::footing`], a [`Footing`] |
@@ -42,6 +42,8 @@ mod ray;
 mod stamp;
 
 #[cfg(test)]
+mod sight_tests;
+#[cfg(test)]
 mod tests;
 
 pub use fov::{FOV_MAX_REACH, FovOffsets, FovSet, Freshness};
@@ -52,7 +54,7 @@ pub use path::{
 };
 pub use ray::{
     NoObstacles, RAY_MAX_M, RayBlocks, RayEnd, RayFilter, RayHit, RayHits, RayObstacles, RaySpan,
-    RayTarget,
+    RayTarget, SIGHT_HEIGHTS_MAX,
 };
 pub use stamp::{RevParts, RevStamp};
 

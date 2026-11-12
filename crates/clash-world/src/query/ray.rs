@@ -15,7 +15,7 @@ use crate::dims::{CELL_M, STOREY_M};
 use crate::error::WorldError;
 use crate::grid::Column;
 use crate::iter::segment_cells;
-use crate::pos::{CellPos, Location, PointM};
+use crate::pos::{CellPos, Location, PointM, TractPos};
 use crate::topology::{Extent, Topology};
 
 use super::locate;
@@ -380,31 +380,99 @@ fn nearest_image(topology: &Topology, a: [Real; 3], mut b: [Real; 3]) -> [Real; 
     b
 }
 
+/// Finds the column of each cell of a walk, keeping the last one found:
+/// the cells of a line are nearly always in the tract of the cell before.
+/// Answers as [`locate`] does.
+struct Columns<'a> {
+    view: &'a GridView<'a>,
+    last: Option<(TractPos, &'a Column)>,
+}
+
+impl<'a> Columns<'a> {
+    fn new(view: &'a GridView<'a>) -> Columns<'a> {
+        Columns { view, last: None }
+    }
+
+    #[inline]
+    fn locate(&mut self, cell: CellPos) -> Result<(&'a Column, CellPos), WorldError> {
+        let cell = self.view.normalize(cell)?;
+        let tract = cell.tract();
+        if let Some((have, column)) = self.last
+            && have == tract
+        {
+            return Ok((column, cell));
+        }
+        match self.view.column(tract) {
+            Some(column) => {
+                self.last = Some((tract, column));
+                Ok((column, cell))
+            }
+            None => Err(WorldError::NotLoaded(Location::new(self.view.id(), cell))),
+        }
+    }
+}
+
+/// The two ends of a line of sight in the order it is walked, the far
+/// end moved round a wrapped axis to the copy nearest the near end, and
+/// the line made ready to measure heights along.
+struct SightLine {
+    a: [Real; 3],
+    b: [Real; 3],
+    /// `None` when the ends are one point: nothing is measured.
+    ray: Option<Ray>,
+    /// Whether the line is longer than any is followed.
+    too_long: bool,
+}
+
+impl SightLine {
+    fn new(topology: &Topology, a: [Real; 3], b: [Real; 3]) -> SightLine {
+        // Always walked from the same end, so that the answer cannot
+        // depend on which point was given first.
+        let key = |p: [Real; 3]| (p[2], p[1], p[0]);
+        let (a, b) = if key(a) <= key(b) { (a, b) } else { (b, a) };
+        let b = nearest_image(topology, a, b);
+        let offset = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let length = (offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]).sqrt();
+        SightLine {
+            a,
+            b,
+            ray: Ray::new(a, offset, length),
+            too_long: length > RAY_MAX_M,
+        }
+    }
+
+    /// Whether something in a cell that is `opaque` stands taller than
+    /// the line passes through it.
+    #[inline]
+    fn hidden_in(&self, defs: &WorldDefs, column: &Column, cell: CellPos, norm: CellPos) -> bool {
+        let Some(ray) = &self.ray else {
+            return false;
+        };
+        let lowest = ray.span(cell).lowest_m();
+        let hides = |info: &StateInfo| info.flags.has(EngineFlag::Opaque) && lowest < info.height;
+        hides(defs.block_info(column.block(norm))) || hides(defs.fixture_info(column.fixture(norm)))
+    }
+}
+
 /// Whether nothing opaque stands on the straight line between two points
 /// of one grid. See [`Cosmos::line_of_sight`].
-fn sight_clear(
+pub(super) fn sight_clear(
     view: &GridView<'_>,
     defs: &WorldDefs,
     a: [Real; 3],
     b: [Real; 3],
 ) -> Result<bool, WorldError> {
-    // Always walked from the same end, so that the answer cannot depend
-    // on which point was given first.
-    let key = |p: [Real; 3]| (p[2], p[1], p[0]);
-    let (a, b) = if key(a) <= key(b) { (a, b) } else { (b, a) };
-    let b = nearest_image(view.topology(), a, b);
-    let first = CellPos::containing(a);
-    let last = CellPos::containing(b);
-    let offset = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    let length = (offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]).sqrt();
-    if length > RAY_MAX_M {
+    let line = SightLine::new(view.topology(), a, b);
+    if line.too_long {
         // Too far to follow, like a ray of that length.
         return Ok(false);
     }
-    let ray = Ray::new(a, offset, length);
+    let first = CellPos::containing(line.a);
+    let last = CellPos::containing(line.b);
+    let mut columns = Columns::new(view);
     let mut prev: Option<(i32, CellFlags)> = None;
-    for cell in segment_cells(a, b) {
-        let (column, norm) = locate(view, cell)?;
+    for cell in segment_cells(line.a, line.b) {
+        let (column, norm) = columns.locate(cell)?;
         let flags = column.flags(norm);
         if let Some((prev_z, prev_flags)) = prev
             && cell.z != prev_z
@@ -419,20 +487,88 @@ fn sight_clear(
         if flags.contains(CellFlags::OPAQUE)
             && cell != first
             && cell != last
-            && let Some(ray) = &ray
+            && line.hidden_in(defs, column, cell, norm)
         {
-            let lowest = ray.span(cell).lowest_m();
-            let block = defs.block_info(column.block(norm));
-            let fixture = defs.fixture_info(column.fixture(norm));
-            let hides =
-                |info: &StateInfo| info.flags.has(EngineFlag::Opaque) && lowest < info.height;
-            if hides(block) || hides(fixture) {
-                return Ok(false);
-            }
+            return Ok(false);
         }
         prev = Some((cell.z, flags));
     }
     Ok(true)
+}
+
+/// The most heights one [`Cosmos::sight_to_heights`] is asked about.
+pub const SIGHT_HEIGHTS_MAX: usize = 32;
+
+/// Which of the points `targets` can be seen from `eye`, as bits: the
+/// answers of [`sight_clear`] for each, an error counting as not seen.
+/// The points share their place on the ground and differ in height.
+/// Where every point and the eye are on one storey, the lines of each
+/// direction of walking pass the same cells (they differ in height
+/// alone), so the cells are walked once for each direction and only the
+/// heights are measured for each line (D-732).
+fn sight_to_points(
+    view: &GridView<'_>,
+    defs: &WorldDefs,
+    eye: [Real; 3],
+    targets: &[[Real; 3]],
+) -> u32 {
+    let storey = CellPos::containing(eye).z;
+    let one_storey = targets
+        .iter()
+        .all(|point| CellPos::containing(*point).z == storey);
+    if !one_storey {
+        return targets
+            .iter()
+            .enumerate()
+            .filter(|(_, point)| sight_clear(view, defs, eye, **point) == Ok(true))
+            .fold(0, |seen, (index, _)| seen | (1 << index));
+    }
+    let lines: Vec<SightLine> = targets
+        .iter()
+        .map(|point| SightLine::new(view.topology(), eye, *point))
+        .collect();
+    let mut seen = 0_u32;
+    // The lines walked from the eye, then those walked to it.
+    for from_eye in [true, false] {
+        let mut alive: u32 = 0;
+        for (index, line) in lines.iter().enumerate() {
+            if (line.a == eye) == from_eye && !line.too_long {
+                alive |= 1 << index;
+            }
+        }
+        let Some(guide) = lines
+            .iter()
+            .enumerate()
+            .find(|(index, _)| alive & (1 << index) != 0)
+            .map(|(_, line)| line)
+        else {
+            continue;
+        };
+        let first = CellPos::containing(guide.a);
+        let last = CellPos::containing(guide.b);
+        let mut columns = Columns::new(view);
+        let mut reached = true;
+        for cell in segment_cells(guide.a, guide.b) {
+            let Ok((column, norm)) = columns.locate(cell) else {
+                reached = false;
+                break;
+            };
+            if column.flags(norm).contains(CellFlags::OPAQUE) && cell != first && cell != last {
+                for (index, line) in lines.iter().enumerate() {
+                    if alive & (1 << index) != 0 && line.hidden_in(defs, column, cell, norm) {
+                        alive &= !(1 << index);
+                    }
+                }
+                if alive == 0 {
+                    break;
+                }
+            }
+        }
+        if reached {
+            seen |= alive;
+        }
+    }
+    seen
 }
 
 impl Cosmos {
@@ -594,5 +730,32 @@ impl Cosmos {
         b_alt_mm: u16,
     ) -> Result<bool, WorldError> {
         self.line_of_sight(a.point_at(a_alt_mm), b.point_at(b_alt_mm))
+    }
+
+    /// Which of several heights over one cell can be seen from a height
+    /// in another: bit `i` of the answer is set when
+    /// [`line_of_sight_between`](Cosmos::line_of_sight_between)`(eye,
+    /// eye_alt_mm, target, alts_mm[i])` is `Ok(true)`, and clear when it
+    /// is `Ok(false)` or an error. At most [`SIGHT_HEIGHTS_MAX`] heights
+    /// are asked about; those past it are not seen.
+    ///
+    /// This is what working out how much of a body is exposed asks
+    /// (15 §3.1), at a part of the cost of asking each line alone.
+    pub fn sight_to_heights(
+        &self,
+        eye: Location,
+        eye_alt_mm: u16,
+        target: Location,
+        alts_mm: &[u16],
+    ) -> u32 {
+        let Ok(view) = self.grid(eye.grid) else {
+            return 0;
+        };
+        if eye.grid != target.grid {
+            return 0;
+        }
+        let asked = &alts_mm[..alts_mm.len().min(SIGHT_HEIGHTS_MAX)];
+        let points: Vec<[Real; 3]> = asked.iter().map(|alt| target.point_at(*alt).pos).collect();
+        sight_to_points(&view, self.defs(), eye.point_at(eye_alt_mm).pos, &points)
     }
 }

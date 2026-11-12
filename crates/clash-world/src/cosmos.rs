@@ -381,6 +381,12 @@ pub struct Cosmos {
     /// ids, the entity sections waiting to be stored, and warnings. Not
     /// hashed.
     pub(crate) save: crate::save::SaveState,
+    /// Counts the times the cells of any grid could have changed: every
+    /// borrow of a grid, a column or a grid's slot to change it, but for
+    /// the occupant index. Equal counts mean no cell has changed in
+    /// between, which spares a cache comparing revisions chunk by chunk
+    /// (D-731). Derived: not state, never saved or hashed.
+    epoch: u64,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -414,12 +420,27 @@ impl Cosmos {
             activity: WorldActivity::new(),
             light: crate::light::LightSlot::new(),
             save: crate::save::SaveState::new(&defs),
+            epoch: 0,
             defs,
         }
     }
 
+    /// The count of the times cells could have changed (D-731): if it
+    /// reads the same twice, no cell of any grid changed in between.
+    pub(crate) fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
     /// The parts of the cosmos that a change to one grid touches.
     pub(crate) fn grid_mut(&mut self, grid: GridId) -> Result<GridMut<'_>, WorldError> {
+        self.epoch = self.epoch.wrapping_add(1);
+        self.grid_mut_occupants(grid)
+    }
+
+    /// [`grid_mut`](Cosmos::grid_mut) for the occupant index alone,
+    /// which is not part of what cells hold: the count of changes to
+    /// cells is left as it is. Nothing else may be changed through it.
+    pub(crate) fn grid_mut_occupants(&mut self, grid: GridId) -> Result<GridMut<'_>, WorldError> {
         let slot = self
             .grids
             .get_mut(grid.index())
@@ -440,6 +461,7 @@ impl Cosmos {
     }
 
     fn slot_mut(&mut self, grid: GridId) -> Option<&mut GridSlot> {
+        self.epoch = self.epoch.wrapping_add(1);
         self.grids.get_mut(grid.index())?.as_deref_mut()
     }
 
@@ -470,6 +492,7 @@ impl Cosmos {
         let clock = timeline.create_clock(ClockId::UNIVERSAL, kind.time_rate)?;
         let id = RealmId::new(self.next_realm);
         self.next_realm = next_realm;
+        self.epoch = self.epoch.wrapping_add(1);
         self.grids.push(Some(Box::new(GridSlot {
             grid: Grid::new(),
             realm: id,
@@ -726,6 +749,7 @@ impl Cosmos {
             return Err("a realm's base grid was not saved");
         }
         self.realms = realms;
+        self.epoch = self.epoch.wrapping_add(1);
         self.grids = slots;
         self.next_realm = next_realm;
         self.vars = vars;
