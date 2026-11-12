@@ -88,6 +88,11 @@ pub type Setter = fn(&mut Sim, Subject, &Value, Cause) -> Result<(), Reason>;
 /// Computes a function the simulation registered.
 pub type Callee = fn(&Sim, &[Value]) -> Value;
 
+/// Computes a function the simulation registered that draws at random,
+/// from the stream it is handed: the rule stream, where draws are
+/// allowed (05 §4.7).
+pub type DrawingCallee = fn(&Sim, &[Value], &mut clash_core::Rng) -> Value;
+
 /// An argument of a property or a function: its name, its type as the
 /// language writes types, what it means, and whether it may be left
 /// out.
@@ -238,6 +243,10 @@ pub struct FunctionDef {
     pub changed_by: Option<&'static [&'static str]>,
     /// What computes it.
     pub call: Callee,
+    /// What computes it where it may draw at random, for a function that
+    /// does. Such a function is refused in a pure context (05 §7.3);
+    /// where nothing may be drawn, `call` answers instead.
+    pub draws: Option<DrawingCallee>,
 }
 
 impl FunctionDef {
@@ -259,7 +268,16 @@ impl FunctionDef {
             belief_safe: false,
             changed_by: None,
             call,
+            draws: None,
         }
+    }
+
+    /// This function, drawing at random through `draws` where a random
+    /// stream is at hand. It is then refused in a pure context.
+    #[must_use]
+    pub fn drawing(mut self, draws: DrawingCallee) -> FunctionDef {
+        self.draws = Some(draws);
+        self
     }
 
     /// This function with one more required parameter.
@@ -311,6 +329,7 @@ impl FunctionDef {
             .doc(self.doc)
             .group(self.group)
             .belief_safe(self.belief_safe);
+        spec.random = self.draws.is_some();
         if let Some(events) = self.changed_by {
             spec = spec.changed_by(events.iter().copied());
         }
@@ -339,7 +358,9 @@ pub fn engine_properties() -> Vec<PropertyDef> {
 /// language computes itself. A package that adds functions adds its
 /// table here.
 pub fn engine_functions() -> Vec<FunctionDef> {
-    crate::props::functions()
+    let mut functions = crate::props::functions();
+    functions.extend(crate::combat::functions());
+    functions
 }
 
 /// The definition types the simulation's properties name in their
@@ -397,6 +418,7 @@ pub fn register_engine(registry: &mut Registry) {
     }
     crate::item::register_types(registry);
     crate::movement::register_types(registry);
+    crate::combat::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)

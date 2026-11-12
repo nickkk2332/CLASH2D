@@ -218,6 +218,13 @@ impl Host for SimRules<'_> {
     }
 
     fn call(&mut self, function: FunctionId, args: &[Value]) -> Value {
+        // A function that draws at random draws from the rule stream.
+        if let Some(draws) = self.sim.exprs.function(function).and_then(|def| def.draws) {
+            let mut rng = self.sim.rng.stream(RULE_STREAM).clone();
+            let value = draws(self.sim, args, &mut rng);
+            *self.sim.rng.stream(RULE_STREAM) = rng;
+            return value;
+        }
         self.sim.call_function_for(function, args, self.reader)
     }
 

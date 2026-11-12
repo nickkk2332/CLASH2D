@@ -173,6 +173,14 @@ impl Host for SimHost<'_> {
     }
 
     fn call(&mut self, function: FunctionId, args: &[Value]) -> Value {
+        // A function that draws at random draws from the host's stream,
+        // and gives null where there is none (05 §7.3).
+        if let Some(draws) = self.sim.exprs.function(function).and_then(|def| def.draws) {
+            return match self.rng.as_mut() {
+                Some(rng) => draws(self.sim, args, rng),
+                None => Value::Null,
+            };
+        }
         self.sim.call_function_for(function, args, self.reader)
     }
 

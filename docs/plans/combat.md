@@ -16,8 +16,8 @@ With packages C1 to C8, C11 and C12 the first playable build of
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| C1 | Contests | S | X4, K5 | todo |
-| C2 | Surfaces and delivery | L | E5, E8, C1 | todo |
+| C1 | Contests | S | X4, K5 | done |
+| C2 | Surfaces and delivery | L | E5, E8, C1 | in progress |
 | C3 | Aim | M | C2, S4 | todo |
 | C4 | Defences | L | C3, T5 | todo |
 | C5 | Push | M | C2, E10 | todo |

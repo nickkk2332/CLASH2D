@@ -170,16 +170,40 @@ A **contest** compares two numbers, with as much or as little chance as
 content wants.
 
 ```json
-{ "type": "contest", "id": "melee_aim", "form": "difference", "scale": 4, "spread": 1.0, "near": 0.5 }
+{ "type": "contest", "id": "melee_aim", "form": "difference", "factor": 4, "spread": 1.0, "near": 0.5 }
 ```
 
 `contest(id, a, b)` returns a **margin**: the scaled difference (or
 log-ratio, for `"form": "ratio"`) between `a` and `b`, plus noise of the
 given spread. A spread of zero is a pure comparison. `odds(id, a, b)` is
-the chance the margin is positive; it draws nothing and is pure.
+the chance the margin is at or above zero; it draws nothing and is pure.
 
 Contests are the only place chance enters combat, and how much is a number
 in a data file.
+
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls it. A text; optional. |
+| `form` | `difference` (the default): `d = factor × (a − b)`. `ratio`: `d = factor × (ln a − ln b)`; a value at or below zero is less than any above zero, so `d` is minus infinity when only `a` is, plus infinity when only `b` is, and zero when both are. |
+| `factor` | What the comparison is multiplied by. Above zero; default 1. (`scale` is the loader's word for multiplying a field, 04 §6.1, so it cannot name a field.) |
+| `spread` | The scale of the noise. Zero or more; default 1. |
+| `near` | For aim (section 4.2): how far below zero a margin may fall and still land beside the part aimed at. Zero or more; default 0. |
+
+The noise is logistic with the spread as its scale: a margin is
+`d + spread × ln(u / (1 − u))` for one number `u` drawn uniformly from
+the open interval (0, 1), so the odds are `1 / (1 + e^(−d / spread))`.
+With a spread of zero the margin is `d`, and the odds are 1 when `d` is
+at or above zero and 0 otherwise. Every contest draws exactly one number
+from the rule stream, whatever its spread.
+
+| Function | Arguments | Gives |
+|----------|-----------|-------|
+| `contest` | `contest: id<contest>`, `a: real`, `b: real` | `real?`: a margin, drawn from the rule stream. Refused in a pure context (05 §7.3). Safe for belief: it reads nothing of the world. |
+| `odds` | `contest: id<contest>`, `a: real`, `b: real` | `real?`: the chance a margin is at or above zero, from 0 to 1. Pure, and safe for belief. |
+
+Both give null for a null value. A function the simulation registers
+that draws at random is computed with the stream of whoever evaluates
+it, and gives null where nothing may be drawn.
 
 ### 4.2 Finding the mark
 
