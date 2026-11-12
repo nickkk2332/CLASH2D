@@ -11,7 +11,8 @@ and built in `crates/clash-sim/src/console`.
 ## What goes here
 
 One `.scn` file for each behaviour that can be scripted, in a directory
-named for its subsystem: `world/`, `combat/`, `console/`. A frame that a
+named for its subsystem: `world/`, `combat/`, `console/`, with
+`known_failures/` for scripts that show a bug still to be fixed. A frame that a
 script compares with `expect frame` is kept beside the script.
 
 ```
@@ -41,9 +42,38 @@ point; with different thread counts. `--bless` rewrites the expected
 hashes and frames and changes nothing else in a file. A change that alters
 a golden hash says which and why in its description.
 
-Until the simulation is built there is no host for the tool to run scripts
-against. It checks every script's syntax, reports mistakes with file, line
-and column, says that no host is registered, and exits with code 3.
+The host the scripts run against is the simulation itself
+(`clash_save::host::GameHost`). `use <profile>` loads a profile from the
+`mods` directory beside `scenarios/` (or the one `--mods <dir>` names);
+`gen flat|city|country size=N` makes a realm from the first bundled realm
+definition with that generator, or from a realm definition named by id,
+and loads a block of N × N tracts. Scripts name the realm definition
+(`gen core:test_city`), so that a mod adding another realm on the same
+generator does not change what they build. The commands the host adds (`spawn`,
+`move`, `remove`, `set`, `control`, `session`, `damage`, `field`, `look`,
+`frame`) are listed in `docs/14-tooling.md` section 3.3 and by `help`.
+
+To look at what a script does, run its lines through the world viewer:
+
+```bash
+grep -v '^expect' scenarios/world/wall_punch.scn | cargo run -p clash-tools -- worldview
+```
+
+The exit code is 0 when every script passed in every mode, 1 when one
+failed or does not parse, and 2 for a command line that was not
+understood.
+
+## Markers
+
+A comment before a script's first command can say how it is run:
+
+- `# host: fake` runs it against the fake host of
+  `clash_sim::console::testing`, for the scripts that test the console
+  itself.
+- `# known failure: <why>` marks the smallest script that shows a bug
+  someone else still has to fix. It is expected to fail and does not fail
+  the run; if it passes, the run fails, so that the marker is taken off.
+  Such scripts live under `known_failures/`.
 
 ## `console/`
 

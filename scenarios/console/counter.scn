@@ -1,3 +1,4 @@
+# host: fake
 # The console's own smoke test. It uses only what the fake host of
 # clash_sim::console::testing has, and clash-sim's tests run it in all
 # four modes of docs/14-tooling.md section 7.2.
