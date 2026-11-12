@@ -1217,3 +1217,102 @@ fn a_power_too_dear_is_refused_with_what_is_short() {
     assert_eq!(push.cost[0].amount, Real::of(30.0));
     assert_eq!(options.len(), 4, "the shield has no grant, only a mode");
 }
+
+#[test]
+fn every_property_of_abilities_answers() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    sim.pump();
+    grant(&mut sim, who, "spark");
+    let read = |sim: &Sim, source: &str| eval_of(sim, who, source);
+    // On the entity.
+    assert_eq!(
+        read(&sim, "self.has_ability('core:spark')"),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        read(&sim, "self.has_ability('core:insight')"),
+        Value::Bool(false)
+    );
+    assert_eq!(read(&sim, "len(self.abilities)"), Value::Int(1));
+    assert_eq!(
+        read(&sim, "len(self.abilities_with('test'))"),
+        Value::Int(1)
+    );
+    assert_eq!(
+        read(&sim, "len(self.abilities_with('fire'))"),
+        Value::Int(0)
+    );
+    assert_eq!(
+        read(&sim, "self.cannot_use('core:spark', 'core:zap')"),
+        Value::Null
+    );
+    assert_eq!(
+        read(&sim, "self.cannot_use('core:spark')"),
+        Value::from("ability.no_grant"),
+        "it grants three"
+    );
+    assert_eq!(read(&sim, "self.ability('core:insight')"), Value::Null);
+    // On the instance.
+    assert_eq!(read(&sim, "self.ability('core:spark').rank"), Value::Int(1));
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').owner"),
+        sim.subject_value(Subject::Entity(who))
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').state"),
+        Value::from("active")
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').id"),
+        Value::from("core:spark")
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').def == 'core:spark'"),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').tags"),
+        Value::list([Value::from("test")])
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').power"),
+        Value::Real(Real::of(10.0))
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').mode_on('aura')"),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').cooldown('core:zap')"),
+        Value::Real(Real::ZERO)
+    );
+    ability::start_mode(&mut sim, who, ability_id("spark"), "aura", cause()).unwrap();
+    assert!(use_it(&mut sim, who, "spark", "zap").unwrap());
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').mode_on('aura')"),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        read(&sim, "self.ability('core:spark').cooldown('core:zap')"),
+        Value::Real(Real::of(5.0))
+    );
+    assert_eq!(
+        read(&sim, "self.cannot_use('core:spark', 'core:zap')"),
+        Value::from("ability.cooling_down")
+    );
+    // A handle outlives what it names, and reads as null.
+    let handle = read(&sim, "self.ability('core:spark')");
+    ability::revoke(&mut sim, who, ability_id("spark"), cause()).unwrap();
+    sim.pump();
+    let registry = sim.defs().expr_registry();
+    let kind = registry.kind_id(ability::ABILITY_KIND).unwrap();
+    let context = clash_expr::Context::new().subject("it", clash_expr::Type::Subject(kind));
+    let code = clash_expr::compile("it.rank", registry, &context, &clash_expr::Type::Any)
+        .into_result()
+        .unwrap();
+    assert_eq!(
+        sim.eval(&code, clash_sim::Bound::new().subject(handle)),
+        Value::Null
+    );
+}

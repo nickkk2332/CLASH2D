@@ -462,8 +462,9 @@ the parameters of the holder's abilities while the instance confers,
 once for each stack (08 §4.2): a list of
 `{ "ability": id?, "tag": text?, "param": name, "add": number, "mul": number }`,
 each naming one ability or a tag (not both) and a parameter; `add`
-defaults to 0 and `mul` to 1. An ability or a tag that names nothing,
-and both or neither of `ability` and `tag`, are load errors.
+defaults to 0 and `mul` to 1. An ability that names nothing, both or
+neither of `ability` and `tag`, and an `add` or `mul` that is not finite
+are load errors.
 
 **Durations** are wake-ups on the holder's clock (03 §3.4), so they speed
 and slow with it and move with it from clock to clock. When the holder
