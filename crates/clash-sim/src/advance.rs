@@ -51,7 +51,7 @@
 
 use std::collections::BTreeMap;
 
-use clash_core::{StateHash, StateHasher, Tick};
+use clash_core::{EntityId, StateHash, StateHasher, Tick};
 use clash_time::{Wake, WakeDomain, WakeId};
 use serde::{Deserialize, Serialize};
 
@@ -116,6 +116,24 @@ pub enum AppRequest {
         /// The checkpoint's name.
         name: String,
     },
+    /// Go back to a checkpoint: load the save made under its name
+    /// (13 §9.1, `restore_checkpoint`).
+    RestoreCheckpoint {
+        /// The checkpoint's name.
+        name: String,
+    },
+    /// The game has ended (13 §9.4): show the summary and apply the
+    /// saving policy.
+    EndScenario {
+        /// The outcome the ending names.
+        outcome: String,
+    },
+    /// The player now plays this character (13 §9.3 `continue`,
+    /// `take_control`).
+    TakeControl {
+        /// The character.
+        entity: EntityId,
+    },
 }
 
 impl StateHash for AppRequest {
@@ -124,6 +142,18 @@ impl StateHash for AppRequest {
             AppRequest::Checkpoint { name } => {
                 hasher.write_u8(0);
                 hasher.write_str(name);
+            }
+            AppRequest::RestoreCheckpoint { name } => {
+                hasher.write_u8(1);
+                hasher.write_str(name);
+            }
+            AppRequest::EndScenario { outcome } => {
+                hasher.write_u8(2);
+                hasher.write_str(outcome);
+            }
+            AppRequest::TakeControl { entity } => {
+                hasher.write_u8(3);
+                entity.state_hash(hasher);
             }
         }
     }
@@ -159,7 +189,9 @@ impl Default for Handlers {
         // are handed theirs before anyone else (`dispatch`). What is
         // left goes to the handler of the domain: traits' durations,
         // and anything else is reported as unhandled.
-        handlers.set(WakeDomain::Timer, crate::traits::on_timer);
+        // Scenarios' own (an objective's time running out) are taken
+        // first, and the rest handed on to traits.
+        handlers.set(WakeDomain::Timer, crate::scenario::on_timer);
         handlers.set(WakeDomain::Perception, crate::perception::on_wake);
         // Timers and recurring rules (05 §10.4, §9.4).
         handlers.set(WakeDomain::Rule, crate::rule::timer_wake);
@@ -201,6 +233,12 @@ impl Sim {
         self.requests.push_back(request);
     }
 
+    /// Whether a request to the application is waiting: the next call of
+    /// [`advance`](Sim::advance) returns it before it does anything else.
+    pub fn has_requests(&self) -> bool {
+        !self.requests.is_empty()
+    }
+
     /// Moves the simulation forward: pops wake-ups in order and runs
     /// them until the limit is reached, a directly controlled entity
     /// must choose, a rule asks the application for something, or the
@@ -210,8 +248,10 @@ impl Sim {
     /// of many `Work(n)` calls handles the same wake-ups in the same
     /// order as one long call.
     pub fn advance(&mut self, limit: AdvanceLimit) -> Advance {
-        // Whatever simulation code did between calls is delivered first.
+        // Whatever simulation code did between calls is delivered first,
+        // and the game brought up to date with it: this is a safe point.
         self.pump();
+        crate::scenario::settle(self);
         let mut handled: u32 = 0;
         let mut at_tick: (Tick, u32) = (self.now(), 0);
         loop {
@@ -374,6 +414,9 @@ impl Sim {
         if !self.events.is_empty() {
             self.pump();
         }
+        // The game's objectives, missions and endings are brought up to
+        // date with what was delivered (13 §5.1, 05 §7.5).
+        crate::scenario::settle(self);
     }
 
     /// The events waiting to be delivered: empty between calls.

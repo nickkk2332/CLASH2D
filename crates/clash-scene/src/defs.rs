@@ -256,12 +256,10 @@ pub fn register_defs(types: &mut DefTypes) {
     types.register::<PreferenceDef>();
     types.register::<AmbienceDef>();
     types.register::<OverlayDef>();
-    types.register::<crate::start::StartDef>();
     types.register::<ShowDef>();
     types.register::<AnimDef>();
     types.add_registry_step(register_app);
     types.add_cross_check(check_parts);
-    types.add_cross_check(crate::start::check_starts);
     types.add_cross_check(check_shows);
 }
 

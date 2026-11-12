@@ -134,7 +134,7 @@ fn put(run: &mut Headless, at: Location, layer: Layer, written: &str) {
 fn to_the_door(run: &mut Headless) -> Location {
     script(
         run,
-        "enter\ntab\ntab\ndown\nenter\nj\nj\nj\nl\nl\nwait 60\n",
+        "enter\ntab\ntab\ndown\ndown\ndown\ndown\nenter\nj\nj\nj\nl\nl\nwait 60\n",
     );
     let (_, at) = player(run);
     Location::new(at.grid, at.cell.offset(IVec3::new(0, 1, 0)))
@@ -278,7 +278,7 @@ fn choose(run: &mut Headless, id: &str) {
 fn hiding_in_a_locker_and_coming_out() {
     let data = data_dir("locker");
     let mut run = boot(&data);
-    script(&mut run, "enter\ntab\ntab\ndown\nenter\n");
+    script(&mut run, "enter\ntab\ntab\ndown\ndown\ndown\ndown\nenter\n");
     let (hero, begin) = player(&run);
     let beside = Location::new(begin.grid, begin.cell.offset(IVec3::new(1, 0, 0)));
     put(&mut run, beside, Layer::Fixture, "core:steel_locker");

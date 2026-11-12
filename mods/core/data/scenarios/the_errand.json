@@ -1,0 +1,40 @@
+[
+  { "//": "A parcel to take across the market town to its town hall before nightfall (13 §5). `start.do` makes the parcel in the character's hands and chooses the town hall among the town's sites, keeping both in variables that the objective reads. The objective is done when the parcel is at the town hall's site, fails if the parcel is lost (destroyed, or out of the world), and fails when five hours have passed: the errand begins at two in the afternoon and night falls at seven. Its marker is the town hall's door, which the character was told of.",
+    "type": "scenario", "id": "the_errand", "name": "The errand",
+    "doc": "Take a parcel across the market town to its town hall before nightfall.",
+    "intro": "A clerk at the town hall is waiting for this parcel, and the hall shuts at nightfall. It is two in the afternoon. The journal (J) shows the way.",
+    "tags": ["errand"],
+    "worlds": [ { "realm": "town", "seed": "ask" } ],
+    "start": {
+      "characters": [ { "template": "person" } ],
+      "at": [ { "name": "The north street", "cell": [2040, 898] } ],
+      "time": { "day": 1, "at": "14:00" },
+      "do": [
+        { "create_item": { "def": "parcel", "at": "self.loc" } },
+        { "let": { "parcel": { "first": { "entities": { "at": "self.loc", "def": "core:parcel" } } },
+                   "hall": { "first": { "sites": { "where": "it.name == 'Town hall'" } } } } },
+        { "take": { "who": "self", "what": "$parcel" } },
+        { "set": { "global.var.parcel": "$parcel", "global.var.errand_to": "$hall" } },
+        { "message": { "text": "You have the parcel. The town hall is in the middle of the town.", "to": "self" } } ] },
+    "objectives": [
+      { "id": "deliver", "text": "Take the parcel to the town hall before nightfall.",
+        "done": "global.var.parcel.site == global.var.errand_to",
+        "failed": "is_null(global.var.parcel.loc)",
+        "marker": { "site": "global.var.errand_to" },
+        "expires": "5 h" } ],
+    "ends": [
+      { "on": "objective_changed", "filter": { "id": "deliver", "state": "done" }, "as": "delivered" },
+      { "on": "objective_changed", "filter": { "id": "deliver", "state": "failed" }, "as": "failed" } ],
+    "saving": { "policy": "free", "on_party_gone": "end" } },
+
+  { "type": "variable", "id": "parcel", "scope": "global", "value": "entity", "belief_safe": true,
+    "doc": "The parcel of the errand (`core:the_errand`)." },
+  { "type": "variable", "id": "errand_to", "scope": "global", "value": "site", "belief_safe": true,
+    "doc": "Where the parcel of the errand is to go (`core:the_errand`)." },
+
+  { "type": "item", "id": "parcel", "name": "parcel",
+    "material": "leather", "mass": "1.5 kg", "volume": 0.004, "length": "0.3 m",
+    "grip": { "arm": 1 },
+    "tags": ["small"],
+    "glyph": { "ch": "=", "fg": "material" } }
+]

@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 10;
+pub const SAVE_VERSION: u32 = 11;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -124,6 +124,12 @@ pub struct Sim {
     /// Not state: how many strikes are being resolved inside one another
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
+    /// The game being played, if one is (13 §3): saved, and hashed when
+    /// there is one ([`scenario`](crate::scenario)).
+    pub(crate) scenario: crate::scenario::ScenarioState,
+    /// Not state: what the scenarios' objectives watch, from the
+    /// definitions.
+    pub(crate) scenario_rt: Arc<crate::scenario::Tables>,
 }
 
 /// Why saved state could not be loaded.
@@ -208,6 +214,7 @@ struct SavedRef<'a> {
     wakes: &'a WakeOwners,
     steps: u64,
     perception: &'a PerceptionState,
+    scenario: &'a crate::scenario::ScenarioState,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -232,6 +239,7 @@ struct Saved {
     wakes: WakeOwners,
     steps: u64,
     perception: PerceptionState,
+    scenario: crate::scenario::ScenarioState,
 }
 
 impl Sim {
@@ -265,6 +273,7 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
             defs,
@@ -295,6 +304,8 @@ impl Sim {
             perception: PerceptionState::default(),
             perception_defs,
             strike_depth: 0,
+            scenario: crate::scenario::ScenarioState::default(),
+            scenario_rt,
         };
         sim.bind_runtime();
         sim
@@ -688,6 +699,9 @@ impl Sim {
         self.shelf.state_hash(&mut kernel);
         kernel.write_u64(self.steps);
         self.perception.state_hash(&mut kernel);
+        // Nothing when no game is being played: a simulation that was
+        // never begun from a scenario hashes as before.
+        self.scenario.state_hash(&mut kernel);
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -743,6 +757,7 @@ impl Sim {
                 wakes: &self.wakes,
                 steps: self.steps,
                 perception: &self.perception,
+                scenario: &self.scenario,
             },
         )
     }
@@ -794,6 +809,7 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
             defs,
@@ -824,6 +840,8 @@ impl Sim {
             perception: saved.perception,
             perception_defs,
             strike_depth: 0,
+            scenario: saved.scenario,
+            scenario_rt,
         };
         sim.bind_runtime();
         Ok(sim)
@@ -835,6 +853,7 @@ impl Sim {
     fn bind_runtime(&mut self) {
         self.bind_rules();
         crate::interaction::bind(self);
+        crate::scenario::bind(self);
         // Recurring global rules have a timer from the start (05 §9.4).
         self.start_recurring_rules();
     }

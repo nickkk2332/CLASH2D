@@ -68,7 +68,24 @@
 //! Beside those of 12 §10.7 the application opens the screen of the
 //! role [`ROLE_PLAY`] when a game starts, and of [`ROLE_ERROR`], with
 //! the parameter `text`, when a service fails. A profile that names no
-//! `error` screen gets the line in the log alone.
+//! `error` screen gets the line in the log alone. For game scenarios
+//! (13 §12) it opens [`ROLE_SETUP`] with `scenario` when `new_game`
+//! asks for a scenario that offers a choice; [`ROLE_INTRO`] with
+//! `title` and `text` over the play screen when a game whose scenario
+//! has an `intro` begins; and [`ROLE_SUMMARY`] with `title`, `outcome`
+//! and `text` when a game ends. A scenario's `screens` may name its own
+//! for `intro` and `summary`.
+//!
+//! # Requests of the simulation (13 §9.1)
+//!
+//! What a rule asks of the application is carried out between two
+//! calls of `advance`, which is a safe point (invariant Z6): a
+//! checkpoint is saved under its name unless the saving policy is
+//! `none`; a return to a checkpoint loads that save and carries it on;
+//! a character the player is to play now (`take_control`, or carrying
+//! on after the party is gone) becomes the player's character, the
+//! camera following it; and an ending stops the simulation, removes the
+//! game's one save under `single`, and shows the summary.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -114,6 +131,18 @@ pub const ROLE_NOTICE: &str = "notice";
 pub const LOG_REFUSAL: &str = "refusal";
 /// The log category of an effect that could not be run.
 pub const LOG_UI: &str = "ui";
+/// The role of the screen a scenario that offers a choice of place or
+/// asks about options is set up on (13 §12). Opened with `scenario`.
+pub const ROLE_SETUP: &str = "setup";
+
+/// The role of the screen that introduces a game as it begins (13 §3,
+/// `intro`). Opened with `title` and `text`.
+pub const ROLE_INTRO: &str = "intro";
+
+/// The role of the screen that sums a game up when it ends (13 §9.4).
+/// Opened with `title`, `outcome` and `text`.
+pub const ROLE_SUMMARY: &str = "summary";
+
 /// The log category of what the application itself has to say.
 pub const LOG_APP: &str = "app";
 /// The log category of a fault the engine contained.
@@ -222,7 +251,10 @@ impl Game {
             profile: profile_entry,
             profiles: crate::app::list_profiles(&loaded),
             mods: crate::app::list_mods(&loaded),
-            starts: crate::app::list_starts(&loaded),
+            scenarios: crate::app::list_scenarios(&loaded),
+            setup: None,
+            wants_setup: None,
+            intro: None,
             creation,
             session: None,
             saves: options.saves,
@@ -548,8 +580,176 @@ impl Game {
             if !warnings.is_empty() {
                 self.show_warnings(&warnings);
             }
+            let intro = self.shared.borrow_mut().intro.take();
+            if let Some((title, text)) = intro {
+                self.show_scenario_screen(ROLE_INTRO, &[("title", title), ("text", text)]);
+            }
+        }
+        let wants_setup = self.shared.borrow_mut().wants_setup.take();
+        if let Some(scenario) = wants_setup {
+            self.open_role(ROLE_SETUP, &[("scenario", scenario)]);
         }
         self.end_if_left();
+    }
+
+    /// Opens the screen of a role with text parameters, saying why not
+    /// in the log if it cannot be.
+    fn open_role(&mut self, role: &str, params: &[(&str, String)]) {
+        let Some(screen) = self.scene.role(role).map(str::to_owned) else {
+            self.say(
+                LOG_APP,
+                &format!("no screen answers the role `{role}`: the profile's `screens` names none"),
+            );
+            return;
+        };
+        self.open_with(&screen, params);
+    }
+
+    fn open_with(&mut self, screen: &str, params: &[(&str, String)]) {
+        let with: BTreeMap<String, ExprValue> = params
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), ExprValue::text(value.as_str())))
+            .collect();
+        if let Err(reason) = self.scene.open_screen(screen, with) {
+            self.say(LOG_UI, &reason);
+        }
+    }
+
+    /// Opens the screen a game's scenario names for a role in its
+    /// `screens`, or else the profile's for it.
+    fn show_scenario_screen(&mut self, role: &str, params: &[(&str, String)]) {
+        let named = {
+            let shared = self.shared.borrow();
+            shared.session.as_ref().and_then(|session| {
+                let (def, _) =
+                    crate::session::scenario_of(&shared.loaded, &session.scenario.id).ok()?;
+                def.screens
+                    .0
+                    .iter()
+                    .find(|(have, _)| have == role)
+                    .map(|(_, screen)| screen.clone())
+            })
+        };
+        let screen = named.and_then(|name| {
+            self.scene
+                .defs()
+                .and_then(|ui| ui.resolve::<ScreenDef>(&name, ""))
+        });
+        match screen {
+            Some(screen) => self.open_with(&screen, params),
+            None => self.open_role(role, params),
+        }
+    }
+
+    /// A game has ended (13 §9.4): the simulation is no longer advanced;
+    /// under `single` the game's one save is removed; and the summary is
+    /// shown, with the outcome, how long it ran and how each objective
+    /// stands, as the character knows them.
+    fn end_scenario(&mut self, outcome: &str) {
+        let (title, text, removed) = {
+            let mut shared = self.shared.borrow_mut();
+            let shared = &mut *shared;
+            let dir = shared.saves_dir();
+            let Some(session) = shared.session.as_mut() else {
+                return;
+            };
+            session.ended = Some(outcome.to_owned());
+            let removed = if session.saving == crate::app::POLICY_SINGLE {
+                let id = crate::saves::save_id(&session.default_save_name());
+                shared.saves.delete(dir.as_deref(), &id).ok().map(|()| id)
+            } else {
+                None
+            };
+            let mut lines = vec![format!(
+                "Played for {}.",
+                crate::session::game_time(clash_sim::scenario::played(&session.sim))
+            )];
+            for row in clash_sim::scenario::journal::journal(&session.sim, session.player) {
+                let field = |name: &str| {
+                    row.as_map()
+                        .and_then(|map| map.get(name))
+                        .and_then(|value| value.as_str().map(str::to_owned))
+                        .unwrap_or_default()
+                };
+                let mark = match field("state").as_str() {
+                    "done" => "[x]",
+                    "failed" | "expired" => "[-]",
+                    _ => "[ ]",
+                };
+                lines.push(format!("{mark} {}", field("text")));
+            }
+            (session.scenario.name.clone(), lines.join("\n"), removed)
+        };
+        self.say(LOG_APP, &format!("The game has ended: {outcome}."));
+        if let Some(id) = removed {
+            self.say(LOG_APP, &format!("Its one save ({id}) is gone."));
+        }
+        self.show_scenario_screen(
+            ROLE_SUMMARY,
+            &[
+                ("title", title),
+                ("outcome", outcome.to_owned()),
+                ("text", text),
+            ],
+        );
+    }
+
+    /// The player now plays another character (13 §9.3, `take_control`):
+    /// the camera follows it and the picture is built afresh from what it
+    /// remembers and sees.
+    fn take_control(&mut self, entity: EntityId) {
+        let name = {
+            let mut shared = self.shared.borrow_mut();
+            let Some(session) = shared.session.as_mut() else {
+                return;
+            };
+            session.player = entity;
+            session.look = perception::look_of(&session.sim, entity);
+            session.percepts.rebuild = true;
+            session.percepts.unshown = true;
+            session.stale_view = true;
+            session
+                .sim
+                .components()
+                .get::<clash_sim::component::Identity>(entity)
+                .and_then(clash_sim::component::Identity::name)
+                .unwrap_or("someone else")
+                .to_owned()
+        };
+        self.scene
+            .playback_mut()
+            .follow(Some(SpriteId::new(entity.to_bits())));
+        self.say(LOG_APP, &format!("You carry on as {name}."));
+    }
+
+    /// Goes back to a checkpoint (13 §9.1): loads the save made under its
+    /// name and carries it on as a load does.
+    fn restore_checkpoint(&mut self, name: &str) {
+        let loaded = {
+            let mut shared = self.shared.borrow_mut();
+            let shared = &mut *shared;
+            let dir = shared.saves_dir();
+            let id = crate::saves::save_id(name);
+            shared
+                .saves
+                .load(dir.as_deref(), &shared.loaded, &id)
+                .and_then(|saved| crate::session::resume(&shared.loaded, saved))
+                .map(|session| {
+                    shared.session = Some(session);
+                })
+        };
+        match loaded {
+            Ok(()) => {
+                self.say(LOG_APP, &format!("Back to the checkpoint “{name}”."));
+                self.show_game();
+            }
+            Err(reason) => {
+                self.say(
+                    LOG_APP,
+                    &format!("The checkpoint “{name}” could not be gone back to: {reason}."),
+                );
+            }
+        }
     }
 
     /// Tells the player what a load had to say (01 §11.2): a line in
@@ -677,7 +877,7 @@ impl Game {
             let Some(session) = shared.session.as_mut() else {
                 return;
             };
-            if session.saving != crate::app::POLICY_SINGLE {
+            if session.saving != crate::app::POLICY_SINGLE || session.ended.is_some() {
                 return;
             }
             let name = session.default_save_name();
@@ -701,6 +901,7 @@ impl Game {
     fn advance_simulation(&mut self, until: Option<Instant>) {
         let look = self.player_look();
         let mut lines: Vec<(&str, String)> = Vec::new();
+        let mut deferred: Vec<clash_sim::AppRequest> = Vec::new();
         let batch = {
             let mut shared = self.shared.borrow_mut();
             let shared = &mut *shared;
@@ -712,8 +913,8 @@ impl Game {
             let began = session.sim.now();
             // What is due now runs even while a decision waits: the
             // simulation runs it before it asks (03 §5.2).
-            let mut due_now = session.due_now();
-            while due_now || session.waits_on_simulation() {
+            let mut due_now = session.due_now() || session.sim.has_requests();
+            while (due_now || session.waits_on_simulation()) && session.ended.is_none() {
                 // Only what is due now, unless the character waits on
                 // the simulation: nothing else moves time.
                 let limit = if session.waits_on_simulation() {
@@ -750,6 +951,20 @@ impl Game {
                             )),
                         }
                     }
+                    // What changes the session itself is done once the
+                    // simulation is let go: at this safe point, before it
+                    // is advanced again.
+                    Advance::Request(
+                        request @ (clash_sim::AppRequest::EndScenario { .. }
+                        | clash_sim::AppRequest::RestoreCheckpoint { .. }
+                        | clash_sim::AppRequest::TakeControl { .. }),
+                    ) => {
+                        let stop = !matches!(request, clash_sim::AppRequest::TakeControl { .. });
+                        deferred.push(request);
+                        if stop {
+                            break;
+                        }
+                    }
                     Advance::Request(_) => lines.push((
                         LOG_APP,
                         "A rule asked the application for something it cannot do yet.".to_owned(),
@@ -784,6 +999,18 @@ impl Game {
         if !batch.is_empty() {
             self.scene.push_events(batch);
             self.scene.simulation_advanced();
+        }
+        for request in deferred {
+            match request {
+                clash_sim::AppRequest::TakeControl { entity } => self.take_control(entity),
+                clash_sim::AppRequest::EndScenario { outcome } => self.end_scenario(&outcome),
+                clash_sim::AppRequest::RestoreCheckpoint { name } => {
+                    self.restore_checkpoint(&name);
+                    // The game is another now: nothing more of the old one.
+                    break;
+                }
+                _ => {}
+            }
         }
     }
 

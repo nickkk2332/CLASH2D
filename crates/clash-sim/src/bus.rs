@@ -783,6 +783,10 @@ impl Bus {
         for ty in crate::combat::event_types() {
             bus.types.entry(ty.name.clone()).or_insert(ty);
         }
+        // The events and the hook of scenarios (13 §13).
+        for ty in crate::scenario::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         bus
     }
 

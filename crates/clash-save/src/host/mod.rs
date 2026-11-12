@@ -47,6 +47,7 @@
 //! | `damage <at> <energy> [kind] [intensity] [layer]` | Sends a packet of damage to one element of a cell: the one named, else the first there is of its block, its fixture and its floor | `WorldEdit::damage` |
 //! | `field <at> <kind> [amount]` | Adds to a field in a cell, or takes from it | `WorldEdit::add_field` |
 //! | `look [at]` | Moves the cursor (`@here`) and says what is in its cell | Nothing: the cursor is the console's |
+//! | `begin <scenario> [place]` | Begins a game from a game scenario (13 §12): a new simulation over its world, made with the seed `use` gave where the scenario asks for one, its character made from its template with every choice at its default, begun at its place `place` (default 0). The character becomes `@self` and the cursor goes to it | `clash_sim::scenario::make_world`, `DebugCommand::Spawn`, `Command::BeginScenario` |
 //! | `frame` | Prints the frame as plain text | Nothing |
 //!
 //! `damage` and `field` change the world through `Sim::world` with the
@@ -420,6 +421,11 @@ pub fn host_commands() -> Vec<CommandSpec> {
             .doc("Moves the cursor, `@here`, to a cell or to where an entity is, and says what is in the cursor's cell.")
             .param(P::optional("at", T::Subject, "Where to put the cursor. Left out, it stays.")),
         cmd("frame").doc("Prints the frame: the storey of the cursor from above, as plain text."),
+        cmd("begin")
+            .doc("Begins a game from a game scenario (13 §12): a new simulation over its world, made with the seed `use` gave where the scenario asks for one (and for one drawn at random), its character made from its template with every choice at its default, begun at one of its places. The character becomes `@self` and the cursor goes to it. What gives back, for `as=`, is the character.")
+            .param(P::required("scenario", T::Word, "The scenario: its qualified id, or a bare name."))
+            .param(P::optional("place", T::Int, "Which of its places, from 0.").default(ArgValue::Value(Value::Int(0))))
+            .changes(),
     ]
 }
 
@@ -677,6 +683,10 @@ impl GameHost {
             "damage" => self.game_mut()?.damage(command),
             "field" => self.game_mut()?.field(command),
             "look" => self.game_mut()?.look(command),
+            "begin" => {
+                let threads = self.threads;
+                self.game_mut()?.begin(command, threads)
+            }
             "step" => self.game_mut()?.step(command),
             "check" => self.game()?.check(),
             "inspect" => self.game_mut()?.inspect(command),
@@ -1164,6 +1174,93 @@ impl Game {
             here.cell.x, here.cell.y, here.cell.z
         ))
         .with_subject(subject))
+    }
+
+    /// `begin`: see [`host_commands`].
+    fn begin(&mut self, command: &BoundCommand, threads: Option<u32>) -> HostResult<Output> {
+        use clash_sim::scenario::{BeginScenario, ScenarioDef, make_world};
+        let written = command.word("scenario").unwrap_or_default().to_owned();
+        let defs = Arc::clone(&self.profile.defs);
+        let scenarios = defs.try_registry::<ScenarioDef>().ok_or_else(|| {
+            refuse(
+                clash_sim::scenario::why::UNKNOWN,
+                "the profile defines no game scenario",
+            )
+        })?;
+        let id = scenarios
+            .lookup(&written)
+            .or_else(|| {
+                scenarios
+                    .names()
+                    .iter()
+                    .filter(|name| name.rsplit(':').next() == Some(written.as_str()))
+                    .min()
+                    .and_then(|name| scenarios.lookup(name))
+            })
+            .ok_or_else(|| {
+                HostError::Refused(
+                    Refusal::new(
+                        clash_sim::scenario::why::UNKNOWN,
+                        format!("there is no game scenario `{written}`"),
+                    )
+                    .with("scenario", written.as_str()),
+                )
+            })?;
+        let scenario = scenarios.name(id).to_owned();
+        let def = scenarios.get(id);
+        let place = command
+            .int("place")
+            .and_then(|place| u32::try_from(place).ok())
+            .unwrap_or(0);
+        let seed = def
+            .world()
+            .map_or(self.seed, |world| world.seed.choose(self.seed, self.seed));
+        let made = make_world(&defs, Arc::clone(&self.profile.world), &scenario, seed)
+            .map_err(|reason| refusal_of(&reason))?;
+        let generators = self
+            .profile
+            .generators(threads)
+            .map_err(HostError::Failed)?;
+        let mut sim = Sim::from_parts(Arc::clone(&defs), made.cosmos, made.timeline, self.seed)
+            .with_io(generators, Box::new(MemoryStore::new()));
+        let namespace = scenario
+            .split_once(':')
+            .map_or("", |(namespace, _)| namespace);
+        let template = def.template_id(namespace).ok_or_else(|| {
+            HostError::failed(format!(
+                "`{scenario}` names no template to make its character from"
+            ))
+        })?;
+        let player = sim
+            .truth()
+            .entities()
+            .next_id()
+            .ok_or_else(|| HostError::failed("every entity slot has been used"))?;
+        sim.submit(Command::Debug(DebugCommand::Spawn {
+            spec: clash_sim::template::CharacterSpec::of([template]),
+            place: Place::Stored,
+        }))
+        .map_err(|error| refusal_of(&error.reason))?;
+        sim.submit(Command::BeginScenario(BeginScenario {
+            scenario: scenario.clone(),
+            party: vec![player],
+            place,
+            options: Vec::new(),
+        }))
+        .map_err(|error| refusal_of(&error.reason))?;
+        self.sim = GameHost::set_up(sim);
+        self.marks.active = Some(player);
+        self.marks.here = self.sim.truth().location(player);
+        let subject = self.value(Subject::Entity(player))?;
+        let at = self
+            .marks
+            .here
+            .map(|here| format!(" at @c:{},{},{}", here.cell.x, here.cell.y, here.cell.z))
+            .unwrap_or_default();
+        Ok(
+            Output::text(format!("began `{scenario}`{at}; the character is @self"))
+                .with_subject(subject),
+        )
     }
 
     // ---- Commands --------------------------------------------------------

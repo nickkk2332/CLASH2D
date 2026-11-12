@@ -152,6 +152,22 @@ impl Compiled {
         read
     }
 
+    /// The functions of the host the expression calls, in the order it
+    /// calls them, each once: what a reactive expression would subscribe
+    /// to beside its properties (05 §7.5). The language's own built-ins
+    /// read nothing of the host and are not listed.
+    pub fn functions_read(&self) -> Vec<FunctionId> {
+        let mut read = Vec::new();
+        for op in self.0.ops.iter() {
+            if let Op::Call { id, .. } = op
+                && !read.contains(id)
+            {
+                read.push(*id);
+            }
+        }
+        read
+    }
+
     /// The qualified names of the variables the expression reads, in the
     /// order it reads them, each once.
     pub fn variables_read(&self) -> Vec<&str> {
