@@ -1,0 +1,16 @@
+# Heal (mods/core/data/powers): a touch that closes the open wounds of
+# someone cut, paid for from the healer's reserve (08 §8.5; 06 §7.3).
+use default seed=25
+gen core:test_city size=1
+look @c:17,22,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+look @c:17,23,0
+do { "spawn": { "template": "core:person", "at": "here" } }
+as @e:1 do { "hit": { "target": "self", "kind": "core:cut", "energy": 150, "intensity": 2.0e7 } }
+assert "len(@e:1.wounds) > 0"
+as @e:0 do { "use_ability": { "who": "self", "ability": "core:heal", "params": { "expr": "{'target': here.occupants[0]}" } } }
+expect event ability_used ability=core:heal
+advance 1200ms
+expect event wound_closed
+assert "@e:0.pool.reserve < 80"
+expect hash 5b1fc4502a87af45bf2762919cfaf605

@@ -1,0 +1,16 @@
+# A power too dear (08 §5.2): with its reserve spent, force push is
+# refused with the reason naming the pool and how much is short, and
+# nothing is taken; once the reserve has filled again, it can be used.
+use default seed=26
+gen core:test_city size=1
+look @c:17,12,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+as @e:0 do { "pool_add": { "who": "self", "pool": "core:reserve", "amount": -90 } }
+assert "@e:0.cannot_use('core:force_push') == 'ability.cost_short'"
+look @c:17,14,0
+as @e:0 do { "use_ability": { "who": "self", "ability": "core:force_push", "params": { "expr": "{'to': here}" } } }
+expect event ability_refused ability=core:force_push reason='ability.cost_short'
+assert "@e:0.pool.reserve == 10"
+advance 10s
+assert "@e:0.cannot_use('core:force_push') == null"
+expect hash b406b33190bd8d053bdfce6758ee0c4b
