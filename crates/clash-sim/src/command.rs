@@ -83,6 +83,57 @@ pub enum Command {
         /// Whose.
         entity: EntityId,
     },
+    /// Answers a window with a reaction (03 §7.3): starts `action` with
+    /// `$window` bound, cancelling the entity's actions in phases that
+    /// allow it to make room, and answers the `Reaction` decision it was
+    /// asked for the window, if it was. Refused, with the reason, if the
+    /// reaction cannot start: the window has closed, the entity did not
+    /// notice it, the action does not answer it, or anything an action
+    /// is refused for.
+    React {
+        /// Who reacts: an entity under direct or delegated control.
+        entity: EntityId,
+        /// The window, as the decision named it.
+        window: crate::action::WindowId,
+        /// The reaction.
+        action: crate::action::ActionDefId,
+        /// Its parameters, by name; those left out take their defaults.
+        params: crate::action::Params,
+    },
+    /// Declines the `Reaction` decision an entity was asked for a window
+    /// (03 §5.2). Refused if it was asked none.
+    Pass {
+        /// Who declines.
+        entity: EntityId,
+        /// The window, as the decision named it.
+        window: crate::action::WindowId,
+    },
+    /// Uses an ability the entity holds (08 §5): starts the action one
+    /// of its grants makes available, paying its cost and starting its
+    /// cooldown. Refused as `Act` is, and with the ability's reason.
+    UseAbility {
+        /// Who.
+        entity: EntityId,
+        /// The ability.
+        ability: crate::ability::AbilityId,
+        /// The action of the grant; `None` for the ability's only one.
+        action: Option<crate::action::ActionDefId>,
+        /// Parameters of the action, by name. The grant's own stand in
+        /// for any of the same name.
+        params: crate::action::Params,
+    },
+    /// Switches a mode of an ability the entity holds on or off
+    /// (08 §5.4).
+    SetMode {
+        /// Who.
+        entity: EntityId,
+        /// The ability.
+        ability: crate::ability::AbilityId,
+        /// The mode's id within the ability.
+        mode: String,
+        /// On, or off.
+        on: bool,
+    },
     /// Changes a setting (04 §10). Refused for a setting the scenario
     /// being played locks (`setting.locked`), and for a value its
     /// `setting` definition does not take (`setting.bad_value`). Raises
@@ -290,6 +341,25 @@ impl Sim {
                 abandon,
             } => self.command_cancel(entity, action, abandon),
             Command::ClearPlan { entity } => self.command_clear_plan(entity),
+            Command::React {
+                entity,
+                window,
+                action,
+                params,
+            } => self.command_react(entity, window, action, params),
+            Command::Pass { entity, window } => self.command_pass(entity, window),
+            Command::UseAbility {
+                entity,
+                ability,
+                action,
+                params,
+            } => self.command_use_ability(entity, ability, action, &params),
+            Command::SetMode {
+                entity,
+                ability,
+                mode,
+                on,
+            } => self.command_set_mode(entity, ability, &mode, on),
             Command::Setting { key, value } => crate::scenario::setting_command(self, &key, value),
             Command::BeginScenario(begin) => crate::scenario::begin(self, begin),
         }

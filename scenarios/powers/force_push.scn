@@ -1,0 +1,21 @@
+# Force push (mods/core/data/powers): a cone of kinetic energy let go
+# in front of its user throws a person across a street into a house
+# wall, which hurts them; the user stays where they stood and has paid
+# for it from their reserve (08 §5, §8.1; 02 §13, §15).
+use default seed=22
+gen core:test_city size=1
+look @c:11,13,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+look @c:11,11,0
+do { "spawn": { "template": "core:person", "at": "here" } }
+assert "@e:0.has_ability('core:force_push') and not @e:1.has_ability('core:force_push')"
+as @e:0 do { "use_ability": { "who": "self", "ability": "core:force_push", "params": { "expr": "{'to': here}" } } }
+expect event ability_used ability=core:force_push
+assert "@e:0.pool.reserve == 70"
+advance 3s
+expect event body_launched
+expect event body_impact layer=block
+assert "len(@e:1.wounds) > 0"
+assert "@e:0.loc.x == 11 and @e:0.loc.y == 13"
+assert "@e:0.ability('core:force_push').cooldown('core:force_push') > 0"
+expect hash cd0619085362907c2d04d0b151ab82b5

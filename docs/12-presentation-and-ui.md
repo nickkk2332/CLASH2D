@@ -219,9 +219,13 @@ its qualified id (a bare name means the first action of that name in
 order of qualified id) and its parameters as the scene assembled them;
 the command `wait { dur }` is `Wait`, `cancel { action, abandon? }` is
 `Cancel`, `clear_plan` is `ClearPlan`, and `choose { entity, choice,
-option }`, which the choice prompt submits, is `Choose`. `react`,
-`pass` and a `run` of a rule are refused with the reason until windows
-(03 §7) and the `Ui` command are built. A refusal is the simulation's
+option }`, which the choice prompt submits, is `Choose`. `react {
+entity, window, action, params }` and `pass { entity, window }`, which
+the reaction prompt submits, are `React` and `Pass` (03 §7.3); the
+decision behind the prompt is the simulation's `Reaction` decision,
+handed to the scene with its options and the time left and in all, in
+the character's own time (decision D-717). A `run` of a rule is
+refused with the reason until the `Ui` command is built. A refusal is the simulation's
 reason, written in the log; walking into a shut door is the one
 refusal the loop answers itself (section 3.7). Tools and tests hand the
 game a command of their own with `Game::submit`, through `Sim::submit`

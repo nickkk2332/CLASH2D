@@ -1,0 +1,22 @@
+[
+  { "//": "What a guard puts in a blow's way (07 §5.3). The flat of a blade, the face of a shield and the forearm each take what is left of a blow once some of it is turned aside, spread over their own area and give: a broad, yielding face spreads it thin, so a blow that the parry could not turn wholly lands on the flat at an intensity steel does not notice.",
+    "type": "item", "id": "knife", "patch": true,
+    "extend": { "surfaces": [
+      { "id": "flat", "kind": "impact", "area": 5.0e-3, "give": 0.005, "span": 0.25 } ] } },
+
+  { "type": "item", "id": "club", "patch": true,
+    "extend": { "surfaces": [
+      { "id": "flat", "kind": "impact", "area": 1.5e-2, "give": 0.01, "span": 0.7 } ] } },
+
+  { "//": "A small round shield held in the fist.",
+    "type": "item", "id": "buckler", "name": "buckler", "material": "wood",
+    "mass": "2 kg", "length": "0.4 m",
+    "surfaces": [ { "id": "face", "kind": "impact", "area": 0.12, "give": 0.02, "span": 0.4 } ],
+    "grip": { "arm": 1 }, "tags": ["shield"],
+    "glyph": { "ch": ")", "fg": "material" } },
+
+  { "//": "The forearm, for a block with no shield.",
+    "type": "body_part", "id": "arm", "patch": true,
+    "extend": { "surfaces": [
+      { "id": "forearm", "kind": "impact", "area": 6.0e-3, "give": 0.02, "span": 0.25 } ] } }
+]

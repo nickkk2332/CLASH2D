@@ -1,0 +1,17 @@
+# A cooldown survives a save (08 §5.1): the runner saves and loads
+# between lines, and the dash used at the start is refused until eight
+# seconds of its user's time have passed, then can be used again.
+use default seed=27
+gen core:test_city size=1
+look @c:17,12,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+use_ability who=@e:0 ability=core:dash
+advance 2s
+assert "@e:0.ability('core:dash').cooldown('core:dash') > 5.9"
+advance 3s
+assert "@e:0.cannot_use('core:dash') == 'ability.cooling_down'"
+advance 3001ms
+assert "@e:0.cannot_use('core:dash') == null"
+use_ability who=@e:0 ability=core:dash
+expect event ability_used ability=core:dash
+expect hash 2aff4a760098fa82983f29fb0e8e1835

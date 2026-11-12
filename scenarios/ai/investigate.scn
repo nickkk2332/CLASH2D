@@ -1,0 +1,19 @@
+# A townsperson hears a wall break that it did not see, goes to look,
+# and goes back to going about its day (09 §3, §4; the bundled
+# `townsperson` mind). Package I4's `patrol_and_investigate`: a
+# routine, a percept, a detour, a return.
+use default seed=7
+gen core:test_city size=1
+spawn creature as=w
+session @w @c:641,660,0
+as @c:650,641,0 do { "spawn": { "template": "core:person", "at": "self" } }
+set @c:666,641,0 block core:wall
+advance 3s
+assert "@e:1v0.mind_def == 'core:townsperson' and @e:1v0.goal == 'core:go_about'"
+damage @c:666,641,0 2MJ intensity=1GPa
+expect event element_destroyed layer=block how=damage
+advance 1s
+assert "@e:1v0.goal == 'core:investigate_noise'"
+advance 20s
+assert "@e:1v0.goal == 'core:go_about'"
+expect hash e6d7eebcaed9da94e43a67fb5d7af411

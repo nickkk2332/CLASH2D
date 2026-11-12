@@ -590,6 +590,17 @@ As built (decision D-365):
   it is refused with `action.not_running` for an action that is not the
   entity's. `Wait` is refused with `command.bad_argument` for less than
   no time. `Act` and `Wait` answer a free decision.
+- `UseAbility { entity, ability, action, params }` and
+  `SetMode { entity, ability, mode, on }` (packages A3, A4, decision
+  D-724) use an ability the entity holds (08 §5): `ability` is an
+  ability definition's dense id, `action` the action of one of its
+  grants (`None` for its only one), `params` the action's parameters by
+  name, and `mode` a mode's id within the ability. They are refused as
+  `Act` is for an entity nobody controls or whose mind has stopped, and
+  with the ability's reason (`ability.cooling_down`,
+  `ability.cost_short`, …: 08 §12) before anything changed; a use
+  refused after a handler of `ability_using` ran is taken and raises
+  `ability_refused`. `UseAbility` answers a free decision.
 - A `CommandError` holds a `Reason` (14 §5): a stable code, a sentence and
   the values involved. A refused command leaves the state exactly as it
   was and is not logged.
@@ -655,7 +666,9 @@ answer them:
   entity order, `advance` runs what is still due at the current tick
   before it returns `NeedInput`. Time does not move.
 - `elapsed` is the entity's own time (section 3.4) since it last answered.
-- Of the kinds, `Free` and `Choice` exist. `PlanEmpty` carries the
+- Of the kinds, `Free`, `Choice` and `Reaction` (section 7.3) exist. A
+  `Reaction` names the window by its number and carries its deadline,
+  `None` where it is not known. `PlanEmpty` carries the
   reason a step could not be started, if that is why. An entity that
   stops being directly controlled, or is removed, is no longer waiting
   for anything; a choice it was asked is then settled with its first
@@ -1105,6 +1118,43 @@ of the source or of someone it names. All candidates then go through
 noticing (section 7.2). So an attack on someone else can be answered by
 someone who cares and is close enough and quick enough to step in.
 
+As built (decision D-710), in `clash_sim::action::windows`:
+
+- A window is plain state in the simulation's `WindowTable`, saved and
+  hashed (save layout 12): its kind, its source, the action and the
+  phase whose start closes it, those it names, when it opened, its
+  **deadline** and its candidates. The deadline is the universal tick
+  it is expected to close at, as the clocks ran when it opened: the end
+  of the phase that opened it where that phase leads straight to the
+  one that closes it, the end of its length for a window opened for a
+  length of time, and unknown otherwise. A window is a value of the
+  expression kind `window`: a handle that names it, and reads as closed
+  once it has closed.
+- **Candidates**, in this order and each once, never the source: those
+  named, in the order named; then by entity id those within `reach`
+  metres, middle of cell to middle of cell, of the source or of someone
+  named who hold an `intervenes` relation toward someone named; then by
+  entity id the directly controlled within that reach. Relations are
+  first-playable package S7's: until it lands the relation is answered
+  by `Sim::set_intervenes(fn(&Sim, holder, toward) -> bool)`, which is
+  not state and which a test supplies. Each candidate is kept with why
+  it was offered (`named`, `intervenes`, `controlled`), its delay in
+  noticing and where it is: `never` (it cannot notice), `pending`,
+  `late`, `noticed`, `asked`, `reacted` (with the action it started) or
+  `passed`.
+- A window **closes** when its action enters the phase `closes` names,
+  before anything of that phase is done, or when its action ends, by
+  any path; one opened for a length of time closes when the length is
+  over; `close_window` closes one at once. Closing cancels every delay
+  still running, withdraws a `Reaction` decision a player was being
+  asked for it, and raises `window_closed`.
+- `window_opened` is raised as before; it carries no window. The window
+  reaches rules through `window_noticed` and `window_closed`, which
+  carry it in their field `window`.
+- `Sim::open_window(OpenWindow { kind, source, aimed_at, open_for })`
+  opens one with no phase to close it, for packages that need one (a
+  shot's, 07 §11.2); the effect is the verb `open_window`.
+
 ### 7.2 Noticing
 
 For each candidate, when the window opens:
@@ -1125,6 +1175,16 @@ So an ordinary person with a quarter-second reaction time can answer a
 telegraphed swing and cannot answer a blow that lands a millisecond after it
 starts. Someone whose clock runs a thousand times faster notices almost
 everything. The gap in decision D-034 is in the arithmetic.
+
+As built (decision D-710): a candidate that does not perceive the source
+(`notices_source`) or whose `noticed_if` is false is `never` noticing. A
+`notice` that is null, below zero or not finite is a fault
+(`action.bad_time`) and counts as zero. A delay of zero is noticed the
+moment the window opens; any other is one wake-up of the `Action` domain
+on the candidate's clock, so a candidate whose clock runs four times as
+fast needs a quarter of the universal time. A wake-up due at the same
+tick as the deadline comes after it: the window has closed. Noticing
+raises `window_noticed` for the candidate.
 
 ### 7.3 Reacting
 
@@ -1155,6 +1215,67 @@ What a reaction achieves is not special-cased. A dodge moves the reactor, so
 the blow finds nobody there. A block puts the reactor in a phase that the
 strike's effects check for. A counter lands its own impact first and
 interrupts the attacker. Document 07 builds the rules of combat from these.
+
+As built (decision D-711), in `clash_sim::action::react`:
+
+- The engine asks nobody by itself. A rule listening for
+  `window_noticed` answers with the verbs `react` or `ask_reaction`;
+  the AI layer answers the same event for the minds it drives (09 §6.3).
+  With nothing listening, nothing happens. `mods/core` asks the player
+  (the rule `core:ask_player_to_react`, off when the setting
+  `core:ask_reactions` is false) and ships stances that answer by
+  themselves (`core:parry_on_notice` and its like, rules to attach).
+- **Starting a reaction** (`react`, the `React` command) checks, in this
+  order, and refuses with the first reason that applies, changing
+  nothing: the window is open (`engine:window_closed`); the reactor is a
+  candidate that has noticed it (`engine:window_noticed_late` for one
+  whose delay was not over when it closed, `engine:window_not_noticed`
+  otherwise); the action lists the window's kind
+  (`engine:reaction_not_listed`); the window names the reactor or the
+  action allows `on_behalf` (`engine:reaction_not_on_behalf`); then
+  everything a start checks (section 6.6), with `$window` bound before
+  the defaults are worked out. The reactor's actions in phases that
+  allow `cancel` for the reaction are cancelled to make room, as for any
+  start; slots held by one that does not make the reaction unavailable,
+  `engine:reaction_cannot_cancel` with the action holding them and its
+  phase. The reactor then turns to face the window's source, a
+  `Reaction` decision it was asked for the window is answered, and the
+  candidate is marked `reacted`.
+- **Options.** `Sim::reaction_options(entity, window)` lists, in order
+  of definition, every action whose `reaction_to` lists the kind and
+  that may answer for the entity (named, or `on_behalf`). Each is a
+  `ReactionOption { action, label, in_time, refused }`: its `name`
+  rendered for the entity, or its id; whether its `ready` phase would
+  begin before the deadline, worked out from the phases' durations
+  along their default path (the following phase) as they would be if
+  it started now, with no `ready` ready at once, a held phase with no
+  `max` on the way never ready, and an unknown deadline always in time;
+  and why it cannot start now, if it cannot. One refused is shown and
+  refused if chosen; one not in time may be chosen.
+- **Asking.** `ask_reaction` asks a directly controlled candidate that
+  has noticed the window: a `Reaction` decision (section 5.2) with its
+  options, and time does not move until `React` or `Pass` answers. It
+  asks nothing, giving false, for anyone else, for one already asked,
+  and where no option is listed. `Pass` declines; it is refused
+  (`decision.none_pending`) for a window the entity was not asked about.
+  The scene's prompt (12 §9.5) answers with these two commands by name.
+
+| Command | Fields | Does |
+|---------|--------|------|
+| `React` | `entity`; `window`: the window's number; `action`: the reaction; `params`: by name | Starts the reaction for an entity under direct or delegated control, answering its `Reaction` decision for the window if it was asked. Refused with the reason it cannot start |
+| `Pass` | `entity`; `window` | Declines the `Reaction` decision the entity was asked for the window |
+
+The decision kind, as built:
+
+```rust
+Reaction { window: WindowId, deadline: Option<Tick>, options: Vec<ReactionOption> }
+pub struct ReactionOption { action: ActionDefId, label: String, in_time: bool, refused: Option<Reason> }
+```
+
+A frontend turns a window's value into its number with
+`Sim::window_of(&value)` and back with `Sim::window_value(id)`;
+`Sim::window_time_left(window, entity)` is the time the entity has left,
+in its own seconds.
 
 ## 8. Joint actions
 
@@ -1352,11 +1473,19 @@ simulation ever has), `phase` the id of a phase, and `code` and
 | `action_abandoned` | `action`, `id` | An action ended because its actor left the world or was removed (section 9): `on_abandon` has run |
 | `action_refused` | `action`, `code`, `message` | An action that an effect or a plan asked for did not start, or a handler of `action_starting` refused one a command asked for |
 | `plan_cleared` | `code?`, `message?` | A plan was emptied, with the reason if a step could not start or a rule interrupted it |
-| `window_opened` | `action`, `id`; `kind`: string; `closes`: string, a phase id; `count`: int, how many it is aimed at | A phase that opens a window began. Until windows are built (T5) nobody is offered it |
+| `window_opened` | `action`, `id`; `kind`: string; `closes`: string, a phase id; `count`: int, how many it is aimed at | A phase that opens a window began. Its candidates are worked out next and start to notice it (section 7.2); the window itself reaches rules through `window_noticed` |
 | `decision_needed` | `control`: `none` or `delegated`; `why`: `started`, `finished`, `interrupted`, `plan_empty` or `waited` | An entity that is not directly controlled is free to act (section 5.2) |
 | `message` | `text`: string, rendered for `self` as its reader; `style`: string | A rule's `message` (05 §10.6): a line for the log of whoever controls `self` |
 | `choice_made` | `choice`: int; `option`: int, from zero; `label`: string | A choice put by `ask` was answered, by `Choose` or at once; the option's effects run next |
 | `tag_changed` | `tag`: string; `added`: bool | An entity was given a tag it did not have, or lost one it had |
+
+The events of windows, as built (decision D-710), raised as payloads.
+Each also binds `actor` and `instigator`: the window's source.
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `window_noticed` | `self`: entity, the candidate; `source?`: entity | `window`: window; `kind`: string, its kind's qualified id; `action`: string?, the qualified id of the action whose phase opened it; `named`: bool, whether it names `self`; `time_left`: real?, seconds of `self`'s own time before its deadline | A candidate noticed a window before it closed (section 7.2). What it does is for rules: `react`, `ask_reaction`, or nothing |
+| `window_closed` | `self?`: entity, the source | `window`; `kind`; `action`; `offered`, `noticed`, `reacted`: int, how many candidates it was offered to, noticed it and answered it | A window closed: its deadline phase began, its action ended, its length was over, or `close_window` |
 
 The two hooks, as built: `action_starting` binds `self` and has the
 fields `action` and `params`, the parameters by name as a map with the
@@ -1420,7 +1549,9 @@ and properties (05 §6, §10.3), `subject.gone`, `vars.wrong_scope`,
 `write.bad_value`, `write.bad_key`, `write.cannot_add`,
 `write.not_a_subject`; and, from acting (decisions D-543, D-544),
 `action.unknown`, `action.not_running`, `action.interrupted`,
-`action.bad_time`, `command.not_controlled` and `command.bad_argument`.
+`action.bad_time`, `command.not_controlled` and `command.bad_argument`;
+and, from windows (decision D-710), `window.unknown_kind`: a window was
+to be opened with a kind that is not loaded (value `kind`).
 Each is documented in the table the generated reference reads.
 
 **The queries as properties** (05 §5.3). All read truth and none is safe
@@ -1447,14 +1578,29 @@ for belief; a mind reads them of itself.
 
 `now()` and `local_now(subject)` are functions (05 §17).
 
+The functions of windows (decision D-710). A window is a value of the
+kind `window`.
+
+| Function | Gives |
+|----------|-------|
+| `window_open(window: window?)` | `bool`: whether it is still open. Safe for belief |
+| `window_source(window: window?)` | `entity?`: whose action or rule opened an open window. Safe for belief: a window is offered only to those who perceive its source |
+| `window_kind_of(window: window?)` | `id<window_kind>?`: its kind, while it is open. Safe for belief |
+| `window_time_left(window: window?, who: entity)` | `real?`: seconds of `who`'s own time before its deadline; null where it is closed or its deadline is not known |
+| `away_from(who: any, from: any)` | `string?`: the step that leads straight away from `from`, by the signs of the offset on the level (`north` … `north_west`); null for two in one column. Safe for belief, as `dir` is. What a reaction that leaves steps by |
+
 **Not yet reachable from data.** Queries of what an entity is doing
 are not registered as properties yet: its running actions with their
 phase, tags and time remaining, whether a channel is free and the length
 of a plan are read in Rust (`Sim::actions_of`, `Sim::is_acting`,
 `Sim::is_free`, `Sim::enabled_slots`, `Sim::held_slots`, the plan of the
-kernel entity), and the time left on a window waits for windows (T5). The
-debug commands are not yet console commands. What a reader knows of
-others (05 §4.6) is supplied in Rust.
+kernel entity). A window's candidates, and where each is with it, are
+read in Rust (`Sim::windows`); so is the list of reactions a character
+could answer one with (`Sim::reaction_options`), which the AI's
+`best_reaction` (09 §6.3) will need from data. Who holds an `intervenes`
+relation toward whom is supplied in Rust (`Sim::set_intervenes`) until
+relations exist. The debug commands are not yet console commands. What
+a reader knows of others (05 §4.6) is supplied in Rust.
 
 **Settings**: `rules.max_cascade`, `rules.max_transitions` (zero-duration
 phase changes in one tick, default 1,000), `actions.idle_wait` (seconds
@@ -1529,6 +1675,10 @@ it (05 §13.1).
 | `disable_channel` | `who`; `channel`: id of a channel; `count?`: int, default 1 | Disables slots; what then holds more than are enabled is interrupted, newest first | `action_interrupted` |
 | `enable_channel` | `who`; `channel`; `count?` | Enables disabled slots again, never more than were disabled | none |
 | `wait` | `who`; `time`: real, seconds of its own time, zero or more | Occupies `who` doing nothing (section 5.3) | `decision_requested` or `decision_needed` when it is over |
+| `react` | `who`: entity, a candidate that noticed the window; `window`: window; `action`: id of an action whose `reaction_to` lists the window's kind; `with?`: map, its parameters by name | Starts a reaction (section 7.3). Gives whether it started; one that cannot start is not a fault: `action_refused` says why | `action_started` and what follows, or `action_refused` |
+| `ask_reaction` | `who`: entity; `window`: window | Asks a directly controlled `who` that noticed the window how to answer it: a `Reaction` decision. Gives whether it asked. Declines with `engine:window_closed` or `engine:window_not_noticed` | `decision_requested` |
+| `close_window` | `window`: window | Closes it now, as at its deadline. Gives whether it was open | `window_closed` |
+| `open_window` | `kind`: id of a `window_kind`; `source?`: entity; `for?`: list of entities, those it names; `time`: real, seconds of universal time it stays open | Publishes a window no phase closes: offered and noticed as a phase's is (sections 7.1, 7.2). Gives the window. Declines with `window.unknown_kind` | `window_noticed`; `window_closed` when its time is over |
 
 A verb given an argument it cannot use (null where an entity is needed,
 a word that is no mode) declines with `verb.bad_argument`, which carries

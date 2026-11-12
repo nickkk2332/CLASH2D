@@ -35,6 +35,7 @@
 //! | What expressions can name | [`engine_registry`], given to the loader; kinds and handles in [`subject`]; the tables in [`registry`] |
 //! | To evaluate an expression | [`Sim::host`] or [`Sim::with_random`] with a [`Bound`], through `clash_data::Runner`; [`Sim::eval`] for one |
 //! | Variables | [`Sim::var`], [`Sim::set_var`]; see [`vars`] |
+//! | Minds: goals, methods, thinking | [`ai`] |
 //! | What `set` and `add` write | [`Sim::assign`], [`Sim::assign_to`], [`Sim::set_property`] |
 //!
 //! # Rules this crate keeps
@@ -53,9 +54,11 @@
 //!   property only through its registered setter, which calls the
 //!   function the engine itself uses.
 
+pub mod ability;
 pub mod action;
 pub mod activity;
 pub mod advance;
+pub mod ai;
 pub mod body;
 pub mod bus;
 pub mod clock;
@@ -149,6 +152,8 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     device::register_defs(types);
     interaction::register_defs(types);
     traits::register_defs(types);
+    ability::register_defs(types);
+    ai::register_defs(types);
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);

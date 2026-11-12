@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 11;
+pub const SAVE_VERSION: u32 = 13;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -74,7 +74,8 @@ pub struct Sim {
     pub(crate) shelf: Shelf,
     /// Every running action. A placeholder until package T3.
     pub actions: ActionTable,
-    /// Every open window. A placeholder until package T5.
+    /// Every open window, and what defences in force have dealt with
+    /// (03 §7, 07 §5).
     pub windows: WindowTable,
     /// What the rule runtime keeps. A placeholder until package K5.
     pub rules: RuleState,
@@ -121,9 +122,23 @@ pub struct Sim {
     pub(crate) perception: PerceptionState,
     /// Not state: the tables of perception, from the definitions.
     pub(crate) perception_defs: Arc<PerceptionDefs>,
+    /// Which entity holds each ability instance, and the number the
+    /// next takes (08 §3.2).
+    pub(crate) abilities: crate::ability::AbilityIndex,
+    /// Not state: the tables of abilities and the expressions kept
+    /// current (05 §7.5).
+    pub(crate) ability_rt: crate::ability::Runtime,
+    /// What minds keep that belongs to no one mind (09 §3.3).
+    pub(crate) ai: crate::ai::AiState,
+    /// Not state: the tables of minds, from the definitions.
+    pub(crate) ai_defs: Arc<crate::ai::AiDefs>,
     /// Not state: how many strikes are being resolved inside one another
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
+    /// Not state: what answers whether one entity holds an `intervenes`
+    /// relation toward another, until relations exist
+    /// ([`Sim::set_intervenes`]). Set it again after a load.
+    pub(crate) intervenes: Option<crate::action::IntervenesFn>,
     /// The game being played, if one is (13 §3): saved, and hashed when
     /// there is one ([`scenario`](crate::scenario)).
     pub(crate) scenario: crate::scenario::ScenarioState,
@@ -184,7 +199,8 @@ pub struct SimHashes {
     pub rng: Hash128,
     /// The kernel's own: events and decisions waiting, application
     /// requests, who owns which wake-up, the entities shelved with
-    /// unloaded tracts, the count of wake-ups handled.
+    /// unloaded tracts, the count of wake-ups handled, perception's and
+    /// the minds' own.
     pub kernel: Hash128,
     /// All of the above.
     pub total: Hash128,
@@ -214,6 +230,8 @@ struct SavedRef<'a> {
     wakes: &'a WakeOwners,
     steps: u64,
     perception: &'a PerceptionState,
+    abilities: &'a crate::ability::AbilityIndex,
+    ai: &'a crate::ai::AiState,
     scenario: &'a crate::scenario::ScenarioState,
 }
 
@@ -239,6 +257,8 @@ struct Saved {
     wakes: WakeOwners,
     steps: u64,
     perception: PerceptionState,
+    abilities: crate::ability::AbilityIndex,
+    ai: crate::ai::AiState,
     scenario: crate::scenario::ScenarioState,
 }
 
@@ -273,6 +293,8 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
+        let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
         let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
@@ -303,7 +325,12 @@ impl Sim {
             rt,
             perception: PerceptionState::default(),
             perception_defs,
+            abilities: crate::ability::AbilityIndex::default(),
+            ability_rt,
+            ai: crate::ai::AiState::default(),
+            ai_defs,
             strike_depth: 0,
+            intervenes: None,
             scenario: crate::scenario::ScenarioState::default(),
             scenario_rt,
         };
@@ -699,6 +726,8 @@ impl Sim {
         self.shelf.state_hash(&mut kernel);
         kernel.write_u64(self.steps);
         self.perception.state_hash(&mut kernel);
+        self.abilities.state_hash(&mut kernel);
+        self.ai.state_hash(&mut kernel);
         // Nothing when no game is being played: a simulation that was
         // never begun from a scenario hashes as before.
         self.scenario.state_hash(&mut kernel);
@@ -757,6 +786,8 @@ impl Sim {
                 wakes: &self.wakes,
                 steps: self.steps,
                 perception: &self.perception,
+                abilities: &self.abilities,
+                ai: &self.ai,
                 scenario: &self.scenario,
             },
         )
@@ -809,6 +840,8 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
+        let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
         let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
@@ -839,7 +872,12 @@ impl Sim {
             rt,
             perception: saved.perception,
             perception_defs,
+            abilities: saved.abilities,
+            ability_rt,
+            ai: saved.ai,
+            ai_defs,
             strike_depth: 0,
+            intervenes: None,
             scenario: saved.scenario,
             scenario_rt,
         };

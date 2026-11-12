@@ -175,6 +175,13 @@ pub(crate) struct Prepared {
     displace: Vec<ActionId>,
 }
 
+impl Prepared {
+    /// The locals it would start with, in slot order.
+    pub(crate) fn locals(&self) -> &[Value] {
+        &self.locals
+    }
+}
+
 /// How entering a phase went.
 enum Entered {
     /// It lasts: a wake-up will end it, or a release.
@@ -286,7 +293,7 @@ impl Sim {
 
     /// Evaluates against truth for an action, drawing from the rule
     /// stream; run-time warnings are reported.
-    fn action_eval<T>(
+    pub(crate) fn action_eval<T>(
         &mut self,
         actor: EntityId,
         locals: &[Value],
@@ -385,6 +392,19 @@ impl Sim {
         params: &Params,
         displace: bool,
     ) -> Result<Prepared, Reason> {
+        self.prepare_with(actor, id, params, displace, &Value::Null)
+    }
+
+    /// [`prepare`](Sim::prepare), for a reaction: `$window` is bound to
+    /// `window` before the defaults are worked out (03 §7.3).
+    pub(crate) fn prepare_with(
+        &mut self,
+        actor: EntityId,
+        id: ActionDefId,
+        params: &Params,
+        displace: bool,
+        window: &Value,
+    ) -> Result<Prepared, Reason> {
         let defs = Arc::clone(&self.defs);
         let def = action_def(&defs, id).ok_or_else(|| {
             Reason::new(
@@ -438,7 +458,7 @@ impl Sim {
         }
         for local in def.locals() {
             let value = match local.source {
-                LocalSource::Window => Value::Null,
+                LocalSource::Window => window.clone(),
                 LocalSource::Role(0) => self.actor_value(actor),
                 LocalSource::Role(_) => match given(&local.name) {
                     Some(value @ Value::Subject(_)) => value,
@@ -986,6 +1006,9 @@ impl Sim {
         };
         let name = action_name(&defs, def_id);
         let locals = self.locals_of(id);
+        // The windows whose deadline is this phase's start close first
+        // (03 §7.1): whatever the phase does comes too late to notice.
+        self.close_windows_at(id, index);
 
         // How long: its time over the tempo, or a held phase's `max`.
         let mut duration = match &phase.time {
@@ -1117,9 +1140,14 @@ impl Sim {
                     action: name.clone(),
                     kind,
                     closes: window.closes.name().to_owned(),
-                    aimed_at,
+                    aimed_at: aimed_at.clone(),
                 }),
             );
+            // Offered to its candidates, who start to notice it (03 §7.2).
+            self.open_phase_window(id, window.kind_id(), window.closes.index(), aimed_at);
+            if self.actions.get(id).is_none() {
+                return Entered::Gone;
+            }
         }
         if !self.run_list(id, |def| def.phase(index).map(|phase| &phase.on_enter)) {
             return Entered::Gone;
@@ -1266,6 +1294,11 @@ impl Sim {
     /// Takes an action out of the table and its actor's list, and
     /// cancels its wake-ups: its slots are free.
     fn release(&mut self, id: ActionId) -> Option<RunningAction> {
+        // Its windows close with it (03 §7.1), and its defence is no
+        // longer in force (07 §5).
+        if self.actions.get(id).is_some() {
+            self.close_windows_of(id);
+        }
         let action = self.actions.remove(id)?;
         for wake in [action.wake, action.tick].into_iter().flatten() {
             self.cancel_wake(wake);
@@ -1655,6 +1688,9 @@ pub(crate) fn action_wake(sim: &mut Sim, wake_id: WakeId, wake: Wake) {
                 sim.actions.take_wait(entity);
                 sim.free(entity, FreeReason::Waited, Cause::new(CauseKind::Process));
             }
+        }
+        arg if super::windows::is_window_wake(arg) => {
+            super::windows::window_wake(sim, wake_id, wake);
         }
         _ => {}
     }

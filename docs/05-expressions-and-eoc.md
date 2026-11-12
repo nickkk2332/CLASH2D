@@ -849,15 +849,67 @@ makes others stale they are evaluated in turn, at most
 `rules.max_reactive_rounds` times (default 8). What is still stale then
 is reported, with its chain, and left for the next pump.
 
-As built for a scenario's objectives and endings (decision D-755, 13
-§5.1): staleness is by event type, not by subject. When mods load, each
+As built (package A1, decisions D-720, D-721), in
+`clash_sim::ability::reactive`:
+
+- **At load.** A reactive condition is one expression: a structure of
+  `all`, `any` and `not` is a load error that says to write it with
+  `and`, `or` and `not`, and so is `exists`. Every property it reads
+  must name the events that change it (`changed_by` in its
+  registration, 05 §5.3), unless it is constant for its subject: a
+  subject's `kind`, an entity's `attr`, `pool` and `track` (the
+  accessors of 06 §4.4), and an ability's `def`, `id` and `tags`. Every
+  function it calls must be a built-in that draws nothing at random, or
+  a function of the host registered with its events; a mod's function,
+  whose body may read anything, and `now()` are load errors. Random
+  functions are refused by the field's purity. A variable may be read.
+  The error is at the field and names what cannot be watched. The
+  `while` of an ability is checked; the `while` of a trait is not (the
+  traits package works out what it cannot watch as it always has).
+- **Evaluation.** A watched expression is evaluated against a host that
+  reads only and notes every property of every subject read and every
+  variable. A property becomes a subscription to each event of its
+  `changed_by`, for the subject it was read of; a function with events,
+  for each subject among its arguments. A subject that is not one of
+  the kernel's is followed by the entity it belongs to: an ability by
+  its owner, an entity's `attrs`, `pools` and `tracks` by the entity.
+  Subscriptions are by event and subject, not by argument: a trait added
+  makes stale whatever read `has_trait` of that entity, whatever trait
+  it asked about.
+- **Staleness.** Every event the kernel delivers marks stale whatever
+  subscribed to its name for one of the subjects it binds (not its
+  cause's), and `Sim::set_var` does the same for a variable. When the
+  event queue is empty the pump re-evaluates what is stale, once each, in
+  the order of their owners (abilities' first, by entity and instance,
+  then traits', by entity and instance), and tells each whose value
+  changed. A round that raises events, or leaves more stale, is followed
+  by another, up to `rules.max_reactive_rounds`; then the fault
+  `reactive.rounds` (values `limit`, `stale`) is reported and what is
+  stale waits for the next pump.
+- **What is watched.** The `while` of every ability instance held
+  (dormancy, 08 §6.1), and the `while` of every trait instance whose
+  condition can be watched (06 §5): its owner, the traits package, is
+  told through `traits::reconsider`. An ability's condition that reads
+  something unwatchable at run time (reached some way loading did not
+  see) is reported with the fault `reactive.unwatchable` and worked out
+  only when its ability changes.
+- **Not state.** The subscriptions and last values follow from the saved
+  state. A simulation made or loaded builds them afresh at its first
+  pump, so a watched value always equals a fresh evaluation (invariant
+  A6). `Sim::reactive()` reads them, with a count of evaluations.
+
+Not built: device outputs (16 §7) do not use it yet; they are package
+G5's.
+
+A scenario's objectives and endings (decision D-755, 13 §5.1) are kept
+current by a coarser form of their own: staleness is by event type, not
+by subject. When mods load, each
 condition's properties and functions are looked up for their
 `changed_by` events, and a variable it reads adds `var_changed`; a read
 with no events registered, or a query, makes it stale on every event.
 Re-evaluation is at every safe point rather than the end of each pump,
 and what is still stale after the rounds stays stale, unreported, for
-the next. Nothing else is reactive yet: a rule group's `enabled` is
-evaluated when a rule of it is about to run (section 9.6).
+the next. Moving them onto the watcher above is left for later.
 
 ## 8. Events
 

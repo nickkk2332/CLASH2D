@@ -19,6 +19,9 @@
 //! | [`run`] | The runtime: [`Sim::start_action`](crate::Sim::start_action), phases on the actor's clock, cancelling, interrupting, slots. |
 //! | [`plan`] | Control, plans, waits and free decisions (03 §5). |
 //! | [`verbs`] | The verbs of 03 §13 that rules call. |
+//! | [`windows`] | Windows: opening, who is offered them, noticing on the candidate's clock, closing (03 §7.1, §7.2). |
+//! | [`react`] | Reactions: `react`, `ask_reaction`, the `Reaction` decision, `React` and `Pass` (03 §7.3). |
+//! | [`WindowTable`], [`Window`], [`WindowId`] | What the window runtime keeps: plain state, saved and hashed. |
 //! | [`ActionTable`], [`RunningAction`], [`ChannelSlots`], [`Plan`] | What the runtime keeps: plain state, saved and hashed. |
 //!
 //! # Loading
@@ -132,10 +135,12 @@ pub mod def;
 mod event;
 mod ids;
 pub mod plan;
+pub mod react;
 pub mod reason;
 pub mod run;
 mod state;
 pub mod verbs;
+pub mod windows;
 
 use clash_data::DefTypes;
 
@@ -153,6 +158,10 @@ pub use ids::{ActionDefId, ChannelId, ChannelSet, PhaseIndex, WindowKindId};
 pub use plan::{DEFAULT_IDLE_WAIT, IDLE_WAIT_SETTING};
 pub use run::{DEFAULT_MAX_TRANSITIONS, DEFAULT_SLOTS, MAX_TRANSITIONS_SETTING, RUNTIME_REASONS};
 pub use state::{ActionTable, ChannelSlots, How, Params, Plan, PlanStep, RunningAction, Waiting};
+pub use windows::{
+    Candidate, Handled, IntervenesFn, Notice, Offered, OpenWindow, WINDOW_CLOSED, WINDOW_EVENTS,
+    WINDOW_KIND, WINDOW_NOTICED, WINDOW_REASONS, Window, WindowId, WindowTable,
+};
 
 /// Registers the definition types of the simulation crate with the mod
 /// loader: `action`, `channel` and `window_kind` (03 §13).

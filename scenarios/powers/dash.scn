@@ -1,0 +1,21 @@
+# Dash (mods/core/data/powers): a burst of speed paid for in stamina,
+# then a cooldown that refuses another use, with its reason, until it
+# has passed on the user's own time (08 §5.1, §5.2).
+use default seed=21
+gen core:test_city size=1
+look @c:17,12,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+assert "@e:0.has_ability('core:dash') and @e:0.ability('core:dash').rank == 1"
+use_ability who=@e:0 ability=core:dash
+expect event ability_used ability=core:dash
+advance 200ms
+assert "@e:0.has_trait('core:dashing')"
+assert "@e:0.pool.stamina < 76"
+use_ability who=@e:0 ability=core:dash
+expect event ability_refused ability=core:dash reason='ability.cooling_down'
+assert "@e:0.cannot_use('core:dash') == 'ability.cooling_down'"
+advance 3s
+assert "not @e:0.has_trait('core:dashing')"
+advance 5s
+assert "@e:0.cannot_use('core:dash') == null"
+expect hash ea59815eb53bc85a38fdcafbf888b849

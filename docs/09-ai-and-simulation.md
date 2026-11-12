@@ -1,6 +1,7 @@
 # 09 — AI and the Layered Simulation
 
-Status: design complete, ready for implementation.
+Status: design complete; the beta subset of sections 3 to 6 is built
+(sections 3.5, 4.1, 5.4a and 6.6).
 Implementation plan: [plans/ai.md](plans/ai.md).
 Serves scenes S7, S13, S14, S16, S19 and S24 of [00-vision.md](00-vision.md).
 
@@ -174,6 +175,78 @@ holds a relation whose kind is flagged `opposes`, and `allies` those
 with one flagged `sides_with`. Warm characters are opposed when their
 groups are. The engine has no other idea of sides.
 
+### 3.5 As built (beta)
+
+Built in `clash_sim::ai` (decisions D-690 to D-698). What follows is the
+whole of what a modder writes and reads; section 17 lists it by kind.
+
+**`mind`** (D-690, D-694, D-695):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `goals` | list of `goal` ids | The goals it may have, in the order ties are broken |
+| `weights` | map of name to number | Read by `self.weight(name)` |
+| `adjust` | list of `{ if, weights?, goals? }` | While `if` (a pure condition on `self`, in the mind context) holds, `weights` are added to the mind's and `goals` may be had too: how traits colour a mind |
+| `think` | time, default `1 s` | How long it waits between thoughts when nothing happens, in its own time |
+| `stretch` | int ≥ 1, default 8 | How many times `think` the interval stretches to while thoughts change nothing |
+| `wake_clarity` | number ≥ 0, default 1 | How clear a percept (`perceived`'s `clarity`) must be to make it think at once |
+| `go_action` | `action` id | The action a `go`, `keep_near` or `keep_from` step starts, given the cell as its parameter `to`. Required if a goal has such a step |
+| `hostile_to`, `fear_of` | list of entity tags | Whoever presents one of these, once perceived, is held hostile or feared |
+| `hostile_after`, `fear_after` | list of event types | Whoever the mind makes out as the actor of such an event it perceives is held hostile or feared from then on |
+| `crowd_cost` | metres, default 3 | What a step into a cell where it saw someone in the last five seconds costs it more (section 5.3) |
+| `hazards` | list of `{ events, radius = 2, cost = 10, below = 0.05 }` | Wherever it remembers one of `events` with salience at least `below`, steps within `radius` metres cost `cost` metres more |
+| `senses` | list of `sense` ids | Given to its character when the mind first thinks, if it has no senses: a character made without any perceives with these. A directly controlled character never thinks, and is given senses by whoever made it |
+| `reactions` | list of `action` ids | The reactions it answers a window its character noticed with, in order of preference (section 6.3). Default none: it answers nothing |
+| `doc` | text | What it is |
+
+`routine` and `tactics` are not built.
+
+**`goal`** (D-691):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `score` | number, mind context | How much it is wanted; zero, below or null is not at all |
+| `about` | one of `{ "track": { where?, best? } }`, `{ "memory": { events?, where?, best? } }`, `{ "place": expr }` | What it concerns, bound as `$about` |
+| `methods` | list of `{ if?, steps }` or `{ if?, method }` | Its ways, in order |
+| `done`, `fail` | conditions, mind context | When it is over; a failed goal is set aside |
+| `commit` | fraction ≥ 0 | How much another must outscore it to displace it |
+| `interrupts` | bool | Whether taking it up cancels what the mind set the character doing (its step's action, where the phase allows, and its own wait); what a command or a rule set going runs on |
+| `retry_after` | time, default `10 s` | How long it is set aside after failing |
+| `noise` | number ≥ 0 | Up to this much is added to its score at each thought, from the character's own stream |
+| `wake_on` | list of event types | Such an event makes every mind that binds it as a subject, and has thought before, think at once |
+| `doc` | text | What it is |
+
+`$about` has a type the compiler knows: `entity` for a track, `map<any>`
+for a memory, `loc` for a place; a goal whose `about` found nothing is
+not scored, and one held whose `about` is no longer believed is given up. Of the candidates whose `where` holds
+(compiled in the mind context with the candidate as `it`), the greatest
+`best` is chosen; for a memory with no `best`, the most recent. The goal
+held keeps what it is about while that is still a candidate. A memory
+reads as a map with `event`, `loc`, `age` (seconds), `salience` (faded),
+`confidence`, `actor` (the entity the mind made out, or null) and `how`
+(the signal kind's qualified id, `told`, `inferred` or `carried`). A
+goal whose `about` finds nothing is not wanted. A track or a memory the
+`settle` step marked is passed over: a track until it is perceived again.
+
+**Thinking** (D-690). A mind is prompted by `decision_needed`, by a
+percept at least as clear as `wake_clarity`, by coming to perceive
+someone or losing them (`detected`, `lost_track`), by remembering
+something (`memory_added`), by a `wake_on` event, by
+entering the world or leaving direct control, by `entity_spawned`,
+`entity_woke`, `entity_revived` and `mind_transferred`, by the end of a
+step's action, by coming close enough on a step that moves, and by the
+`think` verb. Prompted minds think when the event queue is next empty, as
+one batch in order of entity; what one does reaches another only through
+events delivered after the batch. Each thought scores goals, settles the
+step under way and pursues the goal held. A mind with nothing to do waits
+its interval, staggered by up to a quarter by a hash of its entity; a busy
+one thinks again when its interval has passed. A directly controlled
+character's mind does not decide. Settings: `ai.max_thoughts_per_tick`
+(4), `ai.max_minds_per_batch` (256), `ai.max_steps_per_thought` (16).
+
+`weight` is a property of the character, `self.weight('duty')`, not a
+function: a function is not told whose mind asks (D-692).
+
 ## 4. Methods and steps
 
 A method is a list of **steps**. Steps are fed into the character's plan
@@ -201,6 +274,49 @@ Reactions written as rules (15 §12) and goals coexist. A rule that reacts
 to a scream by planning an action is immediate and authored. A goal whose
 score rises because of the memory of the scream is deliberate. Most
 characters have both.
+
+### 4.1 As built (beta)
+
+A method is written in a goal's `methods` with its `if` and `steps`, or
+on its own as a **`method`** definition (`about`: `track`, `memory`,
+`place` or left out; `if`; `steps`) and named there with `{ "method": id }`
+beside an optional `if` of the entry's own; both conditions must hold. A
+goal may name only methods written for its own kind of `about`
+(D-697). The first method whose conditions hold and that has not failed
+in this pursuit is followed; when its last step is done the goal is done
+if its `done` holds, and is otherwise taken up again at the next thought.
+
+A step is an object with exactly one of the kinds below and, beside it,
+an optional `if` (passed over when it does not hold). Every expression is
+in the mind context with `$about` bound (D-693).
+
+| Step | Arguments | Becomes | Ends |
+|------|-----------|---------|------|
+| `go` | `to`: a cell, or an entity, meaning where the mind believes it is; `within`: metres, default 0 | The mind's `go_action` with `to` the cell, or the nearest it believes it can stand in | Done within `within` (and half a metre) of it; fails with `ai.not_arrived` if the action ends short |
+| `do` | `action`: an action id; `with`: map of parameter name to expression | That action, missing parameters taking their defaults | When it finishes; fails with its refusal, its interruption, or `ai.cancelled` |
+| `choose` | `purpose`: an action tag; `target`: expression, optional | The first action carrying the tag, in load order, that can start, with `target` as its parameter `target` | As `do`; fails with `ai.no_option` when none can start |
+| `wait` | `time`: seconds; `until`: condition | A wait of `time`, or of the mind's interval | After the wait, or when `until` holds at a thought |
+| `look` | `at`: a cell or an entity; `time`: seconds, default 2 | Turning to face it, and a wait | After the wait |
+| `say` | `text`: a text template; `volume`: number, default 1 | The event `said` | At once |
+| `set` | `var`: the variable's name as the simulation keeps it, qualified for a declared one; `value`: expression | A variable of the character's own | At once |
+| `settle` | `true` | Marks `$about` settled | At once |
+| `stance` | `of`: an entity; `toward`: `hostile`, `feared` or `none` | The mind's stance toward what it perceives `of` as | At once |
+| `keep_near` | `who`: a cell or an entity; `within`: metres, default 1.5 | A `go` toward where `who` is believed to be, begun again whenever they are believed to have moved further than `within`, and a wait while near | Never by itself |
+| `keep_from` | `from`: a cell or an entity; `distance`: metres, default 12 | A `go` to a place `distance` metres away, in a direction of the compass not back toward `from`, that the mind believes it can reach: the one furthest from `from` for the least walking | When there; fails with `ai.no_way_out` |
+
+A step that fails raises `step_failed`, the method is given up and the
+next is tried; with none left the goal fails with `ai.no_method`, raises
+`goal_failed` and is set aside for its `retry_after`. A step that moves
+toward an entity starts again toward where the mind now believes it is
+when that is more than `within`, or 1.5 m, from where the step was
+going. At most `ai.max_steps_per_thought` steps that take no time run in
+one thought. Every act is an action, a wait, a turn or speech that a
+player could have chosen (invariant N2): actions start through the same
+`start_action` that the `Act` command uses. An interaction (16 §3) is
+done as a player does one, by a `do` step of the action that does
+interactions (in `mods/core`, `core:interact` with `target` and
+`interaction`); a `use` step of its own is not built, nor are `job`,
+`goal`, `follow` and `run`, which wait for jobs and queries.
 
 ## 5. Navigation
 
@@ -243,6 +359,37 @@ passed through them are rechecked.
 Fliers try a straight line first, checked by ray, and fall back to a search
 over regions of open cells. Movers larger than a cell use clearance kept
 with each region.
+
+### 5.4a As built (beta)
+
+Paths are searched cell by cell over what the mover believes, through
+`movement::believed_path` (D-574, D-619): the mover's own ways of moving
+and their speeds are its profile; static geometry is common knowledge,
+hidden elements count once noted; doors cost 2 m of walking. A character
+whose mind has thought adds, through `ai::MindCosts` (D-695):
+
+- `crowd_cost` metres for a step into a cell where it saw someone in the
+  last five seconds of its own time: others are stepped round, not walls;
+- each hazard's `cost` for a step within its `radius` of a place it
+  remembers one of the hazard's events, while the memory is salient;
+- room for a footprint wider than a cell: a cell is one it can be in only
+  if every cell of the footprint is.
+
+When an element changes or is destroyed, every path in use that passes
+within a cell of it is checked again, step by step, at the next batch; a
+path whose remaining steps the mover now believes it cannot make is
+marked stale, so that `go_to` plans again before its next step, and
+`route_blocked` is raised with the first cell that cannot be entered.
+Paths found this way cost what a brute-force search finds (tested on
+random walls). The region and tract graphs, links over portals and
+subgrids, the flier's straight line and flow fields are not built.
+Measured in the timing tests of `tests/ai.rs`, in a release build on a
+loaded machine: a path across a tract of the test city takes about
+43 µs with the world's caches warm, the same with a mind's costs as
+without; twenty minds in a block of the test city (four of them guards)
+cost about 15 ms of real time for each simulated second, perception and
+movement included, about 37 µs a wake-up. No path is cached per mind:
+none was needed.
 
 ### 5.5 Flow fields
 
@@ -356,6 +503,17 @@ engine for `best_reaction`: the available reaction that would be ready in
 time and most reduces the previewed harm, by its tactics. A character's
 stance (07 §12) may forbid or prefer some.
 
+As built by package T5 (decisions D-711, D-716): when a character that
+is not directly controlled notices a window (`window_noticed`), its mind
+answers with the first of its definition's `reactions` that may start
+and would be ready in time, else the first that may start, through
+`Sim::react`; `Sim::reaction_options(entity, window)` gives each option's
+timing and refusal. A mind with no `reactions` answers nothing, and a
+stance attached as a rule (`core:parry_on_notice` and its like) answers
+beside it. The bundled guard blocks, then ducks; the townsperson and the
+dog answer nothing. `best_reaction`, scored by tactics and previews, is
+not built.
+
 ### 6.4 Positions
 
 `pick_position` scores cells within a radius by an expression. Helpers
@@ -378,6 +536,28 @@ doorway are expressions over these.
 Effort (07 §3.3) is chosen by the tactics' `effort` expression. A character
 may hit as hard as it takes to stop someone and no harder, or as hard as it
 can. Which, is its mind's weights.
+
+### 6.6 As built (beta)
+
+Options, tactics, `threat`, `standing`, positions and reactions are not
+built. What stands in for them in the beta (D-693, D-694):
+
+- **Threat from belief** is what goals read: memories of what was seen
+  or heard (a blow, a blast, a collapse, a death) with their place, age
+  and salience, and tracks of those the mind holds hostile or fears.
+- **Stances** stand in for relations (15 §9): a mind holds someone
+  `hostile` or `feared` by a tag they present (`hostile_to`, `fear_of`,
+  once perceived), by what it saw them do (`hostile_after`, `fear_after`)
+  or by a `stance` step or the `set_stance` verb. Relations (S7) will
+  replace stances: a stance becomes a relation whose kind is flagged
+  `opposes`, and `self.hostile(x)` reads `threats`.
+- **Fleeing** is a `keep_from` step; **fighting back** a `choose` step
+  whose purpose is a tag carried by the attacks content defines (the
+  bundled `punch`, `kick` and the rest carry `strike`), with a method
+  behind it for when none can start.
+
+The bundled minds of `mods/core/data/ai/` (`townsperson`, `guard`, `dog`)
+are written with these, and say in their documentation how each behaves.
 
 ## 7. Working
 
@@ -978,6 +1158,40 @@ Rates in this document are written with a unit of time (04 §7.1):
 `"0.02 /d"`, `"0.15 /h"`. A time of day such as `"06:00"` is hours and
 minutes of a twenty-four hour day, scaled to the length of the realm's
 own; `realm.clock` gives the same as a fraction of the day.
+
+**As built in the beta** (section 3.5, 4.1, 5.4a, 6.6):
+
+- Definition types `mind`, `goal`, `method`, with the fields listed there.
+- Events, each with `self` the character: `goal_adopted` (`goal`,
+  `about`, `score`, `previous`), `goal_done` (`goal`), `goal_failed`
+  (`goal`, `code`, `message`), `step_failed` (`goal`, `step`, `code`,
+  `message`), `method_chosen` (`goal`, `method`), `step_started`
+  (`goal`, `step`), `option_chosen` (`purpose`, `action`), `said`
+  (`text`, `volume`), `route_blocked` (`here`). The three raised only
+  while something listens are `method_chosen`, `step_started` and
+  `option_chosen`.
+- Properties of an `entity`, read of the character itself in a mind
+  context: `weight(name)` (`real`), `goal` (`string?`), `goal_about`
+  (`any`), `step` (`string?`), `last_failure` (`string?`), `home`
+  (`loc`: where the character is, for a mind that has not thought),
+  `mind_def` (`string?`), `hostile(x)` (`bool`), `fears(x)` (`bool`),
+  `stance(x)` (`string?`).
+- Verbs: `think { who }`; `set_goal { who, goal, about? }`, which holds
+  the goal until it is done, fails or is cleared; `clear_goal { who }`;
+  `set_stance { who, of, stance }`; `set_home { who, at }`;
+  `set_mind_def { who, mind }`.
+- Reasons: `ai.no_mind_def`, `ai.unknown_goal`, `ai.bad_value`,
+  `ai.no_method`, `ai.goal_failed`, `ai.no_target`, `ai.not_arrived`,
+  `ai.no_go_action`, `ai.no_way_out`, `ai.no_option`, `ai.refused`,
+  `ai.cancelled`.
+- Settings: `ai.max_thoughts_per_tick`, `ai.max_minds_per_batch`,
+  `ai.max_steps_per_thought`.
+- Not built: `tactics`, `collective`, `formation`, `routine` and the
+  cold layer; the hook `goal_scoring`; the effects `set_goal` and
+  `clear_goal` as effects (they are verbs); the functions `weight`
+  (a property), `threat`, `standing` and the rest of section 6; the
+  queries `visible`, `heard`, `allies`, `threats`; `retry_after` is
+  built, `wake_clarity` is a field of `mind`.
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
 sites, `locals`, `stock(what)`, `population(kind)`, `holder`; on regions,

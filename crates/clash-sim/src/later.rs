@@ -6,8 +6,7 @@
 //! hashes, as nothing. The package named on each replaces its body and
 //! raises the save's layout version ([`SAVE_VERSION`](crate::SAVE_VERSION)).
 
-use clash_core::{define_id, impl_state_hash};
-use serde::{Deserialize, Serialize};
+use clash_core::define_id;
 
 define_id! {
     /// A running action of an entity (03 §6). Given out by the action
@@ -23,10 +22,9 @@ pub use crate::rule::EocId;
 /// [`action`](crate::action).
 pub use crate::action::ActionTable;
 
-/// Every open reaction window (03 §7). Built by package T5.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct WindowTable {}
-impl_state_hash!(WindowTable {});
+/// Every open reaction window (03 §7). Built by package T5, in
+/// [`action`](crate::action).
+pub use crate::action::WindowTable;
 
 /// What the rule runtime keeps between runs: rules attached at run
 /// time, when rules last ran, switched rule groups (05 §9). Built by
