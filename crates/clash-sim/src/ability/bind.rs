@@ -233,6 +233,9 @@ pub struct Binding {
     pub owner: EntityId,
     /// The ability instance, by its number.
     pub number: u64,
+    /// The ability, for what is said of the binding once its instance
+    /// is gone.
+    pub ability: super::AbilityId,
     /// What is bound.
     pub what: Bound,
     /// The name it was given (`as`), for `ability.bound(name)`.
@@ -254,6 +257,7 @@ impl_state_hash!(Binding {
     id,
     owner,
     number,
+    ability,
     what,
     name,
     mode,
@@ -424,12 +428,15 @@ fn bind_as(sim: &mut Sim, id: u64, terms: &Terms, what: Bound, cause: Cause) {
         .seconds
         .map(|seconds| sim.own_time(terms.owner) + Dur::from_secs_real(seconds));
     let kind = what.kind();
+    let ability_id = inst(sim, terms.owner, terms.number)
+        .map_or(super::AbilityId::new(0), super::AbilityInst::def);
     sim.abilities.bindings.insert(
         id,
         Binding {
             id,
             owner: terms.owner,
             number: terms.number,
+            ability: ability_id,
             what,
             name: terms.name.clone(),
             mode,
@@ -471,9 +478,7 @@ pub(crate) fn end(sim: &mut Sim, id: u64, why: &str, cause: Cause) -> bool {
     let Some(binding) = sim.abilities.bindings.get(&id).cloned() else {
         return false;
     };
-    let ability = inst(sim, binding.owner, binding.number)
-        .map(|inst| name_of(&sim.defs, inst.def()))
-        .unwrap_or_default();
+    let ability = name_of(&sim.defs, binding.ability);
     let mut on_end = binding.on_end;
     if sim.bus.has_listeners(BINDING_ENDING) && sim.entities.contains(binding.owner) {
         let payload = EventPayload::new(BINDING_ENDING)
@@ -1470,8 +1475,8 @@ pub(crate) fn area_terms(
         Value::Bool(flag) => Some(*flag),
         _ => return Err(bad_term("bound", "true or false")),
     };
-    let terms_given = (at + 1..at + 6)
-        .any(|index| index != at + 1 && !matches!(call.args.get(index), None | Some(Value::Null)));
+    let terms_given =
+        (at + 1..at + 6).any(|index| !matches!(call.args.get(index), None | Some(Value::Null)));
     match flag {
         Some(false) => Ok(None),
         Some(true) => read_terms(sim, call, at + 1, OnEnd::Remove).map(Some),

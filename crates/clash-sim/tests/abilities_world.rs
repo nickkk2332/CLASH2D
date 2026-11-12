@@ -107,13 +107,13 @@ fn core_file(name: &str) -> (String, String) {
     )
 }
 
-/// Loads `mods/core`'s world, life, traits, movement, combat,
+/// Loads `mods/core`'s world, life, traits, movement,
 /// perception, minds and powers with more definitions, or renders why
 /// not.
 fn try_load(extra: &str) -> Result<Arc<Defs>, String> {
     let types = common::types();
     let mut files = dir_files("world");
-    for sub in ["life", "powers", "ai", "perception", "combat"] {
+    for sub in ["life", "powers", "ai", "perception"] {
         files.extend(dir_files(sub));
     }
     files.push(core_file("traits.json"));

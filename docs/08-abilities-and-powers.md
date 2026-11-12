@@ -1240,6 +1240,13 @@ verbs, from a rule).
 **Not built.** Snapshots and
 journals (A8); relays, appraisal, moving fields, contest bias (A9); the
 reference abilities of section 8 (A10). Costs from a store (16 §5).
+Bindings to portals (02 §19 is not built); `bound` on `add_trait` and
+`attach_rule` (`bind_trait` and `bind_rule` do it); orders to a summoned
+servant (until relations, 15 §10). The effect `move_area` (the world's
+`WorldCtx::move_area` is reachable only from Rust) and the queries
+`abilities`, `bindings` and `modes`: a rule reads `self.abilities`,
+`self.ability(id)`, `ability.bound(name)` and `ability.mode_on(mode)`
+meanwhile.
 Variables on the kind `ability` (`ability.var.x`). A rule attached by an
 ability does not bind `ability`. Abilities of items and body parts
 except through the traits they give. `uses` on a mode. The mind-seated

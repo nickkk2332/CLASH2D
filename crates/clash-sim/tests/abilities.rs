@@ -128,7 +128,7 @@ fn try_load(extra: &str) -> Result<Arc<Defs>, String> {
     files.extend(dir_files("life"));
     files.extend(dir_files("powers"));
     // The powers name minds, goals and senses (a summoned hound).
-    for sub in ["ai", "perception", "combat"] {
+    for sub in ["ai", "perception"] {
         files.extend(dir_files(sub));
     }
     files.push(core_file("traits.json"));
