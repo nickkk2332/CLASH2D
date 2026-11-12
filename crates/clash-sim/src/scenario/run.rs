@@ -41,9 +41,9 @@ use crate::verb::VerbDef;
 pub const SCENARIO_CAUSE: Cause = Cause::new(CauseKind::Eoc);
 
 /// The bit of a wake-up's `arg` that marks it as a scenario's: an
-/// objective's or a mission's time running out. Pools, bodies and
-/// traits use the three bits above it.
-pub const SCENARIO_WAKE_TAG: u64 = 1 << 60;
+/// objective's or a mission's time running out. Pools, bodies, traits
+/// and abilities' modes use the four bits above it.
+pub const SCENARIO_WAKE_TAG: u64 = 1 << 59;
 
 /// The events that may mean the party is gone.
 const PARTY_EVENTS: [&str; 3] = ["entity_died", "entity_removed", "control_changed"];

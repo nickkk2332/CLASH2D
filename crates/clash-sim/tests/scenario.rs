@@ -573,6 +573,41 @@ fn saved_and_loaded_in_the_middle_of_a_mission_nothing_changes() {
 }
 
 #[test]
+fn the_journal_and_the_site_are_read_of_the_character() {
+    let defs = defs();
+    let (mut sim, player) = begun(&defs, "core:alpha", 9, 0, vec![]);
+    run(&mut sim, Dur::from_millis(500));
+    let properties = clash_sim::scenario::journal::properties();
+    let read = |name: &str| {
+        let property = properties
+            .iter()
+            .find(|property| property.name == name)
+            .unwrap_or_else(|| panic!("no property `{name}`"));
+        (property.get)(&sim, Subject::Entity(player), &[])
+    };
+    let rows = read("objectives");
+    let rows = rows.as_list().expect("a list");
+    // `gather`, `whole` and its two parts: `report` waits for `gather`.
+    assert_eq!(rows.len(), 4);
+    let first = rows[0].as_map().unwrap();
+    assert_eq!(
+        first.get("id").and_then(clash_expr::Value::as_str),
+        Some("gather")
+    );
+    assert_eq!(
+        first.get("state").and_then(clash_expr::Value::as_str),
+        Some("active")
+    );
+    let depths: Vec<i64> = rows
+        .iter()
+        .filter_map(|row| row.as_map()?.get("depth")?.as_int())
+        .collect();
+    assert_eq!(depths, [0, 0, 1, 1], "parts are under the whole");
+    // The flat test land has no sites.
+    assert_eq!(read("site"), clash_expr::Value::Null);
+}
+
+#[test]
 fn under_continue_the_player_carries_on_as_a_newcomer() {
     let defs = defs();
     let (mut sim, first) = begun(&defs, "core:beta", 5, 0, vec![]);
