@@ -1,0 +1,35 @@
+# caught_arrow (plans/combat.md, review row "Stopping a shot"; 07
+# §11.6): an arrow at 40 J leaves at about 57 m/s and crosses 15 m in a
+# quarter of a second. Bram, wits 40, notices it in 50 ms and catches it
+# out of the air: it ends in his hand, an arrow, and he is not touched.
+# Cora, wits 5, needs 400 ms: the window closes before she notices, and
+# the arrow strikes her.
+use default seed=7
+gen core:testland size=1
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 15, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 0, 10, 0)" } }
+remove @spot
+assert "@e:2.loc.x == 25 and @e:3.loc.y == 20"
+control @e:1 delegated
+control @e:2 delegated
+control @e:3 delegated
+as @e:2 do { "set_attr_base": { "who": "self", "attr": "core:wits", "base": 40 } }
+as @e:3 do { "set_attr_base": { "who": "self", "attr": "core:wits", "base": 5 } }
+as @e:2 do { "face": { "who": "self", "toward": "offset(self.loc, -15, 0, 0)" } }
+as @e:2 do { "set_awareness": { "who": "self", "of": "offset(self.loc, -15, 0, 0).occupants[0]", "sense": "core:human_sight", "level": 1 } }
+as @e:2 do { "attach_rule": { "to": "self", "eoc": "core:catch_on_notice" } }
+as @e:3 do { "face": { "who": "self", "toward": "offset(self.loc, 0, -10, 0)" } }
+as @e:3 do { "set_awareness": { "who": "self", "of": "offset(self.loc, 0, -10, 0).occupants[0]", "sense": "core:human_sight", "level": 1 } }
+as @e:3 do { "attach_rule": { "to": "self", "eoc": "core:catch_on_notice" } }
+as @e:1 do { "shoot": { "at": "offset(self.loc, 15, 0, 0).occupants[0]", "height": 1.2, "projectile": "core:arrow", "energy": 40, "spread": 0, "window": "core:shot" } }
+advance 1s
+expect event window_noticed
+expect event window_closed
+assert "len(@e:2.wounds) == 0 and len(@e:2.held('grasp')) == 1"
+as @e:1 do { "shoot": { "at": "offset(self.loc, 0, 10, 0).occupants[0]", "height": 1.2, "projectile": "core:arrow", "energy": 40, "spread": 0, "window": "core:shot" } }
+advance 1s
+expect event projectile_hit
+assert "len(@e:3.held('grasp')) == 0"
+expect hash c01e5d763c309316a8a2c66d46b17de2

@@ -1,0 +1,36 @@
+# takedown (plans/combat.md, C8; scene S6): forced role, sure strike,
+# cue (07 §10). Ada knocks out Bram, who has not seen her: he is locked
+# into the action, its cutscene is cued, and the blow lands on his head
+# without aiming. Cora has seen Ada: the attempt is over as it begins,
+# and says why. Dov wears a steel gorget: the same blow is delivered and
+# the layer stops it, and the fist takes it back.
+use default seed=25
+gen core:testland size=1
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 0, 1, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, -1, 0, 0)" } }
+remove @spot
+control @e:1 delegated
+control @e:2 delegated
+control @e:3 delegated
+control @e:4 delegated
+as @e:1 do { "start_action": { "who": "self", "action": "core:knock_out", "with": "{ 'victim': offset(self.loc, 1, 0, 0).occupants[0] }" } }
+advance 1s
+expect event cutscene_cued
+expect event strike_landed
+assert "len(@e:2.wounds) > 0"
+as @e:3 do { "face": { "who": "self", "toward": "offset(self.loc, 0, -1, 0)" } }
+as @e:3 do { "set_awareness": { "who": "self", "of": "offset(self.loc, 0, -1, 0).occupants[0]", "sense": "core:human_sight", "level": 1 } }
+as @e:1 do { "start_action": { "who": "self", "action": "core:knock_out", "with": "{ 'victim': offset(self.loc, 0, 1, 0).occupants[0] }" } }
+advance 1s
+expect event action_interrupted
+assert "len(@e:3.wounds) == 0"
+as @e:4 do { "create_item": { "def": "core:gorget", "at": "self.loc" } }
+as @e:4 do { "wear": { "who": "self", "what": "self.loc.occupants[0]" } }
+as @e:1 do { "start_action": { "who": "self", "action": "core:knock_out", "with": "{ 'victim': offset(self.loc, -1, 0, 0).occupants[0] }" } }
+advance 1s
+expect event strike_recoiled
+assert "len(@e:4.wounds) == 0"
+expect hash 84c69ae5b8a1f3da78355dd0ee6450b7

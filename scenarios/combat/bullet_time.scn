@@ -1,0 +1,34 @@
+# bullet_time (plans/combat.md, C9; scene S3): time of flight against
+# notice delay (07 §11.2). A pistol bullet at 500 J leaves at 350 m/s and
+# crosses 10 m in about 28 ms; its `shot` window is open that long. Bram
+# is on a clock twenty times as fast: he notices it in 10 ms of
+# universal time, steps across its line in 3 ms more, and it goes by.
+# Cora, on an ordinary clock, needs 200 ms: she is offered nothing, and
+# is hit.
+use default seed=5
+gen core:testland size=2
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 10, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 10, 4, 0)" } }
+remove @spot
+assert "@e:2.loc.x == 20 and @e:3.loc.y == 14"
+control @e:1 delegated
+control @e:2 delegated
+control @e:3 delegated
+as @e:2 do { "face": { "who": "self", "toward": "offset(self.loc, -10, 0, 0)" } }
+as @e:2 do { "set_awareness": { "who": "self", "of": "offset(self.loc, -10, 0, 0).occupants[0]", "sense": "core:human_sight", "level": 1 } }
+as @e:2 do { "attach_rule": { "to": "self", "eoc": "core:step_aside_on_notice" } }
+as @e:2 do { "set_time_rate": { "who": "self", "rate": 20 } }
+as @e:3 do { "face": { "who": "self", "toward": "offset(self.loc, -10, -4, 0)" } }
+as @e:3 do { "set_awareness": { "who": "self", "of": "offset(self.loc, -10, -4, 0).occupants[0]", "sense": "core:human_sight", "level": 1 } }
+as @e:3 do { "attach_rule": { "to": "self", "eoc": "core:step_aside_on_notice" } }
+as @e:1 do { "shoot": { "at": "offset(self.loc, 10, 0, 0).occupants[0]", "height": 1.2, "projectile": "core:pistol_bullet", "energy": 500, "spread": 0, "window": "core:shot" } }
+advance 40ms
+expect event window_noticed
+assert "len(@e:2.wounds) == 0 and @e:2.loc.y == 9"
+as @e:1 do { "shoot": { "at": "offset(self.loc, 10, 4, 0).occupants[0]", "height": 1.2, "projectile": "core:pistol_bullet", "energy": 500, "spread": 0, "window": "core:shot" } }
+advance 100ms
+expect event projectile_hit
+assert "len(@e:3.wounds) > 0"
+expect hash b0960dbc4ef7db63aa5cb22e9d43f177
