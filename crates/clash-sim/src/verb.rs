@@ -76,6 +76,7 @@ pub fn engine_verbs() -> Vec<VerbDef> {
     verbs.extend(crate::item::verbs());
     verbs.extend(crate::movement::verbs());
     verbs.extend(crate::world_verbs::world_verbs());
+    verbs.extend(crate::device::verbs());
     verbs
 }
 

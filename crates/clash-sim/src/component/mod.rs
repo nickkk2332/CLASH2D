@@ -142,6 +142,7 @@ pub use physical::{
 pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::body::Body;
+use crate::device::Device;
 use crate::item::{Holds, Item};
 use crate::movement::Mover;
 use crate::stats::Stats;
@@ -497,6 +498,9 @@ components! {
     /// The ways of moving an entity has, its posture and the path it is
     /// following. On whatever has been told one of them.
     mover: Mover = "mover";
+    /// What makes an entity a device: its definition and the element it
+    /// is bound to (16 §4.1). On devices.
+    device: Device = "device";
 }
 
 // A `ComponentKinds` has one bit for each kind.

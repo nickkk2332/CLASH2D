@@ -436,9 +436,11 @@ fn an_entity_answers_for_itself() {
 
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
-    // Those of items are read in `tests/items.rs`.
+    // Those of items are read in `tests/items.rs`, those of devices in
+    // `tests/devices.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
+        .chain(clash_sim::device::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {
@@ -771,10 +773,15 @@ fn the_world_answers_for_cells_elements_areas_sites_tracts_and_realms() {
     assert_eq!(probe.get(Subject::Global, "kind"), Value::from("global"));
     assert_eq!(probe.get(Subject::Global, "now"), real(7200.0));
 
-    // Every property that is not an entity's was read.
+    // Every property that is not an entity's was read, but those of
+    // devices, which `tests/devices.rs` reads.
     let read = probe.read.into_inner();
+    let elsewhere: Vec<(&str, &str)> = clash_sim::device::properties()
+        .iter()
+        .map(|property| (property.kind, property.name))
+        .collect();
     for property in engine_properties() {
-        if property.kind != "entity" {
+        if property.kind != "entity" && !elsewhere.contains(&(property.kind, property.name)) {
             assert!(
                 read.contains(&(property.kind.to_owned(), property.name.to_owned())),
                 "{}.{} is not tested",

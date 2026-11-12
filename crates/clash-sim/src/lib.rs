@@ -63,6 +63,7 @@ pub mod command;
 pub mod component;
 pub mod console;
 pub mod decision;
+pub mod device;
 pub mod entity;
 pub mod event;
 pub mod host;
@@ -129,4 +130,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     body::register_defs(types);
     item::register_defs(types);
     movement::register_defs(types);
+    device::register_defs(types);
 }

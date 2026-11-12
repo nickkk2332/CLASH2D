@@ -30,7 +30,7 @@ actions that call `hit`.
 | E9 | Templates and creation | L | E3, E6, E8 | todo |
 | E10 | Movement | M | E4, W14, W18 | beta |
 | E11 | Coming and going | L | E9, W8 | todo |
-| E12 | Minimal devices | M | E8 | todo |
+| E12 | Minimal devices | M | E8 | beta |
 | S1 | Light | M | W18 | beta |
 | S2 | Signals and senses | M | E3 | todo |
 | S3 | Detection | L | S1, S2, E10 | todo |
@@ -416,6 +416,18 @@ Done when
 - Ten thousand unused lockers create no entities.
 - Destroying an element with a device spills its contents and exposes
   anyone inside.
+
+Beta (decision D-621), in `clash_sim::device`: the `device` type with
+`name`, `holds` and `tags`; the `Device` component; promotion when an
+element's state leaves its first and by the verb `promote`; demotion
+when it is plain again; contents stowed or enclosed (`Inside`) through
+`put_in` and `take_out`; destruction or replacement spills them with
+`device_spilled`; three events, three properties, four reasons, and a
+load check of every element's `device`. `tests/devices.rs` covers both
+items above and a save in the middle. The interactions that open, close,
+put in, take out and hide inside are package G1's content. Stubbed:
+links, variables and timers of devices beyond the kernel's, and
+everything of package G2.
 
 ## Perception
 

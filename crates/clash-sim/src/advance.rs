@@ -332,6 +332,7 @@ impl Sim {
             // What the engine's own packages do about it, once rules
             // have had their say.
             crate::movement::on_event(self, &event);
+            crate::device::on_event(self, &event);
             self.out.push(event);
         }
     }

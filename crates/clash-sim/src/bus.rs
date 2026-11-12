@@ -744,6 +744,9 @@ impl Bus {
         for ty in crate::item::event_types() {
             bus.types.entry(ty.name.clone()).or_insert(ty);
         }
+        for ty in crate::device::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         bus
     }
 }

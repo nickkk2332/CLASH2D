@@ -252,6 +252,54 @@ supplied or all not, with the network. A building with four hundred lamps
 has one number, until someone smashes a lamp or switches one off, and that
 one becomes a device.
 
+**As built** (package E12, decision D-621; `clash_sim::device`). The
+minimal device, which package G2 extends with modes, ports, stores,
+config, processes, slots and passive loads:
+
+- **The definition** `device` has `name` (a text), `holds` (`volume`,
+  `mass`, `accepts`, as an item's, 06 §9.2: what can be put inside it;
+  left out, nothing) and `tags` (the device entity carries them). An
+  element's `device` names one, as written in the element's namespace;
+  one that names nothing is a load error at the element's `device`.
+- **The component** `Device` holds the definition and the element it is
+  bound to (`bound`: a cell and a layer). The entity is an occupant of
+  the kind `device`, with no mass and no flags, in the element's cell,
+  and carries an `Identity` naming its definition.
+- **Promotion.** An element whose definition names a device is promoted
+  when it is in any state but its first (the default), and when a rule
+  asks with the verb `promote { of: element }`, which returns the
+  device. The device is found again by its element: `element.device`.
+- **Contents.** `put_in` takes a device as a container with the room
+  its `holds` gives: an item is stowed in it, anything else (someone
+  hiding) is enclosed (`Hold::Inside`), out of the world's occupant
+  index. `take_out` puts it back where the device stands.
+- **Demotion.** A device whose element is in its default state, with
+  nothing inside it, no variables, no rules attached and no tags beyond
+  its definition's, is removed and the element is plain again: tested
+  when something leaves it, when its element's state is set, and when
+  an interaction that reached it ends.
+- **Destruction.** When the element is destroyed, or replaced by
+  another element or by nothing, everything inside the device is put
+  where something dropped into the cell comes to rest, each with
+  `device_spilled`, and the device is removed. Whoever hid there is in
+  the world again, where the next front of a blast can reach them.
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `device_promoted` | `self` (the device), `element` | — | An element became a device entity |
+| `device_demoted` | `self`, `element` | — | A device was removed: plain again, or its element gone. `self` no longer exists when it is delivered |
+| `device_spilled` | `self` (what came out), `device`, `here` (loc) | `layer` (`string`) | Something came out of a device whose element was destroyed or replaced |
+
+| Property | Gives |
+|----------|-------|
+| `element.device` | `entity?`: the device bound to it, if promoted |
+| `entity.element` | `element?`: the element a device is bound to |
+| `entity.is_device` | `bool` |
+
+None is safe for belief. Reasons: `device.none` (`element`: the element
+names no device), `device.unknown_def` (`device`), `device.no_element`
+(`layer`), `device.not_registered`.
+
 ### 4.4 Services
 
 Whole-city grids are not wired cell by cell. A tract may carry **services**
