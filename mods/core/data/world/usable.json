@@ -1,0 +1,19 @@
+[
+  { "//": "A window opens and shuts, and can be broken through. Open, it lets air, smoke and a blast through; only broken can it be climbed through, so that paths do not run through windows.",
+    "type": "block", "id": "window", "patch": true,
+    "states": {
+      "closed": {},
+      "open": { "coverage": 0.0, "glyph": { "ch": "/" } }
+    },
+    "interactions": ["open", "close", "break_through"] },
+
+  { "type": "fixture", "id": "locker", "material": "steel",
+    "height": 2.0, "fill": 0.1, "flags": ["opaque"],
+    "states": {
+      "closed": {},
+      "open": { "remove_flags": ["opaque"], "glyph": { "ch": "[" } }
+    },
+    "interactions": ["open", "close", "store", "retrieve", "hide_inside", "get_out"],
+    "device": "locker",
+    "glyph": { "ch": "]", "fg": "material" } }
+]

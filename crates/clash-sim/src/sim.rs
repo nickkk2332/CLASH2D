@@ -814,6 +814,7 @@ impl Sim {
     /// actors. Called when a simulation is made and again after a load.
     fn bind_runtime(&mut self) {
         self.bind_rules();
+        crate::interaction::bind(self);
     }
 }
 

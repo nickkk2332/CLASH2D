@@ -64,6 +64,7 @@ use crate::registry::PropertyDef;
 use crate::verb::VerbDef;
 use crate::world_verbs::{ArgRow, element_arg, spec};
 
+pub(crate) use defs::names as defs_names;
 pub use defs::{DeviceDef, DeviceId, check_element_devices};
 
 /// Registers the `device` definition type and the check that every
@@ -618,23 +619,69 @@ const OF_ELEMENT: ArgRow = ("of", "element", false, "The element.");
 
 /// The verbs of devices, for [`crate::verb::engine_verbs`].
 pub fn verbs() -> Vec<VerbDef> {
-    vec![VerbDef {
-        name: "promote",
-        build: |registry| {
-            spec(
+    vec![
+        VerbDef {
+            name: "promote",
+            build: |registry| {
+                spec(
                 registry,
                 "promote",
                 "Promotes an element to its device entity (02 §5.5) and returns it: the one there already, or a new one bound to the element, with `device_promoted`. Afterwards `target.device` names it, so that something can be put inside it. A device left in its default state with nothing inside is dropped again when something next leaves it or its state is next set, or when the interaction that promoted it ends. Refused for an element whose definition names no device (`device.none`), no element (`device.no_element`), and a cell not loaded.",
                 &[OF_ELEMENT],
             )
             .map(|spec| spec.direct("of"))
+            },
+            run: |sim, call, cause| {
+                let (loc, layer) = element_arg(sim, "promote", call, 0, "of")?;
+                let id = promote(sim, loc, layer, cause)?;
+                Ok(sim.subject_value(Subject::Entity(id)))
+            },
         },
-        run: |sim, call, cause| {
-            let (loc, layer) = element_arg(sim, "promote", call, 0, "of")?;
-            let id = promote(sim, loc, layer, cause)?;
-            Ok(sim.subject_value(Subject::Entity(id)))
+        VerbDef {
+            name: "put_inside",
+            build: |registry| {
+                spec(
+                    registry,
+                    "put_inside",
+                    "Puts a thing inside an element's device (02 §5.5, 06 §9.2): promotes the element if it has not been, then `put_in` with the device as the container, so that an item is stowed in its `holds` and anyone else is enclosed, out of the world. Returns what is inside it. A device promoted for nothing is dropped again. Refused as `promote` and `put_in` are.",
+                    &[
+                        ("what", "entity", false, "The thing, or whoever hides."),
+                        (
+                            "into",
+                            "element",
+                            false,
+                            "The element whose device takes it.",
+                        ),
+                    ],
+                )
+            },
+            run: |sim, call, cause| {
+                let what = crate::world_verbs::entity_arg(sim, "put_inside", call, 0, "what")?;
+                let (loc, layer) = element_arg(sim, "put_inside", call, 1, "into")?;
+                put_inside(sim, what, loc, layer, cause)
+                    .map(|id| sim.subject_value(Subject::Entity(id)))
+            },
         },
-    }]
+    ]
+}
+
+/// Puts a thing inside an element's device: promotes the element, then
+/// [`put_in`](crate::item::put_in) with the device as the container.
+/// Returns what is inside it, which may be an equal stack the thing
+/// joined. A device promoted for this and left empty is dropped again.
+pub fn put_inside(
+    sim: &mut Sim,
+    what: EntityId,
+    loc: Location,
+    layer: Layer,
+    cause: Cause,
+) -> Result<EntityId, Reason> {
+    let device = promote(sim, loc, layer, cause)?;
+    let result = crate::item::put_in(sim, what, device, cause);
+    if result.is_err() {
+        settle(sim, device, cause);
+    }
+    result
 }
 
 #[cfg(test)]

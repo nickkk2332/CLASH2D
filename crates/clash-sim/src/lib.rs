@@ -67,6 +67,7 @@ pub mod device;
 pub mod entity;
 pub mod event;
 pub mod host;
+pub mod interaction;
 pub mod item;
 pub mod kernel_verbs;
 pub mod later;
@@ -139,6 +140,7 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     item::register_defs(types);
     movement::register_defs(types);
     device::register_defs(types);
+    interaction::register_defs(types);
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);

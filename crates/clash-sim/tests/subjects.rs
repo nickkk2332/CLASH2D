@@ -437,10 +437,12 @@ fn an_entity_answers_for_itself() {
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
     // Those of items are read in `tests/items.rs`, those of devices in
-    // `tests/devices.rs`.
+    // `tests/devices.rs`, those of interactions in
+    // `tests/interactions.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::device::properties().iter())
+        .chain(clash_sim::interaction::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {
@@ -778,6 +780,7 @@ fn the_world_answers_for_cells_elements_areas_sites_tracts_and_realms() {
     let read = probe.read.into_inner();
     let elsewhere: Vec<(&str, &str)> = clash_sim::device::properties()
         .iter()
+        .chain(clash_sim::interaction::properties().iter())
         .map(|property| (property.kind, property.name))
         .collect();
     for property in engine_properties() {

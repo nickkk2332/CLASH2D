@@ -2,10 +2,11 @@
 //! it, and the check that every element's `device` names one.
 
 use clash_core::define_id;
-use clash_data::{CompileCx, CrossCx, Def, DefLabel, Diagnostic, Scope, Text, code};
+use clash_data::{CompileCx, CrossCx, Def, DefLabel, Diagnostic, Ref, Scope, Text, code};
 use clash_world::defs::{BlockDef, FixtureDef, FloorDef};
 use serde::Deserialize;
 
+use crate::interaction::InteractionDef;
 use crate::item::HoldsDef;
 
 define_id! {
@@ -36,6 +37,11 @@ pub struct DeviceDef {
     /// Tags the device entity carries.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// The interactions the device entity offers (16 §3.2), done to it
+    /// as an entity. Those of the element it is bound to are the
+    /// element's.
+    #[serde(default)]
+    pub interactions: Vec<Ref<InteractionDef>>,
 }
 
 impl Def for DeviceDef {
@@ -68,9 +74,16 @@ pub(crate) fn names<T: Def>(cx: &CrossCx<'_>, owner: &str, written: &str) -> boo
 }
 
 /// Reports every element whose `device` names no `device` definition
-/// (02 §5.5). A cross check of the loader.
+/// (02 §5.5), as a warning: such an element is never promoted. A load
+/// that defines no device at all is not checked. A cross check of the
+/// loader.
 pub fn check_element_devices(cx: &mut CrossCx<'_>) {
     let defs = cx.defs();
+    // A load with no devices at all (the world's content alone, for a
+    // test or a tool) is not one to promote any.
+    if defs.iter::<DeviceDef>().next().is_none() {
+        return;
+    }
     let mut missing: Vec<(&'static str, String, String)> = Vec::new();
     let mut look = |ty: &'static str, name: &str, device: Option<&str>| {
         if let Some(device) = device
@@ -105,7 +118,7 @@ pub fn check_element_devices(cx: &mut CrossCx<'_>) {
     }
     for (ty, element, device) in missing {
         let diagnostic = Diagnostic::new(
-            code::UNKNOWN_REFERENCE,
+            code::VALIDATION_WARNING,
             format!("there is no device definition `{device}` for this element to become"),
         )
         .in_def(Some(&DefLabel::new(ty, element)))
