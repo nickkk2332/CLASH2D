@@ -50,7 +50,7 @@ actions that call `hit`.
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
 | U7 | Input, controls, pickers | M | U6b, T5 | beta |
 | U8 | Slots and theming | S | U6b | done |
-| U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
+| U9 | Bundled screens | L | U7, U8, U4, U5, E9 | beta |
 | U10 | Cutscenes | M | U5, T6 | todo |
 | U11 | Application | M | U3, U9, P3 | beta |
 | Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
@@ -702,8 +702,10 @@ Done when
 Beta (D-618): tags (`Sim::party_perceived`), map memory, frames for the
 view model and a snapshot, the omniscient setting; both "Done when"
 items are tests. Stubbed: moving sources of light are not counted in
-what the party sees; the application and playback are what drain the
-frames and ask for tags.
+what the party sees. The application drains the frames, feeds the view
+model from them, the map memory and the cells in view, and answers
+playback with the tags (12 §3.5, decision D-700;
+`crates/clash-app/tests/perceiving.rs`).
 
 ### S10 — Coloured light (experimental)
 
@@ -867,11 +869,11 @@ waits for playback. Tested through the null frontend in
 three ticks after a step at fixed time steps, of a heard event and of a
 projectile, and a property test that caught-up playback equals a fresh
 view (D-608). The game binary plays every batch through it, its host
-answering from `clash_app::perception_shim`, and an event without a
+answering from the simulation's perception (D-700), and an event without a
 show no longer moves a thing ahead of the step that moves it (D-655,
 D-656). Stubbed, each waiting for what it needs: perception
-answers through stand-ins in `clash_scene::testing` and
-`clash_app::perception_shim` (S9); events carry
+answers through a stand-in in `clash_scene::testing` in the scene's
+own tests (the game's through the simulation); events carry
 no duration, so a glide lasts its show's `time`, and bodies in flight are
 drawn where they start, strike and land and not along their paths, which
 no event carries (W14); floating text, particles and effects
@@ -1027,6 +1029,34 @@ Done when
 - A fixture species with every choice kind is fully usable on the creation
   screen without a new screen.
 
+Beta: character creation (`ui:create`, the role `creation`, and its
+popup `ui:create_choice`) over the creation session through
+`app.creation`, `app.templates` and the service `creation`, every
+choice kind of 06 §10.2 on the one screen; the inventory (`ui:inventory`)
+with what is held, worn and carried and the item verbs as actions
+(`ui:item`); the condition (`ui:condition`) with the body as a tree of
+parts, its wounds, and slots for reserves and attributes, which the new mod `core_ui`
+fills; look mode's side panel (`cursor_things`, `cursor_ground`); the
+keys of play (`ui:help`, `app.keys`); the play screen's status column
+with what is held and a line of keys. Every bundled screen is listed
+with its role, parameters and slots in 12 §10.7. Tested against the
+fake host over the real registry and the fake application's real
+creation session, with golden frames (`clash-scene` test `screens`):
+from the title through creation into play, each choice kind, a
+refused selection, each screen, and the way to each from play and
+back. Stubbed: the vital state, a pool's thresholds and the list of an
+entity's pools and attributes, which the simulation does not register
+(D-665); the result's body as a figure and a tree of parts, traits, a
+part browser for `assemble` and a text's suggestions; the application's
+side of `app.templates` and of `app.creation.attributes`, which the
+game binary does not give yet: until it lists the templates, the
+creation screen in the game has nothing to begin a character from;
+the actions the inventory names, which no mod
+defines yet; an item named by its definition, which waits for the
+reader; abilities, map, journal, case file, codex, save and load
+screens, trade, fitting, make, build, work, device, know-how, the
+summary and the helm. Decisions D-660 to D-669.
+
 ### U10 — Cutscenes
 
 **Spec** 12 §8 · **Size** M
@@ -1067,13 +1097,30 @@ creation session, which the interface reads as `app.creation` and edits
 with the service `creation`. Tested in `crates/clash-app/tests/`
 (`first_walk.rs`, `playing.rs`, `creation.rs`); the golden frames
 `first_play`, `inside_house` and `wall` changed for the template's glyph
-and movement's reason. Stubbed behind named seams: perception
-(`perception_shim`: sight from the character's cell, answering
-playback), saving (`saves::SaveBackend` with nothing built in, so
-saving, loading and resuming are not done) and game scenarios (the
-`start` type). Not built: the window frontend and frontend choice,
+and movement's reason. Second pass (decisions D-700 to D-706): the
+stand-ins are gone. The player sees through the simulation's
+perception: senses given when the character is made, the view model fed
+from the frames, the map memory and the cells in view, playback
+answered with the party's tags, the omniscient toggle through
+`set_omniscient` (12 §3.5; `perception_shim` is deleted). Walking into
+a shut door does its bump default at once or asks, by the preference
+`bump`; the key `e` lists `view.offers_near` and starts `interact`;
+refusals are told with their reason (12 §3.7). Saving and loading go
+through `clash-save` into the data directory's `saves/`: the pause
+menu's Save, the title's Continue and Load, the list with name, summary,
+time and whether the mods match, a load's warnings on the role
+`notice`, and the start's saving policy; a loaded game draws the same
+frame and has the same state hash as when it was saved (12 §3.6). Both
+"Done when" items are covered: `tests/first_walk.rs` and
+`tests/saving.rs`, with `perceiving.rs` and `interacting.rs`. The
+golden frames `first_play`, `inside_house` and `wall` changed to what
+the character's sight takes in; `door_opened`, `through_door`,
+`door_locked` and `carried_on` are new. Seams: game scenarios (the
+`start` type) and the senses the application gives (until templates
+carry `senses`). Not built: the window frontend and frontend choice,
 switching profiles or reloading mods while running, reaction windows
-(T5) and `Ui` commands from screens, a benchmark of the loop.
+(T5) and `Ui` commands from screens, saving at intervals under
+`single`, a benchmark of the loop.
 
 ### Z1 — Benchmarks and budget gate
 

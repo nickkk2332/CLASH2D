@@ -786,6 +786,11 @@ impl Bus {
         for hook in crate::ability::hook_types() {
             bus.types.entry(hook.name.clone()).or_insert(hook);
         }
+        // The events and hooks of combat (07 §16), unless a mod has
+        // taken a name.
+        for ty in crate::combat::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         bus
     }
 

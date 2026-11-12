@@ -9,9 +9,12 @@
 //!    runs the effects it asks for: screens open and close, commands
 //!    are submitted, services are asked of the application.
 //! 2. **Follow-up.** What the effects came to is acted on: a refusal or
-//!    a failure gets a line in the log, a service that failed opens the
-//!    error screen, a game that was started is shown, one whose play
-//!    screen was left is ended.
+//!    a failure gets a line in the log, a step refused because the way is
+//!    closed offers what is there ([`crate::interact`]), a service that
+//!    failed opens the error screen, a game that was started or loaded is
+//!    shown (with what a load had to say on the screen of the role
+//!    [`ROLE_NOTICE`]), one whose play screen was left is ended, and saved
+//!    first if its saving policy is `single`.
 //! 3. **The simulation.** While the player's character waits on the
 //!    simulation (`Session::waits_on_simulation`: no decision is asked
 //!    of it and it is busy or unconscious), the simulation is advanced
@@ -22,15 +25,20 @@
 //!    has passed. Nothing else advances the simulation.
 //! 4. **Playback.** Everything the simulation reported in the pass, the
 //!    commands' events and the advance's, is drained and handed to the
-//!    scene as one batch (`Scene::push_events`), after the character
-//!    has looked round ([`crate::perception_shim::look`]), so that the
-//!    host answers what the party perceived as of the end of the batch.
+//!    scene as one batch (`Scene::push_events`), after what the party
+//!    perceives as the batch ends has been taken from the simulation's
+//!    perception ([`crate::perception::look`]), so that the host answers
+//!    what the party perceived as of the end of the batch. What is due
+//!    at the present tick is run even while a decision waits, so that
+//!    a sense that sweeps at once (a character that has just stepped,
+//!    one that has just been put in the world) has swept before the
+//!    character is asked.
 //!    A fault, and a `message` for the player, also get a line in the
 //!    log at once. The scene is then advanced by the real time elapsed
 //!    and plays what falls due.
 //! 5. **The present.** Once playback has caught up: the view model is
-//!    given what the character perceives that no event said
-//!    ([`crate::perception_shim::show`]), and in a debug build checked
+//!    given what the party perceives that no event said
+//!    ([`crate::perception::show`]), and in a debug build checked
 //!    against a fresh one (`Scene::check_caught_up`); a decision that
 //!    is waiting gets its screen (`Scene::sync_decision`).
 //! 6. **The frame.** The scene builds a frame of the frontend's size and
@@ -70,6 +78,7 @@ use std::time::{Duration, Instant};
 
 use clash_core::{Dur, EntityId, Value};
 use clash_expr::Value as ExprValue;
+use clash_scene::ControlDef;
 use clash_scene::control::ROLE_PLAY;
 use clash_scene::input::MouseKind;
 use clash_scene::ui::{PreferenceDef, ScreenDef, VarRef, to_var};
@@ -79,20 +88,27 @@ use clash_scene::{
     RichText, Scene, Theme, UiOutcome,
 };
 use clash_sim::action::ActEvent;
+use clash_sim::reader::capitalised;
 use clash_sim::{Advance, AdvanceLimit, EventBody, SimEvent};
 
 use crate::app::{App, STATE_CURRENT, Shared};
 use crate::boot::{self, Loaded};
 use crate::creation::Creation;
 use crate::host::GameHost;
-use crate::perception_shim::{self, PREF_OMNISCIENT};
+use crate::interact;
+use crate::perception::{self, PREF_OMNISCIENT};
 use crate::prefs::PrefStore;
-use crate::saves::{NoSaves, SaveBackend, SaveMeta};
+use crate::saves::{FileSaves, SaveBackend};
 
 /// The role of the screen that shows why something the player asked of
 /// the application could not be done. It is opened with the parameter
 /// `text`.
 pub const ROLE_ERROR: &str = "error";
+
+/// The role of the screen that tells the player something that is not a
+/// failure: what differs in a save that was loaded. It is opened with
+/// the parameters `title` and `text`.
+pub const ROLE_NOTICE: &str = "notice";
 
 /// The log category of a command the simulation refused.
 pub const LOG_REFUSAL: &str = "refusal";
@@ -146,7 +162,7 @@ impl Default for BootOptions {
         BootOptions {
             seed: crate::cli::DEFAULT_SEED,
             data_dir: None,
-            saves: Box::new(NoSaves),
+            saves: Box::new(FileSaves),
         }
     }
 }
@@ -214,6 +230,8 @@ impl Game {
             data_dir: options.data_dir,
             keymap: String::new(),
             started: false,
+            warnings: Vec::new(),
+            said: Vec::new(),
             loaded,
         }));
 
@@ -440,12 +458,74 @@ impl Game {
         }
     }
 
+    /// A preference's value, by its bare name, as text, if a loaded mod
+    /// defines it.
+    fn pref_text(&self, bare_name: &str) -> Option<String> {
+        let id = self.scene.defs()?.resolve::<PreferenceDef>(bare_name, "")?;
+        match self.scene.pref(&id)? {
+            Value::Str(text) => Some(text.clone()),
+            _ => None,
+        }
+    }
+
+    /// The effects of a control, by its bare name, if a loaded mod
+    /// defines it.
+    fn control_effects(&self, bare_name: &str) -> Option<clash_scene::ui::UiEffects> {
+        let ui = self.scene.defs()?;
+        let id = ui.resolve::<ControlDef>(bare_name, "")?;
+        ui.get::<ControlDef>(&id)
+            .map(|control| control.effects.clone())
+    }
+
+    /// A step was refused because the way is closed: what is there is
+    /// done, asked about, or why it cannot be done is told, as
+    /// [`crate::interact`] says. `reason` is the step's refusal.
+    fn bump(&mut self, dir: &str, reason: &str) {
+        let found = {
+            let shared = self.shared.borrow();
+            let Some(session) = shared.session.as_ref() else {
+                return;
+            };
+            interact::bumped(&session.sim, session.player, dir)
+        };
+        let mode = self.pref_text(interact::PREF_BUMP);
+        match found {
+            Ok(offer) if mode.as_deref() != Some(interact::BUMP_NEVER) => {
+                let control = if mode.as_deref() == Some(interact::BUMP_ASK) {
+                    interact::CONTROL_BUMP_ASK
+                } else {
+                    interact::CONTROL_BUMP
+                };
+                match self.control_effects(control) {
+                    Some(effects) => {
+                        let outcomes = self.scene.run(&effects, Some(offer));
+                        self.follow_up(&outcomes);
+                    }
+                    None => self.say(LOG_REFUSAL, reason),
+                }
+            }
+            Ok(_) => self.say(LOG_REFUSAL, reason),
+            Err(why) => self.say(LOG_REFUSAL, why.as_deref().unwrap_or(reason)),
+        }
+    }
+
     /// Acts on what running effects came to. See the
     /// [module](self) documentation.
     fn follow_up(&mut self, outcomes: &[UiOutcome]) {
         for outcome in outcomes {
             match outcome {
-                UiOutcome::Refused { reason, .. } => self.say(LOG_REFUSAL, reason),
+                UiOutcome::Refused { reason, .. } => {
+                    let bumped = self
+                        .shared
+                        .borrow_mut()
+                        .session
+                        .as_mut()
+                        .and_then(|session| session.bumped.take());
+                    match bumped {
+                        Some(dir) => self.bump(&dir, reason),
+                        None => self.say(LOG_REFUSAL, reason),
+                    }
+                }
                 UiOutcome::Failed { effect, reason } => {
                     self.say(LOG_UI, reason);
                     if *effect == EFFECT_APP {
@@ -457,17 +537,55 @@ impl Game {
                 _ => {}
             }
         }
+        let said = std::mem::take(&mut self.shared.borrow_mut().said);
+        for line in said {
+            self.say(LOG_APP, &line);
+        }
         let started = std::mem::take(&mut self.shared.borrow_mut().started);
         if started {
             self.show_game();
+            let warnings = std::mem::take(&mut self.shared.borrow_mut().warnings);
+            if !warnings.is_empty() {
+                self.show_warnings(&warnings);
+            }
         }
         self.end_if_left();
     }
 
+    /// Tells the player what a load had to say (01 §11.2): a line in
+    /// the log for each, and the screen of the role [`ROLE_NOTICE`]
+    /// over the play screen with all of them, if the profile names one.
+    fn show_warnings(&mut self, warnings: &[String]) {
+        for line in warnings {
+            self.say(LOG_APP, &format!("The save differs: {line}."));
+        }
+        let Some(screen) = self.scene.role(ROLE_NOTICE).map(str::to_owned) else {
+            return;
+        };
+        let text = warnings
+            .iter()
+            .map(|line| format!("- {}", capitalised(line)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let with = BTreeMap::from([
+            (
+                "title".to_owned(),
+                ExprValue::text("This save was made with other mods"),
+            ),
+            ("text".to_owned(), ExprValue::text(text)),
+        ]);
+        if let Err(reason) = self.scene.open_screen(&screen, with) {
+            self.say(LOG_UI, &reason);
+        }
+    }
+
     /// Shows a game that was just started or loaded: the screens that
     /// were open give way to the play screen, and the scene is given a
-    /// view of the world to draw.
+    /// view of the world to draw, empty until what the party remembers
+    /// and sees is put in it. Nothing of a game shown before is left to
+    /// play.
     fn show_game(&mut self) {
+        self.scene.skip_playback();
         let Some(play) = self.scene.role(ROLE_PLAY).map(str::to_owned) else {
             self.end_game();
             let reason = format!(
@@ -544,8 +662,35 @@ impl Game {
                 .iter()
                 .any(|screen| screen.id() == play)
         {
+            self.save_on_leaving();
             self.end_game();
         }
+    }
+
+    /// A game whose saving policy is `single` is saved as it is left
+    /// (13 §9.2), under the character's name: its one save.
+    fn save_on_leaving(&mut self) {
+        let said = {
+            let mut shared = self.shared.borrow_mut();
+            let shared = &mut *shared;
+            let dir = shared.saves_dir();
+            let Some(session) = shared.session.as_mut() else {
+                return;
+            };
+            if session.saving != crate::app::POLICY_SINGLE {
+                return;
+            }
+            let name = session.default_save_name();
+            let meta = session.save_meta();
+            match shared
+                .saves
+                .save(dir.as_deref(), &mut session.sim, &meta, &name)
+            {
+                Ok(_) => format!("Saved as “{name}” on leaving."),
+                Err(reason) => format!("The game was not saved on leaving: {reason}."),
+            }
+        };
+        self.say(LOG_APP, &said);
     }
 
     /// Advances the simulation toward the player's next decision and
@@ -565,8 +710,19 @@ impl Game {
             // What the commands of this pass delivered comes first.
             let mut batch = session.sim.drain_events();
             let began = session.sim.now();
-            while session.waits_on_simulation() {
-                let answer = session.sim.advance(AdvanceLimit::Work(SIM_WORK));
+            // What is due now runs even while a decision waits: the
+            // simulation runs it before it asks (03 §5.2).
+            let mut due_now = session.due_now();
+            while due_now || session.waits_on_simulation() {
+                // Only what is due now, unless the character waits on
+                // the simulation: nothing else moves time.
+                let limit = if session.waits_on_simulation() {
+                    AdvanceLimit::Work(SIM_WORK)
+                } else {
+                    AdvanceLimit::Until(session.sim.now())
+                };
+                due_now = false;
+                let answer = session.sim.advance(limit);
                 batch.extend(session.sim.drain_events());
                 match answer {
                     // The character is asked, or nothing is left to
@@ -574,23 +730,24 @@ impl Game {
                     Advance::NeedInput(_) | Advance::Reached(_) => break,
                     Advance::Yielded => {}
                     Advance::Request(clash_sim::AppRequest::Checkpoint { name }) => {
-                        let meta = SaveMeta {
-                            start: session.start.id.clone(),
-                            name: session.name.clone(),
-                        };
                         let dir = shared
                             .data_dir
                             .as_ref()
                             .map(|dir| dir.join(crate::saves::SAVES_DIR));
-                        if let Err(reason) =
+                        let saved = if session.saving == crate::app::POLICY_NONE {
+                            Err("this game is not saved: its saving policy is `none`".to_owned())
+                        } else {
+                            let meta = session.save_meta();
                             shared
                                 .saves
                                 .save(dir.as_deref(), &mut session.sim, &meta, &name)
-                        {
-                            lines.push((
+                        };
+                        match saved {
+                            Ok(_) => lines.push((LOG_APP, format!("Checkpoint “{name}” saved."))),
+                            Err(reason) => lines.push((
                                 LOG_APP,
-                                format!("The checkpoint `{name}` was not saved: {reason}."),
-                            ));
+                                format!("The checkpoint “{name}” was not saved: {reason}."),
+                            )),
                         }
                     }
                     Advance::Request(_) => lines.push((
@@ -611,9 +768,13 @@ impl Game {
             // answers playback with.
             if session.stale_view {
                 session.stale_view = false;
-                if let Err(reason) = perception_shim::look(session, look) {
-                    lines.push((LOG_APP, reason));
-                }
+                perception::look(
+                    &mut session.sim,
+                    session.player,
+                    look,
+                    self.scene.theme(),
+                    &mut session.percepts,
+                );
             }
             batch
         };
@@ -634,13 +795,15 @@ impl Game {
             .is_some_and(|value| *value == Value::Bool(true))
     }
 
-    /// Gives the scene's view of the world what the character perceives
-    /// now that no event said, once playback has caught up, and in a
-    /// debug build checks the picture against a fresh one (12 §5). With
-    /// the omniscient view on, fills it from truth instead.
+    /// Gives the scene's view of the world what the party perceives now
+    /// that no event said, once playback has caught up, and in a debug
+    /// build checks the picture against a fresh one (12 §5). With the
+    /// omniscient view on, fills it from truth instead, and has the
+    /// simulation call every event seen (`set_omniscient`).
     fn feed_view(&mut self) {
         let omniscient = self.omniscient();
         let look = self.player_look();
+        let theme = self.scene.theme().clone();
         let mut problem = None;
         let fresh = {
             let mut shared = self.shared.borrow_mut();
@@ -651,21 +814,35 @@ impl Game {
                 return;
             };
             if omniscient {
-                if session.omniscient && !session.percepts.unshown {
+                if !session.omniscient {
+                    // Nothing seen before is mixed with truth.
+                    view.model_mut().clear();
+                    session.omniscient = true;
+                    clash_sim::perception::set_omniscient(&mut session.sim, true);
+                } else if !session.percepts.unshown {
                     return;
                 }
                 session.percepts.unshown = false;
-                problem = perception_shim::feed_omniscient(session, view, look).err();
+                problem =
+                    perception::feed_omniscient(&session.sim, session.player, look, &theme, view)
+                        .err();
                 None
             } else {
                 if session.omniscient {
-                    perception_shim::leave_omniscient(session, view);
+                    // Back to the party's own eyes: nothing learnt from
+                    // truth is kept, and the picture is built again from
+                    // what the party remembers and sees.
+                    session.omniscient = false;
+                    clash_sim::perception::set_omniscient(&mut session.sim, false);
+                    session.percepts.rebuild = true;
+                    session.percepts.unshown = true;
                 }
                 if !session.percepts.unshown {
                     return;
                 }
-                perception_shim::show(view, &mut session.percepts);
-                cfg!(debug_assertions).then(|| perception_shim::fresh(&session.percepts))
+                perception::show(&session.sim, session.player, view, &mut session.percepts);
+                cfg!(debug_assertions)
+                    .then(|| perception::fresh(&session.sim, session.player, &session.percepts))
             }
         };
         if let Some(reason) = problem {

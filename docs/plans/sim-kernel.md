@@ -612,6 +612,10 @@ script `scenarios/rules/timer_survives_save.scn` runs in the four modes.
 Rules carried by definitions start no `every` until a definition type of
 the simulation carries `rules`. No benchmark: the budget "save with 50
 dirty tracts" (02 §25) is measured by W23.
+The game binary saves and loads through it (12 §3.6, decision
+D-703): the pause menu's Save, the title's Continue and Load, warnings
+for a save made with other mods, the saving policy a start names;
+`crates/clash-app/tests/saving.rs`.
 
 ### K8 — World verbs
 

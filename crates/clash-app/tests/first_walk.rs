@@ -148,12 +148,12 @@ fn title_to_town_through_a_door_to_a_wall() {
     let (seen_first, remembered_first) = known_round(&run, begin);
     assert!(remembered_first.is_empty(), "nothing is remembered yet");
     // What is shown is what the field of view holds, and no more.
-    let fov_cells = run
+    let view_cells = run
         .game()
-        .with_session(|session| session.percepts.fov.len())
+        .with_session(|session| clash_sim::perception::party::party_view(&session.sim).len())
         .unwrap();
     assert!(
-        seen_first.len() <= fov_cells,
+        seen_first.len() <= view_cells,
         "only cells in view are known"
     );
     assert!(seen_first.contains(&begin.cell));
@@ -218,14 +218,14 @@ fn a_game_is_left_from_the_pause_menu() {
     let mut run = start("pause");
     press(&mut run, &["enter", "tab", "tab", "enter"]);
     assert!(run.game().playing());
-    // Esc pauses. Nothing can be saved in this binary, so the menu
-    // offers neither Save nor Load; the last button leaves, after asking.
+    // Esc pauses: Resume, Save (no save is there yet, so no Load),
+    // Options, and the last button leaves, after asking.
     press(&mut run, &["escape"]);
     assert_eq!(
         run.game().scene().top().map(|screen| screen.id()),
         Some("ui:pause")
     );
-    press(&mut run, &["down", "down", "enter", "enter"]);
+    press(&mut run, &["down", "down", "down", "enter", "enter"]);
     assert!(!run.game().playing(), "the game is over");
     assert_eq!(
         run.game().scene().top().map(|screen| screen.id()),
@@ -237,8 +237,24 @@ fn a_game_is_left_from_the_pause_menu() {
 }
 
 #[test]
-fn a_shut_door_stops_the_character() {
-    let mut run = start("shut");
+fn a_shut_door_stops_the_character_who_will_not_open_doors() {
+    // The preference `bump` at `never`: walking into a door is only a
+    // step, which movement refuses. (Walking into it opens it otherwise:
+    // `tests/interacting.rs`.)
+    let data = data_dir("shut");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(
+        data.join("preferences.json"),
+        r#"{ "preferences": { "ui:bump": "never" }, "bindings": [] }"#,
+    )
+    .unwrap();
+    let options = Options {
+        mods: Some(mods_dir()),
+        data: Some(data.clone()),
+        ..Options::default()
+    };
+    let mut run =
+        Headless::new(clash_app::boot(&options).unwrap_or_else(|problem| panic!("{problem}")));
     // The second start: the lane, whose doors are shut.
     press(&mut run, &["enter", "tab", "tab", "down", "enter"]);
     assert!(run.game().playing());
@@ -253,4 +269,5 @@ fn a_shut_door_stops_the_character() {
     press(&mut run, &["j"]);
     assert_eq!(last_log(&run), "The way is closed.");
     assert_eq!(player(&run), (at_door, then));
+    let _ = std::fs::remove_dir_all(&data);
 }

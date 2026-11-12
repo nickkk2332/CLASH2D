@@ -1,15 +1,17 @@
 {
   "id": "default",
   "name": "CLASH2D",
-  "mods": ["core", "ui"],
+  "mods": ["core", "ui", "core_ui"],
   "boot_screen": "ui:title",
   "screens": {
     "play": "ui:play",
+    "creation": "ui:create",
     "decision.free": "ui:play",
     "decision.reaction": "ui:reaction",
     "decision.choice": "ui:choice",
     "confirm": "ui:confirm",
     "error": "ui:error",
+    "notice": "ui:notice",
     "picker.list": "ui:pick_list",
     "picker.entity": "ui:pick_entity",
     "picker.cell": "ui:pick_cell",

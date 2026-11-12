@@ -734,6 +734,9 @@ As built (decision D-544), in `clash_sim::action::plan`:
   },
   "requires": "dist(self, $target) <= 1.5",
   "tempo": "self.attr.quickness",
+  "attacks": {
+    "fist": { "with": { "part": "hand", "surface": "fist" }, "energy": 120, "push": 0.1 }
+  },
   "phases": [
     { "id": "windup", "time": "300 ms", "cancel": true,
       "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
@@ -744,8 +747,9 @@ As built (decision D-544), in `clash_sim::action::plan`:
 }
 ```
 
-The `strike` verb belongs to document 07. Here it stands for "whatever this
-action does".
+The `attacks` block and the `strike` effect belong to document 07 (§3.1,
+§3.4): `strike` resolves the action's one attack against `$target`, and
+leaves whether it landed in `$landed`.
 
 | Field | Meaning |
 |-------|---------|

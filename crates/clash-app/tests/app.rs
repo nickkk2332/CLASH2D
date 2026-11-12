@@ -166,7 +166,9 @@ fn preferences_and_bindings_are_kept_between_runs() {
     assert_eq!(top(&run).as_deref(), Some("ui:options"));
     press(&mut run, &["right"]);
     assert_eq!(theme(&run), Some(Value::Str("ui:night".to_owned())));
-    press(&mut run, &["tab", "tab", "tab", "tab"]);
+    // Past the playback speed, the cutscenes, the `ui` mod's own preference
+    // of walking into doors and the context.
+    press(&mut run, &["tab", "tab", "tab", "tab", "tab"]);
     assert!(run.type_text("w"));
     press(&mut run, &["tab"]);
     assert!(run.type_text("north"));
@@ -196,22 +198,37 @@ fn preferences_and_bindings_are_kept_between_runs() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// How many cells round a place the view model knows on its storey.
-fn known_count(run: &Headless, at: Location) -> usize {
+/// The cells round a place the view model knows on its storey, each
+/// with whether it is seen now.
+fn known_cells(run: &Headless, at: Location) -> Vec<(CellPos, bool)> {
     let model = run
         .game()
         .scene()
         .world()
         .expect("a world is shown")
         .model();
-    let mut known = 0;
+    let mut known = Vec::new();
     for y in at.cell.y - 40..=at.cell.y + 40 {
         for x in at.cell.x - 40..=at.cell.x + 40 {
             let cell = CellPos::new(x, y, at.cell.z);
-            known += usize::from(model.cell(Location::new(at.grid, cell)).is_some());
+            if let Some(seen) = model.cell(Location::new(at.grid, cell)) {
+                known.push((cell, seen.seen()));
+            }
         }
     }
     known
+}
+
+/// How many cells round a place the view model knows on its storey.
+fn known_count(run: &Headless, at: Location) -> usize {
+    known_cells(run, at).len()
+}
+
+/// Whether the simulation calls every event seen.
+fn sim_omniscient(run: &Headless) -> bool {
+    run.game()
+        .with_session(|session| clash_sim::perception::party::is_omniscient(&session.sim))
+        .unwrap()
 }
 
 #[test]
@@ -222,7 +239,12 @@ fn the_development_profile_can_see_everything() {
     // Into the house: the street is now remembered.
     press(&mut run, &["k", "k", "k", "k"]);
     let at = player(&run);
-    let believed = known_count(&run, at);
+    let before = known_cells(&run, at);
+    let believed = before.len();
+    assert!(
+        before.iter().any(|(_, seen)| !seen),
+        "the street behind the wall is remembered"
+    );
 
     // F12 shows what is really there: more than the character knows.
     // It is not kept for the next run.
@@ -240,31 +262,19 @@ fn the_development_profile_can_see_everything() {
         truth > believed,
         "{truth} cells from truth, {believed} believed"
     );
+    // The simulation calls every event seen while it is on.
+    assert!(sim_omniscient(&run));
 
     // And again goes back to the character's eyes, with nothing learnt
-    // from truth kept as memory: the street behind the wall is gone.
+    // from truth kept: the picture is what the character remembers and
+    // sees, as it was before.
     press(&mut run, &["f12"]);
     assert_eq!(
         run.game().scene().pref("ui:omniscient"),
         Some(&Value::Bool(false))
     );
-    let seen_again = known_count(&run, at);
-    assert!(
-        seen_again < believed,
-        "{seen_again} cells after, {believed} before"
-    );
-    let model = run.game().scene().world().unwrap().model();
-    let mut remembered = 0;
-    for y in at.cell.y - 40..=at.cell.y + 40 {
-        for x in at.cell.x - 40..=at.cell.x + 40 {
-            let cell = Location::new(at.grid, CellPos::new(x, y, at.cell.z));
-            remembered += usize::from(model.cell(cell).is_some_and(|known| !known.seen()));
-        }
-    }
-    assert_eq!(
-        remembered, 0,
-        "nothing is remembered from the omniscient view"
-    );
+    assert!(!sim_omniscient(&run));
+    assert_eq!(known_cells(&run, at), before);
     let _ = std::fs::remove_dir_all(&data);
 }
 

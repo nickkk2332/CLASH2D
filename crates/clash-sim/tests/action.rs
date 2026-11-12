@@ -5,9 +5,9 @@
 //!
 //! The fixtures are under `tests/fixtures/action/mods`: `spec` holds the
 //! examples of document 03, `broken` one definition for each mistake.
-//! The names the examples borrow from later documents (`strike`,
-//! `sweep`, `message`, `auto_part`, `perceives`, `attr`, `route_fault`)
-//! are stubbed in the registry made here, and `takedown_result` is a
+//! The names the examples borrow from later documents (`sweep`,
+//! `message`, `auto_part`, `perceives`, `attr`, `route_fault`) are
+//! stubbed in the registry made here; `strike` is the effect of 07 §3.4, and `takedown_result` is a
 //! rule of the `spec` mod that does nothing.
 
 use std::collections::BTreeSet;
@@ -83,10 +83,6 @@ fn registry() -> Registry {
             .expect("the functions have distinct names");
     }
     let verbs = [
-        VerbSpec::new("strike")
-            .arg("target", subject(entity), "Who is struck.")
-            .optional_arg("part", subject(part), "Where.")
-            .doc("Stands for whatever an action does."),
         VerbSpec::new("sweep")
             .arg("who", subject(entity), "Who moves.")
             .arg("to", subject(loc).nullable(), "Where to.")
@@ -361,7 +357,7 @@ fn a_punch_is_phases_by_index_and_channels_as_a_set() {
     assert_eq!(&*compiled.effects()[0].path, "phases.impact.do[0]");
     assert!(matches!(
         &compiled.effects()[0].kind,
-        EffectKind::Verb { args, .. } if args.iter().all(Option::is_some)
+        EffectKind::Strike(strike) if strike.target.is_some() && strike.part.is_some()
     ));
     assert_eq!(phases[1].on_enter.subject_names().len(), 1);
     assert_eq!(&*phases[1].on_enter.subject_names()[0], "self");
@@ -404,6 +400,11 @@ fn parameters_take_slots_in_the_order_the_scope_uses() {
         [
             ("target", &entity, LocalSource::Param(0)),
             ("part", &part, LocalSource::Param(1)),
+            // What `strike` leaves, given to an action with attacks
+            // (07 §3.4).
+            ("landed", &Type::Bool, LocalSource::Var(0)),
+            ("absorbed", &Type::Real, LocalSource::Var(1)),
+            ("passed", &Type::Real, LocalSource::Var(2)),
         ]
     );
     assert_eq!(punch.local_slot("part"), Some(1));

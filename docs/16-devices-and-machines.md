@@ -212,6 +212,7 @@ of it at once: what a device's rule calls.
 | `entity.interaction_fault(target: any, interaction: id<interaction>)` | `string?`: why not, or null |
 | `entity.interaction_time(interaction: id<interaction>)` | `real?`: seconds |
 | `entity.has_item(def: id<item>)` | `bool`: it holds, wears or carries one at any depth |
+| `entity.offers_near` | `list<map<any>>`: what the entity, as it believes, could do within a step (`offers_near`), for a menu: each row has `target`, `interaction` (its id), `id` (its qualified id), `name`, `default`, `available`, `why` (the refusal's sentence, or empty) and `where` (`here`, `held`, a compass direction such as `north-east`, `up` or `down`). The `ui` mod's `interact` screen lists it (12 §3.7; decision D-702) |
 | `element.interactions` | `list<string>`: what its definition lists |
 | `element.device`, `entity.element`, `entity.is_device` | Section 4.3 |
 
@@ -224,9 +225,10 @@ Reasons: `interaction.unknown`, `interaction.not_offered`,
 
 Not built yet: the channels of `uses` are claimed only by what the
 action that does it states; `tools`; `interactions` on templates; true
-networks; the query `interactions`, which leaves `interactions_for`,
-`bump_default` and `offers_near` reachable only from Rust (a screen
-reaches them through its host).
+networks; the query `interactions`: what a screen lists is the property
+`offers_near` of the character itself, and `interactions_for` and
+`bump_default` stay reachable only from Rust, the application answering
+a bump with the latter (12 §3.7).
 
 ### 3.6 Trade
 
@@ -1294,10 +1296,11 @@ types `interaction` and `device` (`name`, `holds`, `tags`,
 `complete_interaction`, `promote`, `put_inside` and `set_state`; the
 properties `element.device`, `element.interactions`, `entity.element`,
 `entity.is_device`, `entity.can_interact`, `entity.interaction_fault`,
-`entity.interaction_time` and `entity.has_item`. Reachable only from
+`entity.interaction_time`, `entity.has_item` and `entity.offers_near`
+(what `offers_near` gives, for a menu). Reachable only from
 Rust, each a gap until queries are built (05 §11):
 `interaction::interactions_for`, `default_for`, `bump_default`,
-`offers_near`, `reaches`, and `device::device_at`, `promote`, `settle`
+`reaches`, and `device::device_at`, `promote`, `settle`
 and `unbind`.
 
 ## 15. Invariants

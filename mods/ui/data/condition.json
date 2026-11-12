@@ -1,0 +1,27 @@
+[
+  { "//": "The active character's own condition: its body as a tree of parts, each with how whole it is, its state and its wounds; the wounds one by one; and its reserves and attributes, which are content and are put into the slots `ui:condition.pools` and `ui:condition.attributes` by the mods that define them, as `ui:play.bars` is filled. All of it reads the character's own properties (`view.parts`, `view.wounds` and what they yield). Opened in play by the control `condition` (c).",
+    "type": "screen", "id": "condition",
+    "title": "Condition",
+    "min_size": [60, 16],
+    "layout": { "frame": "Condition", "rows": [
+      { "if": "is_null(view)", "text": "<dim>Nobody is yours to look at.</>" },
+      { "if": "not is_null(view)", "text": "<title>{cap(name(view))}</>" },
+      { "fill": 1, "cols": [
+        { "fill": 1, "frame": "Body",
+          "tree": { "id": "body", "open": true,
+                    "rows": "if len(view.parts ?? []) == 0 or not is_null(view.parts[0].parent) then view.parts else [view.parts[0]]",
+                    "children": "it.attached + it.inside",
+                    "item": "{it.name}  {round(it.condition * 100)}%  <dim>{it.state}{if len(it.wounds) == 0 then '' else if len(it.wounds) == 1 then ', 1 wound' else ', ' + str(len(it.wounds)) + ' wounds'}</>",
+                    "empty": "No body.",
+                    "tip": "Right opens a part, Left closes it." } },
+        { "fill": 1, "rows": [
+          { "frame": "Reserves", "fit": true, "rows": [ { "slot": "condition.pools" } ] },
+          { "frame": "Attributes", "fit": true, "rows": [ { "slot": "condition.attributes" } ] },
+          { "frame": "Wounds", "fill": 1,
+            "list": { "id": "wounds", "rows": "view.wounds",
+                      "item": "{it.part.name}: {it.kind}, {it.state}{if it.stump then ', a stump' else ', ' + str(it.depth) + ' deep'}",
+                      "empty": "Unhurt." } },
+          { "slot": "condition.extra" } ] } ] },
+      { "height": 1, "tooltip": { "value": "Tab moves between the body and the wounds. Esc: back." } } ] },
+    "keys": { "back": [ { "close": {} } ] } }
+]

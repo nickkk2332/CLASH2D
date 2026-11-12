@@ -153,6 +153,44 @@ pub struct Raise<'a> {
     pub by: RunView<'a>,
 }
 
+/// A `strike` effect being run (07 §3.4): the values of its arguments,
+/// where it is written and the locals of the list it is written in.
+#[derive(Clone, Debug)]
+pub struct StrikeCall<'a> {
+    /// The id of the attack among those of the action the list belongs
+    /// to; `None` for its only one.
+    pub attack: Option<&'a str>,
+    /// `target`: whom it strikes, or null.
+    pub target: Value,
+    /// `at`: where it strikes instead, or null.
+    pub at: Value,
+    /// `part`: the part it is aimed at, or null.
+    pub part: Value,
+    /// `effort`, or null for full effort.
+    pub effort: Value,
+    /// `sure`, or null for false.
+    pub sure: Value,
+    /// The origin number of the effect: from it
+    /// [`ExprDefs::origin`](clash_data::ExprDefs::origin) knows the
+    /// definition it is written in, whose attack it resolves.
+    pub origin: u64,
+    /// The locals of the list, by slot: the action's own first.
+    pub locals: &'a [Value],
+    /// What is running.
+    pub by: RunView<'a>,
+}
+
+/// What came of a strike, for the locals it leaves (07 §3.4).
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct StrikeOutcome {
+    /// Whether it landed on anyone or anything: `$landed`.
+    pub landed: bool,
+    /// The joules what it struck took: `$absorbed`.
+    pub absorbed: clash_core::Real,
+    /// The joules that went on beyond what it struck: `$passed`.
+    pub passed: clash_core::Real,
+}
+
 /// A line a rule's `message` puts in someone's log (05 §10.6).
 #[derive(Clone, Copy, Debug)]
 pub struct Message<'a> {
@@ -384,6 +422,17 @@ pub trait RuleHost: clash_expr::Host {
     /// is attached to it or detached from it (05 §9.4).
     fn recurring(&mut self, owner: Handle, rule: EocId, on: bool) {
         let _ = (owner, rule, on);
+    }
+
+    /// Carries out a `strike` (07 §3.4). A host that knows no attacks
+    /// declines, which is what this does.
+    fn strike(&mut self, call: &StrikeCall<'_>) -> Result<StrikeOutcome, Reason> {
+        let _ = call;
+        Err(Reason::new(
+            super::reason::VERB_UNBOUND,
+            "nothing in this host carries out `strike`",
+        )
+        .with("verb", "strike"))
     }
 }
 

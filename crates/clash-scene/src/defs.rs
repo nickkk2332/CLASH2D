@@ -811,6 +811,16 @@ impl UiDefs {
         Some((id, effects))
     }
 
+    /// What the control a key's name means is called where the player
+    /// binds keys, and what it does: its `name` (or else the name the
+    /// key was given) and its `doc`. `None` if no control has the name.
+    pub fn control_words(&self, name: &str, namespace: &str) -> Option<(String, String)> {
+        let id = self.resolve::<ControlDef>(name, namespace)?;
+        let control = self.get::<ControlDef>(&id)?;
+        let label = control.name.clone().unwrap_or_else(|| name.to_owned());
+        Some((label, control.doc.clone()))
+    }
+
     /// The keymap with this qualified id.
     pub fn keymap(&self, id: &str) -> Result<&KeymapDef, Diagnostics> {
         let defs = &*self.defs;

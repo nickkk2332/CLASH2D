@@ -127,6 +127,9 @@ pub struct Sim {
     /// Not state: the tables of abilities and the expressions kept
     /// current (05 §7.5).
     pub(crate) ability_rt: crate::ability::Runtime,
+    /// Not state: how many strikes are being resolved inside one another
+    /// now ([`combat`](crate::combat)). Zero between any two events.
+    pub(crate) strike_depth: u8,
 }
 
 /// Why saved state could not be loaded.
@@ -302,6 +305,7 @@ impl Sim {
             perception_defs,
             abilities: crate::ability::AbilityIndex::default(),
             ability_rt,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         sim
@@ -835,6 +839,7 @@ impl Sim {
             perception_defs,
             abilities: saved.abilities,
             ability_rt,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         Ok(sim)

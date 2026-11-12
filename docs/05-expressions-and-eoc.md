@@ -73,6 +73,11 @@ positions (04 §8), not surprises during play.
 
 Variables are stored as `Value`, which can hold any of these. Types are
 checked at load wherever they can be known and at run time otherwise.
+Of a value of type `any`, `x.name` reads the entry `name` of a map, and
+`x.name(a, b)` reads that entry and then its entry for each argument in
+turn, both checked when they run: so a screen loaded without the
+simulation's registry, where a character is `any`, still loads, and
+reads what a host that gives maps gives (decision D-667).
 
 There is no duration type. Time in expressions is a `real` number of
 seconds; the unit literals `300ms` and `2h` are numbers.
@@ -746,9 +751,11 @@ field is always allowed; it is reading from them that is checked.
 A context may bind more than one thing as own, and a local as well as a
 subject: an ordinary screen binds the party, a list, and a parameter
 that is one of its members (12 §10.4). An element of an own list is
-own. The compiler can be asked whether a whole expression's value is
-own, so that whoever binds that value by another name elsewhere, as a
-screen binds each row of a list to `it`, may bind it as own there.
+own; so is a list written out of own things, `[self.parts[0]]`, and an
+`if` both of whose branches are (decision D-667). The compiler can be
+asked whether a whole expression's value is own, so that whoever binds
+that value by another name elsewhere, as a screen binds each row of a
+list to `it`, may bind it as own there.
 
 Who declares the context: the definition type that owns the field, in
 Rust, once for each field (04 §7.3). It lists the subjects with their
@@ -1547,6 +1554,13 @@ one place.
 
 A verb's implementation calls the same engine functions as native code and
 is bound by the same rules. There is no back door.
+
+One effect is read by the rule compiler and acts on the action whose list
+runs it, so only an action's lists may hold it (decision D-641):
+
+| Effect | Form | Does |
+|--------|------|------|
+| `strike` | `{ "strike": { "attack": id, "target": entity, "part": part, "effort": real, "sure": bool } }`, or `"at": cell` in place of `target` | Resolves one of the action's `attacks` (07 §3.4) and leaves `$landed`, `$absorbed` and `$passed` in the action's locals. Written in a rule, or in an attack's own `on_land`, `on_miss` or `on_stopped`, it is a load error. |
 
 ## 11. Queries
 

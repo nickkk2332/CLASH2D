@@ -596,7 +596,7 @@ mod tests {
             assert!(output.out.starts_with("ok: "), "{target}:\n{}", output.out);
         }
         let output = run_engine(&["lint", "../../mods"]);
-        assert!(output.out.contains("(core, ui)"), "{}", output.out);
+        assert!(output.out.contains("(core, ui, core_ui)"), "{}", output.out);
         let output = run_engine(&["lint", "../../mods/ui"]);
         assert_eq!(output.code, EXIT_OK, "{}{}", output.out, output.err);
         assert!(output.out.starts_with("ok: "), "{}", output.out);
