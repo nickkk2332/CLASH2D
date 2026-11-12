@@ -1,0 +1,19 @@
+# A rule on an event: fire appearing in a cell rings the fire alarms
+# near it (`core:fire_alarm`, a rule on `field_appeared` that asks a
+# query), each raises `core:fire_alarm_rang`, and an `after` silences
+# it two minutes after the last fire it noticed (05 §8, §10.4, §11).
+use default seed=4
+gen core:testland size=1
+spawn device at @c:14,10,0 tag=fire_alarm as=alarm
+spawn device at @c:28,28,0 tag=fire_alarm as=far
+set @c:10,10,0 floor core:boards
+field @c:10,10,0 core:fire 200
+advance 1s
+assert "@alarm.var('core:ringing')"
+assert "not @far.var('core:ringing')"
+expect event core:fire_alarm_rang
+assert "@alarm.timer('ringing') > 0"
+advance 5min
+assert "not @alarm.var('core:ringing')"
+assert "@alarm.timer('ringing') == null"
+expect hash e5447796e8803ea3fbd88490bf377fd0

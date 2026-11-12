@@ -801,6 +801,44 @@ fn sites(sim: &Sim, args: &[Value], out: &mut Vec<Value>) -> Result<(), Fault> {
     Ok(())
 }
 
+// ---- what a cell holds ------------------------------------------------------
+
+/// What `loc.field(kind)` reads: the level of a field in a cell.
+fn field_level(sim: &Sim, subject: Subject, args: &[Value]) -> Value {
+    let (Subject::Loc(loc) | Subject::Element(loc, _)) = subject else {
+        return Value::Null;
+    };
+    let Some(name) = args.first().and_then(Value::as_str) else {
+        return Value::Null;
+    };
+    let fields = sim.cosmos.defs().fields();
+    let Some(field) = fields.lookup(name).or_else(|| fields.resolve(name, None)) else {
+        return Value::Null;
+    };
+    match sim.cosmos.fields_at(loc) {
+        Ok(found) => Value::Int(
+            found
+                .into_iter()
+                .find(|(have, _)| *have == field)
+                .map_or(0, |(_, level)| i64::from(level)),
+        ),
+        Err(_) => Value::Null,
+    }
+}
+
+/// The properties that let a query's `where` test what a cell holds.
+pub(crate) fn properties() -> Vec<crate::registry::PropertyDef> {
+    vec![crate::registry::PropertyDef::new(
+        "loc",
+        "field",
+        "int?",
+        "The level of a field in the cell, 0 to 255 (02 §16): 0 where there is none of it, null for a cell that is not loaded or a field no definition names. `cells` queries test it in `where`: `it.field('core:fire') > 0`.",
+        field_level,
+    )
+    .arg("kind", "string", "The field's qualified id.")
+    .changed_by(&["field_appeared", "field_vanished"])]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

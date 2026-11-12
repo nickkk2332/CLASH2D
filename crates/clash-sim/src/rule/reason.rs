@@ -43,9 +43,9 @@ pub const NOT_ATTACHABLE: &str = "rule.not_attachable";
 pub const NOT_A_HOOK: &str = "rule.not_a_hook";
 /// A random choice was asked for and there is no stream to draw from.
 pub const NO_RANDOM: &str = "rule.no_random";
-/// A timer effect ran; timers are not built yet.
+/// A timer effect ran against a host that keeps no timers.
 pub const TIMERS_UNAVAILABLE: &str = "rule.timers_unavailable";
-/// A query was iterated; queries are not built yet.
+/// `for_each` was given a query that did not compile.
 pub const QUERIES_UNAVAILABLE: &str = "rule.queries_unavailable";
 
 /// A verb ran that nothing in the engine carries out.
@@ -135,11 +135,11 @@ pub const RULE_REASONS: &[ReasonInfo] = &[
     },
     ReasonInfo {
         code: TIMERS_UNAVAILABLE,
-        doc: "`after`, `every` or `cancel_timer` ran. Timers are read and kept and not yet built: nothing was scheduled. Values: `rule`, `path`.",
+        doc: "`after` or `every` ran against a host that keeps no timers (the rule runtime's test host). Nothing was scheduled. Values: `rule`, `path`.",
     },
     ReasonInfo {
         code: QUERIES_UNAVAILABLE,
-        doc: "`for_each` was given a query. Queries are read and kept and not yet built: the body did not run. Values: `rule`, `path`.",
+        doc: "`for_each` was given a query that did not compile: the body did not run. Values: `rule`, `path`.",
     },
     ReasonInfo {
         code: CHOICE_LOST,

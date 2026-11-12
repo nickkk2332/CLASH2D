@@ -704,6 +704,101 @@ impl Sim {
         rules.call(&mut self.rule_host(cause), rule, subjects, args)
     }
 
+    /// Carries out one of the engine's verbs outside any rule (05 §10.7):
+    /// for a console. `args` are its arguments by name, null for one
+    /// left out; `subjects` what is bound where it is called (`self`).
+    /// What comes back is what the verb gives. Refused for a verb the
+    /// engine does not carry out, an argument it does not take, and
+    /// whatever the verb itself refuses.
+    pub fn call_verb(
+        &mut self,
+        name: &str,
+        args: &[(&str, Value)],
+        subjects: &[(&str, Value)],
+        cause: Cause,
+    ) -> Result<Value, Reason> {
+        let registry = Arc::clone(self.defs.expr_registry());
+        let unbound = || {
+            Reason::new(
+                reason::VERB_UNBOUND,
+                format!("nothing in the engine carries out `{name}`"),
+            )
+            .with("verb", name)
+        };
+        let id = registry.verb_id(name).ok_or_else(unbound)?;
+        let spec = &registry.verb(id).ok_or_else(unbound)?.spec;
+        let run = self.rt.verb(id).ok_or_else(unbound)?;
+        if let Some((unknown, _)) = args
+            .iter()
+            .find(|(given, _)| !spec.args.iter().any(|arg| arg.name == *given))
+        {
+            return Err(Reason::new(
+                crate::kernel_verbs::BAD_ARGUMENT,
+                format!("`{name}` takes no argument `{unknown}`"),
+            )
+            .with("verb", name));
+        }
+        let values: Vec<Value> = spec
+            .args
+            .iter()
+            .map(|arg| {
+                args.iter()
+                    .find(|(given, _)| *given == arg.name)
+                    .map_or(Value::Null, |(_, value)| value.clone())
+            })
+            .collect();
+        let names: Vec<Arc<str>> = subjects.iter().map(|(name, _)| Arc::from(*name)).collect();
+        let bound: Vec<Value> = subjects.iter().map(|(_, value)| value.clone()).collect();
+        let call = VerbCall {
+            verb: id,
+            args: &values,
+            by: super::RunView::new(&names, &bound),
+        };
+        run(self, &call, cause)
+    }
+
+    /// Compiles a list of effects written outside any mod, as JSON: what
+    /// a console's `do` runs. The list may name the `subjects` and the
+    /// locals given, with their types, in slot order; bare names resolve
+    /// in the engine's namespace only. Every mistake is in the text that
+    /// comes back.
+    pub fn compile_effects(
+        &self,
+        json: &str,
+        subjects: &[(&str, clash_expr::Type)],
+        locals: &[(&str, clash_expr::Type)],
+    ) -> Result<Effects, String> {
+        let mut sources = clash_data::SourceMap::new();
+        let file = sources.add("console", json);
+        let (node, problems) =
+            clash_data::parse_json(file, sources.text(file), &clash_data::Limits::default());
+        let Some(node) = node else {
+            return Err(problems
+                .iter()
+                .map(|problem| problem.message.clone())
+                .collect::<Vec<_>>()
+                .join("; "));
+        };
+        let mut diagnostics = clash_data::Diagnostics::new();
+        let effects: Option<Effects> =
+            clash_data::from_node_at(&node, &sources, &mut diagnostics, None, "do");
+        let mut effects = effects.ok_or_else(|| diagnostics.render())?;
+        let mut scope = clash_data::Scope::new();
+        for (name, ty) in subjects {
+            scope = scope.subject(*name, ty.clone());
+        }
+        for (name, ty) in locals {
+            scope = scope.local(*name, ty.clone());
+        }
+        let label = clash_data::DefLabel::new("console", "console");
+        let found =
+            clash_data::expr::compile_loose(&self.defs, &sources, &label, &mut effects, &scope);
+        if found.error_count() > 0 || !effects.is_compiled() {
+            return Err(found.render());
+        }
+        Ok(effects)
+    }
+
     /// How many faults and run-time warnings rules have raised since
     /// the simulation was set up, counting those thinned out of the
     /// report. Not state.

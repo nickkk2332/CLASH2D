@@ -572,8 +572,12 @@ to a brute-force reference (property tests). A `run` source taken by a
 `let` was built with K5 ("Returning from rules"). Stubbed: the shapes
 `line` and `cone`, the kinds `actions`, `windows` and `parts`; no query
 is answered from belief, so a mind context may write only `list` and
-`defs` until perception registers the others as safe (the seam is
-`QuerySpec::safe` and `QueryCall::observer`). No benchmark.
+`defs`. Perception landed on the build branch while this was built:
+answering `entities` from the observer's tracks (`perception::Beliefs`)
+is the next step, through the seam `QuerySpec::safe` and
+`QueryCall::observer` (D-683), with the filters that read truth of
+others (`tag`, `def`, `has`, `kind`, `plane`) refused in a mind
+context. No benchmark.
 
 ### K7 — Timers, continuations, simulation saves
 
@@ -665,9 +669,9 @@ Beta: the console part is built. The console's host evaluates expressions
 against the simulation with `self` bound (the subject given, else the
 active character), and test scripts assert expressions (`assert`,
 `until`). Effect lists (`do`, `run`, verbs) reach one function of the host,
-`GameHost::run_verb`, which refuses with `console.rules_unbound` until the
-rule runtime is bound to the simulation. Not built: traces, `explain`,
-`profile`; both "Done when" items wait for them.
+`GameHost::run_verb`, which carries them out through the rule runtime
+(D-687); the test scripts under `scenarios/rules/` use it. Not built:
+traces, `explain`, `profile`; both "Done when" items wait for them.
 
 ## Time and actions
 

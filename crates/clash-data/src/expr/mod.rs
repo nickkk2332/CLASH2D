@@ -124,12 +124,45 @@ pub use field::{
     Written,
 };
 pub use query::{CompiledQuery, DEFS_QUERY, IT, LIST_QUERY, QUERY_KEYS, compile_query};
+
 pub use scope::{CompileCx, Origin, Scope, TypeSpec};
 
 pub(crate) use scope::CompileEnv;
 pub(crate) use stage::{StageInput, compile_stage};
 
 use crate::defs::DefTypes;
+
+/// Compiles a field written outside any mod, such as a line typed at
+/// the console, against definitions that have loaded: their registry,
+/// variables and functions. `sources` holds what was typed, and the
+/// diagnostics point into it; `label` names the field in them. Bare
+/// names resolve in the engine's namespace only. The field's origin
+/// numbers are past those of the definitions, so a run-time warning of
+/// it names no definition.
+///
+/// Gives the diagnostics; the field compiled if none is an error.
+pub fn compile_loose<F: Compile + ?Sized>(
+    defs: &crate::Defs,
+    sources: &crate::SourceMap,
+    label: &crate::DefLabel,
+    field: &mut F,
+    scope: &Scope,
+) -> crate::Diagnostics {
+    let mods = crate::merge::ModTable::default();
+    let origins = std::cell::RefCell::new(defs.exprs().origins.clone());
+    let env = CompileEnv {
+        sources,
+        registry: defs.expr_registry(),
+        mods: &mods,
+        functions: defs.exprs().functions(),
+        origins: &origins,
+    };
+    let mut cx = CompileCx::new(&env, label, None);
+    cx.compile(field, scope);
+    let mut diagnostics = crate::Diagnostics::new();
+    diagnostics.extend(cx.into_diagnostics());
+    diagnostics
+}
 
 /// Registers the definition types of this module: `function` and
 /// `variable` (05 §17). The application and the tools call this beside

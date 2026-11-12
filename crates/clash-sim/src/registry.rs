@@ -333,6 +333,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::item::properties());
     properties.extend(crate::movement::properties());
     properties.extend(crate::rule::timer_properties());
+    properties.extend(crate::query::properties());
     properties
 }
 
