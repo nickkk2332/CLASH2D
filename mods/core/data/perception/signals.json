@@ -1,0 +1,15 @@
+[
+  { "//": "Kinds of signal (15 §3.1). Light off a body: it needs a line of sight and is scaled by the light where the body is. Nothing is seen inside a container.",
+    "type": "signal_kind", "id": "sight", "model": "line", "falloff": 1,
+    "uses_light": true, "standing": 1, "contained": 0, "identifies": true,
+    "doc": "Light off a body: needs a line of sight, scaled by the light where the body is." },
+  { "//": "Sound passes walls with loss and is slower than a fast enough character. It leaves a container. Shares held back are by material, then by a tag of the material, then the default.",
+    "type": "signal_kind", "id": "sound", "model": "through", "falloff": 2,
+    "delay": true, "noise": true, "standing": 0, "contained": 1,
+    "block": {
+      "default": 0.3,
+      "materials": { "glass": 0.5 },
+      "tags": { "mineral": 0.8, "earth": 0.9, "metal": 0.7, "organic": 0.5 }
+    },
+    "doc": "Sound: passes obstacles with loss by their materials, falls off with the square of the distance, and arrives after distance over the speed of sound." }
+]

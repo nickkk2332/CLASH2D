@@ -767,6 +767,9 @@ impl DefTypes {
 pub struct DefsView<'a> {
     pub(crate) staged: &'a BTreeMap<&'static str, Box<dyn AnyStaged>>,
     pub(crate) tags: &'a TagTable,
+    /// The registry expressions were compiled against, once they have
+    /// been: in the semantic and cross stages, not in a registry step.
+    pub(crate) exprs: Option<&'a crate::expr::ExprRegistry>,
 }
 
 impl<'a> DefsView<'a> {
@@ -774,6 +777,13 @@ impl<'a> DefsView<'a> {
         self.staged
             .get(T::TYPE)
             .and_then(|staged| staged.as_any().downcast_ref::<Staged<T>>())
+    }
+
+    /// The registry the definitions' expressions were compiled against,
+    /// for a cross check that compiles something of its own. `None`
+    /// while that registry is still being built: in a registry step.
+    pub fn expr_registry(&self) -> Option<&'a crate::expr::ExprRegistry> {
+        self.exprs
     }
 
     /// The definition with a dense id, if it loaded.

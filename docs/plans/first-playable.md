@@ -32,14 +32,14 @@ actions that call `hit`.
 | E11 | Coming and going | L | E9, W8 | todo |
 | E12 | Minimal devices | M | E8 | todo |
 | S1 | Light | M | W18 | beta |
-| S2 | Signals and senses | M | E3 | todo |
-| S3 | Detection | L | S1, S2, E10 | todo |
-| S4 | Percepts | M | S3, K3 | todo |
-| S5 | Beliefs | M | S4, E7 | todo |
+| S2 | Signals and senses | M | E3 | beta |
+| S3 | Detection | L | S1, S2, E10 | beta |
+| S4 | Percepts | M | S3, K3 | beta |
+| S5 | Beliefs | M | S4, E7 | beta |
 | S6 | Personas | M | S5 | todo |
 | S7 | Relations, groups, orders | M | S6, T4 | todo |
 | S8 | Speech | M | S7, T6 | todo |
-| S9 | Party perception | M | S5 | todo |
+| S9 | Party perception | M | S5 | beta |
 | S10 | Coloured light (experimental) | S | S1, U4, P4 | todo |
 | U1 | Scene skeleton, frames, themes | M | K2 | beta |
 | U2 | Terminal frontend | S | U1 | done |
@@ -548,6 +548,18 @@ Done when
 - Scenario `slow_sound`: a sound arrives after distance over speed, and an
   entity on a fast clock gets there first.
 
+Beta: built in `clash_sim::perception` (decisions D-610 to D-613): the
+three types, the three models with blocking by a table on the signal
+kind (D-611), delay with a front that follows a moving observer,
+standing signatures, `emit_signal` as function and verb, facing, and
+sight, hearing and the loud events of the world in `mods/core`. Covered
+by `crates/clash-sim/tests/perception.rs`, `slow_sound` among them, as a
+Rust test (the console has no simulation behind it yet). Stubbed:
+`exposes` is read and does nothing until the stats are wired (so
+`behind_lead` is not built); signatures from templates and traits,
+`signals` on actions and `noise` on movement wait for those packages,
+which call `set_signature` and `emit_signal`; no bundled `field` kind.
+
 ### S3 — Detection
 
 **Spec** 15 §5 · **Size** L
@@ -563,6 +575,15 @@ Done when
 - Scenario `the_locker`: a hidden character is not seen, is heard if it
   makes noise, and the searcher's track ends at the last known position.
 
+Beta (D-614): awareness, sweeps staggered by hash, the triggers of
+15 §5.2 bounded as that decision says, the three events, concealment by
+light, cover, arc, planes, containers and fields; warm observers do not
+sweep. Each "Done when" is a test, `the_locker` as a Rust test; an
+ignored timing test measures 15 §17 (over budget for a crowd). Stubbed:
+promoting a warm observer that receives a strong signal waits for
+attention (09 §9.3); the `search` and `listen` actions call `search`
+when the actions package builds them.
+
 ### S4 — Percepts
 
 **Spec** 15 §6 · **Size** M
@@ -576,6 +597,17 @@ Done when
   investigate a sound it could not see the cause of.
 - A window is noticed only by candidates who perceive its source.
 
+Beta (D-615): `perceived` with what the observer made out, `perceives`
+and `could_perceive` as functions and as a mind's own properties, and
+`notices_source` for whoever builds windows. `heard_not_seen` is a test
+that a window broken out of sight is heard with what a rule needs, and
+that such a rule loads and is not flagged; the rule as 15 §12 writes it
+is kept in `tests/fixtures/perception/heard_not_seen.json` until
+`enqueue_action` exists. Stubbed: watched things and `discrepancy`
+(review addition "Watched things and discrepancies") wait for maps to
+mark things `watched` and for routines; windows call `notices_source`
+when package T5 builds them.
+
 ### S5 — Beliefs
 
 **Spec** 15 §7 · **Size** M
@@ -588,6 +620,15 @@ Done when
 - Belief properties are `null` for the never-perceived.
 - The linter flags a direct read of another entity's location in a rule
   attached to a creature.
+
+Beta (D-616, D-617, D-619): tracks by persona (the entity's own until
+S6), bounded memories and noted things, confidence and salience that
+fade, observed capabilities on tracks (review addition), the properties
+of 15 §7.2 and their companions read of the mind itself, the linter
+check, the `hidden` tag rule, and believed movement rules. Stubbed:
+personas; a capability told of in speech waits for S8; the queries
+`tracks` and `memories`; the linter does not yet check effect
+arguments.
 
 ### S6 — Personas
 
@@ -641,6 +682,12 @@ Build
 Done when
 - An event out of sight and earshot is tagged unperceived.
 - Map memory records what was there when last seen, not what is there now.
+
+Beta (D-618): tags (`Sim::party_perceived`), map memory, frames for the
+view model and a snapshot, the omniscient setting; both "Done when"
+items are tests. Stubbed: moving sources of light are not counted in
+what the party sees; the application and playback are what drain the
+frames and ask for tags.
 
 ### S10 — Coloured light (experimental)
 
