@@ -45,6 +45,9 @@ pub enum WakeDomain {
     Rule,
     /// A stepper that advances things in bulk at lower detail.
     Stepper,
+    /// Perception: a sense's sweep, or a delayed signal arriving
+    /// (15 §5.2, §3.1).
+    Perception,
 }
 
 impl StateHash for WakeDomain {

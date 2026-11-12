@@ -142,6 +142,7 @@ pub use physical::{
 pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::body::Body;
+use crate::perception::{Awareness, Beliefs, MapMemory, Senses, Signature};
 use crate::stats::Stats;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
@@ -486,6 +487,19 @@ components! {
     stats: Stats = "stats";
     /// Parts, wounds and what the body can do. On creatures.
     body: Body = "body";
+    /// The senses it perceives with and which way it faces (15 §4). On
+    /// whatever perceives.
+    senses: Senses = "senses";
+    /// What it gives off standing still, by kind of signal (15 §3.2).
+    signature: Signature = "signature";
+    /// What it is aware of, by target and sense (15 §5.1). On observers.
+    awareness: Awareness = "awareness";
+    /// What it believes: tracks, memories, noted things (15 §7). On
+    /// minds.
+    beliefs: Beliefs = "beliefs";
+    /// What places looked like when last seen (15 §13). On directly
+    /// controlled characters.
+    map_memory: MapMemory = "map_memory";
 }
 
 // A `ComponentKinds` has one bit for each kind.

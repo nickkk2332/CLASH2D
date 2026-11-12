@@ -420,6 +420,48 @@ fn an_entity_answers_for_itself() {
     assert_eq!(probe.get(g, "own_time"), real(6.0));
     assert_eq!(probe.get(entity(ghost), "clock_rate"), Value::Null);
 
+    // Perception's beliefs, of what has never been perceived: tests of
+    // perception read them as they change.
+    let other = probe.value(c);
+    for name in [
+        "believed_loc",
+        "last_seen",
+        "last_seen_at",
+        "confidence",
+        "awareness",
+        "seen_how",
+    ] {
+        assert_eq!(
+            probe.call(g, name, std::slice::from_ref(&other)),
+            Value::Null,
+            "{name}"
+        );
+    }
+    for name in ["knows", "perceives"] {
+        assert_eq!(
+            probe.call(g, name, std::slice::from_ref(&other)),
+            Value::Bool(false),
+            "{name}"
+        );
+    }
+    assert_eq!(probe.get(g, "facing"), Value::Null);
+    assert_eq!(
+        probe.call(g, "remembers", std::slice::from_ref(&other)),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        probe.call(
+            g,
+            "could_perceive",
+            &[other.clone(), Value::from("no_such_kind")]
+        ),
+        Value::Null
+    );
+    assert_eq!(
+        probe.call(g, "knows_element", &[other, Value::from("no_such_layer")]),
+        Value::Null
+    );
+
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
     for property in engine_properties() {

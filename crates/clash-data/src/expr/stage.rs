@@ -155,6 +155,7 @@ pub(crate) fn compile_stage(
         let view = DefsView {
             staged: &*staged,
             tags: input.tags,
+            exprs: None,
         };
         for step in input.types.registry_steps() {
             let mut cx = RegistryCx {

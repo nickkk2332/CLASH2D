@@ -815,6 +815,7 @@ impl<'t> Loader<'t> {
             let view = DefsView {
                 staged: &staged,
                 tags: &tags,
+                exprs: Some(&exprs.registry),
             };
             for one in staged.values() {
                 one.validate(&view, &sources, &mut diagnostics);

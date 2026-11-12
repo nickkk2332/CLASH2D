@@ -144,6 +144,7 @@ impl Default for Handlers {
             by_domain: BTreeMap::new(),
         };
         handlers.set(WakeDomain::World, world_wake);
+        handlers.set(WakeDomain::Perception, crate::perception::on_wake);
         handlers
     }
 }
@@ -329,6 +330,7 @@ impl Sim {
             }
             trace.push(event.name().to_owned());
             self.deliver(&mut event);
+            crate::perception::observe_event(self, &event);
             self.out.push(event);
         }
     }

@@ -329,14 +329,18 @@ impl FunctionDef {
 /// Every property the simulation offers. A package that adds properties
 /// adds its table here.
 pub fn engine_properties() -> Vec<PropertyDef> {
-    crate::props::properties()
+    let mut table = crate::props::properties();
+    table.extend(crate::perception::props::properties());
+    table
 }
 
 /// Every function the simulation offers beyond those the expression
 /// language computes itself. A package that adds functions adds its
 /// table here.
 pub fn engine_functions() -> Vec<FunctionDef> {
-    crate::props::functions()
+    let mut table = crate::props::functions();
+    table.extend(crate::perception::props::functions());
+    table
 }
 
 /// The definition types the simulation's properties name in their
