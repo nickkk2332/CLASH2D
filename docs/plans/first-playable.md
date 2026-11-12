@@ -50,7 +50,7 @@ actions that call `hit`.
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
 | U7 | Input, controls, pickers | M | U6b, T5 | beta |
 | U8 | Slots and theming | S | U6b | done |
-| U9 | Bundled screens | L | U7, U8, U4, U5, E9 | in progress |
+| U9 | Bundled screens | L | U7, U8, U4, U5, E9 | beta |
 | U10 | Cutscenes | M | U5, T6 | todo |
 | U11 | Application | M | U3, U9, P3 | beta |
 | Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
@@ -925,6 +925,32 @@ Done when
   frames along the way.
 - A fixture species with every choice kind is fully usable on the creation
   screen without a new screen.
+
+Beta: character creation (`ui:create`, the role `creation`, and its
+popup `ui:create_choice`) over the creation session through
+`app.creation`, `app.templates` and the service `creation`, every
+choice kind of 06 §10.2 on the one screen; the inventory (`ui:inventory`)
+with what is held, worn and carried and the item verbs as actions
+(`ui:item`); the condition (`ui:condition`) with the body as a tree of
+parts, its wounds, and slots for reserves and attributes, which `core`
+fills; look mode's side panel (`cursor_things`, `cursor_ground`); the
+keys of play (`ui:help`, `app.keys`); the play screen's status column
+with what is held and a line of keys. Every bundled screen is listed
+with its role, parameters and slots in 12 §10.7. Tested against the
+fake host over the real registry and the fake application's real
+creation session, with golden frames (`clash-scene` test `screens`):
+from the title through creation into play, each choice kind, a
+refused selection, each screen, and the way to each from play and
+back. Stubbed: the vital state, a pool's thresholds and the list of an
+entity's pools and attributes, which the simulation does not register
+(D-665); the result's body as a figure and a tree of parts, traits, a
+part browser for `assemble` and a text's suggestions; the application's
+side of `creation` and `app.templates` (clash-app refuses `creation`
+until it implements it); the actions the inventory names, which no mod
+defines yet; an item named by its definition, which waits for the
+reader; abilities, map, journal, case file, codex, save and load
+screens, trade, fitting, make, build, work, device, know-how, the
+summary and the helm. Decisions D-660 to D-669.
 
 ### U10 — Cutscenes
 

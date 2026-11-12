@@ -390,7 +390,10 @@ impl AppReader<'_> {
         };
         let mut by_name: BTreeMap<&str, Vec<String>> = BTreeMap::new();
         for (key, name) in bound {
-            by_name.entry(name.as_str()).or_default().push(key.to_string());
+            by_name
+                .entry(name.as_str())
+                .or_default()
+                .push(key.to_string());
         }
         let mut rows: Vec<(String, &str, String, String)> = by_name
             .into_iter()

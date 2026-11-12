@@ -223,9 +223,8 @@ impl Run {
     fn person(&self) {
         let host = &self.host;
         let subject = |handle: Handle| Value::Subject(handle);
-        let things = |numbers: &[u64]| {
-            Value::list(numbers.iter().map(|n| subject(host.entity(*n))))
-        };
+        let things =
+            |numbers: &[u64]| Value::list(numbers.iter().map(|n| subject(host.entity(*n))));
         let mara = host.entity(thing::MARA);
         host.set_view(subject(mara));
         host.set_party(Value::list([subject(mara)]));
@@ -259,7 +258,11 @@ impl Run {
             host.set(item, "holder", subject(host.entity(holder)));
         }
         let pack = host.entity(thing::PACK);
-        host.set(pack, "capacity_mass", Value::Real(clash_core::Real::of(20.0)));
+        host.set(
+            pack,
+            "capacity_mass",
+            Value::Real(clash_core::Real::of(20.0)),
+        );
         host.set(pack, "carried_mass", Value::Real(clash_core::Real::of(2.0)));
         host.set(host.entity(thing::LOOSE_KNIFE), "name", "a knife");
         host.set(host.entity(thing::STRANGER), "name", "a stranger");
@@ -282,7 +285,11 @@ impl Run {
             let part = self.part(number);
             host.set(part, "name", name);
             host.set(part, "state", state);
-            host.set(part, "condition", Value::Real(clash_core::Real::of(condition)));
+            host.set(
+                part,
+                "condition",
+                Value::Real(clash_core::Real::of(condition)),
+            );
             host.set(
                 part,
                 "parent",
@@ -370,7 +377,11 @@ impl Run {
         // A service that failed opens the screen of the role `error` with
         // the reason, as the application does.
         for outcome in outcomes {
-            if let UiOutcome::Failed { effect: "app", reason } = outcome {
+            if let UiOutcome::Failed {
+                effect: "app",
+                reason,
+            } = outcome
+            {
                 let error = self.scene.role("error").expect("the error role").to_owned();
                 let with = BTreeMap::from([("text".to_owned(), Value::text(reason))]);
                 self.scene.open_screen(&error, with).unwrap();
@@ -387,7 +398,11 @@ impl Run {
             self.host.set(mara, "name", made.name.as_str());
         }
         while self.scene.close().is_some() {}
-        let play = self.scene.role(ROLE_PLAY).expect("the play role").to_owned();
+        let play = self
+            .scene
+            .role(ROLE_PLAY)
+            .expect("the play role")
+            .to_owned();
         self.scene.open_screen(&play, BTreeMap::new()).unwrap();
     }
 
@@ -513,7 +528,10 @@ fn scripted_input_goes_from_the_title_to_a_made_character_in_play() {
     run.press(&["enter"]);
     let begun = run.app.requests();
     assert_eq!(begun.last().map(|r| r.text("op")), Some(Some("begin")));
-    assert_eq!(begun.last().unwrap().text("template"), Some("person:person"));
+    assert_eq!(
+        begun.last().unwrap().text("template"),
+        Some("person:person")
+    );
 
     // The session's first frame: every choice of the template, with what
     // is chosen now, and the character is complete with its defaults.
@@ -527,7 +545,10 @@ fn scripted_input_goes_from_the_title_to_a_made_character_in_play() {
     run.type_text("Ada");
     let named = run.app.requests();
     assert_eq!(named.last().unwrap().text("op"), Some("name"));
-    assert_eq!(named.last().unwrap().args.get("value"), Some(&Value::text("Ada")));
+    assert_eq!(
+        named.last().unwrap().args.get("value"),
+        Some(&Value::text("Ada"))
+    );
 
     // A heavier build, from the choices list: Tab to it, down to Build.
     run.press(&["tab", "tab", "tab"]);
@@ -575,9 +596,7 @@ fn scripted_input_goes_from_the_title_to_a_made_character_in_play() {
 #[test]
 fn a_template_with_a_choice_of_every_kind_is_made_on_the_one_screen() {
     let mut run = Run::bare();
-    run.scene
-        .open_screen("ui:create", BTreeMap::new())
-        .unwrap();
+    run.scene.open_screen("ui:create", BTreeMap::new()).unwrap();
     run.press(&[]);
     run.press(&["enter"]);
     assert!(run.text().contains("Name"), "{}", run.text());
@@ -600,7 +619,10 @@ fn a_template_with_a_choice_of_every_kind_is_made_on_the_one_screen() {
     assert!(run.text().contains("From 0.8 to 1.2."), "{}", run.text());
     run.press(&["right", "right", "enter"]);
     let stature = run.selected("person:person.stature");
-    assert_eq!(stature.as_number().map(|n| (n.get() * 100.0).round()), Some(108.0));
+    assert_eq!(
+        stature.as_number().map(|n| (n.get() * 100.0).round()),
+        Some(108.0)
+    );
 
     // `pick`: one of three; Enter puts the new one in place of the old.
     run.press(&["down", "enter"]);
@@ -641,7 +663,10 @@ fn a_template_with_a_choice_of_every_kind_is_made_on_the_one_screen() {
     );
     assert_golden(golden("create_assemble"), run.shown());
     run.press(&["up", "backspace"]);
-    assert_eq!(run.selected("person:person.extras"), texts(&["person:horn"]));
+    assert_eq!(
+        run.selected("person:person.extras"),
+        texts(&["person:horn"])
+    );
     run.press(&["escape"]);
 
     // What the templates and options chosen give.
@@ -653,9 +678,7 @@ fn a_template_with_a_choice_of_every_kind_is_made_on_the_one_screen() {
 #[test]
 fn a_selection_the_session_refuses_is_shown_with_its_reason() {
     let mut run = Run::bare();
-    run.scene
-        .open_screen("ui:create", BTreeMap::new())
-        .unwrap();
+    run.scene.open_screen("ui:create", BTreeMap::new()).unwrap();
     run.press(&[]);
     run.press(&["enter", "tab", "tab", "tab"]);
     // Extras: three parts are its budget; a fourth is refused, and the
@@ -697,7 +720,11 @@ fn the_inventory_lists_what_is_held_worn_and_carried_and_offers_what_can_be_done
     assert_eq!(run.top(), "ui:inventory");
     assert!(run.row_with("knife  in hand").starts_with("││"));
     assert!(run.row_with("coat  worn").starts_with("││"));
-    assert!(run.row_with("pack  worn").contains("2 of 20 kg"), "{}", run.text());
+    assert!(
+        run.row_with("pack  worn").contains("2 of 20 kg"),
+        "{}",
+        run.text()
+    );
     assert!(run.row_with("  rope  in pack").starts_with("││"));
     assert!(run.row_with("l_arm").contains("coat"));
     assert!(run.text().contains("Carrying 5.2 kg."), "{}", run.text());
@@ -724,12 +751,19 @@ fn the_inventory_lists_what_is_held_worn_and_carried_and_offers_what_can_be_done
         command.args.get("what"),
         Some(&Value::Subject(run.entity(thing::KNIFE)))
     );
-    assert_eq!(run.top(), "ui:inventory", "the popup closed once it was done");
+    assert_eq!(
+        run.top(),
+        "ui:inventory",
+        "the popup closed once it was done"
+    );
 
     // The rope, in the pack: taking it out is offered, stowing is not.
     run.press(&["down", "down", "down", "enter"]);
     let text = run.text();
-    assert!(text.contains("Take out") && !text.contains("Stow"), "{text}");
+    assert!(
+        text.contains("Take out") && !text.contains("Stow"),
+        "{text}"
+    );
     let outcomes = run.press(&["down", "down", "enter"]);
     assert!(
         matches!(&outcomes[..], [UiOutcome::Opened(id)] if id == "ui:pick_list"),
@@ -794,7 +828,11 @@ fn the_keys_of_play_are_listed_from_the_keymap_in_force() {
     let mut run = Run::new();
     run.press(&["?"]);
     assert_eq!(run.top(), "ui:help");
-    assert!(run.row_with("Walk north").contains("k, up"), "{}", run.text());
+    assert!(
+        run.row_with("Walk north").contains("k, up"),
+        "{}",
+        run.text()
+    );
     assert!(run.row_with("Inventory").contains('i'));
     assert_golden(golden("help"), run.shown());
     run.press(&["escape"]);
@@ -850,4 +888,41 @@ fn every_bundled_screen_is_reached_from_play_by_its_key_and_left_by_escape() {
     assert_eq!(run.top(), "ui:item");
     run.press(&["escape", "escape"]);
     assert_eq!(run.top(), "ui:play");
+}
+
+#[test]
+fn a_screen_opened_with_values_for_its_variables_starts_from_them() {
+    let mut run = Run::bare();
+    let with = |pairs: &[(&str, Value)]| -> BTreeMap<String, Value> {
+        pairs
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), value.clone()))
+            .collect()
+    };
+    run.scene
+        .open_screen(
+            "ui:create_choice",
+            with(&[("index", Value::Int(0)), ("words", Value::text("Ada"))]),
+        )
+        .unwrap();
+    let top = run.scene.top().unwrap();
+    assert_eq!(
+        top.var("words"),
+        Some(&clash_core::Value::Str("Ada".to_owned()))
+    );
+    // A variable is given only what it can hold, and a name the screen
+    // has as neither a parameter nor a variable is a mistake.
+    let wrong = run
+        .scene
+        .open_screen("ui:create_choice", with(&[("words", Value::Int(3))]))
+        .unwrap_err();
+    assert!(wrong.contains("cannot start as 3"), "{wrong}");
+    let unknown = run
+        .scene
+        .open_screen("ui:create_choice", with(&[("colour", Value::text("red"))]))
+        .unwrap_err();
+    assert!(
+        unknown.contains("no parameter or variable `colour`"),
+        "{unknown}"
+    );
 }

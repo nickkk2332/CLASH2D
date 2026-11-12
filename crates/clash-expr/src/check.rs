@@ -655,7 +655,14 @@ impl<'a> Checker<'a> {
                     let mut node = Self::entry(object, &name.to_string(), Type::Any, span);
                     for arg in args {
                         let index = self.expr(arg);
-                        node = Node::new(NodeKind::Index { object: node, index }, Type::Any, span);
+                        node = Node::new(
+                            NodeKind::Index {
+                                object: node,
+                                index,
+                            },
+                            Type::Any,
+                            span,
+                        );
                     }
                     return node;
                 }

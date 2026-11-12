@@ -1899,7 +1899,10 @@ fn same_kind(held: &Value, given: &Value) -> bool {
     matches!(
         (held, given),
         (Value::Bool(_), Value::Bool(_))
-            | (Value::Int(_) | Value::Real(_), Value::Int(_) | Value::Real(_))
+            | (
+                Value::Int(_) | Value::Real(_),
+                Value::Int(_) | Value::Real(_)
+            )
             | (Value::Str(_), Value::Str(_))
     )
 }

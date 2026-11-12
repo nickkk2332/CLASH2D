@@ -945,22 +945,45 @@ impl Maker {
             })
             .unwrap_or_default();
         entries.insert("attributes".to_owned(), Value::list(attributes));
-        Value::map(entries.iter().map(|(key, value)| (key.as_str(), value.clone())))
+        Value::map(
+            entries
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.clone())),
+        )
     }
 
-    /// The service `creation`, as the application answers it.
+    /// The service `creation`, as the application answers it. The name
+    /// and the seed are kept whether or not a session is in progress,
+    /// for the game the next `new_game` starts.
     fn serve(&mut self, request: &AppRequest) -> Result<(), String> {
         let op = request.text("op").unwrap_or_default();
         let value = request.args.get("value").cloned().unwrap_or_default();
-        if op == "begin" {
-            let template = request
-                .text("template")
-                .ok_or("`begin` needs the id of the `template` to make a character from")?;
-            let session = CreationSession::new(&self.defs, [template])
-                .map_err(|reason| reason.to_string())?;
-            self.session = Some(session);
-            self.finished = None;
-            return Ok(());
+        match op {
+            "begin" => {
+                let template = request
+                    .text("template")
+                    .ok_or("`begin` needs the id of the `template` to make a character from")?;
+                let session = CreationSession::new(&self.defs, [template])
+                    .map_err(|reason| reason.to_string())?;
+                self.session = Some(session);
+                self.finished = None;
+                return Ok(());
+            }
+            "name" => {
+                value
+                    .as_str()
+                    .ok_or("a name is a text")?
+                    .clone_into(&mut self.name);
+                return Ok(());
+            }
+            "seed" => {
+                self.seed = match value {
+                    Value::Int(seed) => seed,
+                    _ => return Err("a seed is a whole number".to_owned()),
+                };
+                return Ok(());
+            }
+            _ => {}
         }
         let defs = Arc::clone(&self.defs);
         let session = self
@@ -969,7 +992,9 @@ impl Maker {
             .ok_or("no character is being made: `begin` one first")?;
         match op {
             "select" => {
-                let key = request.text("key").ok_or("`select` needs the choice's `key`")?;
+                let key = request
+                    .text("key")
+                    .ok_or("`select` needs the choice's `key`")?;
                 let selection = selection_of(&value)
                     .ok_or("a selection is a list of ids, a number or a text")?;
                 session
@@ -977,19 +1002,10 @@ impl Maker {
                     .map_err(|reason| reason.to_string())
             }
             "clear" => {
-                let key = request.text("key").ok_or("`clear` needs the choice's `key`")?;
+                let key = request
+                    .text("key")
+                    .ok_or("`clear` needs the choice's `key`")?;
                 session.clear(&defs, key);
-                Ok(())
-            }
-            "name" => {
-                value.as_str().ok_or("a name is a text")?.clone_into(&mut self.name);
-                Ok(())
-            }
-            "seed" => {
-                self.seed = match value {
-                    Value::Int(seed) => seed,
-                    _ => return Err("a seed is a whole number".to_owned()),
-                };
                 Ok(())
             }
             "finish" => {
