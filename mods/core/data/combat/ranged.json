@@ -1,0 +1,154 @@
+[
+  { "//": "Fighting at a distance, written as any mod would write it (07 §11). A projectile is a mass with a cross-section and a point; a round names one and the energy it is fired with; a weapon's `shot` block gives its spread, how much of a round's energy goes into the projectile, how loud and how bright it is. Nothing here is a bonus, and nothing is scaled: what a shot does to a wall or a body is the world's and the body's to say. Values are illustrative.",
+    "type": "projectile", "id": "pistol_bullet", "name": "pistol bullet",
+    "mass": "8 g", "area": 6.4e-5, "drag": 0.3,
+    "surface": { "kind": "pierce", "area": 6.4e-5, "give": "1 cm", "span": "9 mm" } },
+
+  { "//": "A soft point that opens as it goes in: a wider contact, so less of it gets through.",
+    "type": "projectile", "id": "hollow_bullet", "name": "hollow-point bullet",
+    "mass": "8 g", "area": 6.4e-5, "drag": 0.3,
+    "surface": { "kind": "pierce", "area": 2.0e-4, "give": "1 cm", "span": "16 mm" } },
+
+  { "type": "projectile", "id": "rifle_bullet", "name": "rifle bullet",
+    "mass": "10 g", "area": 4.8e-5, "drag": 0.25,
+    "surface": { "kind": "pierce", "area": 4.8e-5, "give": "1 cm", "span": "8 mm" } },
+
+  { "//": "A tracer burns as it flies, and leaves a little fire where it comes to an end.",
+    "type": "projectile", "id": "tracer_bullet", "name": "tracer bullet",
+    "mass": "9 g", "area": 4.8e-5, "drag": 0.25,
+    "surface": { "kind": "pierce", "area": 4.8e-5, "give": "1 cm", "span": "8 mm" },
+    "leaves": { "field": "fire", "amount": 8 } },
+
+  { "//": "An arrow: light, slow and dragged by its fletching, so that it arcs.",
+    "type": "projectile", "id": "arrow", "name": "arrow",
+    "mass": "25 g", "area": 6.0e-5, "drag": 1.5,
+    "surface": { "kind": "pierce", "area": 2.0e-5, "give": "2 cm", "span": "25 mm" } },
+
+  { "//": "Who puts a shot where they mean to. Between equals the shot goes about where the weapon sends it; a better shot narrows it, a worse one widens it.",
+    "type": "contest", "id": "marksmanship", "name": "Marksmanship",
+    "form": "difference", "factor": 0.5, "spread": 1 },
+
+  { "type": "function", "id": "marksman",
+    "params": { "who": "entity" },
+    "returns": "real",
+    "value": "$who.attr.wits ?? 10",
+    "doc": "How well someone shoots: their wits." },
+
+  { "type": "function", "id": "unsteadiness",
+    "params": { "margin": "real" },
+    "returns": "real",
+    "value": "clamp(1 - $margin / 2, 0.5, 3)",
+    "doc": "What a shot's spread is multiplied by, from the margin of the shooter's marksmanship: a half at best, three times at worst." },
+
+  { "type": "function", "id": "draw_power",
+    "params": { "who": "entity" },
+    "returns": "real",
+    "value": "($who.attr.strength ?? 10) * 10",
+    "doc": "The joules someone puts into a bow for each second they draw it, before the bow's cap." },
+
+  { "type": "function", "id": "throw_energy",
+    "params": { "who": "entity" },
+    "returns": "real",
+    "value": "($who.attr.strength ?? 10) * 4",
+    "doc": "The joules someone puts into a throw." },
+
+  { "//": "A shot from a firearm held in a hand, at whoever the shooter believes is there. It is unavailable when the weapon is empty.",
+    "type": "action", "id": "shoot", "name": "Shoot",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "at":     { "type": "loc?", "default": "self.believed_loc($target)" },
+      "height": { "type": "real", "default": "1.3" },
+      "count":  { "type": "int", "default": "1" } },
+    "requires": "$at != null and (self.wielding('firearm').rounds ?? 0) > 0",
+    "fail_text": "There is no loaded weapon in hand, or nowhere to aim.",
+    "tags": ["shot"],
+    "phases": [
+      { "id": "raise", "time": "300 ms", "cancel": true },
+      { "id": "fire", "time": 0,
+        "do": [ { "shoot": {
+          "at": "$at", "height": "$height", "count": "$count",
+          "store": "self.wielding('firearm')", "with": "self.wielding('firearm')",
+          "spread": "(self.wielding('firearm').shot('spread') ?? 0.02) * unsteadiness(contest('marksmanship', marksman(self), 10) ?? 0)" } } ] },
+      { "id": "recover", "time": "250 ms", "cancel": ["shot"] } ] },
+
+  { "//": "The same, taken slowly: braced and steadied, the spread is less than half.",
+    "type": "action", "id": "aim_shot", "name": "Aimed shot",
+    "uses": { "arm": 2 },
+    "params": {
+      "target": "entity",
+      "at":     { "type": "loc?", "default": "self.believed_loc($target)" },
+      "height": { "type": "real", "default": "1.3" } },
+    "requires": "$at != null and (self.wielding('firearm').rounds ?? 0) > 0",
+    "fail_text": "There is no loaded weapon in hand, or nowhere to aim.",
+    "tags": ["shot"],
+    "phases": [
+      { "id": "steady", "time": "1200 ms", "cancel": true },
+      { "id": "fire", "time": 0,
+        "do": [ { "shoot": {
+          "at": "$at", "height": "$height",
+          "store": "self.wielding('firearm')", "with": "self.wielding('firearm')",
+          "spread": "(self.wielding('firearm').shot('spread') ?? 0.02) * 0.4 * unsteadiness(contest('marksmanship', marksman(self) + 2, 10) ?? 0)" } } ] },
+      { "id": "recover", "time": "300 ms", "cancel": ["shot"] } ] },
+
+  { "//": "Fills the store of the firearm in hand with rounds it takes, from whatever the shooter carries.",
+    "type": "action", "id": "reload", "name": "Reload",
+    "uses": { "arm": 2 },
+    "requires": "self.wielding('firearm').feed != null",
+    "fail_text": "There is nothing in hand to load.",
+    "phases": [
+      { "id": "load", "time": "2 s", "cancel": true },
+      { "id": "done", "time": 0,
+        "do": [ { "load": { "who": "self", "into": "self.wielding('firearm') ?? self" } } ] } ] },
+
+  { "//": "Nock an arrow from the quiver, draw for as long as the key is held (to the most the bow takes), and let go. The longer the draw, the harder the shot, up to what the bow can hold. The arrow is sent along the arc that comes down where the archer aims.",
+    "type": "action", "id": "draw_and_loose", "name": "Draw and loose",
+    "uses": { "arm": 2 },
+    "params": {
+      "target": "entity",
+      "at":     { "type": "loc?", "default": "self.believed_loc($target)" },
+      "height": { "type": "real", "default": "1.3" } },
+    "vars": { "drawn": { "type": "real", "default": "0" } },
+    "requires": "$at != null and self.wielding('bow') != null and (self.store_of('arrow').rounds ?? 0) > 0",
+    "fail_text": "There is no bow in hand, no arrow to nock, or nowhere to aim.",
+    "tags": ["shot"],
+    "phases": [
+      { "id": "nock", "time": "400 ms", "cancel": true },
+      { "id": "draw", "time": "hold", "max": "1.5 s", "cancel": true,
+        "tick": { "every": "50 ms", "do": [ { "add": { "$drawn": 0.05 } } ] } },
+      { "id": "loose", "time": 0,
+        "do": [ { "shoot": {
+          "at": "$at", "height": "$height", "lob": true,
+          "store": "self.store_of('arrow')", "with": "self.wielding('bow')",
+          "energy": "min(self.wielding('bow').shot('energy') ?? 0, draw_power(self) * $drawn)",
+          "spread": "(self.wielding('bow').shot('spread') ?? 0.02) * unsteadiness(contest('marksmanship', marksman(self), 10) ?? 0)" } } ] },
+      { "id": "recover", "time": "300 ms", "cancel": ["shot"] } ] },
+
+  { "//": "Throw what is in hand that is meant for throwing: a blade strikes with its point; a charge has its fuse lit as it leaves the hand, and bursts three seconds later wherever it is.",
+    "type": "action", "id": "throw", "name": "Throw",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "at":     { "type": "loc?", "default": "self.believed_loc($target)" },
+      "height": { "type": "real", "default": "1.3" },
+      "what":   { "type": "entity", "default": "self.wielding('throwing') ?? self" } },
+    "requires": "$at != null and self.wielding('throwing') != null",
+    "fail_text": "There is nothing in hand to throw, or nowhere to throw it.",
+    "tags": ["shot"],
+    "phases": [
+      { "id": "windup", "time": "400 ms", "cancel": true },
+      { "id": "release", "time": 0,
+        "do": [
+          { "throw": {
+            "what": "$what", "at": "$at", "height": "$height", "lob": true,
+            "energy": "throw_energy(self)",
+            "surface": { "expr": "if $what.has_tag('blade') then 'point' else null" },
+            "spread": "0.03 * unsteadiness(contest('marksmanship', marksman(self), 10) ?? 0)" } },
+          { "if": "$what.has_tag('charge')",
+            "then": [
+              { "after": "3 s", "owner": "$what", "name": "fuse",
+                "do": [
+                  { "release": { "at": "$what", "kind": "blast", "energy": 400000 } },
+                  { "destroy_item": { "item": "$what" } } ] } ] } ] },
+      { "id": "recover", "time": "300 ms" } ] }
+]
