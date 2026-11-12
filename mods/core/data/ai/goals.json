@@ -7,7 +7,7 @@
     "methods": [
       { "if": "chance(0.6)",
         "steps": [
-          { "go": { "to": "offset(self.home ?? self.loc, rand_int(-8, 8), rand_int(-8, 8))" } },
+          { "go": { "to": "offset(self.home, rand_int(-8, 8), rand_int(-8, 8))" } },
           { "wait": { "time": "rand(2, 6)" } } ] },
       { "steps": [ { "wait": { "time": "rand(3, 8)" } } ] }
     ] },
@@ -17,9 +17,9 @@
     "score": "0.3 * self.weight('duty')",
     "methods": [
       { "steps": [
-          { "go": { "to": "offset(self.home ?? self.loc, 8, 0)" } },
+          { "go": { "to": "offset(self.home, 8, 0)" } },
           { "look": { "time": "2 s" } },
-          { "go": { "to": "self.home ?? self.loc" } },
+          { "go": { "to": "self.home" } },
           { "look": { "time": "2 s" } } ] }
     ] },
 
@@ -116,9 +116,8 @@
     "methods": [
       { "steps": [
           { "go": { "to": "self.believed_loc($about)", "within": 1 } },
+          { "look": { "at": "$about", "time": "2 s" } },
           { "look": { "time": "2 s" } },
-          { "look": { "at": "offset(self.loc, 3, 0)", "time": "1 s" } },
-          { "look": { "at": "offset(self.loc, -3, 0)", "time": "1 s" } },
           { "settle": true } ] },
       { "steps": [
           { "look": { "time": "2 s" } },

@@ -14,7 +14,7 @@
 //! | `goal_about` | `any` | What that goal is about: an entity, a memory as a map, a cell, or null |
 //! | `step` | `string?` | The kind of the step it is at: `go`, `do`, … |
 //! | `last_failure` | `string?` | The code of the reason its last step or goal failed |
-//! | `home` | `loc?` | Where it belongs: where it first thought, or what `set_home` said |
+//! | `home` | `loc` | Where it belongs: where it first thought, or what `set_home` said; where it is, for one that has not thought |
 //! | `mind_def` | `string?` | The qualified id of the `mind` it thinks by |
 //! | `hostile(x)` | `bool` | Whether it holds `x` hostile: by a stance it took, or by a tag `x` presents that its mind's `hostile_to` names, once it has perceived `x` |
 //! | `fears(x)` | `bool` | The same for `fear_of` |
@@ -144,12 +144,17 @@ pub fn properties() -> Vec<PropertyDef> {
         p(
             "entity",
             "home",
-            "loc?",
-            "Where this character's mind belongs: where it first thought, or what `set_home` said. Null for a mind that has not thought.",
+            "loc",
+            "Where this character's mind belongs: where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.",
             |sim, subject, _| {
                 opt(mind_of(sim, subject)
-                    .and_then(|mind| sim.components.mind_state.get(mind))
-                    .and_then(|state| state.home())
+                    .and_then(|mind| {
+                        sim.components
+                            .mind_state
+                            .get(mind)
+                            .and_then(|state| state.home())
+                            .or_else(|| sim.entities.location(mind))
+                    })
                     .map(|loc| sim.subject_value(Subject::Loc(loc))))
             },
         ),

@@ -214,8 +214,9 @@ whole of what a modder writes and reads; section 17 lists it by kind.
 | `wake_on` | list of event types | Such an event makes every mind that binds it as a subject, and has thought before, think at once |
 | `doc` | text | What it is |
 
-`$about` has a type the compiler knows: `entity?` for a track, `map<any>?`
-for a memory, `loc?` for a place. Of the candidates whose `where` holds
+`$about` has a type the compiler knows: `entity` for a track, `map<any>`
+for a memory, `loc` for a place; a goal whose `about` found nothing is
+not scored, and one held whose `about` is no longer believed is given up. Of the candidates whose `where` holds
 (compiled in the mind context with the candidate as `it`), the greatest
 `best` is chosen; for a memory with no `best`, the most recent. The goal
 held keeps what it is about while that is still a candidate. A memory
@@ -1153,8 +1154,9 @@ own; `realm.clock` gives the same as a fraction of the day.
 - Properties of an `entity`, read of the character itself in a mind
   context: `weight(name)` (`real`), `goal` (`string?`), `goal_about`
   (`any`), `step` (`string?`), `last_failure` (`string?`), `home`
-  (`loc?`), `mind_def` (`string?`), `hostile(x)` (`bool`), `fears(x)`
-  (`bool`), `stance(x)` (`string?`).
+  (`loc`: where the character is, for a mind that has not thought),
+  `mind_def` (`string?`), `hostile(x)` (`bool`), `fears(x)` (`bool`),
+  `stance(x)` (`string?`).
 - Verbs: `think { who }`; `set_goal { who, goal, about? }`, which holds
   the goal until it is done, fails or is cleared; `clear_goal { who }`;
   `set_stance { who, of, stance }`; `set_home { who, at }`;

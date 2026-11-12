@@ -142,13 +142,15 @@ pub enum AboutKind {
 }
 
 impl AboutKind {
-    /// The type `$about` has.
+    /// The type `$about` has. A goal with an `about` is scored only
+    /// when something was found, so it is not null there; a goal held
+    /// whose `about` is no longer believed is given up.
     pub const fn type_name(self) -> &'static str {
         match self {
             AboutKind::None => "any",
-            AboutKind::Track => "entity?",
-            AboutKind::Memory => "map<any>?",
-            AboutKind::Place => "loc?",
+            AboutKind::Track => "entity",
+            AboutKind::Memory => "map<any>",
+            AboutKind::Place => "loc",
         }
     }
 }

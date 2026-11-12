@@ -150,9 +150,11 @@ Done when
 Beta (09 §4.1): the `method` type; the steps `go`, `do`, `choose`,
 `wait`, `look`, `say`, `set`, `settle`, `stance`, `keep_near`,
 `keep_from`; failure, fallback methods and goals set aside; the events
-of 09 §17 that are listed as built. `patrol_and_investigate` is the test
-script `scenarios/ai/investigate.scn` and the guard and townsperson
-tests of `tests/ai.rs`. Interactions are done by a `do` step of the
+of 09 §17 that are listed as built. `patrol_and_investigate` is checked
+by the guard and townsperson tests of `tests/ai.rs`; its test script,
+`scenarios/known_failures/ai_investigate.scn`, waits for the console to
+bind verbs or spawn from templates, without which nobody at the console
+thinks. Interactions are done by a `do` step of the
 interaction action. Stubbed: the `use` step as a step of its own, the
 `job`, `goal`, `follow` and `run` steps (jobs, queries), paces of `go`,
 minds opening doors in their way.
