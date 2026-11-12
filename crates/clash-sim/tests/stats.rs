@@ -1496,7 +1496,15 @@ fn everything_registered_is_documented() {
     let fields = |name: &str| -> Vec<String> {
         let event = registry.event(registry.event_id(name).unwrap()).unwrap();
         assert!(!event.spec.doc.is_empty(), "{name}");
-        assert_eq!(event.spec.subjects, [("self".to_owned(), kinds.entity)]);
+        // `self`, then the cause's subjects (05 §8.1).
+        assert_eq!(
+            event.spec.subjects,
+            [
+                ("self".to_owned(), kinds.entity),
+                ("actor".to_owned(), kinds.entity),
+                ("instigator".to_owned(), kinds.entity)
+            ]
+        );
         event
             .spec
             .fields

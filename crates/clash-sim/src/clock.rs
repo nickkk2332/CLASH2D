@@ -204,6 +204,8 @@ impl Sim {
         if marked != target {
             self.fold_own_time(id);
         }
+        // Pools and wounds keep wake-ups of their own (06 §4.2, §7.3).
+        self.life_follow(id);
     }
 
     /// Puts an entity and everything inside it on the clocks that now

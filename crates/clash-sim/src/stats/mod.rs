@@ -80,10 +80,13 @@
 //! [`WakeDomain::Timer`]: clash_time::WakeDomain::Timer
 
 pub mod attr;
+pub mod bind;
 mod defs;
 pub mod pool;
 pub mod props;
+pub mod seat;
 pub mod track;
+mod verbs;
 
 use clash_core::{EntityId, Real, StateHash, StateHasher, impl_state_hash};
 use clash_data::{DefTypes, Runner};
@@ -95,18 +98,21 @@ use thiserror::Error;
 use crate::component::ComponentStore;
 
 pub use attr::{
-    Modifier, Source, SourceKind, add_modifier, attach, refresh, remove_modifier, set_base,
+    Modifier, Source, SourceKind, add_modifier, attach, refresh, remove_modifier, remove_modifiers,
+    set_base,
 };
 pub use defs::{
-    AttributeDef, AttributeId, MAX_THRESHOLDS, PoolDef, PoolId, Seat, StatDefTypes, StatDefs,
-    StatKinds, TRACK_LEVEL_CAP, TrackDef, TrackId,
+    AttributeDef, AttributeId, MAX_THRESHOLDS, PoolDef, PoolId, PoolStopDef, Seat, StatDefTypes,
+    StatDefs, StatKinds, StopSide, TRACK_LEVEL_CAP, TrackDef, TrackId,
 };
 pub use pool::{
     POOL_WAKE_TAG, PoolAdded, PoolRate, add_pool, is_pool_wake, on_wake, pool_add, pool_spend,
     pool_wake, remove_pool, remove_rate, resume, set_clock, set_rate, suspend,
 };
 pub use props::property;
+pub use seat::{Seated, SeatedPool, give_seated, take_seated};
 pub use track::advance_track;
+pub use verbs::verbs;
 
 use pool::PoolInst;
 

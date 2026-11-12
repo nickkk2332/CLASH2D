@@ -84,13 +84,17 @@ pub struct Identity {
     name: Option<String>,
     description: Option<String>,
     templates: Vec<TemplateId>,
+    /// Whether it is an anonymous individual of a population (06 §12.2).
+    #[serde(default)]
+    anonymous: bool,
 }
 
 impl_state_hash!(Identity {
     def,
     name,
     description,
-    templates
+    templates,
+    anonymous
 });
 
 impl Identity {
@@ -102,6 +106,7 @@ impl Identity {
             name: None,
             description: None,
             templates: Vec::new(),
+            anonymous: false,
         }
     }
 
@@ -147,6 +152,19 @@ impl Identity {
     /// away. Returns the description before.
     pub fn set_description(&mut self, description: Option<String>) -> Option<String> {
         core::mem::replace(&mut self.description, description)
+    }
+
+    /// Whether the thing is an anonymous individual of a population,
+    /// forgotten when its tract unloads (06 §12.2). Anything else is
+    /// notable.
+    pub const fn is_anonymous(&self) -> bool {
+        self.anonymous
+    }
+
+    /// Makes the thing anonymous, or notable with `false`. Returns
+    /// whether it was anonymous before, for the event the caller raises.
+    pub fn set_anonymous(&mut self, anonymous: bool) -> bool {
+        core::mem::replace(&mut self.anonymous, anonymous)
     }
 
     /// Records that `template` was applied to the thing.

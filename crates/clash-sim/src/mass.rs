@@ -125,9 +125,25 @@ impl Sim {
     }
 
     /// Writes changed masses to the kernel's records and, for whoever
+    /// stands in the world, to the world's, and has the stats of each
+    /// entity whose mass changed worked out again (06 §4.1). `skip` has
+    /// been written already.
+    fn apply_mass_changes(&mut self, changes: &MassChanges, skip: Option<EntityId>, cause: Cause) {
+        self.write_masses(changes, skip, cause);
+        for change in changes {
+            self.life_mass_changed(change.entity, cause);
+        }
+    }
+
+    /// Writes changed masses to the kernel's records and, for whoever
     /// stands in the world, to the world's. `skip` has been written
     /// already.
-    fn apply_mass_changes(&mut self, changes: &MassChanges, skip: Option<EntityId>, cause: Cause) {
+    pub(crate) fn write_masses(
+        &mut self,
+        changes: &[crate::component::MassChange],
+        skip: Option<EntityId>,
+        cause: Cause,
+    ) {
         for change in changes {
             if Some(change.entity) == skip {
                 continue;
