@@ -1,0 +1,120 @@
+[
+  { "//": "Goals the bundled minds share (09 §3.2). Each is scored from what the character believes and from its mind's weights, and pursued by its methods' steps: actions, waits and words a player could choose for it. Nothing here names the player.",
+    "type": "goal", "id": "go_about",
+    "doc": "Going about one's day near home: a walk to somewhere close by, then a pause; or simply standing a while. Always wanted a little, so it is what a character does when nothing else matters.",
+    "score": "0.2",
+    "noise": 0.05,
+    "methods": [
+      { "if": "chance(0.6)",
+        "steps": [
+          { "go": { "to": "offset(self.home ?? self.loc, rand_int(-8, 8), rand_int(-8, 8))" } },
+          { "wait": { "time": "rand(2, 6)" } } ] },
+      { "steps": [ { "wait": { "time": "rand(3, 8)" } } ] }
+    ] },
+
+  { "type": "goal", "id": "patrol",
+    "doc": "Walking a beat: to a point eight metres east of home and back, pausing at each end.",
+    "score": "0.3 * self.weight('duty')",
+    "methods": [
+      { "steps": [
+          { "go": { "to": "offset(self.home ?? self.loc, 8, 0)" } },
+          { "look": { "time": "2 s" } },
+          { "go": { "to": "self.home ?? self.loc" } },
+          { "look": { "time": "2 s" } } ] }
+    ] },
+
+  { "type": "goal", "id": "investigate_noise",
+    "doc": "Going to look where something was heard and not seen, then letting it go: the memory is settled, and the character goes back to what it was doing.",
+    "about": { "memory": {
+      "events": ["element_destroyed", "body_impact", "release_started", "collapse_started", "said"],
+      "where": "it.how == 'core:sound' and it.actor == null and it.age < 60 and it.loc != null",
+      "best": "it.salience" } },
+    "score": "self.weight('curiosity') * $about.salience * 2",
+    "commit": 0.25,
+    "interrupts": true,
+    "retry_after": "20 s",
+    "methods": [
+      { "steps": [
+          { "go": { "to": "$about.loc", "within": 2 } },
+          { "look": { "at": "$about.loc", "time": "3 s" } },
+          { "settle": true } ] },
+      { "steps": [
+          { "look": { "at": "$about.loc", "time": "2 s" } },
+          { "settle": true } ] }
+    ] },
+
+  { "type": "goal", "id": "flee_danger",
+    "doc": "Getting away from something dangerous that happened close by, seen or heard: a fight, a blast, a collapse. Calls out first.",
+    "about": { "memory": {
+      "events": ["hit_landed", "wound_inflicted", "release_started", "collapse_started", "entity_died"],
+      "where": "it.age < 20 and it.loc != null and (dist(self, it.loc) ?? 99) < 15",
+      "best": "it.salience" } },
+    "score": "self.weight('caution') * $about.salience * 2.5",
+    "commit": 0.3,
+    "interrupts": true,
+    "retry_after": "5 s",
+    "methods": [
+      { "steps": [
+          { "say": { "text": "Help!", "volume": 2 } },
+          { "keep_from": { "from": "$about.loc", "distance": 12 } },
+          { "wait": { "time": "3 s" } },
+          { "settle": true } ] },
+      { "steps": [
+          { "wait": { "time": "2 s" } },
+          { "settle": true } ] }
+    ] },
+
+  { "type": "goal", "id": "flee_feared",
+    "doc": "Keeping away from someone feared, while they are believed to be close.",
+    "about": { "track": {
+      "where": "self.fears(it) and (self.confidence(it) ?? 0) > 0.3 and (dist(self, self.believed_loc(it)) ?? 99) < 12",
+      "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
+    "score": "self.weight('caution') * 3 * (self.confidence($about) ?? 0)",
+    "commit": 0.3,
+    "interrupts": true,
+    "methods": [
+      { "steps": [
+          { "keep_from": { "from": "$about", "distance": 15 } },
+          { "wait": { "time": "2 s" } } ] },
+      { "steps": [ { "wait": { "time": "2 s" } } ] }
+    ] },
+
+  { "type": "goal", "id": "confront",
+    "doc": "Going for someone held hostile who is in sight: up to them, then at them with whatever serves to harm, or, with nothing that does, standing over them.",
+    "about": { "track": {
+      "where": "self.hostile(it) and (self.last_seen(it) ?? 99) < 3",
+      "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
+    "score": "self.weight('duty') * 3",
+    "commit": 0.3,
+    "interrupts": true,
+    "methods": [
+      { "steps": [
+          { "say": { "text": "Stop right there!", "volume": 2 } },
+          { "go": { "to": "$about", "within": 1.5 } },
+          { "choose": { "purpose": "harm", "target": "$about" } } ] },
+      { "steps": [
+          { "go": { "to": "$about", "within": 1.5 } },
+          { "look": { "at": "$about", "time": "1 s" } } ] }
+    ] },
+
+  { "type": "goal", "id": "search_lost",
+    "doc": "Looking for someone held hostile who has been lost from sight: to where they were last believed to be, a look round, then giving up until they are perceived again.",
+    "about": { "track": {
+      "where": "self.hostile(it) and (self.last_seen(it) ?? 99) >= 3 and (self.last_seen(it) ?? 99) < 60",
+      "best": "self.confidence(it) ?? 0" } },
+    "score": "self.weight('duty') * 2 * (0.5 + (self.confidence($about) ?? 0))",
+    "commit": 0.2,
+    "interrupts": true,
+    "retry_after": "30 s",
+    "methods": [
+      { "steps": [
+          { "go": { "to": "self.believed_loc($about)", "within": 1 } },
+          { "look": { "time": "2 s" } },
+          { "look": { "at": "offset(self.loc, 3, 0)", "time": "1 s" } },
+          { "look": { "at": "offset(self.loc, -3, 0)", "time": "1 s" } },
+          { "settle": true } ] },
+      { "steps": [
+          { "look": { "time": "2 s" } },
+          { "settle": true } ] }
+    ] }
+]
