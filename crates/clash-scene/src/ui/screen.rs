@@ -400,6 +400,8 @@ pub(super) struct RowSource {
     pub(super) cells: Vec<Option<LiveText>>,
     /// For a tree: the expression giving the rows beneath `it`.
     pub(super) children: Option<Binding>,
+    /// For a tree: whether its branches start open.
+    pub(super) open: bool,
 }
 
 /// The styles and characters the toolkit draws its own parts with,
@@ -1099,6 +1101,7 @@ impl Builder<'_> {
                     })
                     .collect(),
                 children: children.clone(),
+                open: false,
             })),
         };
         let rows = self.rows(rows, &format!("{path}.rows"));
@@ -1420,18 +1423,26 @@ impl Builder<'_> {
                 &w.on_activate,
                 &path,
             ),
-            NodeKind::Tree(w) => self.listing(
-                Flavour::Tree,
-                &w.rows,
-                &w.item,
-                &w.children,
-                &[],
-                &w.empty,
-                &w.selected,
-                &w.on_select,
-                &w.on_activate,
-                &path,
-            ),
+            NodeKind::Tree(w) => {
+                let mut kind = self.listing(
+                    Flavour::Tree,
+                    &w.rows,
+                    &w.item,
+                    &w.children,
+                    &[],
+                    &w.empty,
+                    &w.selected,
+                    &w.on_select,
+                    &w.on_activate,
+                    &path,
+                );
+                if let Kind::Listing(listing) = &mut kind
+                    && let Some(source) = &mut listing.dynamic
+                {
+                    source.open = w.open;
+                }
+                kind
+            }
             NodeKind::Table(w) => self.listing(
                 Flavour::Table,
                 &w.rows,

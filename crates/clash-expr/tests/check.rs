@@ -499,6 +499,18 @@ fn variables_are_resolved_declared_or_not() {
 }
 
 #[test]
+fn a_property_of_something_of_no_known_kind_is_read_when_it_runs() {
+    // As `.name` is read of `any` as a map's entry, so `.name(a)` is
+    // read as the entry and then its entry for `a`.
+    for source in ["$x.held('grasp')", "len($x.worn_on('arm', 2))"] {
+        assert_eq!(diagnostics(source), [], "`{source}`");
+    }
+    // Of a value of a known type that has no properties, it is still a
+    // mistake.
+    error("$n.foo(1)", codes::NOT_CALLABLE, "$n.foo", None);
+}
+
+#[test]
 fn only_functions_and_properties_can_be_called() {
     error("self(1)", codes::NOT_CALLABLE, "self", None);
     error("(1 + 2)(3)", codes::NOT_CALLABLE, "(1 + 2)", None);
@@ -1701,4 +1713,16 @@ fn what_is_own_follows_locals_and_elements() {
     assert!(!own("others"));
     assert!(!own("$member.mass"), "a number belongs to nobody");
     assert!(!own("$stranger"));
+
+    // A list made of own things is own, and so is `if` whose branches
+    // both are; a single other thing in either makes it not.
+    assert!(own("[party[0]]"));
+    assert!(own("[party[0], $member]"));
+    assert!(own("if true then [party[0]] else party"));
+    assert!(!own("[party[0], $stranger]"));
+    assert!(!own("if true then party else others"));
+    assert_eq!(diagnostics_in("[party[0]][0].mass", &mind, &host), []);
+    let found = diagnostics_in("[$stranger][0].mass", &mind, &host);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].code, codes::NOT_BELIEF_SAFE);
 }

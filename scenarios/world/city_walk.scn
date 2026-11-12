@@ -24,4 +24,4 @@ assert "not @c:641,641,0.is_loaded and @w.loc.x == 993"
 advance 1s
 session @w @c:641,641,0
 assert "@c:642,641,0.block.def_id == 'core:wall' and not @c:993,641,0.is_loaded"
-expect hash 93ec6604b8d8c0cc4f7ef544598a1a99
+expect hash 38138b06bbf5a28449e84f8d68f99a00

@@ -827,6 +827,10 @@ widget_def! {
         /// row, `it`.
         #[serde(default)]
         pub children: Option<Binding>,
+        /// For rows from a query: whether every branch starts open.
+        /// Left out, they start closed.
+        #[serde(default)]
+        pub open: bool,
         /// What is shown when there are no rows.
         #[serde(default)]
         pub empty: Option<TextProp>,

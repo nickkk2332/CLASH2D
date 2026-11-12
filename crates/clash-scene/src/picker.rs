@@ -17,6 +17,8 @@
 //! | `cursor_sight` | What the view model knows of the cell under the cursor: `seen`, `remembered` or `unknown` |
 //! | `cursor_distance` | How far the cursor is from the followed character, in metres |
 //! | `cursor_target` | What the reader calls the perceived thing under the cursor; empty if there is none |
+//! | `cursor_things` | What the reader calls every perceived thing in the cell under the cursor, the topmost first, written out as a list (`Jonas and a knife`); empty if there is none |
+//! | `cursor_ground` | What the view model holds of the cell under the cursor: its fixture, its block and its floor as last seen, by their definitions' names, top first and joined by semicolons, with `several things` where items lie in a pile; empty for a cell not known |
 //! | `cursor_reach` | While a parameter is asked for: `yes` if the action's `requires` holds with the place under the cursor as that parameter, as the actor believes; `no` if it does not; empty if there is nothing to say |
 //! | `cursor_why` | With `cursor_reach` at `no`: the action's `fail_text` |
 //! | `cursor_advice` | What the parameter's `check` says of the place under the cursor; empty if it is sound |
@@ -30,12 +32,13 @@ use clash_core::{Real, Value};
 use clash_expr::{Type, Value as ExprValue};
 use clash_sim::action::ActionDef;
 use clash_world::dims::CELL_M;
-use clash_world::{CellPos, Location};
+use clash_world::{CellPos, Layer, Location};
 
 use crate::control::{Ask, Collecting};
 use crate::frame::Rect;
 use crate::scene::{Scene, SceneHost, UiCommand, UiOutcome};
 use crate::ui::{CameraEffect, UiEffects, ViewKind};
+use crate::view::SpriteId;
 
 /// The control a click on a map view runs where the view has no
 /// `on_pick` of its own (12 §9.4).
@@ -55,10 +58,12 @@ pub const REACH_YES: &str = "yes";
 pub const REACH_NO: &str = "no";
 
 /// The variables a screen may declare to be told about the cursor.
-pub const STATUS_VARS: [&str; 9] = [
+pub const STATUS_VARS: [&str; 11] = [
     "cursor_sight",
     "cursor_distance",
     "cursor_target",
+    "cursor_things",
+    "cursor_ground",
     "cursor_reach",
     "cursor_why",
     "cursor_advice",
@@ -73,6 +78,8 @@ pub(crate) struct CursorStatus {
     sight: &'static str,
     distance: f64,
     target: String,
+    things: String,
+    ground: String,
     reach: &'static str,
     why: String,
     advice: String,
@@ -82,7 +89,7 @@ pub(crate) struct CursorStatus {
 }
 
 impl CursorStatus {
-    fn vars(&self) -> [(&'static str, Value); 9] {
+    fn vars(&self) -> [(&'static str, Value); 11] {
         let text = |text: &str| Value::Str(text.to_owned());
         let count = |n: usize| Value::Int(n as i64);
         // Tenths of a metre are as fine as a cursor on cells gets.
@@ -91,6 +98,8 @@ impl CursorStatus {
             text(self.sight),
             Value::Real(Real::new(distance).unwrap_or(Real::ZERO)),
             text(&self.target),
+            text(&self.things),
+            text(&self.ground),
             text(self.reach),
             text(&self.why),
             text(&self.advice),
@@ -100,6 +109,18 @@ impl CursorStatus {
         ];
         let mut named = values.into_iter();
         STATUS_VARS.map(|name| (name, named.next().unwrap_or(Value::Bool(false))))
+    }
+}
+
+/// What `cursor_ground` says of a cell where several items lie.
+const PILE_WORDS: &str = "several things";
+
+/// Names written out as a list: `a`, `a and b`, `a, b and c`.
+fn written_out(names: &[String]) -> String {
+    match names.split_last() {
+        None => String::new(),
+        Some((only, [])) => only.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
     }
 }
 
@@ -163,11 +184,38 @@ impl<H: SceneHost> Scene<H> {
         };
         let camera = *world.camera();
         let (grid, at, subject) = (camera.grid(), camera.centre(), camera.subject());
-        status.sight = match world.model().cell_in(grid, at) {
+        let known = world.model().cell_in(grid, at).copied();
+        status.sight = match known {
             Some(cell) if cell.seen() => SIGHT_SEEN,
             Some(_) => SIGHT_REMEMBERED,
             None => SIGHT_UNKNOWN,
         };
+        if let Some(cell) = known {
+            let glyphs = world.glyphs();
+            let mut parts: Vec<String> = [
+                (Layer::Fixture, cell.fixture.raw()),
+                (Layer::Block, cell.block.raw()),
+                (Layer::Floor, cell.floor.raw()),
+            ]
+            .into_iter()
+            .filter_map(|(layer, state)| glyphs.element_name(layer, state))
+            .collect();
+            if cell.pile() {
+                parts.insert(0, PILE_WORDS.to_owned());
+            }
+            status.ground = parts.join("; ");
+        }
+        // Every thing perceived in the cell, the topmost first.
+        let mut here: Vec<SpriteId> = world
+            .model()
+            .sprites()
+            .filter(|(_, sprite)| sprite.loc.grid == grid && sprite.loc.cell == at)
+            .map(|(id, _)| id)
+            .collect();
+        if let Some(top) = world.model().top_sprite_id_at(grid, at) {
+            here.retain(|id| *id != top);
+            here.insert(0, top);
+        }
         let squared: f64 = [at.x - subject.x, at.y - subject.y, at.z - subject.z]
             .iter()
             .map(|d| f64::from(*d) * f64::from(*d))
@@ -187,6 +235,15 @@ impl<H: SceneHost> Scene<H> {
         if !entity.is_null() {
             status.target = self.name_of(&entity);
         }
+        let names: Vec<String> = here
+            .into_iter()
+            .map(|id| {
+                let value = self.host.sprite_value(id);
+                self.name_of(&value)
+            })
+            .filter(|name| !name.is_empty())
+            .collect();
+        status.things = written_out(&names);
         if let Some(collecting) = &self.collecting {
             status.count = collecting.candidates.len();
             status.index = collecting
