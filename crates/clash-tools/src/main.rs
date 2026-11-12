@@ -9,8 +9,10 @@
 //! `scenario run`, which runs test scripts against the simulation in
 //! the four modes ([`scenario`]); `save inspect`, `save verify` and
 //! `save list` ([`save`]); `replay` between two saves ([`replay`]); and
-//! the terminal world viewer, `worldview` ([`worldview`]). The last
-//! three drive the console's host of `clash-save`. `schema` answers that
+//! the terminal world viewer, `worldview` ([`worldview`]); and the
+//! benchmarks against the budgets of the specifications, `bench`
+//! ([`bench`]). `save`, `replay` and `worldview` drive the console's
+//! host of `clash-save`. `schema` answers that
 //! it is not built yet. The rest is filled in by
 //! `docs/plans/tooling.md`.
 
@@ -18,6 +20,7 @@ use std::process::ExitCode;
 
 use clash_data::DefTypes;
 
+mod bench;
 mod data;
 mod replay;
 mod save;
@@ -46,12 +49,13 @@ pub const ENGINE_CHECKS: &[data::BuildCheck] = &[
 
 fn usage() -> String {
     format!(
-        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}\n{}\n{}",
+        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}\n{}\n{}\n{}",
         data::USAGE,
         scenario::USAGE,
         save::USAGE,
         replay::USAGE,
-        worldview::USAGE
+        worldview::USAGE,
+        bench::USAGE
     )
 }
 
@@ -70,6 +74,7 @@ fn main() -> ExitCode {
         "save" => Some(save::run(rest)),
         "worldview" => Some(worldview::run(rest)),
         "replay" => Some(replay::run(rest)),
+        "bench" => Some(bench::run(rest)),
         _ => None,
     };
     if let Some(output) = own {
