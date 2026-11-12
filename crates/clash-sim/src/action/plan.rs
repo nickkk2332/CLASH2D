@@ -171,9 +171,16 @@ impl Sim {
     /// Asks whoever decides for a free entity what it does next: a
     /// directly controlled one through a `Free` request, anyone else by
     /// `decision_needed` (see the [module documentation](self)). Nothing
-    /// is asked of an entity that is not free.
+    /// is asked of an entity that is not free, nor of one whose mind
+    /// has stopped and that nobody drives ([`Sim::life_lets_act`]): it
+    /// is asked when it wakes or is revived.
     pub(crate) fn free(&mut self, entity: EntityId, why: FreeReason, cause: Cause) {
         if !self.is_free(entity) {
+            return;
+        }
+        // A stopped mind is asked nothing: it is asked when it wakes or
+        // is revived (06 §8.4).
+        if self.life_lets_act(entity).is_err() {
             return;
         }
         let Some(control) = self.entities.get(entity).map(|record| record.control()) else {
@@ -326,6 +333,9 @@ impl Sim {
         how: How,
     ) -> Result<(), Reason> {
         self.controlled(entity)?;
+        // Refused with life's reason for one whose mind has stopped,
+        // whether it would start now or be planned (06 §8.4).
+        self.life_lets_act(entity)?;
         let cause = Cause {
             actor: Some(entity),
             instigator: Some(entity),

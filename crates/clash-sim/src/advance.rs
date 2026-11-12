@@ -9,7 +9,10 @@
 //!    one is waiting.
 //! 3. Dispatch it to the handler of its domain.
 //! 4. Pump events: pass on what the world reported, then deliver queued
-//!    events to their handlers until the queue is empty (05 §8).
+//!    events to their handlers until the queue is empty (05 §8). After
+//!    its handlers, each event is given to movement and to the action
+//!    runtime, which answer what living things report (death,
+//!    unconsciousness, waking, lost slots).
 //! 5. Safe point: reconcile tickets (02 §10.2), which loads and unloads
 //!    tracts and moves the entities in them out of and into the world
 //!    (see [`activity`](crate::activity)).
@@ -33,6 +36,13 @@
 //! has made with [`Sim::set_wake_handler`]. Handlers are not state: a
 //! loaded simulation has the defaults, and whatever was registered on
 //! top must be registered again.
+//!
+//! The `Timer` domain is shared (decision D-651). Pools and bodies keep
+//! their wake-ups there, told apart by tag bits of `arg`, and are handed
+//! theirs first ([`life::handle_wake`](crate::life::handle_wake)); the
+//! domain's handler gets only the rest. So a handler registered for
+//! `Timer` never takes a pool's crossing or a wound's closing away from
+//! life, and the default one reports what nobody handles as a fault.
 //!
 //! The world's own wake-ups (collapse, bodies in flight, fields: the
 //! `World` domain) go through the same loop. The world cannot see the
@@ -145,9 +155,11 @@ impl Default for Handlers {
         };
         handlers.set(WakeDomain::World, world_wake);
         handlers.set(WakeDomain::Action, crate::action::run::action_wake);
-        // Pools and bodies keep their wake-ups in the `Timer` domain. A
-        // package with timers of its own calls `life::handle_wake`
-        // first and handles the rest.
+        // Pools and bodies keep their wake-ups in the `Timer` domain and
+        // are handed theirs before anyone else (`dispatch`). What is
+        // left goes to the handler of the domain: by default one that
+        // reports it as unhandled; a package or a test with timers of
+        // its own registers one with `Sim::set_wake_handler`.
         handlers.set(WakeDomain::Timer, crate::life::timer_wake);
         handlers.set(WakeDomain::Perception, crate::perception::on_wake);
         handlers
@@ -171,6 +183,8 @@ fn world_wake(sim: &mut Sim, _id: WakeId, wake: Wake) {
 impl Sim {
     /// Registers the handler of a wake-up domain, replacing the one it
     /// had, which is returned. See the [module documentation](self).
+    /// For the `Timer` domain it handles the timers that are not life's:
+    /// pools' and bodies' are handed to life before it.
     pub fn set_wake_handler(
         &mut self,
         domain: WakeDomain,
@@ -264,6 +278,11 @@ impl Sim {
 
     /// Hands a popped wake-up to the handler of its domain.
     fn dispatch(&mut self, id: WakeId, wake: Wake) {
+        // The `Timer` domain is shared: pools and bodies first, then
+        // whatever handles the rest (decision D-651).
+        if wake.domain == WakeDomain::Timer && crate::life::handle_wake(self, wake) {
+            return;
+        }
         match self.handlers.by_domain.get(&wake.domain).copied() {
             Some(handler) => handler(self, id, wake),
             None => self.fault(
@@ -343,6 +362,7 @@ impl Sim {
             // What the engine's own packages do about it, once rules
             // have had their say.
             crate::movement::on_event(self, &event);
+            crate::action::run::on_event(self, &event);
             crate::perception::observe_event(self, &event);
             crate::device::on_event(self, &event);
             crate::ai::on_event(self, &event);

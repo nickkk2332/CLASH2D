@@ -5,8 +5,11 @@
 //! does, on the null frontend, with a fixed time step and a grid of
 //! [`HEADLESS_SIZE`]. Input comes from the script, one line at a time.
 //! Each line of input is followed by one pass of the loop, in which the
-//! simulation is advanced until the player's character is free again,
-//! so a script is reproducible (12 V8).
+//! simulation is advanced until the player's character is asked what it
+//! does next (or [`crate::game::PASS_LIMIT`] has passed), and playback
+//! is advanced by [`HEADLESS_STEP_S`], so a script is reproducible
+//! (12 V8). A stretch that plays over time is played on by `wait`
+//! lines, and jumped to its end by the next key, as a player's is.
 //!
 //! # The script
 //!
@@ -66,6 +69,12 @@ impl Headless {
     /// The game.
     pub fn game(&self) -> &Game {
         &self.game
+    }
+
+    /// The game, to hand it a command as a tool would
+    /// ([`Game::submit`]).
+    pub fn game_mut(&mut self) -> &mut Game {
+        &mut self.game
     }
 
     /// The current frame.

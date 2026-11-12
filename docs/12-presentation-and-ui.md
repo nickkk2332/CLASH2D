@@ -154,44 +154,74 @@ the terminal before its message is printed.
 
 ### 3.2 The frame loop as built
 
-One pass of the loop is one frame, 16 ms in a terminal:
+One pass of the loop is one frame, 16 ms in a terminal (decisions D-590,
+D-652):
 
 1. **Input.** What the frontend polled goes to the scene, which runs the
    effects it asks for: screens open and close, commands are submitted
-   through the host, services are asked of the application.
+   through the host, services are asked of the application. Input
+   applies to the present: a key pressed while something is being
+   played jumps playback to its end before it is used (section 7.1),
+   and the loop does the same for a press of a mouse button and for
+   pasted text.
 2. **Follow-up.** A refused command and an effect that could not be run
    each get a line in the log. An `app` service that failed also opens
    the screen of the role `error` with the reason as its parameter
    `text`. A game that was started or loaded closes every screen and
    opens the one of the role `play`; a game whose play screen has been
    closed is over.
-3. **The simulation.** While the player's character is busy, the
-   simulation is advanced with `advance(Until(t))` in steps of 100 ms of
-   simulation time, until the character is free, a decision is needed,
-   or 8 ms of the frame have been spent. After each step the events are
-   drained and shown. Nothing else advances the simulation, and its
-   events reach the scene in the pass that advanced it.
-4. **Decisions.** A decision that is waiting gets its screen
-   (section 9.5).
-5. **The view.** If anything happened, the view model is fed with what
-   the character sees now.
-6. **The frame.** The scene is advanced by the real time elapsed, builds
-   a frame of the frontend's size, and the frontend presents it. The
-   rest of the frame is slept out.
+3. **The simulation.** While the player's character waits on the
+   simulation, which is while no decision is asked of it and it is busy
+   (an action, a wait, a plan) or unconscious, the simulation is
+   advanced toward the character's next decision (03 §5.2) with
+   `advance(Work(256))`, `UntilDecision` in slices, until a decision is
+   needed, nothing is left to happen, 8 ms of the frame have been spent
+   or an hour of simulation time has passed in the pass. A character
+   that is free, dead or out of the world is not waited on. Nothing
+   else advances the simulation.
+4. **Playback.** What the simulation reported in the pass, the
+   commands' events and then the advance's, is drained and handed to
+   the scene as one batch (`push_events`), after the character has
+   looked round, so that the host answers what the party perceived as
+   of the end of the batch (section 7.5). A fault and a `message` for
+   the player also get a line in the log at once (categories `fault`
+   and `message`). The scene is advanced by the real time elapsed and
+   plays what falls due.
+5. **The present.** Once playback has caught up, the view model is
+   given what the character perceives that no event said: cells that
+   came into view or left it, and who is in view. In a debug build it
+   is then checked against a fresh view model (section 5), and a drift
+   is written to the log as a fault. A decision that is waiting gets its
+   screen (section 9.5).
+6. **The frame.** The scene builds a frame of the frontend's size, and
+   the frontend presents it. The rest of the frame is slept out.
 
 The loop never waits on the simulation: a pass that runs out of its
 slice presents a frame and carries on in the next. A request a rule
 makes of the application (13 §9.1) is a checkpoint save, which goes to
 the save service, or is reported in the log as not yet possible.
 
-Four parts of this loop are stand-ins for packages that are not built,
+The commands the play screen submits become the simulation's own
+through the host (`clash_app::host::command_for`): an `act` of an
+action is `Act` with `start` for the player's character, the action by
+its qualified id (a bare name means the first action of that name in
+order of qualified id) and its parameters as the scene assembled them;
+the command `wait { dur }` is `Wait`, `cancel { action, abandon? }` is
+`Cancel`, `clear_plan` is `ClearPlan`, and `choose { entity, choice,
+option }`, which the choice prompt submits, is `Choose`. `react`,
+`pass` and a `run` of a rule are refused with the reason until windows
+(03 §7) and the `Ui` command are built. A refusal is the simulation's
+reason: walking into a shut door is refused with what the movement
+package says, "The way is closed.". Tools and tests hand the game a
+command of their own with `Game::submit`, through `Sim::submit` as
+everything else.
+
+Two parts of this loop are stand-ins for packages that are not built,
 each a module of its own that is deleted when that package lands:
 
 | Stand-in | For | Does |
 |----------|-----|------|
-| `clash_app::shim` | The action runtime (03 §4.4) | The simulation has no `Act` command yet. `step { dir }` is checked against the world as a walker would make it (`neighbours`; walls, closed doors, drops and corners stop it, with the reason in the log), carried out as a debug move, and makes the character busy for the step's length at 1.4 m/s. `go_to { to }` plans a path over the cells the character has seen and takes it a step at a time. The command `wait { dur }` makes the character busy for `dur` seconds. Anything else is refused with a reason. A character with nothing to do is asked a free decision. |
-| `clash_app::perception_shim` | Perception (15 §13) | After anything happens, every known cell becomes remembered, the field of view from the character's cell with an eye 1.6 m above its base and a reach of 40 m is worked out, each cell in it is observed with its light, and each occupant in it becomes a sprite. Nothing beyond the field of view reaches the view model. Every creature but the player's own is drawn as the theme's suspected mark. |
-| `clash_app::present` | Playback (section 7) | Every drained event marks the view to be fed again, and each event with a message (a contained fault, or a mod's event with a `text` field) gets one line in the log. |
+| `clash_app::perception_shim` | Perception (15 §13) | After anything happens, the field of view from the character's cell with an eye 1.6 m above its base and a reach of 40 m is worked out, each cell in it is seen with its light, and each occupant in it becomes a sprite: the party's sight as of the end of the batch, written into its map memory. Playback is answered from it: an event was seen if a place it is about (not who did it) is in sight or seen in the picture, and nothing is only heard; a cell is seen as sight says; a thing is perceived as sight says, or known and not perceived now if it was ever seen. Once playback has caught up, every known cell becomes remembered, the cells in sight are seen, and who is in view replaces who was; the fresh view model of the debug check is memory and sight alone. Every creature but the player's own is drawn as the theme's suspected mark. |
 | `clash_app::saves` | Saving (13 §9) | The services `save`, `load` and `delete_save`, `app.saves`, `app.can_save` and `app.can_load` go through one trait. The backend in this binary lists nothing, says neither can be done, and refuses each service with "saving is not built into this binary yet". |
 
 **The omniscient view.** While a preference whose bare name is
@@ -209,8 +239,11 @@ toggle moves to the `tools` mod (04 §3.5) when that exists.
 
 `clash --headless script` runs the same loop on the null frontend, on a
 grid of 80 × 24, with a fixed step of a sixtieth of a second. Each pass
-advances the simulation until the player's character is free again, so
-a script gives the same frames every time (V8). The script is read a
+advances the simulation until the player's character is asked what it
+does next (or an hour of simulation time has passed), and playback by
+the fixed step, so a script gives the same frames every time (V8). A
+stretch that plays over time is played on by `wait` lines, and jumped
+to its end by the next key, as a player's is. The script is read a
 line at a time:
 
 | Line | Does |
@@ -237,8 +270,7 @@ them as `app.scenarios`:
 ```json
 { "type": "start", "id": "lane", "name": "The lane",
   "doc": "Houses between fields. Their doors are shut.",
-  "realm": "countryside", "at": [39, 45],
-  "glyph": { "ch": "@", "fg": "bright_white", "bold": true } }
+  "realm": "countryside", "at": [39, 45], "template": "person" }
 ```
 
 | Field | Is |
@@ -247,24 +279,51 @@ them as `app.scenarios`:
 | `doc` | A line or two about it: its entry's `description`. |
 | `realm` | The `realm` definition the world is made from: a qualified id, or a bare name in the start's own namespace. Required; one no mod defines is a load error. |
 | `at` | Where the character begins in the realm's base grid: `[x, y]`, the highest cell of that column a walker can stand in, or `[x, y, z]`, that cell. Required. |
-| `glyph` | How the player's character is drawn. Required, with a `ch`. |
+| `template` | The `template` the player's character is made from, every choice at its default, when the player has finished no character of their own (06 §10): a qualified id, or a bare name in the start's own namespace. One no mod defines is a load error, where templates are loaded. Left out, a game begins here only with a character the player made. |
+| `glyph` | How the player's character is drawn when none of its templates gives a glyph, with a `ch`. Left out, such a character is drawn as the theme's suspected mark. |
 
 The service `new_game { scenario }` starts the game: a simulation with
 the realm made from the seed, the generators of the loaded mods and a
-store; the player's character, made by `clash_app::session::make_player`
-(a bare creature, until characters are made from templates, 06 §10);
-its session at the start's place, which loads the tracts round it; and
-direct control. With no `scenario` it takes the first start. The
-bundled `core` mod has two: `core:town`, the test city with its doors
-open, and `core:wayside`, the countryside, whose doors are shut.
+store; the player's character, made by the debug command `spawn`
+(`Sim::spawn_template`, 06 §10.4) from the character the player
+finished in the creation session, or else from the start's `template`
+with every choice at its default and the name given; its session at
+the start's place, which loads the tracts round it; and direct control,
+which asks it its first free decision. With no `scenario` it takes the
+first start. The bundled `core` mod has two, both of the template
+`core:person`: `core:town`, the test city with its doors open, and
+`core:wayside`, the countryside, whose doors are shut. The character is
+drawn with its templates' glyph (decision D-654).
 
-Until character creation (U9) is built, `app.creation` is a map of what
-the player has chosen for the next game: `name` and `seed`. The service
-`edit_creation { field, value }` sets one. A screen that declares a
-variable named `creation_<field>` has it set, when it opens, to that
-field, so the new-game screen starts with the seed given on the command
-line. The name is the character's until it has an `Identity` of its
-own: `name()` of the player's character gives it.
+**The character being made** (decision D-653). The application keeps
+the creation session (06 §10.3) beside the scene, with the name and the
+seed the next game is made with and the character the player finished,
+if they did. The interface reads it as `app.creation` and edits it with
+the service `creation`:
+
+| `op` | With | Does |
+|------|------|------|
+| `begin` | `template` | Starts a session over that template, every choice at its default, and drops a finished character. The name and seed given so far are kept, and the name is selected for the template's `text` choice that `sets` the name, if it has one. |
+| `select` | `key`, `value` | Selects for an open choice by its key (`core:person.build`): a list of option or part ids, one id, a number or a text, as the choice takes. |
+| `clear` | `key` | Takes a selection back: the choice is at its default. |
+| `name` | `value` | The character's name, a text: kept, and selected for the choice that sets the name. |
+| `seed` | `value` | The seed the next game's world is made with and random selections are drawn from, a whole number. |
+| `finish` | | Checks the character: refused with the reason if it cannot be made, otherwise kept for `new_game`. |
+
+A refusal is the service's, so the application shows it on the screen
+of the role `error` (section 3.2). Every op but `name` and `seed` needs
+a session in progress; those two are kept without one. Any change to a
+session drops a finished character, which must be finished again. Once
+a game has begun the session and the finished character are dropped,
+and the name and the seed kept for the next. The older service
+`edit_creation { field, value }` sets the `name` or the `seed`, as the
+ops of those names do. A screen that declares a variable named
+`creation_<field>` has it set, when it opens, to the `name` or the
+`seed`, whether or not a session is in progress, so the new-game screen
+starts with the seed given on the command line, and gives both back
+with `creation` before it asks for `new_game`. The name is the
+character's own when its template has a choice that sets one; where it
+has none, `name()` of the player's character gives it.
 
 ## 4. Glyphs and frames
 
@@ -822,7 +881,11 @@ subject of the event; a name the event does not bind is a load error.
 
 An event with no `show` changes the picture silently: every cell and
 thing it is about is looked at again, and if nothing seen changed it is
-dropped.
+dropped. A thing looked at so takes the look the party perceives and
+stays where it is drawn: only an event that says so moves it, and the
+last event of a batch about it leaves it where it is perceived. An
+action starting before the step it takes does not move the actor ahead
+of the step (decision D-655).
 
 **Effects.** What a show draws is drawn over the picture and is never
 part of it (decision D-606):
@@ -881,7 +944,8 @@ draw as a glide, is not a line.
 Playback applies only what the party perceived, in the manner it was
 perceived (section 5). It does not decide that: the host does, and
 until perception (15 §13) is built a stand-in in `clash_scene::testing`
-does for tests (decision D-603).
+does for tests (decision D-603), and `clash_app::perception_shim` for
+the game (section 3.2, decision D-656).
 
 | The host is asked | When | It answers |
 |-------------------|------|------------|
@@ -1526,7 +1590,7 @@ properties, all safe for belief:
 | `saves`, `profiles`, `mods`, `scenarios` | `list<app_entry>` | What there is of each. Until game scenarios exist, `scenarios` lists the `start` definitions (section 3.4). |
 | `profile`, `scenario` | `app_entry?` | The ones in use |
 | `pref(id)` | `any` | A preference's value (below). `id` is the id of a `preference`, checked when mods load. |
-| `creation` | `any` | The character being made (06 §10.3); null when none is. Until character creation is built, a map of `name` and `seed` (section 3.4). |
+| `creation` | `any` | The character being made (06 §10.3, section 3.4): null while no creation session is in progress, else the map `CreationSession::to_value` gives (`templates`; `choices`, each a map of `key`, `name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`, `max`, `max_length`, `options` with `id`, `name`, `cost` and `chosen`, `parts`, `value` and `by_default`; `complete`; `problem`) with `template`, the first template's qualified id, `name`, `seed`, and `finished`, whether `new_game` will make this character. |
 | `size` | `list<int>` | The grid, as `[columns, rows]` |
 | `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
 
@@ -1648,7 +1712,8 @@ screen's bindings (section 10.4): a text is written `"'like this'"`.
 | `set_pref` | `pref`: the preference's id. `value`. |
 | `rebind` | `context`, `key`, `name`: as a keymap writes them (section 9.2) |
 | `select_profile` | `profile`: the profile's id |
-| `edit_creation` | `field`, `value` |
+| `creation` | `op`: `begin`, `select`, `clear`, `name`, `seed` or `finish`; `template` for `begin`; `key` for `select` and `clear`; `value` for `select`, `name` and `seed` (section 3.4) |
+| `edit_creation` | `field`, `value`: the older form of `creation`'s `name` and `seed` |
 
 A list is run in order, in the screen that asked: its expressions read
 that screen's variables and parameters, and `it` where the event has a
@@ -1909,8 +1974,9 @@ more for each event of the kernel and the world.
 
 **The application**: the command line, the user's data directory and
 what it holds, and the headless script: sections 3.1 and 3.3. The role
-`error`, the service `edit_creation` and the `creation_<field>`
-variables: sections 3.2 and 3.4.
+`error`, the commands the play screen submits, the services `creation`
+and `edit_creation`, `app.creation` and the `creation_<field>`
+variables: sections 3.2, 3.4 and 10.4.
 
 **Widgets**: section 10.3. **UI effects**: section 10.5.
 **Binding names**: section 10.4. **Navigation names**, and the theme
@@ -1944,10 +2010,14 @@ given by `of`. Which preferences the engine itself acts on, `theme` and
 be switched, nor mods read again, while the application runs: the
 services `select_profile` and `reload_mods` are refused, saying to start
 again. The grid of a headless run, its time step, the frame time and the
-share of it given to the simulation are the application's constants.
-Until the packages they stand in for land, the walking pace, eye height
-and reach of sight of section 3.2 are constants too, and every other
-creature is drawn as the suspected mark. The words `Yes` and `No` of the bundled confirm
+share of it given to the simulation, the wake-ups one call of `advance`
+may handle and the hour of simulation time one pass may cover are the
+application's constants. Until perception lands, the eye height and
+reach of sight of section 3.2 are constants too, nothing is heard, and
+every other creature is drawn as the suspected mark. A `message` to the
+player and a fault are written in the log by the application as they
+are reported, in the categories `message` and `fault`, and not as they
+are played; no `show` can word or pace them. The words `Yes` and `No` of the bundled confirm
 screen are that screen's, and a mod changes them by overriding it.
 How playback is paced beyond `stretch_time` and `playback_speed` is
 the engine's: that a long wait counts for two seconds, that a backlog
