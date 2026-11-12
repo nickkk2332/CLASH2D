@@ -36,7 +36,7 @@ says which.
 | TL10 | Map editor and capture | L | WG2, U7 | todo |
 | TL11 | Comparing incident forms | M | L3, I10 | todo |
 | TL12 | Player aids | M | SC3, SC6, A9 | todo |
-| TL13 | Save tools | S | K7, P7 | todo |
+| TL13 | Save tools | S | K7, P7 | beta |
 | TL14 | Matchup and compat reports | S | C11, P4 | todo |
 | TL15 | Stepping through a rule | S | TL1, P8 | todo |
 
@@ -97,6 +97,17 @@ simulation: an implementation of `ConsoleHost` (every command's effect,
 and terminal viewer hosts; the `console_command` definition type, which
 becomes a `CommandSpec` with `CommandSource::Rule`; the third "Done when"
 item.
+
+The host is built: `clash_save::host::GameHost` implements every method of
+`ConsoleHost` over a real simulation (14 §3.3, D-581): `use` from a mods
+directory, `gen`, the debug commands as `Debug` commands of the kernel,
+references, evaluation, time, save and load through the whole-game save,
+records from the kernel's events, refusals with reasons, frames, thread
+counts. The terminal viewer drives it (`clash-tools worldview`). Still
+waiting: the game overlay (the application's), the `console_command`
+type, and verbs, `do` and `run`, which reach `GameHost::run_verb` and are
+refused until the rule runtime is bound; `damage`, `field` and `gen` are
+not yet `Debug` commands (D-585).
 
 ### TL2 — Reasons
 
@@ -185,6 +196,16 @@ scripts are run and blessed from the command line; `expect frame` against
 real frames (12 §12); `--paranoid`, which waits for the checkers of TL7;
 running a mod's own scripts from its directory, which needs profiles.
 
+The host is registered: `clash-tools scenario run` runs and blesses every
+script against the real simulation in the four modes, `expect frame`
+compares real frames, a script marked `# host: fake` runs against the fake
+host and one marked `# known failure:` is expected to fail (D-583), and
+exit code 3 is gone. Scripts under `scenarios/world/` cover entities moved
+by debug commands, a wall punched to rubble, a tower that collapses with
+a save and load in the fall, fire that spreads and burns out, a walk
+across the city's tracts, and `smoke_city`. Still waiting: `--paranoid`
+(TL7) and a mod's own scripts.
+
 ### TL7 — Invariant checkers
 
 **Spec** 14 §7.3 · **Size** M
@@ -217,6 +238,12 @@ Done when
   interval and subsystem (invariant Y6).
 - `diff` names the entity or cell that differs.
 - After `rewind` and `advance` the hash equals the original at that tick.
+
+Partly built ahead (D-587): `clash-tools replay <from> <to>` replays the
+commands between two saves of one game and names the subsystems whose
+hash differs at the end. The input log carries no hashes at intervals
+yet, so the first differing interval is not found; `diff`, `report` and
+`rewind` are not built.
 
 ### TL9 — Mod authoring suite
 
@@ -283,6 +310,12 @@ Done when
 Done when
 - `save verify` fails on a save with a corrupted tract and names it.
 - `save migrate` produces a save that loads under renamed definitions.
+
+Beta: `save inspect`, `save verify` and `save list` are built over
+`clash-save`; the first "Done when" item is shown by a test that writes
+over a tract blob. Not built: `save migrate`, which waits for migration
+entries (04 §12); the invariant checkers in `save verify` (TL7); sizes by
+subsystem and counts of entities by form in `save inspect`.
 
 ### TL14 — Matchup and compat reports
 
