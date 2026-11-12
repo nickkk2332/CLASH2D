@@ -11,6 +11,9 @@
     },
     "requires": "dist(self, $target) <= 1.5",
     "tempo": "self.attr.quickness",
+    "attacks": {
+      "fist": { "with": { "part": "hand", "surface": "fist" }, "energy": 120, "push": 0.1 }
+    },
     "phases": [
       { "id": "windup", "time": "300 ms", "cancel": true,
         "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },

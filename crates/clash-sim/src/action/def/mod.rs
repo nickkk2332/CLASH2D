@@ -247,6 +247,12 @@ pub struct ActionDef {
     locals: Vec<Local>,
     #[serde(skip)]
     reacts: Vec<WindowKindId>,
+    /// What the action strikes with (07 §3.1): its attacks, which the
+    /// `strike` effect of one of its lists resolves. An action with
+    /// attacks is given the locals `strike` leaves (`$landed`,
+    /// `$absorbed`, `$passed`) as variables, unless it declares them.
+    #[serde(default)]
+    pub attacks: crate::combat::Attacks,
 }
 
 impl ActionDef {
@@ -361,7 +367,8 @@ impl ActionDef {
     }
 
     /// Every effect list of the action, in the order written: its own
-    /// five, then for each phase `do`, `on_exit` and the tick's.
+    /// five, then for each phase `do`, `on_exit` and the tick's, then
+    /// for each attack `on_land`, `on_miss` and `on_stopped`.
     pub fn effect_lists(&self) -> impl Iterator<Item = &Effects> {
         let own = [
             &self.on_start,
@@ -376,7 +383,54 @@ impl ActionDef {
                 .chain([phase.tick.as_ref().map(|tick| &tick.effects)])
                 .flatten()
         });
-        own.into_iter().chain(phases)
+        own.into_iter()
+            .chain(phases)
+            .chain(self.attacks.effect_lists())
+    }
+
+    /// The scope an attack's expressions are compiled in (07 §3.1): the
+    /// action's, reading truth, with the subjects `weapon` (the item
+    /// that strikes), `limb` (the part that strikes) and `target` (the
+    /// one struck) after `self`. Each is null where there is none.
+    pub fn attack_scope(&self) -> Scope {
+        let subjects = Scope::new()
+            .own(ACTOR_SUBJECT, ENTITY_KIND)
+            .subject(crate::combat::WEAPON_SUBJECT, ENTITY_KIND)
+            .subject(crate::combat::LIMB_SUBJECT, "part")
+            .subject(crate::combat::TARGET_SUBJECT, ENTITY_KIND);
+        with_locals(subjects, &self.locals)
+    }
+
+    /// The scope an attack's effect lists are compiled in: the action's
+    /// effect scope with the subject `target` after `self`.
+    pub fn attack_effect_scope(&self) -> Scope {
+        let subjects = Scope::new()
+            .own(ACTOR_SUBJECT, ENTITY_KIND)
+            .subject(crate::combat::TARGET_SUBJECT, ENTITY_KIND);
+        with_locals(subjects, &self.locals)
+    }
+
+    /// Gives an action with attacks the locals the `strike` effect
+    /// leaves (07 §3.4), as variables, where it does not declare them.
+    fn imply_strike_results(&mut self) {
+        let Some(first) = self.attacks.iter().next() else {
+            return;
+        };
+        let at = first.id.span;
+        for (name, written) in crate::combat::RESULT_LOCALS {
+            let declared = self.roles().iter().any(|role| role.name.value == name)
+                || self.params().iter().any(|param| param.name.value == name)
+                || self.vars().iter().any(|var| var.name.value == name);
+            if declared {
+                continue;
+            }
+            let start = if written == "bool" {
+                Expr::literal(false)
+            } else {
+                Expr::literal(Real::ZERO)
+            };
+            self.vars.0.push(Var::implied(name, written, start, at));
+        }
     }
 
     /// An action that does nothing: one phase of no length. What a
@@ -408,6 +462,7 @@ impl ActionDef {
             low_attention: false,
             locals: Vec::new(),
             reacts: Vec::new(),
+            attacks: crate::combat::Attacks::default(),
         }
     }
 }
@@ -867,6 +922,8 @@ impl Def for ActionDef {
 
     fn finish(&mut self, cx: &mut FinishCx<'_>) {
         self.uses.finish("uses", cx);
+        self.attacks.finish(cx);
+        self.imply_strike_results();
         self.finish_roles(cx);
         self.finish_names(cx);
         self.finish_reactions(cx);
@@ -924,6 +981,10 @@ impl Def for ActionDef {
             }
         }
 
+        // The attacks: truth, with the action's locals and what strikes.
+        let (attack_exprs, attack_effects) = (self.attack_scope(), self.attack_effect_scope());
+        self.attacks.compile(cx, &attack_exprs, &attack_effects);
+
         // The effect lists: truth, with the action's locals.
         let effects = self.effect_scope();
         cx.compile(&mut self.on_start, &effects);
@@ -944,6 +1005,8 @@ impl Def for ActionDef {
         for effects in self.effect_lists() {
             effects.validate(cx);
         }
+        self.attacks.validate(cx);
+        crate::combat::check_strikes(self, cx);
         let constant = |expr: &Expr<Number>| expr.constant().and_then(|value| value.as_number());
         let mut refuse_at = |span: Option<Span>, path: String, message: &str| {
             let mut diagnostic = Diagnostic::new(code::VALIDATION, message).with_path(path);

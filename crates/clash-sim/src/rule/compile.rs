@@ -21,8 +21,8 @@ use clash_expr::{DefRef, EventId, Place, PlaceRoot, Type, Value, is_keyword};
 use super::def::{EOC_TYPE, EocDef, REASON_TYPE, RULE_GROUP_TYPE};
 use super::effects::Compiled;
 use super::tree::{
-    Arg, Ask, AskOption, AskOptions, Block, Call, Effect, EffectKind, Emit, Items, Target, Timer,
-    TimerKind,
+    Arg, Ask, AskOption, AskOptions, Block, Call, Effect, EffectKind, Emit, Items, Strike, Target,
+    Timer, TimerKind,
 };
 use super::value::literal_type;
 use super::{EocId, ReasonDefId, RuleGroupId};
@@ -188,6 +188,15 @@ pub const CORE_EFFECTS: &[EffectInfo] = &[
         doc: "Offers a choice. A directly controlled entity is asked and time stops until it answers; anyone else takes the first option whose `if` holds. The chosen option's `do` runs with the subjects and locals of where the `ask` is written. `options` may instead be an expression giving a list of maps, each with `label`, `eoc` and `with`. `who` defaults to `self`.",
     },
 ];
+
+/// The effects the rule system compiles that only an action's lists may
+/// hold: they act on the action that runs them (07 §3.4). For the
+/// generated reference.
+pub const ACTION_EFFECTS: &[EffectInfo] = &[EffectInfo {
+    name: "strike",
+    form: r#"{ "strike": { "attack": id, "target": entity, "part": part, "effort": real, "sure": bool } }"#,
+    doc: "Resolves an attack of the action whose list it is written in against `target`, or against the cell `at` (07 §3.4), and leaves `$landed`, `$absorbed` and `$passed` in the action's locals. `attack` may be left out of an action with one attack; `effort` defaults to 1, `sure` to false. Only in an action's lists.",
+}];
 
 /// What `emit` gives a `let` (05 §8.1): the event's fields by name, as
 /// the handlers left them, and these two entries.
@@ -1359,8 +1368,107 @@ impl Compiler<'_, '_> {
                     })));
                 }
             }
+            "strike" => self.strike(value, &at, out),
             _ => self.verb(head, path, out),
         }
+    }
+
+    /// `strike` (07 §3.4): its arguments, and the locals it leaves.
+    fn strike(&mut self, value: &Node, at: &str, out: &mut Vec<EffectKind>) {
+        let Some(members) = value.as_object() else {
+            self.error(
+                codes::BAD_EFFECT,
+                value.span,
+                at,
+                "`strike` takes `{ \"attack\": id, \"target\": entity, \"part\": part, \"effort\": real, \"sure\": bool }`, or `at` for a cell in place of `target`",
+            );
+            return;
+        };
+        let inner = Keys { members };
+        self.only(
+            &inner,
+            at,
+            "strike",
+            &["attack", "target", "at", "part", "effort", "sure"],
+        );
+        if matches!(self.within, Within::Rule(_)) {
+            self.error(
+                codes::MISPLACED_EFFECT,
+                value.span,
+                at,
+                "`strike` resolves an attack of the action whose list it is written in, and a rule has no attacks",
+            );
+            return;
+        }
+        let attack = match inner.get("attack") {
+            Some(member) => match member.value.as_str() {
+                Some(id) => Some(Arc::from(id)),
+                None => {
+                    self.error(
+                        codes::BAD_EFFECT,
+                        member.value.span,
+                        &child(at, "attack"),
+                        "`attack` is the id of one of the action's attacks, as written in its `attacks`",
+                    );
+                    return;
+                }
+            },
+            None => None,
+        };
+        let registry = self.cx.registry();
+        let ty = |written: &str| registry.parse_type(written).unwrap_or(Type::Any);
+        let (entity, loc, part) = (ty("entity?"), ty("loc?"), ty("part?"));
+        let arg = |this: &mut Self, key: &str, expected: &Type| {
+            inner
+                .get(key)
+                .and_then(|member| this.arg(&member.value, &child(at, key), expected))
+        };
+        let target = arg(self, "target", &entity);
+        let cell = arg(self, "at", &loc);
+        let aimed = arg(self, "part", &part);
+        let effort = arg(self, "effort", &Type::Real);
+        let sure = arg(self, "sure", &Type::Bool);
+        if inner.get("target").is_none() == inner.get("at").is_none() {
+            self.error(
+                codes::BAD_EFFECT,
+                value.span,
+                at,
+                "`strike` names whom it strikes, `target`, or the cell it strikes, `at`: one of the two",
+            );
+            return;
+        }
+        let mut results = [None; 3];
+        let left = [
+            ("landed", Type::Bool, "bool"),
+            ("absorbed", Type::Real, "real"),
+            ("passed", Type::Real, "real"),
+        ];
+        for (slot, (name, given, written)) in results.iter_mut().zip(left) {
+            let Some(found) = self.locals.iter().rposition(|(have, _)| have == name) else {
+                continue;
+            };
+            if !self.locals[found].1.accepts(&given) {
+                self.error(
+                    codes::BAD_EFFECT,
+                    value.span,
+                    at,
+                    format!(
+                        "`strike` leaves a {written} in `${name}`, and this list's `${name}` cannot hold one"
+                    ),
+                );
+                return;
+            }
+            *slot = u16::try_from(found).ok();
+        }
+        out.push(EffectKind::Strike(Box::new(Strike {
+            attack,
+            target,
+            at: cell,
+            part: aimed,
+            effort,
+            sure,
+            results,
+        })));
     }
 
     /// Reads and compiles a text template in the scope the effect

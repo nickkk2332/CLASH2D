@@ -1,0 +1,177 @@
+[
+  { "//": "Hand-to-hand fighting for people, written as any mod would write it (07). Nothing here is a bonus: each blow is so many joules on a surface, and what it does is the body model's to say. Values are illustrative: an ordinary person of strength 10 punches with about 80 J, kicks with about 200 J and cuts with a knife with about 50 J.",
+    "type": "window_kind", "id": "strike" },
+
+  { "//": "Who hits where they aim. How many times the one is the other decides: between equals half of all blows land on the mark, a third beside it and the rest miss. Against nothing (an evasion of zero) every blow lands where it was aimed.",
+    "type": "contest", "id": "melee", "name": "Melee",
+    "form": "ratio", "factor": 3, "spread": 1, "near": 1.5 },
+
+  { "type": "function", "id": "fighting",
+    "params": { "who": "entity" },
+    "returns": "real",
+    "value": "$who.attr.wits ?? 0",
+    "doc": "How well someone fights hand to hand: their wits." },
+
+  { "type": "function", "id": "evasion",
+    "params": { "who": "entity", "from": "entity" },
+    "returns": "real",
+    "value": "if perceives($who, $from) ?? false then fighting($who) else 0",
+    "doc": "How hard someone is to land a blow on, against a given attacker: nothing at all for someone who does not perceive the attacker (15 §6), who is simply hit; otherwise how well they fight." },
+
+  { "//": "A punch with the fist. It is aimed at a part, or at none and lands where the body offers; effort holds it back.",
+    "type": "action", "id": "punch", "name": "Punch",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "part":   { "type": "part?", "default": "null" },
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "fist": {
+        "with":   { "part": "hand", "surface": "fist" },
+        "energy": "(self.attr.strength ?? 10) * 8",
+        "push":   0.1,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" } } },
+    "phases": [
+      { "id": "windup", "time": "250 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "attack": "fist", "target": "$target", "part": "$part", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "300 ms", "cancel": ["strike"] } ] },
+
+  { "//": "A kick with the heel: slower, harder, and it shoves more.",
+    "type": "action", "id": "kick", "name": "Kick",
+    "uses": { "leg": 1 },
+    "params": {
+      "target": "entity",
+      "part":   { "type": "part?", "default": "null" },
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "heel": {
+        "with":   { "part": "foot", "surface": "heel" },
+        "energy": "(self.attr.strength ?? 10) * 20",
+        "push":   0.25,
+        "aim":    { "contest": "melee", "by": "fighting(self) - 1", "against": "evasion(target, self)" } } },
+    "phases": [
+      { "id": "windup", "time": "400 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "attack": "heel", "target": "$target", "part": "$part", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "500 ms" } ] },
+
+  { "//": "A cut with the edge of a blade held in the hand: a knife, or anything tagged `blade`.",
+    "type": "action", "id": "slash", "name": "Slash",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "part":   { "type": "part?", "default": "null" },
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "cut": {
+        "with":   { "held": "blade", "surface": "edge" },
+        "energy": "(self.attr.strength ?? 10) * 5",
+        "push":   0.02,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" } } },
+    "phases": [
+      { "id": "windup", "time": "300 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "attack": "cut", "target": "$target", "part": "$part", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "350 ms", "cancel": ["strike"] } ] },
+
+  { "//": "A thrust with the point of a blade held in the hand.",
+    "type": "action", "id": "stab", "name": "Stab",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "part":   { "type": "part?", "default": "null" },
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "point": {
+        "with":   { "held": "blade", "surface": "point" },
+        "energy": "(self.attr.strength ?? 10) * 4",
+        "push":   0.05,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" } } },
+    "phases": [
+      { "id": "windup", "time": "250 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "attack": "point", "target": "$target", "part": "$part", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "300 ms", "cancel": ["strike"] } ] },
+
+  { "//": "A shove with both palms: nearly all of it pushes. An ordinary shove staggers; a much stronger one throws the target, who lands on the ground.",
+    "type": "action", "id": "shove", "name": "Shove",
+    "uses": { "arm": 2 },
+    "params": {
+      "target": "entity",
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $target) < 2",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "palms": {
+        "with":   { "part": "hand", "surface": "palm" },
+        "energy": "(self.attr.strength ?? 10) * 25",
+        "push":   0.95,
+        "knock_down": "prone" } },
+    "phases": [
+      { "id": "windup", "time": "300 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "attack": "palms", "target": "$target", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "400 ms" } ] },
+
+  { "//": "A punch at what stands in a cell beside the actor: a door, a wall, a crate. What the element is not affected by comes back into the fist (07 §6.3).",
+    "type": "action", "id": "smash", "name": "Smash",
+    "uses": { "arm": 1 },
+    "params": {
+      "at":     "cell",
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $at) < 2",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "fist": {
+        "with":   { "part": "hand", "surface": "fist" },
+        "energy": "(self.attr.strength ?? 10) * 8" } },
+    "phases": [
+      { "id": "windup", "time": "250 ms", "cancel": true },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "at": "$at", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "300 ms" } ] },
+
+  { "//": "A cut turned right round with a blade held in the hand: whoever stands within reach is met in turn, and each takes what passed the one before (07 §6.4). Aimed at a part, it is aimed at that part of each.",
+    "type": "action", "id": "whirl", "name": "Whirl",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "part":   { "type": "part?", "default": "null" },
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "round": {
+        "with":   { "held": "blade", "surface": "edge" },
+        "energy": "(self.attr.strength ?? 10) * 5",
+        "push":   0.02,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" },
+        "arc":    { "sweep": 360, "max": 8, "through": true } } },
+    "phases": [
+      { "id": "windup", "time": "450 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "attack": "round", "target": "$target", "part": "$part", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "500 ms" } ] }
+]

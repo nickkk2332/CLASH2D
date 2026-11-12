@@ -160,7 +160,9 @@ mod value;
 
 pub(crate) use bind::Runtime;
 pub use bind::SimRules;
-pub use compile::{CORE_EFFECTS, EMIT_CANCELLED, EMIT_REASON, EffectInfo, MAX_BLOCK_DEPTH};
+pub use compile::{
+    ACTION_EFFECTS, CORE_EFFECTS, EMIT_CANCELLED, EMIT_REASON, EffectInfo, MAX_BLOCK_DEPTH,
+};
 pub use def::{
     EOC_TYPE, EocDef, EocId, GLOBAL_SUBJECT, OWNER_SUBJECT, REASON_TYPE, RULE_GROUP_TYPE,
     ReasonDef, ReasonDefId, RuleGroupDef, RuleGroupId, RuleParam, RuleSubject, Rules,
@@ -170,7 +172,8 @@ pub use effects::Effects;
 pub use host::{
     DEFAULT_FAULT_BURST, DEFAULT_MAX_CALL_DEPTH, DEFAULT_MAX_QUEUED, DEFAULT_MAX_STEPS,
     DEFAULT_MAX_VALUE_DEPTH, DEFAULT_MAX_VALUE_SIZE, FaultLimiter, LIMIT_SETTINGS, Message, Offer,
-    OfferOption, Offered, Raise, Raised, RuleFault, RuleHost, RuleLimits, RunView, VerbCall,
+    OfferOption, Offered, Raise, Raised, RuleFault, RuleHost, RuleLimits, RunView, StrikeCall,
+    StrikeOutcome, VerbCall,
 };
 pub use interp::RunOutcome;
 pub use reason::RULE_REASONS;
@@ -184,7 +187,7 @@ pub use timer::{
 };
 pub(crate) use timer::{properties as timer_properties, timer_wake};
 pub use tree::{
-    Arg, Ask, AskOption, AskOptions, Block, Call, Effect, EffectKind, Emit, Items, Target, Timer,
-    TimerKind,
+    Arg, Ask, AskOption, AskOptions, Block, Call, Effect, EffectKind, Emit, Items, Strike, Target,
+    Timer, TimerKind,
 };
 pub(crate) use value::conforms;
