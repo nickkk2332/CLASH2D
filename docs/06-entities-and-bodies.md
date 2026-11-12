@@ -1603,7 +1603,10 @@ spec when the player is done. The application hands it to the interface
 as `app.creation`: a map of `templates`, `choices` (each a map of `key`,
 `name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`,
 `max`, `max_length`, `options`, `parts`, `value`, `by_default`),
-`complete` and `problem`.
+`complete` and `problem`, with the application's own `template`,
+`name`, `seed` and `finished`; the interface edits it with the service
+`creation` (12 §3.4, decision D-653), and a new game's player is
+spawned from the finished spec, or from its start's template.
 
 Not built: the `creature` type; `apply_template` on an entity that
 exists; adding the parts an `assemble` choice chose, which waits for

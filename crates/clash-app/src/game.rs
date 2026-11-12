@@ -12,20 +12,33 @@
 //!    a failure gets a line in the log, a service that failed opens the
 //!    error screen, a game that was started is shown, one whose play
 //!    screen was left is ended.
-//! 3. **The simulation.** While the player's character owes time
-//!    ([`crate::shim`]), the simulation is advanced toward the moment
-//!    it is free again, in steps of [`SIM_STEP`], until that moment, a
-//!    decision, or the end of the pass's time slice. After each step
-//!    the events are drained and shown ([`crate::present`]). Nothing
-//!    else advances the simulation, and it is never advanced without
-//!    its events reaching the scene in the same pass.
-//! 4. **Decisions.** A decision that is waiting gets its screen
-//!    (`Scene::sync_decision`).
-//! 5. **The view.** If anything happened, the view model is fed with
-//!    what the character sees now ([`crate::perception_shim`]).
-//! 6. **The frame.** The scene is advanced by the real time elapsed,
-//!    builds a frame of the frontend's size and the frontend presents
-//!    it.
+//! 3. **The simulation.** While the player's character waits on the
+//!    simulation (`Session::waits_on_simulation`: no decision is asked
+//!    of it and it is busy or unconscious), the simulation is advanced
+//!    toward its next decision (03 §5.2): `advance(Work(n))` with
+//!    [`SIM_WORK`] wake-ups at a time, which is `UntilDecision` in
+//!    slices, until a decision is needed, nothing is left to happen,
+//!    the pass's time slice is used or [`PASS_LIMIT`] of simulation time
+//!    has passed. Nothing else advances the simulation.
+//! 4. **Playback.** Everything the simulation reported in the pass, the
+//!    commands' events and the advance's, is drained and handed to the
+//!    scene as one batch (`Scene::push_events`), after the character
+//!    has looked round ([`crate::perception_shim::look`]), so that the
+//!    host answers what the party perceived as of the end of the batch.
+//!    A fault, and a `message` for the player, also get a line in the
+//!    log at once. The scene is then advanced by the real time elapsed
+//!    and plays what falls due.
+//! 5. **The present.** Once playback has caught up: the view model is
+//!    given what the character perceives that no event said
+//!    ([`crate::perception_shim::show`]), and in a debug build checked
+//!    against a fresh one (`Scene::check_caught_up`); a decision that
+//!    is waiting gets its screen (`Scene::sync_decision`).
+//! 6. **The frame.** The scene builds a frame of the frontend's size and
+//!    the frontend presents it.
+//!
+//! Input applies to the present: a key pressed while something is being
+//! played jumps playback to its end before it is used (the scene does
+//! this), and so does a click or pasted text (this loop does).
 //!
 //! The pass returns whether to go on: not once the window was closed,
 //! an effect asked to quit, or the last screen was closed.
@@ -38,8 +51,9 @@
 //! # What a screen is told when it opens
 //!
 //! A screen that declares a variable named `creation_<field>` has it
-//! set, when it opens, to that field of `app.creation`: the new-game
-//! screen starts with the seed given on the command line.
+//! set, when it opens, to that field of the character being made, `name`
+//! or `seed` ([`crate::creation`]): the new-game screen starts with the
+//! seed given on the command line.
 //!
 //! # The roles the application opens
 //!
@@ -54,25 +68,26 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use clash_core::{Dur, Value};
+use clash_core::{Dur, EntityId, Value};
 use clash_expr::Value as ExprValue;
 use clash_scene::control::ROLE_PLAY;
+use clash_scene::input::MouseKind;
 use clash_scene::ui::{PreferenceDef, ScreenDef, VarRef, to_var};
-use clash_scene::view::{WorldGlyphs, WorldView};
+use clash_scene::view::{SpriteId, WorldGlyphs, WorldView};
 use clash_scene::{
     Frame, Frontend, GlyphInputs, GlyphPart, InputEvent, KeymapDef, PREF_KEYMAP, PREF_THEME,
     RichText, Scene, Theme, UiOutcome,
 };
-use clash_sim::{Advance, AdvanceLimit};
+use clash_sim::action::ActEvent;
+use clash_sim::{Advance, AdvanceLimit, EventBody, SimEvent};
 
-use crate::app::{App, CREATION_NAME, CREATION_SEED, STATE_CURRENT, Shared};
+use crate::app::{App, STATE_CURRENT, Shared};
 use crate::boot::{self, Loaded};
+use crate::creation::Creation;
 use crate::host::GameHost;
 use crate::perception_shim::{self, PREF_OMNISCIENT};
 use crate::prefs::PrefStore;
-use crate::present::present_events;
 use crate::saves::{NoSaves, SaveBackend, SaveMeta};
-use crate::shim;
 
 /// The role of the screen that shows why something the player asked of
 /// the application could not be done. It is opened with the parameter
@@ -85,6 +100,10 @@ pub const LOG_REFUSAL: &str = "refusal";
 pub const LOG_UI: &str = "ui";
 /// The log category of what the application itself has to say.
 pub const LOG_APP: &str = "app";
+/// The log category of a fault the engine contained.
+pub const LOG_FAULT: &str = "fault";
+/// The log category of a `message` a rule sent the player (05 §10.6).
+pub const LOG_MESSAGE: &str = "message";
 
 /// What a screen variable's name starts with for the application to
 /// set it, when the screen opens, to a field of `app.creation`:
@@ -95,9 +114,15 @@ pub const CREATION_VAR_PREFIX: &str = "creation_";
 /// application.
 const EFFECT_APP: &str = "app";
 
-/// How much simulation time one call of `advance` is asked for, so that
-/// a pass can stop between two of them when its slice is used.
-pub const SIM_STEP: Dur = Dur::from_millis(100);
+/// How many wake-ups one call of `advance` may handle, so that a pass
+/// can stop between two calls when its slice is used.
+pub const SIM_WORK: u32 = 256;
+
+/// The most simulation time one pass advances by. A character that
+/// waits a long while, or lies unconscious, is carried through it over
+/// several passes, and a pass that has nothing to stop it (everyone
+/// else busy for ever) still returns.
+pub const PASS_LIMIT: Dur = Dur::from_secs(3_600);
 
 /// How long one frame lasts in a terminal.
 pub const FRAME_TIME: Duration = Duration::from_millis(16);
@@ -176,12 +201,7 @@ impl Game {
             description: String::new(),
             state: STATE_CURRENT.to_owned(),
         };
-        let mut creation = BTreeMap::new();
-        creation.insert(CREATION_NAME.to_owned(), ExprValue::text(""));
-        creation.insert(
-            CREATION_SEED.to_owned(),
-            ExprValue::Int(i64::try_from(options.seed).unwrap_or(i64::MAX)),
-        );
+        let creation = Creation::new(options.seed);
         let shared = Rc::new(RefCell::new(Shared {
             profile: profile_entry,
             profiles: crate::app::list_profiles(&loaded),
@@ -319,6 +339,24 @@ impl Game {
         self.shared.borrow().session.as_ref().map(read)
     }
 
+    /// Hands a command to the game being played, as the scene's host
+    /// does, through `Sim::submit`: for tools, tests and a console. What
+    /// it causes is shown by the next pass. Refused with the
+    /// simulation's reason, or when no game is being played.
+    pub fn submit(&mut self, command: clash_sim::Command) -> Result<(), String> {
+        let mut shared = self.shared.borrow_mut();
+        let session = shared
+            .session
+            .as_mut()
+            .ok_or_else(|| crate::host::NO_GAME.to_owned())?;
+        session
+            .sim
+            .submit(command)
+            .map_err(|refusal| refusal.reason.message)?;
+        session.stale_view = true;
+        Ok(())
+    }
+
     /// Adds a line to the log.
     fn say(&mut self, category: &str, line: &str) {
         self.scene
@@ -338,21 +376,20 @@ impl Game {
         }
     }
 
-    /// The player's character's own glyph under the theme in force.
-    fn player_look(&self) -> GlyphPart {
+    /// The player's character's own glyph under the theme in force, if
+    /// it has one.
+    fn player_look(&self) -> Option<GlyphPart> {
         let shared = self.shared.borrow();
-        let Some(session) = shared.session.as_ref() else {
-            return GlyphPart::default();
-        };
-        match session.look.compile(self.scene.theme()) {
+        let look = shared.session.as_ref()?.look.as_ref()?;
+        Some(match look.compile(self.scene.theme()) {
             Ok(glyph) => glyph.part(&GlyphInputs::default()),
             // A colour this theme lacks: the character, in the theme's
             // own text colour.
             Err(_) => GlyphPart {
-                ch: session.look.ch,
+                ch: look.ch,
                 ..GlyphPart::default()
             },
-        }
+        })
     }
 
     /// The glyph tables of the loaded world under the theme in force.
@@ -389,14 +426,14 @@ impl Game {
 
     /// Tells the screen on top what the player has chosen for the next
     /// game: each variable it declares named `creation_<field>` is set
-    /// to that field of `app.creation`. A screen is told once, when it
-    /// opens.
+    /// to that field, `name` or `seed`, of the character being made. A
+    /// screen is told once, when it opens.
     fn fill_creation(&mut self) {
-        let creation = self.shared.borrow().creation.clone();
+        let fields = self.shared.borrow().creation.fields();
         let Some(top) = self.scene.top_mut() else {
             return;
         };
-        for (field, value) in creation {
+        for (field, value) in fields {
             if let Some(value) = to_var(&value) {
                 top.set_var(&format!("{CREATION_VAR_PREFIX}{field}"), value);
             }
@@ -452,6 +489,14 @@ impl Game {
         };
         while self.scene.close().is_some() {}
         self.scene.set_world(WorldView::new(glyphs, at));
+        // The camera follows the character as playback moves it.
+        let player = self
+            .shared
+            .borrow()
+            .session
+            .as_ref()
+            .map(|session| SpriteId::new(session.player.to_bits()));
+        self.scene.playback_mut().follow(player);
         if let Err(reason) = self.scene.open_screen(&play, BTreeMap::new()) {
             self.end_game();
             let boot_screen = self.boot_screen.clone();
@@ -469,9 +514,12 @@ impl Game {
         }
     }
 
-    /// Ends the game being played: the simulation is dropped and the
-    /// scene's view of the world with it.
+    /// Ends the game being played: what was still to be played is
+    /// played, and the simulation is dropped and the scene's view of the
+    /// world with it.
     fn end_game(&mut self) {
+        self.scene.skip_playback();
+        self.scene.playback_mut().follow(None);
         self.shared.borrow_mut().session = None;
         self.scene.take_world();
         self.play_screen = None;
@@ -500,89 +548,81 @@ impl Game {
         }
     }
 
-    /// Advances the simulation toward the moment the player's character
-    /// is free again, showing its events as it goes. `until` is when
-    /// this pass's slice of real time ends; with none the simulation is
-    /// advanced until the character is free.
+    /// Advances the simulation toward the player's next decision and
+    /// hands the scene what it reported: see the [module](self)
+    /// documentation, steps 3 and 4. `until` is when this pass's slice
+    /// of real time ends; with none the simulation is advanced until the
+    /// character is asked, or [`PASS_LIMIT`] has passed.
     fn advance_simulation(&mut self, until: Option<Instant>) {
-        let mut shared = self.shared.borrow_mut();
-        let shared = &mut *shared;
-        let Some(session) = shared.session.as_mut() else {
-            return;
-        };
+        let look = self.player_look();
         let mut lines: Vec<(&str, String)> = Vec::new();
-        loop {
-            // What commands and the last step delivered.
-            let events = session.sim.drain_events();
-            present_events(&events, session, self.scene.log_mut());
-            if let Some(line) = shim::next_route_step(session) {
-                lines.push((LOG_REFUSAL, line));
-            }
-            let Some(target) = session.busy_until else {
-                break;
+        let batch = {
+            let mut shared = self.shared.borrow_mut();
+            let shared = &mut *shared;
+            let Some(session) = shared.session.as_mut() else {
+                return;
             };
-            let next = target.min(session.sim.now() + SIM_STEP);
-            match session.sim.advance(AdvanceLimit::Until(next)) {
-                // A free character is asked what it does next (03 §5.2).
-                // Until the interface's commands become the simulation's,
-                // the stand-in answers for it by waiting no time.
-                Advance::NeedInput(request)
-                    if matches!(request.kind, clash_sim::DecisionKind::Free { .. })
-                        && session
-                            .sim
-                            .submit(clash_sim::Command::Wait {
-                                entity: request.entity,
-                                dur: Dur::ZERO,
-                            })
-                            .is_ok() => {}
-                // Time does not move until the decision is answered.
-                Advance::NeedInput(_) => {
-                    session.busy_until = None;
-                    session.route.clear();
-                }
-                Advance::Reached(now) => {
-                    if now >= target {
-                        session.busy_until = None;
+            // What the commands of this pass delivered comes first.
+            let mut batch = session.sim.drain_events();
+            let began = session.sim.now();
+            while session.waits_on_simulation() {
+                let answer = session.sim.advance(AdvanceLimit::Work(SIM_WORK));
+                batch.extend(session.sim.drain_events());
+                match answer {
+                    // The character is asked, or nothing is left to
+                    // happen: the pass has gone as far as it can.
+                    Advance::NeedInput(_) | Advance::Reached(_) => break,
+                    Advance::Yielded => {}
+                    Advance::Request(clash_sim::AppRequest::Checkpoint { name }) => {
+                        let meta = SaveMeta {
+                            start: session.start.id.clone(),
+                            name: session.name.clone(),
+                        };
+                        let dir = shared
+                            .data_dir
+                            .as_ref()
+                            .map(|dir| dir.join(crate::saves::SAVES_DIR));
+                        if let Err(reason) =
+                            shared
+                                .saves
+                                .save(dir.as_deref(), &mut session.sim, &meta, &name)
+                        {
+                            lines.push((
+                                LOG_APP,
+                                format!("The checkpoint `{name}` was not saved: {reason}."),
+                            ));
+                        }
                     }
+                    Advance::Request(_) => lines.push((
+                        LOG_APP,
+                        "A rule asked the application for something it cannot do yet.".to_owned(),
+                    )),
                 }
-                Advance::Yielded => {}
-                Advance::Request(clash_sim::AppRequest::Checkpoint { name }) => {
-                    let meta = SaveMeta {
-                        start: session.start.id.clone(),
-                        name: session.name.clone(),
-                    };
-                    let dir = shared
-                        .data_dir
-                        .as_ref()
-                        .map(|dir| dir.join(crate::saves::SAVES_DIR));
-                    if let Err(reason) =
-                        shared
-                            .saves
-                            .save(dir.as_deref(), &mut session.sim, &meta, &name)
-                    {
-                        lines.push((
-                            LOG_APP,
-                            format!("The checkpoint `{name}` was not saved: {reason}."),
-                        ));
-                    }
+                let slice_used = until.is_some_and(|until| Instant::now() >= until);
+                if slice_used || session.sim.now().since(began) >= PASS_LIMIT {
+                    break;
                 }
-                Advance::Request(_) => lines.push((
-                    LOG_APP,
-                    "A rule asked the application for something it cannot do yet.".to_owned(),
-                )),
             }
-            if until.is_some_and(|until| Instant::now() >= until) {
-                // The slice is used: what was delivered is shown, and
-                // the rest waits for the next pass.
-                let events = session.sim.drain_events();
-                present_events(&events, session, self.scene.log_mut());
-                break;
+            if !batch.is_empty() {
+                session.stale_view = true;
             }
-        }
+            lines.extend(batch.iter().filter_map(|event| told(event, session.player)));
+            // What the party perceives as the batch ends: what the host
+            // answers playback with.
+            if session.stale_view {
+                session.stale_view = false;
+                if let Err(reason) = perception_shim::look(session, look) {
+                    lines.push((LOG_APP, reason));
+                }
+            }
+            batch
+        };
         for (category, line) in lines {
-            self.scene
-                .log_mut()
-                .push(category, RichText::plain_text(&line));
+            self.say(category, &line);
+        }
+        if !batch.is_empty() {
+            self.scene.push_events(batch);
+            self.scene.simulation_advanced();
         }
     }
 
@@ -594,35 +634,56 @@ impl Game {
             .is_some_and(|value| *value == Value::Bool(true))
     }
 
-    /// Feeds the scene's view of the world, if the simulation has moved
-    /// since it was last fed.
+    /// Gives the scene's view of the world what the character perceives
+    /// now that no event said, once playback has caught up, and in a
+    /// debug build checks the picture against a fresh one (12 §5). With
+    /// the omniscient view on, fills it from truth instead.
     fn feed_view(&mut self) {
         let omniscient = self.omniscient();
         let look = self.player_look();
         let mut problem = None;
-        {
+        let fresh = {
             let mut shared = self.shared.borrow_mut();
             let Some(session) = shared.session.as_mut() else {
                 return;
             };
-            if !session.stale_view && session.omniscient == omniscient {
-                return;
-            }
             let Some(view) = self.scene.world_mut() else {
                 return;
             };
-            let fed = if omniscient {
-                perception_shim::feed_omniscient(session, view, look)
+            if omniscient {
+                if session.omniscient && !session.percepts.unshown {
+                    return;
+                }
+                session.percepts.unshown = false;
+                problem = perception_shim::feed_omniscient(session, view, look).err();
+                None
             } else {
-                perception_shim::feed(session, view, look)
-            };
-            session.stale_view = false;
-            if let Err(reason) = fed {
-                problem = Some(reason);
+                if session.omniscient {
+                    perception_shim::leave_omniscient(session, view);
+                }
+                if !session.percepts.unshown {
+                    return;
+                }
+                perception_shim::show(view, &mut session.percepts);
+                cfg!(debug_assertions).then(|| perception_shim::fresh(&session.percepts))
             }
-        }
+        };
         if let Some(reason) = problem {
             self.say(LOG_APP, &reason);
+        }
+        if let Some(fresh) = fresh
+            && let Err(drift) = self.scene.check_caught_up(&fresh)
+        {
+            let line = format!(
+                "The picture is not what the character knows: {} difference{} from a fresh view.",
+                drift.differences.len(),
+                if drift.differences.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            );
+            self.say(LOG_FAULT, &line);
         }
         // Bindings on the view are evaluated again before the frame.
         self.scene.simulation_advanced();
@@ -638,14 +699,23 @@ impl Game {
         let mut outcomes = Vec::new();
         for event in front.poll() {
             closed |= event == InputEvent::Close;
+            // Input applies to the present. A key jumps playback to its
+            // end itself (12 §7.1); a click and pasted text do here.
+            if acts_on_present(&event) && !self.scene.playback_caught_up() {
+                self.scene.skip_playback();
+                self.feed_view();
+            }
             outcomes.extend(self.scene.handle(&event));
         }
         self.follow_up(&outcomes);
         self.advance_simulation(until);
-        let asked = self.scene.sync_decision();
-        self.follow_up(&asked);
-        self.feed_view();
         self.scene.advance(seconds);
+        if self.scene.playback_caught_up() {
+            self.feed_view();
+            // A decision's prompt opens once playback has caught up.
+            let asked = self.scene.sync_decision();
+            self.follow_up(&asked);
+        }
         let caps = front.caps();
         if (self.frame.cols, self.frame.rows) != (caps.cols, caps.rows) {
             self.frame.resize(caps.cols, caps.rows);
@@ -653,6 +723,29 @@ impl Game {
         self.scene.build_frame(&mut self.frame);
         front.present(&self.frame);
         !(closed || self.scene.quit_requested() || self.scene.top().is_none())
+    }
+}
+
+/// Whether an input event acts on what is on screen, other than a key:
+/// a press of a mouse button, or pasted text.
+fn acts_on_present(event: &InputEvent) -> bool {
+    match event {
+        InputEvent::Mouse(mouse) => matches!(mouse.kind, MouseKind::Down(_)),
+        InputEvent::Text(_) => true,
+        _ => false,
+    }
+}
+
+/// The line the application writes in the log at once for an event,
+/// beside what playback writes: a fault the engine contained, and a
+/// `message` a rule sent the player (12 §7.4).
+fn told(event: &SimEvent, player: EntityId) -> Option<(&'static str, String)> {
+    match &event.body {
+        EventBody::Fault { reason } => Some((LOG_FAULT, format!("Fault: {reason}"))),
+        EventBody::Act(ActEvent::Message { to, text, .. }) if *to == player => {
+            Some((LOG_MESSAGE, text.clone()))
+        }
+        _ => None,
     }
 }
 

@@ -1,0 +1,22 @@
+[
+  { "//": "One button for each op of the service `creation`, and one that starts a game with what was made. The line at the top reads `app.creation`.",
+    "type": "screen", "id": "maker",
+    "title": "Maker",
+    "layout": { "rows": [
+      { "text": "Template {app.creation.template ?? 'none'}; name {app.creation.name ?? 'none'}; seed {app.creation.seed ?? -1}; complete {app.creation.complete ?? false}; finished {app.creation.finished ?? false}." },
+      { "button": { "id": "begin", "label": "Begin",
+                    "on_activate": [ { "app": { "creation": { "op": "'begin'", "template": "'person'" } } } ] } },
+      { "button": { "id": "heavy", "label": "Heavy",
+                    "on_activate": [ { "app": { "creation": { "op": "'select'", "key": "'core:person.build'", "value": "'heavy'" } } } ] } },
+      { "button": { "id": "wrong", "label": "Wrong",
+                    "on_activate": [ { "app": { "creation": { "op": "'select'", "key": "'core:person.build'", "value": "'giant'" } } } ] } },
+      { "button": { "id": "name", "label": "Name",
+                    "on_activate": [ { "app": { "creation": { "op": "'name'", "value": "'Bea'" } } } ] } },
+      { "button": { "id": "seed", "label": "Seed",
+                    "on_activate": [ { "app": { "creation": { "op": "'seed'", "value": "7" } } } ] } },
+      { "button": { "id": "finish", "label": "Finish",
+                    "on_activate": [ { "app": { "creation": { "op": "'finish'" } } } ] } },
+      { "button": { "id": "play", "label": "Play",
+                    "on_activate": [ { "app": { "new_game": { "scenario": "'core:town'" } } } ] } } ] },
+    "keys": { "back": [ { "app": "quit" } ] } }
+]
