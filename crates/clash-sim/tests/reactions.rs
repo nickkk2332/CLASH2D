@@ -12,7 +12,8 @@
 //!
 //! C4: the three worked exchanges of 07 §14 to their figures; a defence
 //! applies only in force at impact (invariant C3); leaving and slipping;
-//! a guard held up; defending someone else; energy accounted for.
+//! a guard held up; defending someone else; energy accounted for; a
+//! guard's mind answers a blow by its data and a townsperson's does not.
 
 mod common;
 
@@ -133,8 +134,16 @@ fn core_file(name: &str, without: &[&str]) -> (String, String) {
 /// guards' surfaces, and the fixtures; without rules if `rules` is
 /// false.
 fn load(rules: bool) -> Arc<Defs> {
+    load_with(rules, false)
+}
+
+/// [`load`], with the bundled minds if `minds` is true.
+fn load_with(rules: bool, minds: bool) -> Arc<Defs> {
     let strip: &[&str] = if rules { &[] } else { &["eoc"] };
     let mut owned = core_dir("life");
+    if minds {
+        owned.extend(core_dir("ai"));
+    }
     owned.extend(core_dir("perception"));
     for (path, _) in core_dir("combat") {
         let name = path.trim_start_matches("data/");
@@ -167,6 +176,7 @@ fn load(rules: bool) -> Arc<Defs> {
 
 static DEFS: LazyLock<Arc<Defs>> = LazyLock::new(|| load(true));
 static BARE: LazyLock<Arc<Defs>> = LazyLock::new(|| load(false));
+static MINDS: LazyLock<Arc<Defs>> = LazyLock::new(|| load_with(true, true));
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -251,7 +261,14 @@ fn watch(sim: &mut Sim, who: EntityId, of: EntityId) {
         .defs()
         .lookup::<clash_sim::perception::defs::SenseDef>("core:human_sight")
         .unwrap();
-    clash_sim::perception::attach_sense(sim, who, sight).unwrap();
+    let sees = sim
+        .components()
+        .senses
+        .get(who)
+        .is_some_and(|senses| senses.slot(sight).is_some());
+    if !sees {
+        clash_sim::perception::attach_sense(sim, who, sight).unwrap();
+    }
     let at = sim.truth().location(of).unwrap();
     clash_sim::perception::face_toward(sim, who, at).unwrap();
     clash_sim::perception::set_awareness(sim, who, of, sight, Real::ONE).unwrap();
@@ -1073,6 +1090,51 @@ fn a_defence_may_protect_someone_beside_the_defender() {
     assert_eq!(defended[0].subject("defender"), Some(Subject::Entity(bram)));
     assert_eq!(defended[0].subject("target"), Some(Subject::Entity(ada)));
     assert!((field(defended[0], "turned") - 90.0).abs() < 1e-6);
+}
+
+// ---- minds react ------------------------------------------------------------------
+
+#[test]
+fn a_guards_mind_answers_a_blow_by_its_data_and_a_townspersons_does_not() {
+    // Bram thinks by the bundled `guard` mind, whose `reactions` block
+    // first: he takes the blow on his forearm. Cleo thinks as a
+    // townsperson and answers nothing.
+    for (templates, defended) in [
+        (&["core:person", "core:guard"][..], true),
+        (&["core:person"][..], false),
+    ] {
+        let mut sim = common::sim_over(Arc::clone(&MINDS), 25);
+        let ada = spawn(&mut sim, "Ada", 10, Control::Delegated);
+        let id = sim.truth().entities().next_id().unwrap();
+        debug(
+            &mut sim,
+            DebugCommand::Spawn {
+                spec: CharacterSpec::of(templates.iter().copied()),
+                place: common::on(11, 10),
+            },
+        );
+        let bram = id;
+        arm(&mut sim, ada, "core:knife");
+        set_attr(&mut sim, bram, "core:wits", 14.0);
+        watch(&mut sim, bram, ada);
+        sim.pump();
+        sim.drain_events();
+        swing(&mut sim, ada, bram, 0.3, 50.0);
+        run_for(&mut sim, 600 * MS);
+        let told = sim.drain_events();
+        assert_eq!(noticed_by(&told, bram), 1, "{templates:?} noticed");
+        let blocked: Vec<&SimEvent> = named(&told, "strike_defended")
+            .into_iter()
+            .filter(|event| {
+                event
+                    .body
+                    .field("defence")
+                    .and_then(|field| field.plain().cloned())
+                    == Some(clash_core::Value::Str("core:block".to_owned()))
+            })
+            .collect();
+        assert_eq!(!blocked.is_empty(), defended, "{templates:?}");
+    }
 }
 
 // ---- the documents state what is built ----------------------------------------

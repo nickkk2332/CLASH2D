@@ -90,6 +90,10 @@
       "holds": "(self.attr.strength ?? 10) * 40",
       "brace": 0.4 } },
 
+  { "//": "How a watchman answers a blow he notices in time: a block, on a shield if he has one and on the forearm if not, else a duck (09 §6.3). A townsperson and a dog answer nothing.",
+    "type": "mind", "id": "guard", "patch": true, "optional": true,
+    "reactions": ["block", "dodge"] },
+
   { "//": "The player is asked how to answer a blow they noticed in time, and time stops until they do (03 §7.3). A rule like any other: a mod may replace it, or a setting switch it off.",
     "type": "eoc", "id": "ask_player_to_react", "on": "window_noticed",
     "if": "self.control == 'direct' and (setting('core:ask_reactions') ?? true)",

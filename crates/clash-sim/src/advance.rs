@@ -334,10 +334,15 @@ impl Sim {
         loop {
             self.absorb_world();
             let Some(mut event) = self.events.pop_front() else {
-                // The last step of the pump: what is kept current and
+                // The last steps of the pump: what is kept current and
                 // went stale is evaluated again (05 §7.5), which may
-                // raise more.
+                // raise more; then minds prompted by what was delivered
+                // think, and what they did is delivered in turn
+                // (09 §3.3).
                 if crate::ability::reactive::settle(self) {
+                    continue;
+                }
+                if crate::ai::think_due(self) {
                     continue;
                 }
                 return;
@@ -372,6 +377,7 @@ impl Sim {
             crate::perception::observe_event(self, &event);
             crate::device::on_event(self, &event);
             crate::ability::on_event(self, &event);
+            crate::ai::on_event(self, &event);
             self.out.push(event);
         }
     }

@@ -391,8 +391,8 @@ moved; the effect `face { who, toward }` turns it to face a cell,
 something that is somewhere, or a number of degrees, and the function
 `set_facing` does the same. A sense is given with `attach_sense` and
 taken away with `detach_sense`, which forgets what was known through it
-(both functions of the simulation until templates and traits give
-senses). Refusals: `perception.unknown_sense`, `perception.has_sense`,
+(both functions of the simulation; a template's `senses` gives them
+when a character is made, decision D-696, and traits will too). Refusals: `perception.unknown_sense`, `perception.has_sense`,
 `perception.no_sense`, `perception.no_senses`, `perception.bad_value`.
 
 `relay_senses` and recorders are not built.
