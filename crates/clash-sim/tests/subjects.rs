@@ -482,11 +482,12 @@ fn an_entity_answers_for_itself() {
     let read = probe.read.into_inner();
     // Those of items are read in `tests/items.rs`, those of devices in
     // `tests/devices.rs`, those of interactions in
-    // `tests/interactions.rs`.
+    // `tests/interactions.rs`, those of traits in `tests/traits.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::device::properties().iter())
         .chain(clash_sim::interaction::properties().iter())
+        .chain(clash_sim::traits::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {

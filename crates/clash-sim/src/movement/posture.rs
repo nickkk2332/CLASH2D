@@ -116,6 +116,8 @@ pub fn set_posture(
         .store_mut::<Mover>()
         .get_or_insert_with(entity, Mover::default)
         .posture = posture;
+    // The traits a posture carries are its holder's while it lasts.
+    crate::traits::posture_changed(sim, entity, old, posture, cause);
     let look = posture_def(sim, entity)
         .and_then(|def| def.look.clone())
         .unwrap_or_default();
