@@ -1355,7 +1355,7 @@ material and volume. Weapons notch and break; armour wears through.
 | `surfaces` | list | Parts of the item that can be brought to bear, each with a damage type, contact area, give and span (07 §3.2). Combat turns energy over that area into intensity. Carried for combat. |
 | `grip` | map of `id<channel>` to count | Channel slots needed to hold it in a grasp. An item with none cannot be. |
 | `wear` | one entry or a list, at most 32 | The layers it adds over the parts it is worn on; below. An item with none cannot be worn. |
-| `holds` | `{ volume, mass, accepts }` | Capacity as a container: the most volume and mass what is stowed in it may take, each left out for any; `accepts`, tags of which a thing must carry one, empty for anything. A container cannot `stack`. |
+| `holds` | `{ volume, mass, accepts, order }` | Capacity as a container: the most volume and mass what is stowed in it may take, each left out for any; `accepts`, tags of which a thing must carry one, empty for anything; `order`, `first_in` or `last_in`, makes it a store that gives up what is stowed in it in the order it was put in (07 §11.7). A container cannot `stack`. |
 | `stack` | bool | Whether items equal in every respect (definition, material, damage, colour, tags, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
 | `modifiers` | list of `{ attr, add, mul }` | Attribute modifiers on whoever holds it in a grasp or wears it, under the item as their source (section 4.1). `add` defaults to 0, `mul` to 1. |
 | `holder_tags` | list of tags | Tags whoever holds it in a grasp or wears it carries while they do |
@@ -1368,7 +1368,8 @@ material and volume. Weapons notch and break; armour wears through.
 | `ages` | `{ life, rate, stages, into }` | How it ages (section 9.4) |
 | `keeps` | `{ temperature, ageing }` | What a container keeps for its contents (section 9.4) |
 | `look` | | How whoever wears or holds it appears (12 §4.4). Not a field yet. |
-| `round` | | For ammunition: the projectile it fires and with what energy (07 §11.5). Not a field yet. |
+| `round` | `{ projectile, energy, count, casing }` | For ammunition: the projectile it fires, with what energy, how many at once, and what it leaves (07 §11.7) |
+| `shot` | `{ spread, efficiency, noise, flash, energy, fits }` | For what fires shots, or is fitted to what does: the numbers a shot through it takes, multiplied by those of what is fitted to it, and the tags of what may be fitted (07 §11.7) |
 | `interactions`, `device` | | As for elements (02 §5.5; 16). Not fields yet. |
 
 A `wear` entry:
@@ -1682,7 +1683,7 @@ optional:
 | `mind` | `true` for a mind, `false` for none, or the id of a behaviour profile as text |
 | `glyph` | `{ ch, fg?, bg? }`: one character and colours by name, for presentation. A later template's replaces an earlier one's |
 | `remains` | What is left of a body destroyed entirely, as written |
-| `blocks` | Whether it blocks movement through its cell. Default true for one with a body |
+| `blocks` | Whether it blocks movement through its cell. Default true for one with a body. A thing with a body also collides with bodies in flight (02 §15.2; decision D-741) |
 | `choices` | Section 10.2 |
 
 A choice has an `id` (no `.`), a `name`, a `kind` and a `default`; a

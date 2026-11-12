@@ -844,7 +844,7 @@ matter use this. So does shooting in warm tracts (03 §10).
 | Helper | Gives |
 |--------|-------|
 | `lead_point(self, target, speed)` | Where the target will be, from where and how fast `self` believes it to be moving (15 §7) |
-| `ballistic_dir(from, to, speed)` | The elevation needed to reach a point under gravity |
+| `ballistic_dir(from, to, speed)` | The direction, at the elevation needed to reach a point under gravity |
 | `band_point(target, part)` | A point at the height of a part |
 
 Because the default aims at a point and the shot then disperses, range,
@@ -876,9 +876,10 @@ A ranged weapon is an item, and usually an assembly (16 §11).
 A magazine is a hold (06 §9.2) that accepts rounds by tag and gives them
 up in order. Firing takes the next one, launches its projectile with its
 energy, and leaves its casing if it names one. Loads may be mixed: every
-fifth round a tracer. A quiver and a belt are holds too. Loading is an
-interaction. `count` above one is shot. A weapon that draws on a store
-instead (a power cell, a pool) uses a cost (16 §11.2).
+fifth round a tracer. A quiver and a belt are holds too. Loading is the
+verb `load`, which an action or an interaction runs. `count` above one is
+shot. A weapon that draws on a store instead (a power cell, a pool) uses
+a cost (16 §11.2). Section 11.7 says how this is built.
 
 Recoil is an impulse on the shooter and a rule that widens spread.
 
@@ -1310,8 +1311,11 @@ nearly all push, `knock_down` prone), `smash` (a fist at a cell) and
 each with a windup that opens a `strike` window, an impact and a
 recovery. `mods/core/data/life/surfaces.json` gives the humanoid's hands
 a `palm`, its feet a `sole` and its head a `brow`, and
-`mods/core/data/world/severing.json` flags `cut` as severing. Not built yet: the `defence` and `cutscene`
-blocks, `projectile`, `strike_preview` and the other functions, queries
+`mods/core/data/world/severing.json` flags `cut` as severing. Ranged
+combat (`projectile`, `round`, `shot`, the effects `shoot` and `throw`,
+the `projectile_*` events, `ballistic_dir` and `band_point`) is stated as
+built in section 11.7. Not built yet: the `defence` and `cutscene`
+blocks, `strike_preview` and the other functions, queries
 and properties listed above, swings meeting the world, contact surfaces
 (section 6.5), reach in height (section 4.3) and `closing_energy`
 (section 3.5).
@@ -1340,6 +1344,13 @@ Targets, unmeasured.
 | Projectile striking a creature | under 5 µs |
 | `strike_preview` | under 4 µs |
 | A volley of 500 projectiles over 100 m | under 40 ms |
+
+Measured (package C9): the volley, fifty shooters each firing ten pistol
+bullets at a wall a hundred metres off, took about 80 ms in a release
+build on a loaded shared machine: about twice the target. Nearly all of
+it is the world stepping its bodies (02 §15.1, a wake for every cell
+crossed); the test is `volley` in `crates/clash-sim/tests/ranged.rs`,
+ignored, run with `--release --ignored`.
 
 ## 19. Open questions
 

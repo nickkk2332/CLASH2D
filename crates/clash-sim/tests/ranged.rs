@@ -522,11 +522,9 @@ fn a_shot_is_heard_by_someone_who_does_not_see_it() {
     let shooter = spawn(&mut sim, "Ada", 10, 10);
     let target = spawn(&mut sim, "Bram", 10, 14);
     let listener = spawn(&mut sim, "Cora", 30, 10);
-    for who in [listener] {
-        for sense in ["human_sight", "human_hearing"] {
-            let id = sim.perception_defs().sense_named(sense).unwrap();
-            perception::attach_sense(&mut sim, who, id).unwrap();
-        }
+    for sense in ["human_sight", "human_hearing"] {
+        let id = sim.perception_defs().sense_named(sense).unwrap();
+        perception::attach_sense(&mut sim, listener, id).unwrap();
     }
     // Facing away, behind a wall: out of sight.
     perception::set_facing(&mut sim, listener, Real::of(90.0)).unwrap();
@@ -1000,24 +998,47 @@ fn replay_reproduces_the_hash() {
     assert_eq!(replayed.state_hash(), sim.state_hash());
 }
 
+/// A simulation over flat ground four tracts long (128 cells east) and
+/// two wide.
+fn long_flat(seed: u64) -> Sim {
+    use clash_world::test_support::load_flat;
+    use clash_world::{Cosmos, TractPos, WorldDefs};
+    let defs = Arc::clone(&DEFS);
+    let world = WorldDefs::from_defs(&defs).unwrap_or_else(|d| panic!("{}", d.render()));
+    let mut timeline = clash_time::Timeline::new();
+    let mut cosmos = Cosmos::new(Arc::clone(&world));
+    let realm_def = world.realms().lookup("core:testland").unwrap();
+    cosmos.create_realm(&mut timeline, realm_def, 7).unwrap();
+    let rock = world.block_state("solid", None).unwrap();
+    let grass = world.floor_state("grass", None).unwrap();
+    let tracts = [0, 1]
+        .into_iter()
+        .flat_map(|y| (0..4).map(move |x| TractPos::new(x, y)));
+    load_flat(&mut cosmos, common::GRID, tracts, rock, grass, 0).unwrap();
+    Sim::from_parts(defs, cosmos, timeline, seed)
+}
+
 #[test]
 #[ignore = "a timing: run with --release --ignored"]
 fn volley() {
-    // Five hundred projectiles over a hundred metres within 40 ms (07 §18).
-    let mut sim = flat(39);
+    // Five hundred projectiles over a hundred metres within 40 ms (07 §18):
+    // fifty shooters in a file each fire ten pistol bullets east at a
+    // wall a hundred metres off, which stops every one.
+    let mut sim = long_flat(39);
     let mut shooters = Vec::new();
     for y in 0..50 {
         shooters.push(spawn(&mut sim, "Ada", 2, 5 + y));
+        set_block(&mut sim, 103, 5 + y, "wall");
     }
     sim.pump();
     sim.drain_events();
     let pistol = projectile(&sim, "pistol_bullet");
     let started = std::time::Instant::now();
     for shooter in &shooters {
-        let mut spec = ShotSpec::new(*shooter, Aim::Dir([Real::ONE, Real::ZERO, Real::of(0.01)]));
+        let mut spec = ShotSpec::new(*shooter, Aim::Dir([Real::ONE, Real::ZERO, Real::ZERO]));
         spec.projectile = Some(pistol);
         spec.energy = Some(Real::of(500.0));
-        spec.spread = Some(Real::of(0.01));
+        spec.spread = Some(Real::of(0.002));
         spec.count = 10;
         ranged::shoot(&mut sim, &spec, Cause::DEBUG).unwrap();
     }
@@ -1026,8 +1047,10 @@ fn volley() {
     assert_eq!(
         sim.truth().cosmos().bodies().count(),
         0,
-        "all have come down or left"
+        "all have struck the wall"
     );
+    let told = sim.drain_events();
+    assert_eq!(named(&told, "projectile_fired").len(), 500);
     eprintln!("volley of 500 over 100 m: {took:?}");
     assert!(took.as_millis() < 40, "{took:?}");
 }

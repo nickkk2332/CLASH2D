@@ -277,9 +277,19 @@ pub fn shoot(sim: &mut Sim, spec: &ShotSpec, cause: Cause) -> Result<Fired, Reas
         let base = aim::unit(base).unwrap_or(base);
         for _ in 0..current.each {
             let dir = aim::disperse(base, spread, sim.rng.stream(SHOT_STREAM));
-            let body = if spec.instant {
+            if spec.instant {
+                // Told before it strikes, as a projectile in flight is.
+                announce(
+                    sim,
+                    spec,
+                    &defs,
+                    current.projectile,
+                    None,
+                    (speed, energy, noise, flash),
+                    cause,
+                );
                 let range = spec.range.unwrap_or_else(|| instant_range(sim));
-                let struck = super::ray::cast(
+                fired.struck += super::ray::cast(
                     sim,
                     &super::ray::Ray {
                         shooter: spec.shooter,
@@ -291,10 +301,8 @@ pub fn shoot(sim: &mut Sim, spec: &ShotSpec, cause: Cause) -> Result<Fired, Reas
                     },
                     cause,
                 );
-                fired.struck += struck;
-                None
             } else {
-                Some(launch(
+                let body = launch(
                     sim,
                     spec,
                     def,
@@ -302,21 +310,19 @@ pub fn shoot(sim: &mut Sim, spec: &ShotSpec, cause: Cause) -> Result<Fired, Reas
                     (from_loc, origin),
                     aim::scale(dir, speed),
                     cause,
-                )?)
-            };
-            fired.projectiles += 1;
-            announce(
-                sim,
-                spec,
-                &defs,
-                current.projectile,
-                body,
-                (speed, energy, noise, flash),
-                cause,
-            );
-            if let Some(body) = body {
+                )?;
+                announce(
+                    sim,
+                    spec,
+                    &defs,
+                    current.projectile,
+                    Some(body),
+                    (speed, energy, noise, flash),
+                    cause,
+                );
                 fired.bodies.push(body);
             }
+            fired.projectiles += 1;
         }
         if let Some(round) = current.round {
             spend(sim, round, from_loc, cause)?;

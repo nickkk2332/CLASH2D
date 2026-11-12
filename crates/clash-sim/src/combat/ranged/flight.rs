@@ -23,6 +23,7 @@ use std::sync::Arc;
 use clash_core::{EntityId, Real};
 use clash_expr::Value;
 use clash_world::defs::DamageTypeId;
+use clash_world::dims::CELL_M;
 use clash_world::{
     BodyId, BodyOwner, Cause, CellPos, DamagePacket, DamageResult, Location, OccupantFilter,
     WorldEvent,
@@ -384,7 +385,21 @@ fn pass_by(
         .cosmos()
         .occupants_within(centre, reach, &OccupantFilter::ANY)
         .unwrap_or_default();
-    let mut ids = clash_world::distinct_ids(&found);
+    // On the level first, by the middle of the cell, with a cell to
+    // spare: only those it may have passed are looked at closely.
+    let level = |point: Vec3| [point[0], point[1], Real::ZERO];
+    let (flat_from, flat_to) = (level(from), level(to));
+    let close: Vec<clash_world::Occupied> = found
+        .into_iter()
+        .filter(|occupied| {
+            let middle = level(aim::cell_point(
+                Location::new(shot.grid, occupied.cell),
+                Real::ZERO,
+            ));
+            aim::distance_to_segment(middle, flat_from, flat_to) <= near + CELL_M
+        })
+        .collect();
+    let mut ids = clash_world::distinct_ids(&close);
     ids.sort_unstable();
     let mut passed: Vec<(EntityId, Real)> = Vec::new();
     for id in ids {
