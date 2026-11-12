@@ -16,11 +16,11 @@ concern the layered simulation. The two tracks meet at L2.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| I1 | Navigation | L | W18, E10 | todo |
+| I1 | Navigation | L | W18, E10 | beta |
 | I2 | Flow fields and steering | M | I1 | todo |
-| I3 | Minds and goals | L | S5, K5 | todo |
-| I4 | Methods and steps | L | I3, I1, T4 | todo |
-| I5 | Options, threat, positions, reactions | L | I4, C11, A3 | todo |
+| I3 | Minds and goals | L | S5, K5 | beta |
+| I4 | Methods and steps | L | I3, I1, T4 | beta |
+| I5 | Options, threat, positions, reactions | L | I4, C11, A3 | beta (reactions subset) |
 | I6 | Work, hauling, stations | M | I4, G8 | todo |
 | I7 | Collectives, orders, formations | M | I4, I2, S7 | todo |
 | I8 | Warm stepping and bulk exchanges | M | I4, T7, C11 | todo |
@@ -77,6 +77,15 @@ Done when
   when a collapse blocks it.
 - Budgets of 09 §19 for paths and region rebuilds are benchmarked.
 
+Beta (09 §5.4a): paths are searched cell by cell over belief, with costs
+for doors, creatures seen and remembered hazards and room for wide
+footprints; routes in use are rechecked when elements change; tested
+against brute force on random walls, `wall_falls_reroute` in
+`tests/ai.rs`, a path timed there. Stubbed: profiles beyond the mover's
+own rules, chunk regions and tract graphs, links over portals and
+subgrids, the flier's straight line, `hidden` elements beyond what
+perception already excludes, region rebuild budgets.
+
 ### I2 — Flow fields and steering
 
 **Spec** 09 §5.5, §5.6 · **Size** M
@@ -113,6 +122,14 @@ Done when
   independent of other minds' think order (invariant N8).
 - `commit` prevents flapping between two close goals.
 
+Beta (09 §3.5): `mind` and `goal` with every field listed there, the
+mind context enforced at load, `about` from tracks, memories or a place,
+`commit`, `interrupts`, `noise`, think batches with triggers, stretched
+and staggered intervals; all three "Done when" tested in `tests/ai.rs`.
+Stubbed: `routine` and `tactics` on minds, the hook `goal_scoring`,
+traits adjusting minds (an `adjust` condition stands in), the effects
+`set_goal` and `clear_goal` (verbs for now), queries for `about`.
+
 ### I4 — Methods and steps
 
 **Spec** 09 §4 · **Size** L
@@ -129,6 +146,14 @@ Done when
 - Every act of a character is an action, interaction or speech a player
   could have issued (invariant N2), shown by replaying a character's acts
   as commands and reaching the same state.
+
+Beta (09 §4.1): the `method` type; the steps `go`, `do`, `choose`,
+`wait`, `look`, `say`, `set`, `settle`, `stance`, `keep_near`,
+`keep_from`; failure, fallback methods and goals set aside; the events
+of 09 §17 that are listed as built. `patrol_and_investigate` is the test
+script `scenarios/ai/investigate.scn` and the guard and townsperson
+tests of `tests/ai.rs`. Stubbed: the `use`, `job`, `goal`, `follow` and
+`run` steps (interactions, jobs, queries), paces of `go`.
 
 ### I5 — Options, threat, positions, reactions
 
@@ -149,6 +174,15 @@ Done when
   the weights for them uses those in preference to striking.
 - A character judging a disguised threat by appearance is wrong in the
   expected direction.
+
+Beta, reactions only (09 §6.6): threat read from memories and tracks,
+stances standing in for relations, fleeing by `keep_from`, fighting back
+by `choose` over action tags, investigating what was heard and not
+seen, giving up by `settle`; the bundled `townsperson`, `guard` and
+`dog` minds. Stubbed: the `tactics` type, options and their fields,
+`threat`, `standing`, `severity`, `least_effort_that`, `best_reaction`,
+`pick_position` and its helpers, the scoring helpers; none of this
+package's "Done when" is met yet.
 
 ### I6 — Work, hauling, stations
 
