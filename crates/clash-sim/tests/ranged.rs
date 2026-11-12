@@ -1020,6 +1020,11 @@ fn long_flat(seed: u64) -> Sim {
 
 #[test]
 #[ignore = "a timing: run with --release --ignored"]
+#[allow(
+    clippy::disallowed_types,
+    clippy::disallowed_methods,
+    reason = "a timing measures wall-clock time; nothing simulated reads it"
+)]
 fn volley() {
     // Five hundred projectiles over a hundred metres within 40 ms (07 §18):
     // fifty shooters in a file each fire ten pistol bullets east at a

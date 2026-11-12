@@ -17,8 +17,8 @@
 //! | [`ProjectileDef`], [`RoundDef`], [`ShotDef`] | The `projectile` type, and the `round` and `shot` blocks of items | [`defs`] |
 //! | [`shoot()`], [`ShotSpec`], [`throw()`], [`ThrowSpec`] | Firing and throwing | [`shoot`](mod@shoot) |
 //! | [`RangedState`] | The shots in flight | [`state`] |
-//! | [`FlightNews`](flight::FlightNews) | What the world says of a shot in flight, and what the simulation does | [`flight`] |
-//! | Instant shots | A ray that strikes at once | [`ray`] |
+//! | `FlightNews` | What the world says of a shot in flight, and what the simulation does | `flight` |
+//! | Instant shots | A ray that strikes at once | `ray` |
 //! | [`load`](store::load), [`fit`](store::fit), [`feed_of`](store::feed_of) | Stores, rounds and what is fitted | [`store`] |
 //! | [`ballistic_dir`](aim::ballistic_dir), [`band_point`](aim::band_point) | Aiming helpers | [`aim`] |
 //! | [`verbs`], [`properties`], [`functions`], [`RANGED_EVENTS`], [`RANGED_REASONS`], [`RANGED_SETTINGS`] | What rules call, read and listen for | here, [`events`], [`reason`] |
