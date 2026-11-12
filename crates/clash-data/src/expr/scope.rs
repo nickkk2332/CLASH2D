@@ -159,6 +159,25 @@ impl Scope {
     pub fn is_belief(&self) -> bool {
         self.belief
     }
+
+    /// How many subjects are bound: the slot the next one takes.
+    pub(crate) fn subject_count(&self) -> usize {
+        self.subjects.len()
+    }
+
+    /// The slot of the first subject bound as own, the character of a
+    /// mind context.
+    pub(crate) fn own_slot(&self) -> Option<usize> {
+        self.subjects.iter().position(|(_, _, own)| *own)
+    }
+
+    /// The same scope with no type set for the field's value, for a
+    /// part of a field that has a type of its own.
+    #[must_use]
+    pub(crate) fn without_expectation(mut self) -> Scope {
+        self.expect = None;
+        self
+    }
 }
 
 /// Where a compiled expression came from: what a run-time warning's
@@ -228,6 +247,15 @@ impl<'a> CompileCx<'a> {
     /// Whether anything reported so far was an error.
     pub(crate) fn failed(&self) -> bool {
         self.failed
+    }
+
+    /// How many errors have been reported so far: a part of a field
+    /// compiled soundly if the count did not grow.
+    pub fn error_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == Severity::Error)
+            .count()
     }
 
     pub(crate) fn into_diagnostics(self) -> Vec<Diagnostic> {

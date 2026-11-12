@@ -11,8 +11,22 @@
 
 use clash_core::Rng;
 
-use crate::value::{DefRef, FunctionId, Handle, PropertyId, Value};
-use crate::warn::RuntimeWarning;
+use crate::value::{DefRef, FunctionId, Handle, PropertyId, QueryId, Value};
+use crate::warn::{Fault, RuntimeWarning};
+
+/// A query (05 §11) a host is asked to answer: which kind, and one value
+/// for each of its arguments in the order the
+/// [`QuerySpec`](crate::QuerySpec) declares them, null for one left out.
+#[derive(Clone, Copy, Debug)]
+pub struct QueryCall<'a> {
+    /// The kind of query.
+    pub query: QueryId,
+    /// Its arguments.
+    pub args: &'a [Value],
+    /// In a mind context (05 §7.3), the character whose belief answers
+    /// it: the own subject of the context. `None` where truth is read.
+    pub observer: Option<&'a Value>,
+}
 
 /// What an expression is evaluated against.
 ///
@@ -82,5 +96,16 @@ pub trait Host {
     fn def_name(&self, id: DefRef) -> Option<&str> {
         let _ = id;
         None
+    }
+
+    /// The candidates of a query (05 §11), in its default order: nearest
+    /// first for one with a centre, by cell for any other spatial query,
+    /// and by id where nothing else orders them. `where`, `sort` and
+    /// `limit` are applied by whoever asked. A query the host cannot
+    /// answer is refused with a [`Fault`] and has no results; a host
+    /// that answers none refuses every one as unavailable.
+    fn query(&mut self, call: &QueryCall<'_>, out: &mut Vec<Value>) -> Result<(), Fault> {
+        let _ = (call, out);
+        Err(Fault::Unavailable("queries"))
     }
 }

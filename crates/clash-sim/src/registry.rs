@@ -335,6 +335,8 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::perception::props::properties());
     properties.extend(crate::device::properties());
     properties.extend(crate::interaction::properties());
+    properties.extend(crate::rule::timer_properties());
+    properties.extend(crate::query::properties());
     properties
 }
 
@@ -421,6 +423,7 @@ pub fn register_engine(registry: &mut Registry) {
         }
     }
     crate::verb::register_engine_verbs(registry);
+    crate::query::register_queries(registry);
     for info in KERNEL_EVENTS.iter().chain(WORLD_EVENTS) {
         mirror_event(registry, info);
     }

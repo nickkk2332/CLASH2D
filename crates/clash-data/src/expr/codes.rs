@@ -155,6 +155,12 @@ expr_codes! {
     BAD_SOURCE = "E0676", Error, "compile", None,
         "A value source is not well formed.",
         "Where an expression string cannot say a value, an object can (05 §7.4): `{ \"expr\": \"…\" }`, `{ \"call\": \"function\", \"args\": { … } }`, or a query under `count`, `collect`, `first`, `pick`, `sum`, `min` or `max`. A `call` names a function definition and gives its arguments by parameter name.";
+    BAD_QUERY = "E0677", Error, "compile", None,
+        "A query is not well formed.",
+        "A query is an object with one key, the kind of query, whose value holds its arguments and `where`, `sort` and `limit` (05 §11): `{ \"entities\": { \"around\": \"self\", \"radius\": 12, \"where\": \"…\" } }`. The kinds are `list`, `defs` and those the engine registers (`entities`, `cells`, `contents`, `areas`, `sites`). A spatial query takes at most one shape, and `radius` goes with `around`. The message says what is unknown, missing or misplaced.";
+    QUERY_TOO_LARGE = "E0678", Error, "compile", None,
+        "A query covers more cells than a query may.",
+        "A spatial query's extent is capped by `rules.max_query_cells`, 1,048,576 cells unless set (05 §11, §13.2). This one's size is known when the mod loads, and it is larger than that. A radius covers a box of cells round its centre, a storey counting three metres. Narrow it with a smaller radius, a `box` or `in_area`.";
 
     UNKNOWN_EFFECT = "E0681", Error, "compile", None,
         "An effect names nothing that can be done.",
@@ -168,6 +174,9 @@ expr_codes! {
     BAD_RULE = "E0684", Error, "compile", None,
         "A rule, a rule group or a reason is not well formed.",
         "A rule names the event it listens for in `on`, which must be registered; `as` and `filter` name a subject and fields of that event; `params` are named like locals, and those with a default come last; `returns` and the kinds in `subjects` are types as the language writes them (05 §9). A reason's `values` are named like locals and typed the same way (14 §15).";
+    RUN_QUERY = "W0690", Warning, "run time", Some("X910"),
+        "While running, a query was refused.",
+        "A query whose size could not be known when the mod loaded turned out to cover more than `rules.max_query_cells` cells, or was given arguments its kind cannot use: a shape that is nowhere, two shapes, a radius below zero (05 §11). It had no results, and a value source over it gave null.";
     RUN_NULL_ARITHMETIC = "W0691", Warning, "run time", Some("X901"),
         "While running, arithmetic met a null.",
         "A value was needed and what arrived was null: a target that no longer exists, a variable that was never set, a property of something that is not loaded (05 §4.4). The operation gave null. Give a value for that case with `??`.";

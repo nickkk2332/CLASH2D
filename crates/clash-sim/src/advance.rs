@@ -162,6 +162,8 @@ impl Default for Handlers {
         // its own registers one with `Sim::set_wake_handler`.
         handlers.set(WakeDomain::Timer, crate::life::timer_wake);
         handlers.set(WakeDomain::Perception, crate::perception::on_wake);
+        // Timers and recurring rules (05 §10.4, §9.4).
+        handlers.set(WakeDomain::Rule, crate::rule::timer_wake);
         handlers
     }
 }

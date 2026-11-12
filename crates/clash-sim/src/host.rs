@@ -46,7 +46,9 @@
 
 use clash_core::{EntityId, Rng};
 use clash_data::Runner;
-use clash_expr::{Compiled, DefRef, FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value};
+use clash_expr::{
+    Compiled, DefRef, Fault, FunctionId, Handle, Host, PropertyId, QueryCall, RuntimeWarning, Value,
+};
 
 use crate::Sim;
 use crate::event::Subject;
@@ -190,6 +192,10 @@ impl Host for SimHost<'_> {
 
     fn def_name(&self, id: DefRef) -> Option<&str> {
         self.sim.exprs.registry().def_name(id)
+    }
+
+    fn query(&mut self, call: &QueryCall<'_>, out: &mut Vec<Value>) -> Result<(), Fault> {
+        self.sim.answer_query(call, out)
     }
 }
 
