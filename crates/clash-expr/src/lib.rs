@@ -102,21 +102,22 @@ pub use check::{Checked, CheckedTemplate, Outcome, check, check_template};
 pub use code::{Compiled, CompiledText, MAX_ARGUMENTS, compile, compile_template};
 pub use context::{Binding, Context, Purity, Reads, Undeclared};
 pub use diag::{Code, Diagnostic, Severity, Span, closest_name, codes, offset_in_json_string};
-pub use host::Host;
+pub use host::{Host, QueryCall};
 pub use lexer::is_keyword;
 pub use ops::{DEFAULT_MAX_VALUE_SIZE, Limits};
 pub use parser::{MAX_NESTING, MAX_SOURCE_LEN, MAX_TREE_HEIGHT, parse_expr, parse_template};
 pub use place::{Place, PlaceRoot, compile_place};
 pub use print::{print_expr, print_template};
 pub use registry::{
-    DefType, Event, EventSpec, Function, FunctionSpec, Kind, KindSpec, ParamSpec, Property,
-    PropertySpec, Registry, RegistryError, Resolved, Scope, Variable, VariableSpec, Verb, VerbSpec,
+    DEFAULT_MAX_QUERY_CELLS, DefType, Event, EventSpec, Function, FunctionSpec, Kind, KindSpec,
+    ParamSpec, Property, PropertySpec, QueryExtent, QueryKind, QuerySpec, Registry, RegistryError,
+    Resolved, Scope, Variable, VariableSpec, Verb, VerbSpec,
 };
 pub use types::Type;
 pub use unit::{Quantity, Unit};
 pub use value::{
-    DefRef, DefTypeId, EventId, FunctionId, Handle, KindId, Map, PropertyId, Value, VariableId,
-    VerbId,
+    DefRef, DefTypeId, EventId, FunctionId, Handle, KindId, Map, PropertyId, QueryId, Value,
+    VariableId, VerbId,
 };
 pub use vm::{Machine, TextSink};
 pub use warn::{DEFAULT_WARNING_BURST, Fault, RuntimeWarning, WarningLimiter};

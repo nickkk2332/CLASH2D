@@ -1,0 +1,15 @@
+# A timer that survives a save: a street lamp's keeper
+# (`core:lamp_keeper`, a recurring rule attached as the lamp is made)
+# lights it at dusk and puts it out at dawn. The runner saves and loads
+# between lines, so the keeper's timer and its place in its schedule
+# must come through a save unchanged (05 §9.4, §13.4).
+use default seed=6
+gen core:testland size=1
+spawn device at @c:20,20,0 tag=street_lamp as=lamp
+advance 1h
+assert "not @lamp.var('core:lit')"
+advance 615min
+assert "@lamp.var('core:lit')"
+advance 12h
+assert "not @lamp.var('core:lit')"
+expect hash 36be20f1fc47db5fb1530c416d0d835d

@@ -165,17 +165,17 @@ pub const CORE_EFFECTS: &[EffectInfo] = &[
     EffectInfo {
         name: "after",
         form: r#"{ "after": "2 s", "do": […] }"#,
-        doc: "Runs effects later (05 §10.4). Takes `name`, `owner` and `while_unloaded`. Read and kept; timers are not built yet.",
+        doc: "Runs effects once, later, on the owner's clock (05 §10.4), with the subjects and locals as they are now. `name` (a text unique to the owner; a timer of that name is replaced), `owner` (a subject with a clock; default the rule's `self`, else the realm of `here`, else the simulation) and `while_unloaded` (`pause`, the default, or `elapse`).",
     },
     EffectInfo {
         name: "every",
         form: r#"{ "every": "1 s", "times": 5, "do": […] }"#,
-        doc: "Runs effects repeatedly (05 §10.4). Takes `times`, `name`, `owner` and `while_unloaded`. Read and kept; timers are not built yet.",
+        doc: "Runs effects after each interval of the owner's clock (05 §10.4), `times` times (an int) or for ever. Takes `name`, `owner` and `while_unloaded` as `after` does, and `all` among the modes: fire once for each interval missed.",
     },
     EffectInfo {
         name: "cancel_timer",
         form: r#"{ "cancel_timer": "name" }"#,
-        doc: "Cancels a named timer (05 §10.4). Read and kept; timers are not built yet.",
+        doc: "Cancels the timer of that name (05 §10.4) of the owner `after` would choose, or of `{ \"cancel_timer\": { \"name\": …, \"owner\": subject } }`. Cancelling none does nothing.",
     },
     EffectInfo {
         name: "message",
@@ -1268,11 +1268,28 @@ impl Compiler<'_, '_> {
                 })));
             }
             "cancel_timer" => {
-                if let Some(timer_name) = self.arg(value, &at, &Type::Str) {
+                // `"name"`, or `{ "name": "…", "owner": subject }`.
+                let named = value
+                    .as_object()
+                    .filter(|members| members.iter().any(|member| member.key == "name"));
+                let (timer_name, owner) = match named {
+                    Some(members) => {
+                        let inner = Keys { members };
+                        self.only(&inner, &at, name, &["name", "owner"]);
+                        let timer_name =
+                            self.required(&inner, "name", value.span, &at, name, &Type::Str);
+                        let owner = inner.get("owner").and_then(|member| {
+                            self.arg(&member.value, &child(&at, "owner"), &Type::Any)
+                        });
+                        (timer_name, owner)
+                    }
+                    None => (self.arg(value, &at, &Type::Str), None),
+                };
+                if let Some(timer_name) = timer_name {
                     out.push(EffectKind::Timer(Box::new(Timer {
                         kind: TimerKind::Cancel { name: timer_name },
                         name: None,
-                        owner: None,
+                        owner,
                         while_unloaded: None,
                         body: Block::empty(),
                     })));
@@ -1745,13 +1762,38 @@ impl Compiler<'_, '_> {
     /// What `for_each` iterates, and the type of each element.
     fn items(&mut self, node: &Node, path: &str) -> (Option<Items>, Type) {
         let list = Type::list(Type::Any);
+        let long_list = |value: &Node| {
+            value
+                .as_object()
+                .is_some_and(|members| members.iter().any(|member| member.key == "items"))
+        };
         let arg = match node.as_object() {
-            Some([only]) if only.key == "list" => {
+            Some([only]) if only.key == "list" && !long_list(&only.value) => {
                 self.arg(&only.value, &child(path, "list"), &list)
             }
             Some([only]) if only.key == "expr" => self.arg(node, path, &list),
-            // Any other object is a query, which a later package compiles.
-            Some(_) => return (Some(Items::Query(node.clone())), Type::Any),
+            // Any other object is a query (05 §11).
+            Some(_) => {
+                let site = Site {
+                    span: Some(node.span),
+                    path: path.to_owned(),
+                };
+                let errors = self.cx.error_count();
+                let query = clash_data::compile_query(node, &site, self.cx, &self.scope.clone());
+                if self.cx.error_count() > errors {
+                    self.sound = false;
+                }
+                return match query {
+                    Some(query) => {
+                        let element = query.element().clone();
+                        (Some(Items::Compiled(Arc::new(query))), element)
+                    }
+                    None => {
+                        self.sound = false;
+                        (None, Type::Any)
+                    }
+                };
+            }
             None => self.arg(node, path, &list),
         };
         let element = arg

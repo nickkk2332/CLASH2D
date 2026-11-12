@@ -43,9 +43,9 @@ pub const NOT_ATTACHABLE: &str = "rule.not_attachable";
 pub const NOT_A_HOOK: &str = "rule.not_a_hook";
 /// A random choice was asked for and there is no stream to draw from.
 pub const NO_RANDOM: &str = "rule.no_random";
-/// A timer effect ran; timers are not built yet.
+/// A timer effect ran against a host that keeps no timers.
 pub const TIMERS_UNAVAILABLE: &str = "rule.timers_unavailable";
-/// A query was iterated; queries are not built yet.
+/// `for_each` was given a query that did not compile.
 pub const QUERIES_UNAVAILABLE: &str = "rule.queries_unavailable";
 
 /// A verb ran that nothing in the engine carries out.
@@ -61,6 +61,11 @@ pub const CHOICE_LOST: &str = "rule.choice_lost";
 pub const CHOICE_REFUSED: &str = "rule.choice_refused";
 /// The simulation would not deliver a `message`.
 pub const MESSAGE_REFUSED: &str = "rule.message_refused";
+/// A timer could not be set: its time is not above zero, or its owner
+/// is on no clock.
+pub const TIMER_REFUSED: &str = "rule.timer_refused";
+/// A timer fell due and what it runs is no longer where it was written.
+pub const TIMER_LOST: &str = "rule.timer_lost";
 
 /// The rule runtime's reasons, for the generated reference.
 pub const RULE_REASONS: &[ReasonInfo] = &[
@@ -130,11 +135,11 @@ pub const RULE_REASONS: &[ReasonInfo] = &[
     },
     ReasonInfo {
         code: TIMERS_UNAVAILABLE,
-        doc: "`after`, `every` or `cancel_timer` ran. Timers are read and kept and not yet built: nothing was scheduled. Values: `rule`, `path`.",
+        doc: "`after` or `every` ran against a host that keeps no timers (the rule runtime's test host). Nothing was scheduled. Values: `rule`, `path`.",
     },
     ReasonInfo {
         code: QUERIES_UNAVAILABLE,
-        doc: "`for_each` was given a query. Queries are read and kept and not yet built: the body did not run. Values: `rule`, `path`.",
+        doc: "`for_each` was given a query that did not compile: the body did not run. Values: `rule`, `path`.",
     },
     ReasonInfo {
         code: CHOICE_LOST,
@@ -151,6 +156,14 @@ pub const RULE_REASONS: &[ReasonInfo] = &[
     ReasonInfo {
         code: VERB_UNBOUND,
         doc: "An effect called a verb that is in the registry and that nothing in the engine carries out: a verb of a package that is not built into this simulation. Nothing was done. Values: `verb`.",
+    },
+    ReasonInfo {
+        code: TIMER_REFUSED,
+        doc: "`after` or `every` could not set its timer (05 §10.4): its time came to null or to no time at all, `times` was not an int, or its owner is nothing on a clock (an entity, a cell, an area, a site, a realm or the simulation). Nothing was scheduled and the rule carried on. Values: `rule`, `path`, and `reason` for one the simulation gave.",
+    },
+    ReasonInfo {
+        code: TIMER_LOST,
+        doc: "A timer fell due, and the `after` or `every` that set it, or the recurring rule it runs, is no longer among the definitions: they changed under a save (05 §13.4). Nothing ran and the timer was dropped. Values: `definition`, `path` or `rule`.",
     },
     ReasonInfo {
         code: EXPRESSION_WARNING,
@@ -199,6 +212,8 @@ mod tests {
             CHOICE_LOST,
             CHOICE_REFUSED,
             MESSAGE_REFUSED,
+            TIMER_REFUSED,
+            TIMER_LOST,
         ];
         for code in used {
             assert!(seen.contains(&code), "{code} is used and not listed");

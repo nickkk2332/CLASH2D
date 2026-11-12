@@ -49,6 +49,10 @@ pub enum Fault {
     /// Something was asked for that the engine does not offer yet. The
     /// text says what: "queries". Raised by the host; the value is null.
     Unavailable(&'static str),
+    /// A query was refused (05 §11): it would cover more than
+    /// `rules.max_query_cells`, or its arguments do not fit. The text
+    /// says why. The query had no results.
+    Query(&'static str),
 }
 
 impl Fault {
@@ -64,6 +68,7 @@ impl Fault {
             Fault::NoRandom => codes::RUN_NO_RANDOM,
             Fault::CallDepth => codes::RUN_CALL_DEPTH,
             Fault::Unavailable(_) => codes::RUN_UNAVAILABLE,
+            Fault::Query(_) => codes::RUN_QUERY,
         }
     }
 }
@@ -80,6 +85,7 @@ impl fmt::Display for Fault {
             Fault::NoRandom => f.write_str("there is no random stream to draw from"),
             Fault::CallDepth => f.write_str("functions call each other too deeply"),
             Fault::Unavailable(what) => write!(f, "{what} are not available yet"),
+            Fault::Query(why) => write!(f, "the query was refused: {why}"),
         }
     }
 }

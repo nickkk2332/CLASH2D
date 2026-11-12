@@ -795,6 +795,25 @@ expression. A source is held to its field's context like an expression:
 value must be pure, and a `call` of a function that is not safe for
 belief is refused in a mind context.
 
+As built (decision D-680). A source over a query is compiled with its
+field: the query as section 11 says, and `weight` and `of`, which are
+expressions that read each result as `it`. What each gives, and the
+type the field must accept:
+
+| Source | Gives | Type |
+|--------|-------|------|
+| `count` | How many results | `int` |
+| `collect` | The results, in order; null, with the warning `X910`, if there are more than `rules.max_value_size` | `list<T>` |
+| `first` | The first result, or null. Without `sort`, the query stops at the first result `where` lets through | `T?` |
+| `pick` | One result, drawn from the rule stream: each equally likely, or with `weight` (a `real` on `it`) in proportion to it, those of zero or less never. Null, with no draw, for no results or weights that come to nothing | `T?` |
+| `sum` | The total of `of` (a number on `it`), or of the results themselves without `of`; an `int` if every one is; `0` for none. Nulls are left out | `number` |
+| `min`, `max` | The least or greatest of the same; null for none | `number?` |
+
+`T` is the type of the query's results (section 11). A query the host
+refuses when it runs (section 11) gives null, with a run-time warning
+of code `X910` (`W0690`). `exists` in a condition (section 7.2) is
+true when the query has any result, and stops at the first.
+
 ### 7.5 Reactive expressions
 
 Some fields hold a pure expression whose value must be kept current: a
@@ -1064,6 +1083,35 @@ event. The rules attached to a subject that is stored do not run
 Prefer events to polling. A recurring rule on many owners is the usual way
 rule systems become slow, and the profiler (section 15) will say so.
 
+As built (decision D-686). A recurring rule is a timer (section 10.4)
+whose body is the rule, kept in the rule state:
+
+- **Owners.** A global recurring rule (`every`, not attached) has the
+  simulation as its owner and runs on the universal clock. It is
+  started when the simulation is set up, and after a load for any that
+  came with the definitions since. An attached one (`"attached": true`,
+  `"subjects": { "self": kind }`, `every`) runs for each subject it is
+  attached to, on that subject's clock, from when `attach_rule`
+  attaches it until `detach_rule` takes it off or the owner is
+  removed. Rules carried by definitions (section 9.3) wait for a
+  definition type of the simulation that carries `rules`.
+- **Staggering.** The first run for an owner comes `1 + h mod I`
+  microseconds of local time after it starts, `I` the interval and `h`
+  the positional hash (01 §4) of the owner's handle and the rule's
+  qualified id in the domain `rules.stagger`; each later run one
+  interval after the one before. It depends on who and which rule,
+  never on the order owners were made or attached in.
+- **A run** is a run of the rule as if it were called (section 9.5),
+  with the owner bound as `self` if the rule is attached: its group,
+  `once`, `cooldown` and `if` decide whether `do` or `else` runs.
+- **`while_unloaded`** applies to an owner that is an entity out of the
+  world (section 13.5), with `E` the local time that passed on the
+  clock its timer was on and `R` the time that was left: `skip`, the
+  default, runs nothing for what was missed and goes on with the
+  schedule from where it now is; `once` runs once at once if `E ≥ R`,
+  then goes on; `all` runs once at once for each interval missed, at
+  most 100 (`MAX_MISSED_RUNS`), then goes on.
+
 ### 9.5 Parameters and calling
 
 ```json
@@ -1219,7 +1267,7 @@ The arguments in detail (decision D-477):
 | `if` | `if`: a condition (section 7.2). `then`, `else`: lists of effects; either may be left out, not both. |
 | `first` | A list of entries, each with `do` and, unless it always holds, `if`. |
 | `switch` | `switch`: an expression. `cases`: an object whose keys are compared with the value as a text: a text as it is, a number as it is written, `true` or `false`, an id as its qualified id. Where the value is known to be an id, each key is resolved at load and a misspelling is an error. `default`, which may be left out, runs when no key matches; null matches none. |
-| `for_each` | `for_each`: an expression that gives a list, `{ "list": expr }`, or a query (section 11), which is kept as written until queries are built and reports `rule.queries_unavailable` when it runs. `as`: the name of the local each element is bound to. `do`. Null is gone through as an empty list. |
+| `for_each` | `for_each`: an expression that gives a list, `{ "list": expr }`, or a query (section 11), compiled where it is written; the local has the type of its results. A query refused when it runs is reported as a run-time warning and the body runs for nothing; one that did not compile reports `rule.queries_unavailable`. `as`: the name of the local each element is bound to. `do`. Null is gone through as an empty list. |
 | `repeat` | `repeat`: an int. `do`, which sees `$i`, an int from zero. A count of zero or less runs nothing. |
 | `while` | `while`: a condition, tested before each pass. `do`. |
 | `weighted` | A list of entries, each with `weight`, a number, and `do`. One draw is made from the rule stream; an entry is chosen with the chance its weight is of the total. Weights of zero or less are never chosen, and if all are, nothing runs and nothing is drawn. |
@@ -1325,10 +1373,39 @@ the timer was set.
 `owner.timer(name)` gives the time a named timer has left, or `null`. An
 interval of zero is a load error.
 
-As built. The three effects are read, checked and kept, the effects
-inside them compiled in the scope they stand in, so that a mistake is
-found at load. Timers themselves are a later package's: until then each
-reports `rule.timers_unavailable` when it runs and schedules nothing.
+As built (decisions D-684, D-685). The effects inside `after` and
+`every` are compiled where they stand, so that a mistake is found at
+load, and a timer keeps a continuation of them (section 13.4). The
+arguments:
+
+| Effect | Argument | Is |
+|--------|----------|----|
+| `after` | `after` | A `real` of seconds of the owner's clock, or a quantity (`"90 s"`). A constant of zero or less is a load error; one that comes to null, zero or less when it runs is refused (`rule.timer_refused`) |
+| `every` | `every` | The interval, as `after`'s |
+| `every` | `times` | An `int`: how many runs; for ever if left out. Zero or less schedules nothing |
+| both | `name` | A `string` unique to the owner. A timer set with a name its owner's timer already has replaces that one |
+| both | `owner` | Any subject with a clock: an entity, a cell, an area (its own clock, else its realm's), a site (its realm's), a tract or a realm (the realm's), or `global` (universal time). Left out: what the rule is attached to; else `self`; else the realm of `here`; else the simulation |
+| both | `while_unloaded` | `pause` (the default) or `elapse`; for `every`, also `all` |
+| both | `do` | The effects to run |
+| `cancel_timer` | the value | A `string`, the name: the timer of the owner `after` would choose there. Or `{ "name": string, "owner": subject }`. Cancelling a timer that is not there does nothing |
+
+- A timer runs on its owner's clock: one owned by an entity follows it
+  from clock to clock, so an area that slows time slows it. Each is a
+  wake-up of the `Rule` domain.
+- When it fires, its next run is settled before its effects run, so
+  that they may cancel or replace it. An `every` runs again one
+  interval later, until its `times` are used up.
+- The effects see the subjects, the locals and the event fields as
+  they were when the timer was set. What they assign to a local
+  changes the copy the timer keeps for that run only. They are caused
+  as the effect that set the timer was.
+- `while_unloaded` is section 13.5's: a timer of an entity that leaves
+  the world is taken off the timeline and put back when it returns.
+- `owner.timer(name)` is a property of `entity`, `loc`, `area`, `site`,
+  `realm` and `global`: `real?`, the seconds of local time that timer
+  has left, or null if the owner has none of that name.
+- A host without timers (the rule runtime's test host) refuses `after`
+  and `every` with `rule.timers_unavailable`.
 
 ### 10.5 Rules and events
 
@@ -1459,6 +1536,75 @@ Spatial queries cover loaded space only. Their extent is capped
 (`rules.max_query_cells`); a query that would exceed the cap is a load error
 if its size is constant and a run-time warning otherwise.
 
+As built (decisions D-680 to D-683), in `clash_data::expr` (the
+language: compiling, `where`, `sort`, `limit`, the value sources, and
+the kinds `list` and `defs`) and `clash_sim::query` (the kinds the
+simulation answers).
+
+**The form.** A query is an object with one key, its kind, whose value
+is an object of its arguments and of `where`, `sort` and `limit`:
+
+| Key | Is | Compiled |
+|-----|----|----------|
+| An argument | As its kind declares, each an expression field (section 7.1) of the argument's type, or null | In the scope of the field the query is in |
+| `where` | A condition (section 7.2) on `it` | In that scope with `it`, the candidate, bound after everything else |
+| `sort` | An expression on `it`; ascending | The same, and pure |
+| `limit` | An `int`; at most so many results, counted after `where` and `sort`; a count of zero or less gives none | In the field's scope, once |
+
+Results are worked out in that order: the candidates in their kind's
+default order, those `where` lets through, ordered by `sort` (numbers by
+value, then texts in order, then anything else; ties keep the default
+order), then cut by `limit`. `it` is a subject of the kind's result
+type, and may be read as any subject of that kind; in a mind context it
+is not the character's own. A query may stand inside another's `where`:
+the inner `it` is the inner candidate.
+
+**The kinds.** `list` and `defs` belong to the language and may be
+written anywhere, a mind context included, since they read nothing of
+the world. The rest are the simulation's, registered as `QuerySpec`s in
+the expression registry with their arguments, so that the generated
+reference lists them and the compiler checks them.
+
+| Kind | Results | Arguments | Default order |
+|------|---------|-----------|---------------|
+| `list` | The elements of a list: `{ "list": "$xs" }`, or `{ "list": { "items": "$xs", "where": … } }` | `items`: `list<any>` | As listed |
+| `defs` | The definitions of a type, as ids | `type`: a definition type's name, a constant | By qualified id |
+| `entities` | `entity`: entities standing in the world, not what is inside them | One shape of `around`: `any` with `radius`: `real` (metres); `box`: `list<loc>` (two corners of one grid); `in_area`: `area`; `in_site`: `site`; `at`: `loc`; or none, for every entity in the world. Then filters: `plane`: `string` (a plane's qualified id), `kind`: `string` (`creature`, `item`, `device`, `other`), `tag`: `string`, `def`: `string` (the qualified id it was made from), `has`: `string` (a component type: `body`, `stats`, `item`, …) | Nearest to `around` first, by the nearest cell each fills; for the other shapes by cell (storey, row, column), each entity at the first cell of it the shape covers; ties, and the whole world, by id |
+| `cells` | `loc`: loaded cells | One shape of `around` with `radius`, `box`, `in_area`, `at` | Nearest first; else by cell; ties by cell |
+| `contents` | `entity`: what is inside an entity | `of`: `entity` (none: no results); `deep`: `bool`, default false | By id; with `deep`, each thing followed by what is inside it |
+| `areas` | `area` | `at`: `loc` (those covering it), or `around` with `radius` (those whose middle is in reach), or neither (every area) | Nearest middle first, ties by id; else by id |
+| `sites` | `site` | `at`: `loc` (the one holding it), or `around` with `radius` (those whose anchor is in reach), or neither (every site) | Nearest anchor first, ties by id; else by id |
+
+`around` is a cell, an element, an entity (where it, or what it is
+inside, stands), an area (its middle) or a site (its anchor); distance
+is as `dist` measures it. A centre that is nowhere, or a shape that
+names nothing, gives no results. At most one shape is written, and
+`radius` goes with `around`; either mistake, an unknown key and an
+unknown kind are load errors (`E0677`). A kind's argument of the wrong
+type is the compiler's error, as anywhere.
+
+**The extent cap.** `rules.max_query_cells` (default 1,048,576) caps the
+cells a spatial query covers: a radius the box of cells round its
+centre (`(2⌈r⌉ + 1)² × (2⌈r / 3⌉ + 1)`), a box its cells, an area its
+bounds, a site its tracts' cells on one storey, and `entities` with no
+shape the entities in the world. A query whose radius is a constant
+over the default is a load error (`E0678`), whatever the setting says
+when it runs; any other over the setting is refused when it runs, with
+the run-time warning `X910` (`W0690`), and has no results. So is a query
+whose arguments its kind cannot use: a radius below zero, a `box` that
+is not two cells, a `plane`, `kind` or `has` that names nothing.
+
+**Truth and belief.** Every kind of the simulation reads truth, and none
+is registered safe for belief: in a mind context writing one is a load
+error (`E0662`) that names the seam. The perception package answers
+them from belief by registering them as safe (`QuerySpec::safe`); the
+host is then given the observer, the character the context is about
+(`QueryCall::observer`), and must answer from what it believes.
+
+Not built: `line` and `cone` shapes; the kinds `actions` and
+`windows`, whose subjects are not served yet (section 5.1); `parts` and
+the other kinds of document 06.
+
 ## 12. Functions
 
 A **function** is a named, parameterised value.
@@ -1497,8 +1643,9 @@ calls, directly or through others:
   parameters, and so would the body of every function it calls. A
   function that reads a property of a parameter which is not registered
   safe is therefore not safe, even when it is called with the character
-  itself. Until queries are built, a function whose value is a query is
-  not safe.
+  itself. A function whose value is a source over a query is safe if
+  the query's kind is (section 11) and its `where` and `sort`, written
+  as strings, read nothing that is not.
 - **Recursion.** A function that calls itself on every path through its
   body, directly or through others, could never finish, and is a load
   error that names the chain. A call counts as made on every path unless
@@ -1615,6 +1762,7 @@ As bound to the simulation (decision D-540):
 | Rules waiting in the queue (`queue`, section 10.5) | 1,000 | The rule is not queued; error reported |
 | Nesting of lists and maps in one value an effect writes | 32 | The effect fails; error reported |
 | Nesting of lists of effects | 32 | Load error |
+| Cells one query covers (`rules.max_query_cells`, section 11) | 1,048,576 | A constant one over the default: load error. Otherwise the query is refused and has no results; warning `X910` |
 
 Exceeding a limit is always an error report with a trace, and never a hang
 or a crash.
@@ -1661,8 +1809,10 @@ As built (decision D-475):
 | `rule.not_attachable` | `attach_rule` was given a rule that is not an attached rule, or a subject of another kind than the rule attaches to. |
 | `rule.not_a_hook` | `modify` or `cancel_event` ran where no hook is being handled. |
 | `rule.no_random` | `weighted` had to choose and there is no stream to draw from. |
-| `rule.timers_unavailable` | A timer effect ran; timers are not built yet. |
-| `rule.queries_unavailable` | `for_each` was given a query; queries are not built yet. |
+| `rule.timers_unavailable` | A timer effect ran against a host that keeps no timers (the test host). Nothing was scheduled. |
+| `rule.queries_unavailable` | `for_each` was given a query that did not compile. The body did not run. |
+| `rule.timer_refused` | `after` or `every` could not set its timer: its time is not above zero, `times` is not an int, or its owner is on no clock. Nothing was scheduled. |
+| `rule.timer_lost` | A timer fell due, and the effect that set it, or the recurring rule it runs, is no longer among the definitions (section 13.4). Nothing ran; the timer was dropped. |
 | `rule.verb_unbound` | An effect called a verb that is registered and that nothing in the engine carries out. Nothing was done. |
 | `rule.expression_warning` | An expression a rule or a list of effects evaluated gave a run-time warning (section 4.5). The operation gave null. |
 | `rule.message_refused` | A `message` was for something that is not an entity that exists. Nothing was shown. |
@@ -1684,12 +1834,46 @@ effect list inside it, the subjects and the locals. Continuations are plain
 data. They are saved, survive loading, and survive a definition reload if
 the path still exists.
 
+As built (decision D-684). A continuation is what a `TimerRecord` of
+the rule state keeps: where the `after` or `every` is written (the
+definition type, its qualified id and the JSON path of the effect),
+the qualified id of the rule whose effects they are and what it is
+attached to, the names and values of the subjects bound there, the
+locals of its list, the event being handled with its fields, and the
+cause. Values are stored as variables store them (section 3). When the
+timer fires the effect is found again from where it is written; if it
+is not there, nothing runs and `rule.timer_lost` is reported. The
+record also holds the owner, the name, the interval and runs left, the
+`while_unloaded` mode and the wake-up, or, while its owner is away,
+the local time left and the clock and time it left on. The rule state,
+timers included, is saved and hashed; the save layout is version 9.
+
 ### 13.5 Level of detail
 
 - Event-triggered rules run only for events, and events come only from
   simulated things. Nothing cold raises cell-level events.
 - Attached rules on a stored entity do not run. Recurring ones follow
   `while_unloaded`.
+
+As built (decision D-685). When an entity leaves the world (its tract
+unloads, it is stored, it is removed), each of its timers is taken off
+the timeline with the local time it had left (`R`), the clock it was on
+and that clock's local time. When it returns, with `E` the local time
+that passed on that clock since (universal time if the clock is gone):
+
+| `while_unloaded` | On return |
+|------------------|-----------|
+| `pause` | `R` is left: the timer stood still |
+| `elapse` | If `E < R`, `R - E` is left. Otherwise it fires once at once; an `every` then goes on from where its schedule now is |
+| `all` | As `elapse`, firing once at once for each interval missed, at most 100 |
+| `skip` (rules) | As `elapse`, but nothing that was missed runs |
+| `once` (rules) | As `elapse` |
+
+What fires at once fires in the order it fell due, before anything
+scheduled later at that tick. A removed entity's timers are forgotten.
+Timers of areas, sites, realms, cells and the simulation do not leave
+the simulation: they run on their clocks whatever is loaded, and their
+effects find what is not loaded as section 4.4 says.
 - The cold simulation (09) has its own events at its own scale, and rules
   may listen to them.
 
@@ -1813,13 +1997,25 @@ and is not bound in expressions.
 **Core effects**: sections 10.2 to 10.5: `if`, `first`, `switch`,
 `for_each`, `repeat`, `while`, `weighted`, `as`, `stop`, `return`, `let`,
 `set`, `add`, `unset`, `run`, `queue`, `attach_rule`, `detach_rule`,
-`set_rule_group`, `emit`, `modify`, `cancel_event`, `consume`, and, read
-and kept until timers are built, `after`, `every` and `cancel_timer`.
-`message` and `ask` (section 10.6) are verbs of the package that builds
-them.
+`set_rule_group`, `emit`, `modify`, `cancel_event`, `consume`, `after`,
+`every` and `cancel_timer`. `message` and `ask` (section 10.6) are
+verbs of the package that builds them.
+
+**Queries** (section 11): `list` and `defs`, and the simulation's
+`entities`, `cells`, `contents`, `areas` and `sites`, with their
+arguments and `where`, `sort` and `limit`; the value sources `count`,
+`collect`, `first`, `pick` (with `weight`), `sum`, `min` and `max` (with
+`of`); `{ "exists": query }` in a condition; `for_each` over a query.
+
+**Properties**: `timer(name: string)`: `real?` on `entity`, `loc`,
+`area`, `site`, `realm` and `global` (section 10.4).
 
 **Reasons**: the faults of section 13.2, `rule.step_limit` to
-`rule.queries_unavailable`.
+`rule.timer_lost`.
+
+**Diagnostics**: `E0677` (a query not well formed), `E0678` (a constant
+query over the extent cap), `W0690` (`X910`: a query refused when it
+ran).
 
 **Settings**: `rules.max_steps`, `rules.max_call_depth`,
 `rules.max_hook_depth`, `rules.max_cascade`, `rules.max_reactive_rounds`,
@@ -1862,12 +2058,17 @@ cannot be declared. A property of a definition reached through an id
 the registry holds properties of kinds of subject, and an id is not one;
 `element.def_id` gives the qualified id as a text meanwhile. `subject.var`
 on a `region`, a `subgrid`, an `action`, the scenario and the legacy
-waits for those kinds. Queries, and with them value sources over a query
-and `exists` in a condition, are read and kept and give null with a
-warning until they are built; `for_each` over a query reports and runs
-nothing. Timers (`after`, `every`, `cancel_timer`, a rule's own `every`)
-are read and kept, and schedule nothing. A `run` source is taken by a
-`let` in a list of effects and gives null anywhere else. A rule's limits
+waits for those kinds. The kinds of query are registered in Rust
+(`clash_sim::query::engine_queries`): a mod cannot add one, and the
+shapes `line` and `cone` and the kinds `actions`, `windows` and
+`parts` wait for their packages. No query is answered from belief until
+the perception package registers them as safe. The extent of a constant
+query is checked against the default of `rules.max_query_cells`, not
+the setting. A `run` source is taken by a `let` in a list of effects and
+gives null anywhere else. The cap on runs made at once for missed
+intervals (`MAX_MISSED_RUNS`, 100) is fixed. Rules carried by
+definitions do not start their own `every` until a definition type of
+the simulation carries `rules`. A rule's limits
 are read from the rule host, which the simulation answers from its
 settings once it is bound to the rule runtime; until then they are the
 defaults. A verb's argument is an expression of a declared type: one

@@ -33,6 +33,8 @@ define_id! {
     pub struct DefTypeId(u16);
     /// A declared variable.
     pub struct VariableId;
+    /// A registered kind of query (05 §11).
+    pub struct QueryId;
 }
 
 /// A reference to a subject: its kind, and sixty-four bits that mean

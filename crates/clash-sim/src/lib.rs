@@ -78,6 +78,7 @@ pub mod mind;
 pub mod movement;
 pub mod perception;
 mod props;
+pub mod query;
 pub mod reader;
 pub mod reason;
 pub mod registry;

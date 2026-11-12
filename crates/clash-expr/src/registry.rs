@@ -46,7 +46,7 @@ use crate::builtins::{self, Builtin};
 use crate::lexer::is_keyword;
 use crate::types::Type;
 use crate::value::{
-    DefRef, DefTypeId, EventId, FunctionId, KindId, PropertyId, VariableId, VerbId,
+    DefRef, DefTypeId, EventId, FunctionId, KindId, PropertyId, QueryId, Value, VariableId, VerbId,
 };
 
 /// Why something could not be registered.
@@ -487,6 +487,124 @@ impl VerbSpec {
     }
 }
 
+/// The most cells a query may cover unless the setting
+/// `rules.max_query_cells` says otherwise (05 §11, §13.2). A query whose
+/// size is known when mods load and is larger is a load error.
+pub const DEFAULT_MAX_QUERY_CELLS: u64 = 1 << 20;
+
+/// Works out, from the arguments of a query that are constants at load
+/// (`None` for one that is not, or is left out), how many cells it
+/// covers, if that can be known then.
+pub type QueryExtent = fn(&[Option<Value>]) -> Option<u64>;
+
+/// A kind of query a host answers (05 §11): `entities`, `cells`.
+///
+/// A query is written `{ "entities": { "around": "self", "radius": 12,
+/// "where": "…", "sort": "…", "limit": 3 } }`. The arguments are the
+/// keys besides `where`, `sort` and `limit`, each an expression of its
+/// declared type compiled where the query is written; the host is given
+/// one value for each, in the order declared, null for one left out,
+/// and answers with the candidates in their default order. Whoever asked
+/// filters, sorts and limits them.
+#[derive(Clone, Debug)]
+pub struct QuerySpec {
+    /// The key the query is written under.
+    pub name: String,
+    /// Its arguments. Each may be left out unless the host says
+    /// otherwise when it answers.
+    pub args: Vec<ParamSpec>,
+    /// The type of each result, which `it` has in `where` and `sort`.
+    pub element: Type,
+    /// Arguments of which at most one may be written: the shapes of a
+    /// spatial query.
+    pub one_of: Vec<String>,
+    /// Pairs of arguments that go together: the first is written only
+    /// with the second.
+    pub needs: Vec<(String, String)>,
+    /// Whether the query may be written in a mind context (05 §7.3).
+    /// The host then answers it from what the observer believes.
+    pub belief_safe: bool,
+    /// How many cells it covers, worked out from the arguments that are
+    /// constants at load.
+    pub extent: Option<QueryExtent>,
+    /// What it selects.
+    pub doc: String,
+}
+
+impl QuerySpec {
+    /// A query with this name, whose results are of type `element`.
+    pub fn new(name: impl Into<String>, element: Type) -> QuerySpec {
+        QuerySpec {
+            name: name.into(),
+            args: Vec::new(),
+            element,
+            one_of: Vec::new(),
+            needs: Vec::new(),
+            belief_safe: false,
+            extent: None,
+            doc: String::new(),
+        }
+    }
+
+    /// Sets the documentation.
+    #[must_use]
+    pub fn doc(mut self, doc: impl Into<String>) -> QuerySpec {
+        self.doc = doc.into();
+        self
+    }
+
+    /// Adds an argument, which may be left out.
+    #[must_use]
+    pub fn arg(mut self, name: impl Into<String>, ty: Type, doc: impl Into<String>) -> QuerySpec {
+        let mut param = ParamSpec::new(name, ty, doc);
+        param.optional = true;
+        self.args.push(param);
+        self
+    }
+
+    /// Says that at most one of these arguments may be written.
+    #[must_use]
+    pub fn one_of(mut self, names: &[&str]) -> QuerySpec {
+        self.one_of = names.iter().map(|name| (*name).to_owned()).collect();
+        self
+    }
+
+    /// Says that `arg` is written only with `with`.
+    #[must_use]
+    pub fn needs(mut self, arg: &str, with: &str) -> QuerySpec {
+        self.needs.push((arg.to_owned(), with.to_owned()));
+        self
+    }
+
+    /// Marks the query as one a mind context may write.
+    #[must_use]
+    pub fn safe(mut self) -> QuerySpec {
+        self.belief_safe = true;
+        self
+    }
+
+    /// Says how its extent is worked out from constant arguments.
+    #[must_use]
+    pub fn extent(mut self, extent: QueryExtent) -> QuerySpec {
+        self.extent = Some(extent);
+        self
+    }
+
+    /// The position of an argument, by name.
+    pub fn arg_index(&self, name: &str) -> Option<usize> {
+        self.args.iter().position(|arg| arg.name == name)
+    }
+}
+
+/// A registered kind of query.
+#[derive(Clone, Debug)]
+pub struct QueryKind {
+    /// Its id.
+    pub id: QueryId,
+    /// What was registered.
+    pub spec: QuerySpec,
+}
+
 /// A declared variable (05 §6).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct VariableSpec {
@@ -694,6 +812,8 @@ pub struct Registry {
     variable_names: BTreeMap<String, VariableId>,
     def_types: Vec<DefType>,
     def_type_names: BTreeMap<String, DefTypeId>,
+    queries: Vec<QueryKind>,
+    query_names: BTreeMap<String, QueryId>,
 }
 
 /// Whether `name` is `ident` or, where allowed, `ident:ident`.
@@ -913,6 +1033,38 @@ impl Registry {
         self.verb_names.insert(spec.name.clone(), id);
         self.verbs.push(Verb { id, spec });
         Ok(id)
+    }
+
+    /// Registers a kind of query (05 §11).
+    pub fn add_query(&mut self, spec: QuerySpec) -> Result<QueryId, RegistryError> {
+        check_name("query", &spec.name, false)?;
+        if self.query_names.contains_key(&spec.name) {
+            return Err(RegistryError::Duplicate {
+                what: "query",
+                name: spec.name,
+            });
+        }
+        let id: QueryId = next_id(self.queries.len(), "query")?;
+        self.query_names.insert(spec.name.clone(), id);
+        self.queries.push(QueryKind { id, spec });
+        Ok(id)
+    }
+
+    /// The kind of query with this name.
+    pub fn query_id(&self, name: &str) -> Option<QueryId> {
+        self.query_names.get(name).copied()
+    }
+
+    /// A registered kind of query.
+    pub fn query(&self, id: QueryId) -> Option<&QueryKind> {
+        self.queries.get(id.index())
+    }
+
+    /// Every kind of query, in order of name.
+    pub fn queries(&self) -> impl Iterator<Item = &QueryKind> {
+        self.query_names
+            .values()
+            .filter_map(|id| self.queries.get(id.index()))
     }
 
     /// Declares a variable.

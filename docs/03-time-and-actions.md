@@ -1220,6 +1220,21 @@ agent):
   the local time that passed subtracted; any now overdue fire once,
   immediately, in order.
 
+As built (decisions D-684, D-685), for the timers of rules (05 §10.4)
+and the recurring rules of an owner (05 §9.4): a timer of an entity is
+one of its wake-ups, so it follows the entity's clocks. When the entity
+leaves the world it is taken off the timeline with its remaining local
+time, the clock it was on and that clock's local time; when it returns,
+the local time that passed on that clock (universal time if the clock is
+gone) is what has elapsed. `Pause` keeps the remaining time; `Elapse`
+subtracts what elapsed and, if that leaves nothing, fires once at once
+(an `every` then goes on with its schedule); a repeating timer may also
+fire once for each interval missed (`all`, at most 100), or skip them
+(`skip`, a recurring rule's default). Overdue timers fire in the order
+they fell due. Timers of areas, sites, realms and the simulation run on
+their clocks whatever is loaded. Pools and wounds are `Pause` timers of
+their own (D-552). Actions abandoned on leaving the world are T3's.
+
 ## 10. Stepping at lower detail
 
 | Level | How entities are stepped |

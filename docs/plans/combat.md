@@ -93,9 +93,9 @@ Done when
   and stops at an armoured sixth.
 
 Beta (decisions D-641, D-642): built and tested in
-`crates/clash-sim/tests/combat.rs`, with `own_fist` and `one_cut` as Rust
-tests (the console host refuses verbs and `do` until the rule runtime is
-bound to it, so a test script cannot spawn from a template or act). Stubbed: clash and defences are
+`crates/clash-sim/tests/combat.rs`; `own_fist` and `one_cut` are also
+test scripts under `scenarios/combat/`, with the bundled `smash` and
+`whirl`. Stubbed: clash and defences are
 steps that find none (C6, C4); `with` a gripped thing is refused (C7);
 swings meeting the world (`swing`, review row "Swings meet the world"),
 contact surfaces (`the_pit`) and `closing_energy` are not built; `height`,

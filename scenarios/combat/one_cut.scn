@@ -1,0 +1,33 @@
+# one_cut (plans/combat.md, C2; scene S4): a blade drawn once passes
+# through five unarmoured heads and stops at an armoured sixth (07 §6.4).
+# An ordinary person whirls a knife right round: 50 J on an edge of
+# 1e-5 m². Each head takes about 7 J of it (06 §7.2, under the edge's
+# contact) and passes the rest to the next, met in turn from the north;
+# the sixth, south-west, wears a steel helmet, which the 14 J left
+# cannot affect (800 MPa for a cut), and the knife takes the recoil.
+use default seed=11
+gen core:testland size=1
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 0, -1, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, -1, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 1, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 0, 1, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, -1, 1, 0)" } }
+remove @spot
+assert "@e:1.has_tag('person') and @e:7.has_tag('person') and @e:7.loc.x == 9"
+as @e:1 do { "create_item": { "def": "core:knife", "at": "self.loc" } }
+as @e:1 do { "take": { "who": "self", "what": "self.loc.occupants[0]" } }
+as @e:7 do { "create_item": { "def": "core:helmet", "at": "self.loc" } }
+as @e:7 do { "wear": { "who": "self", "what": "self.loc.occupants[1]" } }
+control @e:1 delegated
+as @e:1 do { "start_action": { "who": "self", "action": "core:whirl", "with": "{ 'target': offset(self.loc, 1, 0, 0).occupants[0], 'part': offset(self.loc, 1, 0, 0).occupants[0].part('head') }" } }
+advance 2s
+expect event strike_landed
+expect event strike_recoiled
+assert "@e:2.part('head').layer_damage(0) > 0 and @e:3.part('head').layer_damage(2) > 0"
+assert "@e:4.part('head').layer_damage(2) > 0 and @e:5.part('head').layer_damage(2) > 0"
+assert "@e:6.part('head').layer_damage(2) > 0"
+assert "@e:7.part('head').layer_damage(0) == 0 and len(@e:7.wounds) == 0"
+expect hash d32214d6fa799ea9f6b17d2277dfe452

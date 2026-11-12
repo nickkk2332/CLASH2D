@@ -12,10 +12,8 @@
 //! at the energy the body model predicts; save and load in the middle of
 //! a strike's phases and replay change nothing.
 //!
-//! `own_fist` and `one_cut` are Rust tests: the console host has landed,
-//! but it refuses verbs, `do` and `run` (`console.rules_unbound`), so a
-//! test script can neither spawn a person from a template nor start an
-//! action.
+//! `own_fist` and `one_cut` are also test scripts, under
+//! `scenarios/combat/`, with the bundled `smash` and `whirl`.
 
 mod common;
 

@@ -21,8 +21,8 @@ use std::sync::Arc;
 use clash_core::{Real, Rng};
 use clash_data::{Cond, Runner, Text};
 use clash_expr::{
-    Compiled, DefRef, FunctionId, Handle, Host, Limits, Place, PlaceRoot, PropertyId,
-    RuntimeWarning, Value,
+    Compiled, DefRef, Fault, FunctionId, Handle, Host, Limits, Place, PlaceRoot, PropertyId,
+    QueryCall, RuntimeWarning, Value,
 };
 
 use super::compile::{EMIT_CANCELLED, EMIT_REASON};
@@ -150,6 +150,10 @@ impl<H: RuleHost + ?Sized> Host for FrameHost<'_, H> {
 
     fn def_name(&self, id: DefRef) -> Option<&str> {
         self.host.def_name(id)
+    }
+
+    fn query(&mut self, call: &QueryCall<'_>, out: &mut Vec<Value>) -> Result<(), Fault> {
+        self.host.query(call, out)
     }
 }
 
@@ -297,6 +301,19 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
             event,
         };
         self.runner.over(exprs, &mut view).value(code)
+    }
+
+    /// Runs a query (05 §11) against the frame on top.
+    fn query(&mut self, query: &clash_data::CompiledQuery) -> Option<Vec<Value>> {
+        let exprs = self.set.defs().exprs();
+        let (subjects, locals, event) = Self::bindings(&self.frames, self.occurrence.as_deref());
+        let mut view = FrameHost {
+            host: &mut *self.host,
+            subjects,
+            locals,
+            event,
+        };
+        self.runner.over(exprs, &mut view).query(query)
     }
 
     fn holds(&mut self, cond: &Cond) -> bool {
@@ -740,14 +757,30 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
                     other => self.fault(
                         reason::TYPE_MISMATCH,
                         origin,
-                        format!("`for_each` goes through a list, and this is a {}", other.type_name()),
+                        format!(
+                            "`for_each` goes through a list, and this is a {}",
+                            other.type_name()
+                        ),
                     ),
                 },
                 Items::Query(_) => self.fault(
                     reason::QUERIES_UNAVAILABLE,
                     origin,
-                    "`for_each` over a query: queries are not available yet, so the body did not run",
+                    "`for_each` over a query that did not compile: the body did not run",
                 ),
+                Items::Compiled(query) => {
+                    // A query that was refused has been reported as a
+                    // warning, and runs the body for nothing.
+                    if let Some(found) = self.query(query) {
+                        self.stack.push(Act::ForEach {
+                            body,
+                            slot: *slot,
+                            items: Arc::from(found),
+                            next: 0,
+                            origin,
+                        });
+                    }
+                }
             },
             EffectKind::Repeat { times, slot, body } => match self.eval(times) {
                 Value::Int(times) => self.stack.push(Act::Repeat {
@@ -973,11 +1006,7 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
                 }
             }
             EffectKind::Strike(strike) => self.strike(strike, origin),
-            EffectKind::Timer(_) => self.fault(
-                reason::TIMERS_UNAVAILABLE,
-                origin,
-                "a timer effect ran: timers are not available yet, so nothing was scheduled",
-            ),
+            EffectKind::Timer(timer) => self.timer(timer, origin),
             EffectKind::Message { text, to, style } => {
                 let Some(reader) = self.who(to.as_ref(), origin, "message") else {
                     return;
@@ -1013,6 +1042,162 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
                 }
             }
             EffectKind::Ask(ask) => self.ask(ask, origin),
+        }
+    }
+
+    /// Whose clock a timer runs on when the effect does not say
+    /// (05 §10.4): the rule's owner, else `self`; failing those, what
+    /// `here` is, for the host to take the realm of.
+    fn default_owner(&self) -> (Option<Handle>, Option<Handle>) {
+        let Some(frame) = self.frames.last() else {
+            return (None, None);
+        };
+        if let Some(owner) = frame.owner {
+            return (Some(owner), None);
+        }
+        let bound = |name: &str| {
+            let at = frame.names.iter().rposition(|have| &**have == name)?;
+            match frame.subjects.get(at) {
+                Some(Value::Subject(handle)) => Some(*handle),
+                _ => None,
+            }
+        };
+        match bound(OWNER_SUBJECT) {
+            Some(own) => (Some(own), None),
+            None => (None, bound("here")),
+        }
+    }
+
+    /// `after`, `every` and `cancel_timer` (05 §10.4).
+    fn timer(&mut self, timer: &'r super::Timer, origin: u64) {
+        let (owner, here) = match &timer.owner {
+            Some(arg) => match self.eval(arg) {
+                Value::Subject(handle) => (Some(handle), None),
+                other => {
+                    self.fault(
+                        reason::NO_SUBJECT,
+                        origin,
+                        format!(
+                            "a timer's `owner` is a subject with a clock, and this is {}",
+                            if other.is_null() {
+                                "null".to_owned()
+                            } else {
+                                format!("a {}", other.type_name())
+                            }
+                        ),
+                    );
+                    return;
+                }
+            },
+            None => self.default_owner(),
+        };
+        let (wait, every, times) = match &timer.kind {
+            super::TimerKind::Cancel { name } => {
+                match self.eval(name) {
+                    Value::Str(name) => {
+                        self.host.cancel_timer(owner, here, &name);
+                    }
+                    other => self.fault(
+                        reason::TYPE_MISMATCH,
+                        origin,
+                        format!(
+                            "a timer's name is a text, and this is a {}",
+                            other.type_name()
+                        ),
+                    ),
+                }
+                return;
+            }
+            super::TimerKind::After { delay } => (delay, false, None),
+            super::TimerKind::Every { interval, times } => (interval, true, times.as_ref()),
+        };
+        let seconds = self.eval(wait).as_number();
+        let span = seconds
+            .map(clash_core::Dur::from_secs_real)
+            .filter(|span| *span > clash_core::Dur::ZERO);
+        let Some(span) = span else {
+            self.fault(
+                reason::TIMER_REFUSED,
+                origin,
+                "a timer waits a span of time above zero, and this is not one; nothing was scheduled",
+            );
+            return;
+        };
+        let times = match times.map(|times| self.eval(times)) {
+            None | Some(Value::Null) => None,
+            Some(Value::Int(count)) if count <= 0 => return,
+            Some(Value::Int(count)) => Some(u64::try_from(count).unwrap_or(u64::MAX)),
+            Some(other) => {
+                self.fault(
+                    reason::TIMER_REFUSED,
+                    origin,
+                    format!("`times` is an int, and this is a {}", other.type_name()),
+                );
+                return;
+            }
+        };
+        let name = match timer.name.as_ref().map(|name| self.eval(name)) {
+            None | Some(Value::Null) => None,
+            Some(Value::Str(name)) => Some(name),
+            Some(other) => {
+                self.fault(
+                    reason::TYPE_MISMATCH,
+                    origin,
+                    format!(
+                        "a timer's name is a text, and this is a {}",
+                        other.type_name()
+                    ),
+                );
+                return;
+            }
+        };
+        let away = timer
+            .while_unloaded
+            .as_deref()
+            .and_then(super::WhileAway::parse)
+            .unwrap_or(super::WhileAway::Pause);
+        let plan = if every {
+            super::TimerPlan::Every {
+                interval: span,
+                times,
+            }
+        } else {
+            super::TimerPlan::After(span)
+        };
+        let result = match self.frames.last() {
+            Some(frame) => {
+                let event = match self.occurrence.as_deref() {
+                    Some(occurrence) if frame.event => {
+                        Some((occurrence.event, occurrence.fields.as_slice()))
+                    }
+                    _ => None,
+                };
+                self.host.set_timer(&super::TimerSet {
+                    plan,
+                    name: name.as_deref(),
+                    owner,
+                    here,
+                    away,
+                    origin,
+                    locals: &frame.locals,
+                    event,
+                    by: RunView {
+                        rule: frame.rule.map(|(id, _)| id),
+                        owner: frame.owner,
+                        names: &frame.names,
+                        values: &frame.subjects,
+                    },
+                })
+            }
+            None => return,
+        };
+        if let Err(refusal) = result {
+            let code = if refusal.code == reason::TIMERS_UNAVAILABLE {
+                reason::TIMERS_UNAVAILABLE
+            } else {
+                reason::TIMER_REFUSED
+            };
+            self.fault_with(code, origin, "the timer was not set", Some(refusal));
         }
     }
 
@@ -1544,7 +1729,9 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
             return;
         };
         if !attach {
-            self.host.rule_state().detach(owner, id);
+            if self.host.rule_state().detach(owner, id) && def.every().is_some() {
+                self.host.recurring(owner, id, false);
+            }
             return;
         }
         let name = set.name(id).unwrap_or("?");
@@ -1571,7 +1758,10 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
             );
             return;
         }
-        self.host.rule_state().attach(owner, id);
+        if self.host.rule_state().attach(owner, id) && def.every().is_some() {
+            // A recurring rule runs for what it is attached to (05 §9.4).
+            self.host.recurring(owner, id, true);
+        }
     }
 
     fn cancel(
@@ -1958,6 +2148,107 @@ impl RuleSet {
         drop(exec);
         self.leave(host);
         Ok(())
+    }
+
+    /// Runs the effects of a timer that fell due (05 §13.4): the body of
+    /// the `after` or `every` found again where it is written, with the
+    /// subjects, locals and event fields the continuation kept.
+    ///
+    /// Refused, running nothing, if the effect is no longer there.
+    pub fn resume_timer<H: RuleHost + ?Sized>(
+        &self,
+        host: &mut H,
+        continuation: &super::Continuation,
+    ) -> Result<(), Reason> {
+        let site = &continuation.site;
+        let found = self
+            .blocks_at(site)
+            .into_iter()
+            .find_map(|block| super::timer::timer_at(block, &site.path));
+        let Some(timer) = found else {
+            return Err(Reason::new(
+                reason::TIMER_LOST,
+                format!(
+                    "the timer at `{}` of {} `{}` is no longer there, so what it was to run cannot be",
+                    site.path, site.def_type, site.def
+                ),
+            )
+            .with("definition", site.def.as_str())
+            .with("path", site.path.as_str()));
+        };
+        let rule = continuation
+            .rule
+            .as_deref()
+            .and_then(|name| self.lookup(name))
+            .and_then(|id| Some((id, self.rule(id)?)));
+        let mut occurrence = continuation.event.as_ref().and_then(|(name, fields)| {
+            let event = self.defs().expr_registry().event_id(name)?;
+            Some(Occurrence::new(
+                event,
+                Vec::new(),
+                fields.iter().map(Value::from).collect(),
+            ))
+        });
+        let handling = occurrence.is_some();
+        let mut locals: Vec<Value> = continuation.locals.iter().map(Value::from).collect();
+        if let Some((_, def)) = rule
+            && locals.len() < def.frame_size()
+        {
+            locals.resize(def.frame_size(), Value::Null);
+        }
+        host.rule_state().running.depth += 1;
+        let mut exec = Exec::new(self, host, occurrence.as_mut());
+        exec.frames.push(Frame {
+            rule,
+            owner: continuation.owner.map(Handle::from),
+            names: continuation
+                .names
+                .iter()
+                .map(|name| Arc::from(&**name))
+                .collect(),
+            subjects: continuation.subjects.iter().map(Value::from).collect(),
+            locals,
+            event: handling,
+            base: 0,
+            ret: None,
+        });
+        exec.push_seq(&timer.body);
+        exec.run();
+        drop(exec);
+        self.leave(host);
+        Ok(())
+    }
+
+    /// Runs a recurring rule for an owner (05 §9.4): its group, `once`,
+    /// `cooldown` and condition as for any run, with the owner bound as
+    /// `self` if the rule is attached.
+    pub fn run_recurring<H: RuleHost + ?Sized>(&self, host: &mut H, id: EocId, owner: Handle) {
+        let Some(rule) = self.rule(id) else {
+            return;
+        };
+        let global = host.global();
+        let subjects: Vec<Value> = rule
+            .subjects()
+            .iter()
+            .map(|subject| match subject.source {
+                SubjectSource::Owner => Value::Subject(owner),
+                SubjectSource::Global => global.clone(),
+                SubjectSource::Event(_) | SubjectSource::Caller => Value::Null,
+            })
+            .collect();
+        let mut locals = vec![Value::Null; rule.frame_size()];
+        for (slot, param) in rule.params().iter().enumerate() {
+            if let (Some(local), Some(default)) = (locals.get_mut(slot), &param.default) {
+                *local = default.clone();
+            }
+        }
+        let attached = rule.is_attached().then_some(owner);
+        host.rule_state().running.depth += 1;
+        let mut exec = Exec::new(self, host, None);
+        exec.enter_rule(id, rule, attached, subjects, locals, false, None, 0);
+        exec.run();
+        drop(exec);
+        self.leave(host);
     }
 
     /// Ends an outermost run: once nothing is running, the rules that

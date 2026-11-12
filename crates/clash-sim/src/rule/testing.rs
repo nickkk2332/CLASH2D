@@ -155,6 +155,16 @@ impl FakeHost {
                 .add_verb(spec)
                 .expect("the fake verbs have distinct names");
         }
+        // A kind of query the fake host does not answer: it compiles,
+        // and is refused as unavailable when it runs.
+        registry
+            .add_query(
+                clash_expr::QuerySpec::new("entities", subject(entity))
+                    .arg("around", Type::Any, "The centre.")
+                    .arg("radius", Type::Real, "How far.")
+                    .doc("Entities near a place."),
+            )
+            .expect("the fake query has a name of its own");
         let events = [
             EventSpec::new("alarm_tripped")
                 .subject("here", loc)

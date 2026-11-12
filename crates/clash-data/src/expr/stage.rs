@@ -758,11 +758,43 @@ impl Analysis<'_> {
                 self.scan_source(source, site, context, unconditional, scan);
             }
             Written::Source(source) => match &**source {
-                ValueSource::Query { op, .. } => {
-                    // Which queries a character may make is decided when
-                    // queries are built; until then none is.
-                    scan.belief_unsafe = true;
+                ValueSource::Query { op, query, .. } => {
+                    // A query is safe for belief if its kind is, and its
+                    // `where` and `sort`, read with `it` bound, read
+                    // nothing that is not; `weight` and `of` likewise.
                     scan.random |= *op == QueryOp::Pick;
+                    let Some((kind, body)) = query.raw.as_object().and_then(|object| {
+                        let mut entries = object.iter();
+                        let first = entries.next()?;
+                        entries.next().is_none().then_some(first)
+                    }) else {
+                        scan.belief_unsafe = true;
+                        return;
+                    };
+                    let safe = match kind.as_str() {
+                        super::query::LIST_QUERY | super::query::DEFS_QUERY => true,
+                        name => self
+                            .registry
+                            .query_id(name)
+                            .and_then(|id| self.registry.query(id))
+                            .is_some_and(|kind| kind.spec.belief_safe),
+                    };
+                    if !safe {
+                        scan.belief_unsafe = true;
+                        return;
+                    }
+                    let mut with_it = context.clone();
+                    with_it.add_subject(super::query::IT, Type::Any, false);
+                    for key in ["where", "sort"] {
+                        match body.get(key) {
+                            None => {}
+                            Some(serde_json::Value::String(text)) => {
+                                self.scan_source(text, field.site(), &with_it, false, scan);
+                            }
+                            // A structure of conditions is not looked into.
+                            Some(_) => scan.belief_unsafe = true,
+                        }
+                    }
                 }
                 ValueSource::Run(_) => {
                     scan.belief_unsafe = true;

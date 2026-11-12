@@ -399,6 +399,31 @@ pub trait RuleHost: clash_expr::Host {
         Offered::Taken(offer.options.iter().position(|option| option.available))
     }
 
+    /// Sets a timer of an `after` or an `every` (05 §10.4): keeps a
+    /// continuation of where the effect is written and what was bound
+    /// there, and schedules it on its owner's clock. A host without
+    /// timers refuses, which is what this does.
+    fn set_timer(&mut self, timer: &super::TimerSet<'_>) -> Result<(), Reason> {
+        let _ = timer;
+        Err(Reason::new(
+            super::reason::TIMERS_UNAVAILABLE,
+            "this host keeps no timers",
+        ))
+    }
+
+    /// Cancels an owner's timer by name (`cancel_timer`). Gives whether
+    /// there was one.
+    fn cancel_timer(&mut self, owner: Option<Handle>, here: Option<Handle>, name: &str) -> bool {
+        let _ = (owner, here, name);
+        false
+    }
+
+    /// Starts or stops a rule's own `every` for an owner, as the rule
+    /// is attached to it or detached from it (05 §9.4).
+    fn recurring(&mut self, owner: Handle, rule: EocId, on: bool) {
+        let _ = (owner, rule, on);
+    }
+
     /// Carries out a `strike` (07 §3.4). A host that knows no attacks
     /// declines, which is what this does.
     fn strike(&mut self, call: &StrikeCall<'_>) -> Result<StrikeOutcome, Reason> {

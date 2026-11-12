@@ -34,7 +34,8 @@ use std::sync::Arc;
 use clash_core::{Dur, EntityId, Rng, Tick};
 use clash_data::Defs;
 use clash_expr::{
-    DefRef, FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value, VerbId, WarningLimiter,
+    DefRef, Fault, FunctionId, Handle, Host, PropertyId, QueryCall, RuntimeWarning, Value, VerbId,
+    WarningLimiter,
 };
 use clash_world::{Cause, CauseKind};
 
@@ -239,6 +240,10 @@ impl Host for SimRules<'_> {
     fn def_name(&self, id: DefRef) -> Option<&str> {
         self.sim.exprs.registry().def_name(id)
     }
+
+    fn query(&mut self, call: &QueryCall<'_>, out: &mut Vec<Value>) -> Result<(), Fault> {
+        self.sim.answer_query(call, out)
+    }
 }
 
 impl RuleHost for SimRules<'_> {
@@ -427,6 +432,74 @@ impl RuleHost for SimRules<'_> {
             }),
         );
         Ok(())
+    }
+
+    fn set_timer(&mut self, timer: &super::TimerSet<'_>) -> Result<(), Reason> {
+        let (delay, interval, left) = match timer.plan {
+            super::TimerPlan::After(delay) => (delay, None, None),
+            super::TimerPlan::Every { interval, times } => (interval, Some(interval), times),
+        };
+        if delay <= Dur::ZERO {
+            return Err(Reason::new(
+                reason::TIMER_REFUSED,
+                "a timer waits a span of time above zero",
+            ));
+        }
+        let owner = timer
+            .owner
+            .or_else(|| self.sim.default_timer_owner(timer.here))
+            .ok_or_else(|| Reason::new(reason::TIMER_REFUSED, "the timer has no owner"))?;
+        let site = self.rules.site_of(timer.origin).ok_or_else(|| {
+            Reason::new(
+                reason::TIMER_REFUSED,
+                "the effect that sets the timer is not among the definitions",
+            )
+        })?;
+        let registry = Arc::clone(self.rules.defs().expr_registry());
+        let continuation = super::Continuation {
+            site,
+            rule: timer
+                .by
+                .rule
+                .and_then(|id| self.rules.name(id).map(str::to_owned)),
+            owner: timer.by.owner.map(SubjectKey::from),
+            names: timer.by.names.iter().map(|name| name.to_string()).collect(),
+            subjects: timer.by.values.iter().map(Value::to_stored).collect(),
+            locals: timer.locals.iter().map(Value::to_stored).collect(),
+            event: timer.event.and_then(|(event, fields)| {
+                let name = registry.event(event)?.spec.name.clone();
+                Some((name, fields.iter().map(Value::to_stored).collect()))
+            }),
+            cause: self.cause(&timer.by),
+        };
+        let record = super::TimerRecord {
+            owner: SubjectKey::from(owner),
+            name: timer.name.map(str::to_owned),
+            interval,
+            left,
+            away: timer.away,
+            body: super::TimerBody::Effects(Box::new(continuation)),
+            state: super::TimerState::Away {
+                remaining: delay,
+                clock: None,
+                mark: Dur::ZERO,
+                since: self.sim.now(),
+            },
+            catch_up: 0,
+            resume: None,
+        };
+        self.sim.add_timer(record, delay).map(|_| ())
+    }
+
+    fn cancel_timer(&mut self, owner: Option<Handle>, here: Option<Handle>, name: &str) -> bool {
+        match owner.or_else(|| self.sim.default_timer_owner(here)) {
+            Some(owner) => self.sim.cancel_named_timer(owner, name),
+            None => false,
+        }
+    }
+
+    fn recurring(&mut self, owner: Handle, rule: EocId, on: bool) {
+        self.sim.set_recurring(owner, rule, on);
     }
 
     fn strike(&mut self, call: &StrikeCall<'_>) -> Result<StrikeOutcome, Reason> {
@@ -641,6 +714,101 @@ impl Sim {
     ) -> Result<Value, Reason> {
         let rules = Arc::clone(&self.rt.rules);
         rules.call(&mut self.rule_host(cause), rule, subjects, args)
+    }
+
+    /// Carries out one of the engine's verbs outside any rule (05 §10.7):
+    /// for a console. `args` are its arguments by name, null for one
+    /// left out; `subjects` what is bound where it is called (`self`).
+    /// What comes back is what the verb gives. Refused for a verb the
+    /// engine does not carry out, an argument it does not take, and
+    /// whatever the verb itself refuses.
+    pub fn call_verb(
+        &mut self,
+        name: &str,
+        args: &[(&str, Value)],
+        subjects: &[(&str, Value)],
+        cause: Cause,
+    ) -> Result<Value, Reason> {
+        let registry = Arc::clone(self.defs.expr_registry());
+        let unbound = || {
+            Reason::new(
+                reason::VERB_UNBOUND,
+                format!("nothing in the engine carries out `{name}`"),
+            )
+            .with("verb", name)
+        };
+        let id = registry.verb_id(name).ok_or_else(unbound)?;
+        let spec = &registry.verb(id).ok_or_else(unbound)?.spec;
+        let run = self.rt.verb(id).ok_or_else(unbound)?;
+        if let Some((unknown, _)) = args
+            .iter()
+            .find(|(given, _)| !spec.args.iter().any(|arg| arg.name == *given))
+        {
+            return Err(Reason::new(
+                crate::kernel_verbs::BAD_ARGUMENT,
+                format!("`{name}` takes no argument `{unknown}`"),
+            )
+            .with("verb", name));
+        }
+        let values: Vec<Value> = spec
+            .args
+            .iter()
+            .map(|arg| {
+                args.iter()
+                    .find(|(given, _)| *given == arg.name)
+                    .map_or(Value::Null, |(_, value)| value.clone())
+            })
+            .collect();
+        let names: Vec<Arc<str>> = subjects.iter().map(|(name, _)| Arc::from(*name)).collect();
+        let bound: Vec<Value> = subjects.iter().map(|(_, value)| value.clone()).collect();
+        let call = VerbCall {
+            verb: id,
+            args: &values,
+            by: super::RunView::new(&names, &bound),
+        };
+        run(self, &call, cause)
+    }
+
+    /// Compiles a list of effects written outside any mod, as JSON: what
+    /// a console's `do` runs. The list may name the `subjects` and the
+    /// locals given, with their types, in slot order; bare names resolve
+    /// in the engine's namespace only. Every mistake is in the text that
+    /// comes back.
+    pub fn compile_effects(
+        &self,
+        json: &str,
+        subjects: &[(&str, clash_expr::Type)],
+        locals: &[(&str, clash_expr::Type)],
+    ) -> Result<Effects, String> {
+        let mut sources = clash_data::SourceMap::new();
+        let file = sources.add("console", json);
+        let (node, problems) =
+            clash_data::parse_json(file, sources.text(file), &clash_data::Limits::default());
+        let Some(node) = node else {
+            return Err(problems
+                .iter()
+                .map(|problem| problem.message.clone())
+                .collect::<Vec<_>>()
+                .join("; "));
+        };
+        let mut diagnostics = clash_data::Diagnostics::new();
+        let effects: Option<Effects> =
+            clash_data::from_node_at(&node, &sources, &mut diagnostics, None, "do");
+        let mut effects = effects.ok_or_else(|| diagnostics.render())?;
+        let mut scope = clash_data::Scope::new();
+        for (name, ty) in subjects {
+            scope = scope.subject(*name, ty.clone());
+        }
+        for (name, ty) in locals {
+            scope = scope.local(*name, ty.clone());
+        }
+        let label = clash_data::DefLabel::new("console", "console");
+        let found =
+            clash_data::expr::compile_loose(&self.defs, &sources, &label, &mut effects, &scope);
+        if found.error_count() > 0 || !effects.is_compiled() {
+            return Err(found.render());
+        }
+        Ok(effects)
     }
 
     /// How many faults and run-time warnings rules have raised since

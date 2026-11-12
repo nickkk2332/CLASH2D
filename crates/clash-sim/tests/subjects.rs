@@ -475,6 +475,8 @@ fn an_entity_answers_for_itself() {
         probe.call(g, "knows_element", &[other, Value::from("no_such_layer")]),
         Value::Null
     );
+    // A timer it does not have (`tests/timers.rs` sets them).
+    assert_eq!(probe.call(g, "timer", &[Value::from("none")]), Value::Null);
 
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
@@ -816,6 +818,22 @@ fn the_world_answers_for_cells_elements_areas_sites_tracts_and_realms() {
     );
     assert_eq!(probe.get(Subject::Global, "kind"), Value::from("global"));
     assert_eq!(probe.get(Subject::Global, "now"), real(7200.0));
+
+    // ---- what a cell holds, and timers (`tests/timers.rs` sets them)
+    assert_eq!(
+        probe.call(here, "field", &[Value::from("core:fire")]),
+        Value::Int(0)
+    );
+    assert_eq!(
+        probe.call(here, "field", &[Value::from("no_such_field")]),
+        Value::Null
+    );
+    for owner in [here, a, s, r, Subject::Global] {
+        assert_eq!(
+            probe.call(owner, "timer", &[Value::from("none")]),
+            Value::Null
+        );
+    }
 
     // Every property that is not an entity's was read, but those of
     // devices, which `tests/devices.rs` reads.
