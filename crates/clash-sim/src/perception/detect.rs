@@ -179,6 +179,10 @@ pub(super) fn is_warm(sim: &Sim, loc: Location) -> bool {
 
 /// Brings one pair up to date: builds awareness by what was received, or
 /// fades it, over `dt` seconds, and raises what crossing a level raises.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one pair's update, with what the sweep worked out once for all of them"
+)]
 fn update(
     sim: &mut Sim,
     observer: EntityId,
@@ -187,6 +191,7 @@ fn update(
     reading: Option<Reading>,
     dt: Real,
     now: Dur,
+    max: usize,
 ) {
     let defs = Arc::clone(&sim.perception_defs);
     let Some(def) = defs.sense(sense) else {
@@ -199,9 +204,6 @@ fn update(
         _ => -(def.decay * dt),
     };
     let received = reading.is_some_and(|reading| reading.ratio >= Real::ONE);
-    let max = sim
-        .setting_int(MAX_AWARENESS_SETTING, DEFAULT_MAX_AWARENESS)
-        .max(1) as usize;
     let awareness = sim
         .components
         .awareness
@@ -252,10 +254,11 @@ fn update(
     let detected_now = !gone && (before.detected || raise_detected);
     trim(sim, observer, max);
 
-    let sense_name = defs.sense_name(sense).to_owned();
+    // The sense's name is looked up only for an event that needs it.
+    let sense_name = || defs.sense_name(sense);
     let kind = defs.sense_kind(sense);
     if raise_suspicion {
-        events::suspicion_raised(sim, observer, target, &sense_name, level);
+        events::suspicion_raised(sim, observer, target, sense_name(), level);
     }
     if detected_now
         && received
@@ -265,7 +268,7 @@ fn update(
     }
     if raise_detected {
         let at = reading.map(|reading| reading.at);
-        events::detected(sim, observer, target, &sense_name, at);
+        events::detected(sim, observer, target, sense_name(), at);
         let clarity = reading.map_or(Real::ONE, |reading| reading.ratio);
         events::perceived(
             sim,
@@ -273,7 +276,7 @@ fn update(
                 observer,
                 about: Some(target),
                 percept: events::PERCEPT_DETECTION,
-                sense: sense_name.clone(),
+                sense: sense_name().to_owned(),
                 signal: kind
                     .map(|kind| defs.kind_name(kind).to_owned())
                     .unwrap_or_default(),
@@ -286,8 +289,15 @@ fn update(
     }
     if raise_lost {
         let last = belief::believed_loc(sim, observer, target);
-        events::lost_track(sim, observer, target, &sense_name, last);
+        events::lost_track(sim, observer, target, sense_name(), last);
     }
+}
+
+/// The most pairs an observer keeps: the setting
+/// `perception.max_awareness`, at least one.
+fn max_awareness(sim: &Sim) -> usize {
+    sim.setting_int(MAX_AWARENESS_SETTING, DEFAULT_MAX_AWARENESS)
+        .max(1) as usize
 }
 
 /// Keeps an observer's entries within `max`: the faintest go first, then
@@ -330,12 +340,80 @@ pub(super) fn emitted(
         return;
     };
     let now = local_now(sim, observer);
-    update(sim, observer, sense, target, Some(reading), interval, now);
+    let max = max_awareness(sim);
+    update(
+        sim,
+        observer,
+        sense,
+        target,
+        Some(reading),
+        interval,
+        now,
+        max,
+    );
+}
+
+/// What a sweep of one sense works out once for every target: the
+/// sense, its kind, the observer's eye, facing and plane, and whether it
+/// is inside something.
+struct Sweeper<'a> {
+    def: &'a super::defs::SenseDef,
+    kind_id: super::defs::SignalKindId,
+    kind: &'a super::defs::KindInfo,
+    eye: Spot,
+    threshold: Real,
+    facing: Real,
+    plane: clash_world::PlaneMask,
+    contained: bool,
 }
 
 /// What one sense of an observer at `eye` makes of one target's standing
 /// signature now, or `None` if nothing of it arrives.
-fn read(
+fn read(sim: &Sim, sweeper: &Sweeper<'_>, target: EntityId) -> Option<Reading> {
+    let (def, kind) = (sweeper.def, sweeper.kind);
+    let strength = senses::standing_signature(sim, target, sweeper.kind_id);
+    if strength <= Real::ZERO {
+        return None;
+    }
+    if !def.planes {
+        let top = sim.entities.outermost(target)?;
+        let theirs = sim.entities.get(top)?.presence().plane;
+        if !sweeper.plane.shares(theirs) {
+            return None;
+        }
+    }
+    let source = signal::source_of(sim, target)?;
+    let eye = sweeper.eye;
+    if !senses::within_arc(
+        sweeper.facing,
+        def.arc,
+        senses::bearing(sim, eye.loc, source.loc),
+    ) {
+        return None;
+    }
+    // What could arrive with nothing in the way: below the threshold,
+    // the line need not be followed.
+    let light = signal::source_light(sim, kind, source);
+    if signal::bound_lit(sim, kind, strength, source, eye, light) < sweeper.threshold {
+        return None;
+    }
+    let mut received = signal::strength_lit(sim, kind, strength, source, eye, || light);
+    if sweeper.contained {
+        received *= kind.contained;
+    }
+    if received <= Real::ZERO {
+        return None;
+    }
+    Some(Reading {
+        ratio: received / sweeper.threshold.max(MIN_THRESHOLD),
+        at: source.loc,
+    })
+}
+
+/// [`read`] as it was first written: what the faster one is tested
+/// against.
+#[cfg(test)]
+fn read_reference(
     sim: &Sim,
     observer: EntityId,
     sense: SenseId,
@@ -364,8 +442,6 @@ fn read(
     if !senses::within_arc(facing, def.arc, senses::bearing(sim, eye.loc, source.loc)) {
         return None;
     }
-    // What could arrive with nothing in the way: below the threshold,
-    // the line need not be followed.
     if signal::bound_at(sim, kind, strength, source, eye) < threshold {
         return None;
     }
@@ -452,18 +528,46 @@ pub(super) fn sweep(sim: &mut Sim, observer: EntityId, sense: SenseId, bonus: Re
     targets.extend(tracked);
     targets.sort_unstable();
     targets.dedup();
+    let sweeper = match threshold {
+        Some(threshold) => sweeper(sim, observer, def, kind_id, kind, eye, threshold),
+        None => None,
+    };
+    let max = max_awareness(sim);
     for target in targets {
-        let reading = match threshold {
-            Some(threshold) if in_range.binary_search(&target).is_ok() => {
-                read(sim, observer, sense, eye, threshold, target)
-            }
+        let reading = match &sweeper {
+            Some(sweeper) if in_range.binary_search(&target).is_ok() => read(sim, sweeper, target),
             _ => None,
         };
-        update(sim, observer, sense, target, reading, dt, now);
+        update(sim, observer, sense, target, reading, dt, now, max);
     }
     if kind.uses_light {
         party::after_sweep(sim, observer, sense);
     }
+}
+
+/// What a sweep of a sense works out once: `None` where [`read`] would
+/// find nothing for any target, the observer having no senses or not
+/// being in the world.
+fn sweeper<'a>(
+    sim: &Sim,
+    observer: EntityId,
+    def: &'a super::defs::SenseDef,
+    kind_id: super::defs::SignalKindId,
+    kind: &'a super::defs::KindInfo,
+    eye: Spot,
+    threshold: Real,
+) -> Option<Sweeper<'a>> {
+    let record = sim.entities.get(observer)?;
+    Some(Sweeper {
+        def,
+        kind_id,
+        kind,
+        eye,
+        threshold,
+        facing: sim.components.senses.get(observer)?.facing(),
+        plane: record.presence().plane,
+        contained: matches!(record.place(), Place::In(_)),
+    })
 }
 
 /// At most `perception.max_candidates` of the candidates of a sweep: the
@@ -475,14 +579,20 @@ fn nearest(sim: &Sim, eye: Spot, mut candidates: Vec<EntityId>) -> Vec<EntityId>
     if candidates.len() <= max {
         return candidates;
     }
-    let distance = |id: &EntityId| {
+    let distance = |id: EntityId| {
         sim.entities
-            .location(*id)
+            .location(id)
             .and_then(|loc| sim.cosmos.delta(eye.loc, loc))
             .map_or(i64::MAX, clash_world::distance_sq_cells)
     };
-    candidates.sort_by_key(|id| (distance(id), *id));
-    candidates.truncate(max);
+    // Each distance worked out once; no two keys are equal, so the
+    // order is the one a sort by them in any manner gives.
+    let mut keyed: Vec<(i64, EntityId)> =
+        candidates.iter().map(|id| (distance(*id), *id)).collect();
+    keyed.sort_unstable();
+    keyed.truncate(max);
+    candidates.clear();
+    candidates.extend(keyed.into_iter().map(|(_, id)| id));
     candidates.sort_unstable();
     candidates
 }
@@ -690,7 +800,16 @@ pub fn set_awareness(
             .map_or(Real::ONE, |def| def.gain)
             .max(MIN_THRESHOLD);
         let dt = (level - current) / (gain * (Real::ONE + AWARENESS_EPSILON));
-        update(sim, observer, sense, target, reading, dt, now);
+        update(
+            sim,
+            observer,
+            sense,
+            target,
+            reading,
+            dt,
+            now,
+            max_awareness(sim),
+        );
         if let Some(entry) = sim
             .components
             .awareness
@@ -709,7 +828,16 @@ pub fn set_awareness(
             .map_or(Real::ONE, |def| def.decay)
             .max(MIN_THRESHOLD);
         let dt = (current - level) / decay;
-        update(sim, observer, sense, target, None, dt, now);
+        update(
+            sim,
+            observer,
+            sense,
+            target,
+            None,
+            dt,
+            now,
+            max_awareness(sim),
+        );
         if let Some(entry) = sim
             .components
             .awareness
@@ -723,4 +851,198 @@ pub fn set_awareness(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    //! The faster sight against the first (D-732): a sweep's reading of
+    //! each target, and the exposure of a body, on random crowds in a
+    //! street of the test city with things of several heights put up in
+    //! it, against the references kept beside them.
+
+    use std::path::Path;
+
+    use clash_core::{Real, StateHasher};
+    use clash_data::{DefTypes, Loader};
+    use clash_time::Timeline;
+    use clash_world::dims::TRACT_XY;
+    use clash_world::{CellPos, Cosmos, GridId, Layer, Location, OccupantKind, WorldDefs};
+
+    use super::super::signal::{exposure, exposure_reference};
+    use super::*;
+    use crate::{Command, DebugCommand, EntitySpec, Presence};
+
+    /// A tract well inside the city.
+    const START: (i32, i32) = (20, 20);
+
+    fn street(dx: i32, dy: i32) -> Location {
+        Location::new(
+            GridId::new(0),
+            CellPos::new(START.0 * TRACT_XY + dx, START.1 * TRACT_XY + 1 + dy, 0),
+        )
+    }
+
+    fn city() -> Sim {
+        let mut types = DefTypes::new();
+        clash_data::expr::register_defs(&mut types);
+        clash_world::register_defs(&mut types);
+        crate::register_defs(&mut types);
+        // The world's and perception's content of `mods/core`.
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods/core/data");
+        let mut files: Vec<(String, String)> = Vec::new();
+        for dir in ["world", "perception"] {
+            let mut paths: Vec<_> = std::fs::read_dir(data.join(dir))
+                .unwrap()
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+                .collect();
+            paths.sort();
+            for path in paths {
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                files.push((
+                    format!("data/{dir}/{name}"),
+                    std::fs::read_to_string(&path).unwrap(),
+                ));
+            }
+        }
+        let files: Vec<(&str, &str)> = files
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_str()))
+            .collect();
+        let defs = Loader::new(&types)
+            .expr_registry(&crate::engine_registry())
+            .memory_mod("core", r#"{ "id": "core" }"#, &files)
+            .load_mods(&["core"])
+            .into_result()
+            .unwrap_or_else(|diagnostics| panic!("{}", diagnostics.render()));
+        let world = WorldDefs::from_defs(&defs).unwrap_or_else(|d| panic!("{}", d.render()));
+        let mut timeline = Timeline::new();
+        let mut cosmos = Cosmos::new(Arc::clone(&world));
+        let def = world.realms().lookup("core:test_city").unwrap();
+        cosmos.create_realm(&mut timeline, def, 11).unwrap();
+        let mut sim = Sim::from_parts(defs, cosmos, timeline, 5);
+        let anchor = person(&mut sim, Place::Stored);
+        let far = street(1, 3 * TRACT_XY);
+        sim.submit(Command::Debug(DebugCommand::StartSession {
+            entity: anchor,
+            at: far,
+        }))
+        .unwrap();
+        sim
+    }
+
+    fn person(sim: &mut Sim, place: Place) -> EntityId {
+        let id = sim.truth().entities().next_id().unwrap();
+        let spec = EntitySpec::new(OccupantKind::Creature)
+            .with_presence(Presence::new(OccupantKind::Creature));
+        sim.submit(Command::Debug(DebugCommand::CreateEntity { spec, place }))
+            .unwrap();
+        id
+    }
+
+    /// A small generator of numbers, so that the cases are the same on
+    /// every run.
+    struct Draw(u64);
+
+    impl Draw {
+        fn next(&mut self, below: u64) -> u64 {
+            let mut hasher = StateHasher::default();
+            hasher.write_u64(self.0);
+            self.0 += 1;
+            (hasher.finish().0 as u64) % below
+        }
+    }
+
+    #[test]
+    fn readings_and_exposure_are_what_the_first_ones_were() {
+        let mut sim = city();
+        let mut draw = Draw(7);
+        let sight = sim
+            .perception_defs()
+            .sense_named("core:human_sight")
+            .unwrap();
+        let hearing = sim
+            .perception_defs()
+            .sense_named("core:human_hearing")
+            .unwrap();
+        let blocks: Vec<clash_world::ElementState> = [
+            "core:wall",
+            "core:pillar",
+            "core:window",
+            "core:door",
+            "core:ramp",
+        ]
+        .iter()
+        .filter_map(|name| sim.truth().cosmos().defs().block_state(name, None).ok())
+        .map(|state| state.raw())
+        .collect();
+        assert!(blocks.len() >= 3);
+        let mut compared = 0;
+        let mut seen = 0;
+        for round in 0..6_u16 {
+            // Things of several kinds put up about the street.
+            for _ in 0..12 {
+                let at = street(draw.next(48) as i32, draw.next(3) as i32 - 1);
+                let state = blocks[draw.next(blocks.len() as u64) as usize];
+                let _ = sim.submit(Command::Debug(DebugCommand::SetElement {
+                    loc: at,
+                    layer: Layer::Block,
+                    state,
+                }));
+            }
+            // A crowd, facing every way.
+            let mut crowd = Vec::new();
+            for _ in 0..10 {
+                let at = street(draw.next(48) as i32, draw.next(3) as i32 - 1);
+                let one = person(&mut sim, Place::at(at));
+                for sense in [sight, hearing] {
+                    super::super::attach_sense(&mut sim, one, sense).unwrap();
+                }
+                let facing = Real::from(draw.next(360) as u16);
+                super::super::set_facing(&mut sim, one, facing).unwrap();
+                crowd.push(one);
+            }
+            let defs = Arc::clone(&sim.perception_defs);
+            for &observer in &crowd {
+                let Some(eye) = signal::eye_of(&sim, observer) else {
+                    continue;
+                };
+                for sense in [sight, hearing] {
+                    let def = defs.sense(sense).unwrap();
+                    let kind_id = defs.sense_kind(sense).unwrap();
+                    let kind = defs.kind(kind_id).unwrap();
+                    let threshold = Real::of(0.02) / Real::from(1 + round);
+                    let sweeper =
+                        sweeper(&sim, observer, def, kind_id, kind, eye, threshold).unwrap();
+                    for &target in &crowd {
+                        let fast = read(&sim, &sweeper, target);
+                        let first = read_reference(&sim, observer, sense, eye, threshold, target);
+                        assert_eq!(fast, first, "{observer} of {target}");
+                        compared += 1;
+                        seen += usize::from(fast.is_some());
+                        let Some(source) = signal::source_of(&sim, target) else {
+                            continue;
+                        };
+                        let eyes = [eye, Spot::point(eye.loc, draw.next(2900) as u16)];
+                        for eye in eyes {
+                            let tall = Spot {
+                                height_mm: draw.next(2500) as u16,
+                                ..source
+                            };
+                            for body in [source, tall, Spot::point(source.loc, 900)] {
+                                assert_eq!(
+                                    exposure(sim.truth().cosmos(), eye, body),
+                                    exposure_reference(sim.truth().cosmos(), eye, body),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            compared > 1000 && seen > 50,
+            "{compared} compared, {seen} seen"
+        );
+    }
 }

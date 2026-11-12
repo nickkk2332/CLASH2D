@@ -499,7 +499,9 @@ fn view_of(sim: &Sim, member: EntityId, sense: SenseId) -> Option<Vec<(Location,
     let topology = *sim.cosmos.topology(eye.loc.grid).ok()?;
     let any_fields = sim.cosmos.field_state().tracts().next().is_some();
     let mut out = Vec::new();
-    for offset in fov.offsets() {
+    // The storeys a member keeps alone: the air of the open sky above
+    // is not walked through.
+    for offset in fov.offsets_between(low, high) {
         if offset.z < low || offset.z > high {
             continue;
         }

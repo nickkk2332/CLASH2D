@@ -94,6 +94,12 @@ impl<T> SparseCells<T> {
         self.entries.iter().map(|(idx, value)| (*idx, value))
     }
 
+    /// The cells that have a value, with their values, in cell order, as
+    /// a slice.
+    pub fn entries(&self) -> &[(CellIdx, T)] {
+        &self.entries
+    }
+
     /// The bytes this layer holds on the heap.
     pub fn heap_bytes(&self) -> usize {
         self.entries.capacity() * core::mem::size_of::<(CellIdx, T)>()

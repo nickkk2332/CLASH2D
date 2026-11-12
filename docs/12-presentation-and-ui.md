@@ -2334,11 +2334,12 @@ event says nothing of what was destroyed that the reader may know.
 
 ## 15. Budgets
 
-Targets, unmeasured.
+Targets, unmeasured but where a figure is given: those rows are in
+`budgets.toml` and measured by `cargo xtask bench` (14 §6.3, D-730).
 
 | Operation | Target |
 |-----------|--------|
-| Build a 200 × 60 frame | under 1.5 ms |
+| Build a 200 × 60 frame | under 1.5 ms (measured by `cargo xtask bench`: 1.7 to 2.1 ms for the map of a generated city alone, from the view model, without the widgets round it) |
 | Ingest 10,000 events | under 5 ms |
 | Re-evaluate bindings of a busy screen | under 0.5 ms |
 | Window frontend, 20,000 quads | 60 frames per second |
