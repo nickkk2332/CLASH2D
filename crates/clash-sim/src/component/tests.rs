@@ -389,12 +389,13 @@ fn bundle(seed: u32) -> ComponentBundle {
         awareness: Some(crate::perception::Awareness::default()),
         beliefs: Some(crate::perception::Beliefs::default()),
         map_memory: Some(crate::perception::MapMemory::default()),
+        mind_state: Some(crate::ai::MindState::sample(seed)),
     }
 }
 
 #[test]
 fn kinds_have_distinct_names_in_order() {
-    assert_eq!(ComponentKind::ALL.len(), 14);
+    assert_eq!(ComponentKind::ALL.len(), 15);
     for (index, &kind) in ComponentKind::ALL.iter().enumerate() {
         assert_eq!(kind.index(), index);
         assert_eq!(ComponentKind::from_name(kind.name()), Some(kind));
@@ -410,11 +411,11 @@ fn kinds_have_distinct_names_in_order() {
     assert_eq!(<Physical as Component>::KIND, ComponentKind::Physical);
 
     let all = ComponentKinds::of(ComponentKind::ALL);
-    assert_eq!(all.len(), 14);
+    assert_eq!(all.len(), 15);
     assert_eq!(all.iter().collect::<Vec<_>>(), ComponentKind::ALL);
     assert_eq!(
         format!("{all:?}"),
-        r#"{"identity", "physical", "stats", "body", "item", "holds", "mover", "mind", "driver", "senses", "signature", "awareness", "beliefs", "map_memory"}"#
+        r#"{"identity", "physical", "stats", "body", "item", "holds", "mover", "mind", "driver", "senses", "signature", "awareness", "beliefs", "map_memory", "mind_state"}"#
     );
     assert!(ComponentKinds::NONE.is_empty());
 }
@@ -558,7 +559,8 @@ fn orphans_are_components_without_a_living_owner() {
             (ComponentKind::Signature, dead),
             (ComponentKind::Awareness, dead),
             (ComponentKind::Beliefs, dead),
-            (ComponentKind::MapMemory, dead)
+            (ComponentKind::MapMemory, dead),
+            (ComponentKind::MindState, dead)
         ]
     );
 }

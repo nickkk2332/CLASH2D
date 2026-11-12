@@ -310,6 +310,11 @@ impl Sim {
         loop {
             self.absorb_world();
             let Some(mut event) = self.events.pop_front() else {
+                // Minds prompted by what was delivered think now, and
+                // what they did is delivered in turn (09 §3.3).
+                if crate::ai::think_due(self) {
+                    continue;
+                }
                 return;
             };
             if delivered >= limit {
@@ -339,6 +344,7 @@ impl Sim {
             // have had their say.
             crate::movement::on_event(self, &event);
             crate::perception::observe_event(self, &event);
+            crate::ai::on_event(self, &event);
             self.out.push(event);
         }
     }

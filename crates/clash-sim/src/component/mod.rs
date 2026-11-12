@@ -141,6 +141,7 @@ pub use physical::{
 };
 pub use store::{ComponentStore, PAGE_SLOTS};
 
+use crate::ai::MindState;
 use crate::body::Body;
 use crate::item::{Holds, Item};
 use crate::mind::{Driver, Mind};
@@ -518,6 +519,9 @@ components! {
     /// What places looked like when last seen (15 §13). On directly
     /// controlled characters.
     map_memory: MapMemory = "map_memory";
+    /// The goal a mind holds, how far it has got, its own stream and its
+    /// stances (09 §3, §4). On characters whose mind has thought.
+    mind_state: MindState = "mind_state";
 }
 
 // A `ComponentKinds` has one bit for each kind.
