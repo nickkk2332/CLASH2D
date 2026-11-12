@@ -194,13 +194,19 @@ pub enum AppService {
     /// `reload_mods`: reads the mods again.
     ReloadMods,
     /// `edit_creation`: changes the character being made. Arguments:
-    /// `field` and `value`.
+    /// `field` and `value`. The older form of `creation`'s `name` and
+    /// `seed`.
     EditCreation,
+    /// `creation`: the creation session (06 §10.3, 12 §10.4).
+    /// Arguments: `op`, one of `begin`, `select`, `clear`, `name`,
+    /// `seed` and `finish`; `template` for `begin`; `key` for `select`
+    /// and `clear`; `value` for `select`, `name` and `seed`.
+    Creation,
 }
 
 impl AppService {
     /// Every service, in the order of 12 §10.5.
-    pub const ALL: [AppService; 10] = [
+    pub const ALL: [AppService; 11] = [
         AppService::NewGame,
         AppService::Save,
         AppService::Load,
@@ -211,6 +217,7 @@ impl AppService {
         AppService::SelectProfile,
         AppService::ReloadMods,
         AppService::EditCreation,
+        AppService::Creation,
     ];
 
     /// The name the service is asked for by.
@@ -226,6 +233,7 @@ impl AppService {
             AppService::SelectProfile => "select_profile",
             AppService::ReloadMods => "reload_mods",
             AppService::EditCreation => "edit_creation",
+            AppService::Creation => "creation",
         }
     }
 
@@ -240,6 +248,12 @@ impl AppService {
             AppService::Rebind => &[("context", true), ("key", true), ("name", true)],
             AppService::SelectProfile => &[("profile", true)],
             AppService::EditCreation => &[("field", true), ("value", true)],
+            AppService::Creation => &[
+                ("op", true),
+                ("template", false),
+                ("key", false),
+                ("value", false),
+            ],
         }
     }
 

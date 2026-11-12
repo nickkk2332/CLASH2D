@@ -403,6 +403,8 @@ impl Sim {
             )
             .with("entity", actor.to_string()));
         }
+        // A mind that has stopped acts for nobody (06 §8.4).
+        self.life_lets_act(actor)?;
         let refuse = |sim: &Sim, reason: &why::Reason, values: &[(&str, Value)]| {
             let mut all = vec![("action", action_id.clone())];
             all.extend(values.iter().cloned());
@@ -1339,21 +1341,42 @@ impl Sim {
     /// `action_interrupted` with the reason, and the actor is free.
     /// Returns whether it was running.
     pub fn interrupt_action(&mut self, id: ActionId, reason: Reason, cause: Cause) -> bool {
-        let Some((actor, def_id)) = self
+        if self.actions.get(id).is_none() {
+            return false;
+        }
+        // Gone already if an effect of `on_interrupt` ended it.
+        let Some((actor, def)) = self.end_interrupted(id, reason, cause) else {
+            return true;
+        };
+        if self.foreground(def) {
+            self.after_action(actor, FreeReason::Interrupted(cause), cause);
+        } else {
+            self.follow_plan(actor);
+        }
+        true
+    }
+
+    /// Ends an action against its actor's will and asks nobody anything:
+    /// `on_interrupt`, the slots released, `action_interrupted` with the
+    /// reason. The actor and the definition, if it was running and has
+    /// been taken out of the table; `None` if it was not running, or an
+    /// effect of `on_interrupt` already ended it.
+    fn end_interrupted(
+        &mut self,
+        id: ActionId,
+        reason: Reason,
+        cause: Cause,
+    ) -> Option<(EntityId, ActionDefId)> {
+        let (actor, def_id) = self
             .actions
             .get(id)
-            .map(|action| (action.actor, action.def))
-        else {
-            return false;
-        };
+            .map(|action| (action.actor, action.def))?;
         let phase = self.phase_name(id);
         let defs = Arc::clone(&self.defs);
         if let Some(def) = action_def(&defs, def_id) {
             self.run_list_of(id, actor, &def.on_interrupt);
         }
-        let Some(action) = self.release(id) else {
-            return true;
-        };
+        let action = self.release(id)?;
         self.emit(
             Where::Entity(actor),
             cause,
@@ -1365,12 +1388,7 @@ impl Sim {
                 reason,
             }),
         );
-        if self.foreground(action.def) {
-            self.after_action(actor, FreeReason::Interrupted(cause), cause);
-        } else {
-            self.follow_plan(actor);
-        }
-        true
+        Some((actor, action.def))
     }
 
     /// Ends an action whose actor left the world or is being removed
@@ -1519,7 +1537,87 @@ impl Sim {
             }
         }
     }
+
+    // ---- life -------------------------------------------------------------------
+
+    /// Whether life lets an entity act (06 §8.4): [`Sim::can_act`], its
+    /// mind is awake or it has a driver, for anything that has a mind
+    /// or a body. Refused with `entity_unconscious` or `entity_dead` for
+    /// one whose mind has stopped and that nobody drives, and with
+    /// `no_mind` for a body with no mind and no driver. An entity with
+    /// neither a mind nor a body is not life's to stop (decision
+    /// D-650): a thing a tool or a test made, or a device that rules
+    /// move, acts as the action runtime alone allows. Every start is
+    /// checked against this, a command's, a rule's and a plan's.
+    pub fn life_lets_act(&self, entity: EntityId) -> Result<(), Reason> {
+        if self.vital(entity).is_none() && !self.components.body.contains(entity) {
+            return Ok(());
+        }
+        self.can_act(entity)
+    }
+
+    /// What the runtime does when life stops an entity from acting
+    /// (06 §8.3): every running action of its own ends, oldest first,
+    /// and its wait and its plan go with them, asking nobody anything.
+    /// With a reason they are interrupted (`on_interrupt`,
+    /// `action_interrupted`); without one, at death, abandoned
+    /// (`on_abandon`, `action_abandoned`). It is asked again when it
+    /// wakes or is revived.
+    fn stop_acting(&mut self, entity: EntityId, interrupted: Option<Reason>, cause: Cause) {
+        for id in self.actions_of(entity).to_vec() {
+            match &interrupted {
+                Some(reason) => {
+                    self.end_interrupted(id, reason.clone(), cause);
+                }
+                None => self.abandon_action(id),
+            }
+        }
+        if let Some(wait) = self.actions.take_wait(entity)
+            && let Some(wake) = wait.wake
+        {
+            self.cancel_wake(wake);
+        }
+        self.clear_plan(entity, None, cause);
+    }
 }
+
+/// The action runtime's answers to what living things report (03 §6.6,
+/// 06 §8.4). The kernel calls this for every event once its handlers
+/// have run, as it calls movement's.
+///
+/// | Event | The answer |
+/// |-------|------------|
+/// | `entity_died` | Unless something drives it, its actions are abandoned and its wait and plan dropped; nobody is asked |
+/// | `entity_unconscious` | Unless something drives it, its actions are interrupted with the reason `entity_unconscious` and its wait and plan dropped; nobody is asked |
+/// | `entity_woke`, `entity_revived` | It is free: whoever decides for it is asked, as one that has just started (03 §5.2) |
+/// | `slots_lost` | [`Sim::check_slots`]: what holds more slots of a channel than are left is interrupted, newest first |
+pub(crate) fn on_event(sim: &mut Sim, event: &crate::SimEvent) {
+    let Some(entity) = event.subject("self").and_then(|subject| subject.entity()) else {
+        return;
+    };
+    match event.name() {
+        EVENT_DIED => {
+            if sim.life_lets_act(entity).is_err() {
+                sim.stop_acting(entity, None, event.cause);
+            }
+        }
+        EVENT_UNCONSCIOUS => {
+            if let Err(reason) = sim.life_lets_act(entity) {
+                sim.stop_acting(entity, Some(reason), event.cause);
+            }
+        }
+        EVENT_WOKE | EVENT_REVIVED => sim.free(entity, FreeReason::Started, event.cause),
+        EVENT_SLOTS_LOST => sim.check_slots(entity, event.cause),
+        _ => {}
+    }
+}
+
+/// The events of living things the runtime answers ([`on_event`]).
+const EVENT_DIED: &str = "entity_died";
+const EVENT_UNCONSCIOUS: &str = "entity_unconscious";
+const EVENT_WOKE: &str = "entity_woke";
+const EVENT_REVIVED: &str = "entity_revived";
+const EVENT_SLOTS_LOST: &str = "slots_lost";
 
 /// The handler of the `Action` wake-up domain: the end of a phase, a
 /// tick, the end of a wait or of an idle.

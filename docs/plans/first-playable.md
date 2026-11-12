@@ -334,9 +334,11 @@ as functions and verbs; `Sim::can_act` with the reasons a command for a
 dead, unconscious or mindless entity is refused. Tested in
 `crates/clash-sim/tests/life.rs`. Stubbed: beliefs, relations and
 senses moving with a mind (15); the `mind` type (09); abilities after a
-transfer (08 §3.4); ending running actions at death, which is the
-action runtime's answer to `entity_died`; checking `can_act` on an
-`Act` command, which arrives with T4.
+transfer (08 §3.4). Joined to the action runtime (decision D-650):
+every start is checked against `can_act` for anything with a mind or a
+body, death abandons running actions and unconsciousness interrupts
+them, asking no one, and waking asks again; tested in
+`crates/clash-sim/tests/acting_alive.rs`.
 
 ### E8 — Items and holds
 
@@ -400,7 +402,8 @@ Beta (decisions D-556 to D-558): `clash_sim::template`: the `template`
 type with every kind of choice and options that nest; character specs
 with default and seeded random selection; `Sim::spawn_template`, the
 verb `spawn`, the debug command `spawn` and the answer to
-`spawn_requested`; the creation session for `app.creation`; anonymous
+`spawn_requested`; the creation session for `app.creation`, which the
+application serves with the service `creation` (D-653); anonymous
 and notable as far as spawning needs; `person` and `dog` in
 `mods/core/data/life`. Stubbed: the `creature` type; adding the parts
 an `assemble` choice chose (E6); option conditions and a range's
@@ -445,8 +448,9 @@ waiting for the package that owns it: `sweep`, `leap` and the scenario
 does), `set_altitude` and `teleport` (realm transfer); catching a
 falling entity; belief reads truth (perception, S2); a posture
 scales the `Physical` height but not a body's bands, and gives no traits
-(bodies in the simulation); the tests drive `step` and `go_to` through
-the verbs and a hand-made loop until the action runtime (T3) runs them.
+(bodies in the simulation). The tests of time and paths start `step`
+and `go_to` with `Command::Act` through the action runtime (T3); the
+hand-made loop that stood in for it is gone.
 
 ### E11 — Coming and going
 
@@ -828,15 +832,19 @@ waits for playback. Tested through the null frontend in
 `crates/clash-scene/tests/playback.rs`: golden frames of a wall broken
 three ticks after a step at fixed time steps, of a heard event and of a
 projectile, and a property test that caught-up playback equals a fresh
-view (D-608). Stubbed, each waiting for what it needs: perception
-answers through a stand-in in `clash_scene::testing` (S9); events carry
+view (D-608). The game binary plays every batch through it, its host
+answering from `clash_app::perception_shim`, and an event without a
+show no longer moves a thing ahead of the step that moves it (D-655,
+D-656). Stubbed, each waiting for what it needs: perception
+answers through stand-ins in `clash_scene::testing` and
+`clash_app::perception_shim` (S9); events carry
 no duration, so a glide lasts its show's `time`, and bodies in flight are
 drawn where they start, strike and land and not along their paths, which
 no event carries (W14); floating text, particles and effects
 shaped by an event's fields are not built; cutscenes cannot yet choose
 when the events of their span are played (U10); `message` effects reach
-the log only through `Scene::log_mut` until the simulation reports them
-(K9); no event is marked player-relevant, so the linter's V5 warning is
+the log through the application, at once and not as they are played;
+no event is marked player-relevant, so the linter's V5 warning is
 not given and steps write no line; events of other packages (hits,
 wounds) have no bundled show; `stretch_time` is set from Rust until
 settings exist (P6); looks (12 §4.4) are not drawn, since no event
@@ -1015,14 +1023,23 @@ frame loop in a terminal or headless from a script (12 §3). Preferences
 and key bindings are kept in the user's data directory. Golden frames
 cover the title, the new-game screen, the first play frame, inside a
 house and at a wall; a total conversion and a broken mod are tested.
-Stubbed behind named seams: actions (`shim`: `step`, `go_to`, `wait` as
-debug moves), perception (`perception_shim`: sight from the character's
-cell), playback (`present::present_events`), saving (`saves::SaveBackend`
-with nothing built in, so saving, loading and resuming are not done),
-characters from templates (`session::make_player`) and game scenarios
-(the `start` type). Not built: the window frontend and frontend choice,
-switching profiles or reloading mods while running, a benchmark of the
-loop.
+Joined to the real systems (decisions D-652 to D-656): the play
+screen's commands are the simulation's `Act`, `Wait`, `Cancel`,
+`ClearPlan` and `Choose` through `host::command_for`, and the loop
+follows its decisions; events are played back by the scene
+(`push_events`), with the host answering what the party perceived; the
+player is spawned from a template, the start's or the one made in the
+creation session, which the interface reads as `app.creation` and edits
+with the service `creation`. Tested in `crates/clash-app/tests/`
+(`first_walk.rs`, `playing.rs`, `creation.rs`); the golden frames
+`first_play`, `inside_house` and `wall` changed for the template's glyph
+and movement's reason. Stubbed behind named seams: perception
+(`perception_shim`: sight from the character's cell, answering
+playback), saving (`saves::SaveBackend` with nothing built in, so
+saving, loading and resuming are not done) and game scenarios (the
+`start` type). Not built: the window frontend and frontend choice,
+switching profiles or reloading mods while running, reaction windows
+(T5) and `Ui` commands from screens, a benchmark of the loop.
 
 ### Z1 — Benchmarks and budget gate
 

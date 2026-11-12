@@ -522,6 +522,38 @@ fn what_is_heard_behind_a_wall_is_a_marker_and_a_line_and_changes_no_cell() {
     assert_eq!(run.ch(behind), '.');
 }
 
+/// D-655: an event that no show gives changes for, about someone who
+/// moves later in the batch (an action starting before its step), looks
+/// at them again where they are drawn and does not move them: the step
+/// is still a glide from where they stood.
+#[test]
+fn an_event_without_a_show_does_not_move_anyone_before_their_step() {
+    let mut run = Run::new();
+    run.host.read_as(Some(run.host.entity(MARA)));
+    run.set_look(MARA, Some(creature('@', (4, 1))));
+    let started = event(
+        T,
+        Cause::DEBUG.by(id(MARA)),
+        EventBody::Act(clash_sim::action::ActEvent::ActionStarted {
+            actor: id(MARA),
+            id: clash_sim::ActionId::new(1),
+            action: "fix:stride".to_owned(),
+        }),
+    );
+    run.scene
+        .push_events(vec![started, moved(T + 3, MARA, MARA_AT, (4, 1))]);
+    run.turns(1);
+    assert_eq!(
+        run.shown().sprites.len(),
+        1,
+        "Mara glides from where she stood"
+    );
+    assert_eq!(run.ch(MARA_AT), '.', "the gliding sprite is between cells");
+    run.until_idle();
+    assert_eq!(run.ch((4, 1)), '@');
+    run.check();
+}
+
 #[test]
 fn instant_playback_applies_a_whole_batch_at_once_and_draws_what_slow_playback_ends_with() {
     let batch = |run: &mut Run| {
