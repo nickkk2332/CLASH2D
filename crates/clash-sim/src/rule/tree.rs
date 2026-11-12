@@ -246,6 +246,30 @@ pub enum EffectKind {
     },
     /// `ask`: offer a choice (05 §10.6).
     Ask(Box<Ask>),
+    /// `strike`: resolve an attack of the action the list belongs to
+    /// (07 §3.4), and leave what came of it in the locals named for it.
+    Strike(Box<Strike>),
+}
+
+/// A `strike` (07 §3.4): which attack of the action, against whom or
+/// where, and the locals what came of it is left in.
+#[derive(Clone, Debug)]
+pub struct Strike {
+    /// The id of the attack among the action's. `None`: its only one.
+    pub attack: Option<Arc<str>>,
+    /// Whom it strikes: an entity.
+    pub target: Option<Arg>,
+    /// Where it strikes instead: a cell.
+    pub at: Option<Arg>,
+    /// The part of the target it is aimed at.
+    pub part: Option<Arg>,
+    /// How much of the attack's energy goes into it, from 0 to 1.
+    pub effort: Option<Arg>,
+    /// Whether it skips aim and cannot miss its mark.
+    pub sure: Option<Arg>,
+    /// The slots of the locals `$landed`, `$absorbed` and `$passed`,
+    /// for those the list has.
+    pub results: [Option<u16>; 3],
 }
 
 /// A choice to offer (05 §10.6).

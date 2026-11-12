@@ -29,7 +29,8 @@ use super::compile::{EMIT_CANCELLED, EMIT_REASON};
 use super::def::{EOC_TYPE, EocDef, OWNER_SUBJECT, SubjectSource};
 use super::effects::Effects;
 use super::host::{
-    Message, Offer, OfferOption, Offered, Raise, RuleFault, RuleHost, RuleLimits, RunView, VerbCall,
+    Message, Offer, OfferOption, Offered, Raise, RuleFault, RuleHost, RuleLimits, RunView,
+    StrikeCall, VerbCall,
 };
 use super::reason;
 use super::state::{Occurrence, PendingChoice, Queued, RuleSet};
@@ -341,6 +342,72 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
     }
 
     // ---- reporting -------------------------------------------------------
+
+    /// Runs a `strike` (07 §3.4) through the host, and leaves what came
+    /// of it in the locals the effect names.
+    fn strike(&mut self, strike: &super::tree::Strike, origin: u64) {
+        let mut values = [
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+        ];
+        let args = [
+            &strike.target,
+            &strike.at,
+            &strike.part,
+            &strike.effort,
+            &strike.sure,
+        ];
+        for (value, arg) in values.iter_mut().zip(args) {
+            if let Some(arg) = arg {
+                *value = self.eval(arg);
+            }
+        }
+        let [target, at, part, effort, sure] = values;
+        let result = match self.frames.last() {
+            Some(frame) => self.host.strike(&StrikeCall {
+                attack: strike.attack.as_deref(),
+                target,
+                at,
+                part,
+                effort,
+                sure,
+                origin,
+                locals: &frame.locals,
+                by: RunView {
+                    rule: frame.rule.map(|(id, _)| id),
+                    owner: frame.owner,
+                    names: &frame.names,
+                    values: &frame.subjects,
+                },
+            }),
+            None => return,
+        };
+        match result {
+            Ok(outcome) => {
+                let left = [
+                    Value::Bool(outcome.landed),
+                    Value::Real(outcome.absorbed),
+                    Value::Real(outcome.passed),
+                ];
+                for (slot, value) in strike.results.iter().zip(left) {
+                    if let Some(slot) = slot {
+                        self.set_local(*slot, value);
+                    }
+                }
+            }
+            Err(refusal) => {
+                self.fault_with(
+                    reason::VERB_REFUSED,
+                    origin,
+                    "`strike` declined",
+                    Some(refusal),
+                );
+            }
+        }
+    }
 
     fn fault(&mut self, code: &'static str, origin: u64, message: impl Into<String>) {
         self.fault_with(code, origin, message, None);
@@ -905,6 +972,7 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
                     );
                 }
             }
+            EffectKind::Strike(strike) => self.strike(strike, origin),
             EffectKind::Timer(_) => self.fault(
                 reason::TIMERS_UNAVAILABLE,
                 origin,

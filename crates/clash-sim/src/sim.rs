@@ -116,6 +116,9 @@ pub struct Sim {
     /// from the definitions, and the machines their expressions run on
     /// (06; see [`life`](crate::life)).
     pub(crate) life: crate::life::Life,
+    /// Not state: how many strikes are being resolved inside one another
+    /// now ([`combat`](crate::combat)). Zero between any two events.
+    pub(crate) strike_depth: u8,
 }
 
 /// Why saved state could not be loaded.
@@ -281,6 +284,7 @@ impl Sim {
             generators,
             store: Box::new(MemoryStore::new()),
             rt,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         sim
@@ -804,6 +808,7 @@ impl Sim {
             generators,
             store: Box::new(MemoryStore::new()),
             rt,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         Ok(sim)

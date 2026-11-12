@@ -17,7 +17,7 @@ With packages C1 to C8, C11 and C12 the first playable build of
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | C1 | Contests | S | X4, K5 | done |
-| C2 | Surfaces and delivery | L | E5, E8, C1 | in progress |
+| C2 | Surfaces and delivery | L | E5, E8, C1 | beta |
 | C3 | Aim | M | C2, S4 | todo |
 | C4 | Defences | L | C3, T5 | todo |
 | C5 | Push | M | C2, E10 | todo |
@@ -91,6 +91,14 @@ Done when
   against a wall.
 - Scenario `one_cut`: an arc with `through` passes five unarmoured targets
   and stops at an armoured sixth.
+
+Beta (decisions D-641, D-642): built and tested in
+`crates/clash-sim/tests/combat.rs`, with `own_fist` and `one_cut` as Rust
+tests (the console host had not landed). Stubbed: clash and defences are
+steps that find none (C6, C4); `with` a gripped thing is refused (C7);
+swings meeting the world (`swing`, review row "Swings meet the world"),
+contact surfaces (`the_pit`) and `closing_energy` are not built; `height`,
+`lands`, `clashes`, `spill` and `spill_kind` are read and carried.
 
 ### C3 — Aim
 

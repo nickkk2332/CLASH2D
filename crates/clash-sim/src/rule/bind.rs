@@ -40,7 +40,7 @@ use clash_world::{Cause, CauseKind};
 
 use super::host::{
     FaultLimiter, Message, Offer, Offered, Raise, Raised, RuleFault, RuleHost, RuleLimits, RunView,
-    VerbCall,
+    StrikeCall, StrikeOutcome, VerbCall,
 };
 use super::interp::RunOutcome;
 use super::state::{Occurrence, PendingChoice, RuleSet, RuleState, StoredOption, SubjectKey};
@@ -427,6 +427,11 @@ impl RuleHost for SimRules<'_> {
             }),
         );
         Ok(())
+    }
+
+    fn strike(&mut self, call: &StrikeCall<'_>) -> Result<StrikeOutcome, Reason> {
+        let cause = self.cause(&call.by);
+        crate::combat::run_strike(self.sim, call, cause)
     }
 
     fn offer(&mut self, offer: &Offer<'_>) -> Offered {

@@ -1413,6 +1413,13 @@ one place.
 A verb's implementation calls the same engine functions as native code and
 is bound by the same rules. There is no back door.
 
+One effect is read by the rule compiler and acts on the action whose list
+runs it, so only an action's lists may hold it (decision D-641):
+
+| Effect | Form | Does |
+|--------|------|------|
+| `strike` | `{ "strike": { "attack": id, "target": entity, "part": part, "effort": real, "sure": bool } }`, or `"at": cell` in place of `target` | Resolves one of the action's `attacks` (07 §3.4) and leaves `$landed`, `$absorbed` and `$passed` in the action's locals. Written in a rule, or in an attack's own `on_land`, `on_miss` or `on_stopped`, it is a load error. |
+
 ## 11. Queries
 
 A query selects a set of things.

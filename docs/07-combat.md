@@ -71,7 +71,7 @@ An action declares its attacks and strikes with them in a phase.
   "attacks": {
     "cut": {
       "with":   { "held": "blade", "surface": "edge" },
-      "reach":  "self.reach + weapon.length",
+      "reach":  "limb.reach + weapon.length",
       "energy": "swing_energy(self, weapon)",
       "push":   0.05,
       "aim":    { "contest": "melee_aim", "by": "blade_skill(self)", "against": "evasion(target, self)" },
@@ -86,28 +86,64 @@ An action declares its attacks and strikes with them in a phase.
     { "id": "recover", "time": "350 ms" } ] }
 ```
 
-| Attack field | Meaning |
-|--------------|---------|
-| `with` | The striking surface: on a held item, on a body part, on a gripped creature or object, or given inline for a strike made with no physical thing (08 §7.7) |
-| `reach` | Metres. The target must be within it at impact. |
-| `energy` | Joules at full effort |
-| `push` | Share of the energy that moves the target instead of harming it (section 7) |
-| `lift` | Upward angle of the push |
-| `aim` | How the strike finds its mark (section 4). Absent means it cannot miss. |
-| `arc` | For strikes at several targets (section 6.4) |
-| `swing` | Degrees the surface travels through before it lands. Obstacles in that arc are struck first (section 6.4). Absent for thrusts and shoves. |
-| `height` | The band of heights, in metres above the attacker's footing, that the attack can reach (section 4.3). Defaults to the attacker's own height and a little over. |
-| `lands` | The phase at whose start this attack strikes. By default it is found when the action loads: the phase whose `do` strikes with it. An attack struck from a `tick` or under a condition has no such phase, never clashes, and has no time to impact. |
-| `clashes` | Whether this attack can meet another (section 8) |
-| `spill`, `spill_kind` | What a locked clash releases (section 8) |
-| `on_land`, `on_miss`, `on_stopped` | Effect lists |
+`attacks` is an object of attacks by id: an id is lowercase letters,
+digits and `_`, starting with a letter, and no two of an action's are
+alike.
 
-Inside an attack's expressions, `weapon` is the item or part supplying the
-surface, and `target` is the one being struck.
+| Attack field | Type | Meaning |
+|--------------|------|---------|
+| `with` | object, required | The striking surface: on a held item, on a body part, on a gripped creature or object, or given inline for a strike made with no physical thing (08 §7.7). Below. |
+| `reach` | expression, metres | The target must be within it at impact (section 3.4, step 2). Left out: the reach of the part that strikes (06 §6.4); for a held item, the reach of the part holding it plus the item's `length`; for an inline surface, the attacker's body's. |
+| `energy` | expression, joules, required | Joules at full effort |
+| `push` | expression, 0 to 1 | Share of the energy that moves the target instead of harming it (section 7). Default 0. |
+| `lift` | expression, degrees | Upward angle of the push. Default 0. |
+| `aim` | object | How the strike finds its mark (section 4): `contest`, the id of a `contest`; `by`, the attacker's value; `against`, the target's; both expressions. Absent means it cannot miss. |
+| `arc` | object | For strikes at several targets (section 6.4): `sweep`, degrees, or `line`, a length, one of the two; `max`, at least 1, required; `through`, a bool, default false. |
+| `knock_down` | `id<posture>` | A posture a target the push launches is put in (section 7). |
+| `swing` | number, degrees | Degrees the surface travels through before it lands. Obstacles in that arc are struck first (section 6.4). Absent for thrusts and shoves. Read and carried: not built. |
+| `height` | `[low, high]`, metres | The band of heights, in metres above the attacker's footing, that the attack can reach (section 4.3). Defaults to the attacker's own height and a little over. Read and checked (`low ≤ high`): not built. |
+| `lands` | phase id | The phase at whose start this attack strikes. By default it is found when the action loads: the phase whose `do` strikes with it. An attack struck from a `tick` or under a condition has no such phase, never clashes, and has no time to impact. Read and carried for clashes (C6). |
+| `clashes` | bool | Whether this attack can meet another (section 8). Read and carried. |
+| `spill`, `spill_kind` | number, text | What a locked clash releases (section 8). Read and carried. |
+| `on_land`, `on_miss`, `on_stopped` | effects | Run once for each target the strike lands on, misses, or reaches and delivers nothing to (section 3.4, step 8). They bind `self` and `target` and the action's locals, and run on a copy of the locals with what came of that target in `$landed`, `$absorbed` and `$passed`: what they `set` there does not last. They may not `strike`. |
+
+An attack's expressions are compiled with the action's own scope, reading
+truth (03 §6.1), and three subjects more after `self`: `weapon`
+(`entity`), the item whose surface strikes; `limb` (`part`), the body
+part whose surface strikes; and `target` (`entity`), the one being
+struck. Each is null where there is none: `weapon` for a part's own
+surface, `limb` for an item's or an inline one, `target` for a strike at
+a cell. They are evaluated when the strike resolves, `reach`, `push` and
+`lift` and the aim's values once for each target. Whatever the actor
+believed when it chose to strike, the strike is resolved in truth.
+
+An action with attacks has three more locals, as variables, unless it
+declares them itself (decision D-401): `$landed` (`bool`, false at
+start), `$absorbed` and `$passed` (`real`, 0 at start). One it declares
+must be able to hold what `strike` leaves in it.
+
+**`with`.** One source of a surface, and the surface's id:
+
+| Key | Finds |
+|-----|-------|
+| `part` | The first working part of the attacker's body, by key, that answers to the name (its name in the body, `r_hand`; the id of its definition, `hand` or `core:hand`; or a tag its definition carries) and has the surface: one that grasps nothing before one that does. |
+| `held` | The first item, by id, held in a grasp (06 §9.2) that carries the tag and whose definition has the surface. An empty tag takes any item held. |
+| `gripped` | `true`: something the attacker grips (section 9). Grips are not built; such a strike is refused (`combat.nothing_gripped`). |
+| `surface` | The surface's id among those of the part or the item. Required with the three above. |
+| `kind`, `area`, `give`, `span` | An inline surface (08 §7.7): a damage type, an area above zero, a give above zero and a span, default 0. It takes no recoil. |
+
+A part's surface scales with the part (06 §6.4): its area with the square
+of the part's size, its give and its span with the size. An item's is as
+its definition writes it. Nothing found is a refusal
+(`combat.no_surface`).
 
 ### 3.2 Surfaces
 
-Items and body parts both carry striking surfaces (06 §9.1, §6.1).
+Items and body parts both carry striking surfaces (06 §9.1, §6.1), each
+with an `id`. The bundled humanoid strikes with the `fist` of its hands,
+the `heel` of its feet, its `elbow`, and, given by
+`mods/core/data/life/surfaces.json`, the `palm` of a hand, the `sole` of
+a foot and the `brow` of its head.
 
 | Field | Meaning |
 |-------|---------|
@@ -119,6 +155,8 @@ Items and body parts both carry striking surfaces (06 §9.1, §6.1).
 ### 3.3 Effort
 
 Every strike takes an `effort` from 0 to 1. Energy is multiplied by it.
+One outside 0 to 1, or not a number, is refused (`combat.bad_number`):
+it is never brought into range.
 
 Effort is how a character holds back. Someone able to punch through a wall
 needs to be able to tap a pickpocket on the shoulder. The default is a
@@ -142,7 +180,53 @@ The `strike` effect resolves one attack against one target:
 | 8. Results | — | Events; `on_*` lists; the action's locals `$landed`, `$absorbed`, `$passed` |
 
 A strike at a cell rather than a creature skips steps 3 to 5 and delivers
-its whole energy to the element as a packet (02 §12).
+its whole energy to the element as a packet (02 §12): the cell's block,
+else its fixture, else its floor, by `WorldEdit::damage_along` in the
+direction from the attacker. An element it does not affect returns all of
+it as recoil (section 6.3); what passes an element it destroys is spent
+there.
+
+**The effect.** `strike` is read by the rule compiler, not a verb
+(decision D-641): it leaves what came of it in the action's locals, which
+a verb cannot reach, and it resolves an attack of the action whose list
+it is written in. It is a load error in a rule, in an attack's own
+`on_land`, `on_miss` and `on_stopped`, and in an action without the
+attack it names.
+
+```json
+{ "strike": { "attack": "cut", "target": "$target", "part": "$part", "effort": "$effort", "sure": false } }
+{ "strike": { "attack": "fist", "at": "$cell" } }
+```
+
+| Argument | Type | Meaning |
+|----------|------|---------|
+| `attack` | id | The attack, by its id in the action's `attacks`. May be left out of an action with exactly one. |
+| `target` | `entity?` | Whom it strikes. One of `target` and `at`. |
+| `at` | `loc?` | The cell it strikes instead. |
+| `part` | `part?` | The part of the target it is aimed at; null for none. |
+| `effort` | `real?` | From 0 to 1; default 1. |
+| `sure` | `bool?` | Skips aim: it cannot miss its mark (section 10). Default false. |
+
+It leaves `$landed` (whether it landed on anyone or anything), `$absorbed`
+(the joules what it struck took: bodies, what they wear, items,
+elements) and `$passed` (the joules that went on beyond the last thing
+struck). A refusal is reported as a fault, and the locals keep their
+values.
+
+**Reach.** A target is within reach when the distance between where the
+two stand, the middles of their cells at their footing, less one cell
+width (half for each of them), is at most the attack's `reach`.
+Neighbours are always within reach; a diagonal neighbour is 0.41 m away.
+A target not in the world, or in another grid, is out of reach.
+
+**Hook.** `strike_resolving` is raised once, before the targets are
+found, with the attack's energy at full effort. A handler may change
+`target`, `part`, `energy` and `effort`, or cancel: then nothing is struck
+and `$landed` stays false.
+
+**Depth.** A strike resolved inside eight others (an `on_land` that starts
+an action that strikes at once, and so on) is refused
+(`combat.too_deep`).
 
 Where several defences are in force at step 5 they are tried in a fixed
 order: first those of others who protect the target, then the target's
@@ -341,6 +425,16 @@ is far above what skin and muscle can resist and little energy is spent in
 each layer on the way through. A fist's is not, and its energy stays in the
 first layers.
 
+As built, `energy × effort` is the energy that reaches the target (for a
+target later in a `through` arc, what passed the one before), and
+`hit.dir` is the direction from the attacker's place to the target's,
+of length one. The hit goes through `Sim::hit`: the hook `hit_incoming`,
+the layers the target wears (06 §9.2), the body's own (06 §7.2). A
+target with no body that is an item takes the packet as an item does
+(06 §9.1); anything else is missed (`why` `nothing`). A hit a handler of
+`hit_incoming` cancels delivers nothing: the strike is **stopped**
+(`strike_stopped`, `on_stopped`), and nothing pushes or recoils.
+
 ### 6.2 Severing and passing through
 
 A part is severed when the damage type is flagged `severs`, every layer is
@@ -349,6 +443,17 @@ blade cuts deep into a thigh. A long one takes it off.
 
 Energy that exits the far side continues along the strike's direction to
 whatever is next: another part, another creature, a wall.
+
+As built (decision D-642): what exits a body first strikes the block of
+the next cell along the strike's direction (06 §7.4, the body wiring's).
+Where that cell holds a block, what the block did not stop is spent there
+and the strike ends. Where it holds none, the energy carries on: with an
+`arc` and `through`, to the arc's next target; with no `arc`, to the
+first creature with a body in that cell, struck where the body offers,
+and on from there, up to 16 creatures beyond the first. An arc without
+`through` strikes each of its targets with the attack's whole energy,
+each a strike of its own, and what exits each is the body wiring's
+alone.
 
 ### 6.3 Recoil
 
@@ -361,6 +466,13 @@ back into the striking surface as a packet of its own.
 - Strength great enough to break a wall, in a body not tough enough to
   survive doing it, breaks the arm. Durability is not optional for the
   strong. This is a consequence, not a rule added for it.
+
+As built: what came back is the hit's `returned` (06 §7.2), or all of a
+packet an item or an element was not affected by. It is a packet of the
+surface's own kind, at `returned / (surface.area × surface.give)`: a hit
+on the attacker's own part whose surface struck, with its contact area,
+span, and the strike's direction turned round; or damage to the item
+(06 §9.1). An inline surface takes nothing. `strike_recoiled` reports it.
 
 ### 6.4 Several targets
 
@@ -386,6 +498,24 @@ swing and is not hindered.
 This is scene S4, and the reason a master cuts down a rank of ordinary foes
 is the reason given by the numbers: enough energy on a fine enough edge
 that flesh takes little of it.
+
+As built (decision D-642), an arc's targets are the creatures with bodies,
+other than the attacker, and always the target named:
+
+- A **line** passes through the cells whose middles lie within half a
+  cell of the line from the attacker's place through the target's, ahead
+  of the attacker, no further than `line` metres beyond the cell between;
+  they are met in order of distance.
+- A **sweep** reaches those within the attack's reach (as to the target
+  named) whose bearing from the attacker lies within half its angle of
+  the target named's; they are met in order of bearing, turning from east
+  toward south.
+
+At most `max` are struck; the target named takes the place of the last
+if it would not otherwise be among them. The part aimed at names a part
+of the target named; each other target is aimed at its part of the same
+name, if it has one, and at none otherwise. Swings meeting the world
+(`swing`, and blocks standing in an arc) are not built.
 
 ### 6.5 Contact with the world
 
@@ -416,9 +546,23 @@ abilities, footing.
 
 | Speed | Result |
 |-------|--------|
-| Below `stagger_at` (default 0.5 m/s) | Nothing |
-| Below `launch_at` (default 3 m/s) | `staggered`, with a severity. What staggering does is content: usually it interrupts and unbalances. |
+| Below `combat.stagger_at` (default 0.5 m/s) | Nothing |
+| Below `combat.launch_at` (default 3 m/s) | `staggered`, with a severity. What staggering does is content: usually it interrupts and unbalances. |
 | At or above | The target becomes a body in flight (02 §15) at that speed. Walls, floors and bystanders in the way are dealt with by the world. Injuries on impact arrive as hits (06 §7). |
+
+As built: `energy × effort` is the energy that reached the target, and
+the mass is its `Physical`'s. The direction is the strike's on the level,
+raised by `lift` degrees, of length one; straight up or down for a
+strike with no level direction. `knockback_incoming` carries `speed`
+and `dir`, and a handler may change either or cancel. A launched target
+is first put in the attack's `knock_down` posture if it names one, then
+handed to the world as a body (`WorldCtx::launch`, owner the entity)
+from its cell's middle at half its height, with its mass, volume,
+cross-section and planes; movement takes it back when it lands
+(06 §11, `landed`), and what it struck on the way is the world's
+`body_impact` (06 §7.4). `launched` reports it. Until defences exist
+nothing braces (`brace` 0). Push is applied only for a strike that
+landed.
 
 A shove is an attack whose `push` is nearly 1. A cut's is nearly 0. A
 punch from someone who can put a megajoule into it, with a third set aside
@@ -434,6 +578,11 @@ creature. They can be struck by anything that reaches where they are at
 the moment of impact. They cannot leave (section 5.2), though a defence
 that needs no footing still works. A strike that lands adds its push to
 their velocity. Hitting someone again before they come down is this.
+
+As built: a target the world carries as a body takes all of the push, at
+any speed: no thresholds apply, and nothing braces. It is an impulse of
+`mass × speed` along the direction (`WorldCtx::impulse`), and `launched`
+is raised with `added` true.
 
 Someone who launched themselves with `leap` (06 §11) keeps their channels.
 An action that does not need `footing` (03 §6) can be run during the
@@ -828,8 +977,9 @@ and `cutscene` on actions; `surfaces` and `band` on body parts; `give` and
 `span` on surfaces; `group` on traits; `thrust`, `guidance` and
 `on_impact` on projectiles; `round` on items; `contact` on elements.
 
-**Events**: `strike_landed`, `strike_missed`, `strike_defended`,
-`strike_recoiled`, `staggered`, `launched`, `clash_resolved`, `seized`,
+**Events**: `strike_landed`, `strike_missed`, `strike_stopped`,
+`strike_defended`, `strike_recoiled`, `staggered`, `launched`,
+`clash_resolved`, `seized`,
 `grip_broken`, `thrown`, `projectile_fired`, `projectile_hit`,
 `projectile_passed`, `projectile_lost_lock`, `contact_struck`.
 
@@ -861,9 +1011,51 @@ entity), `in_arc`.
 and time to impact. In a mind context these are readable only for the
 mind's own actions.
 
-**Settings**: `clash_window`, `lock_ratio`, `stagger_at`, `launch_at`,
-`projectile.near_miss` (how close a shot must pass to raise
-`projectile_passed`), `shoot.max_count`.
+**Settings**: `clash_window`, `lock_ratio`, `combat.stagger_at`,
+`combat.launch_at`, `projectile.near_miss` (how close a shot must pass to
+raise `projectile_passed`), `shoot.max_count`.
+
+### 16.1 As built
+
+Packages C1, C2, C3 and C5 (contests; surfaces and delivery; aim; push)
+register what follows. Every event also binds `actor` and `instigator`
+from its cause: for a strike, the attacker.
+
+| Event | Subjects | Fields |
+|-------|----------|--------|
+| `strike_resolving` (hook) | `self`, the attacker | `action` (`string`), the qualified id of the action; `attack` (`string`), the attack's id; `target` (`entity?`), whom it strikes, null for a cell; `part` (`part?`), the part aimed at; `energy` (`real`), joules at full effort; `effort` (`real`). A handler may change `target`, `part`, `energy` and `effort`, or cancel: nothing is struck. |
+| `strike_landed` | `self`; `target?`, the one struck; `here?`, the cell, for a strike at a cell | `action`, `attack` (`string`); `part` (`part?`), the part it landed on; `kind` (`id<damage_type>`); `energy` (`real`), joules delivered as harm, the push taken out; `intensity` (`real`), pascals; `absorbed` (`real`), joules the target's layers and what it wears, or the element, took; `passed` (`real`), joules that went on beyond it; `returned` (`real`), joules that came back as recoil; `push` (`real`), joules set aside to push; `effort` (`real`); `margin` (`real?`), the margin of its aim, null where it did not aim. |
+| `strike_missed` | `self`; `target?` | `action`, `attack` (`string`); `why` (`string`): `reach`, `aim` or `nothing` (a target with no body that is not an item); `margin` (`real?`). |
+| `strike_stopped` | `self`; `target?` | `action`, `attack` (`string`); `code`, `message` (`string`): why nothing was delivered. A handler of `hit_incoming` cancelled the hit. |
+| `strike_recoiled` | `self`; `weapon?`, the item that took it | `action`, `attack` (`string`); `part` (`part?`), the part of `self` that took it; `energy` (`real`), joules that came back; `absorbed` (`real`), joules of it the part or the item took. Not raised for an inline surface. |
+| `knockback_incoming` (hook) | `self`, the one pushed | `speed` (`real`), metres a second; `dir` (`list<real>`), east, south, up, of length one. A handler may change both, or cancel: nothing moves it. |
+| `staggered` | `self` | `speed` (`real`); `severity` (`real`), where the speed lies between `combat.stagger_at` and `combat.launch_at`, from 0 to 1; `dir` (`list<real>`). |
+| `launched` | `self` | `speed` (`real`); `dir` (`list<real>`); `added` (`bool`), true if it was in flight already and the push was added to its velocity. |
+
+`strike_defended`, `clash_resolved` and the rest wait for their packages.
+
+| Reason | When | Values |
+|--------|------|--------|
+| `combat.no_attack` | A `strike` is written in a list that belongs to no action, names an attack its action does not have, or names none in an action with several | `action`, `attack` |
+| `combat.no_target` | A `strike` names neither an entity nor a cell, or a target not in the world | `target` |
+| `combat.no_surface` | Nothing answers to the attack's `with` | `action`, `attack`, `with` |
+| `combat.nothing_gripped` | The attack strikes with something gripped, and grips are not built | `action`, `attack` |
+| `combat.bad_number` | An energy or a reach below zero or not finite, a push or an effort outside 0 to 1, a lift not finite | `what`, `value` |
+| `combat.not_its_part` | The part aimed at is not the target's | `target` |
+| `combat.nothing_there` | A strike at a cell found no floor, block or fixture there, or the cell not loaded | `cell` |
+| `combat.too_deep` | A strike was resolved inside eight others | `limit` |
+
+| Setting | Meaning |
+|---------|---------|
+| `combat.stagger_at` | Metres a second: a slower push moves nothing. Default 0.5. |
+| `combat.launch_at` | Metres a second: a push at least this fast launches its target. Default 3. |
+
+The functions `contest` and `odds` are stated in section 4.1, the effect
+`strike` in section 3.4. Not built yet: the `defence` and `cutscene`
+blocks, `projectile`, `strike_preview` and the other functions, queries
+and properties listed above, swings meeting the world, contact surfaces
+(section 6.5), reach in height (section 4.3) and `closing_energy`
+(section 3.5).
 
 ## 17. Invariants
 
