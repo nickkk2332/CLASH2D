@@ -1076,7 +1076,10 @@ For each candidate, when the window opens:
 
 1. Evaluate the kind's `noticed_if` with `self` as the candidate. If false,
    the candidate never learns of it. Document 15 supplies real perception
-   tests; until then content can write its own.
+   tests; until then content can write its own. As built (decision
+   D-615), whoever opens windows first asks perception's
+   `notices_source(candidate, source)`: a candidate that does not
+   perceive the source is not offered the window.
 2. Evaluate `notice`, a duration. Schedule a wake-up that far ahead **on the
    candidate's clock**.
 3. If that wake-up fires before the window closes, emit `WindowNoticed`.
