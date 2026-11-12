@@ -24,7 +24,7 @@ actions that call `hit`.
 | E3 | Traits | M | E2 | beta |
 | E4 | Bodies | L | E2, T3 | beta |
 | E5 | Hits and wounds | L | E4, W12 | beta |
-| E6 | Body editing | M | E4 | todo |
+| E6 | Body editing | M | E4 | beta |
 | E7 | Minds and vital state | M | E1, T4 | todo |
 | E8 | Items and holds | L | E5 | beta |
 | E9 | Templates and creation | L | E3, E6, E8 | todo |
@@ -295,6 +295,20 @@ Done when
   test).
 - Scenario `reshaping_touch`: a rule adds, removes, replaces and
   re-materials parts of a target.
+
+Beta: built in `clash_sim::body::edit` and `clash_sim::reshape`
+(decisions D-636 to D-639). Built: every verb of 06 §6.5 as a function of
+the body model and as a verb of the simulation, with socket and name
+checks, the hook `body_changing`, the event `body_changed`, items left
+of what comes off, what is grasped and worn let go, masses handed to the
+world and attributes worked out again; ten new reasons. Tests in
+`crates/clash-sim/tests/reshape.rs`: a property test of B2, B3 and the
+tree under random edits, and `reshaping_touch` run through the verbs in
+the order of the fixture rule `reshapefix:apply_form`. Stubbed: raising
+the events of 06 §7.6 for what an edit changed and interrupting actions
+whose slots it took (`reshape::body_events`); a footprint that follows a
+change of plan; the test script itself, until rules run against the
+simulation; no benchmark.
 
 ### E7 — Minds and vital state
 

@@ -667,30 +667,81 @@ body holds its own parts.)
 
 ### 6.5 Editing bodies
 
-Because the instance owns its tree, effects can change it at any time:
+Because the instance owns its tree, effects can change it at any time.
+Every verb takes `who: entity`, whose body it edits, and names a part by
+its name in the body:
 
-| Verb | Does |
-|------|------|
-| `add_part` | Attach a new part to a free socket, or inside a part |
-| `remove_part` | Detach a part and everything on it; optionally leave it as an item |
-| `replace_part` | Swap a part's definition, keeping what is attached |
-| `graft_part` | Attach a severed part, from this body or another |
-| `set_layer` | Change a layer's material or thickness, on one part or many |
-| `scale_part`, `scale_body` | Resize |
-| `set_body_plan` | Rebuild from another plan, mapping parts by id where possible |
-| `heal_part`, `damage_part` | Direct changes to layer damage |
-| `disable_part`, `restore_part` | Disable a part from outside, whatever its condition, and let it go again |
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `add_part` | `part: id<body_part>`, `on: string`, `socket: string?`, `inside: bool?`, `name: string?`, `side: string?`, `scale: real?` | `string`, its name | Attach a new part to a free socket of the part `on` names, or with `inside` inside it, with the organs its definition brings. `name` defaults to its definition's bare id, numbered `_2`, `_3` if that is taken; `scale`, its size relative to the body, to 1 |
+| `remove_part` | `part: string`, `leave: bool?` | `entity?`, the item | Detach a part and everything on it and in it; the body no longer has them. With `leave` they are left as an item (section 7.5) |
+| `replace_part` | `part: string`, `with: id<body_part>`, `leave: bool?` | `int`, items left | Swap a part's definition, keeping its name, its place and what is attached; its layers are new and its wounds gone. What is on it and no longer fits comes off |
+| `graft_part` | `item: entity`, `on: string`, `socket: string?`, `inside: bool?` | `string`, its name | Attach a part that came off, from this body or another: the item it left. Its parts keep their names, layers, damage and size, not their wounds; the item is used up |
+| `set_layer` | `part: string`, `layer: int?`, `material: id<material>?`, `thickness: real?` | `int`, parts changed | Change a layer's material or thickness (metres, at the part's size), on every part that answers to `part` as a `wear` entry's name does (section 9.1), `all` included; `layer` left out is every layer |
+| `scale_part` | `part: string`, `scale: real` | null | Give a part a new size relative to its body |
+| `scale_body` | `scale: real` | null | Give the body a new overall size |
+| `set_body_plan` | `plan: id<body_plan>`, `leave: bool?` | `int`, items left | Rebuild from another plan, mapping parts by name where the definition is the same |
+| `heal_part` | `part: string`, `share: real` | null | Take a share of a whole layer off the damage of every layer of a part |
+| `damage_part` | `part: string`, `layer: int?`, `share: real` | null | Add a share of a whole layer to the damage of a layer of a part, or of each; no layer passes 254 255ths and no wound is made |
+| `disable_part`, `restore_part` | `part: string` | null | Disable a part from outside, whatever its condition, and let it go again |
 
-Every edit recomputes functions, channel slots, mass and attributes, and
-emits `body_changed`. Scene S17 is a rule that calls several of these on its
-target.
+Every edit raises the hook `body_changing` first, which may cancel, then
+recomputes functions, channel slots, mass and attributes and emits
+`body_changed`. What a part that can no longer hold was grasping falls,
+what was worn only over parts that are gone comes off, and the masses
+that changed reach the world's records. Scene S17 is a rule that calls
+several of these on its target.
 
-Built so far, as functions in Rust: `disable_part` and `restore_part`;
-`remove_part`, which returns the part and everything on it and in it as
-data for whoever makes an item of it (section 7.5), and either leaves them
-listed as gone or, as an edit, takes them out of the body altogether; and
-`heal_part { part, share }`, which takes a share of a whole layer off the
-damage of every layer of a part. Removing the root is refused.
+- **Sockets.** A part `on` another takes a socket of it that its
+  definition has, that accepts the part's definition (any, if its
+  `accepts` is empty) and has room. Left unnamed, the socket is the first
+  of the parent's, by name, that would take it. A part `in` another takes
+  none.
+- **Names.** No two parts that are there share a name. A part that is
+  gone keeps its name until a new part takes it: adding, grafting or
+  replanning a part of that name drops the listing of the gone one and
+  of what was gone with it, so that a limb that grows back is that limb
+  again, with a new key. Removing a part drops the listings of what was
+  gone already beneath it.
+- **Replacing.** What is on the part keeps its socket if the new
+  definition has it, takes what is in it and has room; the rest comes
+  off. The organs the new definition brings that the part lacks are
+  added; those it had stay.
+- **Grafting.** Each part grafted gets a new key; its size in metres is
+  kept whatever the body's scale. The stump the part left heals as a
+  stump does.
+- **Replanning.** A part of the new plan with the name and definition of
+  one the body has keeps that one: its key, layers, damage, wounds and
+  state (a limb that was lost stays lost), with the plan's place, socket,
+  side and size. Every other part of the plan is new. What the body has
+  that the plan does not map comes off in pieces, each with what was on
+  it and in it; what was gone already is forgotten; a new part on one
+  that is gone is gone with it. The body's overall scale stays; its height
+  is the new plan's; the footprint is whatever `Physical` holds.
+- **Size.** Resizing multiplies the thickness of the layers it reaches;
+  length and girth follow the scale, area its square and mass its cube.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `body_changing` (hook) | `self` | `verb` (`string`), the verb's name; `part` (`string`), the part named, empty for the whole body. A handler may cancel: a body that cannot be reshaped. |
+| `body_changed` | `self` | `verb`, `part`; `parts` (`int`), the parts that are there now |
+
+These are refused with a reason (14 §5) and change nothing, beside those
+of section 7.6 (`no_body`, `no_such_part`, `part_missing`, `root_part`,
+`unknown_plan`, `bad_amount`):
+
+| Reason | When | Values |
+|--------|------|--------|
+| `unknown_part` | The id is not a `body_part` definition | — |
+| `no_such_socket` | The parent has no socket of that name | `entity`, `part`, `socket` |
+| `socket_refuses` | The socket does not accept that kind of part | `entity`, `part`, `socket` |
+| `no_free_socket` | The socket is full, or no socket of the parent would take the part | `entity`, `part` |
+| `part_name_taken` | A part that is there has the name | `entity`, `name` |
+| `too_many_parts` | The body would have more than 1024 parts | — |
+| `no_such_layer` | The part has no layer of that number | `entity`, `part`, `layer` |
+| `unknown_material` | The id is not a material | — |
+| `not_a_part` | What was to be grafted is not a part that came off a body | `item` |
+| `body.bad_argument` | A verb's argument is missing, of the wrong kind, or names no part | `arg` |
 
 ### 6.6 Bodies made of cells
 
@@ -1754,7 +1805,8 @@ posture in section 11.
 `item_leaving`, `body_changing`, `mind_transferring`, `posture_changing`,
 `passage_requested`. Each is described in the table below, the last two
 with their fields in section 11, `trait_adding` and `trait_removing`
-with theirs in section 5,
+with theirs in section 5, `body_changing` with its fields in
+section 6.5,
 `pool_changing` with its fields in section 4.4, and `hit_incoming` with
 its fields, and the events of bodies and wounds with theirs, in
 section 7.6.
@@ -1884,16 +1936,19 @@ functions in Rust until the rule runtime registers them, a track's
 `on_advance` is kept and not yet run, and what is seated in a mind does
 not yet move with it. A pool cannot yet name a substance (16 §9.5).
 Bodies, hits and wounds are built with their definition types, properties
-and events (sections 6.1 to 6.4, 6.7 and 7). Reachable only from Rust
-until the kernel and the rule runtime call them: giving an entity a body;
+and events (sections 6.1 to 6.4, 6.7 and 7), and every verb of
+section 6.5 is registered with its hook, event and reasons. Reachable
+only from Rust until the kernel and the rule runtime call them: giving an
+entity a body;
 applying a hit, which waits for the kernel to raise `hit_incoming` and
 the events, to hand on what exits and what came off, and to interrupt
-actions whose slots went; the verbs `close_wound`, `reopen_wound`,
-`heal_part`, `disable_part`, `restore_part` and `remove_part`; and the
+actions whose slots went; the verbs `close_wound` and `reopen_wound`;
+raising the events of section 7.6 for what an edit changed, and
+interrupting actions whose slots an edit took; and the
 conversion of the world's exposure and impact reports into hits. The
 queries `parts` and `wounds` (05 §11) are list properties until queries
-are built. Not built: the other verbs of section 6.5, bodies made of
-cells (section 6.6), shared parts (section 6.4), which parts face a
+are built. Not built: bodies made of
+cells (section 6.6), a change of footprint with a change of plan, shared parts (section 6.4), which parts face a
 hit's direction (section 7.4), and what a pool that names a substance
 spills.
 Movement and posture are built with their definition types, verbs,

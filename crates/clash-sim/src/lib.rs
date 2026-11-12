@@ -73,6 +73,7 @@ pub mod movement;
 mod props;
 pub mod reason;
 pub mod registry;
+pub mod reshape;
 pub mod rule;
 mod sim;
 pub mod stats;

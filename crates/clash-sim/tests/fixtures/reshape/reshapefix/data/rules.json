@@ -1,0 +1,11 @@
+[
+  { "//": "The body of a reshaping touch (08 §9.2; the test script `reshaping_touch` of plan E6): it takes the target's left hand away, grows a wing on its back, turns its right arm into a tentacle and its torso's outer layer to chitin. Kept for when rules run against the simulation; until then the test runs the same verbs' functions in the same order.",
+    "type": "eoc", "id": "apply_form",
+    "params": { "who": "entity" },
+    "do": [
+      { "remove_part": { "who": "$who", "part": "l_hand", "leave": true } },
+      { "add_part": { "who": "$who", "part": "wing", "on": "torso", "socket": "back", "name": "l_wing", "side": "left" } },
+      { "replace_part": { "who": "$who", "part": "r_arm", "with": "tentacle", "leave": true } },
+      { "set_layer": { "who": "$who", "part": "torso", "layer": 0, "material": "chitin" } }
+    ] }
+]

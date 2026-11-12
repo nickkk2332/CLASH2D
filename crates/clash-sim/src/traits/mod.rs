@@ -98,6 +98,7 @@ use crate::reason::ReasonInfo;
 use crate::rule::EocId;
 use crate::stats::{Source, SourceKind};
 
+pub(crate) use confer::with_stats;
 pub use confer::{Conferred, channel_change, conferred};
 pub use defs::{GrantDef, MAX_STACKS, RateDef, Stacking, TraitDef, TraitId, WhileUnloaded};
 pub use ops::{

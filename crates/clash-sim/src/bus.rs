@@ -752,6 +752,14 @@ impl Bus {
         for hook in crate::traits::hook_types() {
             bus.types.entry(hook.name.clone()).or_insert(hook);
         }
+        for info in crate::reshape::EDIT_EVENTS {
+            bus.types
+                .entry(info.name.to_owned())
+                .or_insert_with(|| EventType::of_engine(info));
+        }
+        for hook in crate::reshape::hook_types() {
+            bus.types.entry(hook.name.clone()).or_insert(hook);
+        }
         bus
     }
 }

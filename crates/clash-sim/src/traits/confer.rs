@@ -157,7 +157,10 @@ pub fn channel_change(sim: &Sim, entity: EntityId, channel: ChannelId) -> i32 {
 
 /// Runs a change to the stats: see the [module documentation](self).
 /// `None` if the definitions were loaded without the stats' types.
-fn with_stats<R>(sim: &mut Sim, run: impl FnOnce(&mut StatsCx<'_, SimHost<'_>>) -> R) -> Option<R> {
+pub(crate) fn with_stats<R>(
+    sim: &mut Sim,
+    run: impl FnOnce(&mut StatsCx<'_, SimHost<'_>>) -> R,
+) -> Option<R> {
     let defs = StatDefs::new(&sim.defs).ok()?;
     let defs = &defs;
     let mut store = core::mem::take(&mut sim.components.stats);

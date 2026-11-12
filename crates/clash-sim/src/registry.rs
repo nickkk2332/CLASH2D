@@ -399,6 +399,7 @@ pub fn register_engine(registry: &mut Registry) {
     crate::item::register_types(registry);
     crate::movement::register_types(registry);
     crate::traits::register_types(registry);
+    crate::reshape::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)
@@ -423,6 +424,9 @@ pub fn register_engine(registry: &mut Registry) {
         mirror_event(registry, info);
     }
     for info in crate::traits::TRAIT_EVENTS {
+        mirror_event(registry, info);
+    }
+    for info in crate::reshape::EDIT_EVENTS {
         mirror_event(registry, info);
     }
 }

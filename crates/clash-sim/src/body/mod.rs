@@ -93,6 +93,7 @@
 //! [`WakeDomain::Timer`]: clash_time::WakeDomain::Timer
 
 mod defs;
+pub mod edit;
 pub mod hit;
 pub mod props;
 pub mod wound;
