@@ -46,8 +46,9 @@
 //! Pools and bodies keep their own wake-ups, on their owner's clock, in
 //! the `Timer` domain, told apart by tag bits of the wake-up's `arg`
 //! ([`stats::POOL_WAKE_TAG`], [`body::BODY_WAKE_ARG`]). The rest of the
-//! domain is free: [`handle_wake`] says whether a wake-up was one of
-//! these, and a package with timers of its own handles the others.
+//! domain is free: the kernel hands every timer to [`handle_wake`]
+//! first, and what is not life's goes on to the domain's handler, which
+//! a package with timers of its own registers (decision D-651).
 //!
 //! The kernel does not know these wake-ups as the entity's, so it
 //! neither moves nor cancels them. Whenever it puts an entity on the
@@ -246,8 +247,9 @@ pub fn body_reason(error: &BodyError) -> Reason {
 pub(crate) const TIME_CAUSE: Cause = Cause::new(CauseKind::Process);
 
 /// Handles a wake-up of the `Timer` domain if it is a pool's crossing or
-/// a body's closing and healing, and says whether it was. A package with
-/// timers of its own calls this first and handles the rest.
+/// a body's closing and healing, and says whether it was. The kernel
+/// calls this for every timer before the domain's handler, which gets
+/// the rest (decision D-651).
 pub fn handle_wake(sim: &mut Sim, wake: Wake) -> bool {
     if stats::is_pool_wake(&wake) {
         let entity = EntityId::from_bits(wake.id);
@@ -272,9 +274,11 @@ pub fn handle_wake(sim: &mut Sim, wake: Wake) -> bool {
     }
 }
 
-/// The default handler of the `Timer` wake-up domain: pools and bodies.
-/// A timer that is neither is reported as a fault, as any wake-up nobody
-/// handles is.
+/// The default handler of the `Timer` wake-up domain, for the timers
+/// that are not life's. The kernel hands pools' and bodies' to
+/// [`handle_wake`] before any handler of the domain (decision D-651), so
+/// what reaches this one is neither and nothing else handles it: it is
+/// reported as a fault, as any wake-up nobody handles is.
 pub(crate) fn timer_wake(sim: &mut Sim, _id: WakeId, wake: Wake) {
     if !handle_wake(sim, wake) {
         sim.fault(

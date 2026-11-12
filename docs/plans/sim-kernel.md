@@ -723,7 +723,13 @@ a slot; a joint action claims only its first role's slots and offers no
 roles (T6); a phase's window is raised as `window_opened` and offered to
 nobody (T5); the queries of 03 §13 are not registered as properties;
 the test scripts are tests until the simulation implements the
-console's host; no benchmark.
+console's host; no benchmark. Joined to life (decisions D-650,
+D-651): every start is checked against `Sim::life_lets_act`; the
+runtime answers `slots_lost` with `check_slots`, `entity_died` by
+abandoning and `entity_unconscious` by interrupting, asking no one, and
+`entity_woke` by asking again; the `Timer` domain hands life its timers
+before anyone else's. Tested in `crates/clash-sim/tests/acting_alive.rs`;
+the movement tests drive `core:step` and `core:go_to` through `Act`.
 
 ### T4 — Control, plans, free decisions
 
@@ -748,8 +754,10 @@ AI, interleaves; `party_order`; a plan step whose `requires` fails clears
 the plan and asks with the reason; a delegated character takes orders,
 is never asked and idles while something listens for
 `decision_needed`; `Wait`; commands to an entity nobody controls are
-refused. Stubbed: the AI that answers `decision_needed` (09); plans are
-not handed to the cold simulation (T7).
+refused. A stopped mind is never asked, and `Act` with `enqueue` is
+refused for it as `start` is (decision D-650). Stubbed: the AI that
+answers `decision_needed` (09); plans are not handed to the cold
+simulation (T7).
 
 ### T5 — Windows and reactions
 

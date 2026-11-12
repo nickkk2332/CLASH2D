@@ -334,9 +334,11 @@ as functions and verbs; `Sim::can_act` with the reasons a command for a
 dead, unconscious or mindless entity is refused. Tested in
 `crates/clash-sim/tests/life.rs`. Stubbed: beliefs, relations and
 senses moving with a mind (15); the `mind` type (09); abilities after a
-transfer (08 §3.4); ending running actions at death, which is the
-action runtime's answer to `entity_died`; checking `can_act` on an
-`Act` command, which arrives with T4.
+transfer (08 §3.4). Joined to the action runtime (decision D-650):
+every start is checked against `can_act` for anything with a mind or a
+body, death abandons running actions and unconsciousness interrupts
+them, asking no one, and waking asks again; tested in
+`crates/clash-sim/tests/acting_alive.rs`.
 
 ### E8 — Items and holds
 
@@ -445,8 +447,9 @@ waiting for the package that owns it: `sweep`, `leap` and the scenario
 does), `set_altitude` and `teleport` (realm transfer); catching a
 falling entity; belief reads truth (perception, S2); a posture
 scales the `Physical` height but not a body's bands, and gives no traits
-(bodies in the simulation); the tests drive `step` and `go_to` through
-the verbs and a hand-made loop until the action runtime (T3) runs them.
+(bodies in the simulation). The tests of time and paths start `step`
+and `go_to` with `Command::Act` through the action runtime (T3); the
+hand-made loop that stood in for it is gone.
 
 ### E11 — Coming and going
 

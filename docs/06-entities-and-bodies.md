@@ -1133,7 +1133,12 @@ plan `needs`, since none of its functions is left.
 `die` releases control of the entity (`control_changed`), forgets any
 decision it was asked for, and raises `entity_died` and then
 `mind_released`. Its body, wounds and holdings remain. Ending its
-running actions is the action runtime's answer to `entity_died`.
+running actions is the action runtime's answer to `entity_died`: they
+are abandoned and its wait and plan dropped, and nobody is asked
+anything. Falling unconscious interrupts them with the reason
+`entity_unconscious`, again asking no one; waking, or being revived,
+makes the entity free, and whoever decides for it is asked (03 §6.6,
+decision D-650).
 
 | Verb | Arguments | Does |
 |------|-----------|------|
@@ -1155,8 +1160,12 @@ Each gives null.
 | `driver_changed` | `self`, `driver?` | None |
 
 Whoever turns a command into an action asks `Sim::can_act(entity)`: an
-entity acts if its mind is awake or it has a driver. These are refused
-with a reason and change nothing:
+entity acts if its mind is awake or it has a driver. The action runtime
+asks it of every start, a command's, a rule's and a plan step's, through
+`Sim::life_lets_act`, for anything that has a mind or a body; an entity
+with neither is not life's to stop (a thing a tool or a test made, a
+device that rules move), and acts as the runtime alone allows (decision
+D-650). These are refused with a reason and change nothing:
 
 | Reason | When | Values |
 |--------|------|--------|
