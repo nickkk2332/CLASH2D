@@ -1,7 +1,8 @@
 //! The faster lines of sight against the first ones (D-732): each walk
 //! of [`sight_clear`] keeps the column it last read, and
 //! [`Cosmos::sight_to_heights`] walks once for several heights. Both
-//! must answer exactly as the reference, kept here, does.
+//! must answer exactly as the reference, kept here, does. And a view's
+//! cells on some storeys alone, against all its cells filtered.
 
 use std::sync::Arc;
 
@@ -246,4 +247,38 @@ fn heights_over_another_grid_or_none_are_not_seen() {
     // Past the most that is asked about, nothing is seen.
     let many = [500_u16; 40];
     assert_eq!(cosmos.sight_to_heights(eye, 1500, target, &many), u32::MAX);
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
+    /// A view's cells on some storeys alone are its cells filtered to
+    /// those storeys, in the same order: what a party member's sweep
+    /// walks instead of every storey of open sky.
+    #[test]
+    fn a_views_cells_on_some_storeys_are_its_cells_filtered(
+        things in prop::collection::vec((0_i32..72, 0_i32..24, 0_i32..2, 0_usize..5), 0..120),
+        floors in prop::collection::vec((0_i32..72, 0_i32..24), 0..60),
+        eye in spot(),
+        radius in prop::sample::select(vec![4.0_f64, 9.5, 20.0]),
+        low in -8_i32..4,
+        span in 0_i32..8,
+    ) {
+        let kit = kit();
+        let (cosmos, grid) = scene(&kit, &things, &floors);
+        let (x, y, z, alt) = eye;
+        let mut view = super::FovSet::new();
+        let origin = Location::new(grid, CellPos::new(x.min(63), y, z));
+        if cosmos.field_of_view(origin, alt, Real::of(radius), &mut view).is_err() {
+            return Ok(());
+        }
+        let high = low + span;
+        let all: Vec<_> = view
+            .offsets()
+            .filter(|offset| (low..=high).contains(&offset.z))
+            .collect();
+        let some: Vec<_> = view.offsets_between(low, high).collect();
+        prop_assert_eq!(some, all);
+        prop_assert_eq!(view.offsets_between(high + 1, low).count(), 0);
+    }
 }

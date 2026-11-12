@@ -2334,7 +2334,7 @@ Targets, unmeasured.
 
 | Operation | Target |
 |-----------|--------|
-| Build a 200 × 60 frame | under 1.5 ms |
+| Build a 200 × 60 frame | under 1.5 ms (measured by `cargo xtask bench`: 1.7 to 2.1 ms for the map of a generated city alone, from the view model, without the widgets round it) |
 | Ingest 10,000 events | under 5 ms |
 | Re-evaluate bindings of a busy screen | under 0.5 ms |
 | Window frontend, 20,000 quads | 60 frames per second |

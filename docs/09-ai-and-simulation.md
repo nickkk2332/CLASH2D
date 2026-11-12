@@ -1000,13 +1000,14 @@ on incidents, `stage`, `cast(role)`.
 
 ## 19. Budgets
 
-Targets, unmeasured.
+Targets, unmeasured but where `cargo xtask bench` measures a row
+(14 §6.3, D-730).
 
 | Operation | Target |
 |-----------|--------|
 | A mind thinking: scoring ten goals | under 20 µs |
 | A `choose` among thirty options | under 80 µs |
-| A path across a loaded tract, typical | under 150 µs |
+| A path across a loaded tract, typical | under 150 µs (measured: 0.48 ms for 66 steps through a block of the test city, settling 708 cells; 0.55 to 0.76 ms before D-736) |
 | Rebuilding one chunk's regions | under 200 µs |
 | A flow field over 64 × 64 cells | under 1 ms |
 | One warm step for 2,000 characters | under 3 ms |
