@@ -83,6 +83,32 @@ pub enum Command {
         /// Whose.
         entity: EntityId,
     },
+    /// Uses an ability the entity holds (08 §5): starts the action one
+    /// of its grants makes available, paying its cost and starting its
+    /// cooldown. Refused as `Act` is, and with the ability's reason.
+    UseAbility {
+        /// Who.
+        entity: EntityId,
+        /// The ability.
+        ability: crate::ability::AbilityId,
+        /// The action of the grant; `None` for the ability's only one.
+        action: Option<crate::action::ActionDefId>,
+        /// Parameters of the action, by name. The grant's own stand in
+        /// for any of the same name.
+        params: crate::action::Params,
+    },
+    /// Switches a mode of an ability the entity holds on or off
+    /// (08 §5.4).
+    SetMode {
+        /// Who.
+        entity: EntityId,
+        /// The ability.
+        ability: crate::ability::AbilityId,
+        /// The mode's id within the ability.
+        mode: String,
+        /// On, or off.
+        on: bool,
+    },
 }
 
 /// What a tool or a test may do to the simulation directly. These are
@@ -273,6 +299,18 @@ impl Sim {
                 abandon,
             } => self.command_cancel(entity, action, abandon),
             Command::ClearPlan { entity } => self.command_clear_plan(entity),
+            Command::UseAbility {
+                entity,
+                ability,
+                action,
+                params,
+            } => self.command_use_ability(entity, ability, action, &params),
+            Command::SetMode {
+                entity,
+                ability,
+                mode,
+                on,
+            } => self.command_set_mode(entity, ability, &mode, on),
         }
     }
 

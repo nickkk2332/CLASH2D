@@ -1,0 +1,6 @@
+[
+  { "//": "The test town with a character who has every power of `powers/powers.json`: dash, force push, fire bolt, shield and heal.",
+    "type": "start", "id": "powers", "name": "The town, with powers",
+    "doc": "A grid of streets, and five powers to try in it.",
+    "realm": "open_town", "at": [9, 17], "template": "power_sampler" }
+]

@@ -16,10 +16,10 @@ the rest of this plan. Build it early.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| A1 | Reactive expressions | M | K4, X3 | todo |
-| A2 | Abilities: definition, sources, rank, parameters | L | E3, E9 | todo |
-| A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | todo |
-| A4 | Modes, upkeep, charging | M | A3 | todo |
+| A1 | Reactive expressions | M | K4, X3 | in progress |
+| A2 | Abilities: definition, sources, rank, parameters | L | E3, E9 | in progress |
+| A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | in progress |
+| A4 | Modes, upkeep, charging | M | A3 | in progress |
 | A5 | Dormancy, suppression, loss | M | A2, A1 | todo |
 | A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | todo |
 | A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | todo |
