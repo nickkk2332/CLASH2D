@@ -69,7 +69,7 @@ pub use compile::{
     MAX_MAP_CELLS, MAX_MAP_LEVELS, MAX_MAP_SIDE, MapDefs, MapDevice, MapLimits, PRESET_ROOF,
     PRESETS, ParamType, PatternMatch, PortalTo, Sit, SpawnWho,
 };
-pub(crate) use compile::{nested_origin, turned_size};
+pub(crate) use compile::{nested_origin, turned_cell, turned_size};
 pub(crate) use def::GenCompiler;
 pub use def::{
     AREA_PREFIX, AltDef, AreaDef, Base, BerthDef, CountDef, DeviceDef, EntryDef, ItemsDef,
