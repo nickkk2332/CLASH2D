@@ -1,0 +1,23 @@
+# A query that counts people in a room: `core:people_near` counts the
+# entities tagged `person` within a radius of a cell (05 §11, §12). The
+# console reaches the rule runtime: `do` runs an effect, a verb is a
+# command, and a person made is given the habit of resting.
+use default seed=8
+gen core:testland size=1
+spawn creature at @c:7,7,0 tag=person as=a
+spawn creature at @c:8,7,0 tag=person as=b
+spawn creature at @c:7,9,0 tag=person
+spawn creature at @c:20,20,0 tag=person
+spawn creature at @c:7,8,0
+look @c:7,7,0
+assert "core:people_near(@here, 3) == 3"
+assert "core:people_near(@here, 1) == 2"
+move @b @c:30,30,0
+assert "core:people_near(@here, 3) == 2"
+as @a do { "add": { "self.var('core:weariness')": 5 } }
+assert "@a.var('core:weariness') == 5"
+add_tag to=@a tag=counted
+assert "@a.has_tag('counted')"
+advance 1h
+assert "@a.var('core:weariness') == 7"
+expect hash d32beb663f26d3d66238096c272f7b31

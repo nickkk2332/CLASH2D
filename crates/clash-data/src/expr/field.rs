@@ -14,10 +14,12 @@ use serde::de::{self, Deserializer, MapAccess};
 use super::ExprRegistry;
 use super::codes;
 use super::eval::{Evaluator, Runner};
-use super::scope::{CompileCx, Scope, SpanMap};
+use super::query::{self as queries, CompiledQuery, NodeTree, to_json};
+use super::scope::{CompileCx, Scope, SpanMap, TypeSpec};
 use crate::defs::{Def, Defs};
 use crate::diag::{Diagnostic, closest, did_you_mean};
 use crate::fields::{FromSite, Kind, KindValue, Located, Site, Text, by_site};
+use crate::json::Node;
 use crate::source::Span;
 use crate::units::parse_quantity;
 
@@ -185,23 +187,25 @@ impl<T: Def> ExprType for IdOf<T> {
     }
 }
 
-/// A query (05 §11), kept as it was written. Queries are built by a
-/// later package; until then one is read, kept and gives null with a
-/// run-time warning if it is evaluated.
+/// A query (05 §11) as it was written, with the place of each of its
+/// parts. Compiled with the field it is in ([`compile_query`](super::compile_query)).
 #[derive(Clone, PartialEq, Debug)]
 pub struct Query {
     /// The query as JSON.
     pub raw: serde_json::Value,
     /// Where it was written.
     pub span: Span,
+    /// The query as the loader's tree, with positions.
+    pub node: Node,
 }
 
 impl<'de> Deserialize<'de> for Query {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Query, D::Error> {
-        let located = Located::<serde_json::Value>::deserialize(deserializer)?;
+        let NodeTree(node) = NodeTree::deserialize(deserializer)?;
         Ok(Query {
-            raw: located.value,
-            span: located.span,
+            raw: to_json(&node),
+            span: node.span,
+            node,
         })
     }
 }
@@ -300,6 +304,18 @@ pub(crate) enum Ready {
     Call(Arc<ReadyCall>),
     /// Something the engine does not offer yet; the text says what.
     Unavailable(&'static str, u64),
+    /// A value source over a query (05 §7.4).
+    Query(Arc<ReadyQuery>),
+}
+
+/// A value source over a query, compiled: what is made of the results,
+/// the query, and the `of` or `weight` that sees each result as `it`.
+#[derive(Debug)]
+pub(crate) struct ReadyQuery {
+    pub(crate) op: QueryOp,
+    pub(crate) query: CompiledQuery,
+    pub(crate) of: Option<Expr<Any>>,
+    pub(crate) weight: Option<Expr<Number>>,
 }
 
 #[derive(Debug)]
@@ -849,7 +865,12 @@ fn compile_source(
     expected: &Type,
 ) -> Option<Ready> {
     match source {
-        ValueSource::Query { op, .. } => {
+        ValueSource::Query {
+            op,
+            query,
+            of,
+            weight,
+        } => {
             if *op == QueryOp::Pick && scope.is_pure() {
                 cx.error_at(
                     codes::RANDOM_IN_PURE,
@@ -858,7 +879,16 @@ fn compile_source(
                 );
                 return None;
             }
-            Some(Ready::Unavailable("queries", cx.origin(site)))
+            compile_query_source(
+                *op,
+                query,
+                of.as_ref(),
+                weight.as_ref(),
+                site,
+                cx,
+                scope,
+                expected,
+            )
         }
         ValueSource::Run(_) => {
             if scope.is_pure() {
@@ -878,6 +908,92 @@ fn compile_source(
             compile_call(function, args, site, cx, scope, expected)
         }
     }
+}
+
+/// A value source over a query (05 §7.4): the query, and the `of` or
+/// `weight` that reads each result as `it`, checked against the type the
+/// field wants.
+#[allow(clippy::too_many_arguments)]
+fn compile_query_source(
+    op: QueryOp,
+    query: &Query,
+    of: Option<&Located<String>>,
+    weight: Option<&Located<String>>,
+    site: &Site,
+    cx: &mut CompileCx<'_>,
+    scope: &Scope,
+    expected: &Type,
+) -> Option<Ready> {
+    let at = site.child(op.key());
+    let errors = cx.error_count();
+    let mut compiled =
+        queries::compile(&query.node, &at, cx, &scope.clone().without_expectation())?;
+    // Warnings name the field the value source is in.
+    compiled.query.origin = cx.origin(site);
+    let element = compiled.query.element().clone();
+    let gives = match op {
+        QueryOp::Count => Type::Int,
+        QueryOp::Collect => Type::list(element.clone()),
+        QueryOp::First | QueryOp::Pick => element.clone().nullable(),
+        QueryOp::Sum => Type::Number,
+        QueryOp::Min | QueryOp::Max => Type::Number.nullable(),
+    };
+    if !expected.accepts(&gives) {
+        let registry = cx.registry();
+        let message = format!(
+            "this must be {}, and `{}` gives {}",
+            registry.type_name(expected),
+            op.key(),
+            registry.type_name(&gives)
+        );
+        cx.error_at(codes::RESULT_TYPE, site, message);
+        return None;
+    }
+    let read = |text: &Located<String>, key: &str| -> Site {
+        Site {
+            span: Some(text.span),
+            path: site.child(key).path,
+        }
+    };
+    let mut of_field: Option<Expr<Any>> = of.map(|text| Expr {
+        written: Written::Code {
+            source: text.value.clone(),
+            site: read(text, "of"),
+        },
+        site: read(text, "of"),
+        ready: None,
+        marker: PhantomData,
+    });
+    if let Some(field) = &mut of_field {
+        field.compile_in(
+            cx,
+            &compiled
+                .it_scope
+                .clone()
+                .expecting(TypeSpec::Exact(Type::Number.nullable())),
+        );
+    }
+    let mut weight_field: Option<Expr<Number>> = weight.map(|text| Expr {
+        written: Written::Code {
+            source: text.value.clone(),
+            site: read(text, "weight"),
+        },
+        site: read(text, "weight"),
+        ready: None,
+        marker: PhantomData,
+    });
+    if let Some(field) = &mut weight_field {
+        field.compile_in(cx, &compiled.it_scope);
+    }
+    if cx.error_count() > errors {
+        return None;
+    }
+    Some(Ready::Query(Arc::new(ReadyQuery {
+        op,
+        query: compiled.query,
+        of: of_field,
+        weight: weight_field,
+    })))
 }
 
 fn compile_call(
@@ -1053,7 +1169,7 @@ enum CondKind {
     All(Vec<Cond>),
     Any(Vec<Cond>),
     Not(Box<Cond>),
-    Exists(Query, u64),
+    Exists(Query, u64, Option<Arc<CompiledQuery>>),
 }
 
 impl Default for Cond {
@@ -1116,7 +1232,7 @@ impl Cond {
     /// The query, if the condition is `{ "exists": query }`.
     pub fn query(&self) -> Option<&Query> {
         match &self.kind {
-            CondKind::Exists(query, _) => Some(query),
+            CondKind::Exists(query, _, _) => Some(query),
             _ => None,
         }
     }
@@ -1146,10 +1262,13 @@ impl Cond {
             CondKind::All(parts) => parts.iter().all(|part| part.holds(eval)),
             CondKind::Any(parts) => parts.iter().any(|part| part.holds(eval)),
             CondKind::Not(inner) => !inner.holds(eval),
-            CondKind::Exists(_, origin) => {
-                eval.unavailable("queries", *origin);
-                false
-            }
+            CondKind::Exists(_, origin, compiled) => match compiled {
+                Some(query) => eval.query_exists(query),
+                None => {
+                    eval.unavailable("queries", *origin);
+                    false
+                }
+            },
         }
     }
 }
@@ -1188,7 +1307,7 @@ impl<'de> FromSite<'de> for Cond {
                 } else if let Some(inner) = not {
                     CondKind::Not(inner)
                 } else if let Some(query) = exists {
-                    CondKind::Exists(query, 0)
+                    CondKind::Exists(query, 0, None)
                 } else if let Some(expr) = expr {
                     return Ok(Cond {
                         kind: CondKind::Code {
@@ -1231,7 +1350,17 @@ impl Compile for Cond {
             }
             CondKind::All(parts) | CondKind::Any(parts) => parts.compile_in(cx, scope),
             CondKind::Not(inner) => inner.compile_in(cx, scope),
-            CondKind::Exists(_, origin) => *origin = cx.origin(&self.site),
+            CondKind::Exists(query, origin, compiled) => {
+                *origin = cx.origin(&self.site);
+                let at = self.site.child("exists");
+                *compiled = queries::compile_query(
+                    &query.node,
+                    &at,
+                    cx,
+                    &scope.clone().without_expectation(),
+                )
+                .map(Arc::new);
+            }
         }
     }
 }

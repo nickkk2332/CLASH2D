@@ -56,11 +56,11 @@
 //!
 //! # What waits for other packages
 //!
-//! - **Verbs and rules.** A command that is a verb, a mod's
-//!   `console_command`, `do` and `run` all arrive at one function,
-//!   `GameHost::run_verb`, which refuses with [`reasons::RULES_UNBOUND`]
-//!   until the rule runtime is bound to the simulation. Binding it is
-//!   filling in that function.
+//! - **Verbs and rules.** A command that is a verb, a rule used as
+//!   one, `do` and `run` all arrive at one function,
+//!   `GameHost::run_verb`, which carries them out through the rule
+//!   runtime. What they change is not in the input log (D-687): the
+//!   transcript replays it, as it does `damage` and `field`.
 //! - **What is registered on a simulation.** Whatever a package sets up
 //!   on a new simulation beyond what `Sim` does itself (wake-up
 //!   handlers, event handlers, event types) is set up in one place,
@@ -142,8 +142,9 @@ pub mod reasons {
     pub const TOO_LARGE: &str = "console.too_large";
     /// A command of 14 §3.3 that has nothing behind it yet.
     pub const NOT_BUILT: &str = "console.not_built";
-    /// A verb, a rule or an effect: the rule runtime is not bound to
-    /// the simulation yet.
+    /// A verb, a rule or an effect was asked for of a host whose rule
+    /// runtime is not bound to its simulation. The host over the real
+    /// simulation no longer gives it.
     pub const RULES_UNBOUND: &str = "console.rules_unbound";
     /// A rule has put a choice to a directly controlled entity, and
     /// nobody is there to answer it.
@@ -204,7 +205,7 @@ pub mod reasons {
         ),
         (
             RULES_UNBOUND,
-            "A verb, a rule or an effect was asked for, and the rule runtime is not bound to the simulation yet. Values: `command`.",
+            "A verb, a rule or an effect was asked for of a host whose rule runtime is not bound to its simulation. The host over the real simulation carries them out and no longer gives this. Values: `command`.",
         ),
         (
             DECISION_PENDING,
@@ -549,26 +550,20 @@ impl GameHost {
         sim
     }
 
-    /// Carries out a verb (05 §10), a mod's `console_command`, `do` and
-    /// `run`: everything that reaches the rule runtime.
+    /// Carries out a verb (05 §10), a rule used as one, `do` and `run`:
+    /// everything that reaches the rule runtime (14 §3.3).
     ///
-    /// **The seam for whoever binds the rule runtime to the
-    /// simulation.** A verb's command arrives here with one argument
-    /// for each of the verb's parameters (`command.args`, by name) and
-    /// `self` in `command.subject`; `do` with the effect as JSON in
-    /// `effect`; `run` with the rule's id in `rule` and its arguments
-    /// in `with`. Until then all of them are refused, with a reason.
+    /// A verb of the engine is called with its arguments by name and
+    /// `self` bound to the `as` subject, else the active character, and
+    /// gives back what it gives, for `as=`. A rule used as a verb, `do`
+    /// and `run` are compiled as a list of one effect against the
+    /// loaded definitions (`Sim::compile_effects`), in a scope that
+    /// binds `self`, `here` (the cursor) and `global`, and run through
+    /// `Sim::run_effects`. What they change is caused by the debug
+    /// cause, and is not in the input log: the transcript replays it
+    /// (D-585, D-687).
     fn run_verb(&mut self, command: &BoundCommand) -> HostResult<Output> {
-        Err(HostError::Refused(
-            Refusal::new(
-                reasons::RULES_UNBOUND,
-                format!(
-                    "`{}` reaches the rule runtime, which is not bound to the simulation yet",
-                    command.name
-                ),
-            )
-            .with("command", command.name.as_str()),
-        ))
+        self.game_mut()?.run_rules(command)
     }
 
     fn game(&self) -> HostResult<&Game> {
@@ -931,6 +926,174 @@ impl Game {
         self.sim.pump();
         self.sim.reconcile_activity();
         self.sim.pump();
+    }
+
+    /// What `self` is for a command that reaches the rule runtime: the
+    /// `as` subject, else the active character, else nothing.
+    fn rule_self(&self, command: &BoundCommand) -> Value {
+        match &command.subject {
+            Some(ArgValue::Value(value)) => value.clone(),
+            _ => self
+                .marks
+                .active
+                .filter(|id| self.sim.truth().entities().contains(*id))
+                .map_or(Value::Null, |id| {
+                    self.sim.subject_value(Subject::Entity(id))
+                }),
+        }
+    }
+
+    /// The value of a verb's argument, of the type it declares: a word
+    /// where an id is wanted names the definition.
+    fn verb_value(&self, command: &BoundCommand, name: &str, ty: &Type) -> HostResult<Value> {
+        if let (Type::Id(def), Some(ArgValue::Word(word))) = (ty.non_null(), command.arg(name)) {
+            let registry = self.sim.defs().expr_registry();
+            return registry
+                .def_ref(*def, word)
+                .or_else(|| registry.def_ref(*def, &format!("core:{word}")))
+                .map(Value::Id)
+                .ok_or_else(|| {
+                    HostError::Refused(
+                        Refusal::new(reasons::UNKNOWN_NAME, format!("there is no `{word}`"))
+                            .with("name", word.as_str()),
+                    )
+                });
+        }
+        Ok(self.arg(command, name)?.unwrap_or(Value::Null))
+    }
+
+    /// Carries out what reaches the rule runtime: see
+    /// [`GameHost::run_verb`].
+    fn run_rules(&mut self, command: &BoundCommand) -> HostResult<Output> {
+        let own = self.rule_self(command);
+        let here = self
+            .marks
+            .here
+            .map_or(Value::Null, |loc| self.sim.subject_value(Subject::Loc(loc)));
+        let global = self.sim.subject_value(Subject::Global);
+        let registry = Arc::clone(self.sim.defs().expr_registry());
+        let refused = |reason: Reason| refusal_of(&reason);
+        // A verb of the engine: called directly, for what it gives. One
+        // the simulation does not carry out is refused there, with
+        // `rule.verb_unbound`.
+        if command.source == CommandSource::Verb
+            && self.sim.rule_set().lookup(&command.name).is_none()
+        {
+            let params = registry
+                .verb_id(&command.name)
+                .and_then(|id| registry.verb(id))
+                .map(|verb| verb.spec.args.clone())
+                .unwrap_or_default();
+            let mut args: Vec<(String, Value)> = Vec::new();
+            for param in &params {
+                let value = self.verb_value(command, &param.name, &param.ty)?;
+                args.push((param.name.clone(), value));
+            }
+            let args: Vec<(&str, Value)> = args
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.clone()))
+                .collect();
+            let given = self
+                .sim
+                .call_verb(&command.name, &args, &[("self", own)], Cause::DEBUG)
+                .map_err(refused);
+            self.settle();
+            let given = given?;
+            let mut output = Output::text(if given.is_null() {
+                format!("`{}` done", command.name)
+            } else {
+                format!("`{}` gave {given}", command.name)
+            });
+            if let Value::Subject(_) = given {
+                output = output.with_subject(given);
+            }
+            return Ok(output);
+        }
+        // Everything else is a list of one effect.
+        let mut locals: Vec<(String, Value)> = Vec::new();
+        let effect: serde_json::Value = match command.name.as_str() {
+            "do" => match command.arg("effect") {
+                Some(ArgValue::Json(effect)) => effect.clone(),
+                _ => return Err(HostError::failed("`do` takes an effect, written as JSON")),
+            },
+            "run" => {
+                let rule = command
+                    .word("rule")
+                    .ok_or_else(|| HostError::failed("`run` takes the id of a rule"))?;
+                match command.arg("with") {
+                    Some(ArgValue::Json(with)) => {
+                        serde_json::json!({ "run": { "eoc": rule, "with": with } })
+                    }
+                    _ => serde_json::json!({ "run": rule }),
+                }
+            }
+            name => {
+                // A rule used as a verb: its arguments as locals.
+                let spec = registry
+                    .verb_id(name)
+                    .and_then(|id| registry.verb(id))
+                    .map(|verb| verb.spec.clone());
+                let mut with = serde_json::Map::new();
+                for param in spec.iter().flat_map(|spec| spec.args.iter()) {
+                    let value = self.verb_value(command, &param.name, &param.ty)?;
+                    if value.is_null() {
+                        continue;
+                    }
+                    let local = format!("a{}", locals.len());
+                    with.insert(
+                        param.name.clone(),
+                        serde_json::Value::String(format!("${local}")),
+                    );
+                    locals.push((local, value));
+                }
+                let mut object = serde_json::Map::new();
+                object.insert(name.to_owned(), serde_json::Value::Object(with));
+                serde_json::Value::Object(object)
+            }
+        };
+        let json = serde_json::Value::Array(vec![effect]).to_string();
+        let own_type = match &own {
+            Value::Null => Type::Any,
+            other => type_of(other),
+        };
+        let subjects = [
+            ("self", own_type),
+            (
+                "here",
+                if here.is_null() {
+                    Type::Any
+                } else {
+                    type_of(&here)
+                },
+            ),
+            ("global", type_of(&global)),
+        ];
+        let typed: Vec<(&str, Type)> = locals
+            .iter()
+            .map(|(name, value)| (name.as_str(), type_of(value)))
+            .collect();
+        let effects = self
+            .sim
+            .compile_effects(&json, &subjects, &typed)
+            .map_err(|errors| {
+                HostError::failed(format!("the effect does not compile: {errors}"))
+            })?;
+        let mut values: Vec<Value> = locals.into_iter().map(|(_, value)| value).collect();
+        let outcome = self.sim.run_effects(
+            &effects,
+            &[own, here, global],
+            &mut values,
+            None,
+            Cause::DEBUG,
+        );
+        self.settle();
+        Ok(Output::text(if outcome.aborted {
+            "the run was ended by a limit".to_owned()
+        } else if outcome.value.is_null() {
+            String::new()
+        } else {
+            format!("gave {}", outcome.value)
+        }))
     }
 
     fn select(&mut self, value: &Value) {

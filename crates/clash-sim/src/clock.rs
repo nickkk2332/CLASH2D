@@ -206,6 +206,9 @@ impl Sim {
         }
         // Pools and wounds keep wake-ups of their own (06 §4.2, §7.3).
         self.life_follow(id);
+        // Timers go off the timeline as their owner leaves the world and
+        // come back as it returns (03 §9).
+        self.timers_follow(id);
     }
 
     /// Puts an entity and everything inside it on the clocks that now

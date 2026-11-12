@@ -42,8 +42,8 @@ start while the world model is being built.
 | K3 | Events and hooks | M | K2, X2 | beta |
 | K4 | Subjects, properties, variable storage | L | K1, X3 | beta |
 | K5 | Rule runtime | L | K3, K4, X4 | beta |
-| K6 | Queries and value sources | M | K5 | todo |
-| K7 | Timers, continuations, simulation saves | L | K5, W10 | beta |
+| K6 | Queries and value sources | M | K5 | beta |
+| K7 | Timers, continuations, simulation saves | L | K5, W10 | done |
 | K8 | World verbs | M | K5 | done |
 | K9 | Messages and choices | S | K5 | beta |
 | K10 | Tracing, explain, profile, console | M | K5, W11 | beta |
@@ -558,6 +558,27 @@ Done when
   (property test).
 - An over-large constant query is a load error.
 
+Beta (decisions D-680 to D-683). Built: queries compiled where they are
+written by `clash_data::compile_query`, with `where`, `sort`, `limit`,
+`it`, and the value sources `count`, `collect`, `first`, `pick` (with
+`weight`), `sum`, `min`, `max` (with `of`), `{ "exists": query }` and
+`for_each` over a query; the kinds `list` and `defs`, and the
+simulation's `entities`, `cells`, `contents`, `areas` and `sites`
+(`clash_sim::query`), registered as `QuerySpec`s and answered through
+`Host::query`; the extent cap `rules.max_query_cells` at load and when
+running. `crates/clash-sim/tests/queries.rs` covers every kind and
+source, the load errors and the cap, and holds `entities` and `cells`
+to a brute-force reference (property tests). A `run` source taken by a
+`let` was built with K5 ("Returning from rules"). Stubbed: the shapes
+`line` and `cone`, the kinds `actions`, `windows` and `parts`; no query
+is answered from belief, so a mind context may write only `list` and
+`defs`. Perception landed on the build branch while this was built:
+answering `entities` from the observer's tracks (`perception::Beliefs`)
+is the next step, through the seam `QuerySpec::safe` and
+`QueryCall::observer` (D-683), with the filters that read truth of
+others (`tag`, `def`, `has`, `kind`, `plane`) refused in a mind
+context. No benchmark.
+
 ### K7 — Timers, continuations, simulation saves
 
 **Spec** 05 §9.4, §10.4, §13.4; 03 §9 · **Size** L
@@ -574,15 +595,23 @@ Done when
 - `Pause` and `Elapse` behave as 03 §9 specifies across an unload.
 - A thousand owners of one recurring rule do not fire on the same tick.
 
-Beta: the saving part is built. `clash-save` saves the whole game (the
-world through the W10 store and the simulation's own blob, with metadata)
-into one file and loads it back, invisibly (01 §11.2, D-580), and the
-scenario runner's save-and-load mode runs through it for every script
-under `scenarios/world/`. Not built here: timers and continuations,
-`after`, `every`, `cancel_timer`, recurring rules with staggering and
-`while_unloaded`; the three "Done when" items wait for them. No
-benchmark: the budget "save with 50 dirty tracts" (02 §25) is measured by
-W23.
+Done. The saving part: `clash-save` saves the whole game (the world
+through the W10 store and the simulation's own blob, with metadata) into
+one file and loads it back, invisibly (01 §11.2, D-580), and the
+scenario runner's save-and-load mode runs through it for every script.
+Timers (decisions D-684 to D-686): `after`, `every`, `cancel_timer` and
+`owner.timer(name)`, kept as `TimerRecord`s with continuations in the
+rule state (save layout 9), on the owner's clock, wake-ups of the `Rule`
+domain; a rule's own `every`, global ones from the start and attached
+ones from `attach_rule`, staggered by a positional hash of owner and
+rule; `while_unloaded` (`pause`, `elapse`, `all`, `skip`, `once`) as an
+entity leaves and re-enters the world. `crates/clash-sim/tests/timers.rs`
+holds the body of `timer_survives_save`, `Pause` and `Elapse` across
+leaving the world, a slowed area, and the thousand owners; the test
+script `scenarios/rules/timer_survives_save.scn` runs in the four modes.
+Rules carried by definitions start no `every` until a definition type of
+the simulation carries `rules`. No benchmark: the budget "save with 50
+dirty tracts" (02 §25) is measured by W23.
 
 ### K8 — World verbs
 
@@ -648,9 +677,9 @@ Beta: the console part is built. The console's host evaluates expressions
 against the simulation with `self` bound (the subject given, else the
 active character), and test scripts assert expressions (`assert`,
 `until`). Effect lists (`do`, `run`, verbs) reach one function of the host,
-`GameHost::run_verb`, which refuses with `console.rules_unbound` until the
-rule runtime is bound to the simulation. Not built: traces, `explain`,
-`profile`; both "Done when" items wait for them.
+`GameHost::run_verb`, which carries them out through the rule runtime
+(D-687); the test scripts under `scenarios/rules/` use it. Not built:
+traces, `explain`, `profile`; both "Done when" items wait for them.
 
 ## Time and actions
 

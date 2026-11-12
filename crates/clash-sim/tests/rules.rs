@@ -803,13 +803,11 @@ fn a_hook_raised_from_inside_itself_is_skipped_at_the_hook_depth() {
 fn timers_and_queries_are_kept_and_say_so_when_they_run() {
     let mut host = host(&["fx"]);
     call(&mut host, "fx:later", &[], &[]);
+    // The fake host keeps no timers: `after` and `every` are refused,
+    // and cancelling a timer it does not have does nothing.
     assert_eq!(
         host.fault_codes(),
-        [
-            reason::TIMERS_UNAVAILABLE,
-            reason::TIMERS_UNAVAILABLE,
-            reason::TIMERS_UNAVAILABLE
-        ]
+        [reason::TIMERS_UNAVAILABLE, reason::TIMERS_UNAVAILABLE]
     );
     assert_eq!(noted(&host), ["note(now, null)"]);
     // The effects inside are compiled all the same, so a mistake in
@@ -829,7 +827,13 @@ fn timers_and_queries_are_kept_and_say_so_when_they_run() {
     host.faults.clear();
     host.verbs.clear();
     call(&mut host, "fx:asks", &[], &[]);
-    assert_eq!(host.fault_codes(), [reason::QUERIES_UNAVAILABLE]);
+    // The fake host answers no query: the body runs for nothing, with a
+    // warning, and the rule carries on.
+    assert!(host.fault_codes().is_empty());
+    assert_eq!(
+        host.warnings.last().map(|warning| warning.fault),
+        Some(clash_expr::Fault::Unavailable("queries"))
+    );
     assert_eq!(noted(&host), ["note(asked, null)"]);
 }
 
