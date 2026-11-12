@@ -33,7 +33,7 @@ use clash_core::{Dir8, IVec2, IVec3, Real, Rot4, Turn, VarMap, pos_rng};
 use clash_data::expr::{Any, ExprDefs};
 use clash_data::{CompileCx, Def, DefLabel, Defs, Diagnostics, Expr, Ref, Runner, Scope, TagSet};
 use clash_world::dims::TRACT_XY;
-use clash_world::{TractDefId, TractPos, WorldDefs};
+use clash_world::{PathKindId, RegionKindId, SiteDefId, TractDefId, TractPos, WorldDefs};
 use serde::Deserialize;
 
 use crate::ground::{Ground, GroundDef, GroundId, Report, build_ground};
@@ -41,6 +41,11 @@ use crate::map::{
     GenCompiler, GenHost, Lit, MapDefs, MapId, MapPickDef, Sited, TurnDef, nested_origin,
     turned_size,
 };
+use crate::region::{
+    PathKind, PathKindDef, RegionKind, RegionKindDef, SiteDef, SiteKind, build_path_kind,
+    build_region_kind, build_site,
+};
+use crate::settlement::{SettlementDef, SettlementId, SettlementKind, build_settlement};
 
 /// The name of the tract definition that is no definition: a tract with
 /// dense id 0, as the world's records have it (02 §9.1).
@@ -246,6 +251,13 @@ pub struct GenDefs {
     ground_names: BTreeMap<String, GroundId>,
     tracts: Vec<TractKind>,
     tract_names: BTreeMap<String, TractDefId>,
+    path_kinds: Vec<PathKind>,
+    sites: Vec<SiteKind>,
+    region_kinds: Vec<RegionKind>,
+    settlements: Vec<SettlementKind>,
+    /// Qualified ids by type: path kinds, sites, region kinds,
+    /// settlements.
+    plan_names: [BTreeMap<String, u16>; 4],
 }
 
 // `GenDefs` is shared between threads: tracts are realised in parallel.
@@ -294,6 +306,46 @@ impl GenDefs {
                 ));
             }
         }
+        let mut plan_names: [BTreeMap<String, u16>; 4] = Default::default();
+        let mut path_kinds = Vec::new();
+        if let Some(registry) = defs.try_registry::<PathKindDef>() {
+            for (id, def) in registry.iter() {
+                let name = registry.name(id);
+                plan_names[0].insert(name.to_owned(), id.raw());
+                path_kinds.push(build_path_kind(&mut report, name, def));
+            }
+        }
+        let mut sites = Vec::new();
+        if let Some(registry) = defs.try_registry::<SiteDef>() {
+            for (id, def) in registry.iter() {
+                let name = registry.name(id);
+                plan_names[1].insert(name.to_owned(), id.raw());
+                sites.push(build_site(&mut report, &maps, name, def));
+            }
+        }
+        let mut region_kinds = Vec::new();
+        if let Some(registry) = defs.try_registry::<RegionKindDef>() {
+            for (id, def) in registry.iter() {
+                let name = registry.name(id);
+                plan_names[2].insert(name.to_owned(), id.raw());
+                region_kinds.push(build_region_kind(&mut report, &sites, name, def));
+            }
+        }
+        let mut settlements = Vec::new();
+        if let Some(registry) = defs.try_registry::<SettlementDef>() {
+            for (id, def) in registry.iter() {
+                let name = registry.name(id);
+                plan_names[3].insert(name.to_owned(), id.raw());
+                settlements.push(build_settlement(
+                    &mut report,
+                    &maps,
+                    &path_kinds,
+                    &sites,
+                    name,
+                    def,
+                ));
+            }
+        }
         if !report.diagnostics.is_empty() {
             let mut diagnostics = Diagnostics::new();
             for diagnostic in report.diagnostics {
@@ -310,7 +362,86 @@ impl GenDefs {
             ground_names,
             tracts,
             tract_names,
+            path_kinds,
+            sites,
+            region_kinds,
+            settlements,
+            plan_names,
         }))
+    }
+
+    /// A kind of path by its dense id.
+    pub fn path_kind(&self, id: PathKindId) -> Option<&PathKind> {
+        self.path_kinds.get(id.index())
+    }
+
+    /// A site definition by its dense id.
+    pub fn site(&self, id: SiteDefId) -> Option<&SiteKind> {
+        self.sites.get(id.index())
+    }
+
+    /// A region kind by its dense id.
+    pub fn region_kind(&self, id: RegionKindId) -> Option<&RegionKind> {
+        self.region_kinds.get(id.index())
+    }
+
+    /// A settlement definition by its dense id.
+    pub fn settlement(&self, id: SettlementId) -> Option<&SettlementKind> {
+        self.settlements.get(id.index())
+    }
+
+    /// The dense id of a definition of one of the region types by its
+    /// qualified id, or a bare name looked up in a namespace first and
+    /// then, if only one mod has one of that name, there. `table` is 0
+    /// for path kinds, 1 sites, 2 region kinds, 3 settlements.
+    fn resolve_plan(&self, table: usize, name: &str, namespace: Option<&str>) -> Option<u16> {
+        let names = self.plan_names.get(table)?;
+        if name.contains(':') {
+            return names.get(name).copied();
+        }
+        namespace
+            .and_then(|namespace| names.get(&format!("{namespace}:{name}")).copied())
+            .or_else(|| {
+                let suffix = format!(":{name}");
+                let mut found = names
+                    .iter()
+                    .filter(|(qualified, _)| qualified.ends_with(&suffix));
+                match (found.next(), found.next()) {
+                    (Some((_, id)), None) => Some(*id),
+                    _ => None,
+                }
+            })
+    }
+
+    /// A region kind named in the namespace of a mod.
+    pub fn resolve_region_kind(&self, name: &str, namespace: Option<&str>) -> Option<RegionKindId> {
+        self.resolve_plan(2, name, namespace).map(RegionKindId::new)
+    }
+
+    /// A settlement definition named in the namespace of a mod.
+    pub fn resolve_settlement(&self, name: &str, namespace: Option<&str>) -> Option<SettlementId> {
+        self.resolve_plan(3, name, namespace).map(SettlementId::new)
+    }
+
+    /// A site definition named in the namespace of a mod.
+    pub fn resolve_site(&self, name: &str, namespace: Option<&str>) -> Option<SiteDefId> {
+        self.resolve_plan(1, name, namespace).map(SiteDefId::new)
+    }
+
+    /// Every region kind with its id, in id order.
+    pub fn region_kinds(&self) -> impl Iterator<Item = (RegionKindId, &RegionKind)> + '_ {
+        self.region_kinds
+            .iter()
+            .enumerate()
+            .filter_map(|(index, kind)| Some((RegionKindId::from_index(index)?, kind)))
+    }
+
+    /// Every settlement definition with its id, in id order.
+    pub fn settlements(&self) -> impl Iterator<Item = (SettlementId, &SettlementKind)> + '_ {
+        self.settlements
+            .iter()
+            .enumerate()
+            .filter_map(|(index, kind)| Some((SettlementId::from_index(index)?, kind)))
     }
 
     /// The compiled maps.
