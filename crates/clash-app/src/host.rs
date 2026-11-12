@@ -175,7 +175,10 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
                     Some(value) => match session.sim.subject_of(value) {
                         Some(Subject::Entity(entity)) => entity,
                         _ => {
-                            return Err(format!("`{}` names nobody who could react.", command.name));
+                            return Err(format!(
+                                "`{}` names nobody who could react.",
+                                command.name
+                            ));
                         }
                     },
                     None => player,
