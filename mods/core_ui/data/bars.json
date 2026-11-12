@@ -1,5 +1,5 @@
 [
-  { "//": "How the reserves and attributes of living things are shown, put into the slots the `ui` mod's screens leave for content: the play screen's status column (`ui:play.bars`) and the condition screen (`ui:condition.pools`, `ui:condition.attributes`). Each is shown only while the character has what it shows, and none is needed: a profile without the `ui` mod shows none of them.",
+  { "//": "How the reserves and attributes of living things are shown, put into the slots the `ui` mod's screens leave for content: the play screen's status column (`ui:play.bars`) and the condition screen (`ui:condition.pools`, `ui:condition.attributes`). Each is shown only while the character has what it shows. A mod of its own, which needs both `core` and `ui`, so that neither of those needs the other.",
     "type": "ui_part", "id": "blood_bar", "into": "ui:play.bars", "order": 10, "required": false,
     "if": "not is_null(view.pool.blood)",
     "widget": { "bar": { "label": "Blood ", "value": "view.pool.frac('blood')", "style": "blood" } } },

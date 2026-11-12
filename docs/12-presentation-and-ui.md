@@ -1889,7 +1889,7 @@ wounds it has; every wound (`view.wounds`) with its part, its kind, its
 state and how many layers deep it goes or that it is a stump; and the
 slots `ui:condition.pools` and `ui:condition.attributes`, which content
 fills with its reserves as bars and its attributes, as it fills
-`ui:play.bars` (`mods/core/data/life/ui.json`), and `ui:condition.extra`.
+`ui:play.bars` (`mods/core_ui/data/bars.json`), and `ui:condition.extra`.
 Everything it reads is the character's own.
 
 **Keys** (`ui:help`) lists the controls of the `play` context with
@@ -2072,7 +2072,7 @@ registers no property for a character's vital state (06 §8.4), no
 list of the pools and attributes an entity has and no pool's
 thresholds: the screens show none of these themselves, and content
 puts its reserves and attributes into the slots `ui:play.bars`,
-`ui:condition.pools` and `ui:condition.attributes`, as `core` does.
+`ui:condition.pools` and `ui:condition.attributes`, as the mod `core_ui` does for `core`, so that neither `core` nor `ui` needs the other.
 What a thing is called comes from the reader helpers the host answers,
 which call an item with no name of its own `something` until they name
 it by its definition; a wound's kind and an assemble choice's parts are

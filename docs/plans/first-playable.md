@@ -979,7 +979,7 @@ popup `ui:create_choice`) over the creation session through
 choice kind of 06 §10.2 on the one screen; the inventory (`ui:inventory`)
 with what is held, worn and carried and the item verbs as actions
 (`ui:item`); the condition (`ui:condition`) with the body as a tree of
-parts, its wounds, and slots for reserves and attributes, which `core`
+parts, its wounds, and slots for reserves and attributes, which the new mod `core_ui`
 fills; look mode's side panel (`cursor_things`, `cursor_ground`); the
 keys of play (`ui:help`, `app.keys`); the play screen's status column
 with what is held and a line of keys. Every bundled screen is listed

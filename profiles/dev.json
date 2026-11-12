@@ -1,7 +1,7 @@
 {
   "id": "dev",
   "name": "CLASH2D (development)",
-  "mods": ["core", "ui"],
+  "mods": ["core", "ui", "core_ui"],
   "boot_screen": "ui:title",
   "screens": {
     "play": "ui:play",
