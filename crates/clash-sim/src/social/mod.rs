@@ -70,13 +70,13 @@ pub use lens::social_lens;
 pub use order::{Order, OrderPlan, cancel_order, give_order, standing_orders};
 pub use persona::{
     PersonaRecord, PersonaSpec, assume_persona, copy_persona, create_illusion, create_persona,
-    drop_persona, knows_name, learn_name, persona_name, persona_of, presenting, reveal_persona,
-    set_persona,
+    drop_persona, knows_name, learn_name, persona_name, persona_of, persona_tags, presenting,
+    reveal_persona, set_persona,
 };
 pub(crate) use persona::{identify, lost_sight};
 pub use props::properties;
 pub use relation::{
-    Relation, Stance, Toward, add_relation, clear_relation, intervenes, rel, rel_toward,
+    Relation, Stance, Toward, add_relation, avoids, clear_relation, intervenes, rel, rel_toward,
     set_relation, stance_to,
 };
 pub use speech::{Message, Report, SayArgs, TalkOption, say, talk_options};

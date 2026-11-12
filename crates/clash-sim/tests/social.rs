@@ -517,6 +517,47 @@ fn a_member_uses_its_groups_relation_and_a_uniform_holds_until_seen_through() {
 }
 
 #[test]
+fn minds_take_their_stances_from_relations() {
+    let mut sim = city(14);
+    let guard = person(&mut sim, "Gus", &["guard", "watchman"], street(2));
+    let townsman = person(&mut sim, "Tom", &[], street(3));
+    let thug = person(&mut sim, "Hal", &["thug"], street(5));
+    use clash_sim::ai::{Stance as AiStance, think::stance_toward};
+    // Nothing is held toward one never perceived.
+    assert_eq!(stance_toward(&sim, guard, thug), None);
+    for observer in [guard, townsman] {
+        give_senses(&mut sim, observer);
+        see(&mut sim, observer, thug);
+    }
+    // The watch takes the gang for enemies; the townsfolk fear it.
+    assert_eq!(stance_toward(&sim, guard, thug), Some(AiStance::Hostile));
+    assert_eq!(stance_toward(&sim, townsman, thug), Some(AiStance::Feared));
+    // A uniform of the watch, put on out of sight, changes both.
+    let uniform = social::create_persona(
+        &mut sim,
+        thug,
+        social::PersonaSpec {
+            claims: Some(vec!["watch".to_owned()]),
+            ..social::PersonaSpec::default()
+        },
+    )
+    .unwrap();
+    let sight = sim
+        .perception_defs()
+        .sense_named("core:human_sight")
+        .unwrap();
+    for observer in [guard, townsman] {
+        perception::set_awareness(&mut sim, observer, thug, sight, Real::ZERO).unwrap();
+    }
+    social::assume_persona(&mut sim, thug, uniform).unwrap();
+    for observer in [guard, townsman] {
+        see(&mut sim, observer, thug);
+    }
+    assert_eq!(stance_toward(&sim, guard, thug), None);
+    assert_eq!(stance_toward(&sim, townsman, thug), None);
+}
+
+#[test]
 fn relations_fade_toward_their_default() {
     let mut sim = city(12);
     let a = person(&mut sim, "Ann", &[], street(2));

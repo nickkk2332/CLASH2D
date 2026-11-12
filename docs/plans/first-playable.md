@@ -698,8 +698,9 @@ additions: "Relations that intervene" is `social::intervenes`, which
 windows (T5, not built) are to ask; the test script `bodyguard` waits for
 them. "Roles that spend" is recorded on the group definition, not yet
 readable by rules. Stubbed: a role's `orders` is not enforced;
-collectives; group variables; the AI's stance (09 §3.4) reads `rel` and
-`stance_to` once the AI lands.
+collectives; group variables. Minds (09 §6.6) take their stances from
+relations once they have perceived someone: hostile where `stance_to` is
+`opposes`, feared where a kind flagged `avoids` is held (D-762).
 
 ### S8 — Speech
 

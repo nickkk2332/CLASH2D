@@ -40,7 +40,7 @@ fn full_range() -> [Real; 2] {
 
 /// A kind of relation one mind holds toward a persona or a group
 /// (15 §9.1): fear, trust, loyalty, command. What each means is the
-/// content's; the engine reads only the four flags.
+/// content's; the engine reads only the five flags.
 ///
 /// ```json
 /// { "type": "relation_kind", "id": "fear", "range": [0, 1], "default": 0, "fade": 0.02 }
@@ -84,6 +84,10 @@ pub struct RelationKindDef {
     /// candidate for windows opened against them (15 §9.1; 03 §7.1).
     #[serde(default)]
     pub intervenes: bool,
+    /// Held above its default toward someone, it makes them one to keep
+    /// away from: the AI's `feared` stance (09 §6.6).
+    #[serde(default)]
+    pub avoids: bool,
     /// What it is, for the reference.
     #[serde(default)]
     pub doc: String,
@@ -110,7 +114,7 @@ impl RelationKindDef {
 impl Def for RelationKindDef {
     type Id = RelationKindId;
     const TYPE: &'static str = "relation_kind";
-    const DOC: &'static str = "A kind of relation a mind holds toward a persona or a group: its range, default, fade, and the flags `opposes`, `sides_with`, `orders` and `intervenes` the engine reads (15 §9.1).";
+    const DOC: &'static str = "A kind of relation a mind holds toward a persona or a group: its range, default, fade, and the flags `opposes`, `sides_with`, `avoids`, `orders` and `intervenes` the engine reads (15 §9.1).";
 
     fn compile(&mut self, cx: &mut CompileCx<'_>) {
         cx.compile(&mut self.name, &Scope::new().pure());

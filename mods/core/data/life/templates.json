@@ -4,8 +4,8 @@
     "body": "humanoid",
     "pools": ["blood", "pain"],
     "tags": ["person"],
+    "mind": "townsperson",
     "groups": { "townsfolk": "resident" },
-    "mind": true,
     "glyph": { "ch": "@", "fg": "white" },
     "choices": [
       { "id": "name", "name": "Name", "kind": "text", "sets": "name", "max_length": 32,
@@ -29,6 +29,11 @@
     "pools": ["blood", "pain"],
     "attributes": { "strength": 6, "wits": 3 },
     "tags": ["animal"],
-    "mind": true,
-    "glyph": { "ch": "d", "fg": "yellow" } }
+    "mind": "dog",
+    "glyph": { "ch": "d", "fg": "yellow" } },
+
+  { "//": "A watchman: applied after `person`, it makes the person think by the `guard` mind (09 §3.1).",
+    "type": "template", "id": "guard", "kind": "role", "name": "Guard",
+    "tags": ["guard"],
+    "mind": "guard" }
 ]

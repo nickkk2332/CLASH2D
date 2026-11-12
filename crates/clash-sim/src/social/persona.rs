@@ -156,6 +156,23 @@ pub fn persona_exists(sim: &Sim, persona: PersonaId) -> bool {
     }
 }
 
+/// The tags a persona presents (15 §8.1), in order: its record's, and
+/// for a true persona its owner's own tags as well. A uniform's tags are
+/// those it was made with.
+pub fn persona_tags(sim: &Sim, persona: PersonaId) -> Vec<String> {
+    let mut tags: Vec<String> = persona_record(sim, persona)
+        .map(|record| record.tags.clone())
+        .unwrap_or_default();
+    if persona.is_true()
+        && let Some(owner) = sim.entities.get(persona.entity())
+    {
+        tags.extend(owner.tags.iter().map(str::to_owned));
+    }
+    tags.sort();
+    tags.dedup();
+    tags
+}
+
 /// What a persona is called: its record's name, or for a true persona its
 /// owner's own name. `None` for one with no name.
 pub fn persona_name(sim: &Sim, persona: PersonaId) -> Option<String> {

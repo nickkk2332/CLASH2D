@@ -1694,7 +1694,8 @@ optional:
 | `traits`, `items` | Ids as written, carried for whoever gives traits and makes items: `entity_spawned` names them |
 | `abilities` | Ids of abilities as written, each given with the template as its source once the entity is made (08 §3.3), in order, each once; held until revoked. One that names nothing is a load error (decision D-722) |
 | `scale` | A factor on the body's size |
-| `mind` | `true` for a mind, `false` for none, or the id of a behaviour profile as text |
+| `mind` | `true` for a mind, `false` for none, or the id of a behaviour profile as text: a `mind` definition (09 §3.5) the character thinks by |
+| `senses` | Senses it is given (15 §4), by id as written: attached when it is made where perception's definitions are loaded (decision D-696). The bundled `person` gives none: its mind does, and a start the player's |
 | `glyph` | `{ ch, fg?, bg? }`: one character and colours by name, for presentation. A later template's replaces an earlier one's |
 | `remains` | What is left of a body destroyed entirely, as written |
 | `blocks` | Whether it blocks movement through its cell. Default true for one with a body |

@@ -391,8 +391,8 @@ moved; the effect `face { who, toward }` turns it to face a cell,
 something that is somewhere, or a number of degrees, and the function
 `set_facing` does the same. A sense is given with `attach_sense` and
 taken away with `detach_sense`, which forgets what was known through it
-(both functions of the simulation until templates and traits give
-senses). Refusals: `perception.unknown_sense`, `perception.has_sense`,
+(both functions of the simulation; a template's `senses` gives them
+when a character is made, decision D-696, and traits will too). Refusals: `perception.unknown_sense`, `perception.has_sense`,
 `perception.no_sense`, `perception.no_senses`, `perception.bad_value`.
 
 `relay_senses` and recorders are not built.
@@ -987,7 +987,9 @@ As built (decisions D-761, D-762, D-765), in `clash_sim::social`:
   `flag`), `range` (two numbers, default `[-1, 1]`; a flag's is `[0,
   1]`), `default` (real, 0; a flag's is 0), `fade` (real, 0: how far it
   moves toward `default` each minute of the holder's own time), and the
-  flags `opposes`, `sides_with`, `orders`, `intervenes` (bool, false).
+  flags `opposes`, `sides_with`, `avoids`, `orders`, `intervenes` (bool,
+  false). `avoids` (an addition, decision D-762) marks one to keep away
+  from: what the AI takes for its `feared` stance (09 §6.6).
   A kind cannot both oppose and side with.
 - **Storage.** A mind holds each relation toward a persona or a group (by
   key), of a kind, with the value it was set to and when, in its own
@@ -1401,8 +1403,8 @@ settings.
   `perception.bad_value`, `perception.field_not_sent`,
   `perception.self_track`.
 - Effects `attach_sense { who, sense }` and `detach_sense { who, sense }`
-  (§4), for rules and test scripts until templates and traits carry
-  `senses` (decision D-767).
+  (§4), for rules that give or take a sense in play, beside what
+  templates and minds give (decisions D-696, D-767).
 - Not built: the hook `signal_receiving`; `relay_senses`, `appraise`,
   `forget_memory`; the queries `tracks`, `memories`, `observers`.
 
@@ -1445,8 +1447,8 @@ the arguments, subjects and fields stated there:
   variables; a role's `orders`; the queries `members` and `suspects`.
 
 **Reachable only from Rust**, for the packages that will offer them to
-content: giving senses from templates and traits (`attach_sense`,
-`detach_sense` are verbs, but nothing gives senses at creation);
+content: giving senses from traits (`attach_sense` and
+`detach_sense` are verbs; templates and minds give senses, D-696);
 setting a standing signature (`set_signature`); the list of what one
 can say to another (`social::talk_options`, for the application's talk
 screen); `social::intervenes`, for whoever builds windows (T5);

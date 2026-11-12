@@ -358,6 +358,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::query::properties());
     properties.extend(crate::traits::properties());
     properties.extend(crate::ability::properties());
+    properties.extend(crate::ai::properties());
     properties.extend(crate::social::props::properties());
     properties
 }

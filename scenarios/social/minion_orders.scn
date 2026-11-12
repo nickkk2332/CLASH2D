@@ -8,7 +8,6 @@ spawn item at @c:10,10,0 as=spot
 as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
 as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 2, 0, 0)" } }
 remove @spot
-attach_sense who=@e:2 sense=human_hearing
 set_relation who=@e:2 toward=@e:1 kind=loyal value=1
 assert "@e:2.rel('loyal', @e:1) == 1"
 order from=@e:1 to=@e:2 action=core:step with="{'dir': 'east'}"
@@ -31,4 +30,4 @@ order from=@e:1 to=@e:2 action=core:step with="{'dir': 'east'}"
 advance 2s
 expect event order_refused reason="'social.not_obeyed'"
 assert "@e:2.loc.x == 13"
-expect hash f606b7ac583d24268c1af0f04c9e1873
+expect hash 31adce2f138b2a62d7ec9f6859b74703

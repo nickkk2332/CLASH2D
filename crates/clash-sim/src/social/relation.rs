@@ -346,6 +346,13 @@ pub fn intervenes(sim: &Sim, holder: EntityId, toward: EntityId) -> bool {
     holds_flagged(sim, holder, toward, |def| def.intervenes)
 }
 
+/// Whether a mind holds toward an entity, as the persona it takes it
+/// for, a relation of a kind flagged `avoids` above its default: one to
+/// keep away from, the AI's `feared` stance (09 §6.6).
+pub fn avoids(sim: &Sim, holder: EntityId, toward: EntityId) -> bool {
+    holds_flagged(sim, holder, toward, |def| def.avoids)
+}
+
 /// Whether a mind holds toward an entity a relation of a kind the test
 /// picks above its default.
 pub(crate) fn holds_flagged(
