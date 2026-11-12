@@ -1,0 +1,13 @@
+{
+  "id": "maker",
+  "name": "Making a character",
+  "mods": ["core", "ui", "maker"],
+  "boot_screen": "maker:maker",
+  "screens": {
+    "play": "ui:play",
+    "decision.free": "ui:play",
+    "decision.choice": "ui:choice",
+    "confirm": "ui:confirm",
+    "error": "ui:error"
+  }
+}

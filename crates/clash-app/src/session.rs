@@ -2,31 +2,31 @@
 //!
 //! [`new_game`] makes the simulation a game runs in: a cosmos with the
 //! start's realm, the generators the loaded definitions give and a
-//! tract store, then the player's character, its session at the start
-//! position and direct control. Everything after the simulation exists
-//! is done to it by command (`Sim::submit`).
+//! tract store, then the player's character from its templates
+//! ([`spawn_player`]), its session at the start position and direct
+//! control. Everything after the simulation exists is done to it by
+//! command (`Sim::submit`).
 //!
 //! # Seams
 //!
 //! | Seam | Stands in for | Replaced by |
 //! |------|---------------|-------------|
-//! | [`make_player`] | Making a character from a template (06 §10) | `spawn` from a `template` definition, with the creation session's choices |
 //! | [`StartDef`] | A game scenario (13 §3) | The `scenario` definition: its `worlds` and `start` |
-//! | [`Session::name`] | The character's `Identity` | The name the template or the creation screen gives |
+//! | [`Session::percepts`] | Each character's percepts and memory (15) | Perception ([`crate::perception_shim`]) |
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use clash_core::{EntityId, Tick};
+use clash_core::EntityId;
 use clash_scene::{AppEntry, GlyphDef, StartDef};
-use clash_sim::{Command, Control, DebugCommand, EntitySpec, Place, Sim, Subject};
+use clash_sim::mind::VitalState;
+use clash_sim::template::CharacterSpec;
+use clash_sim::{Command, Control, DebugCommand, Place, Sim, Subject};
 use clash_time::Timeline;
 use clash_world::defs::RealmDef;
-use clash_world::{
-    CellPos, Cosmos, FovSet, GridId, Location, MemoryStore, MoveProfile, MoveRules, OccupantKind,
-};
+use clash_world::{CellPos, Cosmos, GridId, Location, MemoryStore, MoveProfile, MoveRules};
 
 use crate::boot::Loaded;
+use crate::perception_shim::Percepts;
 use crate::saves::SavedGame;
 
 /// One game being played: the simulation, and whose eyes it is seen
@@ -38,26 +38,20 @@ pub struct Session {
     pub sim: Sim,
     /// The player's character.
     pub player: EntityId,
-    /// What the player called the character. See the module's seams.
+    /// What the player called the character: kept beside the save, and
+    /// what `name()` of the character gives while it has no name of its
+    /// own (a template with no choice that sets one).
     pub name: String,
     /// The start the game began from: `app.scenario`.
     pub start: AppEntry,
-    /// How the character is drawn, from the start.
-    pub look: GlyphDef,
-    /// The tick the character is busy until, if it is doing something
-    /// that takes time ([`crate::shim`]).
-    pub busy_until: Option<Tick>,
-    /// The cells the character still has to walk of a `go_to`
-    /// ([`crate::shim`]).
-    pub route: Vec<Location>,
-    /// The cells the character has seen, for [`crate::shim`]'s `go_to`:
-    /// it does not walk through what it has never seen.
-    pub known: BTreeSet<CellPos>,
-    /// The field of view, kept between turns
+    /// How the character is drawn: the glyph of its templates, or else
+    /// the start's. `None` if neither gives one: it is then drawn as a
+    /// presence.
+    pub look: Option<GlyphDef>,
+    /// What the character perceives and remembers
     /// ([`crate::perception_shim`]).
-    pub fov: FovSet,
-    /// Whether the scene's view of the world is behind the simulation
-    /// and must be fed again.
+    pub percepts: Percepts,
+    /// Whether the simulation has moved since the character last looked.
     pub stale_view: bool,
     /// Whether the play screen has been on show for this game. Once it
     /// has, the game is over when it no longer is.
@@ -79,6 +73,23 @@ impl Session {
             .submit(Command::Debug(command))
             .map_err(|refusal| refusal.to_string())
     }
+
+    /// Whether the player is waiting on the simulation: no decision is
+    /// asked of it, and it is busy (an action, a wait, a plan) or
+    /// unconscious, so that time must pass before it is asked. Not while
+    /// it is free, dead or out of the world: nothing would ever ask it.
+    pub fn waits_on_simulation(&self) -> bool {
+        let sim = &self.sim;
+        if sim.pending_decision().is_some() || self.player_loc().is_none() {
+            return false;
+        }
+        let driven = sim.driver(self.player).is_some();
+        match sim.vital(self.player) {
+            Some(VitalState::Dead) if !driven => false,
+            Some(VitalState::Unconscious) if !driven => true,
+            _ => !sim.is_free(self.player),
+        }
+    }
 }
 
 /// The highest cell of a column a walker can stand in, looking down
@@ -93,28 +104,38 @@ fn standing_cell(cosmos: &Cosmos, grid: GridId, x: i32, y: i32) -> Option<Locati
     })
 }
 
-/// Makes the player's character: a plain entity that is not yet
-/// anywhere.
-///
-/// **A seam.** Characters are made from `template` definitions with the
-/// choices of the creation screen (06 §10), which another package
-/// builds. Until that is joined, the character is a bare creature: no
-/// body, no attributes, nothing carried. Its name is kept by the
-/// session and its glyph comes from the start. When `spawn` from a
-/// template exists, this function calls it and nothing else changes.
-pub fn make_player(sim: &mut Sim) -> Result<EntityId, String> {
+/// Makes the player's character from its templates (06 §10.3), out of
+/// the world: the debug command `spawn`, so that it is in the input log
+/// as everything else done to the simulation is. Refused with the
+/// template's reason: an unknown template, a selection a choice does not
+/// take.
+pub fn spawn_player(sim: &mut Sim, spec: CharacterSpec) -> Result<EntityId, String> {
     let id = sim
         .truth()
         .entities()
         .next_id()
         .ok_or("every entity slot has been used")?;
-    let spec = EntitySpec::new(OccupantKind::Creature);
-    sim.submit(Command::Debug(DebugCommand::CreateEntity {
+    sim.submit(Command::Debug(DebugCommand::Spawn {
         spec,
         place: Place::Stored,
     }))
-    .map_err(|refusal| refusal.to_string())?;
+    .map_err(|refusal| format!("the character could not be made: {refusal}"))?;
     Ok(id)
+}
+
+/// The glyph a character is drawn with: its templates' (06 §10.4), in
+/// the interface's form, if they give one that reads as one.
+fn template_look(sim: &Sim, entity: EntityId) -> Option<GlyphDef> {
+    let glyph = sim.glyph(entity)?;
+    let mut written = serde_json::Map::new();
+    written.insert("ch".to_owned(), serde_json::Value::from(glyph.ch.clone()));
+    if let Some(fg) = &glyph.fg {
+        written.insert("fg".to_owned(), serde_json::Value::from(fg.clone()));
+    }
+    if let Some(bg) = &glyph.bg {
+        written.insert("bg".to_owned(), serde_json::Value::from(bg.clone()));
+    }
+    serde_json::from_value(serde_json::Value::Object(written)).ok()
 }
 
 /// What a start says, for a session.
@@ -148,18 +169,24 @@ fn start_of<'a>(loaded: &'a Loaded, start: &str) -> Result<StartOf<'a>, String> 
     })
 }
 
+/// The qualified id of the template a start makes its character from by
+/// default, if it names one.
+pub fn start_template(loaded: &Loaded, start: &str) -> Result<Option<String>, String> {
+    let found = start_of(loaded, start)?;
+    let namespace = start.split_once(':').map_or("", |(namespace, _)| namespace);
+    Ok(found.def.template_id(namespace))
+}
+
 /// A session round a simulation that has its player.
 fn session_of(sim: Sim, player: EntityId, name: &str, start: StartOf<'_>) -> Session {
+    let look = template_look(&sim, player).or_else(|| start.def.glyph.clone());
     Session {
         sim,
         player,
         name: name.to_owned(),
         start: start.entry,
-        look: start.def.glyph.clone(),
-        busy_until: None,
-        route: Vec::new(),
-        known: BTreeSet::new(),
-        fov: FovSet::new(),
+        look,
+        percepts: Percepts::default(),
         stale_view: true,
         shown: false,
         omniscient: false,
@@ -167,12 +194,19 @@ fn session_of(sim: Sim, player: EntityId, name: &str, start: StartOf<'_>) -> Ses
 }
 
 /// Starts a game from a start (the stand-in for a game scenario): makes
-/// the world, the player's character and its session.
+/// the world, the player's character from `spec` and its session.
 ///
 /// `start` is the qualified id of a `start` definition. The realm is
-/// made with `seed`. Whatever cannot be done is returned as a sentence
-/// to show the player.
-pub fn new_game(loaded: &Loaded, start: &str, seed: u64, name: &str) -> Result<Session, String> {
+/// made with `seed`. `name` is what the player called the character.
+/// Whatever cannot be done is returned as a sentence to show the
+/// player.
+pub fn new_game(
+    loaded: &Loaded,
+    start: &str,
+    seed: u64,
+    spec: CharacterSpec,
+    name: &str,
+) -> Result<Session, String> {
     let defs = &loaded.defs;
     let tables = loaded
         .tables
@@ -204,7 +238,7 @@ pub fn new_game(loaded: &Loaded, start: &str, seed: u64, name: &str) -> Result<S
         [x, y] | [x, y, _] => (*x, *y),
         _ => return Err(format!("the start `{start}` does not say where it begins")),
     };
-    let player = make_player(&mut sim)?;
+    let player = spawn_player(&mut sim, spec)?;
     let mut session = session_of(sim, player, name, found);
 
     // The session: the tracts round the start are loaded and the

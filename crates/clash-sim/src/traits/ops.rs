@@ -302,11 +302,11 @@ pub(crate) fn returned_to_world(sim: &mut Sim, entity: EntityId, cause: Cause) {
     }
 }
 
-/// Handles a wake-up of the domain `Timer`: a pool's crossing or a
-/// body's closing and healing goes to `life::handle_wake`, as every
-/// handler of the domain must ask first; a trait's duration that has run
-/// out ends with `trait_expired` and `trait_removed`; anything else is
-/// reported as a fault, as the kernel reports any wake-up nothing
+/// Handles a wake-up of the domain `Timer` that is not a pool's or a
+/// body's (the kernel hands those to life first, decision D-651): a
+/// trait's duration that has run out ends with `trait_expired` and
+/// `trait_removed`; anything else goes to `life::timer_wake`, which
+/// reports it as a fault, as the kernel reports any wake-up nothing
 /// handles.
 pub fn on_timer(sim: &mut Sim, id: WakeId, wake: Wake) {
     if !is_trait_wake(&wake) {
