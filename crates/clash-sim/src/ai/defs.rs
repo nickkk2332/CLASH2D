@@ -281,6 +281,12 @@ pub struct MindDef {
     /// and is given its senses by whoever made it.
     #[serde(default)]
     pub senses: Vec<String>,
+    /// The reactions (03 §7.3) it answers a window it noticed with, in
+    /// order of preference: the first that may start and would be ready
+    /// in time, else the first that may start. Left out, it answers
+    /// nothing.
+    #[serde(default)]
+    pub reactions: Vec<Ref<ActionDef>>,
     /// What it is, for whoever reads the definitions.
     #[serde(default)]
     pub doc: Option<String>,
