@@ -256,6 +256,10 @@ impl Sim {
         if let Some(value) = self.life_property(property, subject, args) {
             return value;
         }
+        // The kind `ability` is answered by abilities (08 §12).
+        if let Some(value) = crate::ability::property(self, property, subject, args) {
+            return value;
+        }
         match (self.exprs.property(property), self.exprs.subject(subject)) {
             (Some(def), Some(subject)) => (def.get)(self, subject, args),
             _ => Value::Null,

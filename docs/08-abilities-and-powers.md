@@ -1,6 +1,8 @@
 # 08 — Abilities and Powers
 
-Status: design complete, ready for implementation.
+Status: design complete. Sections 3 to 6.1 and 7.1 are built (packages
+A1 to A4); what was built, and where it differs from the design, is in
+section 12.1.
 Implementation plan: [plans/abilities.md](plans/abilities.md).
 Serves scenes S3, S10, S15, S16, S17 and S20 of [00-vision.md](00-vision.md),
 and supplies the means for most of the rest.
@@ -108,6 +110,13 @@ An entity's abilities are a component (06 §3.1). An ability instance is a
 subject of kind `ability`: inside its actions, rules and traits, `ability`
 is bound to it, and `ability.rank`, `ability.power`, `ability.owner` and
 `ability.var.x` can be read.
+
+As built (section 12.1, decision D-723): the instance is bound as
+`ability` in what the ability works out about itself: its parameters,
+`while`, its grants' parameters, costs, cooldowns and conditions, and
+its modes' upkeep, costs and effects. An action reads the ability's
+numbers as the parameters its grant hands it, and anything may read an
+instance through `self.ability('id')`. `ability.var.x` is not built.
 
 ### 3.3 Where abilities come from
 
@@ -889,6 +898,230 @@ entities,
 **Settings**: `rules.max_snapshot_cells`, `rules.max_journal_changes`,
 `rules.max_bindings`, `rules.max_restore_cells`,
 `rules.journal_copy_interval`.
+
+### 12.1 As built
+
+Packages A1 to A4 (decisions D-720 to D-729), in `clash_sim::ability`.
+What is not listed here is not built yet: see the end of this section.
+
+**The definition** (`ability`):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name`, `description` | text | What a reader calls it, and what a closer look says |
+| `tags` | list of text | What it is, for parameter modifiers and rules |
+| `seat` | `body` or `mind` | Which it stays with when they part. Default `body` |
+| `track` | id of a `track` | Its rank is the owner's level of this track |
+| `rank` | int, 0 to 10,000 | With no track, the rank it is granted at unless the grant says. Default 1; a load error beside `track` |
+| `params` | map of name to number expression | Its numbers, read as `ability.<name>` (section 4.2). A name is lowercase letters, digits and `_`; it may not be `rank`, `owner`, `state`, `def`, `id`, `tags`, `mode_on`, `cooldown`, `kind` or `var`; parameters that read each other in a circle are a load error |
+| `always` | an object, or a list of them | What it confers while active: each `{ at_rank?, traits, modifiers, params, senses }`, from `at_rank` up. `traits` are given with the instance's entry as giver; `modifiers` (`{ attr, add, mul }`) apply under the entry as a stats source; `params` are parameter modifiers (below); `senses` are carried for perception |
+| `grants` | list | Actions it makes available (below) |
+| `modes` | list | Modes (below), at most 255 |
+| `while` | condition | Kept current (05 §7.5); while false the ability is dormant |
+| `rules` | rules | Attached to the owner while the ability is active, with the owner as `self` |
+
+What an ability works out about itself (`params`, `while`, a grant's
+`params`, `cost` and `cooldown`, a mode's `upkeep` and `cost`) binds the
+owner as `self` and the instance as `ability`, and reads truth; all but
+effects are pure. A grant's `if` and `value` are in the owner's mind
+(05 §7.3): its own state, its own ability, and what is safe for belief.
+A mode's `on_start` and `on_end` are effects with the same two subjects.
+
+A **grant** is an action's id, or:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `action` | id of an `action` | What it starts. One action is granted at most once by an ability |
+| `params` | map of name to expression | Parameters of the action the ability supplies, standing in for any of the same name a command gives: how an action reads the ability's numbers (`"energy": "ability.power"`) |
+| `cost` | map | Below |
+| `cooldown` | number expression, seconds | Of the owner's own time (03 §3.4) before the grant can be used again |
+| `at_rank` | int | The least rank |
+| `if` | condition | A further condition, in the owner's mind |
+| `intent` | `harm`, `protect`, `escape`, `control`, `aid` or `utility` | A hint to whoever chooses for a character |
+| `value` | number expression | A score of a use, for the AI layer. Carried |
+
+A **cost** is keyed by the pool it is paid from, or by an item's id with
+`"item": true` (a qualified id, or a bare one looked up in sorted
+namespace order), and is an amount (a number, or an expression), or
+`{ amount, overdraw?: { from: pool, ratio: number (default 1) }, from?: expression, item?: bool, count?: int (default 1) }`.
+`from` gives the entity that pays in the owner's place, such as the
+companion an ability is bound to (`ability.bound('companion')` once
+bindings are built; any expression that gives an entity meanwhile).
+Overdraw always comes from the owner's pool. A cost naming a pool or an
+item that is not defined is a load error.
+
+A **mode**:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `id` | name | Its name within the ability |
+| `name` | text | What a reader calls it |
+| `at_rank` | int | The least rank it can be on at |
+| `trait` | id of a `trait` | Given while it is on, with the mode as giver |
+| `upkeep` | map of pool to number expression | Drained per second of the owner's time while it is on, worked out when it is switched on |
+| `cost` | map | What switching it on spends, as a grant's |
+| `uses` | map of channel to count | Carried: a mode holds no slots yet; its trait may disable some with `channels` meanwhile |
+| `on_start`, `on_end` | effects | Run as it comes on, and as it ends however it ends |
+| `look` | text | Carried for presentation |
+
+Traits list `abilities` and `ability_params` (06 §5), and templates and
+their options `abilities` (06 §10.4).
+
+**Instances.** The component `Abilities`, the seventeenth (06 §3.1),
+holds an entity's instances in the order they were made: each with its
+number, its definition, its sources (`template`, `trait` with the trait
+instance's key, `rule`), whether it was revoked, its rank set directly,
+its state (`active` or `dormant`), the modes that are on with the
+wake-up of each, its cooldowns as the owner's own time at which each
+grant is ready, and the entries of `always` it applies now. A number is
+given once in the simulation's life and never again: the simulation
+keeps the next and which entity holds each (`AbilityIndex`, saved and
+hashed with the kernel's state; save layout 11). A handle of the kind
+`ability` is that number, so it never names another instance.
+
+**Holding** (sections 3.3, 3.4, 6.3):
+
+- A template's abilities are given once the entity is made, with the
+  template as source. A trait instance that is not dormant is a source
+  of each ability its definition lists, and stops being one when it
+  ends or goes dormant. `grant_ability` makes a rule a source. One
+  ability from several sources is one instance (invariant A8).
+- An instance with no source left ends: its modes end (`lost`), what it
+  conferred is taken back, and `ability_revoked` is raised (`how`
+  `lost`).
+- `revoke_ability` ends it whatever its sources (`how` `revoked`). One
+  that traits still give stays, revoked: it is not held and confers
+  nothing until a rule grants it again; another trait listing it does
+  not bring it back.
+- When a mind moves (`mind_transferred`), the mind-seated abilities the
+  entity held only from rules and templates go with it, keeping their
+  number, rank and cooldowns (`ability_revoked` `moved` at the old
+  body, `ability_granted` at the new); for a swap, both ways. What a body
+  has through its traits stays with it.
+
+**Rank and parameters.** A track's level is read as it stands; each
+`track_advanced` of that track raises `rank_changed` for the abilities
+it ranks. When the rank changes, what applies from a rank in `always` is
+brought into line and modes above it end (`rank`). A parameter is read
+fresh each time: its expression, then `(value + Σ add) × Π mul` over the
+`ability_params` of the owner's traits that confer (once for each stack)
+and the `params` of the entries of `always` its abilities apply, each
+naming this ability or one of its tags.
+
+**Using** (`use_ability`, section 5): the instance must be held and
+active, the grant's `at_rank` met, its cooldown over, its `if` true and
+every cost payable: refused otherwise, changing nothing. The grant's
+`params` are worked out and stand in for the command's. If anything
+listens, `ability_using` is raised. The action is then prepared by the
+action runtime (03 §6.6), every cost is taken in full (invariant A4),
+the cooldown starts, the action starts and `ability_used` is raised. A
+refusal after the hook ran is raised as `ability_refused`, and a start a
+handler of `action_starting` refuses gives the pools back. A granted
+action can still be started with `Act` like any other action, without
+its ability; whoever offers actions offers granted ones through their
+abilities (the bundled ones are tagged `power`).
+
+**Modes.** Switching on takes the mode's cost, gives its trait, applies
+each pool of its upkeep as a rate of minus the amount under the mode's
+own stats source, runs `on_start` and raises `mode_started`. The moment
+the first such pool comes to nothing is worked out from its level and
+net rate and scheduled once on the owner's clock (a `Timer` wake-up with
+bit 60 of `arg` set); it is worked out again when the owner's pools are
+heard to move (`pool_crossed`, `attr_changed`, traits added or removed,
+a cost paid, the owner moving into the world). At that moment the mode
+ends with `how` `empty`. Switching is a command or a verb: a toggle with
+no windup. A mode that should take time is a grant whose action calls
+`start_mode`.
+
+**Charging** is the action runtime's held phase (section 5.5): a `tick`
+raises a variable, and `Cancel` (a command) or `cancel_action` (an
+effect) lets the hold go, which counts as release.
+
+**Events**, each with the owner as `self`:
+
+| Event | Fields |
+|-------|--------|
+| `ability_granted` | `ability` (string, qualified id), `source` (string: `template`, `trait`, `rule`), `rank` (int) |
+| `ability_revoked` | `ability`, `how` (string: `revoked`, `lost`, `moved`) |
+| `ability_dormant`, `ability_active` | `ability` |
+| `rank_changed` | `ability`, `old`, `new` (int) |
+| `mode_started` | `ability`, `mode` (string) |
+| `mode_ended` | `ability`, `mode`, `how` (string: `ended`, `empty`, `dormant`, `revoked`, `lost`, `rank`, `moved`) |
+| `ability_used` | `ability`, `action` (string), `cost` (map of each pool's or item's qualified id to what was spent, overdraw included) |
+| `ability_refused` | `ability`, `action`, `reason` (string, the code), `message` (string) |
+
+**Hooks**, each with the owner as `self`:
+
+| Hook | Fields | A handler may |
+|------|--------|---------------|
+| `ability_using` | `ability`, `action` (string); `params` (map of name to value); `cost` (map of qualified id to amount) | Change `params` (each held to its type again) and `cost` (an amount of zero or more), for this use; cancel |
+| `ability_granting` | `ability`, `source` (`rule`) | Cancel. Raised by `grant_ability` only |
+| `ability_revoking` | `ability` | Cancel. Raised by `revoke_ability` only, for an ability held |
+
+**Verbs:**
+
+| Verb | Arguments | Returns |
+|------|-----------|---------|
+| `grant_ability` | `to: entity`, `ability: id<ability>`, `rank: int?` | `ability`, the instance |
+| `revoke_ability` | `from: entity`, `ability: id<ability>` | `bool`, whether it was held |
+| `set_rank` | `who: entity`, `ability: id<ability>`, `rank: int` | `int`, the rank before |
+| `use_ability` | `who: entity`, `ability: id<ability>`, `action: id<action>?`, `params: any?` (a map) | `bool`, whether it started; when not, `ability_refused` says why |
+| `start_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`, true |
+| `end_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`, true |
+
+**Commands** (03 §4.4): `UseAbility { entity, ability, action, params }`
+and `SetMode { entity, ability, mode, on }`.
+
+**Properties.** On an entity: `has_ability(ability: id<ability>)`
+(`bool`); `ability(ability: id<ability>)` (`ability?`, the instance, the
+owner's own); `abilities` (`list<id<ability>>`, in the order gained);
+`abilities_with(tag: string)` (`list<ability>`); `cannot_use(ability:
+id<ability>, action: id<action>?)` (`string?`, the code of the reason a
+use would be refused now, null if it would not). The first four change
+with `ability_granted` and `ability_revoked`. On the kind `ability`:
+`rank` (`int`, changed by `rank_changed`), `owner` (`entity?`),
+`state` (`string?`, by `ability_dormant` and `ability_active`), `def`
+(`id<ability>?`), `id` (`string?`), `tags` (`list<string>?`),
+`mode_on(mode: string)` (`bool`, by `mode_started` and `mode_ended`),
+`cooldown(action: id<action>)` (`real`, seconds left, 0 when ready), and
+each parameter by name (`real`). None is safe for belief or settable.
+`cooldown`, `cannot_use` and parameters move with time and anything
+else, so they cannot be kept current.
+
+**Reasons:** `ability.unknown` (`ability`), `ability.not_held`
+(`entity`, `ability`), `ability.no_grant` (`ability`, `action`),
+`ability.dormant` (`ability`), `ability.rank_too_low` (`ability`,
+`rank`, `needed`), `ability.cooling_down` (`ability`, `action`, `left`
+seconds), `ability.condition` (`ability`, `action`),
+`ability.cost_short` (`entity` who pays, `pool`, `wanted`, `have`,
+`short`), `ability.cost_source_gone` (`ability`, `pool`),
+`ability.items_short` (`item`, `wanted`, `have`), `ability.cost_unknown`
+(`cost`), `ability.mode_unknown`, `ability.mode_on`, `ability.mode_off`
+(`ability`, `mode`), `ability.upkeep` (`ability`, `mode`, `pool`),
+`ability.rank_from_track` (`ability`), `ability.bad_rank` (`rank`),
+`ability.bad_argument` (`arg`), `ability.not_registered`. The faults of
+05 §7.5: `reactive.rounds`, `reactive.unwatchable`.
+
+**For the application and the AI layer.** `ability::options(sim,
+entity)` lists every grant of every ability held, with its action, its
+intent, what it costs now, the cooldown left and the reason it cannot be
+used now, if any; `ability::available(sim, entity, ability, action)`
+asks one. Both read the owner's own state and the grant's `if` in its
+mind. A choice is carried out with `UseAbility` and `SetMode` (or the
+verbs, from a rule).
+
+**Not built.** Suppression, `ability_suppressing` and
+`restore_abilities` (A5); bindings, `bound`, `ability.bound(name)`,
+`summon`, `conjure`, `dispel`, `binding_ending` (A7); snapshots and
+journals (A8); relays, appraisal, moving fields, contest bias (A9); the
+reference abilities of section 8 (A10). Costs from a store (16 §5).
+Variables on the kind `ability` (`ability.var.x`). A rule attached by an
+ability does not bind `ability`. Abilities of items and body parts
+except through the traits they give. `uses` on a mode. The mind-seated
+abilities a trait gives do not move with a mind until traits' seats do.
+A level of a pool changed by a verb without crossing a threshold is not
+heard by a mode's wake-up until the next crossing or wake-up.
+Benchmarks (A11).
 
 ## 13. Invariants
 

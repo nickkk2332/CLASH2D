@@ -835,7 +835,7 @@ Done when
 - With no rule listening, nothing happens when a window is noticed.
 
 As built (decisions D-710, D-711, D-715). Beta: windows in the
-simulation's `WindowTable` (save layout 11), candidates in the order of
+simulation's `WindowTable` (save layout 12), candidates in the order of
 03 §7.1, noticing on the candidate's clock, closing at the deadline phase
 or with the action, `react`, `ask_reaction`, `open_window`,
 `close_window`, the `Reaction` decision with each option's timing and

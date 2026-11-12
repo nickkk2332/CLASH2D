@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 11;
+pub const SAVE_VERSION: u32 = 12;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -122,6 +122,12 @@ pub struct Sim {
     pub(crate) perception: PerceptionState,
     /// Not state: the tables of perception, from the definitions.
     pub(crate) perception_defs: Arc<PerceptionDefs>,
+    /// Which entity holds each ability instance, and the number the
+    /// next takes (08 §3.2).
+    pub(crate) abilities: crate::ability::AbilityIndex,
+    /// Not state: the tables of abilities and the expressions kept
+    /// current (05 §7.5).
+    pub(crate) ability_rt: crate::ability::Runtime,
     /// Not state: how many strikes are being resolved inside one another
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
@@ -213,6 +219,7 @@ struct SavedRef<'a> {
     wakes: &'a WakeOwners,
     steps: u64,
     perception: &'a PerceptionState,
+    abilities: &'a crate::ability::AbilityIndex,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -237,6 +244,7 @@ struct Saved {
     wakes: WakeOwners,
     steps: u64,
     perception: PerceptionState,
+    abilities: crate::ability::AbilityIndex,
 }
 
 impl Sim {
@@ -270,6 +278,7 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
         let mut sim = Sim {
             life,
             defs,
@@ -299,6 +308,8 @@ impl Sim {
             rt,
             perception: PerceptionState::default(),
             perception_defs,
+            abilities: crate::ability::AbilityIndex::default(),
+            ability_rt,
             strike_depth: 0,
             intervenes: None,
         };
@@ -694,6 +705,7 @@ impl Sim {
         self.shelf.state_hash(&mut kernel);
         kernel.write_u64(self.steps);
         self.perception.state_hash(&mut kernel);
+        self.abilities.state_hash(&mut kernel);
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -749,6 +761,7 @@ impl Sim {
                 wakes: &self.wakes,
                 steps: self.steps,
                 perception: &self.perception,
+                abilities: &self.abilities,
             },
         )
     }
@@ -800,6 +813,7 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
         let mut sim = Sim {
             life,
             defs,
@@ -829,6 +843,8 @@ impl Sim {
             rt,
             perception: saved.perception,
             perception_defs,
+            abilities: saved.abilities,
+            ability_rt,
             strike_depth: 0,
             intervenes: None,
         };

@@ -11,4 +11,4 @@ expect event element_destroyed layer=block how=damage
 assert "@c:10,10,0.block == null"
 assert "@c:10,10,0.fixture.def_id == 'core:rubble'"
 advance 1s
-expect hash 961f95ff3631b691bd83f950bf4c0ccb
+expect hash 57b837349bb19bc401efc43ba110ed26

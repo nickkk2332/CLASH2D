@@ -578,6 +578,17 @@ As built (decision D-365):
   it is refused with `action.not_running` for an action that is not the
   entity's. `Wait` is refused with `command.bad_argument` for less than
   no time. `Act` and `Wait` answer a free decision.
+- `UseAbility { entity, ability, action, params }` and
+  `SetMode { entity, ability, mode, on }` (packages A3, A4, decision
+  D-724) use an ability the entity holds (08 §5): `ability` is an
+  ability definition's dense id, `action` the action of one of its
+  grants (`None` for its only one), `params` the action's parameters by
+  name, and `mode` a mode's id within the ability. They are refused as
+  `Act` is for an entity nobody controls or whose mind has stopped, and
+  with the ability's reason (`ability.cooling_down`,
+  `ability.cost_short`, …: 08 §12) before anything changed; a use
+  refused after a handler of `ability_using` ran is taken and raises
+  `ability_refused`. `UseAbility` answers a free decision.
 - A `CommandError` holds a `Reason` (14 §5): a stable code, a sentence and
   the values involved. A refused command leaves the state exactly as it
   was and is not logged.
@@ -1098,7 +1109,7 @@ someone who cares and is close enough and quick enough to step in.
 As built (decision D-710), in `clash_sim::action::windows`:
 
 - A window is plain state in the simulation's `WindowTable`, saved and
-  hashed (save layout 11): its kind, its source, the action and the
+  hashed (save layout 12): its kind, its source, the action and the
   phase whose start closes it, those it names, when it opened, its
   **deadline** and its candidates. The deadline is the universal tick
   it is expected to close at, as the clocks ran when it opened: the end

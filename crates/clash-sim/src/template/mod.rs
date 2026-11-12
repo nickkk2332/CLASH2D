@@ -393,6 +393,8 @@ impl Sim {
                 self.rules.attach(handle, *rule);
             }
         }
+        // Abilities, with the template as their source (08 §3.3).
+        crate::ability::grant_from_template(self, entity, &resolved.abilities, cause);
         Ok(())
     }
 

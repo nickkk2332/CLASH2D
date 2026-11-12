@@ -284,6 +284,10 @@ impl Sim {
         if wake.domain == WakeDomain::Timer && crate::life::handle_wake(self, wake) {
             return;
         }
+        // A mode's upkeep running a pool dry (08 §5.4).
+        if wake.domain == WakeDomain::Timer && crate::ability::handle_wake(self, id, wake) {
+            return;
+        }
         match self.handlers.by_domain.get(&wake.domain).copied() {
             Some(handler) => handler(self, id, wake),
             None => self.fault(
@@ -330,6 +334,12 @@ impl Sim {
         loop {
             self.absorb_world();
             let Some(mut event) = self.events.pop_front() else {
+                // The last step of the pump: what is kept current and
+                // went stale is evaluated again (05 §7.5), which may
+                // raise more.
+                if crate::ability::reactive::settle(self) {
+                    continue;
+                }
                 return;
             };
             if delivered >= limit {
@@ -361,6 +371,7 @@ impl Sim {
             crate::action::run::on_event(self, &event);
             crate::perception::observe_event(self, &event);
             crate::device::on_event(self, &event);
+            crate::ability::on_event(self, &event);
             self.out.push(event);
         }
     }

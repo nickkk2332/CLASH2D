@@ -184,10 +184,16 @@ pub struct TraitDef {
     /// action runtime offers them.
     #[serde(default)]
     pub grants: Vec<GrantDef>,
-    /// Abilities conferred while it lasts (08 §3.3), by id as written.
-    /// Carried until abilities are built.
+    /// Abilities conferred while it lasts and is not dormant (08 §3.3),
+    /// by id as written: each instance is a source of each
+    /// ([`crate::ability`]).
     #[serde(default)]
     pub abilities: Vec<String>,
+    /// Changes to the parameters of its holder's abilities while it
+    /// lasts and is not dormant (08 §4.2), once for each stack: each
+    /// names an ability or a tag, a parameter, and `add` and `mul`.
+    #[serde(default)]
+    pub ability_params: Vec<crate::ability::ParamModifierDef>,
     /// Channel slots added (a positive count) or disabled (a negative
     /// one) while it lasts (03 §6.2). Read by
     /// [`channel_change`](super::channel_change) for the action runtime.
@@ -312,6 +318,9 @@ impl Def for TraitDef {
             if !rate.rate.is_finite() {
                 cx.error(format!("rates {index}: `rate` must be finite"));
             }
+        }
+        for modifier in &self.ability_params {
+            modifier.check("ability_params", cx);
         }
         if self.channels.values().any(|count| *count == 0) {
             cx.error("`channels` gives each channel a count of slots: above zero to add, below to disable");

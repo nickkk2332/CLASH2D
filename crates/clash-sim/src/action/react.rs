@@ -405,7 +405,7 @@ impl Sim {
 
     /// Whether commands may address an entity: it is under `Direct` or
     /// `Delegated` control (03 §4.4).
-    fn commanded(&self, entity: EntityId) -> Result<(), Reason> {
+    fn reactor_commanded(&self, entity: EntityId) -> Result<(), Reason> {
         if self.known(entity)?.control() == Control::None {
             return Err(Reason::new(
                 COMMAND_NOT_CONTROLLED,
@@ -429,7 +429,7 @@ impl Sim {
         action: ActionDefId,
         params: Params,
     ) -> Result<(), Reason> {
-        self.commanded(entity)?;
+        self.reactor_commanded(entity)?;
         self.life_lets_act(entity)?;
         let cause = Cause {
             actor: Some(entity),
@@ -447,7 +447,7 @@ impl Sim {
         entity: EntityId,
         window: WindowId,
     ) -> Result<(), Reason> {
-        self.commanded(entity)?;
+        self.reactor_commanded(entity)?;
         let answered = self.answer_which(
             entity,
             |kind| matches!(kind, DecisionKind::Reaction { window: asked, .. } if *asked == window),

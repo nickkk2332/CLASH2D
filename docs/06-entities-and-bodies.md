@@ -448,9 +448,23 @@ ends, however it ends, each against the simulation with the holder as
 `attr_changed` and `pool_crossed` (section 4.4).
 
 **Dormancy.** A trait whose `while` does not hold confers nothing; its
-duration still runs. Until reactive expressions are built `while` is
-worked out when a trait of the holder is added or removed, and when the
-kernel asks (`traits::reconsider`).
+duration still runs. `while` is worked out when a trait of the holder is
+added or removed, and when the kernel asks (`traits::reconsider`); and,
+where everything it reads names the events that change it, it is kept
+current as a reactive expression (05 §7.5): the kernel calls
+`traits::reconsider` when its value changes.
+
+**Abilities** (package A2, decision D-722). Each instance that is not
+dormant is a source of every ability its `abilities` lists (08 §3.3):
+the entity holds the ability while any source remains, and loses that
+source when the instance ends or goes dormant. `ability_params` changes
+the parameters of the holder's abilities while the instance confers,
+once for each stack (08 §4.2): a list of
+`{ "ability": id?, "tag": text?, "param": name, "add": number, "mul": number }`,
+each naming one ability or a tag (not both) and a parameter; `add`
+defaults to 0 and `mul` to 1. An ability that names nothing, both or
+neither of `ability` and `tag`, and an `add` or `mul` that is not finite
+are load errors.
 
 **Durations** are wake-ups on the holder's clock (03 §3.4), so they speed
 and slow with it and move with it from clock to clock. When the holder
@@ -1678,6 +1692,7 @@ optional:
 | `variables` | `{ <name>: <constant expression> }` |
 | `rules` | Rules (`eoc`) attached to the entity (05 §9.3) |
 | `traits`, `items` | Ids as written, carried for whoever gives traits and makes items: `entity_spawned` names them |
+| `abilities` | Ids of abilities as written, each given with the template as its source once the entity is made (08 §3.3), in order, each once; held until revoked. One that names nothing is a load error (decision D-722) |
 | `scale` | A factor on the body's size |
 | `mind` | `true` for a mind, `false` for none, or the id of a behaviour profile as text |
 | `glyph` | `{ ch, fg?, bg? }`: one character and colours by name, for presentation. A later template's replaces an earlier one's |
