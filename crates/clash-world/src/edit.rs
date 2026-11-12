@@ -370,6 +370,30 @@ impl WorldEdit<'_> {
         self.change(loc, layer, ElementState { material, ..old }, true)
     }
 
+    /// Puts the element of a cell on a layer into another state, given
+    /// by its bits (the index of a named state, or the definition's own
+    /// number), and returns the state it had. The element stays: it
+    /// keeps its definition, its material and its accumulated damage. A
+    /// door that is opened is the same door, as damaged as it was.
+    /// Where there is no element nothing changes.
+    ///
+    /// Otherwise as [`set_element`](WorldEdit::set_element): a stability
+    /// check if the new state stops bearing or loses volume,
+    /// `ElementChanged`, and room made for whoever the new state leaves
+    /// none.
+    pub fn set_state_bits(
+        &mut self,
+        loc: Location,
+        layer: Layer,
+        bits: u16,
+    ) -> Result<ElementState, WorldError> {
+        let old = self.ctx.cosmos.grid(loc.grid)?.element(loc.cell, layer)?;
+        if old.is_none() {
+            return Ok(old);
+        }
+        self.change(loc, layer, ElementState { bits, ..old }, true)
+    }
+
     fn change(
         &mut self,
         loc: Location,

@@ -426,6 +426,40 @@ impl WorldEdit<'_> {
             .map(|(outcome, _)| outcome)
     }
 
+    /// Destroys the element of a cell on a layer outright, as though a
+    /// packet of damage of `kind` had been more than it could take
+    /// (02 §12.3): it becomes its `on_destroy` state or is removed, the
+    /// matter it lost is left as rubble, and `ElementDestroyed` is
+    /// emitted with nothing absorbed and nothing passed. No fragments
+    /// fly: there is no blow to throw them. Returns whether there was
+    /// an element to destroy.
+    ///
+    /// For rules that destroy by other means than energy (02 §23). What
+    /// is destroyed this way carries this edit's cause.
+    ///
+    /// Refused, changing nothing, for a cell outside its grid or not
+    /// loaded.
+    pub fn destroy(
+        &mut self,
+        loc: Location,
+        layer: Layer,
+        kind: DamageTypeId,
+    ) -> Result<bool, WorldError> {
+        let wrecked = self.wreck(
+            loc,
+            layer,
+            Destruction::Damage(kind),
+            DamageOutcome {
+                result: DamageResult::Destroyed,
+                absorbed: Real::ZERO,
+                passed: Real::ZERO,
+            },
+            None,
+            true,
+        )?;
+        Ok(wrecked.is_some())
+    }
+
     /// Applies a packet, and returns with the outcome what was left of
     /// the element if it was destroyed. With `leave_rubble` unset the
     /// wreck is not left in the cell: the caller carries it off.

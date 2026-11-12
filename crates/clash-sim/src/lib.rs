@@ -79,6 +79,7 @@ pub mod stats;
 pub mod subject;
 pub mod vars;
 pub mod verb;
+pub mod world_verbs;
 
 pub use action::{ActionDefId, ChannelId, ChannelSet};
 pub use activity::{Shelf, Shelved, SimStore, debug_ticket};

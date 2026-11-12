@@ -397,6 +397,7 @@ pub fn register_engine(registry: &mut Registry) {
     }
     crate::item::register_types(registry);
     crate::movement::register_types(registry);
+    crate::world_verbs::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)
