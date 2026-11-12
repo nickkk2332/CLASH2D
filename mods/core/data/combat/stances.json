@@ -27,14 +27,14 @@
 
   { "//": "Where a blow is aimed when nobody says (07 §3.1, §4.2): at no part in particular, so that it lands where the body offers.",
     "type": "function", "id": "auto_part",
-    "params": { "target": "entity" },
+    "params": {},
     "returns": "part?",
     "value": "null",
     "doc": "The part a blow is aimed at when none is chosen: none, so that it lands where the target's body offers it (07 §4.2)." },
 
   { "//": "How hard a blow is thrown when nobody says (07 §3.3): all of it, unless a stance says otherwise. The actions give it what their actor knows of itself: whether it stands guarded.",
     "type": "function", "id": "auto_effort",
-    "params": { "guarded": "bool", "target": "entity" },
+    "params": { "guarded": "bool" },
     "returns": "real",
     "value": "if $guarded then 0.7 else 1",
     "doc": "The effort of a blow when none is chosen (07 §3.3): full effort, or seven tenths for someone guarded (in a defensive stance). Safe for belief." },

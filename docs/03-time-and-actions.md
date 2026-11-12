@@ -773,6 +773,7 @@ leaves whether it landed in `$landed`.
 | `roles` | Present on joint actions (section 8). |
 | `tags` | Free-form tags, queryable by rules and named by a phase's `cancel`. Default none. |
 | `low_attention` | Section 11. Default false. |
+| `cutscene` | The id of a cutscene the action names (07 §10, 12 §8.1), as written: when the action begins, once its `requires_at_start` held, `cutscene_cued` is raised with every participant, a cue for the application. It decides nothing. Optional. |
 
 **What an action's expressions may name.** Every expression of an action
 binds one subject, `self`, the actor, and the action's **locals**, written
@@ -1315,6 +1316,34 @@ A **joint action** is one action instance with several participants.
 Joint actions are also how grapples, carrying someone, mounting, rituals with
 several casters and handshakes work.
 
+As built (package T6 beta, decision D-816), in `clash_sim::action::run`:
+
+- **Starting** checks, after the actor's own slots, each other role in
+  the order written: its participant is given (`engine:role_unfilled`
+  otherwise, also for the actor itself, one named twice or one not in
+  the world); its role is `forced` (`action.role_not_offered`
+  otherwise: offering a role is not built); and of each channel the
+  role uses it has enough enabled slots, `all` meaning every enabled
+  one, possibly none (`engine:action_channel_lacking`), and enough
+  free once its own actions holding them are counted out
+  (`engine:action_channel_busy` when another's joint action holds
+  them). Nothing changes on a refusal.
+- **Beginning**: the participant's own actions holding what its role
+  claims are interrupted (`action.taken_over`), and the action is
+  entered among the participant's running actions with the slots its
+  role holds, kept in the action table beside the action
+  (`ActionTable::joined`, saved, hashed only while one runs). The
+  participant is then acting: it is asked nothing, its other actions
+  find those slots busy, and it cannot cancel the action, which is not
+  its own.
+- **Ending**, by any path, lets every participant go with the actor:
+  each is free again (section 5.2). Interrupting the actor, a slot
+  disabled under any participant (`check_slots`) and any participant
+  leaving the world end it for all. A forced participant whose mind
+  stops (unconscious, dead) does not end it: going limp is what a
+  takedown is for.
+- `RoleOffered`, `accept_role` and `decline_role` are not built.
+
 ## 9. Timers and unloading
 
 Anything that happens later and is not an action phase is a **timer**: a
@@ -1538,6 +1567,11 @@ and properties (05 §6, §10.3), `subject.gone`, `vars.wrong_scope`,
 `write.not_a_subject`; and, from acting (decisions D-543, D-544),
 `action.unknown`, `action.not_running`, `action.interrupted`,
 `action.bad_time`, `command.not_controlled` and `command.bad_argument`;
+from joint actions (section 8, decision D-816), `action.taken_over`
+(an action of a participant forced into a joint action was interrupted
+to make room; value `action`) and `action.role_not_offered` (a role
+that is not `forced`, which would have to be offered; values `action`,
+`role`);
 and, from windows (decision D-710), `window.unknown_kind`: a window was
 to be opened with a kind that is not loaded (value `kind`).
 Each is documented in the table the generated reference reads.

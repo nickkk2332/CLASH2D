@@ -52,7 +52,7 @@ start while the world model is being built.
 | T3 | Action runtime | L | T2, K5 | beta |
 | T4 | Control, plans, free decisions | M | T3 | beta |
 | T5 | Windows and reactions | M | T4, T1 | beta |
-| T6 | Joint actions | M | T5 | todo |
+| T6 | Joint actions | M | T5 | beta |
 | T7 | Unloading and lower detail | M | T3, K7 | todo |
 | T8 | Benchmarks and budget gate | S | X3, then recurring | todo |
 
@@ -866,6 +866,18 @@ Done when
   action's duration and released together.
 - Interrupting either participant ends the action for both.
 - A non-forced role produces a decision or a rule query before entry.
+
+Beta (decision D-816), built for takedowns (C8): every role claims slots
+on its own participant, a forced participant's own actions holding them
+are interrupted, the participant is locked in until the action ends and
+is then free; interrupting the actor, a slot disabled under any
+participant or any leaving the world ends it for all; joined
+participants are saved and hashed. Tested in
+`crates/clash-sim/tests/grips.rs` (both locked in and released
+together, interrupting ends it for both, save, load and replay); the
+script `takedown` covers `takedown_lock`. Stubbed: roles that are not
+forced are refused (`action.role_not_offered`): `RoleOffered`,
+`accept_role` and `decline_role` are not built.
 
 ### T7 — Unloading and lower detail
 

@@ -957,3 +957,60 @@ fn two_guards_fight_to_a_conclusion_under_the_bundled_minds() {
     }
     assert!(over, "the fight came to an end");
 }
+
+// ---- The documents state what is built ------------------------------------------------------
+
+#[test]
+fn document_07_states_grips_takedowns_shots_and_previews() {
+    let document =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/07-combat.md");
+    let text = std::fs::read_to_string(document).unwrap();
+    let registry = DEFS.expr_registry();
+    let events = clash_sim::combat::GRIP_EVENTS
+        .iter()
+        .chain(clash_sim::combat::takedown::TAKEDOWN_EVENTS);
+    for info in events {
+        assert!(registry.event_id(info.name).is_some(), "{}", info.name);
+        assert!(text.contains(&format!("| `{}`", info.name)), "{}", info.name);
+        for (field, _, doc) in info.fields {
+            assert!(!doc.is_empty());
+            assert!(text.contains(&format!("`{field}`")), "{}.{field}", info.name);
+        }
+    }
+    for info in clash_sim::combat::GRIP_REASONS {
+        assert!(text.contains(&format!("`{}`", info.code)), "{}", info.code);
+    }
+    for verb in grip::verbs() {
+        let id = registry.verb_id(verb.name).unwrap();
+        let spec = &registry.verb(id).unwrap().spec;
+        assert!(text.contains(&format!("| `{}` |", verb.name)), "{}", verb.name);
+        for arg in &spec.args {
+            assert!(!arg.doc.is_empty(), "{}.{}", verb.name, arg.name);
+            assert!(
+                text.contains(&format!("`{}: ", arg.name)),
+                "{}.{}",
+                verb.name,
+                arg.name
+            );
+        }
+    }
+    let properties = grip::properties()
+        .into_iter()
+        .chain(clash_sim::combat::takedown::properties());
+    for property in properties {
+        assert!(
+            text.contains(&format!("`entity.{}`", property.name)),
+            "{}",
+            property.name
+        );
+    }
+    assert!(text.contains("`entity.wielding_surface"));
+    for function in clash_sim::combat::preview::functions() {
+        assert!(text.contains(&format!("| `{}` |", function.name)));
+    }
+    assert!(text.contains("| `seize_resolving` (hook)"));
+    let kernel = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/03-time-and-actions.md");
+    let kernel = std::fs::read_to_string(kernel).unwrap();
+    assert!(kernel.contains("| `cutscene` |"));
+}

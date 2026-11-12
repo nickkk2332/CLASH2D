@@ -128,8 +128,8 @@ must be able to hold what `strike` leaves in it.
 |-----|-------|
 | `part` | The first working part of the attacker's body, by key, that answers to the name (its name in the body, `r_hand`; the id of its definition, `hand` or `core:hand`; or a tag its definition carries) and has the surface: one that grasps nothing before one that does. |
 | `held` | The first item, by id, held in a grasp (06 §9.2) that carries the tag and whose definition has the surface. An empty tag takes any item held. |
-| `gripped` | `true`: something the attacker grips (section 9). Grips are not built; such a strike is refused (`combat.nothing_gripped`). |
-| `surface` | The surface's id among those of the part or the item. Required with the three above. |
+| `gripped` | `true`: the first creature the attacker grips, in the order the grips were taken (section 9.4). With `surface`, the first working part of it, by key, that has that surface, scaled as a part's is: it strikes, and takes the recoil. Nothing gripped is a refusal (`combat.nothing_gripped`). In a defence's `with` the surface may be left out: the creature is put in the way whole. |
+| `surface` | The surface's id among those of the part or the item. Required with the three above, but for `gripped` in a defence. |
 | `kind`, `area`, `give`, `span` | An inline surface (08 §7.7): a damage type, an area above zero, a give above zero and a span, default 0. It takes no recoil. |
 
 A part's surface scales with the part (06 §6.4): its area with the square
@@ -483,8 +483,12 @@ measured from.
 now. What defences in force have dealt with is kept, saved and hashed,
 in the simulation's window table.
 
-Not built: a gripped creature put in the way (C7), defences against
-shots (C9), the query `defences`, and previews of defences (C11).
+A defence's `with` may be `{ "gripped": true }`: the creature its
+holder grips is put in the way, and takes what is left of the blow on
+its body where it is exposed, struck with the blow's own surface; what
+exits it goes on to the part aimed at (section 9.4, decision D-813).
+Defences meet shots too (section 11.6). Not built: the query
+`defences`, and previews of defences.
 
 ## 6. Delivery
 
@@ -779,6 +783,83 @@ a cell of a subgrid.
 A door off its hinges, a lamp post, a car door used as a shield and the
 corner of a building are one verb with different amounts of energy.
 
+### 9.4 As built
+
+Package C7 (decisions D-812, D-813, D-814), in
+`clash_sim::combat::grip`. A grip is plain state in the simulation's
+`GripTable` (saved, hashed once anything has been gripped):
+
+```rust
+pub struct Grip {
+    pub holder: EntityId,
+    pub held: EntityId,
+    pub on: Option<PartKey>,           // the part held
+    pub action: ActionId,              // the holder's action that maintains it
+    pub pins: bool,
+    pub pinned: Vec<(ChannelId, u16)>, // the slots the pin disabled
+    pub drags: Option<Real>,           // the most mass dragged, kg; None for any
+}
+```
+
+**Taking hold.** `seize` is a verb, run from one of the holder's own
+actions: the grip belongs to the action whose list runs it. A grab is
+an attack with no energy whose `on_land` runs `seize`, so that it is
+resolved like a strike first: reach, aim, defences (a strike with no
+energy is still resolved against its target). `seize` checks, and
+refuses having changed nothing: an action of the holder's runs it
+(`combat.no_action`); what is held is something else in the world
+(`combat.no_target`); the part is its (`combat.not_its_part`); it is
+within the reach of the holder's body (`combat.out_of_reach`); then
+the hook `seize_resolving` may change the part and whether it pins, or
+cancel (`combat.seize_failed`). `seized` reports it.
+
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `seize` | `who: entity?` (default `self`), `target: entity`, `part: part?`, `pins: bool?` (default false), `drags: real?` (kilograms; default any) | `bool`, true | Takes hold, as above |
+| `release_grip` | `who: entity?` (default `self`), `other: entity?` | `int`, how many ended | Ends the grips `who` holds or is held by, only those with `other` if given |
+
+**How long** (invariant C7). A grip never outlives its action: when the
+action ends, by any path, its grips end (`grip_broken`, `how`
+`ended`). A grip ended by anything else interrupts its action, so that
+the action never goes on holding nothing: `release_grip` by the held
+(`how` `broken`, the action interrupted with `combat.grip_broken`);
+by the holder outside the maintaining action's own lists (`released`,
+`combat.grip_released`; from its own lists the action goes on); a throw
+(`thrown`); the two coming apart, no longer beside each other, either
+launched, or either leaving the world (`lost`, `combat.grip_lost`).
+
+**While it lasts.**
+
+- With `pins` and a part, the channel slots that part and the parts on
+  it supply (06 §6.1) are disabled (03 §6.2), and given back as it
+  ends: the actions using them are interrupted, and those that need
+  them are refused with `engine:action_channel_lacking`.
+- A step of the held to a cell not beside its holder is refused
+  (`combat.gripped`): it cannot move away without breaking the grip.
+  A step of the holder dragging something heavier than its `drags` is
+  refused (`combat.too_heavy`); otherwise, when the holder steps, the
+  held is moved (`move_to`) into the cell the holder left. Movement asks
+  `grip::may_step` before it moves anyone.
+- An attack or a defence `with` `{ "gripped": true }` uses the held
+  (section 3.1): swung, it strikes with a surface of its own parts and
+  takes the recoil there; put in the way, it takes the blow on its body
+  with the blow's own surface.
+- `throw` of a creature the thrower grips ends the grip and launches the
+  held as a body (02 §15) from the middle of its body where it stands,
+  at `speed` or `√(2 × energy / mass)`, toward `at` or along `dir`;
+  aimed at itself, away from the thrower on the level. The world
+  resolves what it meets; movement takes it back when it lands.
+  `launched` and `thrown` report it.
+
+**Properties**, of the kind `entity`, readable of oneself in a mind
+context: `entity.gripping` (`entity?`), the first creature or thing it
+grips; `entity.gripped_by` (`entity?`), who grips it, the first to have
+taken hold.
+
+Not built: carrying (a creature taken into a `Grasp` hold, 06 §9.2),
+holding the world (section 9.3, `wrench`), the query `grips`, chokes and
+locks other than as content's traits.
+
 ## 10. Takedowns
 
 A takedown, an execution or a finishing move is a joint action (03 §8) with
@@ -812,6 +893,28 @@ a forced role for the victim.
 A takedown on something whose neck a blade cannot cut is a mistake the
 attacker is locked into for a second. Previews (section 13) exist so it
 need not be made blind.
+
+As built (package C8, decision D-816), in `clash_sim::combat::takedown`
+and the action runtime's joint actions (03 §8 as built). Nothing is a
+takedown to the engine: a joint action whose victim's role is forced,
+a `sure` strike, and a `requires_at_start`. An attempt on a victim that
+does not satisfy it is interrupted at once with
+`engine:action_start_condition`, before anything is struck or cued. The
+`cutscene` field of an action (03 §6.1) raises, as the action begins
+and once its `requires_at_start` has held:
+
+| Event | Subjects | Fields |
+|-------|----------|--------|
+| `cutscene_cued` | `self`, who started it; `other?`, the participant of its second role | `cutscene` (`string`), as written; `action` (`string`), the qualified id; `id` (`int`), the running action's number; `participants` (`list<entity>`), everyone, in the order of the roles |
+
+`entity.helpless` (`bool`, reads truth) is whether it cannot resist:
+its mind is not awake, or someone grips it with a pin. The bundled
+takedowns (`mods/core/data/combat/takedowns.json`) are `knock_out` (a
+sure blow of the fist to the head, `strength × 15` joules) and `choke`
+(a trait, `choked`, that raises pain 25 a second for four seconds), both
+with `requires_at_start`
+`not (perceives($victim, $attacker) ?? false) or $victim.helpless`; and
+a steel `gorget` worn over the head, which stops the fist.
 
 ## 11. Ranged weapons
 
@@ -966,6 +1069,37 @@ Two attacks made at range that are both marked `clashes` meet as any two
 do (section 8): a beam against a beam is two strikes with inline surfaces
 (08 §7.7).
 
+As built (decisions D-810, D-811):
+
+- **The window.** `shoot` and `throw` given `window` (the id of a
+  `window_kind`) open one when the shot leaves (`Sim::open_window`),
+  named for the entity aimed at, or for those with bodies standing in
+  the cell aimed at; none for an instant shot or one aimed along a
+  direction. It stays open for the time the shot is expected to take,
+  its speed over the distance to the aim point, and closes then, or
+  once nothing it was opened for is in flight. Its candidates notice it
+  as any window's (03 §7.2): only those who perceive the shooter, after
+  their `notice`, on their own clock.
+- **Defences meet shots.** Before a shot strikes a creature, in flight
+  or by ray, the defences in force for it are tried as at a strike's
+  step 5, the shooter as the attacker; `strike_defended` and
+  `defence_resolving` name the projectile's qualified id as `action`
+  and `shot` as `attack`. One that avoids lets the shot fly by at full
+  speed. One that interposes turns its share aside, and each surface it
+  puts in the way takes a packet at the projectile's own intensity,
+  over the projectile's contact: the point meets the shield, as it
+  would meet a wall (a blow is spread by the surface, D-712; a shot is
+  not). What passes goes on into the body.
+- **Leaving.** A dodge that moves the defender out of the shot's path
+  before it arrives is missed by the world: nothing else is needed.
+- **Catching** is the verb `catch_shot`, run by a reaction:
+
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `catch_shot` | `who: entity?` (default `self`), `window: window?`, `reach: real?` (metres; default 1.5) | `bool`, whether anything was caught | Of what the window was opened for still in flight, the projectiles in the order fired and then an item thrown, the first whose body is within `reach` of the middle of `who`'s body is taken out of the air where it is (`arrest`, 02 §15); its window closes once nothing of it flies. An item thrown is taken into `who`'s hand; a projectile becomes the item its definition's `item` names, in the hand, or nothing; with no hand free it falls where `who` stands. Nothing within reach is not a refusal. Refused with `ranged.not_in_world`, `ranged.bad_number` and `ranged.bad_argument` |
+
+- `intercept` is not built; projectiles crossing do not interact.
+
 ### 11.7 As built
 
 Packages C9 and C10 (decisions D-740 to D-749). Nothing below is a gun,
@@ -992,6 +1126,7 @@ weapon is an item with a `shot` block.
 | `surface` | object, required | What it strikes with: `kind` (`id<damage_type>`), `area` (m², above zero), `give` (length, above zero), `span` (length, default 0) |
 | `leaves` | object | A field it leaves where it comes to an end: `field` (`id<field>`), `amount` (levels, 1 to 255, default 1) |
 | `on_impact` | effects | Run once, at the first thing it strikes, with `self` the one who fired it, `here` the cell and `target` the creature struck (null for an element); it ends there |
+| `item` | `id<item>` | What it is as an item once it is caught in flight (section 11.6, `catch_shot`): an arrow caught is an arrow in the hand. Left out, one caught becomes nothing |
 | `thrust` | object | A drive along its path (02 §15): `accel` (m/s²), `burn` (time) |
 | `guidance`, `fuse` | | Read and carried: not built |
 
@@ -1029,8 +1164,8 @@ else the first store fitted to it, in order of id.
 
 | Verb | Arguments | Returns | Does |
 |------|-----------|---------|------|
-| `shoot` | `from: entity?` (default `self`), `at: any?`, `dir: any?`, `part: part?`, `height: real?`, `projectile: id<projectile>?`, `store: entity?`, `with: entity?`, `energy: real?`, `speed: any?`, `spread: real?`, `count: int?`, `noise: real?`, `flash: real?`, `lob: bool?`, `range: real?`, `window: any?` | `int`, the projectiles fired | Below |
-| `throw` | `who: entity?` (default `self`), `what: entity`, `at: any?`, `dir: any?`, `part: part?`, `height: real?`, `energy: real?`, `speed: real?`, `spread: real?`, `surface: string?`, `lob: bool?` | null | Throws an item `who` holds: it is put down where `who` stands and launched as a body that is the item (owner the entity), with its own mass and cross-section, from the height a shot leaves. It strikes what it meets with its surface named `surface` through the same delivery as a projectile's; with none, with the world's blunt blow. Raises `thrown` |
+| `shoot` | `from: entity?` (default `self`), `at: any?`, `dir: any?`, `part: part?`, `height: real?`, `projectile: id<projectile>?`, `store: entity?`, `with: entity?`, `energy: real?`, `speed: any?`, `spread: real?`, `count: int?`, `noise: real?`, `flash: real?`, `lob: bool?`, `range: real?`, `window: id<window_kind>?` | `int`, the projectiles fired | Below; with `window`, opens a `shot` window (section 11.6) |
+| `throw` | `who: entity?` (default `self`), `what: entity`, `at: any?`, `dir: any?`, `part: part?`, `height: real?`, `energy: real?`, `speed: real?`, `spread: real?`, `surface: string?`, `lob: bool?`, `window: id<window_kind>?` | null | Throws an item `who` holds, or a creature `who` grips (section 9.4); with `window`, opens a `shot` window (section 11.6). An item: it is put down where `who` stands and launched as a body that is the item (owner the entity), with its own mass and cross-section, from the height a shot leaves. It strikes what it meets with its surface named `surface` through the same delivery as a projectile's; with none, with the world's blunt blow. Raises `thrown` |
 | `load` | `who: entity?` (default `self`), `into: entity`, `from: entity?`, `count: int?` | `int`, the rounds loaded | Puts rounds into the feed of `into`, one member at a time by `put_in`: from `from`, a container (its rounds in order of id) or a stack of rounds itself; with none, from what `who` carries at any depth, in the order `carried` gives. Only rounds the store accepts, as many as fit, at most `count` |
 | `fit` | `what: entity`, `into: entity` | `entity` | Fits an item to another: it is held `fixed` in it. Taking it into a grasp takes it off |
 
@@ -1161,11 +1296,8 @@ a mind context (05 §7.3):
 | `shoot.max_count` | The most shots one `shoot` fires. Default 1000. |
 | `shoot.instant_range` | Metres an instant shot goes when it gives no `range`. Default 1000. |
 
-**Seams.** The `shot` window (section 11.2) waits for reaction windows
-(03 §7, package T5): `shoot` takes `window`, and offers it to nobody, as
-an action phase's window is offered to nobody; so nobody steps out of a
-bullet's way yet (`bullet_time`), and stopping a shot (section 11.6,
-`caught_arrow`) and defences against shots wait for packages T5 and C4.
+**Seams.** The `shot` window, defences against shots and catching are
+section 11.6's (`bullet_time`, `caught_arrow`); `intercept` is not built.
 `guidance`, `fuse` and `projectile_lost_lock` are not built (`heat_seeker`);
 a timed charge is an item thrown with a rule's `after`. A weapon that
 draws on a power store (16 §11.2) waits for assemblies (package G9).
@@ -1191,7 +1323,18 @@ leaves the hand, by `after`). `mods/core/data/combat/arms.json` holds a
 efficiency 0.97), a `bow` (80 J), `arrow`s and a `quiver` (a store worn),
 a `throwing_knife` and a `charge`. `mods/core/data/perception/shots.json`
 gives `projectile_fired` off as a sound of its `noise` and a sight of its
-`flash` about the shooter, and `projectile_hit` as a sound.
+`flash` about the shooter, and `projectile_hit` as a sound. The bundled
+`shoot`, `aim_shot`, `draw_and_loose` and `throw` open a `shot` window.
+`mods/core/data/combat/shots.json` (decision D-818) holds the window kind
+`shot` (noticed in `2 / wits` seconds of the candidate's own time, reach
+3 m); the `arrow` projectile's `item`, and a grip for the arrow item;
+the contest `catching`; the reactions `catch` (a hand that tries at each
+5 ms tick to close on what the window was opened for, its contest
+`catching` of `fighting(self)` against 12 drawn once), `step_aside` (a
+step across the line from the window's source, `aside_from`, for shots
+and blows) and `raise_shield` (a held shield's face, put in the way of
+shots and blows, `handles` all); and the rules to attach
+`catch_on_notice`, `step_aside_on_notice` and `shield_on_notice`.
 
 ## 12. Stances, styles and combinations
 
@@ -1210,6 +1353,34 @@ None of these are engine concepts. They are built as follows.
 
 The bundled content supplies a basic set of each. They are the defaults
 that make one-key fighting work, and the first thing a combat mod replaces.
+
+As built (packages C11 and C12, decision D-817): nothing new in the
+engine but exclusive trait groups, which traits already have (06 §5).
+`mods/core/data/combat/stances.json` holds the stance traits
+`aggressive` (strength × 1.15) and `defensive` (strength × 0.9; every
+blow noticed in time is answered with a `block`), both of the group
+`fighting_stance`; the action `take_stance` (a trait given as the shift
+ends); the functions `auto_part()` (null: the blow lands where the
+body offers) and `auto_effort(guarded)` (1, or 0.7 for one
+guarded), which the bundled `punch`, `kick`, `slash`, `stab`, `shove` and
+`whirl` take as their defaults, given `self.has_tag('defensive')` so that
+they stay safe for belief; and the rule `stagger_breaks_blow` (a stagger
+of severity 0.5 or more interrupts the staggered's actions tagged
+`strike`; off with the setting `core:staggering` false).
+`mods/core/data/exertion.json`, beside the `stamina` pool of
+`traits.json`, holds `exertion` (a blow that lands from someone
+aggressive costs 5 stamina) and `winded` (below a quarter, the stance is
+dropped), for those who have the pool. `mods/core/data/combat/grips.json`
+holds the contest `grapple`, the functions `drag_limit` (12 kg for each
+point of strength) and `heave_energy` (30 J for each point), the actions
+`grab` (one hand, pinning the part named, held up to 20 s), `throw_person`
+(both hands, thrown away from the thrower), `drag`, `human_shield` (both
+hands; its `defence` puts the held in the way of every blow and shot) and
+`break_free` (strength against the holder's, ending in `release_grip`);
+the goal `apprehend` (a grab on someone held hostile within two metres),
+which an optional patch adds to the `guard` mind, whose `confront` then
+strikes with the other hand. Two bundled guards, one an outlaw, fight
+each other to a conclusion with nothing outside `core`.
 
 ## 13. Previews
 
@@ -1243,6 +1414,21 @@ Uses: the precise targeting picker (12 §9.3) shows a preview per part;
 default effort functions choose the most that does not maim; the AI layer
 (09) weighs techniques; and bulk resolution of fights away from attention
 uses expected outcomes in place of full resolution.
+
+As built (package C11, decision D-815), in `clash_sim::combat::preview`:
+
+| Function | Arguments | Gives |
+|----------|-----------|-------|
+| `strike_preview` | `who: entity`, `action: any` (an action's id), `target: entity`, `part: any` (of the kind `part`; optional), `effort: real` (optional, default 1), `attack: string` (optional, for an action with several) | `map<any>?`: `in_reach` (`bool`), whether the target is within the attack's reach now; `odds` (`real`), the chance it lands on the part aimed at, the `odds` of its aim's contest, 1 for one that does not aim; `odds_near` (`real`), on it or a part beside it; `energy` (`real`), joules of harm at the effort, less the push; `intensity` (`real`); `push_speed` (`real`), unbraced; `staggers` and `launches` (`bool`), by the settings of section 7. Null for an action with no such attack, or nothing to strike with |
+
+It finds the attack and what strikes as the strike would, and
+evaluates the attack's numbers with the attacker, the weapon or limb and
+the target bound and the locals a command would give (`$target`,
+`$part`, `$effort`; the second role of a joint action is the target),
+through a host that may not draw: invariant C5. It reads the target as
+it is, not as it appears, and is not safe for belief. Not built: `depth`,
+`disables`, `severs`, `passes` and `recoil`, which need a dry run of the
+body model; handlers run dry; appearances.
 
 ## 14. A worked exchange
 
@@ -1347,28 +1533,59 @@ from its cause: for a strike, the attacker.
 | `staggered` | `self` | `speed` (`real`); `severity` (`real`), where the speed lies between `combat.stagger_at` and `combat.launch_at`, from 0 to 1; `dir` (`list<real>`). |
 | `launched` | `self` | `speed` (`real`); `dir` (`list<real>`); `added` (`bool`), true if it was in flight already and the push was added to its velocity. |
 
-`clash_resolved` and the rest wait for their packages. The property
-`entity.defending` (`bool`) is built (section 5.5).
+Grips (package C7, section 9.4) add:
+
+| Event | Subjects | Fields |
+|-------|----------|--------|
+| `seize_resolving` (hook) | `self`, the holder; `target`, what is to be held | `part` (`part?`), the part to be held; `pins` (`bool`). A handler may change both, or cancel: the grip fails (`combat.seize_failed`). |
+| `seized` | `self`, the holder; `target` | `part` (`part?`); `pins` (`bool`); `action` (`int`), the number of the holder's action that maintains it. |
+| `grip_broken` | `self`, the holder; `target?`, what was held | `part` (`part?`); `how` (`string`): `ended` (its action ended), `released` (the holder let go), `broken` (the held broke free), `thrown`, `lost` (they came apart). |
+
+Takedowns (package C8) add `cutscene_cued` (section 10). Shots meet the
+defences' events with `action` the projectile's qualified id and
+`attack` `shot` (section 11.6).
+
+`clash_resolved` and the rest wait for their packages. The properties
+`entity.defending` (`bool`, section 5.5), `entity.gripping`,
+`entity.gripped_by` (section 9.4), `entity.helpless` (section 10) and
+`entity.wielding_surface` are built:
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.wielding_surface(surface: string)` | `entity?` | The first thing it holds in a grasp, in order of id, whose definition has a striking surface of that id: the knife or club whose `flat` a parry puts in the way. Readable of oneself in a mind context, so that the bundled `parry` requires one (decision D-819) |
 
 | Reason | When | Values |
 |--------|------|--------|
 | `combat.no_attack` | A `strike` is written in a list that belongs to no action, names an attack its action does not have, or names none in an action with several | `action`, `attack` |
 | `combat.no_target` | A `strike` names neither an entity nor a cell, or a target not in the world | `target` |
 | `combat.no_surface` | Nothing answers to the attack's `with` | `action`, `attack`, `with` |
-| `combat.nothing_gripped` | The attack strikes with something gripped, and grips are not built | `action`, `attack` |
+| `combat.nothing_gripped` | The attack strikes with something gripped, and the attacker grips nothing | `action`, `attack` |
 | `combat.bad_number` | An energy or a reach below zero or not finite, a push or an effort outside 0 to 1, a lift not finite | `what`, `value` |
 | `combat.not_its_part` | The part aimed at is not the target's | `target` |
 | `combat.nothing_there` | A strike at a cell found no floor, block or fixture there, or the cell not loaded | `cell` |
 | `combat.too_deep` | A strike was resolved inside eight others | `limit` |
 | `combat.defended` | What defences put in a strike's way took all of it: carried by `strike_stopped` | `target` |
+| `combat.no_action` | `seize` was run outside an action of the holder's | `holder` |
+| `combat.out_of_reach` | What was to be seized is further than the holder's body reaches | `target`, `reach` |
+| `combat.seize_failed` | A handler of `seize_resolving` made the grip fail | `target` |
+| `combat.gripped` | A step by a creature held would take it away from its holder | `holder` |
+| `combat.too_heavy` | A step by a holder would drag more than its grip's `drags` | `what`, `mass`, `most` |
+| `combat.grip_lost` | A grip's two came apart: the action that kept it is interrupted | `target` |
+| `combat.grip_broken` | The held broke free: the action that kept the grip is interrupted | `target` |
+| `combat.grip_released` | The holder let go other than by the action that kept the grip, which is interrupted | `target` |
+| `combat.not_gripped` | A creature to be thrown is not one the thrower grips | `who`, `what` |
 
 | Setting | Meaning |
 |---------|---------|
 | `combat.stagger_at` | Metres a second: a slower push moves nothing. Default 0.5. |
 | `combat.launch_at` | Metres a second: a push at least this fast launches its target. Default 3. |
 
-The functions `contest` and `odds` are stated in section 4.1, the effect
-`strike` in section 3.4.
+The functions `contest` and `odds` are stated in section 4.1,
+`strike_preview` in section 13, the effect `strike` in section 3.4, and:
+
+| Function | Arguments | Gives |
+|----------|-----------|-------|
+| `aside_from` | `who: any`, `from: any`, `right: bool` (optional, default false) | `string?`: the step across the line from `from` to `who`, out of the way of what comes along it (section 5.2, 11.6): `north`, `north_east` and so on, to the left of someone facing straight away from `from`, or to the right. Null for two in one column, or either nowhere. Safe for belief |
 
 The `core` mod (`mods/core/data/combat/fighting.json`) bundles the window
 kind `strike`, the contest `melee`, the functions `fighting(who)` and
@@ -1383,8 +1600,9 @@ a `palm`, its feet a `sole` and its head a `brow`, and
 `mods/core/data/combat/reactions.json` (decision D-714) gives the
 `strike` window kind a `notice` of `2 / wits` seconds (a fifth of a
 second at wits 10) and a `reach` of 3 m; the contests `control` and
-`slip`; the reactions `parry` (the flat of a held blade, deflect 0.9,
-holds 60 J for each point of strength, brace 0.3), `block` (a held
+`slip`; the reactions `parry` (the flat of anything held that has one,
+deflect 0.9, holds 60 J for each point of strength, brace 0.3;
+unavailable, saying why, with nothing such in hand), `block` (a held
 shield's face, else the forearm), `dodge` (avoid, with `evasion`) and
 `step_back` (a step straight away from the window's source); the guard
 `guard`, a held phase; the rule `ask_player_to_react`; and the stances
@@ -1393,11 +1611,14 @@ shield's face, else the forearm), `dodge` (avoid, with `evasion`) and
 gives the knife and the club a `flat`, the arm a `forearm`, and adds a
 `buckler`. Ranged combat (`projectile`, `round`, `shot`, the effects
 `shoot` and `throw`, the `projectile_*` events, `ballistic_dir` and
-`band_point`) is stated as built in section 11.7. Not built yet: the
-`cutscene` block, `strike_preview` and the other functions, queries
-and properties listed above, swings meeting the world, contact surfaces
-(section 6.5), reach in height (section 4.3) and `closing_energy`
-(section 3.5).
+`band_point`) is stated as built in section 11.7; grips in section 9.4;
+takedowns and the `cutscene` field in section 10; stances, exertion and
+the default part and effort in section 12; `strike_preview` in section
+13. Not built yet: `lead_point`, `intercept`, `wrench`, the effect `drag`
+(a holder that steps drags what it grips by itself), the queries
+`grips`, `defences` and `in_arc`, `entity.reach` and an action's
+`attack(id)`, swings meeting the world, contact surfaces (section 6.5),
+reach in height (section 4.3) and `closing_energy` (section 3.5).
 
 ## 17. Invariants
 
@@ -1409,7 +1630,7 @@ and properties listed above, swings meeting the world, contact surfaces
 | C4 | Chance enters only through contests, shot dispersion and where on a body a hit falls (06 §7.3), all from the simulation's random stream. |
 | C5 | `strike_preview` and `odds` are pure. |
 | C6 | Two attacks that clash are resolved once, together. |
-| C7 | A grip exists exactly as long as the action maintaining it. |
+| C7 | A grip exists exactly as long as the action maintaining it: it ends when the action ends, for any reason, and a grip ended otherwise interrupts the action (section 9.4). |
 | C8 | A projectile's effect on what it meets depends only on its mass, velocity and surface at that moment. |
 
 ## 18. Budgets
