@@ -1220,22 +1220,120 @@ fn save_and_load_are_invisible_to_perception() {
     clippy::disallowed_methods,
     reason = "a timing test reads the wall clock; nothing in the simulation does"
 )]
-fn timing_probe_party_view() {
+fn timing_of_perception_in_a_city_block() {
+    // Run with `cargo test -p clash-sim --release --test perception --
+    // --ignored --nocapture timing`. 15 §17's budgets, measured.
     let mut sim = city(EXTRA);
-    let me = member(&mut sim, street(0));
+    let sight = kind(&sim, "sight");
+    let info = sim.perception_defs().kind(sight).unwrap().clone();
+
+    // One observer-target evaluation of sight at 30 m.
+    let eye = Spot::point(street(0), 1500);
+    let body = Spot {
+        loc: street(30),
+        alt_mm: 0,
+        height_mm: 1700,
+    };
+    let rounds = 20_000_u32;
     let started = std::time::Instant::now();
-    let mut fov = clash_world::FovSet::new();
-    sim.truth()
-        .cosmos()
-        .field_of_view(street(0), 1500, Real::of(60.0), &mut fov)
+    let mut sum = Real::ZERO;
+    for _ in 0..rounds {
+        sum += perception::signal::strength_at(&sim, &info, Real::ONE, body, eye);
+    }
+    let each = started.elapsed() / rounds;
+    println!("one evaluation of sight at 30 m: {each:?} ({sum})");
+
+    // Fifty creatures in a block: two rows of a street, all in range of
+    // each other, with sight and hearing, walking up and down.
+    sim.set_wake_handler(WakeDomain::Stepper, pacer);
+    let mut crowd = Vec::new();
+    for i in 0..50 {
+        let at = Location::new(
+            GRID,
+            CellPos::new(
+                street(0).cell.x + (i % 25) * 2,
+                street(0).cell.y + i / 25,
+                0,
+            ),
+        );
+        let one = person(&mut sim, at);
+        give(&mut sim, one, "human_sight");
+        give(&mut sim, one, "human_hearing");
+        let facing = if i % 2 == 0 { 90.0 } else { 270.0 };
+        perception::set_facing(&mut sim, one, Real::of(facing)).unwrap();
+        sim.schedule_for(
+            one,
+            Dur::from_millis(i64::from(i) * 20),
+            Wake::new(WakeDomain::Stepper, one.to_bits(), 0),
+        )
         .unwrap();
+        crowd.push(one);
+    }
+    advance_by(&mut sim, 1.0);
+    sim.drain_events();
+    let seconds = 10.0;
+    let started = std::time::Instant::now();
+    advance_by(&mut sim, seconds);
+    let took = started.elapsed();
+    let events = sim.drain_events();
     println!(
-        "fov: {:?}, {} cells, storeys {:?}",
-        started.elapsed(),
-        fov.len(),
-        fov.storeys()
+        "fifty creatures, one simulated second: {:?}; {} perceived, {} detected in {seconds} s",
+        took / seconds as u32,
+        named(&events, "perceived").len(),
+        named(&events, "detected").len()
     );
+
+    // A signal to fifty observers in range: given off, and received.
+    let sound = kind(&sim, "sound");
+    let started = std::time::Instant::now();
+    let emitted = perception::emit_signal(
+        &mut sim,
+        Signal::new(sound, street(24), Real::of(5.0), Cause::DEBUG),
+    )
+    .unwrap();
+    let given = started.elapsed();
+    sim.set_wake_handler(WakeDomain::Stepper, |_, _, _| {});
+    let started = std::time::Instant::now();
+    advance_by(&mut sim, 0.2);
+    println!(
+        "a signal to {} observers: given off in {given:?}, received in {:?}",
+        emitted.delayed,
+        started.elapsed()
+    );
+
+    // A party member's sweep: its view, map memory and a frame.
+    let me = member(&mut sim, street(40));
     let started = std::time::Instant::now();
     perception::search(&mut sim, me, Real::ONE).unwrap();
-    println!("one search: {:?}", started.elapsed());
+    println!("a party member's search: {:?}", started.elapsed());
+    let memory = perception::party::map_memory(&sim, me).unwrap();
+    let words = crowd.len();
+    println!(
+        "its map memory: {} cells; awareness entries of one of the crowd: {}",
+        memory.len(),
+        sim.components()
+            .awareness
+            .get(crowd[words / 2])
+            .map_or(0, |awareness| awareness.entries().len())
+    );
+}
+
+/// A wake-up handler that walks an entity a cell east and back, a step
+/// every 700 ms of its own time.
+fn pacer(sim: &mut Sim, _id: WakeId, wake: Wake) {
+    let entity = EntityId::from_bits(wake.id);
+    let Some(Place::At { loc, .. }) = sim.truth().place(entity) else {
+        return;
+    };
+    let dx = if wake.arg % 2 == 0 { 1 } else { -1 };
+    let to = Location::new(
+        loc.grid,
+        CellPos::new(loc.cell.x + dx, loc.cell.y, loc.cell.z),
+    );
+    let _ = sim.relocate(entity, Place::at(to), Cause::DEBUG.by(entity));
+    let _ = sim.schedule_for(
+        entity,
+        Dur::from_millis(700),
+        Wake::new(WakeDomain::Stepper, wake.id, wake.arg + 1),
+    );
 }

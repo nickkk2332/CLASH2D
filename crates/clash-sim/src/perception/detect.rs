@@ -20,13 +20,20 @@ use serde::{Deserialize, Serialize};
 
 use super::defs::{SenseId, SignalModel};
 use super::signal::{self, Spot};
-use super::{AWARENESS_EPSILON, MAX_AWARENESS_SETTING, belief, events, party, senses};
+use super::{
+    AWARENESS_EPSILON, MAX_AWARENESS_SETTING, MAX_CANDIDATES_SETTING, belief, events, party, senses,
+};
 use crate::reason::Reason;
 use crate::{Place, Sim};
 
-/// The most targets an observer is aware of through all its senses when
-/// the setting `perception.max_awareness` is not given.
-pub const DEFAULT_MAX_AWARENESS: i64 = 64;
+/// The most pairs an observer keeps awareness of through all its senses
+/// when the setting `perception.max_awareness` is not given.
+pub const DEFAULT_MAX_AWARENESS: i64 = 128;
+
+/// The most entities one sweep of one sense considers, the nearest
+/// first, when the setting `perception.max_candidates` is not given;
+/// those already in the observer's awareness are considered as well.
+pub const DEFAULT_MAX_CANDIDATES: i64 = 32;
 
 /// The least a threshold is taken to be, so that a sense whose threshold
 /// comes to zero still divides by something.
@@ -357,6 +364,11 @@ fn read(
     if !senses::within_arc(facing, def.arc, senses::bearing(sim, eye.loc, source.loc)) {
         return None;
     }
+    // What could arrive with nothing in the way: below the threshold,
+    // the line need not be followed.
+    if signal::bound_at(sim, kind, strength, source, eye) < threshold {
+        return None;
+    }
     let mut received = signal::strength_at(sim, kind, strength, source, eye);
     if matches!(sim.entities.get(observer)?.place(), Place::In(_)) {
         received *= kind.contained;
@@ -423,7 +435,11 @@ pub(super) fn sweep(sim: &mut Sim, observer: EntityId, sense: SenseId, bonus: Re
         return;
     }
     let mut targets = match threshold {
-        Some(_) => signal::candidates(sim, observer, eye.loc, def.range.get()),
+        Some(_) => nearest(
+            sim,
+            eye,
+            signal::candidates(sim, observer, eye.loc, def.range.get()),
+        ),
         None => Vec::new(),
     };
     let tracked = sim
@@ -448,6 +464,27 @@ pub(super) fn sweep(sim: &mut Sim, observer: EntityId, sense: SenseId, bonus: Re
     if kind.uses_light {
         party::after_sweep(sim, observer, sense);
     }
+}
+
+/// At most `perception.max_candidates` of the candidates of a sweep: the
+/// nearest, then by id; in order of id.
+fn nearest(sim: &Sim, eye: Spot, mut candidates: Vec<EntityId>) -> Vec<EntityId> {
+    let max = sim
+        .setting_int(MAX_CANDIDATES_SETTING, DEFAULT_MAX_CANDIDATES)
+        .max(1) as usize;
+    if candidates.len() <= max {
+        return candidates;
+    }
+    let distance = |id: &EntityId| {
+        sim.entities
+            .location(*id)
+            .and_then(|loc| sim.cosmos.delta(eye.loc, loc))
+            .map_or(i64::MAX, clash_world::distance_sq_cells)
+    };
+    candidates.sort_by_key(|id| (distance(id), *id));
+    candidates.truncate(max);
+    candidates.sort_unstable();
+    candidates
 }
 
 /// A sweep of a sense of the `field` model: the observer reads the field

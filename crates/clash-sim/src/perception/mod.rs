@@ -108,6 +108,8 @@ pub const FLIGHT_ARG: u64 = u64::MAX;
 pub const WARM_FACTOR_SETTING: &str = "perception.warm_factor";
 /// The most pairs an observer keeps awareness of.
 pub const MAX_AWARENESS_SETTING: &str = "perception.max_awareness";
+/// The most entities one sweep of one sense considers, the nearest first.
+pub const MAX_CANDIDATES_SETTING: &str = "perception.max_candidates";
 /// Whether every event counts as seen by the party (15 §13).
 pub const OMNISCIENT_SETTING: &str = "perception.omniscient";
 /// The most tracks a mind keeps (15 §15).

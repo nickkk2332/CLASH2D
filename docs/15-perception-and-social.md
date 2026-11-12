@@ -1,6 +1,7 @@
 # 15 — Perception, Belief and Social Behaviour
 
-Status: design complete, ready for implementation.
+Status: design complete; sections 3 to 7, 13 and 14 built for the beta
+(decisions D-610 to D-619), as their "As built" notes say.
 Implementation plan: [plans/first-playable.md](plans/first-playable.md).
 Serves scenes S6, S7, S13, S15 and S16 of [00-vision.md](00-vision.md).
 
@@ -432,8 +433,11 @@ As built (decision D-614):
   whether it is suspected and detected. A pair is made only when
   something is received at or over the threshold, and dropped when its
   level falls to 0. An observer keeps at most `perception.max_awareness`
-  pairs (default 64); past that the faintest that is not detected goes
-  first, then the longest unchanged.
+  pairs (default 128); past that the faintest that is not detected goes
+  first, then the longest unchanged. A sweep considers at most
+  `perception.max_candidates` of the entities in range (default 32), the
+  nearest first and then by id, besides those already in the observer's
+  awareness through the sense.
 - The events bind the observer as `self` and the target as `about`:
   `suspicion_raised` (fields `sense`, the sense's qualified id, and
   `level`), `detected` (`sense`, `where`: the cell it was perceived in)
@@ -1010,6 +1014,49 @@ from each. Stories come from their interference.
 The player is subject to the same disguises as anyone. What is shown about
 another character is the persona the controlled character perceives.
 
+As built (decision D-618):
+
+- **The party** is every entity whose control is direct (03 §5.1) and
+  that has senses. Each time a member's sense of a kind that uses light
+  sweeps, the member **observes**: the cells it sees are those in its
+  field of view (02 §22) within the sense's range and arc, from one
+  storey above its own to three below (`PARTY_VIEW_UP`,
+  `PARTY_VIEW_DOWN`), where a creature standing in the cell would be
+  received at or over the threshold by the light there.
+- **Map memory** is the member's `MapMemory` component: for each cell it
+  has seen, its floor, block and fixture, the strongest field and its
+  level, the most marked decal, whether it was open to the sky, its
+  light from 0 to 255 for 0 to 1, and when. It is kept in slabs of one
+  storey of one tract, at most `perception.map_slabs_max` (default
+  1024), the slab seen longest ago going first. What is remembered is
+  what was there when it was last seen, not what is there now.
+- **Frames.** Each observation queues a `PartyFrame`: the cells that came
+  into the party's view or changed since the member last saw them, with
+  what is there; the cells that left the view of the whole party; every
+  entity standing in a cell in view, with its cell and height, but for
+  those given no signature of a kind that uses light; and what members
+  heard since the last frame (who, from where, the kind, the clarity,
+  the event). The application takes them with `drain_frames(sim)`,
+  which also says whether frames were dropped (more than 256 waited);
+  `snapshot(sim, member)` gives a member's whole map memory, each cell
+  marked in view or not, for a fresh view model. A hidden element is
+  given as it is: its look is its definition's.
+- **Tags.** Every event delivered is tagged as the party perceived it:
+  `Seen` if it happened to a member or where the party's view was at
+  their last observations; `Heard { from }` if a signal it gave off (an
+  `event_signal`) would reach a member's sense at or over its threshold;
+  `Not` otherwise. `Sim::party_perceived(&event)` answers for the last
+  8192 events delivered (`PARTY_TAGS_KEPT`); playback asks it.
+- **The omniscient switch** is the setting `perception.omniscient`
+  (`set_omniscient`): with it on, every event is `Seen`. A debug profile
+  sets it; the application then fills the view model from truth.
+- Frames and tags are records of output: saved, so that a loaded game
+  answers for events delivered before, and not hashed. The party's view
+  is hashed with the rest.
+- Not built: moving sources of light (carried lamps, fields that give
+  light) are not counted in what a member sees; neither are they in
+  `light` for the line model.
+
 ## 14. Level of detail
 
 | Level | Perception |
@@ -1017,6 +1064,13 @@ another character is the persona the controlled character perceives.
 | Hot | As specified |
 | Warm | Does not sweep. Receives only emitted signals strong enough to exceed a multiple of threshold; receiving one promotes the entity (03 §10) |
 | Cold | None. Beliefs are stored with the agent. The cold simulation moves knowledge between agents and groups at its own scale (09). |
+
+As built: an observer standing in a warm tract does not sweep, and
+receives a signal only at or over `perception.warm_factor` times its
+threshold (default 4). Promoting it (03 §10) waits for the attention
+of 09 §9.3. An entity that leaves the world with its tract keeps its
+components, beliefs included, unchanged; its sweeps begin again when it
+returns (invariant P6).
 
 ## 15. Modding surface
 
@@ -1078,6 +1132,47 @@ sources, which the simulation does not hand in yet; the constants of section 3.3
 mattering, the count of sources a chunk takes) are named constants, not
 settings.
 
+**As built** (decisions D-610 to D-619), of the lists above:
+
+- Definition types: `signal_kind` (§3.1), `sense` (§4), `event_signal`
+  (§3.2), with every field stated there. `exposes` is read and does
+  nothing yet.
+- Events: `perceived` (§6), `suspicion_raised`, `detected`, `lost_track`
+  (§5.1), `memory_added`, `memory_forgotten` (§7.1), each with the
+  subjects and fields stated there. They are the engine's: content
+  cannot raise them.
+- Effects: `emit_signal { kind: string, at: any, strength: real, about?:
+  entity }` (§3.2); `face { who: entity, toward: any }` (§4);
+  `set_awareness { who: entity, of: entity, sense: string, level: real
+  }` (§5.1); `add_track { who: entity, of: entity, at?: any, how?:
+  string, confidence?: real }`, `clear_track { who: entity, of: entity
+  }`, `remember { who: entity, event: string, at?: any, salience?: real,
+  actor?: entity }` (§7.1).
+- Functions: `perceives(a, b)`, `could_perceive(a, at, kind)` (§6).
+- Properties of `entity`: those of §7.2 as built, and `facing`.
+- Settings: `perception.warm_factor` (default 4), `perception.max_awareness`
+  (128), `perception.max_candidates` (32), `perception.omniscient`
+  (false), `perception.map_slabs_max` (1024), `mind.max_tracks` (64),
+  `mind.max_memories` (32), `mind.max_noted` (32), `track_capabilities`
+  (8), `mind.confidence_halflife` (60 s), `mind.salience_halflife`
+  (600 s).
+- Refusals: `perception.unknown_sense`, `perception.unknown_kind`,
+  `perception.has_sense`, `perception.no_sense`, `perception.no_senses`,
+  `perception.bad_value`, `perception.field_not_sent`,
+  `perception.self_track`.
+- Not built: the hooks `identity_check`, `understands`, `talk_options`,
+  `order_received` and `signal_receiving`; `relay_senses`, `appraise`,
+  `forget_memory`; the queries `tracks`, `memories`, `observers`; and
+  everything of sections 8 to 11.
+
+**Reachable only from Rust**, for the packages that will offer them to
+content: giving and taking senses (`attach_sense`, `detach_sense`, for
+templates and traits); setting a standing signature (`set_signature`);
+an explicit search or listen with a bonus (`search`, for the actions);
+noting an element (`note_element`); recording an observed capability
+(`observe_capability`); the omniscient switch (`set_omniscient`); and
+the frames of §13 (`drain_frames`, `snapshot`).
+
 ## 16. Invariants
 
 | # | Invariant |
@@ -1098,10 +1193,17 @@ Targets, unmeasured.
 | Light at a cell, cached, in a fill | under 30 ns (measured: 1 to 3 ns) |
 | Light at one cell asked for alone, cached | under 1 µs (measured: 0.5 µs) |
 | Light of an 80 × 50 view after one edit that light cares about | under 1 ms (measured: 0.03 ms in the open, 0.2 ms in a building) |
-| One observer-target evaluation, including line of sight at 30 m | under 2 µs |
-| Emitting a signal to 50 observers in range | under 100 µs |
-| One simulated second of perception for 300 hot characters in a crowd | under 4 ms |
+| One observer-target evaluation, including line of sight at 30 m | under 2 µs (measured: 5 to 8 µs: four lines of sight for `exposed`) |
+| Emitting a signal to 50 observers in range | under 100 µs (measured: 33 µs to send a delayed one, 2 ms for all fifty to receive it with their events) |
+| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 23 ms for fifty walking in one street, all in range of each other, with sight and hearing and footsteps) |
 | Memory per mind, typical | under 4 KB |
+
+Measured with the ignored test `timing_of_perception_in_a_city_block`
+of `crates/clash-sim/tests/perception.rs`, in a release build. A crowd
+is over its target: a sweep considers at most `perception.max_candidates`
+of those in range, the nearest first, and a target whose signal could
+not reach the threshold with nothing in the way costs no line of sight,
+but each evaluation in view still follows four.
 
 ## 18. Open questions
 

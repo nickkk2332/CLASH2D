@@ -373,6 +373,26 @@ pub fn strength_at(sim: &Sim, kind: &KindInfo, strength: Real, source: Spot, eye
     }
 }
 
+/// The most of a signal that could reach an eye from a source with
+/// nothing in the way: [`strength_at`] with the source fully exposed and
+/// nothing holding it back. Never less than what does arrive.
+pub fn bound_at(sim: &Sim, kind: &KindInfo, strength: Real, source: Spot, eye: Spot) -> Real {
+    let Some(distance) = cell_distance(&sim.cosmos, source.loc, eye.loc) else {
+        return Real::ZERO;
+    };
+    let light = if kind.model == SignalModel::Line && kind.uses_light {
+        light_now(sim, source.loc)
+    } else {
+        Real::ONE
+    };
+    match kind.model {
+        SignalModel::Field => Real::ZERO,
+        SignalModel::Line | SignalModel::Through => {
+            strength * light / spread(distance, kind.falloff)
+        }
+    }
+}
+
 /// Where an entity's eye is, if it is in the world: the cell of what it
 /// is in, at its height there and up its body, or at [`EYE_MM`] for one
 /// whose body gives no height.
