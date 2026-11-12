@@ -175,6 +175,11 @@ macro_rules! giving {
             /// `entity_spawned`.
             #[serde(default)]
             pub traits: Vec<String>,
+            /// Abilities it is given, by id, as written, with the
+            /// template as their source (08 §3.3): it holds them until
+            /// they are revoked.
+            #[serde(default)]
+            pub abilities: Vec<String>,
             /// What it starts with, by the id of an item or a content
             /// table, as written: made by the item package (06 §9),
             /// which is told of them by `entity_spawned`.
@@ -204,6 +209,7 @@ macro_rules! giving {
                     variables: &self.variables,
                     rules: &self.rules,
                     traits: &self.traits,
+                    abilities: &self.abilities,
                     items: &self.items,
                     scale: self.scale,
                     mind: self.mind.as_ref(),
@@ -239,6 +245,8 @@ pub struct Gives<'a> {
     pub rules: &'a [Ref<EocDef>],
     /// Traits it starts with, as written.
     pub traits: &'a [String],
+    /// Abilities it is given, as written.
+    pub abilities: &'a [String],
     /// Items it starts with, as written.
     pub items: &'a [String],
     /// A factor on the body's size.
@@ -559,6 +567,24 @@ giving! {
         /// The choices made within it.
         #[serde(default)]
         pub choices: Vec<ChoiceDef>,
+    }
+}
+
+impl TemplateDef {
+    /// Every ability it or an option of its choices names, as written,
+    /// for the check that each is defined.
+    pub fn all_abilities(&self) -> Vec<&str> {
+        fn of_choices<'a>(choices: &'a [ChoiceDef], out: &mut Vec<&'a str>) {
+            for choice in choices {
+                for option in &choice.options {
+                    out.extend(option.abilities.iter().map(String::as_str));
+                    of_choices(&option.choices, out);
+                }
+            }
+        }
+        let mut out: Vec<&str> = self.abilities.iter().map(String::as_str).collect();
+        of_choices(&self.choices, &mut out);
+        out
     }
 }
 

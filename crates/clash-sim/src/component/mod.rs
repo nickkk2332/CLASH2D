@@ -141,6 +141,7 @@ pub use physical::{
 };
 pub use store::{ComponentStore, PAGE_SLOTS};
 
+use crate::ability::Abilities;
 use crate::ai::MindState;
 use crate::body::Body;
 use crate::device::Device;
@@ -527,6 +528,9 @@ components! {
     /// The trait instances an entity has and what they put on it
     /// (06 §5). On whatever has been given a trait.
     traits: Traits = "traits";
+    /// The ability instances an entity holds and what they attached
+    /// (08 §3.2). On whatever has been given an ability.
+    abilities: Abilities = "abilities";
     /// The goal a mind holds, how far it has got, its own stream and its
     /// stances (09 §3, §4). On characters whose mind has thought.
     mind_state: MindState = "mind_state";

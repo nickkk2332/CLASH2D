@@ -1,0 +1,24 @@
+# Fire bolt (mods/core/data/powers): held for its three seconds, a
+# charged bolt of heat sets fire where it lands, and the fire spreads
+# along the boards laid across the street (08 §5.5, §8.4; 02 §16). The
+# use feeds the ability's track.
+use default seed=23
+gen core:test_city size=1
+set @c:5,12,0 floor core:boards
+set @c:6,12,0 floor core:boards
+set @c:7,12,0 floor core:boards
+set @c:8,12,0 floor core:boards
+set @c:9,12,0 floor core:boards
+set @c:10,12,0 floor core:boards
+set @c:11,12,0 floor core:boards
+look @c:2,12,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+look @c:8,12,0
+as @e:0 do { "use_ability": { "who": "self", "ability": "core:firebolt", "params": { "expr": "{'to': here}" } } }
+expect event ability_used ability=core:firebolt
+advance 3100ms
+assert "@c:8,12,0.field('core:fire') > 200"
+assert "@e:0.track.amount('core:pyromancy') == 1"
+until "(@c:7,12,0.field('core:fire') ?? 0) > 0 or (@c:9,12,0.field('core:fire') ?? 0) > 0" max=60s
+advance 1s
+expect hash 4ac3428cedd753914815c8cd52a5ad88
