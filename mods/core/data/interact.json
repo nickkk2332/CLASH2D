@@ -1,0 +1,11 @@
+[
+  { "//": "Does an interaction (16 §3.4): what the play screen starts when the player chooses one from a menu or bumps into a closed door. `requires` is what the actor believes; when it starts, the engine tests reach and `if` against truth and raises `interaction_starting`, any of which may refuse it with a reason. The phase lasts the interaction's `time` in the actor's own time, and its effects run as it ends.",
+    "type": "action", "id": "interact", "name": "Use",
+    "params": { "target": "any", "interaction": "id<interaction>" },
+    "requires": "self.can_interact($target, $interaction)",
+    "fail_text": "{self.interaction_fault($target, $interaction) ?? 'that cannot be done'}",
+    "phases": [
+      { "id": "use", "time": "self.interaction_time($interaction) ?? 0", "cancel": true,
+        "on_exit": [ { "complete_interaction": { "who": "self", "target": "$target", "interaction": { "expr": "$interaction" } } } ] }
+    ] }
+]

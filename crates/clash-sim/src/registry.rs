@@ -333,6 +333,8 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::item::properties());
     properties.extend(crate::movement::properties());
     properties.extend(crate::perception::props::properties());
+    properties.extend(crate::device::properties());
+    properties.extend(crate::interaction::properties());
     properties
 }
 
@@ -400,6 +402,9 @@ pub fn register_engine(registry: &mut Registry) {
     }
     crate::item::register_types(registry);
     crate::movement::register_types(registry);
+    crate::world_verbs::register_types(registry);
+    crate::device::register_types(registry);
+    crate::interaction::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)
@@ -427,6 +432,8 @@ pub fn register_engine(registry: &mut Registry) {
     for info in crate::movement::MOVEMENT_EVENTS {
         mirror_event(registry, info);
     }
+    crate::device::register_events(registry);
+    crate::interaction::register_events(registry);
 }
 
 /// The registry of everything the simulation offers so far: the

@@ -126,6 +126,108 @@ as `here.block` and so on. Its properties are its definition, material,
 state, damage, tags, and its device if it has one. `set_state`,
 `set_material` and `damage` act on it through `WorldEdit`.
 
+### 3.5.1 As built
+
+Package G1, decision D-622; `clash_sim::interaction`.
+
+**The definition.** `interaction` has the fields of section 3.1 and
+these, all optional:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name` | text | What a menu calls it; else its id |
+| `target` | `element` (default) or `entity` | What it is done to, and so the kind `target` is bound as |
+| `reach` | `held`, `same_cell`, `adjacent` (default), `network` or `{ "range": metres }` | Section 3.3 |
+| `uses` | channel slots | Carried for the action that does it |
+| `time` | duration | How long it takes in the doer's own time (default 0) |
+| `noise` | number | Carried for perception |
+| `tools` | list of texts | Carried for package G6 |
+| `if` | condition, truth | Tested when it is attempted, with `self` (the doer), `target` and `here` (the target's cell) |
+| `shown_if` | condition, mind context of `self`, pure | Whether it is listed at all |
+| `fail_text` | text, truth, pure | What a refusal for `if` says |
+| `do` | effects, truth | What it does, with `self`, `target` and `here` |
+| `default` | bool | Used when the thing is bumped into or clicked |
+| `offered_by` | `any` | Offered by every target of its kind |
+
+**Who offers what.** An element's `interactions` and a device's
+resolve in the namespace of the definition that lists them; an element
+that lists one that does not exist is warned of at load, and offers
+nothing by it. A device definition's
+and an item definition's `interactions` are done to the entity. A
+creature offers only what is `offered_by: any`, until templates carry
+`interactions`.
+
+**Reach**, tested against where things stand (an entity inside another
+stands where its outermost container does): `held`, the target is
+inside the doer at any depth; `same_cell`; `adjacent`, the same cell or
+one of the eight round it on its storey, or straight above or below
+where no floor lies between or either cell has stairs, a ramp or a
+ladder; `range`, the distance in metres (a storey counting three) with
+a clear line of sight; `network`, a stub until networks exist: the
+doer operates a device (one it holds, one within a step, or one an
+element within a step names) whose definition carries a tag beginning
+`network:` that the target's device definition carries too.
+
+**What is offered.** `interactions_for(sim, who, target)` lists every
+interaction the target offers whose `shown_if` holds, each with the
+reason it cannot be done now (`interaction.out_of_reach`, or
+`interaction.not_now` with its `fail_text`), or none. It changes
+nothing and raises nothing, and it reads what `who` believes through
+the seam `interaction::belief`, which reads truth until perception is
+built. `default_for` is the first default that can be done;
+`bump_default(sim, who, dir)` is that of the block, else the fixture,
+else the floor of the next cell in one of the ten directions of a step;
+`offers_near(sim, who)` lists what everything within a step offers,
+and what `who` holds, for a context menu.
+
+**Doing it.** The bundled action `core:interact` takes `target` and
+`interaction`. Any action whose parameters are so named is an
+interaction's: when it starts, the simulation's handler of
+`action_starting` checks against truth that the target offers it, that
+the doer reaches it (raising `interaction_reach`) and that `if` holds,
+then raises `interaction_starting`; any refusal refuses the action with
+its reason (`action_refused`), which the player is told. The action's
+phase lasts `time`, and its effect `complete_interaction` tests reach
+and `if` again, runs `do` through the rule runtime, raises `interacted`
+and lets a device the target has settle. The verb `interact` does all
+of it at once: what a device's rule calls.
+
+| Event | Subjects | Fields | Raised |
+|-------|----------|--------|--------|
+| `interaction_reach` (hook) | `self`; `target?` (an entity) or `element?` | `interaction`, `reach` (`string`); `reached` (`bool`, mutable) | When reach is tested for an attempt. A handler sets `reached` |
+| `interaction_starting` (hook) | the same | `interaction` | Before it begins. A handler cancels with a reason |
+| `interacted` | the same | `interaction` | Its effects have run |
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `interact` | `who: entity`, `target: any`, `interaction: id<interaction>` | Begins and completes an interaction at once |
+| `complete_interaction` | the same | What ends an interaction's action |
+| `promote` | `of: element` | Section 4.3; gives the device |
+| `put_inside` | `what: entity`, `into: element` | Promotes the element and puts the thing inside its device (`put_in`) |
+| `set_state`, `set_material`, `damage`, `destroy` | 02 §23 | On an element through `WorldEdit` |
+
+| Property | Gives |
+|----------|-------|
+| `entity.can_interact(target: any, interaction: id<interaction>)` | `bool`: as the entity believes, it can be done now. An interaction's action `requires` it |
+| `entity.interaction_fault(target: any, interaction: id<interaction>)` | `string?`: why not, or null |
+| `entity.interaction_time(interaction: id<interaction>)` | `real?`: seconds |
+| `entity.has_item(def: id<item>)` | `bool`: it holds, wears or carries one at any depth |
+| `element.interactions` | `list<string>`: what its definition lists |
+| `element.device`, `entity.element`, `entity.is_device` | Section 4.3 |
+
+None is safe for belief; the entity's are read of the character itself.
+Reasons: `interaction.unknown`, `interaction.not_offered`,
+`interaction.out_of_reach` (`interaction`, `reach`),
+`interaction.not_now` (`interaction`), `interaction.no_target`,
+`interaction.bad_argument` (`verb`, `arg`),
+`interaction.not_registered`.
+
+Not built yet: the channels of `uses` are claimed only by what the
+action that does it states; `tools`; `interactions` on templates; true
+networks; the query `interactions`, which leaves `interactions_for`,
+`bump_default` and `offers_near` reachable only from Rust (a screen
+reaches them through its host).
+
 ### 3.6 Trade
 
 `trade` exchanges things between two parties, all at once or not at all.
@@ -251,6 +353,55 @@ Passive loads on a network are counted, not instantiated. They are all
 supplied or all not, with the network. A building with four hundred lamps
 has one number, until someone smashes a lamp or switches one off, and that
 one becomes a device.
+
+**As built** (package E12, decision D-621; `clash_sim::device`). The
+minimal device, which package G2 extends with modes, ports, stores,
+config, processes, slots and passive loads:
+
+- **The definition** `device` has `name` (a text), `holds` (`volume`,
+  `mass`, `accepts`, as an item's, 06 §9.2: what can be put inside it;
+  left out, nothing) and `tags` (the device entity carries them). An
+  element's `device` names one, as written in the element's namespace;
+  one that names nothing is warned of at load at the element's
+  `device`, and is never promoted.
+- **The component** `Device` holds the definition and the element it is
+  bound to (`bound`: a cell and a layer). The entity is an occupant of
+  the kind `device`, with no mass and no flags, in the element's cell,
+  and carries an `Identity` naming its definition.
+- **Promotion.** An element whose definition names a device is promoted
+  when it is in any state but its first (the default), and when a rule
+  asks with the verb `promote { of: element }`, which returns the
+  device. The device is found again by its element: `element.device`.
+- **Contents.** `put_in` takes a device as a container with the room
+  its `holds` gives: an item is stowed in it, anything else (someone
+  hiding) is enclosed (`Hold::Inside`), out of the world's occupant
+  index. `take_out` puts it back where the device stands.
+- **Demotion.** A device whose element is in its default state, with
+  nothing inside it, no variables, no rules attached and no tags beyond
+  its definition's, is removed and the element is plain again: tested
+  when something leaves it, when its element's state is set, and when
+  an interaction that reached it ends.
+- **Destruction.** When the element is destroyed, or replaced by
+  another element or by nothing, everything inside the device is put
+  where something dropped into the cell comes to rest, each with
+  `device_spilled`, and the device is removed. Whoever hid there is in
+  the world again, where the next front of a blast can reach them.
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `device_promoted` | `self` (the device), `element` | — | An element became a device entity |
+| `device_demoted` | `self`, `element` | — | A device was removed: plain again, or its element gone. `self` no longer exists when it is delivered |
+| `device_spilled` | `self` (what came out), `device`, `here` (loc) | `layer` (`string`) | Something came out of a device whose element was destroyed or replaced |
+
+| Property | Gives |
+|----------|-------|
+| `element.device` | `entity?`: the device bound to it, if promoted |
+| `entity.element` | `element?`: the element a device is bound to |
+| `entity.is_device` | `bool` |
+
+None is safe for belief. Reasons: `device.none` (`element`: the element
+names no device), `device.unknown_def` (`device`), `device.no_element`
+(`layer`), `device.not_registered`.
 
 ### 4.4 Services
 
@@ -1134,6 +1285,20 @@ minds, `knows_how(what)`; on devices, `condition` (0 to 1, from damage).
 `interactions_for(who, target)` lists what applies. In a mind context it
 and an interaction's `if` are worked out from what `who` believes; truth
 is tested when the interaction is attempted (05 §7.3).
+
+**As built so far** (packages E12 and G1; sections 3.5.1 and 4.3): the
+types `interaction` and `device` (`name`, `holds`, `tags`,
+`interactions`), and `interactions` on items; the events `interacted`,
+`device_promoted`, `device_demoted` and `device_spilled`; the hooks
+`interaction_starting` and `interaction_reach`; the effects `interact`,
+`complete_interaction`, `promote`, `put_inside` and `set_state`; the
+properties `element.device`, `element.interactions`, `entity.element`,
+`entity.is_device`, `entity.can_interact`, `entity.interaction_fault`,
+`entity.interaction_time` and `entity.has_item`. Reachable only from
+Rust, each a gap until queries are built (05 §11):
+`interaction::interactions_for`, `default_for`, `bump_default`,
+`offers_near`, `reaches`, and `device::device_at`, `promote`, `settle`
+and `unbind`.
 
 ## 15. Invariants
 
