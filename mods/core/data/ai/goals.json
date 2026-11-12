@@ -1,15 +1,14 @@
 [
   { "//": "Goals the bundled minds share (09 §3.2). Each is scored from what the character believes and from its mind's weights, and pursued by its methods' steps: actions, waits and words a player could choose for it. Nothing here names the player.",
     "type": "goal", "id": "go_about",
-    "doc": "Going about one's day near home: a walk to somewhere close by, then a pause; or simply standing a while. Always wanted a little, so it is what a character does when nothing else matters.",
+    "doc": "Going about one's day near home: standing a while, then most times a walk to somewhere close by. Always wanted a little, so it is what a character does when nothing else matters. A character just come into the world stands a few seconds before it goes anywhere.",
     "score": "0.2",
     "noise": 0.05,
     "methods": [
-      { "if": "chance(0.6)",
-        "steps": [
-          { "go": { "to": "offset(self.home, rand_int(-8, 8), rand_int(-8, 8))" } },
-          { "wait": { "time": "rand(2, 6)" } } ] },
-      { "steps": [ { "wait": { "time": "rand(3, 8)" } } ] }
+      { "steps": [
+          { "wait": { "time": "rand(4, 10)" } },
+          { "if": "chance(0.7)", "go": { "to": "offset(self.home, rand_int(-8, 8), rand_int(-8, 8))" } } ] },
+      { "steps": [ { "wait": { "time": "rand(4, 10)" } } ] }
     ] },
 
   { "type": "goal", "id": "patrol",

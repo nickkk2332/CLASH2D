@@ -869,13 +869,13 @@ fn the_same_town_runs_the_same_twice_and_through_a_save() {
 #[test]
 fn a_minds_acts_replayed_as_commands_reach_the_same_place() {
     let (mut sim, people) = town(23);
-    let who = people[0];
+    let who = people[3];
     let mut acts: Vec<(
         clash_core::Tick,
         clash_sim::ActionDefId,
         clash_sim::action::Params,
     )> = Vec::new();
-    for _ in 0..300 {
+    for _ in 0..400 {
         advance_by(&mut sim, 0.05);
         for event in sim.drain_events() {
             if event.name() != "action_started" || common::entity_of(&event, "self") != Some(who) {
@@ -911,7 +911,7 @@ fn a_minds_acts_replayed_as_commands_reach_the_same_place() {
     // The same town, but the character's mind thinks by nothing and its
     // acts are given as commands.
     let (mut replay, people) = town(23);
-    let them = people[0];
+    let them = people[3];
     // Its mind thinks by no `mind` definition: nothing decides for it
     // but the commands.
     replay.remove_mind(them, Cause::DEBUG).unwrap();
