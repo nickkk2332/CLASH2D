@@ -125,9 +125,24 @@
 //! - Queries: `for_each` over a query is kept as written and reports
 //!   [`reason::QUERIES_UNAVAILABLE`]; a value source over a query in an
 //!   argument is the expression field's and gives null. Package K6.
-//! - `message` and `ask` are verbs of package K9, and the world's verbs
-//!   are package K8's.
+//! - The world's verbs are package K8's.
+//!
+//! # Messages and choices
+//!
+//! `message` and `ask` (05 §10.6) are effects of the rule system
+//! itself and not verbs, because a verb's argument is one value: it
+//! cannot be a text template rendered for a reader, nor a list of
+//! effects to run later. The compiler reads them into
+//! [`EffectKind::Message`] and [`EffectKind::Ask`]; the interpreter
+//! renders the texts between two calls of [`RuleHost::set_reader`] and
+//! hands the line to [`RuleHost::message`] and the choice to
+//! [`RuleHost::offer`]. A choice the host keeps is a [`PendingChoice`]
+//! in the [`RuleState`]: where the `ask` is written, and the subjects,
+//! locals and event fields bound there. [`RuleSet::resume_choice`] finds
+//! the option's effects again from that, after a save and a load too,
+//! and runs them.
 
+mod bind;
 mod compile;
 mod def;
 mod effects;
@@ -139,6 +154,8 @@ pub mod testing;
 mod tree;
 mod value;
 
+pub(crate) use bind::Runtime;
+pub use bind::SimRules;
 pub use compile::{CORE_EFFECTS, EMIT_CANCELLED, EMIT_REASON, EffectInfo, MAX_BLOCK_DEPTH};
 pub use def::{
     EOC_TYPE, EocDef, EocId, GLOBAL_SUBJECT, OWNER_SUBJECT, REASON_TYPE, RULE_GROUP_TYPE,
@@ -148,10 +165,17 @@ pub use def::{
 pub use effects::Effects;
 pub use host::{
     DEFAULT_FAULT_BURST, DEFAULT_MAX_CALL_DEPTH, DEFAULT_MAX_QUEUED, DEFAULT_MAX_STEPS,
-    DEFAULT_MAX_VALUE_DEPTH, DEFAULT_MAX_VALUE_SIZE, FaultLimiter, LIMIT_SETTINGS, Raise, Raised,
-    RuleFault, RuleHost, RuleLimits, RunView, VerbCall,
+    DEFAULT_MAX_VALUE_DEPTH, DEFAULT_MAX_VALUE_SIZE, FaultLimiter, LIMIT_SETTINGS, Message, Offer,
+    OfferOption, Offered, Raise, Raised, RuleFault, RuleHost, RuleLimits, RunView, VerbCall,
 };
 pub use interp::RunOutcome;
 pub use reason::RULE_REASONS;
-pub use state::{Occurrence, RuleSet, RuleState, RunRecord, SubjectKey};
-pub use tree::{Arg, Block, Call, Effect, EffectKind, Emit, Items, Target, Timer, TimerKind};
+pub use state::{
+    EffectRoots, EffectSite, Occurrence, PendingChoice, RuleSet, RuleState, RunRecord,
+    StoredOption, SubjectKey,
+};
+pub use tree::{
+    Arg, Ask, AskOption, AskOptions, Block, Call, Effect, EffectKind, Emit, Items, Target, Timer,
+    TimerKind,
+};
+pub(crate) use value::conforms;

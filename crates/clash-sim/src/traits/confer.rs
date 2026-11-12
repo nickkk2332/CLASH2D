@@ -11,29 +11,27 @@
 //! A dormant instance confers nothing. What the instances confer is
 //! always what [`conferred`] works out from scratch.
 //!
-//! # The seam to stats
+//! # The stats
 //!
-//! [`with_stats`] is the one place this module reaches the stats, as it
-//! is for items (`item::confer`): their tables are built for the call,
-//! and the store and the timeline are taken out of the simulation while
-//! it runs. When the kernel offers its own way to change stats, that
-//! function is the one place to change.
+//! Modifiers and rates are changed over the simulation's own stores
+//! (`Sim::with_stats`), and the `attr_changed` and `pool_crossed` events
+//! of what they changed are raised as every change to stats is
+//! (`Sim::raise_stat_changes`).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use clash_core::{EntityId, Real};
-use clash_data::Runner;
-use clash_time::Timeline;
+use clash_world::Cause;
 
 use super::{TraitDef, TraitId, TraitInst, TraitKey, Traits, source_of};
 use crate::Sim;
 use crate::action::ChannelId;
 use crate::event::Subject;
-use crate::host::{Bound, SimHost};
+use crate::host::SimHost;
 use crate::item::Holds;
 use crate::rule::EocId;
-use crate::stats::{self, Changes, Modifier, PoolId, Source, StatDefs, Stats, StatsCx};
+use crate::stats::{self, Changes, Modifier, PoolId, Source, Stats, StatsCx};
 
 /// What the trait instances of an entity confer on it, worked out from
 /// scratch.
@@ -155,38 +153,16 @@ pub fn channel_change(sim: &Sim, entity: EntityId, channel: ChannelId) -> i32 {
         .sum()
 }
 
-/// Runs a change to the stats: see the [module documentation](self).
-/// `None` if the definitions were loaded without the stats' types.
-pub(crate) fn with_stats<R>(
+/// Runs a change to the stats over the simulation's own stores
+/// (`Sim::with_stats`): see the [module documentation](self). `None` if
+/// the definitions were loaded without the stats' types.
+fn with_stats<R>(
     sim: &mut Sim,
+    entity: EntityId,
     run: impl FnOnce(&mut StatsCx<'_, SimHost<'_>>) -> R,
 ) -> Option<R> {
-    let defs = StatDefs::new(&sim.defs).ok()?;
-    let defs = &defs;
-    let mut store = core::mem::take(&mut sim.components.stats);
-    let mut timeline = core::mem::replace(&mut sim.timeline, Timeline::new());
-    let mut runner = Runner::new();
-    let result = {
-        let mut host = sim.host(Bound::new());
-        let mut cx = StatsCx {
-            stats: &mut store,
-            defs,
-            timeline: &mut timeline,
-            host: &mut host,
-            runner: &mut runner,
-        };
-        run(&mut cx)
-    };
-    sim.timeline = timeline;
-    sim.components.stats = store;
-    Some(result)
+    sim.with_stats(entity, run).ok()
 }
-
-/// Receives what conferring changed of an entity's stats. The events
-/// those changes are reported by (`attr_changed`, `pool_crossed`) are
-/// the stats' own to raise once the kernel raises them; until then the
-/// changes end here.
-fn stat_changes(_sim: &mut Sim, _changes: Changes) {}
 
 /// An instance of an entity, by its key.
 fn inst(sim: &Sim, entity: EntityId, key: TraitKey) -> Option<TraitInst> {
@@ -196,7 +172,7 @@ fn inst(sim: &Sim, entity: EntityId, key: TraitKey) -> Option<TraitInst> {
 /// Brings the stats of an entity into line with one instance: whatever
 /// was kept under its source is taken away, and what it confers now (with
 /// its stacks, unless it is dormant or gone) is applied.
-pub(super) fn restate(sim: &mut Sim, entity: EntityId, key: TraitKey) {
+pub(super) fn restate(sim: &mut Sim, entity: EntityId, key: TraitKey, cause: Cause) {
     if !sim.components.stats.contains(entity) {
         return;
     }
@@ -223,7 +199,7 @@ pub(super) fn restate(sim: &mut Sim, entity: EntityId, key: TraitKey) {
         return;
     }
     let stacks = wanted.as_ref().map_or(0, |inst| inst.stacks);
-    let changes = with_stats(sim, |cx| {
+    let changes = with_stats(sim, entity, |cx| {
         let mut out = Changes::new();
         if had {
             out.extend(stats::remove_source(cx, entity, source).unwrap_or_default());
@@ -264,7 +240,8 @@ pub(super) fn restate(sim: &mut Sim, entity: EntityId, key: TraitKey) {
         }
         out
     });
-    stat_changes(sim, changes.unwrap_or_default());
+    // `attr_changed` and `pool_crossed` for what the trait changed.
+    sim.raise_stat_changes(entity, changes.unwrap_or_default(), cause);
 }
 
 /// Brings the tags an entity has because of its traits into line with
@@ -343,9 +320,9 @@ pub(super) fn settle_rules(sim: &mut Sim, entity: EntityId) {
 /// Brings everything an entity has from its traits into line with
 /// them, after `changed` instances were added, restacked, made dormant
 /// or removed.
-pub(super) fn settle(sim: &mut Sim, entity: EntityId, changed: &[TraitKey]) {
+pub(super) fn settle(sim: &mut Sim, entity: EntityId, changed: &[TraitKey], cause: Cause) {
     for key in changed {
-        restate(sim, entity, *key);
+        restate(sim, entity, *key, cause);
     }
     settle_tags(sim, entity);
     settle_rules(sim, entity);

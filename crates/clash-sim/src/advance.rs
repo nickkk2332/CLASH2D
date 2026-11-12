@@ -144,6 +144,10 @@ impl Default for Handlers {
             by_domain: BTreeMap::new(),
         };
         handlers.set(WakeDomain::World, world_wake);
+        handlers.set(WakeDomain::Action, crate::action::run::action_wake);
+        // Pools and bodies keep their wake-ups in the `Timer` domain, and
+        // so do traits' durations: the handler of traits asks
+        // `life::handle_wake` first and handles the rest.
         handlers.set(WakeDomain::Timer, crate::traits::on_timer);
         handlers
     }

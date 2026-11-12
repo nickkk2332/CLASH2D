@@ -1,15 +1,11 @@
 [
-  { "//": "Plain traits for the engine's tests and for a first world (06 §5): a timed stimulant and what follows it, a stance, and a bleed that stacks. What each confers is all it is. Values are illustrative. The attribute and the pools they act on are defined here too, for want of a set of creature stats in `core`.",
+  { "//": "Plain traits for the engine's tests and for a first world (06 §5): a timed stimulant and what follows it, a stance, and a bleed that stacks. What each confers is all it is. Values are illustrative. The attribute and the pool the stimulant acts on are defined here; the bleed drains the `blood` of `life/stats.json`.",
     "type": "attribute", "id": "quickness", "name": "Quickness",
     "base": 1, "min": 0 },
 
   { "type": "pool", "id": "stamina", "name": "Stamina",
     "max": 100, "start": "max", "regen": 1,
     "thresholds": [0.0, 0.25] },
-
-  { "type": "pool", "id": "blood", "name": "Blood",
-    "max": 5, "start": "max",
-    "thresholds": [0.0, 0.4, 0.7] },
 
   { "//": "Quicker for half a minute, at the cost of stamina, and slower for a minute afterwards. Taken again, it starts over.",
     "type": "trait", "id": "stimulated", "name": "Stimulated",

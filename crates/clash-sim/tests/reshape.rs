@@ -71,7 +71,15 @@ static DEFS: LazyLock<Arc<Defs>> = LazyLock::new(|| {
         .memory_mod("core", r#"{ "id": "core" }"#, &files)
         .search_path(fixtures("reshape"))
         .load_mods(&["core", "reshapefix"]);
-    assert_eq!(outcome.diagnostics.render(), "");
+    // `self.part(name)` may be null, and the fixture rule hands it to
+    // verbs as it is: those are warnings, and nothing else may be said.
+    let others: Vec<String> = outcome
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code != "W0644")
+        .map(clash_data::Diagnostic::render)
+        .collect();
+    assert!(others.is_empty(), "{}", others.join("\n"));
     outcome.defs.expect("the fixtures load")
 });
 
@@ -786,29 +794,12 @@ fn sim() -> Sim {
 }
 
 /// A person standing at a cell, with stats and the fixtures' humanoid
-/// body, attached as the kernel will.
+/// body, given them by the simulation.
 fn person(sim: &mut Sim, x: i32, y: i32) -> EntityId {
     let id = spawn(sim, creature(), on(x, y));
     let plan = TABLES.body.plan_id("reshapefix:humanoid").unwrap();
-    let mut timeline = Timeline::new();
-    let mut runner = Runner::new();
-    let mut quiet = Quiet;
-    let components = sim.components_mut();
-    let mut cx = BodyCx {
-        bodies: &mut components.body,
-        defs: &TABLES.body,
-        physical: &mut components.physical,
-        containment: &Apart,
-        stats: StatsCx {
-            stats: &mut components.stats,
-            defs: &TABLES.stats,
-            timeline: &mut timeline,
-            host: &mut quiet,
-            runner: &mut runner,
-        },
-    };
-    stats::attach(&mut cx.stats, id, ClockId::UNIVERSAL).unwrap();
-    body::attach(&mut cx, id, plan, Real::ONE, ClockId::UNIVERSAL).unwrap();
+    sim.attach_stats(id, Cause::DEBUG).unwrap();
+    sim.attach_body(id, plan, Real::ONE, Cause::DEBUG).unwrap();
     id
 }
 
@@ -837,8 +828,14 @@ fn text_field(event: &SimEvent, name: &str) -> String {
         .unwrap_or_default()
 }
 
+fn part_value(sim: &Sim, who: EntityId, name: &str) -> Value {
+    let key = reshape::part_named(sim, who, name).unwrap();
+    let kinds = sim.body_defs().unwrap().kinds();
+    Value::Subject(clash_sim::body::props::part_handle(kinds, who, key))
+}
+
 fn call(sim: &mut Sim, name: &str, args: &[Value]) -> Result<Value, Reason> {
-    let registry = clash_sim::engine_registry();
+    let registry = Arc::clone(sim.defs().expr_registry());
     let verb = registry
         .verb_id(name)
         .unwrap_or_else(|| panic!("no verb `{name}`"));
@@ -875,20 +872,21 @@ fn check_sim_body(sim: &Sim, who: EntityId) {
     assert_eq!(record.presence().mass, physical.mass().get());
 }
 
-/// The reshaping touch of 08 §9.2, test script `reshaping_touch`: what
-/// the fixture rule `apply_form` does, run through the verbs' own
-/// functions in the same order until rules run against the simulation.
+fn items_at(sim: &Sim) -> Vec<EntityId> {
+    sim.truth()
+        .entities()
+        .iter()
+        .map(|entity| entity.id())
+        .filter(|id| sim.components().item.contains(*id))
+        .collect()
+}
+
+/// The reshaping touch of 08 §9.2, test script `reshaping_touch`: the
+/// fixture rule `apply_form`, run against the simulation, takes a hand
+/// away, grows a wing, turns an arm into a tentacle and the torso's skin
+/// to chitin.
 #[test]
 fn reshaping_touch() {
-    // The rule that will run it compiles against the verbs.
-    let rule = DEFS.lookup::<EocDef>("reshapefix:apply_form").unwrap();
-    assert!(
-        DEFS.try_registry::<EocDef>()
-            .unwrap()
-            .try_get(rule)
-            .is_some()
-    );
-
     let mut sim = sim();
     let target = person(&mut sim, 4, 4);
     let grasping = |sim: &Sim| body_of(sim, target).function(function("grasping"));
@@ -896,54 +894,10 @@ fn reshaping_touch() {
     let mass = body_of(&sim, target).mass();
     events(&mut sim);
 
+    let rule = DEFS.lookup::<EocDef>("reshapefix:apply_form").unwrap();
     let me = sim.subject_value(Subject::Entity(target));
-    let hand = call(
-        &mut sim,
-        "remove_part",
-        &[me.clone(), Value::text("l_hand"), Value::Bool(true)],
-    )
-    .unwrap();
-    let wing = call(
-        &mut sim,
-        "add_part",
-        &[
-            me.clone(),
-            Value::text("reshapefix:wing"),
-            Value::text("torso"),
-            Value::text("back"),
-            Value::Null,
-            Value::text("l_wing"),
-            Value::text("left"),
-            Value::Null,
-        ],
-    )
-    .unwrap();
-    assert_eq!(wing, Value::text("l_wing"));
-    let left = call(
-        &mut sim,
-        "replace_part",
-        &[
-            me.clone(),
-            Value::text("r_arm"),
-            Value::text("reshapefix:tentacle"),
-            Value::Bool(true),
-        ],
-    )
-    .unwrap();
-    assert_eq!(left, Value::Int(1), "the right hand came off");
-    let changed = call(
-        &mut sim,
-        "set_layer",
-        &[
-            me,
-            Value::text("torso"),
-            Value::Int(0),
-            Value::text("reshapefix:chitin"),
-            Value::Null,
-        ],
-    )
-    .unwrap();
-    assert_eq!(changed, Value::Int(1));
+    sim.call_rule(rule, &[], &[("who", me)], Cause::DEBUG)
+        .unwrap();
 
     let body = body_of(&sim, target);
     assert!(body.part_named("l_hand").is_none());
@@ -953,36 +907,97 @@ fn reshaping_touch() {
         part_def("tentacle")
     );
     assert!(body.part_named("r_arm.sac").is_some());
+    assert!(
+        body.part_named("r_hand").is_none(),
+        "a tentacle has no wrist"
+    );
     let torso = body.part_named("torso").unwrap();
     assert_eq!(torso.layers()[0].material(), material("chitin"));
     assert_eq!(grasping(&sim), real(0.3), "only the tentacle grasps");
     assert_ne!(body.mass(), mass);
     check_sim_body(&sim, target);
 
-    // The hands lie where the target stands.
-    let hand = sim.subject_of(&hand).unwrap();
-    let Subject::Entity(hand) = hand else {
-        panic!()
-    };
-    assert_eq!(sim.truth().place(hand), Some(on(4, 4)));
-    let items: Vec<EntityId> = sim
-        .truth()
-        .entities()
-        .iter()
-        .map(|entity| entity.id())
-        .filter(|id| sim.components().item.contains(*id))
-        .collect();
+    // Both hands lie where the target stands.
+    let items = items_at(&sim);
     assert_eq!(items.len(), 2);
-
+    for item in items {
+        assert_eq!(sim.truth().place(item), Some(on(4, 4)));
+    }
     let seen = events(&mut sim);
     let changes: Vec<String> = named(&seen, "body_changed")
         .iter()
         .map(|event| text_field(event, "verb"))
         .collect();
+    assert_eq!(changes, ["add_part", "replace_part", "set_layer"]);
+    assert_eq!(named(&seen, "part_detached").len(), 2);
+    assert!(!named(&seen, "function_changed").is_empty());
+}
+
+#[test]
+fn the_verbs_take_parts_and_give_parts() {
+    let mut sim = sim();
+    let target = person(&mut sim, 4, 4);
+    let torso = part_value(&sim, target, "torso");
+    let wing = call(
+        &mut sim,
+        "add_part",
+        &[
+            torso,
+            Value::text("reshapefix:wing"),
+            Value::Null,
+            Value::Null,
+            Value::text("l_wing"),
+            Value::text("left"),
+            Value::Real(real(0.5)),
+        ],
+    )
+    .unwrap();
+    assert_eq!(wing, part_value(&sim, target, "l_wing"));
     assert_eq!(
-        changes,
-        ["remove_part", "add_part", "replace_part", "set_layer"]
+        body_of(&sim, target).part_named("l_wing").unwrap().socket(),
+        Some("back")
     );
+    call(
+        &mut sim,
+        "scale_part",
+        &[wing.clone(), Value::Real(real(2.0))],
+    )
+    .unwrap();
+    call(
+        &mut sim,
+        "damage_part",
+        &[wing.clone(), Value::Int(0), Value::Real(real(0.1))],
+    )
+    .unwrap();
+    call(
+        &mut sim,
+        "set_layer",
+        &[
+            wing,
+            Value::Null,
+            Value::text("reshapefix:chitin"),
+            Value::Real(real(0.004)),
+        ],
+    )
+    .unwrap();
+    let me = sim.subject_value(Subject::Entity(target));
+    call(
+        &mut sim,
+        "scale_body",
+        &[me.clone(), Value::Real(real(1.5))],
+    )
+    .unwrap();
+    call(
+        &mut sim,
+        "set_body_plan",
+        &[me, Value::text("reshapefix:crawler")],
+    )
+    .unwrap();
+    assert_eq!(
+        body_of(&sim, target).plan(),
+        TABLES.body.plan_id("reshapefix:crawler").unwrap()
+    );
+    check_sim_body(&sim, target);
 }
 
 #[test]
@@ -998,7 +1013,7 @@ fn a_body_that_cannot_be_reshaped_refuses_and_changes_nothing() {
     .unwrap();
     let before = Hash128::of(body_of(&sim, target));
     let arm = reshape::part_named(&sim, target, "l_arm").unwrap();
-    let refused = reshape::remove_part(&mut sim, target, arm, true, Cause::DEBUG);
+    let refused = reshape::remove_part(&mut sim, target, arm, Cause::DEBUG);
     assert_eq!(refused.unwrap_err().code, "test.unchanging");
     assert_eq!(Hash128::of(body_of(&sim, target)), before);
 }
@@ -1007,30 +1022,29 @@ fn a_body_that_cannot_be_reshaped_refuses_and_changes_nothing() {
 fn refusals_carry_reasons() {
     let mut sim = sim();
     let target = person(&mut sim, 4, 4);
-    let me = sim.subject_value(Subject::Entity(target));
+    let torso = part_value(&sim, target, "torso");
+    let head = part_value(&sim, target, "head");
     let refused = call(
         &mut sim,
-        "remove_part",
-        &[me.clone(), Value::text("torso"), Value::Null],
+        "add_part",
+        &[
+            torso,
+            Value::text("reshapefix:head"),
+            Value::text("neck"),
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+        ],
     );
-    assert_eq!(refused.unwrap_err().code, "root_part");
-    let refused = call(
-        &mut sim,
-        "remove_part",
-        &[me.clone(), Value::text("tail"), Value::Null],
-    );
-    assert_eq!(refused.unwrap_err().code, "no_such_part");
+    assert_eq!(refused.unwrap_err().code, "no_free_socket");
     let refused = call(
         &mut sim,
         "damage_part",
-        &[
-            me.clone(),
-            Value::text("head"),
-            Value::Int(9),
-            Value::Real(real(0.5)),
-        ],
+        &[head, Value::Int(9), Value::Real(real(0.5))],
     );
     assert_eq!(refused.unwrap_err().code, "no_such_layer");
+    let me = sim.subject_value(Subject::Entity(target));
     let refused = call(
         &mut sim,
         "scale_body",
@@ -1040,9 +1054,18 @@ fn refusals_carry_reasons() {
     let refused = call(
         &mut sim,
         "set_body_plan",
-        &[me, Value::text("reshapefix:nothing"), Value::Null],
+        &[me, Value::text("reshapefix:nothing")],
     );
-    assert_eq!(refused.unwrap_err().code, "body.bad_argument");
+    assert_eq!(refused.unwrap_err().code, "verb.bad_argument");
+    let refused = call(
+        &mut sim,
+        "scale_part",
+        &[Value::Null, Value::Real(real(1.0))],
+    );
+    assert_eq!(refused.unwrap_err().code, "verb.bad_argument");
+    let torso = reshape::part_named(&sim, target, "torso").unwrap();
+    let refused = reshape::remove_part(&mut sim, target, torso, Cause::DEBUG);
+    assert_eq!(refused.unwrap_err().code, "root_part");
 }
 
 #[test]
@@ -1058,7 +1081,7 @@ fn what_was_worn_on_a_part_that_is_gone_comes_off_it() {
     };
     assert_eq!(covers(&sim), 3);
     let arm = reshape::part_named(&sim, target, "r_arm").unwrap();
-    reshape::remove_part(&mut sim, target, arm, false, Cause::DEBUG).unwrap();
+    reshape::remove_part(&mut sim, target, arm, Cause::DEBUG).unwrap();
     assert_eq!(covers(&sim), 2, "it covers what is left");
     assert_eq!(sim.truth().place(coat), Some(Place::In(target)));
 }
@@ -1068,18 +1091,15 @@ fn a_rebuilt_body_hands_its_new_mass_to_the_world() {
     let mut sim = sim();
     let target = person(&mut sim, 4, 4);
     let plan = TABLES.body.plan_id("reshapefix:crawler").unwrap();
-    let items = reshape::set_body_plan(&mut sim, target, plan, true, Cause::DEBUG).unwrap();
+    let items = reshape::set_body_plan(&mut sim, target, plan, Cause::DEBUG).unwrap();
     assert_eq!(items.len(), 2);
     check_sim_body(&sim, target);
     let arm = reshape::part_named(&sim, target, "l_arm").unwrap();
     reshape::scale_part(&mut sim, target, arm, real(2.0), Cause::DEBUG).unwrap();
-    reshape::hold_part(&mut sim, target, arm, false, Cause::DEBUG).unwrap();
-    assert!(!body_of(&sim, target).part(arm).unwrap().is_working());
-    reshape::hold_part(&mut sim, target, arm, true, Cause::DEBUG).unwrap();
-    assert!(body_of(&sim, target).part(arm).unwrap().is_working());
     let head = reshape::part_named(&sim, target, "head").unwrap();
     reshape::damage_part(&mut sim, target, head, None, real(0.4), Cause::DEBUG).unwrap();
-    reshape::heal_part(&mut sim, target, head, real(1.0), Cause::DEBUG).unwrap();
+    sim.heal_part(target, head, real(1.0), Cause::DEBUG)
+        .unwrap();
     assert!(
         body_of(&sim, target)
             .part(head)
@@ -1092,12 +1112,12 @@ fn a_rebuilt_body_hands_its_new_mass_to_the_world() {
 }
 
 #[test]
-fn a_severed_limb_left_as_an_item_can_be_grafted_onto_another() {
+fn a_limb_left_as_an_item_can_be_grafted_back_but_not_onto_another_with_its_names() {
     let mut sim = sim();
     let first = person(&mut sim, 4, 4);
     let second = person(&mut sim, 6, 6);
     let arm = reshape::part_named(&sim, first, "l_arm").unwrap();
-    let limb = reshape::remove_part(&mut sim, first, arm, true, Cause::DEBUG)
+    let limb = reshape::remove_part(&mut sim, first, arm, Cause::DEBUG)
         .unwrap()
         .unwrap();
     // The second has a left arm of its own: the names would repeat.
@@ -1106,7 +1126,12 @@ fn a_severed_limb_left_as_an_item_can_be_grafted_onto_another() {
     assert_eq!(refused.unwrap_err().code, "part_name_taken");
     // Back where it came from it fits, and the item is used up.
     let torso = reshape::part_named(&sim, first, "torso").unwrap();
-    reshape::graft_part(&mut sim, first, limb, &Attach::on(torso), Cause::DEBUG).unwrap();
+    let shoulder = Attach {
+        parent: torso,
+        relation: Relation::On,
+        socket: Some("shoulder".to_owned()),
+    };
+    reshape::graft_part(&mut sim, first, limb, &shoulder, Cause::DEBUG).unwrap();
     assert!(sim.truth().entity(limb).is_none());
     assert_eq!(
         body_of(&sim, first).function(function("grasping")),

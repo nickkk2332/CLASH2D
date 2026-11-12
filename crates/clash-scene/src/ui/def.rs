@@ -976,6 +976,10 @@ widget_def! {
         /// expression. Left out, every line is shown.
         #[serde(default)]
         pub filter: Option<Prop<Vec<String>>>,
+        /// The least importance a line must have to be shown: `minor`,
+        /// `normal` or `major`. Left out, every line is shown.
+        #[serde(default)]
+        pub importance: Option<crate::playback::Importance>,
     }
 }
 

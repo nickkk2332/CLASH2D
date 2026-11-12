@@ -92,10 +92,12 @@
 //!
 //! [`WakeDomain::Timer`]: clash_time::WakeDomain::Timer
 
+pub mod bind;
 mod defs;
 pub mod edit;
 pub mod hit;
 pub mod props;
+mod verbs;
 pub mod wound;
 
 use std::collections::BTreeMap;
@@ -115,6 +117,8 @@ use crate::component::{
 };
 use crate::stats::{self, StatsCx, StatsError};
 
+pub use bind::HitOutcome;
+pub(crate) use defs::pool_by_name;
 pub use defs::{
     BodyDefTypes, BodyDefs, BodyFunctionDef, BodyFunctionId, BodyKinds, BodyPartDef, BodyPartId,
     BodyPlanDef, BodyPlanId, Combine, DAMAGE_PARTS, InsideDef, LayerDef, Leak, Leaves, MAX_LAYERS,
@@ -126,6 +130,7 @@ pub use hit::{
     OVERKILL_SETTING, PartHit, WornHit, WornLayer, apply_hit, exposure_hit, field_hit, impact_hit,
 };
 pub use props::{property, property_at};
+pub use verbs::verbs;
 pub use wound::{
     BODY_WAKE_ARG, Wound, WoundState, body_wake, close_wound, heal_part, is_body_wake, on_wake,
     reopen_wound, resume, set_clock, suspend,
@@ -214,7 +219,7 @@ impl StateHash for PartState {
 
 /// One layer of one part: what it is made of now, how thick it is at
 /// the part's size, and how damaged.
-#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct LayerInst {
     /// What it is made of.
     pub(super) material: MaterialId,
@@ -269,7 +274,7 @@ impl LayerInst {
 /// A part that is gone stays listed, with a state that says how and no
 /// layers, so that what the body has lost can be read and still counts,
 /// as nothing, toward its functions.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct PartInst {
     key: PartKey,
     name: String,
@@ -949,7 +954,7 @@ impl StateHash for Detach {
 /// A part that came off a body, with everything that was on it and in
 /// it: what the item package makes an item of (06 §7.5), or nothing if
 /// the root's definition says it [`Leaves`] nothing.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Detached {
     /// Whose it was.
     pub from: EntityId,

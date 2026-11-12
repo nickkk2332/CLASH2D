@@ -18,7 +18,7 @@ use crate::bus::{EventPayload, FieldValue};
 use crate::event::{EventBody, Subject, Where};
 use crate::host::Bound;
 use crate::movement::{PostureDef, PostureId};
-use crate::reason::{Reason, codes as kernel_codes};
+use crate::reason::Reason;
 use crate::rule::Effects;
 
 /// The bit of a wake-up's `arg` that marks it as a trait's duration
@@ -302,24 +302,15 @@ pub(crate) fn returned_to_world(sim: &mut Sim, entity: EntityId, cause: Cause) {
     }
 }
 
-/// Handles a wake-up of the domain `Timer`: a trait's duration that has
-/// run out ends with `trait_expired` and `trait_removed`. A wake-up of
-/// the domain that is not a trait's is reported as a fault, as the
-/// kernel reports any wake-up nothing handles.
+/// Handles a wake-up of the domain `Timer`: a pool's crossing or a
+/// body's closing and healing goes to `life::handle_wake`, as every
+/// handler of the domain must ask first; a trait's duration that has run
+/// out ends with `trait_expired` and `trait_removed`; anything else is
+/// reported as a fault, as the kernel reports any wake-up nothing
+/// handles.
 pub fn on_timer(sim: &mut Sim, id: WakeId, wake: Wake) {
     if !is_trait_wake(&wake) {
-        sim.fault(
-            Reason::new(
-                kernel_codes::ADVANCE_UNHANDLED_WAKE,
-                format!(
-                    "a wake-up of domain {:?} was due and nothing handles it",
-                    wake.domain
-                ),
-            )
-            .with("domain", format!("{:?}", wake.domain))
-            .with("id", wake.id as i64)
-            .with("arg", wake.arg as i64),
-        );
+        crate::life::timer_wake(sim, id, wake);
         return;
     }
     let entity = EntityId::from_bits(wake.id);
@@ -360,7 +351,7 @@ fn expire(sim: &mut Sim, entity: EntityId, key: TraitKey, cause: Cause) {
         ),
     );
     end(sim, entity, key, "expired", cause);
-    reconsider(sim, entity);
+    reconsider(sim, entity, cause);
 }
 
 // ---- Adding ------------------------------------------------------------------
@@ -523,7 +514,7 @@ pub fn add_trait(
         inst.dormant = dormant;
     }
     start_timer(sim, entity, key, duration);
-    settle(sim, entity, &[key]);
+    settle(sim, entity, &[key], cause);
     sim.emit(
         Where::Entity(entity),
         cause,
@@ -541,7 +532,7 @@ pub fn add_trait(
     if first {
         run_effects(sim, entity, &trait_def.on_apply, cause);
     }
-    reconsider(sim, entity);
+    reconsider(sim, entity, cause);
     Ok(Added {
         key,
         stacks,
@@ -578,7 +569,7 @@ fn end(sim: &mut Sim, entity: EntityId, key: TraitKey, how: &str, cause: Cause) 
     if let Timer::Running(wake) = inst.timer {
         sim.cancel_wake(wake);
     }
-    settle(sim, entity, &[key]);
+    settle(sim, entity, &[key], cause);
     let name = name_of(sim, inst.def);
     sim.emit(
         Where::Entity(entity),
@@ -677,7 +668,7 @@ pub fn remove_trait(
         if let Some(inst) = inst_mut(sim, entity, key) {
             inst.stacks = remaining;
         }
-        settle(sim, entity, &[key]);
+        settle(sim, entity, &[key], cause);
         sim.emit(
             Where::Entity(entity),
             cause,
@@ -693,7 +684,7 @@ pub fn remove_trait(
             ),
         );
     }
-    reconsider(sim, entity);
+    reconsider(sim, entity, cause);
     Ok(taken)
 }
 
@@ -716,7 +707,7 @@ pub fn withdraw(sim: &mut Sim, entity: EntityId, giver: Giver, cause: Cause) -> 
         end(sim, entity, *key, "withdrawn", cause);
     }
     if !keys.is_empty() {
-        reconsider(sim, entity);
+        reconsider(sim, entity, cause);
     }
     keys.len()
 }
@@ -753,7 +744,7 @@ pub fn posture_changed(
 /// whenever a trait of the entity is added or removed; the kernel calls
 /// it when something else a `while` reads may have changed, until
 /// reactive expressions (05 §7.5) keep it current.
-pub fn reconsider(sim: &mut Sim, entity: EntityId) {
+pub fn reconsider(sim: &mut Sim, entity: EntityId, cause: Cause) {
     let insts: Vec<(TraitKey, TraitId, bool)> = traits(sim, entity)
         .map(|traits| {
             traits
@@ -780,13 +771,24 @@ pub fn reconsider(sim: &mut Sim, entity: EntityId) {
         }
     }
     if !changed.is_empty() {
-        settle(sim, entity, &changed);
+        settle(sim, entity, &changed, cause);
     }
 }
 
-/// Runs a trait's `on_apply` or `on_remove` with its holder as `self`.
-///
-/// The rule runtime does not yet run against the simulation (its
-/// binding, 05 §13.1, is another package's), so the effects are
-/// compiled and kept, and this is the one place they will be run from.
-pub fn run_effects(_sim: &mut Sim, _entity: EntityId, _effects: &Effects, _cause: Cause) {}
+/// Runs a trait's `on_apply` or `on_remove` against the simulation, with
+/// its holder as `self` (05 §10): a list that was never compiled, or is
+/// empty, does nothing.
+pub fn run_effects(sim: &mut Sim, entity: EntityId, effects: &Effects, cause: Cause) {
+    if effects.is_empty() {
+        return;
+    }
+    let subjects = [sim.subject_value(Subject::Entity(entity))];
+    let mut locals = Vec::new();
+    sim.run_effects(
+        effects,
+        &subjects,
+        &mut locals,
+        Some(Subject::Entity(entity)),
+        cause,
+    );
+}

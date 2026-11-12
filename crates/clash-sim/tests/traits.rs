@@ -12,20 +12,18 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 
-use clash_core::{Dur, EntityId, Real, Rng, Tick};
-use clash_data::{Defs, Loader, Runner};
-use clash_expr::{FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value};
-use clash_sim::body::{self, BodyCx, BodyDefs};
-use clash_sim::component::Containment;
+use clash_core::{Dur, EntityId, Real, Tick};
+use clash_data::{Defs, Loader};
+use clash_expr::{Handle, Value};
+use clash_sim::body::BodyDefs;
 use clash_sim::item::{self, ItemDef};
 use clash_sim::movement::PostureDef;
 use clash_sim::rule::{EocDef, RunView, VerbCall};
-use clash_sim::stats::{self, SourceKind, StatDefs, StatsCx};
+use clash_sim::stats::{self, SourceKind, StatDefs};
 use clash_sim::traits::{
     self, Giver, GiverKind, Timer, TraitDef, TraitId, Traits, add_trait, remove_trait, withdraw,
 };
 use clash_sim::{AdvanceLimit, Delivery, Handler, Place, Reason, Sim, SimEvent, Subject};
-use clash_time::{ClockId, Timeline};
 use clash_world::Cause;
 use common::{creature, on, save_and_load, sim_over, spawn};
 use proptest::prelude::*;
@@ -36,8 +34,10 @@ fn fixtures(area: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/fixtures/{area}"))
 }
 
-/// Traits, a posture and an item of the tests' own.
+/// Traits, a posture and an item of the tests' own, and the pool the
+/// bundled bleed drains, which `mods/core` defines with its creatures.
 const TEST_DEFS: &str = r#"[
+  { "type": "pool", "id": "blood", "max": 5, "start": "max", "thresholds": [0.0, 0.4, 0.7] },
   { "type": "trait", "id": "hardy",
     "modifiers": [ { "attr": "quickness", "add": 0.5 } ], "tags": ["hardy"] },
   { "type": "trait", "id": "lingering", "duration": "30 s", "while_unloaded": "elapse",
@@ -130,77 +130,15 @@ fn pool(name: &str) -> stats::PoolId {
 
 // ---- Making people ----------------------------------------------------------
 
-struct Apart;
-
-impl Containment for Apart {
-    fn container(&self, _id: EntityId) -> Option<EntityId> {
-        None
-    }
-
-    fn contents(&self, _id: EntityId, _visit: &mut dyn FnMut(EntityId)) {}
-}
-
-struct Quiet;
-
-impl Host for Quiet {
-    fn subject(&mut self, _slot: u16) -> Value {
-        Value::Null
-    }
-
-    fn local(&mut self, _slot: u16) -> Value {
-        Value::Null
-    }
-
-    fn event_field(&mut self, _slot: u16) -> Value {
-        Value::Null
-    }
-
-    fn property(&mut self, _property: PropertyId, _subject: Handle, _args: &[Value]) -> Value {
-        Value::Null
-    }
-
-    fn variable(&mut self, _subject: Handle, _name: &str) -> Value {
-        Value::Null
-    }
-
-    fn call(&mut self, _function: FunctionId, _args: &[Value]) -> Value {
-        Value::Null
-    }
-
-    fn rng(&mut self) -> Option<&mut Rng> {
-        None
-    }
-
-    fn warn(&mut self, _warning: RuntimeWarning) {}
-}
-
 /// A person of the fixtures' humanoid plan, with stats and the bundled
-/// pools, standing at a cell. Stats and the body are attached on a
-/// timeline of their own: the pools start full and schedule nothing.
+/// pools, standing at a cell, given them by the simulation.
 fn person(sim: &mut Sim, x: i32, y: i32) -> EntityId {
     let id = spawn(sim, creature(), on(x, y));
     let plan = TABLES.body.plan_id("itemfix:humanoid").unwrap();
-    let mut timeline = Timeline::new();
-    let mut runner = Runner::new();
-    let mut quiet = Quiet;
-    let components = sim.components_mut();
-    let mut cx = BodyCx {
-        bodies: &mut components.body,
-        defs: &TABLES.body,
-        physical: &mut components.physical,
-        containment: &Apart,
-        stats: StatsCx {
-            stats: &mut components.stats,
-            defs: &TABLES.stats,
-            timeline: &mut timeline,
-            host: &mut quiet,
-            runner: &mut runner,
-        },
-    };
-    stats::attach(&mut cx.stats, id, ClockId::UNIVERSAL).unwrap();
-    stats::add_pool(&mut cx.stats, id, pool("stamina")).unwrap();
-    stats::add_pool(&mut cx.stats, id, pool("blood")).unwrap();
-    body::attach(&mut cx, id, plan, Real::ONE, ClockId::UNIVERSAL).unwrap();
+    sim.attach_stats(id, Cause::DEBUG).unwrap();
+    sim.give_pool(id, pool("stamina"), Cause::DEBUG).unwrap();
+    sim.give_pool(id, pool("blood"), Cause::DEBUG).unwrap();
+    sim.attach_body(id, plan, Real::ONE, Cause::DEBUG).unwrap();
     id
 }
 
@@ -353,13 +291,19 @@ fn a_stimulant_confers_while_it_lasts_and_takes_back_exactly_what_it_added() {
     assert_eq!(text_field(added[0], "look"), "stimulated");
 
     assert_eq!(take(&mut sim, who, "stimulated"), 1);
+    // Its `on_remove` gives the crash that follows it.
+    assert!(has(&sim, who, "crashing"));
+    assert!(close(quickness(&sim, who), 0.8));
+    assert!(!has_tag(&sim, who, "stimulated"));
+    assert_eq!(take(&mut sim, who, "crashing"), 1);
     assert_eq!(quickness(&sim, who).to_bits(), before.0.to_bits());
     assert_eq!(rate(&sim, who, "stamina").to_bits(), before.1.to_bits());
     assert_eq!(tags(&sim, who), before.2);
     let seen = events(&mut sim);
     let removed = named(&seen, "trait_removed");
-    assert_eq!(removed.len(), 1);
+    assert_eq!(removed.len(), 2, "the stimulant and then the crash");
     assert_eq!(text_field(removed[0], "how"), "removed");
+    assert_eq!(text_field(removed[0], "trait"), "core:stimulated");
     assert_eq!(int_field(removed[0], "left"), 0);
     // Removing what it does not have changes nothing.
     assert_eq!(take(&mut sim, who, "stimulated"), 0);
@@ -511,12 +455,12 @@ fn while_makes_a_trait_dormant_and_dormant_traits_confer_nothing() {
     assert!(!has_tag(&sim, who, "focused"));
 
     sim.entity_mut(who).unwrap().tags.insert("armed".to_owned());
-    traits::reconsider(&mut sim, who);
+    traits::reconsider(&mut sim, who, Cause::DEBUG);
     assert!(close(quickness(&sim, who), 2.0));
     assert!(has_tag(&sim, who, "focused"));
 
     sim.entity_mut(who).unwrap().tags.remove("armed");
-    traits::reconsider(&mut sim, who);
+    traits::reconsider(&mut sim, who, Cause::DEBUG);
     assert!(close(quickness(&sim, who), 1.0));
     assert!(!has_tag(&sim, who, "focused"));
 }
@@ -538,7 +482,8 @@ fn a_duration_runs_out_on_the_holders_own_clock() {
     assert!(has(&sim, who, "stimulated"));
     advance_to(&mut sim, 30);
     assert!(!has(&sim, who, "stimulated"));
-    assert!(close(quickness(&sim, who), 1.0));
+    assert!(has(&sim, who, "crashing"), "the crash follows it");
+    assert!(close(quickness(&sim, who), 0.8));
     let seen = events(&mut sim);
     let expired = named(&seen, "trait_expired");
     assert_eq!(expired.len(), 1);
@@ -1027,7 +972,7 @@ proptest! {
                     if armed {
                         base.push("armed".to_owned());
                     }
-                    traits::reconsider(&mut sim, who);
+                    traits::reconsider(&mut sim, who, Cause::DEBUG);
                 }
                 Op::Away(seconds) => {
                     sim.relocate(who, Place::Stored, Cause::DEBUG).unwrap();

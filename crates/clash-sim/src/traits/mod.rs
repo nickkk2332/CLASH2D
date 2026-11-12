@@ -55,19 +55,18 @@
 //! | Building its definition types | Calls the crate's `register_defs`, which registers `trait` and the check of the trait names items and postures give |
 //! | Building its registry | Calls [`register_types`], lists [`verbs()`] and [`properties`] and mirrors [`TRAIT_EVENTS`] |
 //! | Building its event bus | Enters [`TRAIT_EVENTS`] and [`hook_types`] |
-//! | A wake-up of the domain `Timer` pops | Calls [`on_timer`] |
+//! | A wake-up of the domain `Timer` pops | Calls [`on_timer`], which hands pools' and bodies' to `life::timer_wake` |
 //! | An entity leaves the world and comes back (`Sim::relocate`) | Calls [`suspend`] before it goes and [`resume`] once it is back |
 //! | An item comes into use by a holder and leaves it | `item` calls [`give_named`] and [`withdraw`] with [`Giver::item`] |
 //! | A posture changes | `movement` calls [`posture_changed`] |
 //!
-//! # The seams
+//! # Stats and rules
 //!
-//! The stats are not yet held by the kernel: the one function of `confer`
-//! that reaches them builds their tables for the length of a call, as
-//! the items package does. The `attr_changed` and `pool_crossed` events
-//! of what a trait confers are the stats' to raise once the kernel
-//! raises them. `on_apply` and `on_remove` are compiled and kept, and run
-//! once rules run against the simulation: [`run_effects`] is the place.
+//! Modifiers and rates are changed over the simulation's own stores
+//! (`Sim::with_stats`), and the `attr_changed` and `pool_crossed` events
+//! of what a trait changed are raised as every change to stats is.
+//! `on_apply` and `on_remove` run against the simulation with the holder
+//! as `self` ([`run_effects`]).
 //!
 //! # What is not built here
 //!
@@ -98,7 +97,6 @@ use crate::reason::ReasonInfo;
 use crate::rule::EocId;
 use crate::stats::{Source, SourceKind};
 
-pub(crate) use confer::with_stats;
 pub use confer::{Conferred, channel_change, conferred};
 pub use defs::{GrantDef, MAX_STACKS, RateDef, Stacking, TraitDef, TraitId, WhileUnloaded};
 pub use ops::{

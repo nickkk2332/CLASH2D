@@ -1,67 +1,56 @@
 //! Editing bodies in the simulation (06 §6.5): the verbs that add,
-//! remove, replace, graft, re-material and resize parts, rebuild a body
-//! from another plan, and change a part's damage directly.
+//! replace, graft, re-material and resize parts, rebuild a body from
+//! another plan, and damage a part directly.
 //!
-//! The edits themselves are the body model's ([`body::edit`]), which
+//! The edits themselves are the body model's ([`body::edit`](crate::body::edit)), which
 //! knows nothing of the simulation. Each function here does what the
 //! simulation adds around one:
 //!
 //! 1. the hook `body_changing` runs and may cancel;
-//! 2. the edit is made, and refused with its reason if it cannot be;
-//! 3. what came off is made an item where the edit was asked to leave
-//!    one (`item::part_item`), and what the body grasped with parts that
-//!    can no longer hold, or wore on parts that are gone, is let go;
-//! 4. the masses that changed are handed to the world's records, and the
-//!    entity's attributes are worked out again (06 §4.1: an edit can
-//!    change what a derived attribute reads);
+//! 2. the edit is made over the simulation's own stores
+//!    (`Sim::with_body`), and refused with its reason if it cannot be;
+//! 3. what the body model changed is raised as the events of 06 §7.6 and
+//!    followed as every body change is (`Sim::raise_body_changes`):
+//!    masses reach the world's records, the stats are worked out again,
+//!    vital state is settled;
+//! 4. what came off is reported as `part_detached` and leaves what its
+//!    definition's `leaves` says (`item::part_item`); what the body
+//!    grasped with parts that can no longer hold, and what it wore only
+//!    over parts that are gone, is let go;
 //! 5. `body_changed` is raised.
 //!
-//! A part is named by its name in the body. `set_layer` takes a part as
-//! a wear entry names one (06 §9.1): its name, the id of its definition,
-//! a tag its definition carries, or `all`.
-//!
-//! # The seams
-//!
-//! The kernel does not yet hold the bodies' and the stats' tables, so
-//! `with_body` builds them for the length of a call and takes the stores
-//! and the timeline out of the simulation while it runs, as the items
-//! package does for stats. The events the body model's changes are
-//! reported by (`part_disabled`, `function_changed` and the rest of
-//! 06 §7.6) are the kernel's to raise once it raises them: they reach
-//! [`body_events`] and stop there.
-
-use std::sync::Arc;
+//! A part is a subject of its own kind, which says whose body it is of,
+//! so a verb that names a part takes no `who` (decision D-550). The
+//! verbs `heal_part`, `disable_part`, `restore_part` and `remove_part`
+//! are the body package's (`body::verbs`); [`remove_part`] here is the
+//! edit, which also takes away the listings of what was gone already
+//! beneath the part.
 
 use clash_core::{EntityId, Real};
-use clash_data::{Def, Runner};
-use clash_expr::{EventSpec, Registry, Type, Value, VerbSpec};
-use clash_time::Timeline;
+use clash_data::Def;
+use clash_expr::{EventSpec, Handle, Registry, Type, Value, VerbSpec};
 use clash_world::Cause;
 use clash_world::defs::{MaterialDef, MaterialId};
 
 use crate::Sim;
 use crate::body::edit::{self, Attach, EditError};
+use crate::body::props::{PART_KIND, part_handle, part_of_handle};
 use crate::body::{
-    self, Body, BodyCx, BodyDefs, BodyError, BodyPartDef, BodyPartId, BodyPlanDef, BodyPlanId,
-    Change, Changes, Detached, PartKey, Relation,
+    Body, BodyCx, BodyPartDef, BodyPartId, BodyPlanDef, BodyPlanId, Changes, Detached, PartKey,
+    Relation,
 };
 use crate::bus::{EventPayload, EventType, FieldType};
 use crate::event::{CAUSE_SUBJECTS, EventBody, EventInfo, Subject, Where};
-use crate::host::{Bound, SimHost};
 use crate::item;
+use crate::life::{NullHost, args};
 use crate::reason::{Reason, ReasonInfo};
 use crate::rule::VerbCall;
-use crate::stats::{StatDefs, StatsCx};
 use crate::verb::VerbDef;
 
 /// The hook raised before a body is edited.
 pub const BODY_CHANGING: &str = "body_changing";
 /// Raised once a body has been edited.
 pub const BODY_CHANGED: &str = "body_changed";
-
-/// The code of the refusal of a verb's argument that is missing or of
-/// the wrong kind.
-pub const BAD_ARGUMENT: &str = "body.bad_argument";
 
 /// The refusals of editing beyond those of bodies (06 §7.6), for the
 /// generated reference.
@@ -102,10 +91,6 @@ pub const EDIT_REASONS: &[ReasonInfo] = &[
         code: edit::reason::NOT_A_PART,
         doc: "What was to be grafted is not a part that came off a body. Values: `item`, when an item was given.",
     },
-    ReasonInfo {
-        code: BAD_ARGUMENT,
-        doc: "A verb of body editing was given an argument that is missing or of the wrong kind, or names no part of the body. Values: `arg`, the argument's name.",
-    },
 ];
 
 /// The notification of editing, entered beside the kernel's own in every
@@ -117,12 +102,12 @@ pub const EDIT_EVENTS: &[EventInfo] = &[EventInfo {
         (
             "verb",
             "string",
-            "Which edit: `add_part`, `remove_part`, `replace_part`, `graft_part`, `set_layer`, `scale_part`, `scale_body`, `set_body_plan`, `heal_part`, `damage_part`, `disable_part` or `restore_part`.",
+            "Which edit: `add_part`, `remove_part`, `replace_part`, `graft_part`, `set_layer`, `scale_part`, `scale_body`, `set_body_plan` or `damage_part`.",
         ),
         (
             "part",
             "string",
-            "The name of the part edited; empty for an edit of the whole body.",
+            "The name of the part edited, or of the part a new one went on; empty for an edit of the whole body.",
         ),
         (
             "parts",
@@ -130,7 +115,7 @@ pub const EDIT_EVENTS: &[EventInfo] = &[EventInfo {
             "How many parts the body has now that are there.",
         ),
     ],
-    doc: "A body was edited (06 §6.5): its functions, channel slots, mass and attributes have been worked out again.",
+    doc: "A body was edited (06 §6.5): its functions, channel slots, mass and attributes have been worked out again, and the events of what changed raised.",
 }];
 
 /// The hook of editing (05 §8.2): entered in the event bus of every
@@ -143,10 +128,10 @@ pub fn hook_types() -> Vec<EventType> {
             .field(
                 "part",
                 FieldType::Str,
-                "The name of the part to be edited; empty for an edit of the whole body.",
+                "The name of the part to be edited, or of the part a new one is to go on; empty for an edit of the whole body.",
             )
             .hook(Vec::<String>::new())
-            .doc("Runs before a body is edited by any verb of 06 §6.5. A handler may cancel, with a reason: a body that cannot be reshaped."),
+            .doc("Runs before a body is edited by a verb of 06 §6.5 that reshapes it. A handler may cancel, with a reason: a body that cannot be reshaped."),
     ]
 }
 
@@ -186,14 +171,6 @@ pub fn register_types(registry: &mut Registry) {
 
 // ---- Reasons -----------------------------------------------------------------
 
-fn body_reason(error: &BodyError) -> Reason {
-    let mut reason = Reason::new(error.code(), error.to_string());
-    for (name, value) in error.values() {
-        reason = reason.with(name, plain(&value));
-    }
-    reason
-}
-
 fn edit_reason(error: &EditError) -> Reason {
     let mut reason = Reason::new(error.code(), error.to_string());
     for (name, value) in error.values() {
@@ -215,59 +192,11 @@ fn plain(value: &Value) -> clash_core::Value {
 
 fn bad_argument(name: &str, wanted: &str) -> Reason {
     Reason::new(
-        BAD_ARGUMENT,
+        args::BAD_ARGUMENT,
         format!("the argument `{name}` must be {wanted}"),
     )
-    .with("arg", name)
+    .with("argument", name)
 }
-
-// ---- The seams ---------------------------------------------------------------
-
-/// Runs a body function over the simulation's stores: see the
-/// [module documentation](self). Refused if the definitions were loaded
-/// without the bodies' or the stats' types.
-fn with_body<R>(
-    sim: &mut Sim,
-    run: impl FnOnce(&mut BodyCx<'_, SimHost<'_>>) -> R,
-) -> Result<R, Reason> {
-    let world = Arc::clone(sim.cosmos.defs());
-    let body_defs = BodyDefs::new(&sim.defs, &world).map_err(|error| body_reason(&error))?;
-    let stat_defs =
-        StatDefs::new(&sim.defs).map_err(|error| Reason::new(error.code(), error.to_string()))?;
-    let mut bodies = core::mem::take(&mut sim.components.body);
-    let mut physical = core::mem::take(&mut sim.components.physical);
-    let mut stats = core::mem::take(&mut sim.components.stats);
-    let mut timeline = core::mem::replace(&mut sim.timeline, Timeline::new());
-    let mut runner = Runner::new();
-    let result = {
-        let mut host = sim.host(Bound::new());
-        let mut cx = BodyCx {
-            bodies: &mut bodies,
-            defs: &body_defs,
-            physical: &mut physical,
-            containment: &sim.entities,
-            stats: StatsCx {
-                stats: &mut stats,
-                defs: &stat_defs,
-                timeline: &mut timeline,
-                host: &mut host,
-                runner: &mut runner,
-            },
-        };
-        run(&mut cx)
-    };
-    sim.timeline = timeline;
-    sim.components.stats = stats;
-    sim.components.physical = physical;
-    sim.components.body = bodies;
-    Ok(result)
-}
-
-/// Receives what an edit changed of the body, for the kernel to raise
-/// the events of 06 §7.6 from once it raises them; until then they end
-/// here. What the simulation must do about them now (letting go, masses)
-/// is done by the caller.
-pub fn body_events(_sim: &mut Sim, _changes: &Changes) {}
 
 // ---- Running an edit ---------------------------------------------------------
 
@@ -286,22 +215,39 @@ fn edited<T>((value, changes): (T, Changes)) -> Edited<T> {
     }
 }
 
+fn just(changes: Changes) -> Edited<()> {
+    Edited {
+        value: (),
+        changes,
+        detached: Vec::new(),
+    }
+}
+
+fn with_off((detached, changes): (Vec<Detached>, Changes)) -> Edited<()> {
+    Edited {
+        value: (),
+        changes,
+        detached,
+    }
+}
+
 /// The body of an entity, or the refusal that it has none.
 fn body_of(sim: &Sim, who: EntityId) -> Result<&Body, Reason> {
     sim.known(who)?;
-    sim.components
-        .get::<Body>(who)
-        .ok_or_else(|| body_reason(&BodyError::NoBody { entity: who }))
+    sim.components.get::<Body>(who).ok_or_else(|| {
+        Reason::new(crate::body::reason::NO_BODY, format!("{who} has no body"))
+            .with("entity", who.to_string())
+    })
 }
 
 /// A part of an entity's body by its name, there or gone.
 pub fn part_named(sim: &Sim, who: EntityId, name: &str) -> Result<PartKey, Reason> {
     body_of(sim, who)?
         .part_named(name)
-        .map(body::PartInst::key)
+        .map(crate::body::PartInst::key)
         .ok_or_else(|| {
             Reason::new(
-                body::reason::NO_SUCH_PART,
+                crate::body::reason::NO_SUCH_PART,
                 format!("{who} has no part named `{name}`"),
             )
             .with("entity", who.to_string())
@@ -317,16 +263,15 @@ fn name_of(sim: &Sim, who: EntityId, part: PartKey) -> String {
         .map_or_else(String::new, |part| part.name().to_owned())
 }
 
-/// Runs one edit with everything the simulation does around it. `leave`
-/// says whether what comes off is left as items, which are returned.
+/// Runs one edit with everything the simulation does around it, and
+/// returns what the edit gave and the items left of what came off.
 fn edit<T>(
     sim: &mut Sim,
     who: EntityId,
     verb: &str,
     part: &str,
-    leave: bool,
     cause: Cause,
-    run: impl FnOnce(&mut BodyCx<'_, SimHost<'_>>) -> Result<Edited<T>, EditError>,
+    run: impl FnOnce(&mut BodyCx<'_, NullHost>) -> Result<Edited<T>, EditError>,
 ) -> Result<(T, Vec<EntityId>), Reason> {
     body_of(sim, who)?;
     let asked = EventPayload::new(BODY_CHANGING)
@@ -336,11 +281,17 @@ fn edit<T>(
     if let Some(reason) = sim.raise(Where::Entity(who), cause, asked)?.cancelled {
         return Err(reason);
     }
-    let edited = with_body(sim, run)?.map_err(|error| edit_reason(&error))?;
+    let edited = sim
+        .with_body(|cx, _| run(cx))?
+        .map_err(|error| edit_reason(&error))?;
+    sim.raise_body_changes(who, edited.changes.clone(), cause);
     let mut items = Vec::new();
     for detached in &edited.detached {
-        if leave && let Ok(Some(item)) = item::part_item(sim, detached, cause) {
-            items.push(item);
+        sim.report_detached(detached.clone());
+        match item::part_item(sim, detached, cause) {
+            Ok(Some(item)) => items.push(item),
+            Ok(None) => {}
+            Err(reason) => sim.fault(reason),
         }
     }
     item::on_body_changes(sim, &edited.changes, cause);
@@ -352,29 +303,11 @@ fn edit<T>(
             body.parts()
                 .iter()
                 .filter(|part| part.is_present())
-                .map(body::PartInst::key)
+                .map(crate::body::PartInst::key)
                 .collect()
         })
         .unwrap_or_default();
     item::hold::uncover(sim, who, &|part| !present.contains(&part), None, cause);
-    for change in &edited.changes {
-        if let Change::MassChanged(mass) = change
-            && let Some(mut presence) = sim
-                .entities
-                .get(mass.entity)
-                .map(|record| *record.presence())
-        {
-            presence.mass = mass.after.get();
-            let _ = sim.set_presence(mass.entity, presence, cause);
-        }
-    }
-    if sim.components.stats.contains(who) {
-        let _ = crate::traits::with_stats(sim, |cx| crate::stats::refresh(cx, who));
-    }
-    body_events(sim, &edited.changes);
-    let parts = sim.components.get::<Body>(who).map_or(0, |body| {
-        body.parts().iter().filter(|part| part.is_present()).count()
-    });
     sim.emit(
         Where::Entity(who),
         cause,
@@ -383,7 +316,7 @@ fn edit<T>(
                 .subject("self", Subject::Entity(who))
                 .with("verb", verb)
                 .with("part", part)
-                .with("parts", i64::try_from(parts).unwrap_or(i64::MAX)),
+                .with("parts", i64::try_from(present.len()).unwrap_or(i64::MAX)),
         ),
     );
     Ok((edited.value, items))
@@ -405,60 +338,50 @@ pub fn add_part(
     cause: Cause,
 ) -> Result<PartKey, Reason> {
     let parent = name_of(sim, who, at.parent);
-    let (key, _) = edit(sim, who, "add_part", &parent, false, cause, |cx| {
+    let (key, _) = edit(sim, who, "add_part", &parent, cause, |cx| {
         edit::add_part(cx, who, def, at, name, side, scale).map(edited)
     })?;
     Ok(key)
 }
 
-/// Takes a part off with everything on it and in it (06 §6.5
-/// `remove_part`): the body no longer has them. With `leave`, they are
-/// left as an item where the body is, which is returned.
+/// Takes a part off with everything on it and in it, and the listings
+/// of what was gone already beneath it (06 §6.5 `remove_part`): see
+/// [`edit::remove_part`]. What came off leaves what its definition
+/// says; the item, if any, is returned.
 pub fn remove_part(
     sim: &mut Sim,
     who: EntityId,
     part: PartKey,
-    leave: bool,
     cause: Cause,
 ) -> Result<Option<EntityId>, Reason> {
     let name = name_of(sim, who, part);
-    let ((), items) = edit(sim, who, "remove_part", &name, leave, cause, |cx| {
+    let ((), items) = edit(sim, who, "remove_part", &name, cause, |cx| {
         let (detached, changes) = edit::remove_part(cx, who, part, cause)?;
-        Ok(Edited {
-            value: (),
-            changes,
-            detached: vec![detached],
-        })
+        Ok(with_off((vec![detached], changes)))
     })?;
     Ok(items.into_iter().next())
 }
 
 /// Swaps a part's definition (06 §6.5 `replace_part`): see
-/// [`edit::replace_part`]. With `leave`, what came off because it no
-/// longer fits is left as items, which are returned.
+/// [`edit::replace_part`]. Returns the items left of what came off
+/// because it no longer fits.
 pub fn replace_part(
     sim: &mut Sim,
     who: EntityId,
     part: PartKey,
     with: BodyPartId,
-    leave: bool,
     cause: Cause,
 ) -> Result<Vec<EntityId>, Reason> {
     let name = name_of(sim, who, part);
-    let ((), items) = edit(sim, who, "replace_part", &name, leave, cause, |cx| {
-        let (detached, changes) = edit::replace_part(cx, who, part, with, cause)?;
-        Ok(Edited {
-            value: (),
-            changes,
-            detached,
-        })
+    let ((), items) = edit(sim, who, "replace_part", &name, cause, |cx| {
+        edit::replace_part(cx, who, part, with, cause).map(with_off)
     })?;
     Ok(items)
 }
 
-/// Attaches a part that came off a body (06 §6.5 `graft_part`): an item
-/// left by a part (`item::part_item`), from this body or another. The
-/// item is used up. Returns the key of the part grafted.
+/// Attaches a part that came off a body (06 §6.5 `graft_part`): the item
+/// a part left (`item::part_item`), from this body or another. The item
+/// is used up. Returns the key of the part grafted.
 pub fn graft_part(
     sim: &mut Sim,
     who: EntityId,
@@ -466,93 +389,40 @@ pub fn graft_part(
     at: &Attach,
     cause: Cause,
 ) -> Result<PartKey, Reason> {
-    let not_a_part = || edit_reason(&EditError::NotAPart).with("item", part.to_string());
     sim.known(part)?;
     let remains = sim
         .components
         .get::<item::Item>(part)
         .and_then(item::Item::remains)
         .cloned()
-        .ok_or_else(not_a_part)?;
+        .ok_or_else(|| edit_reason(&EditError::NotAPart).with("item", part.to_string()))?;
     let parent = name_of(sim, who, at.parent);
-    let (key, _) = edit(sim, who, "graft_part", &parent, false, cause, |cx| {
+    let (key, _) = edit(sim, who, "graft_part", &parent, cause, |cx| {
         edit::graft_part(cx, who, &remains, at).map(edited)
     })?;
     item::destroy(sim, part, cause)?;
     Ok(key)
 }
 
-/// The parts that are there and answer to a name as a wear entry's
-/// `parts` does (06 §9.1): their name, their definition's id (qualified
-/// or bare) or a tag their definition carries, or every part for `all`.
-pub fn parts_answering(sim: &Sim, who: EntityId, name: &str) -> Result<Vec<PartKey>, Reason> {
-    let body = body_of(sim, who)?;
-    let registry = sim.defs.try_registry::<BodyPartDef>();
-    let tag = sim.defs.tags().lookup(name);
-    let found: Vec<PartKey> = body
-        .parts()
-        .iter()
-        .filter(|part| part.is_present())
-        .filter(|part| {
-            if name == item::ALL_PARTS || part.name() == name {
-                return true;
-            }
-            let Some(registry) = registry else {
-                return false;
-            };
-            let qualified = registry.name(part.def());
-            let bare = qualified.rsplit(':').next().unwrap_or(qualified);
-            qualified == name
-                || bare == name
-                || tag.is_some_and(|tag| {
-                    registry
-                        .try_get(part.def())
-                        .is_some_and(|def| def.tags.contains(tag))
-                })
-        })
-        .map(body::PartInst::key)
-        .collect();
-    if found.is_empty() {
-        return Err(Reason::new(
-            body::reason::NO_SUCH_PART,
-            format!("{who} has no part that answers to `{name}`"),
-        )
-        .with("entity", who.to_string())
-        .with("part", name));
-    }
-    Ok(found)
-}
-
-/// Changes a layer's material or thickness on some parts (06 §6.5
-/// `set_layer`): see [`edit::set_layer`]. `parts` names them as
-/// [`parts_answering`] reads a name. Returns how many parts changed.
+/// Changes a layer's material or thickness on some parts of one body
+/// (06 §6.5 `set_layer`): see [`edit::set_layer`].
 pub fn set_layer(
     sim: &mut Sim,
     who: EntityId,
-    parts: &str,
+    parts: &[PartKey],
     layer: Option<usize>,
     material: Option<MaterialId>,
     thickness: Option<Real>,
     cause: Cause,
-) -> Result<usize, Reason> {
-    let keys = parts_answering(sim, who, parts)?;
-    let count = keys.len();
-    edit(sim, who, "set_layer", parts, false, cause, |cx| {
-        edit::set_layer(cx, who, &keys, layer, material, thickness).map(|changes| Edited {
-            value: (),
-            changes,
-            detached: Vec::new(),
-        })
-    })?;
-    Ok(count)
-}
-
-fn just(changes: Changes) -> Edited<()> {
-    Edited {
-        value: (),
-        changes,
-        detached: Vec::new(),
-    }
+) -> Result<(), Reason> {
+    let name = match parts {
+        [one] => name_of(sim, who, *one),
+        _ => String::new(),
+    };
+    edit(sim, who, "set_layer", &name, cause, |cx| {
+        edit::set_layer(cx, who, parts, layer, material, thickness).map(just)
+    })
+    .map(|_| ())
 }
 
 /// Gives a part a new size relative to its body (06 §6.5 `scale_part`).
@@ -564,7 +434,7 @@ pub fn scale_part(
     cause: Cause,
 ) -> Result<(), Reason> {
     let name = name_of(sim, who, part);
-    edit(sim, who, "scale_part", &name, false, cause, |cx| {
+    edit(sim, who, "scale_part", &name, cause, |cx| {
         edit::scale_part(cx, who, part, scale).map(just)
     })
     .map(|_| ())
@@ -572,47 +442,25 @@ pub fn scale_part(
 
 /// Gives a body a new overall size (06 §6.5 `scale_body`).
 pub fn scale_body(sim: &mut Sim, who: EntityId, scale: Real, cause: Cause) -> Result<(), Reason> {
-    edit(sim, who, "scale_body", "", false, cause, |cx| {
+    edit(sim, who, "scale_body", "", cause, |cx| {
         edit::scale_body(cx, who, scale).map(just)
     })
     .map(|_| ())
 }
 
 /// Rebuilds a body from another plan (06 §6.5 `set_body_plan`): see
-/// [`edit::set_body_plan`]. With `leave`, what the new plan does not
-/// map is left as items, which are returned.
+/// [`edit::set_body_plan`]. Returns the items left of what the new plan
+/// does not map.
 pub fn set_body_plan(
     sim: &mut Sim,
     who: EntityId,
     plan: BodyPlanId,
-    leave: bool,
     cause: Cause,
 ) -> Result<Vec<EntityId>, Reason> {
-    let ((), items) = edit(sim, who, "set_body_plan", "", leave, cause, |cx| {
-        let (detached, changes) = edit::set_body_plan(cx, who, plan, cause)?;
-        Ok(Edited {
-            value: (),
-            changes,
-            detached,
-        })
+    let ((), items) = edit(sim, who, "set_body_plan", "", cause, |cx| {
+        edit::set_body_plan(cx, who, plan, cause).map(with_off)
     })?;
     Ok(items)
-}
-
-/// Takes a share of a whole layer off the damage of every layer of a
-/// part (06 §6.5 `heal_part`).
-pub fn heal_part(
-    sim: &mut Sim,
-    who: EntityId,
-    part: PartKey,
-    share: Real,
-    cause: Cause,
-) -> Result<(), Reason> {
-    let name = name_of(sim, who, part);
-    edit(sim, who, "heal_part", &name, false, cause, |cx| {
-        Ok(just(body::heal_part(cx, who, part, share)?))
-    })
-    .map(|_| ())
 }
 
 /// Adds a share of a whole layer to the damage of one layer of a part or
@@ -626,91 +474,40 @@ pub fn damage_part(
     cause: Cause,
 ) -> Result<(), Reason> {
     let name = name_of(sim, who, part);
-    edit(sim, who, "damage_part", &name, false, cause, |cx| {
+    edit(sim, who, "damage_part", &name, cause, |cx| {
         edit::damage_part(cx, who, part, layer, share).map(just)
-    })
-    .map(|_| ())
-}
-
-/// Disables a part from outside, whatever its condition, or with
-/// `restore` lets it go again (06 §6.5 `disable_part`, `restore_part`).
-pub fn hold_part(
-    sim: &mut Sim,
-    who: EntityId,
-    part: PartKey,
-    restore: bool,
-    cause: Cause,
-) -> Result<(), Reason> {
-    let name = name_of(sim, who, part);
-    let verb = if restore {
-        "restore_part"
-    } else {
-        "disable_part"
-    };
-    edit(sim, who, verb, &name, false, cause, |cx| {
-        let changes = if restore {
-            body::restore(cx, who, part)?
-        } else {
-            body::disable(cx, who, part)?
-        };
-        Ok(just(changes))
     })
     .map(|_| ())
 }
 
 // ---- The verbs ---------------------------------------------------------------
 
-fn arg<'a>(call: &'a VerbCall<'_>, index: usize) -> &'a Value {
-    call.args.get(index).unwrap_or(&Value::Null)
-}
-
-fn entity(sim: &Sim, call: &VerbCall<'_>, index: usize, name: &str) -> Result<EntityId, Reason> {
-    match sim.subject_of(arg(call, index)) {
-        Some(Subject::Entity(id)) => Ok(id),
-        _ => Err(bad_argument(name, "an entity")),
-    }
-}
-
-fn text<'a>(call: &'a VerbCall<'_>, index: usize, name: &str) -> Result<&'a str, Reason> {
-    arg(call, index)
-        .as_str()
-        .ok_or_else(|| bad_argument(name, "a text"))
-}
-
-fn text_or_null<'a>(
-    call: &'a VerbCall<'_>,
-    index: usize,
+/// The part an argument names, and whose body it is of.
+fn part_arg(
+    sim: &Sim,
+    call: &VerbCall<'_>,
+    at: usize,
     name: &str,
-) -> Result<Option<&'a str>, Reason> {
-    match arg(call, index) {
-        Value::Null => Ok(None),
-        _ => text(call, index, name).map(Some),
+) -> Result<(EntityId, PartKey), Reason> {
+    let handle: Handle =
+        args::optional_handle(call, at, name)?.ok_or_else(|| bad_argument(name, "a part"))?;
+    let kind = sim.body_defs().map(|defs| defs.kinds().part);
+    if Some(handle.kind) != kind {
+        return Err(bad_argument(name, "a part of a body"));
     }
+    part_of_handle(&sim.components().body, handle)
+        .ok_or_else(|| bad_argument(name, "a part of a body that still exists"))
 }
 
-fn real(call: &VerbCall<'_>, index: usize, name: &str) -> Result<Real, Reason> {
-    arg(call, index)
-        .as_number()
-        .ok_or_else(|| bad_argument(name, "a number"))
+/// A part as a verb gives it back.
+fn part_value(sim: &Sim, who: EntityId, part: PartKey) -> Value {
+    sim.body_defs().map_or(Value::Null, |defs| {
+        Value::Subject(part_handle(defs.kinds(), who, part))
+    })
 }
 
-fn real_or_null(call: &VerbCall<'_>, index: usize, name: &str) -> Result<Option<Real>, Reason> {
-    match arg(call, index) {
-        Value::Null => Ok(None),
-        _ => real(call, index, name).map(Some),
-    }
-}
-
-fn flag(call: &VerbCall<'_>, index: usize, name: &str) -> Result<bool, Reason> {
-    match arg(call, index) {
-        Value::Null => Ok(false),
-        Value::Bool(value) => Ok(*value),
-        _ => Err(bad_argument(name, "true or false")),
-    }
-}
-
-fn layer(call: &VerbCall<'_>, index: usize) -> Result<Option<usize>, Reason> {
-    match arg(call, index) {
+fn layer_arg(call: &VerbCall<'_>, at: usize) -> Result<Option<usize>, Reason> {
+    match args::value(call, at) {
         Value::Null => Ok(None),
         value => value
             .as_int()
@@ -720,57 +517,44 @@ fn layer(call: &VerbCall<'_>, index: usize) -> Result<Option<usize>, Reason> {
     }
 }
 
-/// A definition an argument names: an id of the type, or its qualified
-/// id as text.
-fn def_arg<T: Def>(
-    sim: &Sim,
-    call: &VerbCall<'_>,
-    index: usize,
-    name: &str,
-) -> Result<T::Id, Reason> {
-    let ty = sim.exprs.registry().def_type_id(T::TYPE);
-    let wanted = || bad_argument(name, &format!("a `{}` definition", T::TYPE));
-    match arg(call, index) {
-        Value::Id(id) if Some(id.ty) == ty => {
-            <T::Id as clash_core::DenseId>::from_index(id.index as usize).ok_or_else(wanted)
-        }
-        Value::Str(text) => sim
-            .defs
-            .try_registry::<T>()
-            .and_then(|registry| registry.lookup(text))
-            .ok_or_else(wanted),
-        _ => Err(wanted()),
-    }
-}
-
-/// Where a verb puts a part: `on` the part named, in `socket`, or inside
+/// Where a verb puts a part: on the part `on`, in `socket`, or inside
 /// it with `inside`.
 fn attach_arg(
     sim: &Sim,
-    who: EntityId,
     call: &VerbCall<'_>,
     on: usize,
     socket: usize,
     inside: usize,
-) -> Result<Attach, Reason> {
-    let parent = part_named(sim, who, text(call, on, "on")?)?;
-    let inside = flag(call, inside, "inside")?;
-    Ok(Attach {
-        parent,
-        relation: if inside { Relation::In } else { Relation::On },
-        socket: text_or_null(call, socket, "socket")?.map(str::to_owned),
-    })
+) -> Result<(EntityId, Attach), Reason> {
+    let (who, parent) = part_arg(sim, call, on, "on")?;
+    let inside = args::flag(call, inside, "inside")?;
+    Ok((
+        who,
+        Attach {
+            parent,
+            relation: if inside { Relation::In } else { Relation::On },
+            socket: args::optional_text(call, socket, "socket")?.map(str::to_owned),
+        },
+    ))
 }
 
+/// A verb's specification, from its arguments as the language writes
+/// their types; `part` stands for the kind of a body's part.
 fn spec(
     registry: &Registry,
     name: &str,
     doc: &str,
-    args: &[(&str, &str, bool, &str)],
+    arguments: &[(&str, &str, bool, &str)],
 ) -> Option<VerbSpec> {
     let mut spec = VerbSpec::new(name).doc(doc);
-    for (arg, written, optional, arg_doc) in args {
-        let ty = registry.parse_type(written)?;
+    for (arg, written, optional, arg_doc) in arguments {
+        let ty = if *written == PART_KIND {
+            // `self.part(name)` may be null: a null part is refused when
+            // the verb runs rather than warned of where it is written.
+            Type::Subject(registry.kind_id(PART_KIND)?).nullable()
+        } else {
+            registry.parse_type(written)?
+        };
         spec = if *optional {
             spec.optional_arg(*arg, ty.nullable(), *arg_doc)
         } else {
@@ -780,19 +564,7 @@ fn spec(
     Some(spec)
 }
 
-const WHO: (&str, &str, bool, &str) = ("who", "entity", false, "Whose body.");
-const PART: (&str, &str, bool, &str) = (
-    "part",
-    "string",
-    false,
-    "The part, by its name in the body.",
-);
-const LEAVE: (&str, &str, bool, &str) = (
-    "leave",
-    "bool",
-    true,
-    "Whether what comes off is left as an item where the body is. Default false: it is gone.",
-);
+const PART: (&str, &str, bool, &str) = ("part", PART_KIND, false, "The part.");
 
 /// The verbs of body editing, for [`crate::verb::engine_verbs`]. Each
 /// raises `body_changing` first, which may cancel, and `body_changed`
@@ -806,16 +578,15 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "add_part",
-                    "Adds a new part of a definition to a body (06 §6.5), on a part in a socket that takes it, or with `inside` inside it, with the organs its definition brings. A part of that name that is gone is replaced. Returns the new part's name. Refused with `unknown_part`, `no_such_socket`, `socket_refuses`, `no_free_socket`, `part_name_taken`, `too_many_parts`, `bad_amount` and by a handler of `body_changing`.",
+                    "Adds a new part of a definition to a body (06 §6.5), on the part `on` in a socket that takes it, or with `inside` inside it, with the organs its definition brings. A part of that name that is gone is replaced. Gives the new part. Refused with `unknown_part`, `no_such_socket`, `socket_refuses`, `no_free_socket`, `part_name_taken`, `too_many_parts`, `bad_amount` and by a handler of `body_changing`.",
                     &[
-                        WHO,
+                        ("on", PART_KIND, false, "The part it is joined to."),
                         ("part", "id<body_part>", false, "What kind of part."),
-                        ("on", "string", false, "The part it is joined to, by name."),
                         (
                             "socket",
                             "string",
                             true,
-                            "The socket it takes. Left out, the first that would take it.",
+                            "The socket it takes. Left out, the first, by name, that would take it.",
                         ),
                         (
                             "inside",
@@ -840,32 +611,15 @@ pub fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let def = def_arg::<BodyPartDef>(sim, call, 1, "part")?;
-                let at = attach_arg(sim, who, call, 2, 3, 4)?;
-                let name = text_or_null(call, 5, "name")?;
-                let side = text_or_null(call, 6, "side")?.map(str::to_owned);
-                let scale = real_or_null(call, 7, "scale")?.unwrap_or(Real::ONE);
+                let (who, at) = attach_arg(sim, call, 0, 2, 3)?;
+                let def =
+                    BodyPartId::from_index(args::def(sim, call, 1, "part", BodyPartDef::TYPE)?)
+                        .ok_or_else(|| bad_argument("part", "a `body_part`"))?;
+                let name = args::optional_text(call, 4, "name")?;
+                let side = args::optional_text(call, 5, "side")?.map(str::to_owned);
+                let scale = args::optional_real(call, 6, "scale")?.unwrap_or(Real::ONE);
                 let key = add_part(sim, who, def, &at, name, side, scale, cause)?;
-                Ok(Value::text(name_of(sim, who, key)))
-            },
-        },
-        VerbDef {
-            name: "remove_part",
-            build: |registry| {
-                spec(
-                    registry,
-                    "remove_part",
-                    "Takes a part off a body with everything on it and in it (06 §6.5): the body no longer has them. Returns the item left, or null. Refused with `no_such_part`, `part_missing`, `root_part` and by a handler of `body_changing`.",
-                    &[WHO, PART, LEAVE],
-                )
-            },
-            run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = part_named(sim, who, text(call, 1, "part")?)?;
-                let leave = flag(call, 2, "leave")?;
-                let item = remove_part(sim, who, part, leave, cause)?;
-                Ok(item.map_or(Value::Null, |item| sim.subject_value(Subject::Entity(item))))
+                Ok(part_value(sim, who, key))
             },
         },
         VerbDef {
@@ -874,22 +628,20 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "replace_part",
-                    "Swaps a part's definition (06 §6.5), keeping its name, its place and what is attached to it; its layers are new and its wounds gone. What is on it and no longer fits the new definition's sockets comes off. Returns how many items were left. Refused with `unknown_part`, `socket_refuses` and as `remove_part` is.",
+                    "Swaps a part's definition (06 §6.5), keeping its name, its place and what is attached to it; its layers are new and its wounds gone. What is on it and no longer fits the new definition's sockets comes off, reported as `part_detached`. Gives null. Refused with `unknown_part`, `socket_refuses`, `part_missing` and by a handler of `body_changing`.",
                     &[
-                        WHO,
                         PART,
                         ("with", "id<body_part>", false, "The new definition."),
-                        LEAVE,
                     ],
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = part_named(sim, who, text(call, 1, "part")?)?;
-                let with = def_arg::<BodyPartDef>(sim, call, 2, "with")?;
-                let leave = flag(call, 3, "leave")?;
-                let items = replace_part(sim, who, part, with, leave, cause)?;
-                Ok(Value::Int(i64::try_from(items.len()).unwrap_or(i64::MAX)))
+                let (who, part) = part_arg(sim, call, 0, "part")?;
+                let with =
+                    BodyPartId::from_index(args::def(sim, call, 1, "with", BodyPartDef::TYPE)?)
+                        .ok_or_else(|| bad_argument("with", "a `body_part`"))?;
+                replace_part(sim, who, part, with, cause)?;
+                Ok(Value::Null)
             },
         },
         VerbDef {
@@ -898,16 +650,15 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "graft_part",
-                    "Attaches a part that came off a body, from this body or another (06 §6.5): the item a part left. Its parts keep their names, layers, damage and size; the item is used up. Returns the grafted part's name. Refused with `not_a_part` and as `add_part` is.",
+                    "Attaches a part that came off a body, from this body or another (06 §6.5): the item it left. Its parts keep their names, layers, damage and size, not their wounds; the item is used up. Gives the grafted part. Refused with `not_a_part` and as `add_part` is.",
                     &[
-                        WHO,
                         ("item", "entity", false, "The item a part left."),
-                        ("on", "string", false, "The part it is joined to, by name."),
+                        ("on", PART_KIND, false, "The part it is joined to."),
                         (
                             "socket",
                             "string",
                             true,
-                            "The socket it takes. Left out, the first that would take it.",
+                            "The socket it takes. Left out, the first, by name, that would take it.",
                         ),
                         (
                             "inside",
@@ -919,11 +670,10 @@ pub fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = entity(sim, call, 1, "item")?;
-                let at = attach_arg(sim, who, call, 2, 3, 4)?;
+                let part = args::entity(sim, call, 0, "item")?;
+                let (who, at) = attach_arg(sim, call, 1, 2, 3)?;
                 let key = graft_part(sim, who, part, &at, cause)?;
-                Ok(Value::text(name_of(sim, who, key)))
+                Ok(part_value(sim, who, key))
             },
         },
         VerbDef {
@@ -932,15 +682,9 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "set_layer",
-                    "Changes what a layer is made of, how thick it is, or both, on every part that answers to `part` (06 §6.5). Returns how many parts changed. Refused with `no_such_part`, `no_such_layer`, `unknown_material`, `bad_amount` and by a handler of `body_changing`.",
+                    "Changes what a layer of a part is made of, how thick it is, or both (06 §6.5). A layer keeps its damage. Gives null. Refused with `no_such_layer`, `unknown_material`, `part_missing`, `bad_amount` and by a handler of `body_changing`.",
                     &[
-                        WHO,
-                        (
-                            "part",
-                            "string",
-                            false,
-                            "The parts: a part's name, the id of its definition, a tag its definition carries, or `all`.",
-                        ),
+                        PART,
                         (
                             "layer",
                             "int",
@@ -963,16 +707,17 @@ pub fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let parts = text(call, 1, "part")?.to_owned();
-                let layer = layer(call, 2)?;
-                let material = match arg(call, 3) {
-                    Value::Null => None,
-                    _ => Some(def_arg::<MaterialDef>(sim, call, 3, "material")?),
-                };
-                let thickness = real_or_null(call, 4, "thickness")?;
-                let count = set_layer(sim, who, &parts, layer, material, thickness, cause)?;
-                Ok(Value::Int(i64::try_from(count).unwrap_or(i64::MAX)))
+                let (who, part) = part_arg(sim, call, 0, "part")?;
+                let layer = layer_arg(call, 1)?;
+                let material = args::optional_def(sim, call, 2, "material", MaterialDef::TYPE)?
+                    .map(|index| {
+                        MaterialId::from_index(index)
+                            .ok_or_else(|| bad_argument("material", "a `material`"))
+                    })
+                    .transpose()?;
+                let thickness = args::optional_real(call, 3, "thickness")?;
+                set_layer(sim, who, &[part], layer, material, thickness, cause)?;
+                Ok(Value::Null)
             },
         },
         VerbDef {
@@ -981,9 +726,8 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "scale_part",
-                    "Gives a part a new size relative to its body (06 §6.5): its length, girth and layers go with it, its mass with the cube. Refused with `no_such_part`, `part_missing`, `bad_amount` and by a handler of `body_changing`.",
+                    "Gives a part a new size relative to its body (06 §6.5): its length, girth and layers go with it, its mass with the cube. Gives null. Refused with `part_missing`, `bad_amount` and by a handler of `body_changing`.",
                     &[
-                        WHO,
                         PART,
                         (
                             "scale",
@@ -995,9 +739,8 @@ pub fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = part_named(sim, who, text(call, 1, "part")?)?;
-                let scale = real(call, 2, "scale")?;
+                let (who, part) = part_arg(sim, call, 0, "part")?;
+                let scale = args::real(call, 1, "scale")?;
                 scale_part(sim, who, part, scale, cause)?;
                 Ok(Value::Null)
             },
@@ -1008,9 +751,9 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "scale_body",
-                    "Gives a body a new overall size (06 §6.5): every part, its height and its mass go with it. Refused with `no_body`, `bad_amount` and by a handler of `body_changing`.",
+                    "Gives a body a new overall size (06 §6.5): every part, its height and its mass go with it. Gives null. Refused with `no_body`, `bad_amount` and by a handler of `body_changing`.",
                     &[
-                        WHO,
+                        ("who", "entity", false, "Whose body."),
                         (
                             "scale",
                             "real",
@@ -1021,8 +764,8 @@ pub fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let scale = real(call, 1, "scale")?;
+                let who = args::entity(sim, call, 0, "who")?;
+                let scale = args::real(call, 1, "scale")?;
                 scale_body(sim, who, scale, cause)?;
                 Ok(Value::Null)
             },
@@ -1033,42 +776,19 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "set_body_plan",
-                    "Rebuilds a body from another plan (06 §6.5), keeping each part the new plan names with the same definition, damage and wounds included; the rest comes off. Returns how many items were left. Refused with `unknown_plan`, `too_many_parts` and by a handler of `body_changing`.",
-                    &[WHO, ("plan", "id<body_plan>", false, "The plan."), LEAVE],
-                )
-            },
-            run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let plan = def_arg::<BodyPlanDef>(sim, call, 1, "plan")?;
-                let leave = flag(call, 2, "leave")?;
-                let items = set_body_plan(sim, who, plan, leave, cause)?;
-                Ok(Value::Int(i64::try_from(items.len()).unwrap_or(i64::MAX)))
-            },
-        },
-        VerbDef {
-            name: "heal_part",
-            build: |registry| {
-                spec(
-                    registry,
-                    "heal_part",
-                    "Takes a share of a whole layer off the damage of every layer of a part (06 §6.5): 1 mends it. A wound whose layers are whole again is healed. Refused with `no_such_part`, `part_missing`, `bad_amount` and by a handler of `body_changing`.",
+                    "Rebuilds a body from another plan (06 §6.5), keeping each part the new plan names with the same definition, damage and wounds included; what the plan does not map comes off, reported as `part_detached`. Gives null. Refused with `unknown_plan`, `too_many_parts`, `no_body` and by a handler of `body_changing`.",
                     &[
-                        WHO,
-                        PART,
-                        (
-                            "share",
-                            "real",
-                            false,
-                            "The share of a whole layer, above zero.",
-                        ),
+                        ("who", "entity", false, "Whose body."),
+                        ("plan", "id<body_plan>", false, "The plan."),
                     ],
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = part_named(sim, who, text(call, 1, "part")?)?;
-                let share = real(call, 2, "share")?;
-                heal_part(sim, who, part, share, cause)?;
+                let who = args::entity(sim, call, 0, "who")?;
+                let plan =
+                    BodyPlanId::from_index(args::def(sim, call, 1, "plan", BodyPlanDef::TYPE)?)
+                        .ok_or_else(|| bad_argument("plan", "a `body_plan`"))?;
+                set_body_plan(sim, who, plan, cause)?;
                 Ok(Value::Null)
             },
         },
@@ -1078,9 +798,8 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "damage_part",
-                    "Adds a share of a whole layer to the damage of one layer of a part, or of each (06 §6.5). No wound is made, and no layer is taken past 254 255ths. Refused with `no_such_part`, `part_missing`, `no_such_layer`, `bad_amount` and by a handler of `body_changing`.",
+                    "Adds a share of a whole layer to the damage of one layer of a part, or of each (06 §6.5). No wound is made, and no layer is taken past 254 255ths. Gives null. Refused with `part_missing`, `no_such_layer`, `bad_amount` and by a handler of `body_changing`.",
                     &[
-                        WHO,
                         PART,
                         (
                             "layer",
@@ -1098,45 +817,10 @@ pub fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = part_named(sim, who, text(call, 1, "part")?)?;
-                let layer = layer(call, 2)?;
-                let share = real(call, 3, "share")?;
+                let (who, part) = part_arg(sim, call, 0, "part")?;
+                let layer = layer_arg(call, 1)?;
+                let share = args::real(call, 2, "share")?;
                 damage_part(sim, who, part, layer, share, cause)?;
-                Ok(Value::Null)
-            },
-        },
-        VerbDef {
-            name: "disable_part",
-            build: |registry| {
-                spec(
-                    registry,
-                    "disable_part",
-                    "Disables a part from outside, whatever its condition (06 §6.5): it contributes nothing and its channel slots are gone until `restore_part`. Refused with `no_such_part`, `part_missing` and by a handler of `body_changing`.",
-                    &[WHO, PART],
-                )
-            },
-            run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = part_named(sim, who, text(call, 1, "part")?)?;
-                hold_part(sim, who, part, false, cause)?;
-                Ok(Value::Null)
-            },
-        },
-        VerbDef {
-            name: "restore_part",
-            build: |registry| {
-                spec(
-                    registry,
-                    "restore_part",
-                    "Lets a part disabled from outside go again (06 §6.5): it works if its condition allows. Refused with `no_such_part`, `part_missing` and by a handler of `body_changing`.",
-                    &[WHO, PART],
-                )
-            },
-            run: |sim, call, cause| {
-                let who = entity(sim, call, 0, "who")?;
-                let part = part_named(sim, who, text(call, 1, "part")?)?;
-                hold_part(sim, who, part, true, cause)?;
                 Ok(Value::Null)
             },
         },
@@ -1149,7 +833,11 @@ mod tests {
 
     #[test]
     fn every_verb_event_and_hook_is_in_the_engine_registry() {
-        let registry = crate::engine_registry();
+        // As loading leaves it: the kinds of bodies are entered by their
+        // registry step, and the verbs that name them after.
+        let mut registry = crate::engine_registry();
+        crate::body::props::register(&mut registry).unwrap();
+        crate::verb::register_engine_verbs(&mut registry);
         for verb in verbs() {
             let id = registry
                 .verb_id(verb.name)

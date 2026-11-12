@@ -143,6 +143,7 @@ pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::body::Body;
 use crate::item::{Holds, Item};
+use crate::mind::{Driver, Mind};
 use crate::movement::Mover;
 use crate::stats::Stats;
 use crate::traits::Traits;
@@ -498,6 +499,12 @@ components! {
     /// The ways of moving an entity has, its posture and the path it is
     /// following. On whatever has been told one of them.
     mover: Mover = "mover";
+    /// What decides for a body, and whether it does. On anything that
+    /// decides.
+    mind: Mind = "mind";
+    /// Who acts for a body without being its mind. On a body that is
+    /// driven.
+    driver: Driver = "driver";
     /// The trait instances an entity has and what they put on it
     /// (06 §5). On whatever has been given a trait.
     traits: Traits = "traits";

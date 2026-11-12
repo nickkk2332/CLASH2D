@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use clash_data::expr::Any;
-use clash_data::{Cond, Expr, Node, Span};
+use clash_data::{Cond, Expr, Node, Span, Text};
 use clash_expr::{EventId, Place, VerbId};
 
 use super::{EocId, ReasonDefId, RuleGroupId};
@@ -235,6 +235,52 @@ pub enum EffectKind {
     /// `after`, `every` or `cancel_timer`. Read and kept; timers are
     /// built by a later package.
     Timer(Box<Timer>),
+    /// `message`: a line for a reader (05 §10.6).
+    Message {
+        /// The line, as a template rendered for the reader.
+        text: Text,
+        /// Who it is for; `self` if left out.
+        to: Option<Arg>,
+        /// How it is to be shown.
+        style: Option<Arg>,
+    },
+    /// `ask`: offer a choice (05 §10.6).
+    Ask(Box<Ask>),
+}
+
+/// A choice to offer (05 §10.6).
+#[derive(Clone, Debug)]
+pub struct Ask {
+    /// Who chooses; `self` if left out.
+    pub who: Option<Arg>,
+    /// The question, as a template rendered for the one who chooses.
+    pub prompt: Text,
+    /// What may be chosen.
+    pub options: AskOptions,
+}
+
+/// The options of an `ask`.
+#[derive(Clone, Debug)]
+pub enum AskOptions {
+    /// Written where the effect is: each with the effects to run if it
+    /// is chosen.
+    Listed(Vec<AskOption>),
+    /// Gathered when the effect runs: an expression giving a list of
+    /// maps, each with a `label`, the `eoc` to run and the values to
+    /// run it `with`.
+    Computed(Arg),
+}
+
+/// One option written in an `ask`.
+#[derive(Clone, Debug)]
+pub struct AskOption {
+    /// What it says, as a template rendered for the one who chooses.
+    pub label: Text,
+    /// Whether it may be taken; always, if left out.
+    pub cond: Option<Cond>,
+    /// The effects to run if it is chosen, with the subjects and locals
+    /// of where the `ask` is written.
+    pub body: Block,
 }
 
 /// What `for_each` iterates.

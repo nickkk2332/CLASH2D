@@ -172,6 +172,7 @@ impl Sim {
         if from == to {
             return Ok(from);
         }
+        let was_in_world = self.entities.location(id).is_some();
         self.index(id, &presence, to, cause)?;
         // Whether it leaves the world or comes back to it: durations are
         // taken off the timeline before it goes, and put back once it is
@@ -220,6 +221,13 @@ impl Sim {
                 to,
             },
         );
+        // What it was doing ends as it leaves the world (03 §9), and an
+        // entity that comes into it takes up its plan or is asked.
+        match (was_in_world, self.entities.location(id).is_some()) {
+            (true, false) => self.abandon_all(id),
+            (false, true) => self.entered_world(id, cause),
+            _ => {}
+        }
         Ok(from)
     }
 
@@ -366,6 +374,9 @@ impl Sim {
                     to: Place::Stored,
                 },
             );
+            // What it was doing ends as for any entity that leaves the
+            // world (03 §9).
+            self.abandon_all(lost.entity);
         }
         unplaced
     }

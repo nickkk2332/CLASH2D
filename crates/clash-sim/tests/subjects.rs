@@ -1018,9 +1018,10 @@ fn setters_go_through_the_engines_mutation_paths() {
     let back = sim.subject_value(Subject::Loc(at(20, 20)));
     set(&mut sim, m, "loc", back);
 
-    // control.
+    // control: an entity with nothing to do that comes under direct
+    // control is asked what to do (03 §5.2).
     let told = set(&mut sim, m, "control", Value::from("direct"));
-    assert_eq!(names(&told), ["control_changed"]);
+    assert_eq!(names(&told), ["control_changed", "decision_requested"]);
     assert_eq!(
         sim.truth().entity(mover).unwrap().control(),
         Control::Direct

@@ -419,6 +419,10 @@ pub fn register_engine(registry: &mut Registry) {
     for info in KERNEL_EVENTS.iter().chain(WORLD_EVENTS) {
         mirror_event(registry, info);
     }
+    for info in crate::action::ACT_EVENTS {
+        mirror_event(registry, info);
+    }
+    crate::action::register_hooks(registry);
     crate::item::register_events(registry);
     for info in crate::movement::MOVEMENT_EVENTS {
         mirror_event(registry, info);

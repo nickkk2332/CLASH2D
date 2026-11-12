@@ -1,0 +1,23 @@
+# A flat world, and entities made, moved, carried and removed by the
+# console's debug commands (03 §4.4).
+use default seed=7
+gen core:testland size=2
+spawn creature at=@c:5,5,0 as=walker
+expect event entity_created
+assert "@walker.loc.x == 5 and @walker.loc.y == 5"
+move @walker @c:40,20,0
+expect event entity_relocated
+assert "@walker.loc.x == 40 and @walker.loc.tract.loaded"
+spawn item at=@c:41,20,0 mass=2kg as=stone
+move @stone @walker
+assert "@stone.container == @walker and @stone.outermost == @walker"
+advance 2s
+move @walker @c:6,6,0
+assert "@stone.outermost == @walker and @walker.loc.x == 6"
+move @stone @c:7,6,0
+assert "@stone.container == null and @stone.loc.x == 7"
+remove @stone
+expect event entity_removed
+move @walker @c:200,6,0
+expect reason world.not_loaded
+expect hash 110fc3ad3ab3d0db91b92938c9af12ea

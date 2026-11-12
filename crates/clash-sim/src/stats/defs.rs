@@ -169,9 +169,42 @@ pub struct PoolDef {
     /// The fractions of `max` whose crossing is reported, lowest first.
     #[serde(default)]
     pub thresholds: Vec<Real>,
+    /// What running out of it, or filling up with it, does to an owner
+    /// that has a mind (06 §8.3): each entry names one of the
+    /// `thresholds` and stops the owner while the level is on one side
+    /// of it.
+    #[serde(default)]
+    pub stops: Vec<PoolStopDef>,
     /// The attributes `max` and `regen` read directly.
     #[serde(skip)]
     reads: Vec<AttributeId>,
+}
+
+/// Which side of a threshold a pool's level must be on for a
+/// [`PoolStopDef`] to hold.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StopSide {
+    /// Below the threshold, or fallen to it exactly.
+    #[default]
+    Below,
+    /// Above the threshold, or risen to it exactly.
+    Above,
+}
+
+/// One entry of a pool's `stops` (06 §8.3): while the pool's level is
+/// on one side of one of its thresholds, an owner with a mind is
+/// unconscious or dead.
+#[derive(Clone, Copy, PartialEq, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoolStopDef {
+    /// The threshold: one of the pool's `thresholds`.
+    pub at: Real,
+    /// The side of it that stops the owner. Default `below`.
+    #[serde(default)]
+    pub when: StopSide,
+    /// What it does: `unconscious` or `dead`.
+    pub state: crate::mind::Stop,
 }
 
 impl PoolDef {
@@ -223,6 +256,14 @@ impl Def for PoolDef {
         for pair in self.thresholds.windows(2) {
             if pair[0] == pair[1] {
                 cx.error(format!("the threshold {} is listed twice", pair[0]));
+            }
+        }
+        for stop in &self.stops {
+            if !self.thresholds.contains(&stop.at) {
+                cx.error(format!(
+                    "a stop's `at` must be one of the pool's `thresholds`, and {} is not: a pool is looked at only when it crosses one",
+                    stop.at
+                ));
             }
         }
     }
