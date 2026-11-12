@@ -847,3 +847,281 @@ fn charge_delivered_follows_time_held() {
     }
     let _ = names_of(&[]);
 }
+
+// ---- The bundled powers ------------------------------------------------------------
+
+/// Evaluates an expression with someone as `self`.
+fn eval_of(sim: &Sim, who: EntityId, source: &str) -> Value {
+    sim.eval(
+        &compile(sim, source),
+        clash_sim::Bound::new().subject(sim.subject_value(Subject::Entity(who))),
+    )
+}
+
+/// Evaluates an expression with a cell as `here`.
+fn eval_at(sim: &Sim, x: i32, y: i32, source: &str) -> Value {
+    let registry = sim.defs().expr_registry();
+    let loc = registry.kind_id("loc").unwrap();
+    let context = clash_expr::Context::new().subject("here", clash_expr::Type::Subject(loc));
+    let code = clash_expr::compile(source, registry, &context, &clash_expr::Type::Any)
+        .into_result()
+        .unwrap();
+    sim.eval(
+        &code,
+        clash_sim::Bound::new().subject(sim.subject_value(Subject::Loc(common::at(x, y)))),
+    )
+}
+
+fn set_cell(
+    sim: &mut Sim,
+    x: i32,
+    y: i32,
+    layer: clash_world::Layer,
+    state: clash_world::ElementState,
+) {
+    sim.submit(Command::Debug(DebugCommand::SetElement {
+        loc: common::at(x, y),
+        layer,
+        state,
+    }))
+    .unwrap();
+}
+
+/// Uses one of the sampler's powers toward a cell.
+fn power_at(sim: &mut Sim, who: EntityId, name: &str, x: i32, y: i32) -> bool {
+    let to = sim.subject_value(Subject::Loc(common::at(x, y))).to_stored();
+    let started = ability::use_ability(
+        sim,
+        who,
+        ability_id(name),
+        None,
+        &vec![("to".to_owned(), to)],
+        cause(),
+    )
+    .unwrap_or_else(|reason| panic!("{reason:?}"));
+    sim.pump();
+    started.is_some()
+}
+
+#[test]
+fn dash_makes_its_user_quicker_for_a_while_at_a_price() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "power_sampler", 10, 10);
+    sim.pump();
+    let speed = |sim: &Sim| clash_sim::movement::mover_rules(sim, who).best_speed();
+    let walking = speed(&sim);
+    assert!(walking > Real::ZERO);
+    let started = ability::use_ability(
+        &mut sim,
+        who,
+        ability_id("dash"),
+        None,
+        &Params::new(),
+        cause(),
+    )
+    .unwrap();
+    assert!(started.is_some());
+    advance(&mut sim, Dur::from_millis(200));
+    assert!(has_trait(&sim, who, "dashing"));
+    let stamina = level(&sim, who, "stamina");
+    assert!((stamina - Real::of(75.2)).abs() < Real::of(1.0e-6), "{stamina}");
+    let dashing = speed(&sim);
+    assert!(
+        dashing > walking * Real::of(2.9),
+        "{dashing} against {walking}"
+    );
+    let refused = ability::available(&sim, who, ability_id("dash"), None).unwrap_err();
+    assert_eq!(refused.code, codes::COOLING_DOWN);
+    // Rank 1: three seconds of it.
+    advance(&mut sim, Dur::from_secs(3));
+    assert!(!has_trait(&sim, who, "dashing"));
+    assert_eq!(speed(&sim), walking);
+}
+
+#[test]
+fn force_push_throws_people_into_walls_and_hurts_them() {
+    let mut sim = sim();
+    let wall = common::wall(&sim).raw();
+    for y in 7..=13 {
+        set_cell(&mut sim, 16, y, clash_world::Layer::Block, wall);
+    }
+    let user = spawn(&mut sim, "power_sampler", 10, 10);
+    let target = spawn(&mut sim, "person", 12, 10);
+    sim.pump();
+    sim.drain_events();
+    assert!(power_at(&mut sim, user, "force_push", 12, 10));
+    assert_eq!(level(&sim, user, "reserve"), Real::of(70.0));
+    advance(&mut sim, Dur::from_secs(4));
+    let events = sim.drain_events();
+    let thrown = events.iter().any(|event| {
+        event.name() == "body_launched" && event.subject("target") == Some(Subject::Entity(target))
+    });
+    assert!(thrown, "{:?}", names_of(&events));
+    let struck = events.iter().any(|event| {
+        event.name() == "body_impact"
+            && event.subject("target") == Some(Subject::Entity(target))
+            && text(event, "layer") == "block"
+    });
+    assert!(struck, "the person strikes the wall: {:?}", names_of(&events));
+    let wounds = eval_of(&sim, target, "len(self.wounds)").as_int().unwrap();
+    assert!(wounds > 0, "and is hurt");
+    assert_eq!(
+        sim.truth().location(user),
+        Some(common::at(10, 10)),
+        "the cone goes away from its user"
+    );
+}
+
+#[test]
+fn firebolt_sets_a_fire_that_spreads() {
+    let mut sim = sim();
+    let boards = sim
+        .truth()
+        .cosmos()
+        .defs()
+        .floor_state("boards", None)
+        .unwrap()
+        .raw();
+    for x in 13..=22 {
+        set_cell(&mut sim, x, 10, clash_world::Layer::Floor, boards);
+    }
+    let user = spawn(&mut sim, "power_sampler", 10, 10);
+    sim.pump();
+    assert!(power_at(&mut sim, user, "firebolt", 15, 10));
+    // Held to its end: three seconds, twelve charges.
+    advance(&mut sim, Dur::from_millis(3_100));
+    let set = eval_at(&sim, 15, 10, "here.field('core:fire') ?? 0")
+        .as_int()
+        .unwrap();
+    assert!(set > 200, "{set}");
+    let mut spread = false;
+    for _ in 0..40 {
+        advance(&mut sim, Dur::from_secs(1));
+        spread |= [13, 14, 16, 17].iter().any(|x| {
+            eval_at(&sim, *x, 10, "here.field('core:fire') ?? 0")
+                .as_int()
+                .unwrap_or(0)
+                > 0
+        });
+    }
+    assert!(spread, "the fire spreads along the boards");
+    // One use fed the track a point: not yet a level.
+    assert_eq!(
+        eval_of(&sim, user, "self.track.pyromancy").as_int(),
+        Some(0)
+    );
+}
+
+#[test]
+fn shield_drains_its_pool_while_on_and_stops_when_it_is_empty() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "power_sampler", 10, 10);
+    sim.pump();
+    let started = sim.now();
+    ability::start_mode(&mut sim, who, ability_id("shield"), "raised", cause()).unwrap();
+    sim.pump();
+    assert!(has_trait(&sim, who, "shielded"));
+    advance(&mut sim, Dur::from_secs(10));
+    // Five a second against two of regeneration.
+    let left = level(&sim, who, "reserve");
+    assert!((left - Real::of(70.0)).abs() < Real::of(0.01), "{left}");
+    sim.drain_events();
+    advance(&mut sim, Dur::from_secs(30));
+    assert!(!has_trait(&sim, who, "shielded"));
+    let events = sim.drain_events();
+    let ended = events
+        .iter()
+        .find(|event| event.name() == ability::MODE_ENDED)
+        .unwrap();
+    assert_eq!(text(ended, "how"), "empty");
+    assert_eq!(ended.tick, started + Dur::from_micros(33_333_334));
+    // And the pool fills again.
+    advance(&mut sim, Dur::from_secs(5));
+    assert!(level(&sim, who, "reserve") > Real::of(9.0));
+}
+
+#[test]
+fn heal_closes_the_wounds_of_someone_touched() {
+    let mut sim = sim();
+    let healer = spawn(&mut sim, "power_sampler", 10, 10);
+    let hurt = spawn(&mut sim, "person", 11, 10);
+    sim.pump();
+    let registry = Arc::clone(sim.defs().expr_registry());
+    let damage = registry.def_type_id("damage_type").unwrap();
+    let cut = registry.def_ref(damage, "core:cut").unwrap();
+    sim.call_verb(
+        "hit",
+        &[
+            ("target", sim.subject_value(Subject::Entity(hurt))),
+            ("kind", Value::Id(cut)),
+            ("energy", Value::Real(Real::of(150.0))),
+            ("intensity", Value::Real(Real::of(2.0e7))),
+        ],
+        &[],
+        cause(),
+    )
+    .unwrap();
+    sim.pump();
+    let open = |sim: &Sim| {
+        sim.components()
+            .get::<clash_sim::body::Body>(hurt)
+            .map_or(0, |body| {
+                body.wounds()
+                    .iter()
+                    .filter(|wound| wound.state() == clash_sim::body::WoundState::Open)
+                    .count()
+            })
+    };
+    assert!(open(&sim) > 0, "the cut leaves a wound");
+    let target = sim.subject_value(Subject::Entity(hurt)).to_stored();
+    let started = ability::use_ability(
+        &mut sim,
+        healer,
+        ability_id("heal"),
+        None,
+        &vec![("target".to_owned(), target)],
+        cause(),
+    )
+    .unwrap();
+    assert!(started.is_some());
+    advance(&mut sim, Dur::from_millis(1_200));
+    assert_eq!(open(&sim), 0, "every open wound is closed");
+    let reserve = level(&sim, healer, "reserve");
+    assert!((reserve - Real::of(77.4)).abs() < Real::of(1.0e-6), "{reserve}");
+}
+
+#[test]
+fn a_power_too_dear_is_refused_with_what_is_short() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "power_sampler", 10, 10);
+    sim.pump();
+    sim.pool_spend(who, pool("reserve"), Real::of(90.0), cause())
+        .unwrap();
+    let to = sim
+        .subject_value(Subject::Loc(common::at(12, 10)))
+        .to_stored();
+    let refused = ability::use_ability(
+        &mut sim,
+        who,
+        ability_id("force_push"),
+        None,
+        &vec![("to".to_owned(), to)],
+        cause(),
+    )
+    .unwrap_err();
+    assert_eq!(refused.code, codes::COST_SHORT);
+    assert!(refused.message.contains("20 short"), "{}", refused.message);
+    // Every option says the same, and what it costs.
+    let options = ability::options(&sim, who);
+    let push = options
+        .iter()
+        .find(|option| option.ability == ability_id("force_push"))
+        .unwrap();
+    assert_eq!(
+        push.unavailable.as_ref().map(|reason| reason.code.as_str()),
+        Some(codes::COST_SHORT)
+    );
+    assert_eq!(push.cost[0].what, "core:reserve");
+    assert_eq!(push.cost[0].amount, Real::of(30.0));
+    assert_eq!(options.len(), 4, "the shield has no grant, only a mode");
+}
