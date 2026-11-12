@@ -499,6 +499,18 @@ fn variables_are_resolved_declared_or_not() {
 }
 
 #[test]
+fn a_property_of_something_of_no_known_kind_is_read_when_it_runs() {
+    // As `.name` is read of `any` as a map's entry, so `.name(a)` is
+    // read as the entry and then its entry for `a`.
+    for source in ["$x.held('grasp')", "len($x.worn_on('arm', 2))"] {
+        assert_eq!(diagnostics(source), [], "`{source}`");
+    }
+    // Of a value of a known type that has no properties, it is still a
+    // mistake.
+    error("$n.foo(1)", codes::NOT_CALLABLE, "$n.foo", None);
+}
+
+#[test]
 fn only_functions_and_properties_can_be_called() {
     error("self(1)", codes::NOT_CALLABLE, "self", None);
     error("(1 + 2)(3)", codes::NOT_CALLABLE, "(1 + 2)", None);

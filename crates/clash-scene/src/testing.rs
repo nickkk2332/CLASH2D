@@ -59,6 +59,7 @@
 //! their own articles. Once a test says who reads
 //! ([`FakeHost::read_as`]), that one is "you": `verb` agrees with it and
 //! the pronouns are the second person's. Until then nobody is.
+//! `list(xs)` writes out what each is called: `a, b and c`.
 //!
 //! # A stand-in for perception
 //!
@@ -820,6 +821,17 @@ impl Host for FakeHost {
         };
         match (name.as_str(), args) {
             (FN_NAME | "the" | "a", [value]) => called(value).0,
+            ("list", [Value::List(items)]) => {
+                let names: Vec<String> = items
+                    .iter()
+                    .map(|item| called(item).0.as_str().unwrap_or_default().to_owned())
+                    .collect();
+                Value::text(match names.split_last() {
+                    None => String::new(),
+                    Some((only, [])) => only.clone(),
+                    Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+                })
+            }
             ("they", [value]) => person(value, "you", "they"),
             ("them", [value]) => person(value, "you", "them"),
             ("their", [value]) => person(value, "your", "their"),

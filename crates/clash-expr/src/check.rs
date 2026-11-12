@@ -646,6 +646,19 @@ impl<'a> Checker<'a> {
                     let kind = *kind;
                     return self.property(object, kind, name, Some(args), span);
                 }
+                // Of something whose kind is not known here, as `view` in
+                // a load without the simulation's registry, a property
+                // with arguments is read as `.name` is, as an entry of a
+                // map, and then by each argument in turn, and checked
+                // when it runs.
+                if matches!(object.ty.non_null(), Type::Any) {
+                    let mut node = Self::entry(object, &name.to_string(), Type::Any, span);
+                    for arg in args {
+                        let index = self.expr(arg);
+                        node = Node::new(NodeKind::Index { object: node, index }, Type::Any, span);
+                    }
+                    return node;
+                }
                 let message = format!(
                     "`.{name}(…)`: {} has no properties to call",
                     self.name_of(&object.ty)

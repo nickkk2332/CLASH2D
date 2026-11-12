@@ -1,0 +1,24 @@
+[
+  { "//": "How the reserves and attributes of living things are shown, put into the slots the `ui` mod's screens leave for content: the play screen's status column (`ui:play.bars`) and the condition screen (`ui:condition.pools`, `ui:condition.attributes`). Each is shown only while the character has what it shows, and none is needed: a profile without the `ui` mod shows none of them.",
+    "type": "ui_part", "id": "blood_bar", "into": "ui:play.bars", "order": 10, "required": false,
+    "if": "not is_null(view.pool.blood)",
+    "widget": { "bar": { "label": "Blood ", "value": "view.pool.frac('blood')", "style": "blood" } } },
+  { "type": "ui_part", "id": "pain_bar", "into": "ui:play.bars", "order": 20, "required": false,
+    "if": "not is_null(view.pool.pain)",
+    "widget": { "bar": { "label": "Pain  ", "value": "view.pool.frac('pain')", "style": "warn" } } },
+
+  { "type": "ui_part", "id": "blood_reserve", "into": "ui:condition.pools", "order": 10, "required": false,
+    "if": "not is_null(view.pool.blood)",
+    "widget": { "rows": [
+      { "bar": { "label": "Blood ", "value": "view.pool.frac('blood')", "style": "blood" } },
+      { "text": "<dim>Below 60% one falls; below 40% one dies.</>" } ] } },
+  { "type": "ui_part", "id": "pain_reserve", "into": "ui:condition.pools", "order": 20, "required": false,
+    "if": "not is_null(view.pool.pain)",
+    "widget": { "rows": [
+      { "bar": { "label": "Pain  ", "value": "view.pool.frac('pain')", "style": "warn" } },
+      { "text": "<dim>Above 90% one falls.</>" } ] } },
+
+  { "type": "ui_part", "id": "attributes", "into": "ui:condition.attributes", "order": 10, "required": false,
+    "if": "not is_null(view.attr.strength)",
+    "widget": { "text": "Strength {view.attr.strength:.0}  Wits {view.attr.wits:.0}  Speed {view.attr.speed:.1}" } }
+]

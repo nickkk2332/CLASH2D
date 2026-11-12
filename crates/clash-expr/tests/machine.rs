@@ -463,6 +463,18 @@ fn numeric_errors_give_null_and_a_warning() {
 }
 
 #[test]
+fn a_property_with_arguments_of_a_map_is_its_entry_and_then_the_arguments_entries() {
+    // What `any` holds is read when it runs: a map's entry for the
+    // property's name, then that entry's for each argument.
+    let mut host = TestHost::new();
+    let held = Value::map([("grasp", ints(&[7, 8])), ("worn", ints(&[]))]);
+    host.set_local(slot::X, Value::map([("held", held)]));
+    assert_eq!(run(&mut host, "$x.held('grasp')").0, ints(&[7, 8]));
+    assert_eq!(run(&mut host, "$x.held('fixed')").0, Value::Null);
+    assert_eq!(run(&mut host, "$x.carried('grasp')").0, Value::Null);
+}
+
+#[test]
 fn a_value_of_the_wrong_type_at_run_time_gives_null_and_a_warning() {
     let mut host = TestHost::new();
     let wrong = |wanted, found| Fault::Type { wanted, found };

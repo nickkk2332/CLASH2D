@@ -177,7 +177,7 @@ impl Refresher<'_> {
                 depth,
                 parent,
                 has_children: !beneath.is_empty(),
-                open: false,
+                open: source.open && !beneath.is_empty(),
                 tip: None,
                 on_activate: UiEffects::default(),
             });

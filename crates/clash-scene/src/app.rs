@@ -267,7 +267,7 @@ pub fn register_expr(registry: &mut Registry) {
             .doc("The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3)."),
         PropertySpec::new(app, "keys", Type::list(Type::map(Type::Str)))
             .param("context", Type::Str, "A context of the keymap: `play`, `menu`, `targeting`.")
-            .doc("What the keymap in force binds in a context: one map for each name a key there is given, in order of name, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2)."),
+            .doc("What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2)."),
         PropertySpec::new(app, "size", Type::list(Type::Int))
             .doc("The grid, as `[columns, rows]`."),
         PropertySpec::new(app, "can_save", Type::Bool)
@@ -392,16 +392,24 @@ impl AppReader<'_> {
         for (key, name) in bound {
             by_name.entry(name.as_str()).or_default().push(key.to_string());
         }
-        ExprValue::list(by_name.into_iter().map(|(name, keys)| {
-            let (label, doc) = self
-                .ui
-                .control_words(name, self.keymap_ns)
-                .unwrap_or_else(|| (name.to_owned(), String::new()));
+        let mut rows: Vec<(String, &str, String, String)> = by_name
+            .into_iter()
+            .map(|(name, keys)| {
+                let (label, doc) = self
+                    .ui
+                    .control_words(name, self.keymap_ns)
+                    .unwrap_or_else(|| (name.to_owned(), String::new()));
+                (label, name, doc, keys.join(", "))
+            })
+            .collect();
+        // In the order a reader looks them up: by what they are called.
+        rows.sort();
+        ExprValue::list(rows.into_iter().map(|(label, name, doc, keys)| {
             ExprValue::map([
                 ("name", ExprValue::text(name)),
                 ("label", ExprValue::text(label)),
                 ("doc", ExprValue::text(doc)),
-                ("keys", ExprValue::text(keys.join(", "))),
+                ("keys", ExprValue::text(keys)),
             ])
         }))
     }
