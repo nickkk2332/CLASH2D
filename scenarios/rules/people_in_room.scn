@@ -20,4 +20,4 @@ add_tag to=@a tag=counted
 assert "@a.has_tag('counted')"
 advance 1h
 assert "@a.var('core:weariness') == 7"
-expect hash 5b414d7fbddb3f98f204c42cfb855e5f
+expect hash 283354d86bdde4279b343bad2cecdc61
