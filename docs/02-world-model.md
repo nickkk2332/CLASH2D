@@ -1217,6 +1217,26 @@ pub struct Ambient {                        // what Cosmos::ambient gives
   middle of its shape, which a vortex turns about. What velocity that is
   at a given cell is worked out with the medium (11 §4.7).
 
+**As built** (package A6, decision D-771):
+
+- An `area_kind` may give `gravity` (a scale, or a vector of three
+  numbers), `light` and `suppresses` (the table above). A kind's gravity
+  applies to an area of the kind unless the area's own override sets
+  gravity; a kind's light unless the area carries its own.
+- An area may carry a **light**: a source (`Area::light`,
+  `AreaSpec::light`, a `LightSource` of intensity and radius) at the
+  middle of its shape. It is counted where light is read, as moving
+  sources are (15 §3.3): `Cosmos::light`, `light_with` and `fill_light`
+  add the sources of the areas of the grid (`Cosmos::area_lights`,
+  in id order) before those handed in, and the sum is never below
+  zero. An anchored area takes its light with it: a shadow round
+  someone is an anchored area with a negative light. The table keeps
+  the areas that carry one (`AreaTable::lit`). The world's `areas`
+  section is version 2.
+- Anchoring, the events of an area that moves and radius shapes are as
+  this section says. `create_area` takes `anchor`, `gravity`, `light`
+  and `light_radius` (section 23).
+
 ### 8.4 Sites
 
 ```rust
@@ -3746,7 +3766,7 @@ argument also takes the qualified id as a text.
 | `launch` | `what: entity` standing in the world, `vel: any` (three numbers, m/s) | null | `WorldCtx::launch`, as `Body::of_mass` with its `Physical` | `body_launched` |
 | `impulse` | `what: entity` in flight, `j: any` (three numbers, kg·m/s) | null | `WorldCtx::impulse` | — |
 | `arrest` | `what: entity` in flight | null | `WorldCtx::arrest` | — |
-| `create_area` | `at: loc`, `to: loc?` (a box's other corner), `radius: real?`, `kind: id<area_kind>?`, `tags: list<string>?`, `clock_rate: real?`, `priority: int?` | `area` | `WorldCtx::create_area` | `area_entered` |
+| `create_area` | `at: loc`, `to: loc?` (a box's other corner), `radius: real?`, `kind: id<area_kind>?`, `tags: list<string>?`, `clock_rate: real?`, `priority: int?`, `anchor: entity?` (it moves with the entity), `gravity: any?` (a scale, or three numbers in m/s² east, south and up), `light: real?` (the intensity of a light at its middle; negative darkens), `light_radius: real?` (metres, at most 16), and the terms of a binding (08 §7.3): `bound: bool?`, `ability: ability?`, `for: real?`, `ends_on: list<string>?`, `on_end: string?`, `as: string?` | `area` | `WorldCtx::create_area` | `area_entered`; `binding_created` when bound |
 | `remove_area` | `area: area` | null | `WorldCtx::remove_area` | `area_exited` |
 | `enclose` | `from: loc`, `kind: id<area_kind>?`, `limit: int?` (default 65,536) | `area` | `WorldCtx::enclose` | `area_entered` |
 

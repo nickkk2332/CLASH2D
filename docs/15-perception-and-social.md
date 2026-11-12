@@ -275,6 +275,11 @@ it may give off another or none:
   radius), and each adds in the same way, in the order of the list. The
   world keeps none. Items, creatures and fields tagged as light sources
   reach light this way, supplied by the simulation.
+- **Sources areas carry** (02 §8.3; decision D-771): an area, or its
+  kind, may carry a source at the middle of its shape. The world counts
+  them as moving sources wherever light is read, before those handed
+  in. An area anchored to someone takes it along: darkness round a
+  person is an anchored area with a negative intensity.
 - The sky's part and the fixed sources' part together are never below
   zero, and nor is the whole with moving sources added.
 

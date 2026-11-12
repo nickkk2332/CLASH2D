@@ -1067,6 +1067,19 @@ Dormancy (section 6.1) is as A1 to A4 built it: an ability's `while` is
 kept current, and a trait's where everything it reads names its events.
 The rounds of re-evaluation are counted afresh by each pump.
 
+**Areas that move, and what areas change** (section 7.2; package A6,
+decision D-771): built in the world (02 §8.3 as built). An area
+anchored to an entity follows it as `relocate` moves it, and whoever it
+comes over or leaves is told exactly as when they move the other way;
+its maker is inside it throughout and is told nothing. An area with a
+clock rehomes whoever and whatever it comes over: a maker who anchors
+its own clock to the realm's (`anchor_clock`) walks on while everything
+else inside hangs. An area or its kind may set gravity (a scale, or a
+vector), which bodies in flight read where they are at each wake, and
+may carry a light at its middle, negative for darkness, which moves
+with it; light is never below zero. `create_area` takes `anchor`,
+`gravity`, `light` and `light_radius`.
+
 **Loss** (section 6.3). Revoking an instance, or losing its last
 source, ends its modes (`revoked`, `lost`) and everything bound to it
 (section 7.3, invariant A3), then takes back what it conferred.

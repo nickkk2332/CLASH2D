@@ -21,7 +21,7 @@ the rest of this plan. Build it early.
 | A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | beta |
 | A4 | Modes, upkeep, charging | M | A3 | beta |
 | A5 | Dormancy, suppression, loss | M | A2, A1 | done |
-| A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | in progress |
+| A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | done |
 | A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | in progress |
 | A8 | Snapshots, journals, restoring as generated | L | E8, W6, K7, W8 | todo |
 | A9 | Relays, appraisal, field movement, force at range, contest bias | M | S5, C7, W16 | todo |
@@ -185,6 +185,13 @@ Done when
 - A body falling through a zero-gravity area stops accelerating inside it.
 - An anchored area with a clock rehomes what it comes to cover.
 - Light is never negative.
+
+Done (decision D-771; 02 §8.3 and 08 §12.1 as built). Anchors, moving
+areas and radius shapes were in the world already (D-303); this package
+adds gravity, light and suppression on area kinds, lights carried by
+areas (negative for darkness), and `anchor`, `gravity`, `light` and
+`light_radius` on `create_area`. Tests:
+`crates/clash-sim/tests/abilities_world.rs`.
 
 ### A7 — Bindings: bound traits, summons, conjuring, dispelling
 

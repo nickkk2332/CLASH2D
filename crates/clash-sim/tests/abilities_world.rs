@@ -10,6 +10,11 @@
 //! | A5 | Entering a suppressing area ends a running mode; leaving restores the ability, not the mode | `a_null_area_ends_a_mode_and_leaving_it_restores_the_ability` |
 //! | A5 | A rule on `ability_suppressing` resists | `a_rule_on_ability_suppressing_resists` |
 //! | A5 | Suppression by a trait, and for a time | `a_trait_suppresses_while_it_lasts`, `a_timed_suppression_lifts_on_its_owners_time` |
+//! | A6 | Moving an anchored area raises the events of the others moving the other way | `moving_an_anchored_area_is_moving_the_others_the_other_way` (property test), `an_anchored_area_follows_its_anchor_and_the_anchor_never_leaves_it` |
+//! | A6 | A body falling through weightlessness stops accelerating | `a_body_falling_through_weightlessness_stops_gaining_speed_inside_it` |
+//! | A6 | An anchored area with a clock rehomes what it comes over | `an_anchored_clock_area_stops_what_it_comes_over_and_not_its_maker` |
+//! | A6 | Light is never negative | `darkness_lowers_light_and_never_below_zero` |
+//! | A6 | `create_area` with an anchor, gravity and a light | `create_area_takes_an_anchor_gravity_and_a_light` |
 
 mod common;
 
@@ -560,5 +565,349 @@ fn a_timed_suppression_lifts_on_its_owners_time() {
         .unwrap_err();
     assert_eq!(reason.code, codes::BAD_DURATION);
     let _ = level(&loaded, who, "mana");
-    let _ = Location::new(common::GRID, CellPos::new(0, 0, 0));
+}
+
+// ---- A6: anchored areas and ambient overrides ------------------------------------
+
+/// A plain occupant standing at a cell.
+fn stone(sim: &mut Sim, x: i32, y: i32) -> EntityId {
+    let id = common::spawn(sim, common::item(), common::on(x, y));
+    sim.pump();
+    id
+}
+
+/// An area of no kind round a cell, anchored to an entity, with what a
+/// test sets on it.
+fn bubble(sim: &mut Sim, anchor: EntityId, radius: f64, set: impl FnOnce(&mut AreaSpec)) -> AreaId {
+    let at = sim.truth().location(anchor).unwrap();
+    let mut spec = AreaSpec::new(
+        common::GRID,
+        AreaShape::Radius {
+            centre: at.cell,
+            radius: Real::of(radius),
+        },
+    );
+    spec.anchor = Some(clash_world::AreaAnchor::Entity(anchor));
+    set(&mut spec);
+    let id = sim.world(|ctx| ctx.create_area(spec, cause())).unwrap();
+    sim.pump();
+    id
+}
+
+/// The entering and leaving of an area the events report, by occupant,
+/// sorted: `true` for entering.
+fn crossings(events: &[SimEvent], area: AreaId) -> Vec<(EntityId, bool)> {
+    let mut out: Vec<(EntityId, bool)> = events
+        .iter()
+        .filter_map(|event| match &event.body {
+            clash_sim::EventBody::World(clash_world::WorldEvent::AreaEntered {
+                area: at,
+                occupant,
+                ..
+            }) if *at == area => Some((*occupant, true)),
+            clash_sim::EventBody::World(clash_world::WorldEvent::AreaExited {
+                area: at,
+                occupant,
+                ..
+            }) if *at == area => Some((*occupant, false)),
+            _ => None,
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(24))]
+
+    /// Moving an anchored area raises the same events as its occupants
+    /// moving the other way (02 §8.3).
+    #[test]
+    fn moving_an_anchored_area_is_moving_the_others_the_other_way(
+        others in proptest::collection::vec((22i32..42, 22i32..42), 1..8),
+        moves in proptest::collection::vec((-4i32..=4, -4i32..=4), 1..5),
+        radius in 1.0f64..6.0,
+    ) {
+        let mut carried = sim();
+        let anchor = stone(&mut carried, 32, 32);
+        let placed: Vec<EntityId> = others.iter().map(|(x, y)| stone(&mut carried, *x, *y)).collect();
+        let area = bubble(&mut carried, anchor, radius, |_| {});
+        // The same world, the area left where it is.
+        let mut still = carried.clone();
+        still.world(|ctx| ctx.cosmos.set_area_anchor(area, None)).unwrap();
+        let mut at = (32, 32);
+        let mut shifted = (0, 0);
+        for (dx, dy) in moves {
+            at = (at.0 + dx, at.1 + dy);
+            shifted = (shifted.0 + dx, shifted.1 + dy);
+            carried.drain_events();
+            step_to(&mut carried, anchor, at.0, at.1);
+            let by_area = crossings(&carried.drain_events(), area);
+            still.drain_events();
+            for (who, (x, y)) in placed.iter().zip(&others) {
+                still.relocate(*who, common::on(x - shifted.0, y - shifted.1), cause()).unwrap();
+            }
+            still.pump();
+            let by_others = crossings(&still.drain_events(), area);
+            proptest::prop_assert_eq!(by_area, by_others);
+        }
+    }
+}
+
+#[test]
+fn an_anchored_area_follows_its_anchor_and_the_anchor_never_leaves_it() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 30, 30);
+    let other = stone(&mut sim, 34, 30);
+    let area = bubble(&mut sim, who, 2.0, |_| {});
+    sim.drain_events();
+    step_to(&mut sim, who, 33, 30);
+    let events = sim.drain_events();
+    assert_eq!(crossings(&events, area), vec![(other, true)]);
+    let centre = sim.truth().cosmos().area(area).unwrap().shape.centre();
+    assert_eq!(centre, Some(CellPos::new(33, 30, 0)));
+    step_to(&mut sim, who, 20, 30);
+    assert_eq!(crossings(&sim.drain_events(), area), vec![(other, false)]);
+    // Saved and loaded, it still follows.
+    let (mut loaded, _) = common::save_and_load(&sim);
+    loaded.pump();
+    step_to(&mut loaded, who, 21, 31);
+    let centre = loaded.truth().cosmos().area(area).unwrap().shape.centre();
+    assert_eq!(centre, Some(CellPos::new(21, 31, 0)));
+}
+
+#[test]
+fn a_body_falling_through_weightlessness_stops_gaining_speed_inside_it() {
+    let mut sim = sim();
+    // Weightless from storey 1 to storey 2, over a few cells.
+    let mut spec = AreaSpec::new(
+        common::GRID,
+        AreaShape::Box(CellBox::new(
+            CellPos::new(20, 20, 1),
+            CellPos::new(24, 24, 2),
+        )),
+    );
+    spec.ambient = Some(clash_world::AmbientOverride {
+        gravity: Some(clash_world::GravityOverride::Scale(Real::ZERO)),
+        drift: None,
+    });
+    sim.world(|ctx| ctx.create_area(spec, cause())).unwrap();
+    let material = sim
+        .truth()
+        .cosmos()
+        .defs()
+        .materials()
+        .resolve("core:granite", None)
+        .unwrap();
+    let mut body = clash_world::Body::of_mass(
+        clash_world::BodyOwner::Debris(clash_world::Debris {
+            material,
+            volume: Real::of(0.001),
+        }),
+        common::GRID,
+        [Real::of(22.5), Real::of(22.5), Real::of(14.0)],
+        [Real::ZERO, Real::ZERO, Real::of(-1.0)],
+        Real::of(2.0),
+        cause(),
+    );
+    body.drag = Real::ZERO;
+    let id = sim.world(|ctx| ctx.launch(body)).unwrap();
+    let mut samples: Vec<(Real, Real)> = Vec::new();
+    for _ in 0..200 {
+        advance(&mut sim, Dur::from_millis(20));
+        let Some(body) = sim.truth().cosmos().body(id) else {
+            break;
+        };
+        samples.push((body.pos[2], body.vel[2]));
+    }
+    let storey = clash_world::dims::STOREY_M;
+    let inside: Vec<Real> = samples
+        .iter()
+        .filter(|(z, _)| *z > storey + Real::of(0.5) && *z < storey * Real::of(3.0) - Real::of(0.5))
+        .map(|(_, vz)| *vz)
+        .collect();
+    let above: Vec<Real> = samples
+        .iter()
+        .filter(|(z, _)| *z > storey * Real::of(3.0) + Real::of(0.2))
+        .map(|(_, vz)| *vz)
+        .collect();
+    let below: Vec<Real> = samples
+        .iter()
+        .filter(|(z, _)| *z < storey - Real::of(0.2) && *z > Real::of(0.2))
+        .map(|(_, vz)| *vz)
+        .collect();
+    assert!(inside.len() >= 3, "{samples:?}");
+    assert!(above.len() >= 2 && below.len() >= 1, "{samples:?}");
+    // It gains speed falling toward the area, keeps the speed it had
+    // inside, and gains again below.
+    assert!(above.windows(2).all(|pair| pair[1] < pair[0]), "{above:?}");
+    let first = inside[0];
+    assert!(
+        inside
+            .iter()
+            .all(|vz| (*vz - first).abs() < Real::of(1.0e-9)),
+        "{inside:?}"
+    );
+    assert!(below.iter().all(|vz| *vz < first), "{below:?} {first}");
+}
+
+#[test]
+fn an_anchored_clock_area_stops_what_it_comes_over_and_not_its_maker() {
+    let mut sim = sim();
+    let maker = stone(&mut sim, 12, 40);
+    let other = stone(&mut sim, 30, 40);
+    let realm = sim
+        .truth()
+        .cosmos()
+        .realm(common::realm(&sim))
+        .unwrap()
+        .clock;
+    sim.anchor_clock(maker, Some(realm), cause()).unwrap();
+    bubble(&mut sim, maker, 4.0, |spec| {
+        spec.clock_rate = Some(Real::ZERO)
+    });
+    let other_time = |sim: &Sim| sim.truth().own_time(other);
+    let before = other_time(&sim);
+    advance(&mut sim, Dur::from_secs(2));
+    assert!(other_time(&sim) > before);
+    // The bubble comes over the other as its maker walks up.
+    step_to(&mut sim, maker, 27, 40);
+    let stopped = other_time(&sim);
+    let maker_before = sim.truth().own_time(maker);
+    advance(&mut sim, Dur::from_secs(5));
+    assert_eq!(other_time(&sim), stopped);
+    assert_eq!(
+        sim.truth().own_time(maker) - maker_before,
+        Dur::from_secs(5)
+    );
+    // Saved and loaded inside, it is still stopped.
+    let hash = sim.state_hash();
+    let (mut loaded, _) = common::save_and_load(&sim);
+    loaded.pump();
+    assert_eq!(loaded.state_hash(), hash);
+    advance(&mut loaded, Dur::from_secs(1));
+    assert_eq!(loaded.truth().own_time(other), stopped);
+    // Walking away lets it go on.
+    step_to(&mut loaded, maker, 12, 40);
+    advance(&mut loaded, Dur::from_secs(1));
+    assert!(loaded.truth().own_time(other) > stopped);
+}
+
+#[test]
+fn darkness_lowers_light_and_never_below_zero() {
+    let mut sim = sim();
+    let who = stone(&mut sim, 30, 30);
+    let lamp = stone(&mut sim, 31, 30);
+    let lamp_far = stone(&mut sim, 50, 30);
+    let light_at = |sim: &Sim, x: i32, y: i32| {
+        let cosmos = sim.truth().cosmos();
+        let time = clash_world::SkyTime::now(cosmos, sim.timeline(), common::GRID).unwrap();
+        cosmos.light(common::at(x, y), time).unwrap()
+    };
+    // Two areas that carry light, one by the other far off.
+    let bright = clash_world::LightSource::shining(Real::of(2.0), Some(Real::of(8.0)))
+        .unwrap()
+        .unwrap();
+    bubble(&mut sim, lamp, 0.0, |spec| spec.light = Some(bright));
+    bubble(&mut sim, lamp_far, 0.0, |spec| spec.light = Some(bright));
+    let open = light_at(&sim, 30, 30);
+    let far = light_at(&sim, 50, 30);
+    assert!(open > Real::ZERO && far > Real::ZERO);
+    let source = clash_world::LightSource::shining(Real::of(-50.0), Some(Real::of(6.0)))
+        .unwrap()
+        .unwrap();
+    bubble(&mut sim, who, 0.0, |spec| spec.light = Some(source));
+    let dark = light_at(&sim, 30, 30);
+    assert!(dark < open);
+    assert_eq!(
+        dark,
+        Real::ZERO,
+        "a strong darkness puts out the light, and no more"
+    );
+    assert_eq!(
+        light_at(&sim, 50, 30),
+        far,
+        "out of its reach nothing changes"
+    );
+    // A box filled at once agrees cell by cell, and nothing is negative.
+    let cosmos = sim.truth().cosmos();
+    let time = clash_world::SkyTime::now(cosmos, sim.timeline(), common::GRID).unwrap();
+    let cells = CellBox::new(CellPos::new(24, 24, 0), CellPos::new(36, 36, 0));
+    let mut filled = Vec::new();
+    cosmos
+        .fill_light(common::GRID, cells, time, &[], &mut filled)
+        .unwrap();
+    for (level, cell) in filled.iter().zip(cells.cells()) {
+        assert!(*level >= Real::ZERO);
+        let one = cosmos
+            .light(Location::new(common::GRID, cell), time)
+            .unwrap();
+        assert!((one - *level).abs() < Real::of(1.0e-9), "{cell:?}");
+    }
+    // The darkness moves with its anchor.
+    step_to(&mut sim, who, 50, 30);
+    assert_eq!(light_at(&sim, 30, 30), open);
+    assert!(light_at(&sim, 50, 30) < far);
+}
+
+#[test]
+fn create_area_takes_an_anchor_gravity_and_a_light() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 30, 30);
+    let made = sim
+        .call_verb(
+            "create_area",
+            &[
+                ("at", sim.subject_value(Subject::Loc(common::at(30, 30)))),
+                ("radius", Value::Real(Real::of(3.0))),
+                ("anchor", entity_value(&sim, who)),
+                ("gravity", Value::Real(Real::of(3.0))),
+                ("light", Value::Real(Real::of(-2.0))),
+                ("light_radius", Value::Real(Real::of(5.0))),
+            ],
+            &[],
+            cause(),
+        )
+        .unwrap();
+    let Some(Subject::Area(area)) = sim.subject_of(&made) else {
+        panic!("{made:?}");
+    };
+    let made = sim.truth().cosmos().area(area).unwrap().clone();
+    assert_eq!(made.anchor, Some(clash_world::AreaAnchor::Entity(who)));
+    assert_eq!(
+        made.ambient.and_then(|over| over.gravity),
+        Some(clash_world::GravityOverride::Scale(Real::of(3.0)))
+    );
+    assert_eq!(
+        made.light.map(|light| light.intensity),
+        Some(Real::of(-2.0))
+    );
+    let gravity = sim
+        .truth()
+        .cosmos()
+        .ambient(common::at(30, 30))
+        .unwrap()
+        .gravity;
+    let outside = sim
+        .truth()
+        .cosmos()
+        .ambient(common::at(60, 30))
+        .unwrap()
+        .gravity;
+    assert!((gravity - outside * Real::of(3.0)).abs() < Real::of(1.0e-9));
+    // What it cannot use is refused with a reason.
+    for (name, value) in [
+        ("gravity", Value::from("down")),
+        ("light_radius", Value::Real(Real::of(99.0))),
+    ] {
+        let mut args = vec![
+            ("at", sim.subject_value(Subject::Loc(common::at(30, 30)))),
+            ("light", Value::Real(Real::of(1.0))),
+        ];
+        args.push((name, value));
+        let reason = sim
+            .call_verb("create_area", &args, &[], cause())
+            .unwrap_err();
+        assert_eq!(reason.code, "world.bad_argument", "{name}");
+    }
 }
