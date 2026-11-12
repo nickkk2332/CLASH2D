@@ -41,7 +41,7 @@ use clash_world::{Cause, CauseKind};
 
 use super::host::{
     FaultLimiter, Message, Offer, Offered, Raise, Raised, RuleFault, RuleHost, RuleLimits, RunView,
-    VerbCall,
+    StrikeCall, StrikeOutcome, VerbCall,
 };
 use super::interp::RunOutcome;
 use super::state::{Occurrence, PendingChoice, RuleSet, RuleState, StoredOption, SubjectKey};
@@ -219,6 +219,13 @@ impl Host for SimRules<'_> {
     }
 
     fn call(&mut self, function: FunctionId, args: &[Value]) -> Value {
+        // A function that draws at random draws from the rule stream.
+        if let Some(draws) = self.sim.exprs.function(function).and_then(|def| def.draws) {
+            let mut rng = self.sim.rng.stream(RULE_STREAM).clone();
+            let value = draws(self.sim, args, &mut rng);
+            *self.sim.rng.stream(RULE_STREAM) = rng;
+            return value;
+        }
         self.sim.call_function_for(function, args, self.reader)
     }
 
@@ -493,6 +500,11 @@ impl RuleHost for SimRules<'_> {
 
     fn recurring(&mut self, owner: Handle, rule: EocId, on: bool) {
         self.sim.set_recurring(owner, rule, on);
+    }
+
+    fn strike(&mut self, call: &StrikeCall<'_>) -> Result<StrikeOutcome, Reason> {
+        let cause = self.cause(&call.by);
+        crate::combat::run_strike(self.sim, call, cause)
     }
 
     fn offer(&mut self, offer: &Offer<'_>) -> Offered {

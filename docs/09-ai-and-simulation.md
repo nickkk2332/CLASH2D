@@ -539,8 +539,9 @@ built. What stands in for them in the beta (D-693, D-694):
   replace stances: a stance becomes a relation whose kind is flagged
   `opposes`, and `self.hostile(x)` reads `threats`.
 - **Fleeing** is a `keep_from` step; **fighting back** a `choose` step
-  whose purpose is a tag carried by the attacks content defines, with a
-  method behind it for when none can start.
+  whose purpose is a tag carried by the attacks content defines (the
+  bundled `punch`, `kick` and the rest carry `strike`), with a method
+  behind it for when none can start.
 
 The bundled minds of `mods/core/data/ai/` (`townsperson`, `guard`, `dog`)
 are written with these, and say in their documentation how each behaves.

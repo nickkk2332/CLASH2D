@@ -214,6 +214,26 @@ pub struct Var {
 }
 
 impl Var {
+    /// A variable the action does not write itself but is given because
+    /// of something else it declares: the locals the `strike` effect
+    /// leaves in an action with `attacks` (07 §3.4). It is declared at
+    /// `at`, with a type as written and a constant it starts as.
+    pub(crate) fn implied(name: &str, written_type: &str, default: Expr<Any>, at: Span) -> Var {
+        Var {
+            name: Located {
+                value: name.to_owned(),
+                span: at,
+            },
+            written_type: Located {
+                value: written_type.to_owned(),
+                span: at,
+            },
+            default: Some(default),
+            ty: Type::Any,
+            slot: 0,
+        }
+    }
+
     /// The type of the variable's value: the declared one, or that or
     /// null for a variable with no default.
     pub fn ty(&self) -> &Type {

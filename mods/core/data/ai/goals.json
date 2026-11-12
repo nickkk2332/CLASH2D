@@ -86,7 +86,7 @@
     "doc": "When a character last called out, in seconds of universal time: a character calls once in a while, not at every step." },
 
   { "type": "goal", "id": "confront",
-    "doc": "Going for someone held hostile who is in sight: up to them, then at them with whatever serves to harm, or, with nothing that does, standing over them.",
+    "doc": "Going for someone held hostile who is in sight: up to them, then at them with the first blow that can be struck (an action tagged `strike`: `punch`, `kick`, …), or, with none that can, standing over them.",
     "about": { "track": {
       "where": "self.hostile(it) and (self.last_seen(it) ?? 99) < 3",
       "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
@@ -98,7 +98,7 @@
           { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Stop right there!", "volume": 2 } },
           { "if": "now() - self.var.called_out_at > 30", "set": { "var": "core:called_out_at", "value": "now()" } },
           { "go": { "to": "$about", "within": 1.5 } },
-          { "choose": { "purpose": "harm", "target": "$about" } } ] },
+          { "choose": { "purpose": "strike", "target": "$about" } } ] },
       { "steps": [
           { "go": { "to": "$about", "within": 1.5 } },
           { "look": { "at": "$about", "time": "1 s" } } ] }

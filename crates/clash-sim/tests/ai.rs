@@ -48,22 +48,32 @@ fn core_files(dir: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// `mods/core`'s world, perception, living things, movement and minds,
-/// with one more file.
+/// `mods/core/data/items.json` without its colours, which are the
+/// interface's definition type.
+fn items() -> String {
+    let path = common::mods_dir().join("core/data/items.json");
+    let text = std::fs::read_to_string(path).unwrap();
+    let all: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap();
+    let kept: Vec<serde_json::Value> = all
+        .into_iter()
+        .filter(|def| def.get("type").and_then(serde_json::Value::as_str) != Some("color"))
+        .collect();
+    serde_json::to_string_pretty(&kept).unwrap()
+}
+
+/// `mods/core`'s world, perception, living things, movement, items,
+/// fighting and minds, with one more file.
 fn try_load(extra: &str) -> Result<Arc<Defs>, String> {
     let types = common::types();
     let mut files = core_files("world");
-    for dir in ["perception", "life", "ai"] {
+    for dir in ["perception", "life", "combat", "ai"] {
         files.extend(core_files(dir));
     }
     files.push((
         "data/movement.json".to_owned(),
         std::fs::read_to_string(common::mods_dir().join("core/data/movement.json")).unwrap(),
     ));
-    files.push((
-        "data/test/channels.json".to_owned(),
-        r#"[{ "type": "channel", "id": "arm", "name": "arm" }]"#.to_owned(),
-    ));
+    files.push(("data/items.json".to_owned(), items()));
     files.push(("data/test/extra.json".to_owned(), extra.to_owned()));
     let files: Vec<(&str, &str)> = files
         .iter()
@@ -614,6 +624,31 @@ fn a_guard_goes_for_a_hostile_loses_it_behind_a_door_searches_and_gives_up() {
         Some("core:confront")
     );
     assert!(!named(&events, "said", watch).is_empty());
+    // It struck, with the bundled attacks (07), through `start_action`:
+    // the first action tagged `strike` that could start.
+    let strikes: Vec<String> = {
+        let defs = sim.defs();
+        let tag = defs
+            .tags()
+            .lookup("strike")
+            .expect("attacks carry `strike`");
+        let actions = defs
+            .try_registry::<clash_sim::action::def::ActionDef>()
+            .unwrap();
+        actions
+            .iter()
+            .filter(|(_, def)| def.tags.contains(tag))
+            .map(|(id, _)| actions.name(id).to_owned())
+            .collect()
+    };
+    let struck = events.iter().any(|event| {
+        matches!(
+            &event.body,
+            clash_sim::EventBody::Act(clash_sim::action::ActEvent::ActionStarted { actor, action, .. })
+                if *actor == watch && strikes.contains(action)
+        )
+    });
+    assert!(struck, "the guard did not strike");
     // It reached the outlaw.
     let gap = metres(&sim, loc_of(&sim, watch), loc_of(&sim, outlaw));
     assert!(gap <= 2.5, "the guard is {gap} m from the outlaw");

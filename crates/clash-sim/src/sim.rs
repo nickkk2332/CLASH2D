@@ -125,6 +125,9 @@ pub struct Sim {
     pub(crate) ai: crate::ai::AiState,
     /// Not state: the tables of minds, from the definitions.
     pub(crate) ai_defs: Arc<crate::ai::AiDefs>,
+    /// Not state: how many strikes are being resolved inside one another
+    /// now ([`combat`](crate::combat)). Zero between any two events.
+    pub(crate) strike_depth: u8,
 }
 
 /// Why saved state could not be loaded.
@@ -301,6 +304,7 @@ impl Sim {
             perception_defs,
             ai: crate::ai::AiState::default(),
             ai_defs,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         sim
@@ -834,6 +838,7 @@ impl Sim {
             perception_defs,
             ai: saved.ai,
             ai_defs,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         Ok(sim)

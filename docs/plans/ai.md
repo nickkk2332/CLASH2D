@@ -179,7 +179,8 @@ Done when
 
 Beta, reactions only (09 §6.6): threat read from memories and tracks,
 stances standing in for relations, fleeing by `keep_from`, fighting back
-by `choose` over action tags, investigating what was heard and not
+by `choose` over action tags (the bundled guard strikes with the first
+of combat's attacks tagged `strike` that can start), investigating what was heard and not
 seen, giving up by `settle`; the bundled `townsperson`, `guard` and
 `dog` minds. Stubbed: the `tactics` type, options and their fields,
 `threat`, `standing`, `severity`, `least_effort_that`, `best_reaction`,
