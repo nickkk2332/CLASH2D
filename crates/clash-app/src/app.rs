@@ -16,21 +16,21 @@
 //! | `scenarios` | The `start` definitions of the loaded mods, in id order: the stand-in for game scenarios (`clash_scene::StartDef`). |
 //! | `saves` | What the save backend lists ([`crate::saves`]). |
 //! | `profile`, `scenario` | The profile in use; the start of the game being played. |
-//! | `creation` | A map of what the player has chosen for the next game: `name` and `seed`, set with `edit_creation`. |
+//! | `creation` | The character being made for the next game: null while none is, else the creation session as [`crate::creation`] says. |
 //!
 //! # The services
 //!
 //! | Service | Does |
 //! |---------|------|
-//! | `new_game` | Starts a game from the start with the id `scenario` (left out, the first), with the `seed` and `name` of `app.creation` ([`crate::session::new_game`]) |
-//! | `edit_creation` | Sets a `field` of `app.creation` to a `value` |
+//! | `new_game` | Starts a game from the start with the id `scenario` (left out, the first), with the character the player finished, or else the start's template with its defaults, and the name and seed given ([`crate::session::new_game`]) |
+//! | `creation` | The creation session: `begin`, `select`, `clear`, `name`, `seed`, `finish` ([`crate::creation`]) |
+//! | `edit_creation` | The older form of `creation`'s `name` and `seed`: sets the `field` `name` or `seed` to a `value` |
 //! | `set_pref`, `rebind` | Keeps what the scene has already changed ([`crate::prefs`]) |
 //! | `save`, `load`, `delete_save` | Through the save backend, which is not built into this binary yet |
 //! | `quit` | Nothing more: the scene has noted it and the loop ends |
 //! | `select_profile`, `reload_mods` | Refused, saying how to do it by starting again |
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -40,6 +40,7 @@ use clash_scene::{AppCurrent, AppEntry, AppList, AppRequest, AppState, StartDef}
 use serde_json::Value as Json;
 
 use crate::boot::Loaded;
+use crate::creation::{Creation, FIELD_NAME, FIELD_SEED};
 use crate::paths::PROFILES_DIR;
 use crate::prefs::{Binding, PrefStore};
 use crate::saves::{SAVES_DIR, SaveBackend, SaveMeta};
@@ -54,11 +55,6 @@ pub const STATE_ENABLED: &str = "enabled";
 pub const STATE_DISABLED: &str = "disabled";
 /// The state of an entry whose file cannot be read.
 pub const STATE_BROKEN: &str = "broken";
-
-/// The field of `app.creation` that holds the character's name.
-pub const CREATION_NAME: &str = "name";
-/// The field of `app.creation` that holds the seed of the world.
-pub const CREATION_SEED: &str = "seed";
 
 /// The name a save is given when none is.
 pub const DEFAULT_SAVE: &str = "save";
@@ -76,8 +72,9 @@ pub struct Shared {
     pub mods: Vec<AppEntry>,
     /// `app.scenarios`: the starts.
     pub starts: Vec<AppEntry>,
-    /// `app.creation`: what the player has chosen for the next game.
-    pub creation: BTreeMap<String, ExprValue>,
+    /// `app.creation`: the character being made for the next game, its
+    /// name and the seed.
+    pub creation: Creation,
     /// The game being played, if one is.
     pub session: Option<Session>,
     /// What keeps saves.
@@ -267,7 +264,9 @@ impl App {
     }
 }
 
-/// Starts a game: the `new_game` service.
+/// Starts a game: the `new_game` service. The character is the one the
+/// player finished, or else the start's template with its defaults
+/// ([`Creation::spec_for`]).
 fn start_game(shared: &mut Shared, request: &AppRequest) -> Result<(), String> {
     let start = match request.text("scenario") {
         Some(id) => id.to_owned(),
@@ -277,22 +276,42 @@ fn start_game(shared: &mut Shared, request: &AppRequest) -> Result<(), String> {
             .map(|start| start.id.clone())
             .ok_or("the loaded mods define no way to start a game")?,
     };
-    let seed = shared
-        .creation
-        .get(CREATION_SEED)
-        .and_then(ExprValue::as_int)
-        .map_or(crate::cli::DEFAULT_SEED, |seed| seed.unsigned_abs());
-    let name = shared
-        .creation
-        .get(CREATION_NAME)
-        .and_then(ExprValue::as_str)
-        .unwrap_or("")
-        .trim()
-        .to_owned();
-    let session = session::new_game(&shared.loaded, &start, seed, &name)?;
+    let template = session::start_template(&shared.loaded, &start)?;
+    let defs = &shared.loaded.defs;
+    let spec = shared.creation.spec_for(defs, template.as_deref())?;
+    let seed = shared.creation.seed();
+    let name = shared.creation.name().to_owned();
+    let session = session::new_game(&shared.loaded, &start, seed, spec, &name)?;
     shared.session = Some(session);
+    shared.creation.begun();
     shared.started = true;
     Ok(())
+}
+
+/// The older service `edit_creation { field, value }`: the name or the
+/// seed of the next game.
+fn edit_creation(shared: &mut Shared, request: &AppRequest) -> Result<(), String> {
+    let field = request
+        .text("field")
+        .ok_or("`edit_creation` needs the `field` to change, as a text")?;
+    let value = request.args.get("value").cloned().unwrap_or_default();
+    match field {
+        FIELD_NAME => {
+            let name = value.as_str().unwrap_or("").to_owned();
+            shared.creation.set_name(&shared.loaded.defs, &name)
+        }
+        FIELD_SEED => {
+            let seed = value
+                .as_int()
+                .ok_or("the seed of a game is a whole number")?
+                .unsigned_abs();
+            shared.creation.set_seed(seed);
+            Ok(())
+        }
+        other => Err(format!(
+            "the character being made has no field `{other}` to set: it has `{FIELD_NAME}` and `{FIELD_SEED}`"
+        )),
+    }
 }
 
 impl AppState for App {
@@ -326,12 +345,7 @@ impl AppState for App {
 
     fn creation(&self) -> ExprValue {
         let shared = self.shared.borrow();
-        ExprValue::map(
-            shared
-                .creation
-                .iter()
-                .map(|(field, value)| (field.as_str(), value.clone())),
-        )
+        shared.creation.value(&shared.loaded.defs)
     }
 
     fn service(&mut self, request: &AppRequest) -> Result<(), String> {
@@ -340,13 +354,10 @@ impl AppState for App {
         let dir = shared.saves_dir();
         match request.service {
             AppService::NewGame => start_game(shared, request),
-            AppService::EditCreation => {
-                let field = request
-                    .text("field")
-                    .ok_or("`edit_creation` needs the `field` to change, as a text")?;
-                let value = request.args.get("value").cloned().unwrap_or_default();
-                shared.creation.insert(field.to_owned(), value);
-                Ok(())
+            AppService::EditCreation => edit_creation(shared, request),
+            AppService::Creation => {
+                let defs = std::sync::Arc::clone(&shared.loaded.defs);
+                shared.creation.service(&defs, request)
             }
             AppService::SetPref => {
                 let (Some(id), Some(value)) = (
@@ -406,9 +417,6 @@ impl AppState for App {
                 "mods cannot be read again while the game runs yet: leave and start it again"
                     .to_owned(),
             ),
-            AppService::Creation => {
-                Err("making a character is not built into this binary yet".to_owned())
-            }
         }
     }
 }

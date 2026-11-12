@@ -1,8 +1,10 @@
 //! The first walk (package U11), run headless with the bundled mods:
 //! from the title screen, through the new-game screen, to a character
-//! standing in the generated town; then through an open door into a
-//! house, and up to a wall that stops it. Golden frames (12 §12) are
-//! kept for each of those moments, and the view model is checked to
+//! made from the `core:person` template standing in the generated town;
+//! then through an open door into a house with the `core:step` action,
+//! and up to a wall that stops it with the movement package's reason.
+//! Golden frames (12 §12) are kept for each of those moments, taken
+//! once playback has come to rest, and the view model is checked to
 //! hold only what the character could see: inside the house the street
 //! behind the wall is remembered, not seen.
 //!
@@ -50,6 +52,18 @@ fn start(name: &str) -> Headless {
 fn press(run: &mut Headless, keys: &[&str]) {
     let going = run.keys(keys).unwrap_or_else(|problem| panic!("{problem}"));
     assert!(going, "the game ended while pressing {keys:?}");
+}
+
+/// Passes with no input until playback has nothing left to play: the
+/// picture at rest, as a golden frame is taken of it.
+fn settle(run: &mut Headless) {
+    for _ in 0..600 {
+        if run.game().scene().playback().is_idle() {
+            return;
+        }
+        run.pass();
+    }
+    panic!("playback never came to rest");
 }
 
 /// Where the player's character is, and the simulation's time.
@@ -128,6 +142,7 @@ fn title_to_town_through_a_door_to_a_wall() {
         run.game().scene().top().map(|screen| screen.id()),
         Some("ui:play")
     );
+    settle(&mut run);
     assert_golden(golden("first_play"), run.frame());
     let (begin, began) = player(&run);
     let (seen_first, remembered_first) = known_round(&run, begin);
@@ -135,7 +150,7 @@ fn title_to_town_through_a_door_to_a_wall() {
     // What is shown is what the field of view holds, and no more.
     let fov_cells = run
         .game()
-        .with_session(|session| session.fov.len())
+        .with_session(|session| session.percepts.fov.len())
         .unwrap();
     assert!(
         seen_first.len() <= fov_cells,
@@ -174,11 +189,14 @@ fn title_to_town_through_a_door_to_a_wall() {
             "{far} is remembered, not seen, from inside the house"
         );
     }
+    settle(&mut run);
     assert_golden(golden("inside_house"), run.frame());
 
-    // On north until a wall stops the character.
+    // On north until a wall stops the character, with movement's
+    // reason.
+    let wall = "Something is in the way.";
     let mut steps = 0;
-    while !last_log(&run).starts_with("You cannot go north") {
+    while last_log(&run) != wall {
         press(&mut run, &["k"]);
         steps += 1;
         assert!(steps < 12, "no wall stopped the character");
@@ -190,10 +208,8 @@ fn title_to_town_through_a_door_to_a_wall() {
         (stopped, stopped_at),
         "a refused step moves nothing and takes no time"
     );
-    assert_eq!(
-        last_log(&run),
-        "You cannot go north: something is in the way."
-    );
+    assert_eq!(last_log(&run), wall);
+    settle(&mut run);
     assert_golden(golden("wall"), run.frame());
 }
 
@@ -235,9 +251,6 @@ fn a_shut_door_stops_the_character() {
         (begin.cell.x + 2, begin.cell.y + 3)
     );
     press(&mut run, &["j"]);
-    assert_eq!(
-        last_log(&run),
-        "You cannot go south: something closed is in the way."
-    );
+    assert_eq!(last_log(&run), "The way is closed.");
     assert_eq!(player(&run), (at_door, then));
 }

@@ -295,7 +295,7 @@ fn settle_sprites(steps: &mut [Step]) {
         std::collections::BTreeMap::new();
     for (index, step) in steps.iter().enumerate() {
         for (at, op) in step.ops.iter().enumerate() {
-            if let Op::Sprite { id, .. } = op {
+            if let Op::Sprite { id, .. } | Op::Look { id, .. } = op {
                 last.insert(*id, (index, at));
             }
         }
@@ -312,6 +312,19 @@ fn settle_sprites(steps: &mut [Step]) {
                 to: Some(_),
                 ..
             } => *op = Op::Gone { id: *id },
+            // Looked at again last: it ends where it is perceived.
+            Op::Look {
+                id,
+                look: Some(look),
+            } => {
+                *op = Op::Sprite {
+                    id: *id,
+                    look: Some(*look),
+                    to: None,
+                    glide: 0.0,
+                }
+            }
+            Op::Look { id, look: None } => *op = Op::Gone { id: *id },
             _ => {}
         }
     }
@@ -558,12 +571,9 @@ impl<H: SceneHost> Scene<H> {
                 } else if let Some(entity) = subject.entity()
                     && let Some((id, look)) = host.seen_sprite(entity)
                 {
-                    add(Op::Sprite {
-                        id,
-                        look,
-                        to: None,
-                        glide: 0.0,
-                    });
+                    // Looked at again where it is drawn: only an event
+                    // that says so moves it (D-655).
+                    add(Op::Look { id, look });
                 }
             }
         }

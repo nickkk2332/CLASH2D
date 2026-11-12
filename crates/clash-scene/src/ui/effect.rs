@@ -194,7 +194,8 @@ pub enum AppService {
     /// `reload_mods`: reads the mods again.
     ReloadMods,
     /// `edit_creation`: changes the character being made. Arguments:
-    /// `field` and `value`.
+    /// `field` and `value`. The older form of `creation`'s `name` and
+    /// `seed`.
     EditCreation,
     /// `creation`: works on the creation session (06 §10.3), whose
     /// state `app.creation` reads. Arguments: `op`, one of `begin`

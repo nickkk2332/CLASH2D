@@ -4,15 +4,12 @@
 //! falls when the floor goes, lies down, and is the same after a save
 //! and a load.
 //!
-//! **Until the action runtime runs the actions of
-//! `mods/core/data/movement.json`**, the tests drive them by hand: a
-//! wake-up handler here does what a phase of `core:step` and
-//! `core:go_to` does (waits the time the phase's own `time` expression
-//! gives, read from the loaded definition, then calls what the phase's
-//! effect calls and follows its `next`). The tests marked *re-point*
-//! are to be driven by `Command::Act` with the real actions once they
-//! run; the others test the functions the verbs call and stay as they
-//! are.
+//! The tests of time and paths drive the bundled actions of
+//! `mods/core/data/movement.json`, `core:step` and `core:go_to`, with
+//! `Command::Act` through the action runtime, as a player's command
+//! does; the walker is under delegated control, so nobody is asked
+//! anything when an action ends. The others test the functions the
+//! verbs call.
 
 mod common;
 
@@ -21,15 +18,14 @@ use std::sync::Arc;
 use clash_core::{Dur, EntityId, Real, Tick};
 use clash_data::{Defs, Length, Mass, Volume};
 use clash_expr::Value;
-use clash_sim::action::{ActionDef, PhaseTime};
+use clash_sim::action::{ActEvent, ActionDef, How, Params};
 use clash_sim::component::{Physical, Shape};
-use clash_sim::movement::{
-    self, MovementDef, Mover, PostureDef, Stepped, codes, dir_name, parse_dir,
-};
+use clash_sim::movement::{self, MovementDef, PostureDef, Stepped, codes, dir_name, parse_dir};
 use clash_sim::{
-    AdvanceLimit, Bound, DebugCommand, Handler, Place, Reason, Sim, SimEvent, Subject,
+    AdvanceLimit, Command, CommandError, Control, DebugCommand, EventBody, Handler, Place, Reason,
+    Sim, SimEvent, Subject,
 };
-use clash_time::{Timeline, Wake, WakeDomain, WakeId};
+use clash_time::Timeline;
 use clash_world::dims::STOREY_M;
 use clash_world::{
     AreaShape, AreaSpec, Cause, CellBox, CellPos, Cosmos, FloorState, Footprint, GridId, Layer,
@@ -97,7 +93,6 @@ fn city(at: Location) -> (Sim, EntityId) {
     let def = world.realms().lookup("core:test_city").unwrap();
     cosmos.create_realm(&mut timeline, def, CITY_SEED).unwrap();
     let mut sim = Sim::from_parts(defs, cosmos, timeline, 3);
-    sim.set_wake_handler(WakeDomain::Stepper, phase_ends);
     debug(
         &mut sim,
         DebugCommand::CreateEntity {
@@ -109,6 +104,15 @@ fn city(at: Location) -> (Sim, EntityId) {
     let walker = sim.truth().entities().ids().next().unwrap();
     debug(&mut sim, DebugCommand::StartSession { entity: walker, at }).unwrap();
     assert_eq!(sim.truth().place(walker), Some(Place::at(at)));
+    // Commands address it; nobody is asked when it is free.
+    debug(
+        &mut sim,
+        DebugCommand::SetControl {
+            entity: walker,
+            control: Control::Delegated,
+        },
+    )
+    .unwrap();
     heard(&mut sim);
     (sim, walker)
 }
@@ -188,88 +192,49 @@ fn real_field(event: &SimEvent, name: &str) -> Real {
         .unwrap()
 }
 
-// ---- driving the actions by hand ------------------------------------------
+// ---- driving the actions ---------------------------------------------------
 
-/// The argument of the wake-up that ends a phase of `core:go_to`.
-const GO_TO: u64 = 100;
-
-/// How long a phase of an action of `mods/core` lasts for an actor: its
-/// own `time` expression, read from the loaded definition, with the
-/// action's locals bound.
-fn phase_time(sim: &Sim, action: &str, phase: &str, actor: EntityId, locals: &[Value]) -> Dur {
-    let registry = sim.defs().registry::<ActionDef>();
-    let def = registry.get(registry.lookup(action).unwrap());
-    let phase = def.phase(def.phase_index(phase).unwrap()).unwrap();
-    let PhaseTime::For(time) = &phase.time else {
-        panic!("`{action}` holds its phase");
-    };
-    let mut bound = Bound::new().subject(sim.subject_value(Subject::Entity(actor)));
-    for local in locals {
-        bound = bound.local(local.clone());
-    }
-    let seconds = time.eval_on(sim.defs(), &mut sim.host(bound)).unwrap();
-    Dur::from_secs_real(seconds)
+/// Starts one of the bundled actions of `mods/core` for an actor, as a
+/// player's command does.
+fn act(sim: &mut Sim, actor: EntityId, action: &str, params: Params) -> Result<(), CommandError> {
+    let action = sim
+        .defs()
+        .lookup::<ActionDef>(action)
+        .unwrap_or_else(|| panic!("no action {action}"));
+    sim.submit(Command::Act {
+        entity: actor,
+        action,
+        params,
+        how: How::Start,
+    })
 }
 
-/// Starts `core:step` for an actor: its one phase waits the step's time
-/// and then takes it.
+/// Starts `core:step` for an actor, and gives how long its one phase
+/// lasts in the actor's own time, as `phase_entered` says.
 fn act_step(sim: &mut Sim, actor: EntityId, dir: &str) -> Dur {
-    let time = phase_time(sim, "core:step", "stride", actor, &[Value::text(dir)]);
-    let kind = parse_dir(dir).unwrap();
-    let at = StepKind::ALL.iter().position(|have| *have == kind).unwrap();
-    sim.schedule_for(
-        actor,
-        time,
-        Wake::new(WakeDomain::Stepper, actor.to_bits(), at as u64),
-    )
-    .unwrap();
-    time
+    let params = vec![("dir".to_owned(), Value::text(dir).to_stored())];
+    act(sim, actor, "core:step", params).unwrap_or_else(|refused| panic!("{refused}"));
+    let events = heard(sim);
+    events
+        .iter()
+        .find_map(|event| match &event.body {
+            EventBody::Act(ActEvent::PhaseEntered {
+                actor: who,
+                duration,
+                ..
+            }) if *who == actor => *duration,
+            _ => None,
+        })
+        .expect("the step entered its phase")
 }
 
-/// The `plan` phase of `core:go_to`: plans, then enters `stride` if a
-/// path is left.
+/// Starts `core:go_to` for an actor: its `plan` phase plans at once.
 fn act_go_to(sim: &mut Sim, actor: EntityId, to: Location) {
-    let _ = movement::plan_path(sim, actor, to, PathLimits::DEFAULT, cause(actor));
-    enter_stride(sim, actor, to);
-}
-
-/// Enters the `stride` phase of `core:go_to` if its `next` says so.
-fn enter_stride(sim: &mut Sim, actor: EntityId, to: Location) {
-    if property(sim, actor, "path_left", &[]).as_int().unwrap_or(0) <= 0 {
-        return;
-    }
-    let to = sim.subject_value(Subject::Loc(to));
-    let time = phase_time(sim, "core:go_to", "stride", actor, &[to]);
-    sim.schedule_for(
-        actor,
-        time,
-        Wake::new(WakeDomain::Stepper, actor.to_bits(), GO_TO),
-    )
-    .unwrap();
-}
-
-/// The end of a phase: what its `on_exit` calls, and its `next`.
-fn phase_ends(sim: &mut Sim, _id: WakeId, wake: Wake) {
-    let actor = EntityId::from_bits(wake.id);
-    if wake.arg != GO_TO {
-        let kind = StepKind::ALL[wake.arg as usize];
-        let _ = movement::step(sim, actor, kind, false, cause(actor));
-        return;
-    }
-    let to = sim
-        .components()
-        .get::<Mover>(actor)
-        .and_then(Mover::journey)
-        .map(|journey| journey.to());
-    let _ = movement::follow_path(sim, actor, cause(actor));
-    let Some(to) = to else {
-        return;
-    };
-    if property(sim, actor, "path_stale", &[]) == Value::Bool(true) {
-        act_go_to(sim, actor, to);
-    } else {
-        enter_stride(sim, actor, to);
-    }
+    let params = vec![(
+        "to".to_owned(),
+        sim.subject_value(Subject::Loc(to)).to_stored(),
+    )];
+    act(sim, actor, "core:go_to", params).unwrap_or_else(|refused| panic!("{refused}"));
 }
 
 /// Saves a simulation and loads it again as a fresh process would: the
@@ -492,7 +457,6 @@ fn a_creature_yields_only_where_a_rule_says_so() {
 
 // ---- time ------------------------------------------------------------------
 
-/// *Re-point*: start `core:step` with `Command::Act`.
 #[test]
 fn a_step_takes_distance_over_speed_on_the_clock_where_the_walker_is() {
     let (mut sim, walker) = city(cell(17, 17, 0));
@@ -614,7 +578,6 @@ fn what_cannot_move_by_its_definitions_does_not_move() {
 
 // ---- paths -----------------------------------------------------------------
 
-/// *Re-point*: start `core:go_to` with `Command::Act`.
 #[test]
 fn go_to_reaches_a_room_across_the_street_through_open_doors() {
     // In the north-east room of the first building.
@@ -665,7 +628,6 @@ fn go_to_reaches_a_room_across_the_street_through_open_doors() {
     assert!(through.contains(&cell(FAR_WEST_DOOR.0, FAR_WEST_DOOR.1, 0)));
 }
 
-/// *Re-point*: start `core:go_to` with `Command::Act`.
 #[test]
 fn go_to_stops_with_a_reason_at_a_door_that_is_closed() {
     let start = cell(12, 6, 0);
@@ -713,7 +675,6 @@ fn go_to_stops_with_a_reason_at_a_door_that_is_closed() {
     );
 }
 
-/// *Re-point*: start `core:go_to` with `Command::Act`.
 #[test]
 fn a_save_and_a_load_in_the_middle_of_a_path_change_nothing() {
     let start = cell(12, 6, 0);
@@ -729,9 +690,8 @@ fn a_save_and_a_load_in_the_middle_of_a_path_change_nothing() {
                 sim.advance(AdvanceLimit::Work(steps)),
                 clash_sim::Advance::Yielded
             ));
-            let mut loaded = save_and_load(&sim);
+            let loaded = save_and_load(&sim);
             assert_eq!(loaded.hashes(), sim.hashes());
-            loaded.set_wake_handler(WakeDomain::Stepper, phase_ends);
             sim = loaded;
             // In the middle of the path, with the rest of it kept.
             assert_ne!(loc_of(&sim, walker), goal);
@@ -919,9 +879,8 @@ fn a_save_and_a_load_in_the_middle_of_a_fall_change_nothing() {
                 clash_sim::Advance::Yielded
             ));
             assert!(sim.truth().cosmos().body_of(walker).is_some());
-            let mut loaded = save_and_load(&sim);
+            let loaded = save_and_load(&sim);
             assert_eq!(loaded.hashes(), sim.hashes());
-            loaded.set_wake_handler(WakeDomain::Stepper, phase_ends);
             sim = loaded;
         }
         let events = run(&mut sim);
