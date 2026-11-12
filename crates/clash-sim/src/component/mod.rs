@@ -141,6 +141,7 @@ pub use physical::{
 };
 pub use store::{ComponentStore, PAGE_SLOTS};
 
+use crate::ability::Abilities;
 use crate::body::Body;
 use crate::device::Device;
 use crate::item::{Holds, Item};
@@ -526,6 +527,9 @@ components! {
     /// The trait instances an entity has and what they put on it
     /// (06 §5). On whatever has been given a trait.
     traits: Traits = "traits";
+    /// The ability instances an entity holds and what they attached
+    /// (08 §3.2). On whatever has been given an ability.
+    abilities: Abilities = "abilities";
 }
 
 // A `ComponentKinds` has one bit for each kind.

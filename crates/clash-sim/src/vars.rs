@@ -377,6 +377,8 @@ impl Sim {
         if let Subject::Entity(id) = subject {
             self.life_var_changed(id, name, cause);
         }
+        // An expression kept current that read it is stale (05 §7.5).
+        crate::ability::reactive::var_written(self, subject, name);
         if watched {
             let after = self.var(subject, name);
             if after != before {

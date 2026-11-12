@@ -53,6 +53,7 @@
 //!   property only through its registered setter, which calls the
 //!   function the engine itself uses.
 
+pub mod ability;
 pub mod action;
 pub mod activity;
 pub mod advance;
@@ -148,6 +149,7 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     device::register_defs(types);
     interaction::register_defs(types);
     traits::register_defs(types);
+    ability::register_defs(types);
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);
