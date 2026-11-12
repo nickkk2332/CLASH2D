@@ -293,7 +293,7 @@ in the mind context with `$about` bound (D-693).
 | `wait` | `time`: seconds; `until`: condition | A wait of `time`, or of the mind's interval | After the wait, or when `until` holds at a thought |
 | `look` | `at`: a cell or an entity; `time`: seconds, default 2 | Turning to face it, and a wait | After the wait |
 | `say` | `text`: a text template; `volume`: number, default 1 | The event `said` | At once |
-| `set` | `var`: name; `value`: expression | A variable of the character's own | At once |
+| `set` | `var`: the variable's name as the simulation keeps it, qualified for a declared one; `value`: expression | A variable of the character's own | At once |
 | `settle` | `true` | Marks `$about` settled | At once |
 | `stance` | `of`: an entity; `toward`: `hostile`, `feared` or `none` | The mind's stance toward what it perceives `of` as | At once |
 | `keep_near` | `who`: a cell or an entity; `within`: metres, default 1.5 | A `go` toward where `who` is believed to be, begun again whenever they are believed to have moved further than `within`, and a wait while near | Never by itself |

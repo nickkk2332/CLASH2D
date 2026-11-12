@@ -79,6 +79,9 @@
       { "steps": [ { "wait": { "time": "2 s" } } ] }
     ] },
 
+  { "type": "variable", "id": "warned_at", "scope": "entity", "value": "real", "default": -1000,
+    "doc": "When a character last called on someone to stop, in seconds of universal time: a guard calls once, not at every step." },
+
   { "type": "goal", "id": "confront",
     "doc": "Going for someone held hostile who is in sight: up to them, then at them with whatever serves to harm, or, with nothing that does, standing over them.",
     "about": { "track": {
@@ -89,7 +92,8 @@
     "interrupts": true,
     "methods": [
       { "steps": [
-          { "say": { "text": "Stop right there!", "volume": 2 } },
+          { "if": "now() - self.var.warned_at > 30", "say": { "text": "Stop right there!", "volume": 2 } },
+          { "if": "now() - self.var.warned_at > 30", "set": { "var": "core:warned_at", "value": "now()" } },
           { "go": { "to": "$about", "within": 1.5 } },
           { "choose": { "purpose": "harm", "target": "$about" } } ] },
       { "steps": [

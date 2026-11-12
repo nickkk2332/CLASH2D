@@ -785,7 +785,9 @@ pub struct SayStep {
 /// A `set` step.
 #[derive(Debug, Deserialize)]
 pub struct SetStep {
-    /// The name of a variable of the character's own.
+    /// The name of a variable of the character's own, as the
+    /// simulation keeps it: qualified for a declared variable
+    /// (`core:warned_at`).
     pub var: String,
     /// Its new value.
     pub value: Expr<Any>,

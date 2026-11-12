@@ -1694,18 +1694,13 @@ fn go_toward(
         );
     };
     // Somewhere it believes it can stand: the cell itself, or the
-    // nearest that is, for a step that need not reach it exactly.
-    let cell = if within > Real::ZERO {
-        target
-    } else {
-        match nav::nearest_standable(sim, mind, target) {
-            Some(cell) => {
-                pending.target = Some(cell);
-                cell
-            }
-            None => target,
-        }
-    };
+    // nearest that is. A step that need not reach the cell exactly is
+    // judged by how near it comes to the cell; one that must, by how
+    // near it comes to where it can stand.
+    let cell = nav::nearest_standable(sim, mind, target).unwrap_or(target);
+    if within <= Real::ZERO {
+        pending.target = Some(cell);
+    }
     let to = sim.subject_value(Subject::Loc(cell)).to_stored();
     match start(sim, mind, kind, action, &[("to".to_owned(), to)]) {
         Begun::Under(started) => {
