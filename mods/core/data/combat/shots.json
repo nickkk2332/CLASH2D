@@ -4,9 +4,12 @@
     "notice": "2 / max(self.attr.wits ?? 10, 1)",
     "reach": "3 m" },
 
-  { "//": "An arrow caught in flight is an arrow in the hand (07 §11.6, `catch_shot`).",
+  { "//": "An arrow caught in flight is an arrow in the hand (07 §11.6, `catch_shot`): one hand holds it.",
     "type": "projectile", "id": "arrow", "patch": true,
     "item": "arrow" },
+
+  { "type": "item", "id": "arrow", "patch": true,
+    "grip": { "arm": 1 } },
 
   { "//": "Whether a hand closes on something flying past it: how quick the catcher is against how hard it is to follow.",
     "type": "contest", "id": "catching", "name": "Catching",

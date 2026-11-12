@@ -155,6 +155,13 @@ impl GripTable {
     }
 }
 
+impl Sim {
+    /// Every grip (07 §9.1), in the order taken.
+    pub fn grips(&self) -> &GripTable {
+        &self.grips
+    }
+}
+
 /// What a holder grips, in the order taken.
 pub fn gripped_by_holder(sim: &Sim, holder: EntityId) -> Vec<EntityId> {
     sim.grips.of_holder(holder).map(|grip| grip.held).collect()

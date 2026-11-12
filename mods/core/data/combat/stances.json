@@ -43,16 +43,5 @@
     "type": "eoc", "id": "stagger_breaks_blow", "on": "staggered",
     "if": "event.severity >= 0.5 and (setting('core:staggering') ?? true)",
     "doc": "A push that staggers someone at half the way to launching them or more interrupts the blows they have under way (actions tagged `strike`). Off when the setting `core:staggering` is false.",
-    "do": [ { "interrupt": { "who": "self", "tag": "strike" } } ] },
-
-  { "//": "Exertion (07 §12): every blow thrown in an aggressive stance costs stamina, for those who have it; out of breath, the stance is dropped.",
-    "type": "eoc", "id": "exertion", "on": "strike_landed",
-    "if": "self.has_tag('aggressive') and self.pool.frac('stamina') != null",
-    "doc": "A blow that lands from someone in an aggressive stance costs them 5 stamina.",
-    "do": [ { "pool_add": { "who": "self", "pool": "stamina", "amount": -5 } } ] },
-
-  { "type": "eoc", "id": "winded", "on": "pool_crossed",
-    "if": "self.has_tag('aggressive') and (self.pool.frac('stamina') ?? 1) < 0.25",
-    "doc": "Someone in an aggressive stance whose stamina falls below a quarter drops the stance.",
-    "do": [ { "remove_trait": { "from": "self", "trait": "aggressive" } } ] }
+    "do": [ { "interrupt": { "who": "self", "tag": "strike" } } ] }
 ]

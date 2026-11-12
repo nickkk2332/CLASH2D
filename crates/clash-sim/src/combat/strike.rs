@@ -530,7 +530,10 @@ fn resolve(
         if !chained {
             tally.put_in += put_in;
         }
-        if chained && energy_here <= Real::ZERO {
+        // Nothing left goes on to anyone beyond; a strike with no energy
+        // at all is still resolved against the target named (07 §9.1: a
+        // grab is a strike with no energy).
+        if chained && energy_here <= Real::ZERO && next != target {
             break;
         }
         let aimed_at = if next == target {
