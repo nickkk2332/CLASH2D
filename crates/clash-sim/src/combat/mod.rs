@@ -19,6 +19,7 @@
 //! | [`DefenceDef`], [`defending`] | The `defence` block of an action, what is in force and what it does at step 5 (07 §5) | [`defence`] |
 //! | [`push`](push::push), [`Push`], [`Pushed`] | What the push share does (07 §7) | [`push`] |
 //! | [`COMBAT_EVENTS`], [`COMBAT_REASONS`], [`COMBAT_SETTINGS`] | Events and hooks, refusals, settings | [`events`], [`reason`] |
+//! | Projectiles, shots, ammunition, stores, what is fitted | Ranged combat (07 §11) | [`ranged`] |
 //!
 //! # The `strike` effect
 //!
@@ -32,10 +33,9 @@
 //!
 //! # What is not built here yet
 //!
-//! Clashes (§8), grips and throws (§9), takedowns (§10), projectiles
-//! and ranged weapons (§11) and previews (§13) are the later packages of
-//! `docs/plans/combat.md`. The strike calls a step for clashes and finds
-//! none.
+//! Clashes (§8), grips and throws of creatures (§9), takedowns (§10)
+//! and previews (§13) are the later packages of `docs/plans/combat.md`.
+//! The strike calls a step for clashes and finds none.
 
 pub mod aim;
 pub mod attack;
@@ -43,6 +43,7 @@ pub mod contest;
 pub mod defence;
 pub mod events;
 pub mod push;
+pub mod ranged;
 pub mod reason;
 pub mod strike;
 pub mod surface;
@@ -76,6 +77,7 @@ const GROUP_COMBAT: &str = "Combat";
 /// `register_defs`, after the step of living things.
 pub fn register_defs(types: &mut DefTypes) {
     types.register::<ContestDef>();
+    ranged::register_defs(types);
     types.add_registry_step(events::registry_step);
 }
 
@@ -86,6 +88,7 @@ pub fn register_types(registry: &mut Registry) {
     if registry.def_type_id(ContestDef::TYPE).is_none() {
         let _ = registry.add_def_type(ContestDef::TYPE, ContestDef::DOC);
     }
+    ranged::register_types(registry);
 }
 
 /// The `strike` effects of a list and of the lists inside it, each with
@@ -214,8 +217,16 @@ pub fn odds_fn(sim: &Sim, args: &[Value]) -> Value {
     contest_args(sim, args).map_or(Value::Null, |(def, a, b)| Value::Real(def.odds(a, b)))
 }
 
-/// The functions combat offers to expressions (07 §16).
+/// The functions combat offers to expressions (07 §16), with those of
+/// ranged combat (07 §11.4).
 pub fn functions() -> Vec<FunctionDef> {
+    let mut table = melee_functions();
+    table.extend(ranged::functions());
+    table
+}
+
+/// The functions of contests (07 §4.1).
+fn melee_functions() -> Vec<FunctionDef> {
     vec![
         FunctionDef::new(
             "contest",

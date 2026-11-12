@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 13;
+pub const SAVE_VERSION: u32 = 14;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -141,6 +141,8 @@ pub struct Sim {
     /// relation toward another: the social layer's, bound with every
     /// simulation, unless a test supplies another ([`Sim::set_intervenes`]).
     pub(crate) intervenes: Option<crate::action::IntervenesFn>,
+    /// The shots in flight (07 §11; [`ranged`](crate::combat::ranged)).
+    pub(crate) ranged: crate::combat::ranged::RangedState,
 }
 
 /// Why saved state could not be loaded.
@@ -228,6 +230,7 @@ struct SavedRef<'a> {
     perception: &'a PerceptionState,
     abilities: &'a crate::ability::AbilityIndex,
     ai: &'a crate::ai::AiState,
+    ranged: &'a crate::combat::ranged::RangedState,
     social: &'a crate::social::SocialState,
 }
 
@@ -255,6 +258,7 @@ struct Saved {
     perception: PerceptionState,
     abilities: crate::ability::AbilityIndex,
     ai: crate::ai::AiState,
+    ranged: crate::combat::ranged::RangedState,
     social: crate::social::SocialState,
 }
 
@@ -327,6 +331,7 @@ impl Sim {
             ai_defs,
             strike_depth: 0,
             intervenes: None,
+            ranged: crate::combat::ranged::RangedState::default(),
         };
         sim.bind_runtime();
         sim
@@ -648,7 +653,13 @@ impl Sim {
             }
             // What the world did to someone's body or pools (06 §7.4;
             // 02 §16), to be carried out once its events are queued.
-            let harm = crate::life::harm::Harm::of(&event);
+            // A shot in flight strikes with its own surface (07 §11.1),
+            // in place of the blunt blow the world's event would give.
+            let flight = crate::combat::ranged::flight::FlightNews::of(self, &event);
+            let harm = match &flight {
+                Some(news) if news.replaces_harm() => None,
+                _ => crate::life::harm::Harm::of(&event),
+            };
             let (cause, loc) = (event.cause(), event.location());
             let stamped = self.stamped(Where::Loc(loc), cause, EventBody::World(event));
             self.events.push_back(stamped);
@@ -675,6 +686,9 @@ impl Sim {
             }
             if let Some(harm) = harm {
                 self.apply_harm(harm);
+            }
+            if let Some(news) = flight {
+                crate::combat::ranged::flight::follow(self, news);
             }
         }
     }
@@ -722,6 +736,11 @@ impl Sim {
         self.perception.state_hash(&mut kernel);
         self.abilities.state_hash(&mut kernel);
         self.ai.state_hash(&mut kernel);
+        // A simulation that has never fired hashes as one from before
+        // shots were kept.
+        if !self.ranged.is_pristine() {
+            self.ranged.state_hash(&mut kernel);
+        }
         self.social.state_hash(&mut kernel);
         let kernel = kernel.finish();
         let total = Hash128::of(&[
@@ -780,6 +799,7 @@ impl Sim {
                 perception: &self.perception,
                 abilities: &self.abilities,
                 ai: &self.ai,
+                ranged: &self.ranged,
                 social: &self.social,
             },
         )
@@ -870,6 +890,7 @@ impl Sim {
             ai_defs,
             strike_depth: 0,
             intervenes: None,
+            ranged: saved.ranged,
         };
         sim.bind_runtime();
         Ok(sim)

@@ -908,7 +908,7 @@ matter use this. So does shooting in warm tracts (03 §10).
 | Helper | Gives |
 |--------|-------|
 | `lead_point(self, target, speed)` | Where the target will be, from where and how fast `self` believes it to be moving (15 §7) |
-| `ballistic_dir(from, to, speed)` | The elevation needed to reach a point under gravity |
+| `ballistic_dir(from, to, speed)` | The direction, at the elevation needed to reach a point under gravity |
 | `band_point(target, part)` | A point at the height of a part |
 
 Because the default aims at a point and the shot then disperses, range,
@@ -940,9 +940,10 @@ A ranged weapon is an item, and usually an assembly (16 §11).
 A magazine is a hold (06 §9.2) that accepts rounds by tag and gives them
 up in order. Firing takes the next one, launches its projectile with its
 energy, and leaves its casing if it names one. Loads may be mixed: every
-fifth round a tracer. A quiver and a belt are holds too. Loading is an
-interaction. `count` above one is shot. A weapon that draws on a store
-instead (a power cell, a pool) uses a cost (16 §11.2).
+fifth round a tracer. A quiver and a belt are holds too. Loading is the
+verb `load`, which an action or an interaction runs. `count` above one is
+shot. A weapon that draws on a store instead (a power cell, a pool) uses
+a cost (16 §11.2). Section 11.7 says how this is built.
 
 Recoil is an impulse on the shooter and a rule that widens spread.
 
@@ -964,6 +965,233 @@ for those quick enough to have one (section 11.2).
 Two attacks made at range that are both marked `clashes` meet as any two
 do (section 8): a beam against a beam is two strikes with inline surfaces
 (08 §7.7).
+
+### 11.7 As built
+
+Packages C9 and C10 (decisions D-740 to D-749). Nothing below is a gun,
+a bow or a bullet: a projectile is a mass with a surface, a round is an
+item that names one, a store is a container that keeps an order, and a
+weapon is an item with a `shot` block.
+
+**The `projectile` type.**
+
+```json
+{ "type": "projectile", "id": "tracer_bullet", "name": "tracer bullet",
+  "mass": "9 g", "area": 4.8e-5, "drag": 0.25,
+  "surface": { "kind": "pierce", "area": 4.8e-5, "give": "1 cm", "span": "8 mm" },
+  "leaves": { "field": "fire", "amount": 8 } }
+```
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name` | text | What a reader calls it |
+| `mass` | mass, required, above zero | Its mass |
+| `area` | number, m², zero or more | Its cross-section: what drag acts on, and how wide it is to what closes part of a cell (02 §15.2). Default the surface's area |
+| `drag` | number, zero or more | Its drag coefficient. Default 1 |
+| `restitution` | number, 0 to 1 | How much of its speed it keeps when it is turned back. Default 0: what it does not go through holds it |
+| `surface` | object, required | What it strikes with: `kind` (`id<damage_type>`), `area` (m², above zero), `give` (length, above zero), `span` (length, default 0) |
+| `leaves` | object | A field it leaves where it comes to an end: `field` (`id<field>`), `amount` (levels, 1 to 255, default 1) |
+| `on_impact` | effects | Run once, at the first thing it strikes, with `self` the one who fired it, `here` the cell and `target` the creature struck (null for an element); it ends there |
+| `thrust` | object | A drive along its path (02 §15): `accel` (m/s²), `burn` (time) |
+| `guidance`, `fuse` | | Read and carried: not built |
+
+**Items.** Three blocks of the `item` type (06 §9.1) serve ranged
+combat:
+
+| Block | Field | Type | Meaning |
+|-------|-------|------|---------|
+| `round` | `projectile` | `id<projectile>`, required | What it launches |
+| | `energy` | energy, required, above zero | The energy each projectile is given, before the weapon's efficiency |
+| | `count` | int, at least 1 | How many projectiles it launches at once. Default 1 |
+| | `casing` | `id<item>` | What it leaves where it was fired from |
+| `shot` | `spread` | number, radians | The standard deviation of each of a shot's two angles of dispersion |
+| | `efficiency` | number | The share of a round's energy that goes into its projectile |
+| | `noise` | number | How loud a shot is, in the units of the sound kind content uses |
+| | `flash` | number | How bright a shot is |
+| | `energy` | energy | The most it puts into a shot of its own: a bow at full draw |
+| | `fits` | list of tags | What may be fitted to it: an item that carries one of them, one of each |
+| `holds` | `order` | `first_in` or `last_in` | Makes a container a **store**: it gives up what is stowed in it in the order it was put in, first or last. Left out, a container keeps no order |
+
+A shot through an item takes the **product** of the item's own `shot`
+number and those of everything fitted to it (held `fixed` in it) that
+states it; a number none states is null. So a rifle's `spread` is in
+radians and a scope's `"spread": 0.3` narrows it to three tenths, and a
+suppressor's `"noise": 0.15` takes most of the sound out of it. They give
+it while they are fitted and not once they are taken off.
+
+A store keeps what is stowed in it in the order it was put in. An equal
+round put in joins only the stack put in just before it, so that two
+kinds loaded in turn stay in turn; a member split off a stack keeps the
+stack's place. An item's **feed** is the item itself if it is a store,
+else the first store fitted to it, in order of id.
+
+**The effects.** Each is a verb (05 §10.7), written in any effect list.
+
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `shoot` | `from: entity?` (default `self`), `at: any?`, `dir: any?`, `part: part?`, `height: real?`, `projectile: id<projectile>?`, `store: entity?`, `with: entity?`, `energy: real?`, `speed: any?`, `spread: real?`, `count: int?`, `noise: real?`, `flash: real?`, `lob: bool?`, `range: real?`, `window: any?` | `int`, the projectiles fired | Below |
+| `throw` | `who: entity?` (default `self`), `what: entity`, `at: any?`, `dir: any?`, `part: part?`, `height: real?`, `energy: real?`, `speed: real?`, `spread: real?`, `surface: string?`, `lob: bool?` | null | Throws an item `who` holds: it is put down where `who` stands and launched as a body that is the item (owner the entity), with its own mass and cross-section, from the height a shot leaves. It strikes what it meets with its surface named `surface` through the same delivery as a projectile's; with none, with the world's blunt blow. Raises `thrown` |
+| `load` | `who: entity?` (default `self`), `into: entity`, `from: entity?`, `count: int?` | `int`, the rounds loaded | Puts rounds into the feed of `into`, one member at a time by `put_in`: from `from`, a container (its rounds in order of id) or a stack of rounds itself; with none, from what `who` carries at any depth, in the order `carried` gives. Only rounds the store accepts, as many as fit, at most `count` |
+| `fit` | `what: entity`, `into: entity` | `entity` | Fits an item to another: it is held `fixed` in it. Taking it into a grasp takes it off |
+
+`shoot`, in order:
+
+1. Where it leaves from: the middle of the shooter's cell, `height`
+   metres above its footing, or 0.8 of its body's height
+   (`SHOT_HEIGHT_SHARE`), or for something with no body the middle of
+   the storey.
+2. Where it is aimed: along `dir` (a list of three numbers); or at `at`:
+   an entity, at the middle of the band of `part`, or `height` above its
+   footing, or the middle of its body; a cell, `height` above its floor
+   or level with where the shot leaves; a point, a list of three numbers
+   in metres in the shooter's grid.
+3. For each of `count` shots (1 to `shoot.max_count`): with a `store`,
+   the next round of its feed, its projectile (or `projectile`, if
+   given) and its energy; with none, `projectile`. A store that runs dry
+   part way fires what it had.
+4. Its energy: `energy`, or the round's times the efficiency of `with`
+   (its `shot` product, 1 where none is stated). Its speed: `speed`, or
+   `√(2 E / m)`.
+5. Its direction: at the aim point, or with `lob` along the lower arc
+   that comes down on it under the gravity where it leaves
+   (`ballistic_dir`; where no arc reaches, at 45 degrees). Each
+   projectile of a round is then turned by dispersion: across and up by
+   two angles each drawn from a normal distribution whose standard
+   deviation is `spread` (or the spread of `with`, or none), four
+   numbers drawn from the stream `shots` for each projectile whatever
+   the spread.
+6. It is launched as a body (02 §15) whose owner is a `Projectile` with
+   the definition's surface and a tag the simulation keeps, on the
+   shooter's planes, with the definition's cross-section, drag,
+   restitution and thrust. With `speed` `instant`, a ray is cast instead
+   (section 11.3, below). `projectile_fired` is raised for each, with
+   `noise` and `flash` (the arguments, or the `shot` products of `with`,
+   or 0).
+7. The round is spent (`item::spend`: a stack loses one member, the last
+   is unmade) and leaves its casing in the shooter's cell.
+
+It is refused, having changed nothing, with `ranged.not_in_world`,
+`ranged.too_many`, `ranged.empty`, `ranged.no_projectile`,
+`ranged.no_energy`, `ranged.no_aim`, `ranged.not_a_store` and
+`ranged.bad_number`, and with the world's refusal of the launch.
+
+**In flight.** What the world says of a projectile's body, or of an item
+thrown, the simulation answers:
+
+| The world says | The simulation |
+|----------------|----------------|
+| `body_hit_occupant` | In place of the blunt blow of 06 §7.4: the creature is struck at the height above its footing that the body met it, on a part whose band holds that height (06 §7.1, `HitAt::Height`), by a hit of the body's whole energy with the projectile's surface, through what it wears and its body's layers (`Sim::hit`, as section 6.1). The hit has no direction, so that the body wiring does not also carry its exits to the block behind (06 §7.4): what exits flies on, the body given the speed that energy has along its way (`WorldCtx::impulse`). A creature with no part at that height is passed by at full speed; an item is struck as an item is (06 §9.1). With nothing left a projectile is lodged where it is and ends. `projectile_hit` |
+| `body_impact` | `projectile_hit` at the cell, with what it lost there. A projectile that did not go through and has no restitution is lodged there and ends: a bullet in a wall, an arrow in the ground |
+| `body_landed`, `body_left_loaded` (gone) | The shot ends |
+
+At each of these, the stretch of its path since it was last known (where
+it was fired from, or last struck something) is looked along: everyone
+with a body whose middle lies within `projectile.near_miss` of it, other
+than the shooter and whoever it struck, is told once by
+`projectile_passed`. A projectile's `on_impact` runs at the first thing
+it strikes, and it ends there. Where a projectile ends it leaves the
+field it names.
+
+A thing with a body collides with bodies in flight: a template that
+gives a body gives its occupant the flag `COLLIDES` (02 §15.2).
+
+**Instant shots** (section 11.3). One ray is cast from where the shot
+leaves, along its direction, up to `range` (default
+`shoot.instant_range`), through the cells and every creature with a
+body, the shooter aside. In order: an element closing the whole of the
+ray's path, or the share it closes on a draw from `shots`, takes a
+packet of what is left at `E / (area × give)` (`damage_along`); one it
+destroys passes `passed` on, and anything else ends the ray. A creature
+is struck as in flight; what exits goes on. `projectile_hit` with
+`instant` true and no `body`.
+
+**Helpers** (section 11.4).
+
+| Function | Arguments | Gives |
+|----------|-----------|-------|
+| `ballistic_dir` | `from: any`, `to: any`, `speed: real` | `list<real>?`: the direction, of length one, along the lower arc from `from` to `to` at that speed under the gravity where `from` is, with no drag. An entity is taken at the height a shot leaves it from, a cell at its floor, a list of three numbers as a point. Null where no arc reaches. Reads truth |
+| `band_point` | `target: entity`, `part: part?` | `list<real>?`: the point, in metres in its grid, at the middle of the band of a part where the target stands; with no part, the middle of its body. Reads truth |
+
+`lead_point` waits for believed velocities (15 §7).
+
+**Properties**, all of the kind `entity`, readable of one's own things in
+a mind context (05 §7.3):
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.shot(name: string)` | `real?` | The `shot` product of an item and what is fitted to it: `spread`, `efficiency`, `noise`, `flash` or `energy` |
+| `entity.feed` | `entity?` | The store an item fires from |
+| `entity.rounds` | `int` | The members of the rounds in its feed; zero for none |
+| `entity.next_round` | `entity?` | The round its feed gives up next |
+| `entity.store_of(tag: string)` | `entity?` | The first store, itself, then what it holds in any way but enclosed (in order of id) and what is fitted to those, that accepts the tag: a quiver worn, a rifle's magazine |
+| `entity.wielding(tag: string)` | `entity?` | The first thing it holds in a grasp, in order of id, that carries the tag; any, for an empty one |
+
+**Events.** Each also binds `actor` and `instigator` from its cause.
+
+| Event | Subjects | Fields |
+|-------|----------|--------|
+| `projectile_fired` | `self`, the shooter; `target?`, whom it was aimed at; `weapon?` | `projectile` (`string`), its qualified id; `body` (`int?`), its body, null for an instant shot; `speed` (`real`); `energy` (`real`); `noise`, `flash` (`real`); `instant` (`bool`). Raised for each projectile, before any of it strikes. |
+| `projectile_hit` | `self?`, the shooter, while it exists; `target?`, the creature or item struck; `here`, the cell | `projectile`, `body`; `part` (`part?`), the part struck; `energy` (`real`), joules it arrived with; `intensity` (`real`); `absorbed` (`real`), what what it struck took; `passed` (`real`), what it went on with; `instant` (`bool`). An item thrown has an empty `projectile`. |
+| `projectile_passed` | `self`, the one it passed; `shooter?` | `projectile`, `body`; `distance` (`real`), metres from `self`'s middle, zero for one passed by at a height where nothing of it was. Once for each projectile. |
+| `thrown` | `self`, the thrower; `what`, the item; `target?` | `speed` (`real`); `energy` (`real`). |
+
+**Refusals.**
+
+| Reason | When | Values |
+|--------|------|--------|
+| `ranged.empty` | The store holds no round to give up next | `store` |
+| `ranged.no_projectile` | No projectile that is loaded, and no store to take a round from | — |
+| `ranged.no_energy` | Neither a speed nor an energy, and no round | — |
+| `ranged.bad_number` | An energy, spread, noise or flash below zero or not finite; a speed not above zero; a thing thrown with no mass | `what`, `value` |
+| `ranged.no_aim` | Nothing to aim at: no `at` or `dir`, a target not in the world, another grid, the point it leaves from | `at` |
+| `ranged.not_in_world` | The shooter or thrower is not standing in the world | `entity` |
+| `ranged.too_many` | A count of none, or above `shoot.max_count` | `count`, `limit` |
+| `ranged.not_a_store` | What is fired from or loaded is no store and has none fitted | `store` |
+| `ranged.nothing_to_load` | No rounds the store takes where `load` looked | `store` |
+| `ranged.cannot_fit` | None of the item's tags is in the other's `shot.fits`, or one carrying that tag is fitted already | `item`, `into` |
+| `ranged.not_held` | A thing to be thrown is not held by the thrower | `item`, `who` |
+| `ranged.no_surface` | A thing is thrown striking with a surface it does not have | `item`, `surface` |
+| `ranged.bad_argument` | A verb's argument is missing or of the wrong kind | `verb`, `arg` |
+
+**Settings.**
+
+| Setting | Meaning |
+|---------|---------|
+| `projectile.near_miss` | Metres: how close a shot must pass to raise `projectile_passed`. Default 2. |
+| `shoot.max_count` | The most shots one `shoot` fires. Default 1000. |
+| `shoot.instant_range` | Metres an instant shot goes when it gives no `range`. Default 1000. |
+
+**Seams.** The `shot` window (section 11.2) waits for reaction windows
+(03 §7, package T5): `shoot` takes `window`, and offers it to nobody, as
+an action phase's window is offered to nobody; so nobody steps out of a
+bullet's way yet (`bullet_time`), and stopping a shot (section 11.6,
+`caught_arrow`) and defences against shots wait for packages T5 and C4.
+`guidance`, `fuse` and `projectile_lost_lock` are not built (`heat_seeker`);
+a timed charge is an item thrown with a rule's `after`. A weapon that
+draws on a power store (16 §11.2) waits for assemblies (package G9).
+Recoil is content's rule; the bundled content has none. `$window.body`
+waits for a subject kind `body`: events carry the body's number.
+
+**Bundled.** `mods/core/data/combat/ranged.json` holds the projectiles
+`pistol_bullet`, `hollow_bullet`, `rifle_bullet`, `tracer_bullet` (it
+leaves fire) and `arrow`; the contest `marksmanship` and the functions
+`marksman`, `unsteadiness`, `draw_power` and `throw_energy`; and the
+actions `shoot` (a firearm held, `count` shots at whoever the shooter
+believes is there, unavailable while it is empty), `aim_shot` (slower,
+under half the spread), `reload` (`load` from whatever the shooter
+carries), `draw_and_loose` (a held draw that adds 50 ms a tick, up to
+1.5 s; energy `draw_power × seconds`, capped by the bow's `shot.energy`;
+the arrow is lobbed) and `throw` (what is held tagged `throwing`: a
+blade strikes with its point; a `charge` bursts three seconds after it
+leaves the hand, by `after`). `mods/core/data/combat/arms.json` holds a
+`pistol` and a `rifle` with a `pistol_magazine` and a `rifle_magazine`
+(stores, `first_in`), the rounds `pistol_round`, `pistol_round_hollow`,
+`rifle_round` and `rifle_round_tracer` with a `casing`, a `scope`
+(`sight`, spread 0.3), a `suppressor` (`muzzle`, noise 0.15, flash 0.1,
+efficiency 0.97), a `bow` (80 J), `arrow`s and a `quiver` (a store worn),
+a `throwing_knife` and a `charge`. `mods/core/data/perception/shots.json`
+gives `projectile_fired` off as a sound of its `noise` and a sight of its
+`flash` about the shooter, and `projectile_hit` as a sound.
 
 ## 12. Stances, styles and combinations
 
@@ -1163,8 +1391,10 @@ shield's face, else the forearm), `dodge` (avoid, with `evasion`) and
 `parry_on_notice`, `block_on_notice`, `dodge_on_notice` and
 `step_back_on_notice`, rules to attach. `mods/core/data/shields.json`
 gives the knife and the club a `flat`, the arm a `forearm`, and adds a
-`buckler`. Not built yet: the `cutscene`
-block, `projectile`, `strike_preview` and the other functions, queries
+`buckler`. Ranged combat (`projectile`, `round`, `shot`, the effects
+`shoot` and `throw`, the `projectile_*` events, `ballistic_dir` and
+`band_point`) is stated as built in section 11.7. Not built yet: the
+`cutscene` block, `strike_preview` and the other functions, queries
 and properties listed above, swings meeting the world, contact surfaces
 (section 6.5), reach in height (section 4.3) and `closing_energy`
 (section 3.5).
@@ -1193,6 +1423,13 @@ Targets, unmeasured.
 | Projectile striking a creature | under 5 µs |
 | `strike_preview` | under 4 µs |
 | A volley of 500 projectiles over 100 m | under 40 ms |
+
+Measured (package C9): the volley, fifty shooters each firing ten pistol
+bullets at a wall a hundred metres off, took about 80 ms in a release
+build on a loaded shared machine: about twice the target. Nearly all of
+it is the world stepping its bodies (02 §15.1, a wake for every cell
+crossed); the test is `volley` in `crates/clash-sim/tests/ranged.rs`,
+ignored, run with `--release --ignored`.
 
 ## 19. Open questions
 

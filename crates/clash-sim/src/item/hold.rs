@@ -156,8 +156,10 @@ impl_state_hash!(HoldEntry { entity, hold });
 ///
 /// It lists the things held in some way other than [`Hold::Inside`], in
 /// order of id, and the tags the holder carries only because something
-/// it holds confers them. An entity that holds nothing in particular
-/// has no `Holds`.
+/// it holds confers them. A store (a container whose `holds` has an
+/// `order`, 07 §11.5) also keeps what is stowed in it in the order it
+/// was put in. An entity that holds nothing in particular has no
+/// `Holds`.
 ///
 /// Its fields change only through the functions of this module.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -166,12 +168,21 @@ pub struct Holds {
     entries: Vec<HoldEntry>,
     /// The tags the holder has because of what it holds, in order.
     conferred_tags: Vec<String>,
+    /// For a store: what is stowed in it, in the order it was put in.
+    order: Vec<EntityId>,
 }
 
-impl_state_hash!(Holds {
-    entries,
-    conferred_tags
-});
+/// Hashes the order of a store only where there is one, so that the
+/// hash of what keeps none is what it was before stores had an order.
+impl StateHash for Holds {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.entries.state_hash(hasher);
+        self.conferred_tags.state_hash(hasher);
+        if !self.order.is_empty() {
+            self.order.state_hash(hasher);
+        }
+    }
+}
 
 impl Holds {
     fn at(&self, entity: EntityId) -> Result<usize, usize> {
@@ -196,6 +207,12 @@ impl Holds {
         &self.conferred_tags
     }
 
+    /// For a store (07 §11.5): what is stowed in it, in the order it was
+    /// put in. Empty for anything else.
+    pub fn order(&self) -> &[EntityId] {
+        &self.order
+    }
+
     pub(super) fn conferred_tags_mut(&mut self) -> &mut Vec<String> {
         &mut self.conferred_tags
     }
@@ -208,11 +225,55 @@ impl Holds {
     }
 
     fn remove(&mut self, entity: EntityId) -> Option<Hold> {
+        self.order.retain(|stowed| *stowed != entity);
         self.at(entity).ok().map(|at| self.entries.remove(at).hold)
     }
 
     fn is_empty(&self) -> bool {
-        self.entries.is_empty() && self.conferred_tags.is_empty()
+        self.entries.is_empty() && self.conferred_tags.is_empty() && self.order.is_empty()
+    }
+}
+
+/// The order a store gives up what is stowed in it (07 §11.5): what its
+/// definition's `holds` says, or a device's. `None` for a container that
+/// keeps no order, and for anything else.
+pub fn store_order(sim: &Sim, container: EntityId) -> Option<super::StoreOrder> {
+    sim.components
+        .get::<Item>(container)
+        .and_then(|item| def_of(&sim.defs, item))
+        .and_then(|def| def.holds.as_ref())
+        .or_else(|| crate::device::holds_of(sim, container))
+        .and_then(|holds| holds.order)
+}
+
+/// What a store gives up next (07 §11.5): of what is stowed in it, the
+/// first put in or the last, as its order says. `None` for an empty
+/// store and for a container that keeps no order.
+pub fn next_in_store(sim: &Sim, store: EntityId) -> Option<EntityId> {
+    let order = store_order(sim, store)?;
+    let holds = sim.components.get::<Holds>(store)?;
+    match order {
+        super::StoreOrder::FirstIn => holds.order.first().copied(),
+        super::StoreOrder::LastIn => holds.order.last().copied(),
+    }
+}
+
+/// Puts `piece`, stowed in a store, next to `beside` in the store's
+/// order: where a stack's members split off belong.
+pub(crate) fn place_beside(sim: &mut Sim, store: EntityId, piece: EntityId, beside: EntityId) {
+    let Some(holds) = sim.components.get_mut::<Holds>(store) else {
+        return;
+    };
+    let order = &mut holds.order;
+    let (Some(from), Some(_)) = (
+        order.iter().position(|stowed| *stowed == piece),
+        order.iter().position(|stowed| *stowed == beside),
+    ) else {
+        return;
+    };
+    order.remove(from);
+    if let Some(at) = order.iter().position(|stowed| *stowed == beside) {
+        order.insert(at + 1, piece);
     }
 }
 
@@ -507,10 +568,20 @@ pub(crate) fn set_entry(sim: &mut Sim, holder: EntityId, entity: EntityId, hold:
             holds.remove(entity);
         }
     } else {
-        sim.components
+        // A store keeps what is stowed in it in the order it came.
+        let stored = hold == Hold::Stowed && store_order(sim, holder).is_some();
+        let holds = sim
+            .components
             .holds
-            .get_or_insert_with(holder, Holds::default)
-            .set(entity, hold);
+            .get_or_insert_with(holder, Holds::default);
+        if stored {
+            if !holds.order.contains(&entity) {
+                holds.order.push(entity);
+            }
+        } else {
+            holds.order.retain(|stowed| *stowed != entity);
+        }
+        holds.set(entity, hold);
     }
     match (was, now) {
         (false, true) => confer::add(sim, holder, entity),
