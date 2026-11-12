@@ -51,7 +51,7 @@ start while the world model is being built.
 | T2 | Action definitions | M | X4 | beta |
 | T3 | Action runtime | L | T2, K5 | beta |
 | T4 | Control, plans, free decisions | M | T3 | beta |
-| T5 | Windows and reactions | M | T4, T1 | todo |
+| T5 | Windows and reactions | M | T4, T1 | beta |
 | T6 | Joint actions | M | T5 | todo |
 | T7 | Unloading and lower detail | M | T3, K7 | todo |
 | T8 | Benchmarks and budget gate | S | X3, then recurring | todo |
@@ -833,6 +833,26 @@ Done when
 - A candidate in a phase that does not allow cancelling has no reaction
   available.
 - With no rule listening, nothing happens when a window is noticed.
+
+As built (decisions D-710, D-711, D-715, D-716). Beta: windows in the
+simulation's `WindowTable` (save layout 12), candidates in the order of
+03 §7.1, noticing on the candidate's clock, closing at the deadline phase
+or with the action, `react`, `ask_reaction`, `open_window`,
+`close_window`, the `Reaction` decision with each option's timing and
+refusal, `React` and `Pass`, cancelling for a reaction, the `window`
+kind and its functions; the bundled rule that asks the player. Tested in
+`crates/clash-sim/tests/reactions.rs`: `too_fast_to_notice`, a candidate
+committed to something has no reaction available and one in a phase that
+allows cancelling is cancelled to make room, with no rule listening
+nothing happens, a player is asked and the reaction chosen runs, or
+passes, who is offered a window (the review row "Who is offered a
+window", with the relation supplied by the test), a save and a load
+while a window is open, and replay. Stubbed: the `intervenes` relation
+is `Sim::set_intervenes` until S7; the test script `bodyguard` is a Rust
+test (the relation cannot be supplied from a script); minds answer
+windows by the ordered `reactions` of their definition (decision D-716),
+and the AI's `best_reaction` (09 §6.3) is not built; `too_fast_to_notice`
+is a Rust test.
 
 ### T6 — Joint actions
 

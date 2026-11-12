@@ -38,7 +38,8 @@
 //!
 //! Options and tactics (09 §6.1: a `choose` step starts the first action
 //! tagged with its purpose that can start), `threat`, positions and
-//! reactions (I5); `use`, `job`, `goal`, `follow` and `run` steps (they
+//! `best_reaction` (I5: a mind answers a window by the first of its
+//! definition's `reactions` that may start); `use`, `job`, `goal`, `follow` and `run` steps (they
 //! wait for interactions, jobs and queries); the hook `goal_scoring`;
 //! routines (L2); hierarchical regions and flow fields (I2); collectives
 //! (I7); warm stepping (I8); the inspector's views (I9). Stances stand
@@ -452,7 +453,67 @@ fn on_custom(sim: &mut Sim, event: &SimEvent, name: &str) {
                 }
             }
         }
+        crate::action::WINDOW_NOTICED => react_to_window(sim, event),
         _ => {}
+    }
+}
+
+/// A mind answers a window its character noticed (03 §7.3, 09 §6.3)
+/// with the first of its definition's `reactions` that may start and
+/// would be ready in time, else the first that may start; with none,
+/// nothing. A directly controlled character is the player's to answer.
+fn react_to_window(sim: &mut Sim, event: &SimEvent) {
+    let Some(who) = entity_subject(event, "self") else {
+        return;
+    };
+    if sim
+        .truth()
+        .entity(who)
+        .is_none_or(|record| record.control() == Control::Direct)
+    {
+        return;
+    }
+    let Some(wanted) = mind_def_of(sim, who)
+        .and_then(|id| think::mind_def(sim, id))
+        .map(|def| {
+            def.reactions
+                .iter()
+                .map(|action| action.id())
+                .collect::<Vec<_>>()
+        })
+        .filter(|wanted| !wanted.is_empty())
+    else {
+        return;
+    };
+    let Some(window) = event
+        .body
+        .field("window")
+        .and_then(|field| sim.exprs().field_value(&field).as_subject())
+        .and_then(|handle| sim.window_of(&clash_expr::Value::Subject(handle)))
+    else {
+        return;
+    };
+    let options = sim.reaction_options(who, window);
+    let may = |action: &crate::action::ActionDefId, in_time: bool| {
+        options.iter().any(|option| {
+            option.action == *action && option.refused.is_none() && (option.in_time || !in_time)
+        })
+    };
+    let Some(action) = wanted
+        .iter()
+        .find(|action| may(action, true))
+        .or_else(|| wanted.iter().find(|action| may(action, false)))
+        .copied()
+    else {
+        return;
+    };
+    let cause = clash_world::Cause {
+        actor: Some(who),
+        instigator: Some(who),
+        kind: clash_world::CauseKind::Action,
+    };
+    if let Err(reason) = sim.react(who, window, action, &Vec::new(), cause) {
+        sim.fault(reason);
     }
 }
 

@@ -19,13 +19,13 @@ With packages C1 to C8, C11 and C12 the first playable build of
 | C1 | Contests | S | X4, K5 | done |
 | C2 | Surfaces and delivery | L | E5, E8, C1 | beta |
 | C3 | Aim | M | C2, S4 | beta |
-| C4 | Defences | L | C3, T5 | todo |
+| C4 | Defences | L | C3, T5 | beta |
 | C5 | Push | M | C2, E10 | beta |
 | C6 | Clashes | L | C4, C5, W15 | todo |
 | C7 | Grips and throws | L | C4, C5, T6 | todo |
 | C8 | Takedowns | M | C2, T6 | todo |
-| C9 | Projectiles | L | C4, W14, S2 | todo |
-| C10 | Ranged weapons | M | C9, G9 | todo |
+| C9 | Projectiles | L | C4, W14, S2 | beta |
+| C10 | Ranged weapons | M | C9, G9 | beta |
 | C11 | Stances, combinations, effort, previews | M | C4, C5, E3 | todo |
 | C12 | Bundled combat content | M | C6, C7, C8, C11 | todo |
 | C13 | Benchmarks and budget gate | S | C2, then recurring | todo |
@@ -140,6 +140,23 @@ Done when
 - Scenario `too_slow`: the third; no defence exists.
 - A defender who has moved out of reach is missed without a contest.
 
+Beta (decisions D-712 to D-714): the `defence` block, in force during
+its phase only, `covers` by arc and part, `handles`, `contest`, `avoid`
+by leaving (step 2) and by slipping, `interpose` with `deflect`, `holds`
+and `brace`, the surfaces put in the way taking the rest and passing on
+what they cannot stop, `protects`, `evasion`, the hook
+`defence_resolving`, `strike_defended`, `entity.defending`; guards as
+held phases; the bundled `parry`, `block`, `dodge`, `step_back` and
+`guard`. Tested in `crates/clash-sim/tests/reactions.rs`:
+`parry_in_time`, `broken_blade` and `too_slow` to the figures of 07 §14,
+invariant C3, leaving, slipping, a guard held and let go, defending
+someone beside (the review row "Defending someone else"), and energy
+accounted for through a guard. `parry_in_time` and `too_slow` are also
+test scripts under `scenarios/combat/`, with the bundled `slash` and
+`parry`. Stubbed: a gripped creature put in the way (C7), defences
+against shots (C9), the query `defences`, previews (C11); the
+`bodyguard` script waits for relations (S7).
+
 ### C5 — Push
 
 **Spec** 07 §7 · **Size** M
@@ -231,6 +248,20 @@ Done when
   short.
 - Scenario `volley`: five hundred projectiles within the budget of 07 §18.
 
+Beta (decisions D-740 to D-744, D-748): the `projectile` type, `shoot`
+with dispersion from the stream `shots`, bodies carrying the
+projectile's surface and its delivery into creatures by height band,
+continuing with what exits, lodging, `projectile_passed`, instant shots
+by ray, `ballistic_dir` and `band_point`, all tested in
+`crates/clash-sim/tests/ranged.rs`; `through_cover` is also a test script
+under `scenarios/combat/`; `volley` is an ignored timing test there.
+Stubbed: the `shot` window is offered to nobody until T5 (`bullet_time`,
+and the review row "Stopping a shot", `caught_arrow`, wait for it);
+defences against shots wait for C4; `guidance`, `fuse` and
+`projectile_lost_lock` are read and carried (review row "Driven and
+guided projectiles", `heat_seeker`); `lead_point` waits for believed
+velocities.
+
 ### C10 — Ranged weapons
 
 **Spec** 07 §11.5 · **Size** M
@@ -245,6 +276,17 @@ Done when
 - A fitted module changes spread and noise and stops doing so when
   removed.
 - A bow's shot energy follows draw time up to its cap.
+
+Beta (decisions D-745 to D-747, D-749): rounds as items (`round`),
+stores (`holds.order`) fired in the order loaded, `load`, `fit` and the
+`shot` block with what is fitted multiplying it, `throw`, a held draw,
+`count` above one, a timed charge by `after`, an instant shot by ray;
+the bundled pistol, rifle, magazines, two kinds of round each, scope,
+suppressor, bow, arrows, quiver, throwing knife and charge, and the
+actions `shoot`, `aim_shot`, `reload`, `draw_and_loose` and `throw`.
+`mixed_belt` is a test script and a Rust test. Stubbed: weapons that draw
+on a power store (16 §11.2) wait for G9, so a firearm is an item with a
+magazine fitted rather than an assembly; no bundled recoil rule.
 
 ### C11 — Stances, combinations, effort, previews
 

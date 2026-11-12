@@ -253,6 +253,10 @@ pub struct ActionDef {
     /// `$absorbed`, `$passed`) as variables, unless it declares them.
     #[serde(default)]
     pub attacks: crate::combat::Attacks,
+    /// How the action defends (07 §5.1): in force during one of its
+    /// phases, avoiding a strike or putting something in its way.
+    #[serde(default)]
+    pub defence: Option<crate::combat::DefenceDef>,
 }
 
 impl ActionDef {
@@ -463,7 +467,20 @@ impl ActionDef {
             locals: Vec::new(),
             reacts: Vec::new(),
             attacks: crate::combat::Attacks::default(),
+            defence: None,
         }
+    }
+
+    /// The scope a defence's expressions are compiled in (07 §5.1): the
+    /// action's, reading truth, with the subjects `attacker` (who
+    /// strikes) and `target` (the one struck) after `self`, the
+    /// defender.
+    pub fn defence_scope(&self) -> Scope {
+        let subjects = Scope::new()
+            .own(ACTOR_SUBJECT, ENTITY_KIND)
+            .subject(crate::combat::defence::ATTACKER_SUBJECT, ENTITY_KIND)
+            .subject(crate::combat::TARGET_SUBJECT, ENTITY_KIND);
+        with_locals(subjects, &self.locals)
     }
 }
 
@@ -764,6 +781,11 @@ impl ActionDef {
         {
             sound = false;
         }
+        if let Some(defence) = &mut self.defence
+            && !resolve(cx, &mut defence.during, "defence.during")
+        {
+            sound = false;
+        }
         sound
     }
 
@@ -984,6 +1006,11 @@ impl Def for ActionDef {
         // The attacks: truth, with the action's locals and what strikes.
         let (attack_exprs, attack_effects) = (self.attack_scope(), self.attack_effect_scope());
         self.attacks.compile(cx, &attack_exprs, &attack_effects);
+        // The defence: truth, with the action's locals and who strikes.
+        let defence_exprs = self.defence_scope();
+        if let Some(defence) = &mut self.defence {
+            defence.compile(cx, &defence_exprs, &truth);
+        }
 
         // The effect lists: truth, with the action's locals.
         let effects = self.effect_scope();
@@ -1006,6 +1033,9 @@ impl Def for ActionDef {
             effects.validate(cx);
         }
         self.attacks.validate(cx);
+        if let Some(defence) = &self.defence {
+            defence.validate(cx);
+        }
         crate::combat::check_strikes(self, cx);
         let constant = |expr: &Expr<Number>| expr.constant().and_then(|value| value.as_number());
         let mut refuse_at = |span: Option<Span>, path: String, message: &str| {

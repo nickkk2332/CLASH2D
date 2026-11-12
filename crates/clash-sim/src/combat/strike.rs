@@ -7,7 +7,7 @@
 //! | 2. Reach | The gap between the two cells' middles, less the cell they take between them, is within the attack's `reach`; otherwise it misses |
 //! | 3. Clash | Not built (C6): there is never one |
 //! | 4. Aim | [`aim`](mod@super::aim) |
-//! | 5. Defences | Not built (C4): there are none |
+//! | 5. Defences | [`defence`](mod@super::defence): those in force for the target, in order; one that avoids makes it miss, one that interposes turns some aside and puts a surface in the way of the rest |
 //! | 6. Delivery | A [`Hit`] through [`Sim::hit`], with what the target wears; or a packet on an item; recoil into the surface that struck |
 //! | 7. Push | [`push`](mod@super::push) |
 //! | 8. Results | `strike_landed`, `strike_missed`, `strike_stopped`; `on_land`, `on_miss`, `on_stopped`; the action's `$landed`, `$absorbed`, `$passed` |
@@ -57,6 +57,7 @@ use clash_world::{Cause, CellPos, DamagePacket, DamageResult, Layer, Location, O
 
 use super::aim::{self, Aimed};
 use super::attack::{ArcDef, ArcShape, AttackDef, RESULT_LOCALS};
+use super::defence::{self, Defended, Incoming};
 use super::events::{
     STRIKE_LANDED, STRIKE_MISSED, STRIKE_RECOILED, STRIKE_RESOLVING, STRIKE_STOPPED,
 };
@@ -297,6 +298,9 @@ enum AtTarget {
     /// It missed, or reached and delivered nothing: the energy is still
     /// the strike's.
     Missed,
+    /// What was put in its way took all of it (07 §5.3): nothing goes
+    /// on.
+    Spent,
 }
 
 impl Striking {
@@ -574,9 +578,76 @@ fn resolve(
                 }
             }
             AtTarget::Missed => {}
+            AtTarget::Spent => {
+                if chained {
+                    tally.passed = Real::ZERO;
+                    break;
+                }
+            }
         }
     }
     Ok(tally)
+}
+
+/// Delivers what is left of a strike to the surfaces defences put in
+/// its way, in turn (07 §5.3): each takes a packet of the strike's kind
+/// at the energy over its own area times its give, and passes on what
+/// it cannot stop. Gives what is left for the part aimed at, what the
+/// surfaces took, and what came back from one that was not affected.
+fn through_guard(
+    sim: &mut Sim,
+    striking: &Striking,
+    interposed: &[defence::Interposed],
+    mut harm: Real,
+) -> Result<(Real, Real, Real), Reason> {
+    let (mut absorbed, mut returned) = (Real::ZERO, Real::ZERO);
+    for put in interposed {
+        if harm <= Real::ZERO {
+            break;
+        }
+        let packet = DamagePacket::new(
+            striking.surface.kind,
+            harm,
+            intensity_of(&put.surface, harm),
+            striking.cause,
+        );
+        match put.surface.striker {
+            Striker::Item { item, .. } => {
+                let hit = crate::item::damage(sim, item, &packet)?;
+                if hit.outcome.result == DamageResult::Unaffected {
+                    returned += harm;
+                    harm = Real::ZERO;
+                } else {
+                    absorbed += hit.outcome.absorbed;
+                    harm = hit.outcome.passed;
+                }
+            }
+            Striker::Part(key) => {
+                // No direction: what exits the part goes on to the part
+                // aimed at, not to the wall behind.
+                let outcome = sim.hit(Hit {
+                    target: put.defender,
+                    at: HitAt::Part(key),
+                    packet,
+                    area: put.surface.area,
+                    span: put.surface.span,
+                    dir: None,
+                })?;
+                if outcome.cancelled.is_some() {
+                    harm = Real::ZERO;
+                    continue;
+                }
+                absorbed += outcome.report.absorbed;
+                for worn in &outcome.report.worn {
+                    absorbed += worn.absorbed;
+                }
+                returned += outcome.report.returned;
+                harm = outcome.exited();
+            }
+            Striker::Inline => {}
+        }
+    }
+    Ok((harm.max(Real::ZERO), absorbed, returned))
 }
 
 /// How far the attack reaches toward a target: its `reach`, or its
@@ -853,7 +924,21 @@ fn at_target(
                     attack.aim.as_ref().map(|aim| &aim.against)
                 })
                 .unwrap_or(Real::ZERO);
-            aim::aim(sim, target, part, contest, by, against)
+            // A defence of the target's in force may make it harder to
+            // land on squarely (07 §5.1 `evasion`).
+            let evading = defence::evasion(
+                sim,
+                &Incoming {
+                    attacker: striking.actor,
+                    target,
+                    part,
+                    energy,
+                    action: &striking.action_name,
+                    attack: &striking.attack_name,
+                    cause: striking.cause,
+                },
+            );
+            aim::aim(sim, target, part, contest, by, against + evading)
         }
         _ => Aimed::Lands(aim::mark(sim, target, part), None),
     };
@@ -865,7 +950,40 @@ fn at_target(
         }
     };
 
-    // Step 5: defences. Not built (C4).
+    // Step 5: defences (07 §5). What goes through a creature is not
+    // aimed and meets none.
+    let defended = if carried_on {
+        Defended::Nothing
+    } else {
+        let incoming = Incoming {
+            attacker: striking.actor,
+            target,
+            part: match at {
+                HitAt::Part(key) => Some(key),
+                _ => None,
+            },
+            energy,
+            action: &striking.action_name,
+            attack: &striking.attack_name,
+            cause: striking.cause,
+        };
+        defence::defend(sim, &incoming)
+    };
+    let (energy, brace, interposed) = match defended {
+        Defended::Nothing => (energy, Real::ZERO, Vec::new()),
+        Defended::Avoided(margin) => {
+            missed(sim, striking, target, "defence", margin);
+            return Ok(AtTarget::Missed);
+        }
+        Defended::Interposed {
+            turned,
+            surfaces,
+            brace,
+        } => {
+            tally.turned += turned;
+            (energy - turned, brace, surfaces)
+        }
+    };
 
     // Step 6: delivery.
     let push_share = if carried_on {
@@ -886,9 +1004,39 @@ fn at_target(
     }
     let harm = energy * (Real::ONE - push_share);
     let pushed = energy * push_share;
+    let dir = direction(sim, striking.actor, target);
+    // What was put in the way takes the rest first, and passes on what
+    // it cannot stop (07 §5.3).
+    let (harm, guarded, guard_returned) = through_guard(sim, striking, &interposed, harm)?;
+    if !interposed.is_empty() && harm <= Real::ZERO {
+        tally.absorbed += guarded;
+        tally.returned += guard_returned;
+        recoil(sim, striking, guard_returned, dir);
+        if pushed > Real::ZERO {
+            tally.pushed += pushed;
+            push::push(
+                sim,
+                &Push {
+                    target,
+                    energy: pushed,
+                    dir: dir.unwrap_or([Real::ZERO; 3]),
+                    lift,
+                    brace,
+                    knock_down: None,
+                },
+                striking.cause,
+            );
+        }
+        let why = Reason::new(
+            defence::DEFENDED,
+            "what was put in the way stopped all of it",
+        )
+        .with("target", target.to_string());
+        stopped(sim, striking, target, &why);
+        return Ok(AtTarget::Spent);
+    }
     let intensity = intensity_of(&surface, harm);
     let packet = DamagePacket::new(surface.kind, harm, intensity, striking.cause);
-    let dir = direction(sim, striking.actor, target);
     let walled = walled_behind(sim, target, dir);
 
     let (absorbed, returned, exits, landed_part) = if sim.components().body.contains(target) {
@@ -924,11 +1072,11 @@ fn at_target(
     };
     tally.landed = true;
     tally.hits = tally.hits.saturating_add(1);
-    tally.absorbed += absorbed;
-    tally.returned += returned;
-    recoil(sim, striking, returned, dir);
+    tally.absorbed += absorbed + guarded;
+    tally.returned += returned + guard_returned;
+    recoil(sim, striking, returned + guard_returned, dir);
 
-    // Step 7: push.
+    // Step 7: push, less what a defence braced against (07 §5.1).
     if pushed > Real::ZERO {
         tally.pushed += pushed;
         let knock_down = attack.knock_down.as_ref().map(|posture| posture.id());
@@ -939,7 +1087,7 @@ fn at_target(
                 energy: pushed,
                 dir: dir.unwrap_or([Real::ZERO; 3]),
                 lift,
-                brace: Real::ZERO,
+                brace,
                 knock_down,
             },
             striking.cause,
