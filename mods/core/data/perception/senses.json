@@ -1,0 +1,11 @@
+[
+  { "//": "Senses (15 §4) an ordinary person has. A full-grown person standing in daylight is seen at once out to about 50 m and, in deep shadow, not beyond a step or two.",
+    "type": "sense", "id": "human_sight", "signal": "sight",
+    "range": 60, "arc": 200, "threshold": 0.02,
+    "gain": 4.0, "decay": 0.5, "interval": "500 ms",
+    "doc": "Sight: sixty metres, two hundred degrees about the facing." },
+  { "type": "sense", "id": "human_hearing", "signal": "sound",
+    "range": 40, "arc": 360, "threshold": 0.001,
+    "gain": 4.0, "decay": 0.25, "interval": "500 ms",
+    "doc": "Hearing: forty metres all round." }
+]

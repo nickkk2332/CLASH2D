@@ -1067,6 +1067,94 @@ pub const KERNEL_EVENTS: &[EventInfo] = &[
         doc: "A hook was cancelled: what it preceded did not happen. The hook's own subjects are not bound; its cause is carried.",
     },
     EventInfo {
+        name: "perceived",
+        subjects: &[("self", "entity"), ("about?", "entity")],
+        fields: &[
+            (
+                "percept",
+                "string",
+                "`detection`: awareness of `about` reached 1; `signal`: a signal that was given off was received.",
+            ),
+            ("sense", "string", "The qualified id of the sense."),
+            (
+                "signal",
+                "string",
+                "The qualified id of the kind of signal that carried it.",
+            ),
+            (
+                "event",
+                "string?",
+                "The type of the event the signal carried, if it carried one.",
+            ),
+            (
+                "about_actor",
+                "entity?",
+                "Whom the observer took the event's actor for: someone it had detected, or seen where the signal came from. Null if it made out nobody. The true actor is not given.",
+            ),
+            ("where", "loc?", "Where it seemed to come from."),
+            (
+                "clarity",
+                "real",
+                "How far over the threshold it was received: received over threshold.",
+            ),
+        ],
+        doc: "`self` perceived something (15 §6). `about` is who or what it appeared to be about, if the observer made that out: until personas, the entity, which a mind may read only through its belief properties. Its cause names no actor.",
+    },
+    EventInfo {
+        name: "suspicion_raised",
+        subjects: &[("self", "entity"), ("about", "entity")],
+        fields: &[
+            ("sense", "string", "The qualified id of the sense."),
+            ("level", "real", "The awareness now, 0 to 1."),
+        ],
+        doc: "`self`'s awareness of `about` through a sense crossed that sense's `suspect`: something is there (15 §5.1).",
+    },
+    EventInfo {
+        name: "detected",
+        subjects: &[("self", "entity"), ("about", "entity")],
+        fields: &[
+            ("sense", "string", "The qualified id of the sense."),
+            ("where", "loc?", "Where it was perceived."),
+        ],
+        doc: "`self`'s awareness of `about` through a sense reached 1: it knows what and where, and its track is brought up to date (15 §5.1).",
+    },
+    EventInfo {
+        name: "lost_track",
+        subjects: &[("self", "entity"), ("about", "entity")],
+        fields: &[
+            ("sense", "string", "The qualified id of the sense."),
+            (
+                "where",
+                "loc?",
+                "The last known place: where the track ends.",
+            ),
+        ],
+        doc: "`self`'s awareness of something it had detected fell to 0 through a sense: it no longer perceives it there (15 §5.1).",
+    },
+    EventInfo {
+        name: "memory_added",
+        subjects: &[("self", "entity")],
+        fields: &[
+            (
+                "event",
+                "string",
+                "What is remembered: an event type or any name.",
+            ),
+            ("where", "loc?", "Where it happened."),
+            ("salience", "real", "How much it matters, 0 to 1."),
+        ],
+        doc: "`self` remembered something (15 §7.1).",
+    },
+    EventInfo {
+        name: "memory_forgotten",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("event", "string", "What was forgotten."),
+            ("where", "loc?", "Where it happened."),
+        ],
+        doc: "`self` forgot its least salient memory to make room for another (15 §7.1).",
+    },
+    EventInfo {
         name: "part_detached",
         subjects: &[("self", "entity"), ("here?", "loc")],
         fields: &[

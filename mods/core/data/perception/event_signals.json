@@ -1,0 +1,18 @@
+[
+  { "//": "Loud events of the world and the kernel (15 §3.2). Strengths are in the units of the sound kind: a footstep is 0.2, heard to about fourteen metres in the open.",
+    "type": "event_signal", "id": "element_breaks", "event": "element_destroyed",
+    "signal": "sound", "strength": "1 + event.absorbed / 2000", "salience": 0.6,
+    "doc": "Something breaks: louder the more energy it took." },
+  { "type": "event_signal", "id": "collapse", "event": "collapse_started",
+    "signal": "sound", "strength": 200, "salience": 0.9,
+    "doc": "A structure begins to come down." },
+  { "type": "event_signal", "id": "blast", "event": "release_started",
+    "signal": "sound", "strength": "10 + event.energy / 10000", "salience": 1.0,
+    "doc": "Energy let go at a point: a blast." },
+  { "type": "event_signal", "id": "impact", "event": "body_impact",
+    "signal": "sound", "strength": "0.5 + event.energy / 1000", "salience": 0.3,
+    "doc": "Something thrown or falling strikes the world." },
+  { "type": "event_signal", "id": "footsteps", "event": "entity_relocated",
+    "signal": "sound", "strength": 0.2, "if": "here != null", "about": "self",
+    "doc": "Someone or something moves from cell to cell. Movement definitions that say how loud they are (06 §11) will give off their own." }
+]
