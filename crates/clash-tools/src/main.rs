@@ -131,7 +131,7 @@ mod tests {
             .iter()
             .map(|loaded| loaded.manifest.id.as_str())
             .collect();
-        assert_eq!(mods, ["core", "ui"]);
+        assert_eq!(mods, ["core", "ui", "core_ui"]);
         assert_eq!(
             defs.profile().map(|profile| profile.id.as_str()),
             Some("default")

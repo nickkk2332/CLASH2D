@@ -1,0 +1,17 @@
+[
+  { "//": "The keys of play, read from the keymap in force (`app.keys('play')`): what each control is called and every key bound to it, so that a key the player rebinds shows as it is. Opened in play by the control `help` (? or F1).",
+    "type": "screen", "id": "help",
+    "title": "Keys",
+    "popup": { "width": 64, "height": "fill", "place": "centre", "dim": true },
+    "layout": { "frame": "Keys in play: Esc goes back",
+                "table": { "id": "keys", "rows": "app.keys('play')",
+                           "columns": [ { "title": "Does", "value": "{it.label}", "width": 26 },
+                                        { "title": "Keys", "value": "{it.keys}", "width": "fill" } ],
+                           "empty": "The keymap binds nothing in play.",
+                           "tip": "Up and Down scroll. Options gives a key another meaning." } },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "type": "control", "id": "help", "name": "Keys",
+    "doc": "Show what each key does in play.",
+    "do": { "open": "help" } }
+]

@@ -955,9 +955,11 @@ impl<H: SceneHost> Scene<H> {
     }
 
     /// Opens the screen with this qualified id on top of the stack,
-    /// with values for its parameters by name. A value for a parameter
-    /// the screen does not have is an error, and so is a screen that
-    /// cannot be made.
+    /// with values by name for its parameters and for its variables: a
+    /// variable given a value starts with it, so that a screen that
+    /// edits something starts from what it edits (12 §10.5). A value
+    /// for a name the screen has as neither is an error, and so is one
+    /// a variable cannot hold and a screen that cannot be made.
     pub fn open_screen(
         &mut self,
         id: &str,
@@ -970,8 +972,24 @@ impl<H: SceneHost> Scene<H> {
             .screen(id, &self.theme)
             .map_err(|diagnostics| diagnostics.render())?;
         for (name, value) in with {
-            if !screen.set_param(&name, value) {
-                return Err(format!("the screen `{id}` has no parameter `{name}`"));
+            let var = screen.var(&name).cloned();
+            if let Some(held) = &var {
+                match to_var(&value) {
+                    Some(start) if same_kind(held, &start) => {
+                        screen.set_var(&name, start);
+                    }
+                    _ => {
+                        return Err(format!(
+                            "the variable `{name}` of the screen `{id}` cannot start as {value}"
+                        ));
+                    }
+                }
+            }
+            let param = screen.set_param(&name, value);
+            if var.is_none() && !param {
+                return Err(format!(
+                    "the screen `{id}` has no parameter or variable `{name}`"
+                ));
             }
         }
         self.open(screen);
@@ -1191,6 +1209,8 @@ impl<H: SceneHost> Scene<H> {
             runner,
             size,
             warnings,
+            keymap,
+            keymap_ns,
             ..
         } = self;
         let ui = ui.as_ref()?;
@@ -1201,6 +1221,9 @@ impl<H: SceneHost> Scene<H> {
             registry: ui.defs().exprs().registry(),
             prefs,
             size: *size,
+            keymap,
+            keymap_ns,
+            ui,
         });
         let mut reader = Reader {
             runner,
@@ -1868,6 +1891,20 @@ where
         front.present(frame);
         turn
     }
+}
+
+/// Whether a screen variable that holds one value may be given another:
+/// a flag for a flag, a number for a number, a text for a text.
+fn same_kind(held: &Value, given: &Value) -> bool {
+    matches!(
+        (held, given),
+        (Value::Bool(_), Value::Bool(_))
+            | (
+                Value::Int(_) | Value::Real(_),
+                Value::Int(_) | Value::Real(_)
+            )
+            | (Value::Str(_), Value::Str(_))
+    )
 }
 
 #[cfg(test)]
