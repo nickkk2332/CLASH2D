@@ -59,6 +59,7 @@ pub mod advance;
 pub mod body;
 pub mod bus;
 pub mod clock;
+pub mod combat;
 pub mod command;
 pub mod component;
 pub mod console;
@@ -150,4 +151,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);
+    combat::register_defs(types);
 }

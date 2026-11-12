@@ -121,6 +121,9 @@ pub struct Sim {
     pub(crate) perception: PerceptionState,
     /// Not state: the tables of perception, from the definitions.
     pub(crate) perception_defs: Arc<PerceptionDefs>,
+    /// Not state: how many strikes are being resolved inside one another
+    /// now ([`combat`](crate::combat)). Zero between any two events.
+    pub(crate) strike_depth: u8,
 }
 
 /// Why saved state could not be loaded.
@@ -291,6 +294,7 @@ impl Sim {
             rt,
             perception: PerceptionState::default(),
             perception_defs,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         sim
@@ -819,6 +823,7 @@ impl Sim {
             rt,
             perception: saved.perception,
             perception_defs,
+            strike_depth: 0,
         };
         sim.bind_runtime();
         Ok(sim)
