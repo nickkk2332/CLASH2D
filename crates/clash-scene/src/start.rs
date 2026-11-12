@@ -21,6 +21,7 @@
 //! this type is deleted.
 
 use clash_data::{CrossCx, Def, DefLabel, Diagnostic, Located, ValidateCx, code};
+use clash_sim::perception::SenseDef;
 use clash_sim::template::TemplateDef;
 use clash_world::defs::RealmDef;
 use serde::Deserialize;
@@ -65,9 +66,37 @@ pub struct StartDef {
     /// theme's text.
     #[serde(default)]
     pub glyph: Option<GlyphDef>,
+    /// The senses the player's character perceives with when its
+    /// templates give it none (15 §4): `sense` definitions by qualified
+    /// id, or bare names in the start's own namespace. Left out, every
+    /// sense the loaded mods define.
+    #[serde(default)]
+    pub senses: Vec<Located<String>>,
+    /// The saving policy of the game (13 §9.2): `free` (save and load at
+    /// will, the default), `single` (one save, written on leaving),
+    /// `checkpoints` (only the saves rules make) or `none`.
+    #[serde(default)]
+    pub saving: Option<String>,
 }
 
+/// The saving policies a start may name (13 §9.2).
+pub const SAVING_POLICIES: [&str; 4] = ["free", "single", "checkpoints", "none"];
+
 impl StartDef {
+    /// The qualified ids of the senses the start names, for a start
+    /// defined in `namespace`.
+    pub fn sense_ids(&self, namespace: &str) -> Vec<String> {
+        self.senses
+            .iter()
+            .map(|sense| qualified(&sense.value, namespace))
+            .collect()
+    }
+
+    /// The saving policy: what the start names, or `free`.
+    pub fn saving_policy(&self) -> &str {
+        self.saving.as_deref().unwrap_or(SAVING_POLICIES[0])
+    }
+
     /// The qualified id of the realm definition, for a start defined in
     /// `namespace`.
     pub fn realm_id(&self, namespace: &str) -> String {
@@ -108,11 +137,20 @@ impl Def for StartDef {
         if self.glyph.as_ref().is_some_and(|glyph| glyph.ch.is_none()) {
             cx.error("`glyph` needs a `ch`: the character the player's character is drawn as");
         }
+        if let Some(policy) = &self.saving
+            && !SAVING_POLICIES.contains(&policy.as_str())
+        {
+            cx.error(format!(
+                "`saving` is one of {}, and `{policy}` is none of them",
+                SAVING_POLICIES.join(", ")
+            ));
+        }
     }
 }
 
 /// The cross check: the realm a start names must be defined, and so
-/// must the template it names, where templates are loaded at all.
+/// must the template it names, where templates are loaded at all, and
+/// the senses it names, where senses are.
 pub(crate) fn check_starts(cx: &mut CrossCx<'_>) {
     let defs = cx.defs();
     // Templates are checked where any loaded: a tool may load starts
@@ -145,6 +183,28 @@ pub(crate) fn check_starts(cx: &mut CrossCx<'_>) {
                 "template",
                 written.span,
             ));
+        }
+    }
+    // Senses likewise, where any are loaded.
+    let senses = defs.iter::<SenseDef>().next().is_some();
+    for (id, start) in defs.iter::<StartDef>() {
+        let Some(name) = defs.name::<StartDef>(id) else {
+            continue;
+        };
+        if !senses {
+            break;
+        }
+        let namespace = namespace_of(name);
+        for written in &start.senses {
+            let sense = qualified(&written.value, namespace);
+            if defs.lookup::<SenseDef>(&sense).is_none() {
+                missing.push((
+                    name.to_owned(),
+                    format!("there is no sense `{sense}` to give this start's character"),
+                    "senses",
+                    written.span,
+                ));
+            }
         }
     }
     for (start, message, path, span) in missing {

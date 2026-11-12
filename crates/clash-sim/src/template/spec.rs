@@ -147,6 +147,8 @@ pub struct Resolved {
     pub rules: Vec<EocId>,
     /// Traits it starts with, as written, in order.
     pub traits: Vec<String>,
+    /// Abilities it is given, as written, in order.
+    pub abilities: Vec<String>,
     /// Items it starts with, as written, in order.
     pub items: Vec<String>,
     /// A mind: `None` for none, `Some(profile)` for one.
@@ -195,6 +197,11 @@ fn gather(out: &mut Resolved, gives: Gives<'_>) {
         }
     }
     out.traits.extend(gives.traits.iter().cloned());
+    for ability in gives.abilities {
+        if !out.abilities.contains(ability) {
+            out.abilities.push(ability.clone());
+        }
+    }
     out.items.extend(gives.items.iter().cloned());
     if let Some(scale) = gives.scale {
         out.scale *= scale;

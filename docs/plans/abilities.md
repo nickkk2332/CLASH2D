@@ -16,10 +16,10 @@ the rest of this plan. Build it early.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| A1 | Reactive expressions | M | K4, X3 | todo |
-| A2 | Abilities: definition, sources, rank, parameters | L | E3, E9 | todo |
-| A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | todo |
-| A4 | Modes, upkeep, charging | M | A3 | todo |
+| A1 | Reactive expressions | M | K4, X3 | done |
+| A2 | Abilities: definition, sources, rank, parameters | L | E3, E9 | beta |
+| A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | beta |
+| A4 | Modes, upkeep, charging | M | A3 | beta |
 | A5 | Dormancy, suppression, loss | M | A2, A1 | todo |
 | A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | todo |
 | A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | todo |
@@ -64,6 +64,11 @@ Done when
   most once per pump.
 - A property registered without `changes_on` fails a test.
 
+Done (decisions D-720, D-721; 05 §7.5 as built). `changes_on` is the
+registry's `changed_by`. Watched: the `while` of abilities, and of traits
+whose condition can be watched. Device outputs (16 §7) are package G5's
+to watch. Tests: `crates/clash-sim/tests/abilities.rs`.
+
 ### A2 — Abilities: definition, sources, rank, parameters
 
 **Spec** 08 §3, §4 · **Size** L
@@ -84,6 +89,12 @@ Done when
 - A parameter read in an action changes with rank and with a modifier from
   an unrelated trait.
 
+Beta (decisions D-722, D-723, D-728; 08 §12.1). Stubbed: items, modules
+and body parts confer abilities only through the traits they give (no
+`abilities` field of their own); `ability.var.x`; `ability` bound in an
+ability's attached rules; the seat of trait-given abilities, which stay
+with the body until traits have seats.
+
 ### A3 — Grants, costs, cooldowns, hooks on use
 
 **Spec** 08 §5.1–5.3, §7.9 · **Size** M
@@ -101,6 +112,15 @@ Done when
   only.
 - A gagged character cannot use an action that needs `voice`.
 
+Beta (decisions D-724 to D-726; 08 §12.1). Built on abilities: grants with
+`params`, `cost`, `cooldown`, `at_rank`, `if`, `intent`, `value`; costs
+from pools and items, overdraw, and `from` another payer (the review
+addition, with any expression until `ability.bound(name)` exists);
+`ability_using`; `use_ability`, the commands `UseAbility` and `SetMode`;
+`ability::options` and `available` for the application and the AI.
+Stubbed: the `grants` of traits and modules are still carried, not
+offered; costs from stores (16 §5); `value` is carried for the AI layer.
+
 ### A4 — Modes, upkeep, charging
 
 **Spec** 08 §5.4, §5.5 · **Size** M
@@ -115,6 +135,14 @@ Done when
 - A mode ends at the analytically correct tick when its pool empties, with
   nothing scheduled in between.
 - Charge delivered follows time held.
+
+Beta (decision D-727; 08 §12.1). A mode ends at a wake-up of its own,
+worked out from the pool's line, rather than at the pool's crossing.
+Stubbed: channel claims (`uses` is carried; a mode's trait may disable
+slots meanwhile); a switching action supplied by the mode (a mode is a
+toggle; a windup is a grant whose action calls `start_mode`). The
+bundled powers of `mods/core/data/powers` (D-729) and the test scripts
+under `scenarios/powers/` exercise A2 to A4 in the test city.
 
 ### A5 — Dormancy, suppression, loss
 

@@ -494,7 +494,7 @@ the definitions it has. It is read without loading the game.
 | `tick` | The universal time of the save | Saving |
 | `experimental` | The experimental features the mods opted in to (04 §8.4) | Saving |
 | `state_hash` | The simulation's state hash when saved; `save verify` compares it with what loads | Saving |
-| `app` | Bytes of the saver's own, neither read nor hashed: the console keeps its cursor, active character, selection, frame size, profile name and seed there | The saver |
+| `app` | Bytes of the saver's own, neither read nor hashed: the console keeps its cursor, active character, selection, frame size, profile name and seed there; the game keeps the start it began from, the character's name and who the character is (12 §3.6) | The saver |
 
 Saving follows 02 §11.4: the blobs of tracts that are not loaded are
 carried over from the simulation's own store, `Cosmos::save_world` writes

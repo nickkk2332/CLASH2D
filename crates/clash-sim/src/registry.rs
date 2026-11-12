@@ -357,6 +357,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::rule::timer_properties());
     properties.extend(crate::query::properties());
     properties.extend(crate::traits::properties());
+    properties.extend(crate::ability::properties());
     properties
 }
 
@@ -430,6 +431,7 @@ pub fn register_engine(registry: &mut Registry) {
     crate::interaction::register_types(registry);
     crate::traits::register_types(registry);
     crate::reshape::register_types(registry);
+    crate::ability::register_types(registry);
     crate::combat::register_types(registry);
     for property in engine_properties() {
         let known = registry
@@ -465,6 +467,9 @@ pub fn register_engine(registry: &mut Registry) {
         mirror_event(registry, info);
     }
     for info in crate::reshape::EDIT_EVENTS {
+        mirror_event(registry, info);
+    }
+    for info in crate::ability::ABILITY_EVENTS {
         mirror_event(registry, info);
     }
 }
