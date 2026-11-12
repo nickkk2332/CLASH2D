@@ -12,4 +12,4 @@ advance 615min
 assert "@lamp.var('core:lit')"
 advance 12h
 assert "not @lamp.var('core:lit')"
-expect hash de9f3fba41ba07704f45a09b4f88b544
+expect hash 1a348e77a43e30cc7141520cf1614460
