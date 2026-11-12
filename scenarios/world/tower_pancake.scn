@@ -1,0 +1,71 @@
+# A tower of slabs on four walls loses its ground storey and comes
+# down storey on storey (02 §14). The save-and-load mode cuts through
+# the middle of the fall.
+use default seed=11
+gen core:testland size=1
+set @c:10,10,0 block core:wall
+set @c:11,10,0 block core:wall
+set @c:10,11,0 block core:wall
+set @c:11,11,0 block core:wall
+set @c:10,10,1 block core:wall
+set @c:11,10,1 block core:wall
+set @c:10,11,1 block core:wall
+set @c:11,11,1 block core:wall
+set @c:10,10,2 block core:wall
+set @c:11,10,2 block core:wall
+set @c:10,11,2 block core:wall
+set @c:11,11,2 block core:wall
+set @c:10,10,1 floor core:slab
+set @c:11,10,1 floor core:slab
+set @c:10,11,1 floor core:slab
+set @c:11,11,1 floor core:slab
+set @c:10,10,2 floor core:slab
+set @c:11,10,2 floor core:slab
+set @c:10,11,2 floor core:slab
+set @c:11,11,2 floor core:slab
+set @c:10,10,3 floor core:slab
+set @c:11,10,3 floor core:slab
+set @c:10,11,3 floor core:slab
+set @c:11,11,3 floor core:slab
+advance 1s
+assert "@c:10,10,3.floor.def_id == 'core:slab'"
+set @c:10,10,0 block none
+set @c:11,10,0 block none
+set @c:10,11,0 block none
+set @c:11,11,0 block none
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+advance 50ms
+expect event collapse_started
+advance 10s
+expect event collapse_settled
+assert "@c:10,10,3.floor == null and @c:10,10,1.block == null"
+assert "@c:10,10,0.fixture.def_id == 'core:rubble'"
+expect hash 05af5e7f7e77ec466d25af031a7b2239

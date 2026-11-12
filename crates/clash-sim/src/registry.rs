@@ -332,6 +332,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     let mut properties = crate::props::properties();
     properties.extend(crate::item::properties());
     properties.extend(crate::movement::properties());
+    properties.extend(crate::perception::props::properties());
     properties.extend(crate::device::properties());
     properties.extend(crate::interaction::properties());
     properties
@@ -341,7 +342,9 @@ pub fn engine_properties() -> Vec<PropertyDef> {
 /// language computes itself. A package that adds functions adds its
 /// table here.
 pub fn engine_functions() -> Vec<FunctionDef> {
-    crate::props::functions()
+    let mut table = crate::props::functions();
+    table.extend(crate::perception::props::functions());
+    table
 }
 
 /// The definition types the simulation's properties name in their

@@ -7,7 +7,7 @@
     },
     "interactions": ["open", "close", "break_through"] },
 
-  { "type": "fixture", "id": "locker", "material": "steel",
+  { "type": "fixture", "id": "steel_locker", "material": "steel",
     "height": 2.0, "fill": 0.1, "flags": ["opaque"],
     "states": {
       "closed": {},

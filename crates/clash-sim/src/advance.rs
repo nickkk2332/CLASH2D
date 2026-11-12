@@ -149,6 +149,7 @@ impl Default for Handlers {
         // package with timers of its own calls `life::handle_wake`
         // first and handles the rest.
         handlers.set(WakeDomain::Timer, crate::life::timer_wake);
+        handlers.set(WakeDomain::Perception, crate::perception::on_wake);
         handlers
     }
 }
@@ -337,6 +338,7 @@ impl Sim {
             // What the engine's own packages do about it, once rules
             // have had their say.
             crate::movement::on_event(self, &event);
+            crate::perception::observe_event(self, &event);
             crate::device::on_event(self, &event);
             self.out.push(event);
         }

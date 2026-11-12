@@ -404,7 +404,7 @@ fn device_count(sim: &Sim) -> usize {
 fn hiding_in_a_locker_takes_a_character_out_of_the_world_until_a_blast_spills_them() {
     let mut sim = flat();
     let locker = at(10, 10);
-    put(&mut sim, locker, Layer::Fixture, "locker");
+    put(&mut sim, locker, Layer::Fixture, "steel_locker");
     let hero = character(&mut sim, at(11, 10));
     let target = Target::Element(locker, Layer::Fixture);
     assert_eq!(device_count(&sim), 0);
@@ -466,7 +466,7 @@ fn hiding_in_a_locker_takes_a_character_out_of_the_world_until_a_blast_spills_th
 fn a_locker_takes_what_is_in_hand_and_gives_it_back() {
     let mut sim = flat();
     let locker = at(10, 10);
-    put(&mut sim, locker, Layer::Fixture, "locker#open");
+    put(&mut sim, locker, Layer::Fixture, "steel_locker#open");
     let hero = character(&mut sim, at(11, 10));
     let target = Target::Element(locker, Layer::Fixture);
     // A bare creature has no hands: give it the key as though held.
@@ -704,7 +704,7 @@ fn the_bundled_doors_windows_lamps_and_lockers_offer_what_they_should() {
         (Layer::Fixture, "lamp", vec!["core:switch"]),
         (
             Layer::Fixture,
-            "locker",
+            "steel_locker",
             vec![
                 "core:open",
                 "core:close",

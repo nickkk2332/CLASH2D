@@ -75,6 +75,7 @@ pub mod life;
 pub mod mass;
 pub mod mind;
 pub mod movement;
+pub mod perception;
 mod props;
 pub mod reader;
 pub mod reason;
@@ -139,6 +140,7 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     template::register_defs(types);
     item::register_defs(types);
     movement::register_defs(types);
+    perception::register_defs(types);
     device::register_defs(types);
     interaction::register_defs(types);
     // Last: the events of living things name the kinds the steps above

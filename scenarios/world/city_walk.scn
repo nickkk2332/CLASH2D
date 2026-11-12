@@ -1,0 +1,27 @@
+# A walk across the test city: tracts load ahead of a controlled
+# character and unload behind it (02 §9), and a change made at the
+# start is still there when the walker comes back to it.
+use default seed=13
+gen core:test_city size=1
+spawn creature as=w
+session @w @c:641,641,0
+expect event tract_loaded
+set @c:642,641,0 block core:wall
+assert "@c:641,641,0.is_loaded"
+move @w @c:673,641,0
+move @w @c:705,641,0
+move @w @c:737,641,0
+move @w @c:769,641,0
+move @w @c:801,641,0
+move @w @c:833,641,0
+move @w @c:865,641,0
+move @w @c:897,641,0
+move @w @c:929,641,0
+move @w @c:961,641,0
+move @w @c:993,641,0
+expect event tract_unloading
+assert "not @c:641,641,0.is_loaded and @w.loc.x == 993"
+advance 1s
+session @w @c:641,641,0
+assert "@c:642,641,0.block.def_id == 'core:wall' and not @c:993,641,0.is_loaded"
+expect hash e3874c8ca3e3188e05894b6ac7d12d50
