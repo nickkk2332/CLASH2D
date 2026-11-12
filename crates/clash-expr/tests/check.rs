@@ -1701,4 +1701,16 @@ fn what_is_own_follows_locals_and_elements() {
     assert!(!own("others"));
     assert!(!own("$member.mass"), "a number belongs to nobody");
     assert!(!own("$stranger"));
+
+    // A list made of own things is own, and so is `if` whose branches
+    // both are; a single other thing in either makes it not.
+    assert!(own("[party[0]]"));
+    assert!(own("[party[0], $member]"));
+    assert!(own("if true then [party[0]] else party"));
+    assert!(!own("[party[0], $stranger]"));
+    assert!(!own("if true then party else others"));
+    assert_eq!(diagnostics_in("[party[0]][0].mass", &mind, &host), []);
+    let found = diagnostics_in("[$stranger][0].mass", &mind, &host);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].code, codes::NOT_BELIEF_SAFE);
 }

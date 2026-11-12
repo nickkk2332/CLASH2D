@@ -406,6 +406,9 @@ impl AppState for App {
                 "mods cannot be read again while the game runs yet: leave and start it again"
                     .to_owned(),
             ),
+            AppService::Creation => {
+                Err("making a character is not built into this binary yet".to_owned())
+            }
         }
     }
 }

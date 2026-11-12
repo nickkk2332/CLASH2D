@@ -17,6 +17,8 @@
 //! | `profile`, `scenario` | `app_entry?` | The ones in use |
 //! | `pref(id)` | `any` | A preference's value |
 //! | `creation` | `any` | The character being made (06 §10.3) |
+//! | `templates` | `list<app_entry>` | The templates a character may be made from |
+//! | `keys(context)` | `list<map>` | What each name of a keymap context is bound to |
 //! | `size` | `list<int>` | The grid, as `[columns, rows]` |
 //! | `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
 //!
@@ -29,6 +31,8 @@ use clash_expr::{
     Handle, KindId, KindSpec, PropertyId, PropertySpec, Registry, Type, Value as ExprValue,
 };
 
+use crate::defs::UiDefs;
+use crate::input::KeymapDef;
 use crate::ui::{AppService, KIND_APP, KIND_APP_ENTRY, from_var};
 
 /// The definition type whose ids `app.pref` takes.
@@ -157,6 +161,14 @@ pub trait AppState {
         ExprValue::Null
     }
 
+    /// The templates a character may be made from for the game being
+    /// set up, each by its qualified `id` and its `name`: `app.templates`,
+    /// what the creation screen begins a session with (`creation` with
+    /// `begin`). An application that makes no characters has none.
+    fn templates(&self) -> Vec<AppEntry> {
+        Vec::new()
+    }
+
     /// Carries out a service, or says why it cannot. The scene has
     /// already changed a preference or a key binding itself when it
     /// passes `set_pref` or `rebind` on: those are for the application
@@ -197,6 +209,8 @@ enum AppProp {
     Current(AppCurrent),
     Pref,
     Creation,
+    Templates,
+    Keys,
     Size,
     CanSave,
     CanLoad,
@@ -249,6 +263,11 @@ pub fn register_expr(registry: &mut Registry) {
             .doc("The value of a preference (12 §10.4)."),
         PropertySpec::new(app, "creation", Type::Any)
             .doc("The character being made (06 §10.3); null when none is."),
+        PropertySpec::new(app, "templates", Type::list(Type::Subject(entry)))
+            .doc("The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3)."),
+        PropertySpec::new(app, "keys", Type::list(Type::map(Type::Str)))
+            .param("context", Type::Str, "A context of the keymap: `play`, `menu`, `targeting`.")
+            .doc("What the keymap in force binds in a context: one map for each name a key there is given, in order of name, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2)."),
         PropertySpec::new(app, "size", Type::list(Type::Int))
             .doc("The grid, as `[columns, rows]`."),
         PropertySpec::new(app, "can_save", Type::Bool)
@@ -296,6 +315,8 @@ impl AppIds {
         }
         add(app, "pref", AppProp::Pref);
         add(app, "creation", AppProp::Creation);
+        add(app, "templates", AppProp::Templates);
+        add(app, "keys", AppProp::Keys);
         add(app, "size", AppProp::Size);
         add(app, "can_save", AppProp::CanSave);
         add(app, "can_load", AppProp::CanLoad);
@@ -324,7 +345,16 @@ pub(crate) struct AppReader<'a> {
     pub(crate) registry: &'a Registry,
     pub(crate) prefs: &'a VarMap,
     pub(crate) size: (u16, u16),
+    /// The keymap in force and the namespace a bare control name in it
+    /// is read from, for `app.keys`.
+    pub(crate) keymap: &'a KeymapDef,
+    pub(crate) keymap_ns: &'a str,
+    /// The definitions, for what the controls are called.
+    pub(crate) ui: &'a UiDefs,
 }
+
+/// The code of `app.templates` among the lists entries are read from.
+const TEMPLATES_CODE: u64 = AppList::ALL.len() as u64 + 2;
 
 /// How many entries of one list a handle can tell apart.
 const ENTRY_BITS: u32 = 32;
@@ -343,10 +373,37 @@ impl AppReader<'_> {
         if let Some(list) = AppList::ALL.into_iter().find(|list| list.code() == code) {
             return self.state.entries(list).into_iter().nth(index);
         }
+        if code == TEMPLATES_CODE {
+            return self.state.templates().into_iter().nth(index);
+        }
         [AppCurrent::Profile, AppCurrent::Scenario]
             .into_iter()
             .find(|current| current.code() == code)
             .and_then(|current| self.state.current(current))
+    }
+
+    /// `app.keys(context)`: what the keymap in force binds in a context,
+    /// by name.
+    fn keys(&self, context: &str) -> ExprValue {
+        let Some(bound) = self.keymap.contexts.get(context) else {
+            return ExprValue::list([]);
+        };
+        let mut by_name: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+        for (key, name) in bound {
+            by_name.entry(name.as_str()).or_default().push(key.to_string());
+        }
+        ExprValue::list(by_name.into_iter().map(|(name, keys)| {
+            let (label, doc) = self
+                .ui
+                .control_words(name, self.keymap_ns)
+                .unwrap_or_else(|| (name.to_owned(), String::new()));
+            ExprValue::map([
+                ("name", ExprValue::text(name)),
+                ("label", ExprValue::text(label)),
+                ("doc", ExprValue::text(doc)),
+                ("keys", ExprValue::text(keys.join(", "))),
+            ])
+        }))
     }
 
     /// A preference's value: what the player set, or else nothing.
@@ -384,6 +441,14 @@ impl AppReader<'_> {
             },
             AppProp::Pref => args.first().map_or(ExprValue::Null, |id| self.pref(id)),
             AppProp::Creation => self.state.creation(),
+            AppProp::Templates => ExprValue::list(
+                (0..self.state.templates().len())
+                    .map(|index| self.entry_handle(TEMPLATES_CODE, index)),
+            ),
+            AppProp::Keys => args
+                .first()
+                .and_then(ExprValue::as_str)
+                .map_or_else(|| ExprValue::list([]), |context| self.keys(context)),
             AppProp::Size => ExprValue::list([
                 ExprValue::Int(i64::from(self.size.0)),
                 ExprValue::Int(i64::from(self.size.1)),
@@ -442,6 +507,7 @@ mod tests {
                 "can_load",
                 "can_save",
                 "creation",
+                "keys",
                 "mods",
                 "pref",
                 "profile",
@@ -449,7 +515,8 @@ mod tests {
                 "saves",
                 "scenario",
                 "scenarios",
-                "size"
+                "size",
+                "templates"
             ]
         );
         for property in registry
@@ -480,6 +547,7 @@ mod tests {
     fn a_scene_without_an_application_refuses_what_only_one_can_do() {
         let mut app = NoApp;
         assert!(app.entries(AppList::Saves).is_empty());
+        assert!(app.templates().is_empty());
         assert!(app.current(AppCurrent::Profile).is_none());
         assert!(!app.can_save() && !app.can_load());
         let request = |service| AppRequest {

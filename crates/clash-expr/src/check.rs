@@ -859,7 +859,13 @@ impl<'a> Checker<'a> {
             nodes.push(*node);
         }
         let ty = Type::list(element.unwrap_or(Type::Any));
-        Node::new(NodeKind::List(nodes), ty, span)
+        // A list made of the character's own things is the character's
+        // own, as an element of an own list is (05 §7.3). An empty one
+        // holds nothing to read.
+        let own = nodes.iter().all(|node| node.own);
+        let mut node = Node::new(NodeKind::List(nodes), ty, span);
+        node.own = own;
+        node
     }
 
     fn map(&mut self, entries: &[(Expr, Expr)], span: Span) -> Box<Node> {
@@ -1162,7 +1168,10 @@ impl<'a> Checker<'a> {
         let otherwise = self.coerce(otherwise, &then.ty);
         let then = self.coerce(then, &otherwise.ty);
         let ty = then.ty.join(&otherwise.ty);
-        Node::new(
+        // Whichever branch is taken, it is the character's own if both
+        // are.
+        let own = then.own && otherwise.own;
+        let mut node = Node::new(
             NodeKind::If {
                 cond,
                 then,
@@ -1170,7 +1179,9 @@ impl<'a> Checker<'a> {
             },
             ty,
             span,
-        )
+        );
+        node.own = own;
+        node
     }
 
     // ---- ids ----------------------------------------------------------------------

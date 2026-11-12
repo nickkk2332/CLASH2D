@@ -50,7 +50,7 @@ actions that call `hit`.
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
 | U7 | Input, controls, pickers | M | U6b, T5 | beta |
 | U8 | Slots and theming | S | U6b | done |
-| U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
+| U9 | Bundled screens | L | U7, U8, U4, U5, E9 | in progress |
 | U10 | Cutscenes | M | U5, T6 | todo |
 | U11 | Application | M | U3, U9, P3 | beta |
 | Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
