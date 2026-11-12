@@ -114,19 +114,7 @@ fn core_file(name: &str, without: &[&str]) -> (String, String) {
     let path = common::mods_dir().join("core/data").join(name);
     let text = std::fs::read_to_string(path).unwrap();
     let all: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap();
-    let strips = all.iter().any(|def| {
-        without.contains(
-            &def.get("type")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or(""),
-        )
-    });
-    if !strips {
-        // Written out again, an object's keys would come in sorted
-        // order, and a parameter's default may name one declared before
-        // it: a file with nothing to strip is given as it is.
-        return (format!("data/{name}"), text);
-    }
+    let count = all.len();
     let kept: Vec<serde_json::Value> = all
         .into_iter()
         .filter(|def| {
@@ -137,10 +125,15 @@ fn core_file(name: &str, without: &[&str]) -> (String, String) {
             )
         })
         .collect();
-    (
-        format!("data/{name}"),
-        serde_json::to_string_pretty(&kept).unwrap(),
-    )
+    // Written back only when something was left out: written back, the
+    // keys of an object come out sorted, and the order of an action's
+    // parameters is the order their defaults may refer to each other in.
+    let text = if kept.len() == count {
+        text
+    } else {
+        serde_json::to_string_pretty(&kept).unwrap()
+    };
+    (format!("data/{name}"), text)
 }
 
 /// `mods/core`'s life, combat, perception, movement and items, the
