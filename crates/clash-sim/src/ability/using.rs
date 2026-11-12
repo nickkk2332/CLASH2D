@@ -102,7 +102,8 @@ pub(crate) fn plan_costs(
                 let payer = match &cost.from {
                     None => Some(entity),
                     Some(from) => {
-                        let value = from.value(&mut clash_data::Runner::new().on(&sim.defs, &mut host));
+                        let value =
+                            from.value(&mut clash_data::Runner::new().on(&sim.defs, &mut host));
                         match sim.subject_of(&value) {
                             Some(Subject::Entity(payer))
                                 if sim.entities.contains(payer)
@@ -120,7 +121,10 @@ pub(crate) fn plan_costs(
                 (pool_name(sim, pool), payer, amount)
             }
         };
-        let overdraw = cost.overdraw.as_ref().map(|overdraw| (overdraw.from.id(), overdraw.ratio));
+        let overdraw = cost
+            .overdraw
+            .as_ref()
+            .map(|overdraw| (overdraw.from.id(), overdraw.ratio));
         plans.push(Plan {
             name,
             kind,
@@ -177,7 +181,10 @@ pub(crate) fn check_costs(sim: &Sim, entity: EntityId, plans: &[Plan]) -> Result
         match plan.kind {
             CostKind::Unknown => {}
             CostKind::Item(item) => {
-                let have: u32 = items_held(sim, entity, item).iter().map(|(_, count)| count).sum();
+                let have: u32 = items_held(sim, entity, item)
+                    .iter()
+                    .map(|(_, count)| count)
+                    .sum();
                 if have < plan.count {
                     return Err(Reason::new(
                         codes::ITEMS_SHORT,
@@ -195,7 +202,10 @@ pub(crate) fn check_costs(sim: &Sim, entity: EntityId, plans: &[Plan]) -> Result
                 let (have, payer) = match plan.payer {
                     Some(payer) => {
                         let already = asked.get(&(payer, pool)).copied().unwrap_or(Real::ZERO);
-                        ((level(sim, payer, pool) - already).max(Real::ZERO), Some(payer))
+                        (
+                            (level(sim, payer, pool) - already).max(Real::ZERO),
+                            Some(payer),
+                        )
                     }
                     None => (Real::ZERO, None),
                 };
@@ -216,7 +226,12 @@ pub(crate) fn check_costs(sim: &Sim, entity: EntityId, plans: &[Plan]) -> Result
                         )
                         .with("pool", plan.name.as_str()));
                     }
-                    return Err(short(payer.unwrap_or(entity), &plan.name, plan.amount, have));
+                    return Err(short(
+                        payer.unwrap_or(entity),
+                        &plan.name,
+                        plan.amount,
+                        have,
+                    ));
                 };
                 let missing = (plan.amount - have) * ratio;
                 let already = asked.get(&(entity, from)).copied().unwrap_or(Real::ZERO);
@@ -269,12 +284,15 @@ pub(crate) fn pay_costs(sim: &mut Sim, entity: EntityId, plans: &[Plan], cause: 
                         Err(reason) => sim.fault(reason),
                     }
                 }
-                spent
-                    .by_name
-                    .push((plan.name.clone(), Real::from_i64(i64::from(plan.count - left))));
+                spent.by_name.push((
+                    plan.name.clone(),
+                    Real::from_i64(i64::from(plan.count - left)),
+                ));
             }
             CostKind::Pool(pool) => {
-                let have = plan.payer.map_or(Real::ZERO, |payer| level(sim, payer, pool));
+                let have = plan
+                    .payer
+                    .map_or(Real::ZERO, |payer| level(sim, payer, pool));
                 let from_pool = have.min(plan.amount);
                 if let Some(payer) = plan.payer
                     && from_pool > Real::ZERO
@@ -360,7 +378,9 @@ fn cooldown_left(sim: &Sim, entity: EntityId, inst: &AbilityInst, action: Action
     inst.cooldowns()
         .iter()
         .find(|cooldown| cooldown.action == action)
-        .map_or(Dur::ZERO, |cooldown| (cooldown.ready_at - now).max(Dur::ZERO))
+        .map_or(Dur::ZERO, |cooldown| {
+            (cooldown.ready_at - now).max(Dur::ZERO)
+        })
 }
 
 /// What a use is, once the instance and the grant are found.
@@ -395,8 +415,10 @@ fn usable<'a>(
         .ok_or_else(|| not_held(sim, entity, def))?;
     let (index, grant) = find_grant(sim, def, ability, action)?;
     if inst.state() == State::Dormant {
-        return Err(Reason::new(codes::DORMANT, format!("the ability `{name}` is dormant"))
-            .with("ability", name.as_str()));
+        return Err(
+            Reason::new(codes::DORMANT, format!("the ability `{name}` is dormant"))
+                .with("ability", name.as_str()),
+        );
     }
     let rank = super::rank(sim, entity, &inst);
     if let Some(needed) = grant.at_rank

@@ -16,8 +16,8 @@ use clash_data::Def;
 use clash_expr::{DefRef, Handle, PropertyId, Value};
 
 use super::{
-    ABILITY_GRANTED, ABILITY_REVOKED, Abilities, AbilityDef,
-    AbilityId, Prop, def_of, handle_value, owner_of,
+    ABILITY_GRANTED, ABILITY_REVOKED, Abilities, AbilityDef, AbilityId, Prop, def_of, handle_value,
+    owner_of,
 };
 use crate::Sim;
 use crate::action::{ActionDef, ActionDefId};
@@ -166,7 +166,12 @@ trait OptionalArg {
 }
 
 impl OptionalArg for PropertyDef {
-    fn optional_arg(mut self, name: &'static str, ty: &'static str, doc: &'static str) -> PropertyDef {
+    fn optional_arg(
+        mut self,
+        name: &'static str,
+        ty: &'static str,
+        doc: &'static str,
+    ) -> PropertyDef {
         self.args.push(crate::registry::ArgDef {
             name,
             ty,
@@ -209,11 +214,18 @@ pub fn property(sim: &Sim, property: PropertyId, subject: Handle, args: &[Value]
             .exprs
             .registry()
             .def_type_id(AbilityDef::TYPE)
-            .map_or(Value::Null, |ty| Value::Id(DefRef::new(ty, inst.def().raw()))),
+            .map_or(Value::Null, |ty| {
+                Value::Id(DefRef::new(ty, inst.def().raw()))
+            }),
         Prop::Id => Value::from(super::name_of(&sim.defs, inst.def()).as_str()),
         Prop::Tags => Value::list(
-            def.map(|def| def.tags.iter().map(|tag| Value::from(tag.as_str())).collect::<Vec<_>>())
-                .unwrap_or_default(),
+            def.map(|def| {
+                def.tags
+                    .iter()
+                    .map(|tag| Value::from(tag.as_str()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
         ),
         Prop::ModeOn => {
             let Some(Value::Str(mode)) = args.first() else {
@@ -234,7 +246,9 @@ pub fn property(sim: &Sim, property: PropertyId, subject: Handle, args: &[Value]
                 .iter()
                 .find(|cooldown| cooldown.action == action)
                 .map_or(Real::ZERO, |cooldown| {
-                    (cooldown.ready_at - now).max(clash_core::Dur::ZERO).as_secs_real()
+                    (cooldown.ready_at - now)
+                        .max(clash_core::Dur::ZERO)
+                        .as_secs_real()
                 });
             Value::Real(left)
         }

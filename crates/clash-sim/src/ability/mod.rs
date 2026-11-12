@@ -78,9 +78,9 @@
 //! | Building its registry | Calls [`register_types`], lists [`properties`] and [`verbs()`] and mirrors [`ABILITY_EVENTS`] |
 //! | Building its event bus | Enters [`ABILITY_EVENTS`] and [`hook_types`] |
 //! | An event has been delivered | Calls [`on_event`] |
-//! | The event queue is empty at the end of a pump | Calls [`reactive::settle`] |
+//! | The event queue is empty at the end of a pump | Calls `reactive::settle` |
 //! | A wake-up of the domain `Timer` pops | Hands it to [`handle_wake`] first |
-//! | A variable is written | Calls [`reactive::var_written`] |
+//! | A variable is written | Calls `reactive::var_written` |
 //! | A property of a handle is read | Asks [`property`] first |
 //! | A template has made an entity | Calls [`grant_from_template`] |
 
@@ -1135,9 +1135,7 @@ fn registry_step(cx: &mut RegistryCx<'_>) {
 /// pool, item and trait an ability names, is defined. Called from the
 /// crate's `register_defs`.
 pub fn register_defs(types: &mut DefTypes) {
-    types
-        .register::<AbilityDef>()
-        .add_cross_check(check_names);
+    types.register::<AbilityDef>().add_cross_check(check_names);
     types.add_registry_step(registry_step);
 }
 
@@ -1174,7 +1172,11 @@ fn check_names(cx: &mut CrossCx<'_>) {
                 };
                 if !found {
                     let what = if cost.item { "item" } else { "pool" };
-                    missing.push((label.clone(), format!("there is no {what} `{name}` to pay a cost from"), path));
+                    missing.push((
+                        label.clone(),
+                        format!("there is no {what} `{name}` to pay a cost from"),
+                        path,
+                    ));
                 }
             }
         }
@@ -1182,20 +1184,32 @@ fn check_names(cx: &mut CrossCx<'_>) {
             if let Some(name) = &mode.trait_name
                 && !known::<TraitDef>(view, name)
             {
-                missing.push((label.clone(), format!("there is no trait `{name}`"), "modes"));
+                missing.push((
+                    label.clone(),
+                    format!("there is no trait `{name}`"),
+                    "modes",
+                ));
             }
         }
         for always in &def.always.0 {
             for name in &always.traits {
                 if !known::<TraitDef>(view, name) {
-                    missing.push((label.clone(), format!("there is no trait `{name}`"), "always"));
+                    missing.push((
+                        label.clone(),
+                        format!("there is no trait `{name}`"),
+                        "always",
+                    ));
                 }
             }
             for modifier in &always.params {
                 if let Some(name) = &modifier.ability
                     && !known::<AbilityDef>(view, name)
                 {
-                    missing.push((label.clone(), format!("there is no ability `{name}`"), "always"));
+                    missing.push((
+                        label.clone(),
+                        format!("there is no ability `{name}`"),
+                        "always",
+                    ));
                 }
             }
         }
@@ -1204,22 +1218,37 @@ fn check_names(cx: &mut CrossCx<'_>) {
         let label = DefLabel::new(TraitDef::TYPE, view.name::<TraitDef>(id).unwrap_or(""));
         for name in &def.abilities {
             if !known::<AbilityDef>(view, name) {
-                missing.push((label.clone(), format!("there is no ability `{name}`"), "abilities"));
+                missing.push((
+                    label.clone(),
+                    format!("there is no ability `{name}`"),
+                    "abilities",
+                ));
             }
         }
         for modifier in &def.ability_params {
             if let Some(name) = &modifier.ability
                 && !known::<AbilityDef>(view, name)
             {
-                missing.push((label.clone(), format!("there is no ability `{name}`"), "ability_params"));
+                missing.push((
+                    label.clone(),
+                    format!("there is no ability `{name}`"),
+                    "ability_params",
+                ));
             }
         }
     }
     for (id, def) in view.iter::<TemplateDef>() {
-        let label = DefLabel::new(TemplateDef::TYPE, view.name::<TemplateDef>(id).unwrap_or(""));
+        let label = DefLabel::new(
+            TemplateDef::TYPE,
+            view.name::<TemplateDef>(id).unwrap_or(""),
+        );
         for name in def.all_abilities() {
             if !known::<AbilityDef>(view, name) {
-                missing.push((label.clone(), format!("there is no ability `{name}`"), "abilities"));
+                missing.push((
+                    label.clone(),
+                    format!("there is no ability `{name}`"),
+                    "abilities",
+                ));
             }
         }
     }

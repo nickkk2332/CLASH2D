@@ -114,7 +114,10 @@ fn dir_files(sub: &str) -> Vec<(String, String)> {
 
 fn core_file(name: &str) -> (String, String) {
     let path = common::mods_dir().join("core/data").join(name);
-    (format!("data/{name}"), std::fs::read_to_string(path).unwrap())
+    (
+        format!("data/{name}"),
+        std::fs::read_to_string(path).unwrap(),
+    )
 }
 
 /// Loads `mods/core`'s world, life, traits, movement and powers with
@@ -195,8 +198,13 @@ fn var(sim: &Sim, who: EntityId, name: &str) -> Value {
 }
 
 fn set_var(sim: &mut Sim, who: EntityId, name: &str, value: Value) {
-    sim.set_var(Subject::Entity(who), &format!("core:{name}"), value, cause())
-        .unwrap();
+    sim.set_var(
+        Subject::Entity(who),
+        &format!("core:{name}"),
+        value,
+        cause(),
+    )
+    .unwrap();
 }
 
 fn holds(sim: &Sim, who: EntityId, name: &str) -> bool {
@@ -255,7 +263,7 @@ fn names_of(events: &[SimEvent]) -> Vec<&str> {
     events.iter().map(SimEvent::name).collect()
 }
 
-fn field<'a>(event: &'a SimEvent, name: &str) -> Option<clash_sim::FieldValue> {
+fn field(event: &SimEvent, name: &str) -> Option<clash_sim::FieldValue> {
     let _ = &event;
     event.body.field(name)
 }
@@ -345,7 +353,8 @@ fn a_condition_is_worked_out_again_only_when_what_it_read_changed() {
     // The track it reads: once more, and now it holds.
     sim.advance_track(
         who,
-        DEFS.lookup::<clash_sim::stats::TrackDef>("core:focus").unwrap(),
+        DEFS.lookup::<clash_sim::stats::TrackDef>("core:focus")
+            .unwrap(),
         Real::ONE,
         cause(),
     )
@@ -360,7 +369,10 @@ fn a_condition_is_worked_out_again_only_when_what_it_read_changed() {
     traits::add_trait(&mut sim, who, trait_id("lit"), Giver::RULE, None, cause()).unwrap();
     sim.pump();
     assert_eq!(state(&sim, who, "fickle"), State::Dormant);
-    assert!(!has_trait(&sim, who, "glowing"), "a dormant ability confers nothing");
+    assert!(
+        !has_trait(&sim, who, "glowing"),
+        "a dormant ability confers nothing"
+    );
 }
 
 /// What the tests change about someone in random order.
@@ -384,12 +396,12 @@ fn change() -> impl Strategy<Value = Change> {
 /// The condition of `fickle`, worked out by hand.
 fn fresh(sim: &Sim, who: EntityId) -> bool {
     let charged = var(sim, who, "charged") == Value::Bool(true);
-    let focus = sim
-        .components()
-        .get::<Stats>(who)
-        .map_or(0, |stats| {
-            stats.track_level(DEFS.lookup::<clash_sim::stats::TrackDef>("core:focus").unwrap())
-        });
+    let focus = sim.components().get::<Stats>(who).map_or(0, |stats| {
+        stats.track_level(
+            DEFS.lookup::<clash_sim::stats::TrackDef>("core:focus")
+                .unwrap(),
+        )
+    });
     charged && focus >= 1 && !has_trait(sim, who, "lit")
 }
 
@@ -434,7 +446,15 @@ fn one_ability_from_two_sources_lasts_as_long_as_either() {
     let mut sim = sim();
     let who = spawn(&mut sim, "tester", 10, 10);
     sim.pump();
-    traits::add_trait(&mut sim, who, trait_id("giver_a"), Giver::RULE, None, cause()).unwrap();
+    traits::add_trait(
+        &mut sim,
+        who,
+        trait_id("giver_a"),
+        Giver::RULE,
+        None,
+        cause(),
+    )
+    .unwrap();
     sim.pump();
     let first = sim
         .components()
@@ -443,7 +463,15 @@ fn one_ability_from_two_sources_lasts_as_long_as_either() {
         .of(ability_id("spark"))
         .unwrap()
         .number();
-    traits::add_trait(&mut sim, who, trait_id("giver_b"), Giver::RULE, None, cause()).unwrap();
+    traits::add_trait(
+        &mut sim,
+        who,
+        trait_id("giver_b"),
+        Giver::RULE,
+        None,
+        cause(),
+    )
+    .unwrap();
     sim.pump();
     let abilities = sim.components().get::<Abilities>(who).unwrap();
     assert_eq!(abilities.instances().len(), 1, "one instance");
@@ -458,7 +486,10 @@ fn one_ability_from_two_sources_lasts_as_long_as_either() {
     traits::remove_trait(&mut sim, who, trait_id("giver_b"), None, cause()).unwrap();
     sim.pump();
     assert!(!holds(&sim, who, "spark"), "it ends with its last source");
-    assert!(!has_trait(&sim, who, "glowing"), "what it conferred is taken back");
+    assert!(
+        !has_trait(&sim, who, "glowing"),
+        "what it conferred is taken back"
+    );
     let events = sim.drain_events();
     let revoked = events
         .iter()
@@ -473,14 +504,30 @@ fn revoking_holds_against_a_trait_until_a_rule_gives_it_back() {
     let mut sim = sim();
     let who = spawn(&mut sim, "tester", 10, 10);
     sim.pump();
-    traits::add_trait(&mut sim, who, trait_id("giver_a"), Giver::RULE, None, cause()).unwrap();
+    traits::add_trait(
+        &mut sim,
+        who,
+        trait_id("giver_a"),
+        Giver::RULE,
+        None,
+        cause(),
+    )
+    .unwrap();
     sim.pump();
     assert!(ability::revoke(&mut sim, who, ability_id("spark"), cause()).unwrap());
     sim.pump();
     assert!(!holds(&sim, who, "spark"));
     assert!(!has_trait(&sim, who, "glowing"));
     // Another trait listing it does not bring it back.
-    traits::add_trait(&mut sim, who, trait_id("giver_b"), Giver::RULE, None, cause()).unwrap();
+    traits::add_trait(
+        &mut sim,
+        who,
+        trait_id("giver_b"),
+        Giver::RULE,
+        None,
+        cause(),
+    )
+    .unwrap();
     sim.pump();
     assert!(!holds(&sim, who, "spark"));
     // A rule does.
@@ -500,11 +547,21 @@ fn a_mind_takes_its_abilities_and_leaves_the_body_its_own() {
     grant(&mut sim, second, "dark_sight");
     sim.transfer_mind(first, second, true, cause()).unwrap();
     sim.pump();
-    assert!(holds(&sim, second, "insight"), "the mind brings what it knows");
-    assert!(holds(&sim, second, "dark_sight"), "and gains what the body can do");
+    assert!(
+        holds(&sim, second, "insight"),
+        "the mind brings what it knows"
+    );
+    assert!(
+        holds(&sim, second, "dark_sight"),
+        "and gains what the body can do"
+    );
     assert!(!holds(&sim, first, "insight"));
     assert!(holds(&sim, first, "dark_sight"), "the body keeps its own");
-    assert_eq!(sim.ability_index().owner(insight), Some(second), "it is the same instance");
+    assert_eq!(
+        sim.ability_index().owner(insight),
+        Some(second),
+        "it is the same instance"
+    );
 }
 
 #[test]
@@ -526,7 +583,15 @@ fn a_parameter_follows_rank_and_a_modifier_from_a_trait() {
     assert_eq!(var(&sim, who, "last_energy"), Value::Real(Real::of(20.0)));
     // A trait that has nothing to do with it strengthens every `test`
     // ability's power by half.
-    traits::add_trait(&mut sim, who, trait_id("amplified"), Giver::RULE, None, cause()).unwrap();
+    traits::add_trait(
+        &mut sim,
+        who,
+        trait_id("amplified"),
+        Giver::RULE,
+        None,
+        cause(),
+    )
+    .unwrap();
     sim.pump();
     advance(&mut sim, Dur::from_secs(6));
     assert!(use_it(&mut sim, who, "spark", "zap").unwrap());
@@ -561,7 +626,8 @@ fn a_cost_is_taken_in_full_or_nothing_starts() {
     let who = spawn(&mut sim, "tester", 10, 10);
     sim.pump();
     grant(&mut sim, who, "spark");
-    sim.pool_spend(who, pool("mana"), Real::of(80.0), cause()).unwrap();
+    sim.pool_spend(who, pool("mana"), Real::of(80.0), cause())
+        .unwrap();
     let hash = sim.state_hash();
     let refused = use_it(&mut sim, who, "spark", "zap").unwrap_err();
     assert_eq!(refused.code, codes::COST_SHORT);
@@ -579,7 +645,8 @@ fn a_cost_is_taken_in_full_or_nothing_starts() {
     assert_eq!(value("short"), clash_core::Value::from(Real::of(10.0)));
     assert_eq!(sim.state_hash(), hash, "a refusal changes nothing");
     // Exactly enough: all of it is taken and the action starts.
-    sim.pool_add(who, pool("mana"), Real::of(10.0), cause()).unwrap();
+    sim.pool_add(who, pool("mana"), Real::of(10.0), cause())
+        .unwrap();
     assert!(use_it(&mut sim, who, "spark", "zap").unwrap());
     assert_eq!(level(&sim, who, "mana"), Real::ZERO);
     assert!(!sim.actions_of(who).is_empty());
@@ -591,12 +658,18 @@ fn overdraw_takes_exactly_the_shortfall_at_its_ratio() {
     let who = spawn(&mut sim, "tester", 10, 10);
     sim.pump();
     grant(&mut sim, who, "blood_price");
-    sim.pool_spend(who, pool("mana"), Real::of(80.0), cause()).unwrap();
+    sim.pool_spend(who, pool("mana"), Real::of(80.0), cause())
+        .unwrap();
     assert!(use_it(&mut sim, who, "blood_price", "zap").unwrap());
     assert_eq!(level(&sim, who, "mana"), Real::ZERO);
-    assert_eq!(level(&sim, who, "vigor"), Real::of(80.0), "10 short at 2 to 1");
+    assert_eq!(
+        level(&sim, who, "vigor"),
+        Real::of(80.0),
+        "10 short at 2 to 1"
+    );
     // Not enough of either: refused, naming the pool that is short.
-    sim.pool_spend(who, pool("vigor"), Real::of(75.0), cause()).unwrap();
+    sim.pool_spend(who, pool("vigor"), Real::of(75.0), cause())
+        .unwrap();
     let refused = ability::available(&sim, who, ability_id("blood_price"), None).unwrap_err();
     assert_eq!(refused.code, codes::COST_SHORT);
     assert!(refused.message.contains("vigor"), "{}", refused.message);
@@ -619,7 +692,8 @@ fn a_cost_drawn_from_another_is_theirs_to_pay() {
     assert_eq!(level(&sim, companion, "mana"), Real::of(70.0));
     assert_eq!(level(&sim, who, "mana"), Real::of(100.0));
     // The companion short: unavailable, naming who is short.
-    sim.pool_spend(companion, pool("mana"), Real::of(60.0), cause()).unwrap();
+    sim.pool_spend(companion, pool("mana"), Real::of(60.0), cause())
+        .unwrap();
     let refused = ability::available(&sim, who, ability_id("borrowed"), None).unwrap_err();
     assert_eq!(refused.code, codes::COST_SHORT);
     // Gone: unavailable again.
@@ -638,7 +712,10 @@ fn a_rule_on_ability_using_changes_one_use_only() {
     set_var(&mut sim, who, "boost", Value::Bool(true));
     assert!(use_it(&mut sim, who, "spark", "zap").unwrap());
     advance(&mut sim, Dur::from_millis(200));
-    assert_eq!(var(&sim, who, "last_energy").as_number(), Some(Real::of(99.0)));
+    assert_eq!(
+        var(&sim, who, "last_energy").as_number(),
+        Some(Real::of(99.0))
+    );
     assert_eq!(level(&sim, who, "mana"), Real::of(95.0));
     advance(&mut sim, Dur::from_secs(6));
     assert!(use_it(&mut sim, who, "spark", "zap").unwrap());
@@ -699,7 +776,9 @@ fn a_cooldown_runs_on_its_owners_time_and_survives_a_save() {
     let refused = use_it(&mut loaded, who, "spark", "zap").unwrap_err();
     assert_eq!(refused.code, codes::COOLING_DOWN);
     // Twice as fast a clock: the rest goes by in half the time.
-    loaded.set_time_rate(who, Some(Real::of(2.0)), cause()).unwrap();
+    loaded
+        .set_time_rate(who, Some(Real::of(2.0)), cause())
+        .unwrap();
     advance(&mut loaded, Dur::from_millis(1_400));
     assert_eq!(
         use_it(&mut loaded, who, "spark", "zap").unwrap_err().code,
@@ -805,7 +884,8 @@ fn a_mode_ends_the_tick_its_pool_runs_dry_with_nothing_between() {
     sim.pump();
     grant(&mut sim, who, "spark");
     advance(&mut sim, Dur::from_secs(1));
-    sim.pool_spend(who, pool("wellspring"), Real::of(1.0), cause()).unwrap();
+    sim.pool_spend(who, pool("wellspring"), Real::of(1.0), cause())
+        .unwrap();
     sim.drain_events();
     let started = sim.now();
     ability::start_mode(&mut sim, who, ability_id("spark"), "aura", cause()).unwrap();
@@ -889,7 +969,9 @@ fn set_cell(
 
 /// Uses one of the sampler's powers toward a cell.
 fn power_at(sim: &mut Sim, who: EntityId, name: &str, x: i32, y: i32) -> bool {
-    let to = sim.subject_value(Subject::Loc(common::at(x, y))).to_stored();
+    let to = sim
+        .subject_value(Subject::Loc(common::at(x, y)))
+        .to_stored();
     let started = ability::use_ability(
         sim,
         who,
@@ -924,7 +1006,10 @@ fn dash_makes_its_user_quicker_for_a_while_at_a_price() {
     advance(&mut sim, Dur::from_millis(200));
     assert!(has_trait(&sim, who, "dashing"));
     let stamina = level(&sim, who, "stamina");
-    assert!((stamina - Real::of(75.2)).abs() < Real::of(1.0e-6), "{stamina}");
+    assert!(
+        (stamina - Real::of(75.2)).abs() < Real::of(1.0e-6),
+        "{stamina}"
+    );
     let dashing = speed(&sim);
     assert!(
         dashing > walking * Real::of(2.9),
@@ -962,7 +1047,11 @@ fn force_push_throws_people_into_walls_and_hurts_them() {
             && event.subject("target") == Some(Subject::Entity(target))
             && text(event, "layer") == "block"
     });
-    assert!(struck, "the person strikes the wall: {:?}", names_of(&events));
+    assert!(
+        struck,
+        "the person strikes the wall: {:?}",
+        names_of(&events)
+    );
     let wounds = eval_of(&sim, target, "len(self.wounds)").as_int().unwrap();
     assert!(wounds > 0, "and is hurt");
     assert_eq!(
@@ -1087,7 +1176,10 @@ fn heal_closes_the_wounds_of_someone_touched() {
     advance(&mut sim, Dur::from_millis(1_200));
     assert_eq!(open(&sim), 0, "every open wound is closed");
     let reserve = level(&sim, healer, "reserve");
-    assert!((reserve - Real::of(77.4)).abs() < Real::of(1.0e-6), "{reserve}");
+    assert!(
+        (reserve - Real::of(77.4)).abs() < Real::of(1.0e-6),
+        "{reserve}"
+    );
 }
 
 #[test]

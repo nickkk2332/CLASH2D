@@ -40,7 +40,13 @@ fn mode_unknown(ability: &str, mode: &str) -> Reason {
 
 /// The upkeep of a mode, worked out for an instance: each pool and what
 /// it drains each second.
-fn upkeep(sim: &Sim, entity: EntityId, number: u64, def: &AbilityDef, mode: usize) -> Vec<(PoolId, Real)> {
+fn upkeep(
+    sim: &Sim,
+    entity: EntityId,
+    number: u64,
+    def: &AbilityDef,
+    mode: usize,
+) -> Vec<(PoolId, Real)> {
     let Some(mode) = def.modes.get(mode) else {
         return Vec::new();
     };
@@ -90,11 +96,10 @@ pub fn start_mode(
         .mode_index(mode_id)
         .ok_or_else(|| mode_unknown(&name, mode_id))?;
     if current.state() == State::Dormant {
-        return Err(Reason::new(
-            codes::DORMANT,
-            format!("the ability `{name}` is dormant"),
-        )
-        .with("ability", name.as_str()));
+        return Err(
+            Reason::new(codes::DORMANT, format!("the ability `{name}` is dormant"))
+                .with("ability", name.as_str()),
+        );
     }
     let rank = super::rank(sim, entity, &current);
     if let Some(needed) = ability.modes[mode].at_rank
@@ -129,7 +134,9 @@ pub fn start_mode(
                 .map_or_else(String::new, |registry| registry.name(*pool).to_owned());
             return Err(Reason::new(
                 codes::UPKEEP,
-                format!("the mode `{mode_id}` of `{name}` draws on `{pool_name}`, and there is none"),
+                format!(
+                    "the mode `{mode_id}` of `{name}` draws on `{pool_name}`, and there is none"
+                ),
             )
             .with("ability", name.as_str())
             .with("mode", mode_id)
@@ -143,27 +150,32 @@ pub fn start_mode(
         .and_then(|modes| modes.get(mode))
         .cloned()
         .unwrap_or((None, Vec::new()));
-    let plans = super::using::plan_costs(
-        sim,
-        entity,
-        number,
-        &ability.modes[mode].cost,
-        &cost_kinds,
-    )?;
+    let plans =
+        super::using::plan_costs(sim, entity, number, &ability.modes[mode].cost, &cost_kinds)?;
     super::using::check_costs(sim, entity, &plans)?;
     let index = u16::try_from(mode).unwrap_or(u16::MAX);
     let mut spent = super::using::pay_costs(sim, entity, &plans, cause);
     if let Some(trait_id) = trait_id
-        && let Err(reason) =
-            crate::traits::add_trait(sim, entity, trait_id, mode_giver(number, index), None, cause)
+        && let Err(reason) = crate::traits::add_trait(
+            sim,
+            entity,
+            trait_id,
+            mode_giver(number, index),
+            None,
+            cause,
+        )
     {
         super::using::refund(sim, entity, &mut spent, cause);
         return Err(reason);
     }
     for (pool, rate) in &drains {
-        if let Err(reason) =
-            sim.pool_rate(entity, *pool, mode_source(number, index), Some(-*rate), cause)
-        {
+        if let Err(reason) = sim.pool_rate(
+            entity,
+            *pool,
+            mode_source(number, index),
+            Some(-*rate),
+            cause,
+        ) {
             sim.fault(reason);
         }
     }
@@ -254,7 +266,14 @@ fn run(sim: &mut Sim, entity: EntityId, number: u64, effects: &crate::rule::Effe
 /// Ends one mode that is on: its wake-up is cancelled, its upkeep and
 /// its trait taken away together, its `on_end` run and `mode_ended`
 /// raised with `how`.
-pub(super) fn end_one(sim: &mut Sim, entity: EntityId, number: u64, mode: u16, how: &str, cause: Cause) {
+pub(super) fn end_one(
+    sim: &mut Sim,
+    entity: EntityId,
+    number: u64,
+    mode: u16,
+    how: &str,
+    cause: Cause,
+) {
     let Some(current) = inst(sim, entity, number).cloned() else {
         return;
     };
@@ -334,8 +353,10 @@ fn time_to_empty(sim: &Sim, entity: EntityId, pools: &[PoolId]) -> Option<Dur> {
     let stats = sim.components.get::<Stats>(entity)?;
     let mut soonest: Option<Dur> = None;
     for pool in pools {
-        let (Some(level), Some(net)) = (stats.pool_level(&sim.timeline, *pool), stats.pool_rate(*pool))
-        else {
+        let (Some(level), Some(net)) = (
+            stats.pool_level(&sim.timeline, *pool),
+            stats.pool_rate(*pool),
+        ) else {
             continue;
         };
         let after = if level <= Real::ZERO {
@@ -440,7 +461,14 @@ pub(super) fn on_wake(sim: &mut Sim, id: WakeId, entity: EntityId, number: u64, 
         })
     });
     if dry {
-        end_one(sim, entity, number, mode, "empty", Cause::new(clash_world::CauseKind::Process));
+        end_one(
+            sim,
+            entity,
+            number,
+            mode,
+            "empty",
+            Cause::new(clash_world::CauseKind::Process),
+        );
     } else {
         schedule(sim, entity, number, mode);
     }

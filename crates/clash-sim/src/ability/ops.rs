@@ -12,8 +12,8 @@ use clash_world::Cause;
 use super::reactive::{self, Watcher};
 use super::{
     ABILITY_ACTIVE, ABILITY_DORMANT, ABILITY_GRANTED, ABILITY_REVOKED, Abilities, AbilityDef,
-    AbilityId, AbilityInst, AbilitySource, RANK_CHANGED, State, always_giver, always_source,
-    codes, def_of, handle_value, name_of,
+    AbilityId, AbilityInst, AbilitySource, RANK_CHANGED, State, always_giver, always_source, codes,
+    def_of, handle_value, name_of,
 };
 use crate::Sim;
 use crate::bus::EventPayload;
@@ -120,7 +120,12 @@ fn param_modifiers(sim: &Sim, entity: EntityId, def: AbilityId, param: &str) -> 
             };
             for modifier in &trait_def.ability_params {
                 if modifier.param == param
-                    && names_ability(sim, modifier.ability.as_deref(), modifier.tag.as_deref(), def)
+                    && names_ability(
+                        sim,
+                        modifier.ability.as_deref(),
+                        modifier.tag.as_deref(),
+                        def,
+                    )
                 {
                     for _ in 0..trait_inst.stacks() {
                         out.push((modifier.add, modifier.mul));
@@ -230,7 +235,8 @@ fn apply_entry(sim: &mut Sim, entity: EntityId, inst: &AbilityInst, entry: u16, 
         );
     }
     let defs = Arc::clone(&sim.defs);
-    let Some(always) = def_of(&defs, inst.def()).and_then(|def| def.always.0.get(usize::from(entry)))
+    let Some(always) =
+        def_of(&defs, inst.def()).and_then(|def| def.always.0.get(usize::from(entry)))
     else {
         return;
     };
@@ -377,7 +383,9 @@ pub fn grant(
 ) -> Result<u64, Reason> {
     sim.known(entity)?;
     let defs = Arc::clone(&sim.defs);
-    let registry = defs.try_registry::<AbilityDef>().ok_or_else(not_registered)?;
+    let registry = defs
+        .try_registry::<AbilityDef>()
+        .ok_or_else(not_registered)?;
     let ability = registry
         .try_get(def)
         .ok_or_else(|| unknown(def.index().to_string()))?;
@@ -522,10 +530,17 @@ pub fn lose_source(
 /// that trait lasts; a rule's grant does. Returns whether it was held.
 ///
 /// The hook `ability_revoking` is the verb's to raise, before this.
-pub fn revoke(sim: &mut Sim, entity: EntityId, def: AbilityId, cause: Cause) -> Result<bool, Reason> {
+pub fn revoke(
+    sim: &mut Sim,
+    entity: EntityId,
+    def: AbilityId,
+    cause: Cause,
+) -> Result<bool, Reason> {
     sim.known(entity)?;
     let defs = Arc::clone(&sim.defs);
-    let registry = defs.try_registry::<AbilityDef>().ok_or_else(not_registered)?;
+    let registry = defs
+        .try_registry::<AbilityDef>()
+        .ok_or_else(not_registered)?;
     if registry.try_get(def).is_none() {
         return Err(unknown(def.index().to_string()));
     }
@@ -569,14 +584,24 @@ pub fn revoke(sim: &mut Sim, entity: EntityId, def: AbilityId, cause: Cause) -> 
 /// watcher of its `while` calls when the value changes. Dormant, its
 /// modes end and it confers nothing (`ability_dormant`); active, it
 /// confers again (`ability_active`) and its modes stay off.
-pub(crate) fn set_dormant(sim: &mut Sim, entity: EntityId, number: u64, dormant: bool, cause: Cause) {
+pub(crate) fn set_dormant(
+    sim: &mut Sim,
+    entity: EntityId,
+    number: u64,
+    dormant: bool,
+    cause: Cause,
+) {
     let Some(current) = inst(sim, entity, number).cloned() else {
         return;
     };
     if current.is_revoked() {
         return;
     }
-    let state = if dormant { State::Dormant } else { State::Active };
+    let state = if dormant {
+        State::Dormant
+    } else {
+        State::Active
+    };
     if current.state() == state {
         return;
     }
@@ -588,7 +613,11 @@ pub(crate) fn set_dormant(sim: &mut Sim, entity: EntityId, number: u64, dormant:
     }
     settle(sim, entity, number, cause);
     let name = name_of(&sim.defs, current.def());
-    let event = if dormant { ABILITY_DORMANT } else { ABILITY_ACTIVE };
+    let event = if dormant {
+        ABILITY_DORMANT
+    } else {
+        ABILITY_ACTIVE
+    };
     notify(
         sim,
         entity,
@@ -755,19 +784,15 @@ pub fn set_rank(
 /// Answers `track_advanced`: each ability of the entity ranked by that
 /// track has changed rank.
 pub(super) fn track_advanced(sim: &mut Sim, entity: EntityId, event: &SimEvent) {
-    let Some(track) = event
-        .body
-        .field("track")
-        .and_then(|field| match field {
-            crate::bus::FieldValue::Plain(clash_core::Value::Id { index, .. }) => {
-                TrackId::from_index(index as usize)
-            }
-            crate::bus::FieldValue::Plain(clash_core::Value::Str(name)) => {
-                sim.defs.lookup::<TrackDef>(&name)
-            }
-            _ => None,
-        })
-    else {
+    let Some(track) = event.body.field("track").and_then(|field| match field {
+        crate::bus::FieldValue::Plain(clash_core::Value::Id { index, .. }) => {
+            TrackId::from_index(index as usize)
+        }
+        crate::bus::FieldValue::Plain(clash_core::Value::Str(name)) => {
+            sim.defs.lookup::<TrackDef>(&name)
+        }
+        _ => None,
+    }) else {
         return;
     };
     let level = event
@@ -872,7 +897,13 @@ fn move_numbers(sim: &mut Sim, from: EntityId, to: EntityId, numbers: &[u64], ca
         };
         super::modes::end_all(sim, from, *number, "moved", cause);
         take_back_all(sim, from, *number, cause);
-        reactive::unwatch(sim, Watcher::Ability { entity: from, number: *number });
+        reactive::unwatch(
+            sim,
+            Watcher::Ability {
+                entity: from,
+                number: *number,
+            },
+        );
         if let Some(abilities) = abilities_mut(sim, from) {
             abilities.insts.retain(|inst| inst.number != *number);
         }

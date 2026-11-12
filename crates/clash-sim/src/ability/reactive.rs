@@ -4,7 +4,7 @@
 //!
 //! # At load
 //!
-//! [`check_reactive_cond`] refuses, at the field, a reactive condition
+//! `check_reactive_cond` refuses, at the field, a reactive condition
 //! that reads anything nothing says how it changes: a property
 //! registered with no `changed_by` events (unless it is one of the
 //! constant accessors of [`CONSTANT_PROPERTIES`]), a function of the
@@ -25,10 +25,10 @@
 //! by its owner, an entity's attributes, pools and tracks by the
 //! entity.
 //!
-//! The kernel hands every event, once delivered, to [`event_delivered`],
+//! The kernel hands every event, once delivered, to `event_delivered`,
 //! which marks stale whatever subscribed to that event for one of its
-//! subjects; [`var_written`] does the same for a variable. At the end of
-//! the pump (03 §4.3) [`settle`] re-evaluates what is stale, once each,
+//! subjects; `var_written` does the same for a variable. At the end of
+//! the pump (03 §4.3) `settle` re-evaluates what is stale, once each,
 //! in the order of [`Watcher`], and tells the owner of each whose value
 //! changed. If telling makes others stale they are evaluated in another
 //! round, at most `rules.max_reactive_rounds` rounds (default 8) in one
@@ -37,7 +37,7 @@
 //!
 //! The subscriptions are not state: they follow from the saved state,
 //! and a simulation made or loaded builds them afresh at its first pump
-//! ([`rebuild`]), so a watched value always equals a fresh evaluation
+//! (`rebuild`), so a watched value always equals a fresh evaluation
 //! (invariant A6).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -490,7 +490,9 @@ fn subject_key(sim: &Sim, handle: Handle) -> Option<Subject> {
         super::ABILITY_KIND => super::owner_of(sim, handle.payload).map(Subject::Entity),
         crate::stats::props::ATTRS_KIND
         | crate::stats::props::POOLS_KIND
-        | crate::stats::props::TRACKS_KIND => Some(Subject::Entity(EntityId::from_bits(handle.payload))),
+        | crate::stats::props::TRACKS_KIND => {
+            Some(Subject::Entity(EntityId::from_bits(handle.payload)))
+        }
         _ => None,
     }
 }
@@ -518,7 +520,9 @@ impl Host for Recorder<'_> {
             Some(key) => {
                 self.reads.insert(Read::Var(key, name.to_owned()));
             }
-            None => self.refuse(format!("the variable `{name}` of a subject that cannot be followed")),
+            None => self.refuse(format!(
+                "the variable `{name}` of a subject that cannot be followed"
+            )),
         }
         self.inner.variable(subject, name)
     }
@@ -601,13 +605,8 @@ fn evaluate_watcher(sim: &Sim, watcher: Watcher) -> Option<Evaluated> {
     let defs = Arc::clone(&sim.defs);
     match watcher {
         Watcher::Ability { entity, number } => {
-            let inst = sim
-                .components
-                .get::<Abilities>(entity)?
-                .by_number(number)?;
-            let def = defs
-                .try_registry::<AbilityDef>()?
-                .try_get(inst.def())?;
+            let inst = sim.components.get::<Abilities>(entity)?.by_number(number)?;
+            let def = defs.try_registry::<AbilityDef>()?.try_get(inst.def())?;
             let condition = def.condition.as_ref()?;
             let subjects = vec![
                 sim.subject_value(Subject::Entity(entity)),

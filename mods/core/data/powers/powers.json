@@ -134,7 +134,7 @@
       { "action": "heal", "params": { "share": "ability.share" },
         "cost": { "reserve": 25 }, "cooldown": "3 s", "intent": "aid" } ] },
 
-  { "//": "Someone with every power of the sampler and the pools to pay for them. The new game screen offers the start `powers`.",
+  { "//": "Someone with every power of the sampler and the pools to pay for them: what the test scripts under `scenarios/powers` make, and what a start offers once the application offers abilities.",
     "type": "template", "id": "power_sampler", "copy_from": "person", "name": "Gifted person",
     "pools": ["blood", "pain", "stamina", "reserve"],
     "abilities": ["dash", "force_push", "firebolt", "shield", "heal"] }

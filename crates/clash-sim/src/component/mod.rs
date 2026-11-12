@@ -141,6 +141,7 @@ pub use physical::{
 };
 pub use store::{ComponentStore, PAGE_SLOTS};
 
+use crate::ability::Abilities;
 use crate::body::Body;
 use crate::device::Device;
 use crate::item::{Holds, Item};
@@ -148,7 +149,6 @@ use crate::mind::{Driver, Mind};
 use crate::movement::Mover;
 use crate::perception::{Awareness, Beliefs, MapMemory, Senses, Signature};
 use crate::stats::Stats;
-use crate::ability::Abilities;
 use crate::traits::Traits;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).

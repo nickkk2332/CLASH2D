@@ -103,7 +103,8 @@ fn spec(
 
 const WHO: (&str, &str, bool, &str) = ("who", "entity", false, "Whose ability.");
 const ABILITY: (&str, &str, bool, &str) = ("ability", "id<ability>", false, "The ability.");
-const MODE: (&str, &str, bool, &str) = ("mode", "string", false, "The mode's id within the ability.");
+const MODE: (&str, &str, bool, &str) =
+    ("mode", "string", false, "The mode's id within the ability.");
 
 /// The verbs of abilities, for [`crate::verb::engine_verbs`].
 pub fn verbs() -> Vec<VerbDef> {
@@ -137,8 +138,11 @@ pub fn verbs() -> Vec<VerbDef> {
                             .as_int()
                             .and_then(|rank| u32::try_from(rank).ok())
                             .ok_or_else(|| {
-                                Reason::new(codes::BAD_RANK, "a rank is a whole number of zero or more")
-                                    .with("rank", value.as_int().unwrap_or(-1))
+                                Reason::new(
+                                    codes::BAD_RANK,
+                                    "a rank is a whole number of zero or more",
+                                )
+                                .with("rank", value.as_int().unwrap_or(-1))
                             })?,
                     ),
                 };
@@ -178,7 +182,8 @@ pub fn verbs() -> Vec<VerbDef> {
                     let payload = EventPayload::new(ABILITY_REVOKING)
                         .subject("self", Subject::Entity(from))
                         .with("ability", name.as_str());
-                    if let Some(reason) = sim.raise(Where::Entity(from), cause, payload)?.cancelled {
+                    if let Some(reason) = sim.raise(Where::Entity(from), cause, payload)?.cancelled
+                    {
                         return Err(reason);
                     }
                 }
@@ -255,7 +260,14 @@ pub fn verbs() -> Vec<VerbDef> {
                         let action_name = action
                             .map(|action| crate::action::run::action_name(&sim.defs, action))
                             .unwrap_or_default();
-                        super::using::refused(sim, who, &ability_name, &action_name, &reason, cause);
+                        super::using::refused(
+                            sim,
+                            who,
+                            &ability_name,
+                            &action_name,
+                            &reason,
+                            cause,
+                        );
                         Ok(Value::Bool(false))
                     }
                 }

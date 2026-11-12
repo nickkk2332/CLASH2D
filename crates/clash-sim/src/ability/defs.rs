@@ -46,8 +46,8 @@ pub const DEFAULT_RANK: u32 = 1;
 /// The highest rank set directly: as high as a track's level can go.
 pub const MAX_RANK: u32 = crate::stats::TRACK_LEVEL_CAP;
 
-/// The names of the properties every ability has (section
-/// [`props`](super::props)): a parameter may not take one.
+/// The names of the properties every ability has (08 §12.1): a
+/// parameter may not take one.
 pub const RESERVED_PARAMS: &[&str] = &[
     "rank", "owner", "state", "def", "id", "tags", "mode_on", "cooldown", "kind", "var",
 ];
@@ -230,16 +230,18 @@ impl<'de> FromKind<'de> for AbilityGrantDef {
         value: KindValue<'_, A>,
     ) -> Result<AbilityGrantDef, A::Error> {
         match kind {
-            Kind::String => value.read::<Ref<ActionDef>>().map(|action| AbilityGrantDef {
-                action,
-                params: BTreeMap::new(),
-                cost: Costs::new(),
-                cooldown: None,
-                at_rank: None,
-                condition: None,
-                intent: None,
-                value: None,
-            }),
+            Kind::String => value
+                .read::<Ref<ActionDef>>()
+                .map(|action| AbilityGrantDef {
+                    action,
+                    params: BTreeMap::new(),
+                    cost: Costs::new(),
+                    cooldown: None,
+                    at_rank: None,
+                    condition: None,
+                    intent: None,
+                    value: None,
+                }),
             Kind::Object => value.read::<GrantObject>().map(|grant| AbilityGrantDef {
                 action: grant.action,
                 params: grant.params,
@@ -329,7 +331,10 @@ pub struct AlwaysDef {
 pub struct Always(pub Vec<AlwaysDef>);
 
 impl<'de> FromKind<'de> for Always {
-    fn from_kind<A: MapAccess<'de>>(kind: Kind, value: KindValue<'_, A>) -> Result<Always, A::Error> {
+    fn from_kind<A: MapAccess<'de>>(
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<Always, A::Error> {
         match kind {
             Kind::Object => value.read::<AlwaysDef>().map(|one| Always(vec![one])),
             Kind::List => value.read::<Vec<AlwaysDef>>().map(Always),
@@ -496,7 +501,10 @@ fn validate_costs(costs: &Costs, at: &str, cx: &mut ValidateCx<'_>) {
                 "{at}: the cost `{name}` consumes at least one item"
             ));
         }
-        if let Some(constant) = cost.amount.constant().and_then(clash_expr::Value::as_number)
+        if let Some(constant) = cost
+            .amount
+            .constant()
+            .and_then(clash_expr::Value::as_number)
             && (!constant.is_finite() || constant < Real::ZERO)
         {
             cx.error(format!(
@@ -626,7 +634,9 @@ impl Def for AbilityDef {
             mode.on_start.validate(cx);
             mode.on_end.validate(cx);
             if mode.uses.values().any(|count| *count == 0) {
-                cx.error(format!("{at}: `uses` gives each channel a count of at least one slot"));
+                cx.error(format!(
+                    "{at}: `uses` gives each channel a count of at least one slot"
+                ));
             }
         }
     }
