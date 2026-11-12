@@ -93,7 +93,7 @@ impl StateHash for WoundState {
 }
 
 /// A rate a wound has applied to a pool, as the stats hold it.
-#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct WoundLeak {
     /// The pool drained.
     pub pool: PoolId,
@@ -104,7 +104,7 @@ pub struct WoundLeak {
 impl_state_hash!(WoundLeak { pool, rate });
 
 /// What a breach left on a part (06 §7.3).
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Wound {
     pub(super) id: WoundId,
     pub(super) part: PartKey,

@@ -290,6 +290,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(ATTR_CHANGED)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field(
                 "attr",
                 Type::Id(attribute),
@@ -304,6 +306,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(POOL_CROSSED)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("pool", Type::Id(pool), "The pool.")
             .field("threshold", Type::Real, "The threshold crossed, as the fraction of `max` the definition lists.")
             .field("rising", Type::Bool, "True if the level rose to the threshold or past it; false if it fell to it or below.")
@@ -313,6 +317,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(POOL_CHANGING)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("pool", Type::Id(pool), "The pool.")
             .field("amount", Type::Real, "What is about to be added; negative to take away.")
             .hook(["amount"])
@@ -321,6 +327,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(TRACK_ADVANCED)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("track", Type::Id(track), "The track.")
             .field("level", Type::Int, "The level reached.")
             .doc("A track reached a level. Raised once for each level, lowest first, when one advance passes several."),

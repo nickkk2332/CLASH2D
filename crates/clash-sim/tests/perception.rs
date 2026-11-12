@@ -1064,11 +1064,25 @@ fn member(sim: &mut Sim, at: Location) -> EntityId {
     me
 }
 
+/// Moves time on with a directly controlled member in the world: each
+/// time it is asked what to do, it waits out the rest.
+fn party_advance(sim: &mut Sim, me: EntityId, secs: f64) {
+    let until = sim.now() + Dur::from_secs_real(Real::of(secs));
+    while let clash_sim::Advance::NeedInput(_) = sim.advance(AdvanceLimit::Until(until)) {
+        let left = until.since(sim.now()).max(Dur::from_millis(1));
+        sim.submit(clash_sim::Command::Wait {
+            entity: me,
+            dur: left,
+        })
+        .unwrap();
+    }
+}
+
 #[test]
 fn events_are_tagged_by_how_the_party_perceived_them() {
     let mut sim = city(EXTRA);
     let me = member(&mut sim, street(0));
-    advance_by(&mut sim, 0.6);
+    party_advance(&mut sim, me, 0.6);
     sim.drain_events();
     // In view: a wall built ten cells along the street.
     set_block(&mut sim, street(10), "wall");
@@ -1078,7 +1092,7 @@ fn events_are_tagged_by_how_the_party_perceived_them() {
         CellPos::new(street(0).cell.x - 40, street(0).cell.y + 40, 0),
     );
     set_block(&mut sim, far, "wall");
-    advance_by(&mut sim, 0.1);
+    party_advance(&mut sim, me, 0.1);
     let events = sim.drain_events();
     let changed: Vec<&SimEvent> = named(&events, "element_changed");
     assert_eq!(changed.len(), 2);
@@ -1098,7 +1112,7 @@ fn events_are_tagged_by_how_the_party_perceived_them() {
         CellPos::new(street(0).cell.x - 4, street(0).cell.y, 0),
     );
     set_block(&mut sim, behind, "wall");
-    advance_by(&mut sim, 0.1);
+    party_advance(&mut sim, me, 0.1);
     let events = sim.drain_events();
     let built = named(&events, "element_changed");
     assert_eq!(built.len(), 1);
@@ -1117,7 +1131,7 @@ fn map_memory_records_what_was_there_when_last_seen() {
     let mut sim = city(EXTRA);
     let me = member(&mut sim, street(0));
     set_block(&mut sim, street(12), "wall");
-    advance_by(&mut sim, 0.6);
+    party_advance(&mut sim, me, 0.6);
     let (frames, dropped) = perception::drain_frames(&mut sim);
     assert!(!dropped);
     assert!(!frames.is_empty());
@@ -1136,7 +1150,7 @@ fn map_memory_records_what_was_there_when_last_seen() {
     );
     // It turns its back; the wall is taken away.
     perception::set_facing(&mut sim, me, Real::of(270.0)).unwrap();
-    advance_by(&mut sim, 0.6);
+    party_advance(&mut sim, me, 0.6);
     let (frames, _) = perception::drain_frames(&mut sim);
     assert!(
         frames
@@ -1153,7 +1167,7 @@ fn map_memory_records_what_was_there_when_last_seen() {
         },
     )
     .unwrap();
-    advance_by(&mut sim, 0.6);
+    party_advance(&mut sim, me, 0.6);
     // Remembered as it was, not as it is.
     let memory = perception::party::map_memory(&sim, me).unwrap();
     assert_eq!(memory.cell(street(12)).map(|cell| cell.block), Some(wall));
@@ -1167,7 +1181,7 @@ fn map_memory_records_what_was_there_when_last_seen() {
     );
     // Looking again, it learns.
     perception::set_facing(&mut sim, me, Real::of(90.0)).unwrap();
-    advance_by(&mut sim, 0.6);
+    party_advance(&mut sim, me, 0.6);
     let memory = perception::party::map_memory(&sim, me).unwrap();
     assert_eq!(memory.cell(street(12)).map(|cell| cell.block), Some(none));
     let snapshot = perception::snapshot(&sim, me);
@@ -1325,7 +1339,7 @@ fn pacer(sim: &mut Sim, _id: WakeId, wake: Wake) {
     let Some(Place::At { loc, .. }) = sim.truth().place(entity) else {
         return;
     };
-    let dx = if wake.arg % 2 == 0 { 1 } else { -1 };
+    let dx = if wake.arg.is_multiple_of(2) { 1 } else { -1 };
     let to = Location::new(
         loc.grid,
         CellPos::new(loc.cell.x + dx, loc.cell.y, loc.cell.z),

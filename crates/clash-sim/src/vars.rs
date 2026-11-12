@@ -372,6 +372,11 @@ impl Sim {
             }
             Subject::Element(..) => {}
         }
+        // A stat whose expression reads this variable is worked out
+        // again (06 §4.1).
+        if let Subject::Entity(id) = subject {
+            self.life_var_changed(id, name, cause);
+        }
         if watched {
             let after = self.var(subject, name);
             if after != before {

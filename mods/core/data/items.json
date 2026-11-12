@@ -1,0 +1,85 @@
+[
+  { "//": "Plain things for the engine's tests and a first world: something to cut with, something to hit with, something to wear over the body and the head, something to carry things in, money and food. Values are illustrative. What each is made of, how heavy and large it is, how it is held and what it covers are all it is: nothing here is a bonus.",
+    "type": "channel", "id": "arm", "name": "arm" },
+
+  { "type": "material", "id": "leather",
+    "density": 860,
+    "toughness": 2.0e7,
+    "resist": {
+      "impact": { "threshold": "2 MPa", "factor": 0.5 },
+      "cut":    { "threshold": "15 MPa" },
+      "pierce": { "threshold": "10 MPa" },
+      "heat":   { "threshold": "5 MPa", "factor": 0.3 }
+    },
+    "flammable": true,
+    "color": "brown",
+    "tags": ["hide"] },
+
+  { "type": "material", "id": "bread",
+    "density": 250,
+    "toughness": 5.0e3,
+    "resist": {
+      "impact": { "threshold": "20 kPa" },
+      "cut":    { "threshold": "10 kPa" },
+      "pierce": { "threshold": "10 kPa" }
+    },
+    "flammable": true,
+    "color": "russet",
+    "tags": ["food"] },
+
+  { "type": "color", "id": "russet", "rgb": "#80461b", "word": "russet", "fallback": "yellow" },
+
+  { "type": "item", "id": "knife", "name": "knife",
+    "material": "steel", "mass": "0.2 kg", "length": "0.25 m",
+    "surfaces": [
+      { "id": "edge",  "kind": "cut",    "area": 1.0e-5, "give": 0.002, "span": 0.12 },
+      { "id": "point", "kind": "pierce", "area": 2.0e-6, "give": 0.002, "span": 0.01 } ],
+    "grip": { "arm": 1 },
+    "tags": ["blade", "small"],
+    "glyph": { "ch": "/", "fg": "material" } },
+
+  { "type": "item", "id": "club", "name": "club",
+    "material": "wood", "mass": "1.2 kg", "length": "0.7 m",
+    "surfaces": [
+      { "id": "head", "kind": "impact", "area": 2.0e-3, "give": 0.01, "span": 0.08 } ],
+    "grip": { "arm": 1 },
+    "tags": ["blunt"],
+    "glyph": { "ch": "/", "fg": "material" } },
+
+  { "//": "Its colour is picked when it is made.",
+    "type": "item", "id": "coat", "name": "coat",
+    "material": "leather", "mass": "1.8 kg", "volume": 0.004, "length": "1 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": ["torso", "arm"], "layer": 3, "thickness": "3 mm", "coverage": 0.9 },
+    "color": ["brown", "russet", "dark_gray"],
+    "tags": ["clothing"],
+    "glyph": { "ch": "[", "fg": "own" } },
+
+  { "type": "item", "id": "helmet", "name": "helmet",
+    "material": "steel", "mass": "1.5 kg", "volume": 0.004, "length": "0.25 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": "head", "layer": 4, "thickness": "2 mm", "coverage": 0.8 },
+    "tags": ["clothing"],
+    "glyph": { "ch": "^", "fg": "material" } },
+
+  { "type": "item", "id": "backpack", "name": "backpack",
+    "material": "leather", "mass": "1.2 kg", "volume": 0.003, "length": "0.5 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": "torso", "layer": 5, "thickness": "2 mm", "coverage": 0.3 },
+    "holds": { "volume": 0.025, "mass": "20 kg" },
+    "tags": ["container"],
+    "glyph": { "ch": "&", "fg": "material" } },
+
+  { "type": "item", "id": "coin", "name": "coin",
+    "material": "steel", "mass": "0.008 kg", "length": "0.02 m",
+    "stack": true,
+    "tags": ["money", "small"],
+    "glyph": { "ch": "$", "fg": "yellow" } },
+
+  { "type": "item", "id": "loaf", "name": "loaf",
+    "material": "bread", "mass": "0.4 kg", "length": "0.25 m",
+    "grip": { "arm": 1 },
+    "stack": true,
+    "tags": ["food", "small"],
+    "glyph": { "ch": "%", "fg": "material" } }
+]

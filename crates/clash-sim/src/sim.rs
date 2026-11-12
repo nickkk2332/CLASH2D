@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 4;
+pub const SAVE_VERSION: u32 = 7;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -109,6 +109,14 @@ pub struct Sim {
     /// Not state of the simulation's own: where changed tracts are kept
     /// while they are not loaded (02 §11).
     pub(crate) store: Box<dyn SimStore>,
+    /// Not state: the rules of the definitions, the verbs by id and
+    /// whatever else running rules and actions needs set up
+    /// ([`rule`](crate::rule)).
+    pub(crate) rt: crate::rule::Runtime,
+    /// Not state: the tables of stats, bodies and templates worked out
+    /// from the definitions, and the machines their expressions run on
+    /// (06; see [`life`](crate::life)).
+    pub(crate) life: crate::life::Life,
     /// What perception keeps that belongs to no one entity (15).
     pub(crate) perception: PerceptionState,
     /// Not state: the tables of perception, from the definitions.
@@ -251,8 +259,11 @@ impl Sim {
         let bus = Bus::for_defs(&defs);
         let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
+        let rt = crate::rule::Runtime::for_defs(&defs);
+        let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
-        Sim {
+        let mut sim = Sim {
+            life,
             defs,
             cosmos,
             timeline,
@@ -277,9 +288,12 @@ impl Sim {
             exprs,
             generators,
             store: Box::new(MemoryStore::new()),
+            rt,
             perception: PerceptionState::default(),
             perception_defs,
-        }
+        };
+        sim.bind_runtime();
+        sim
     }
 
     /// This simulation with other generators and another tract store:
@@ -420,6 +434,9 @@ impl Sim {
     /// (invariant T9), and any decision it was asked for is forgotten.
     pub fn remove_entity(&mut self, id: EntityId, cause: Cause) -> Result<(), Reason> {
         let place = self.known(id)?.place();
+        // While it is still where it was: what it was doing ends, and
+        // what rules kept for it is forgotten (05 §9.3).
+        self.release_entity(id, cause);
         for inside in self.entities.contents(id).to_vec() {
             if self.relocate(inside, place, cause).is_err() {
                 // What cannot stand where its container stood leaves the
@@ -475,6 +492,12 @@ impl Sim {
                 new: control,
             },
         );
+        if control != Control::Direct {
+            // Nobody will be asked: what it was asked is settled now.
+            self.settle_choices(id);
+        }
+        // One that is free is asked by whoever now decides for it.
+        self.control_followed(id, cause);
         Ok(old)
     }
 
@@ -587,6 +610,9 @@ impl Sim {
                 }
                 _ => {}
             }
+            // What the world did to someone's body or pools (06 §7.4;
+            // 02 §16), to be carried out once its events are queued.
+            let harm = crate::life::harm::Harm::of(&event);
             let (cause, loc) = (event.cause(), event.location());
             let stamped = self.stamped(Where::Loc(loc), cause, EventBody::World(event));
             self.events.push_back(stamped);
@@ -610,6 +636,9 @@ impl Sim {
                     let event = self.stamped(Where::Entity(entity), cause, body);
                     self.events.push_back(event);
                 }
+            }
+            if let Some(harm) = harm {
+                self.apply_harm(harm);
             }
         }
     }
@@ -758,8 +787,11 @@ impl Sim {
         let bus = Bus::for_defs(&defs);
         let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
+        let rt = crate::rule::Runtime::for_defs(&defs);
+        let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
-        Ok(Sim {
+        let mut sim = Sim {
+            life,
             defs,
             cosmos,
             timeline: saved.timeline,
@@ -784,9 +816,19 @@ impl Sim {
             exprs,
             generators,
             store: Box::new(MemoryStore::new()),
+            rt,
             perception: saved.perception,
             perception_defs,
-        })
+        };
+        sim.bind_runtime();
+        Ok(sim)
+    }
+
+    /// Sets up what is not state and every simulation has: the handlers
+    /// through which rules answer events and actions follow their
+    /// actors. Called when a simulation is made and again after a load.
+    fn bind_runtime(&mut self) {
+        self.bind_rules();
     }
 }
 

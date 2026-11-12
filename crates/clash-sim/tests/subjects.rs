@@ -419,6 +419,20 @@ fn an_entity_answers_for_itself() {
     assert_eq!(probe.get(g, "local_time"), real(6.0));
     assert_eq!(probe.get(g, "own_time"), real(6.0));
     assert_eq!(probe.get(entity(ghost), "clock_rate"), Value::Null);
+    // Movement's, of something with no way of moving: no `movement`
+    // definition is loaded here (`tests/movement.rs` has the rest).
+    assert_eq!(probe.get(g, "posture"), Value::Null);
+    assert_eq!(probe.get(g, "speed"), Value::Null);
+    let east = [Value::from("east")];
+    assert_eq!(probe.call(g, "can_step", &east), Value::Bool(false));
+    assert!(probe.call(g, "step_fault", &east).as_str().is_some());
+    assert_eq!(probe.call(g, "step_time", &east), Value::Null);
+    let next_door = [probe.value(Subject::Loc(at(4, 4)))];
+    assert_eq!(probe.call(g, "can_reach", &next_door), Value::Bool(false));
+    assert_eq!(probe.call(g, "path_cost", &next_door), Value::Null);
+    assert_eq!(probe.get(g, "path_left"), Value::Null);
+    assert_eq!(probe.get(g, "path_next"), Value::Null);
+    assert_eq!(probe.get(g, "path_stale"), Value::Bool(false));
 
     // Perception's beliefs, of what has never been perceived: tests of
     // perception read them as they change.
@@ -464,8 +478,13 @@ fn an_entity_answers_for_itself() {
 
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
+    // Those of items are read in `tests/items.rs`.
+    let of_items: Vec<&str> = clash_sim::item::properties()
+        .iter()
+        .map(|property| property.name)
+        .collect();
     for property in engine_properties() {
-        if property.kind == "entity" {
+        if property.kind == "entity" && !of_items.contains(&property.name) {
             assert!(
                 read.contains(&("entity".to_owned(), property.name.to_owned())),
                 "entity.{} is not tested",
@@ -1039,9 +1058,10 @@ fn setters_go_through_the_engines_mutation_paths() {
     let back = sim.subject_value(Subject::Loc(at(20, 20)));
     set(&mut sim, m, "loc", back);
 
-    // control.
+    // control: an entity with nothing to do that comes under direct
+    // control is asked what to do (03 §5.2).
     let told = set(&mut sim, m, "control", Value::from("direct"));
-    assert_eq!(names(&told), ["control_changed"]);
+    assert_eq!(names(&told), ["control_changed", "decision_requested"]);
     assert_eq!(
         sim.truth().entity(mover).unwrap().control(),
         Control::Direct
@@ -1076,9 +1096,14 @@ fn setters_go_through_the_engines_mutation_paths() {
     assert_eq!(sim.truth().cosmos().site(site).unwrap().name, "The Bank");
 
     // Every settable property was set.
+    // Those of items are set in `tests/items.rs`.
+    let of_items: Vec<&str> = clash_sim::item::properties()
+        .iter()
+        .map(|property| property.name)
+        .collect();
     let settable: Vec<String> = engine_properties()
         .iter()
-        .filter(|property| property.set.is_some())
+        .filter(|property| property.set.is_some() && !of_items.contains(&property.name))
         .map(|property| format!("{}.{}", property.kind, property.name))
         .collect();
     assert_eq!(

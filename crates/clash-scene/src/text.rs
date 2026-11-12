@@ -196,6 +196,18 @@ impl RichText {
         }
     }
 
+    /// Gives the text a capital first letter, as a finished line has
+    /// (05 §4.6). A first character that is not a letter with one
+    /// capital form is left as it is.
+    pub fn capitalize_first(&mut self) {
+        if let Some(first) = self.chars.first_mut() {
+            let mut upper = first.to_uppercase();
+            if let (Some(capital), None) = (upper.next(), upper.next()) {
+                *first = capital;
+            }
+        }
+    }
+
     /// How many characters the text has.
     pub fn len(&self) -> usize {
         self.chars.len()
@@ -240,6 +252,12 @@ impl RichText {
     /// caller can keep one buffer.
     pub fn wrap(&self, width: usize, out: &mut Vec<(usize, usize)>) {
         out.clear();
+        self.wrap_each(width, |line| out.push(line));
+    }
+
+    /// [`RichText::wrap`] without a buffer: `each` is given every line in
+    /// order, as a range of character indices.
+    pub fn wrap_each(&self, width: usize, mut each: impl FnMut((usize, usize))) {
         let width = width.max(1);
         let mut line_start = 0;
         loop {
@@ -250,7 +268,7 @@ impl RichText {
             let mut start = line_start;
             loop {
                 if line_end - start <= width {
-                    out.push((start, line_end));
+                    each((start, line_end));
                     break;
                 }
                 // The last space at which the line still fits.
@@ -258,11 +276,11 @@ impl RichText {
                 let break_at = (start + 1..=limit).rev().find(|i| self.chars[*i] == ' ');
                 match break_at {
                     Some(space) => {
-                        out.push((start, space));
+                        each((start, space));
                         start = space + 1;
                     }
                     None => {
-                        out.push((start, limit));
+                        each((start, limit));
                         start = limit;
                     }
                 }

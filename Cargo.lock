@@ -35,9 +35,18 @@ dependencies = [
 name = "clash-app"
 version = "0.1.0"
 dependencies = [
+ "clash-core",
+ "clash-data",
+ "clash-expr",
  "clash-front-term",
  "clash-front-window",
+ "clash-gen",
  "clash-save",
+ "clash-scene",
+ "clash-sim",
+ "clash-time",
+ "clash-world",
+ "serde_json",
 ]
 
 [[package]]
@@ -125,6 +134,7 @@ dependencies = [
  "clash-sim",
  "clash-time",
  "clash-world",
+ "proptest",
  "serde",
  "serde_json",
  "thiserror",

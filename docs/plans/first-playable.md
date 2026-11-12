@@ -25,10 +25,10 @@ actions that call `hit`.
 | E4 | Bodies | L | E2, T3 | beta |
 | E5 | Hits and wounds | L | E4, W12 | beta |
 | E6 | Body editing | M | E4 | todo |
-| E7 | Minds and vital state | M | E1, T4 | todo |
-| E8 | Items and holds | L | E5 | todo |
-| E9 | Templates and creation | L | E3, E6, E8 | todo |
-| E10 | Movement | M | E4, W14, W18 | todo |
+| E7 | Minds and vital state | M | E1, T4 | beta |
+| E8 | Items and holds | L | E5 | beta |
+| E9 | Templates and creation | L | E3, E6, E8 | beta |
+| E10 | Movement | M | E4, W14, W18 | beta |
 | E11 | Coming and going | L | E9, W8 | todo |
 | E12 | Minimal devices | M | E8 | todo |
 | S1 | Light | M | W18 | beta |
@@ -45,14 +45,14 @@ actions that call `hit`.
 | U2 | Terminal frontend | S | U1 | done |
 | U3 | Window frontend | L | U1 | todo |
 | U4 | View model and world drawing | L | U1, S9 | beta |
-| U5 | Playback | L | U4 | todo |
+| U5 | Playback | L | U4 | beta |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |
 | U6b | Toolkit: binding and UI effects | M | U6a, X4, K6 | beta |
 | U7 | Input, controls, pickers | M | U6b, T5 | beta |
 | U8 | Slots and theming | S | U6b | done |
 | U9 | Bundled screens | L | U7, U8, U4, U5, E9 | todo |
 | U10 | Cutscenes | M | U5, T6 | todo |
-| U11 | Application | M | U3, U9, P3 | todo |
+| U11 | Application | M | U3, U9, P3 | beta |
 | Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
 
 ## Order and parallelism
@@ -125,6 +125,10 @@ removal and writes changed masses to the world's occupant records
 back are registered (06 §13). Still stubbed: definition ids in saved
 components go through no id table (K7); `templates` is not a property.
 
+Since (decisions D-550, D-558): the `Mind` and `Driver` components
+follow `Body` in the list, and `Identity` says whether an individual is
+anonymous; the save layout version is 5.
+
 ### E2 — Attributes, pools, tracks
 
 **Spec** 06 §4 · **Size** M
@@ -166,6 +170,20 @@ calling `refresh` when a reactive input changes (05 §7.5); moving what is
 seated in a mind (E7); a pool that names a substance (G19). No test
 script, since nothing here can be reached from the console until the
 kernel holds it, so `gas_mask` waits with E8; and no benchmark (Z1).
+
+Joined to the simulation since (decisions D-550 to D-552): the tables
+are built at set-up and after a load; `Sim::attach_stats`,
+`give_pool`, `pool_add` (after `pool_changing`), `pool_spend`,
+`pool_rate`, `set_attr_base`, `add_modifier`, `remove_modifier`,
+`advance_track` and `refresh_stats` raise every change as its event in
+order; the `Timer` domain runs crossings; pools follow their entity's
+clock and stand still while it is away (`Pause`); the properties are
+answered by the simulation; stats are worked out again when a body
+function, the mass or a variable they read changes; the six verbs are
+in the engine's verb table; seated stats move with a mind
+(`stats::take_seated`, `give_seated`). Still stubbed: `on_advance`
+(K5 binding), a pool that names a substance (G19), definition ids
+through the save's id table (K7).
 
 ### E3 — Traits
 
@@ -262,6 +280,24 @@ holds bodies: the first in full against a timeline the test drives, the
 second only as far as impact reports becoming hits; both scripts under
 `scenarios/people/` are owed. No benchmark (Z1).
 
+E4 and E5 joined to the simulation since (decisions D-550, D-553):
+`Sim::attach_body` hands mass and size to `Physical` and the world;
+`Sim::hit` raises `hit_incoming`, applies the hit with the `hits`
+stream, raises every change, reports what came off as `part_detached`
+and carries exits on as `hit_exited`; `slots_lost` and `slots_gained`
+are raised for the action runtime to interrupt what held a slot;
+`function_changed` works the stats out again; the world's
+`occupant_exposed` and `occupant_dosed` become a hit and a dose
+(through `exposure_incoming`), and so do `body_impact` of an entity
+and `body_hit_occupant` (`Sim::body_impact`); `hit`, `close_wound`, `reopen_wound`,
+`heal_part`, `disable_part`, `restore_part` and `remove_part` are
+verbs. `one_bad_cut` and a collapse that hurts whoever stands under it
+are integration tests against the real simulation
+(`crates/clash-sim/tests/life.rs`). Hits go through what the item package says is worn, damage it, and
+make items of parts that came off. Still stubbed: the other verbs of
+06 §6.5 (E6), test
+scripts, since the simulation does not implement the console's host.
+
 ### E6 — Body editing
 
 **Spec** 06 §6.5 · **Size** M
@@ -289,6 +325,19 @@ Done when
 - A driven body acts; a mindless undriven one does not.
 - A cancelled `entity_dying` prevents death.
 
+Beta (decisions D-554, D-555): `clash_sim::mind`: the `Mind` and
+`Driver` components; vital state derived from data, `needs` on body
+plans and `stops` on pools; `die` (after `entity_dying`), `revive`,
+`create_mind`, `remove_mind`, `transfer_mind` (after
+`mind_transferring`, with seated stats and control) and `set_driver`
+as functions and verbs; `Sim::can_act` with the reasons a command for a
+dead, unconscious or mindless entity is refused. Tested in
+`crates/clash-sim/tests/life.rs`. Stubbed: beliefs, relations and
+senses moving with a mind (15); the `mind` type (09); abilities after a
+transfer (08 §3.4); ending running actions at death, which is the
+action runtime's answer to `entity_died`; checking `can_act` on an
+`Act` command, which arrives with T4.
+
 ### E8 — Items and holds
 
 **Spec** 06 §9 · **Size** L
@@ -305,6 +354,35 @@ Done when
 - Latent contents are identical whenever they are first materialised.
 - Invariant B6 holds under random holding operations.
 
+Beta, in `clash_sim::item`, tested in `crates/clash-sim/tests/items.rs`
+over the fixtures in `crates/clash-sim/tests/fixtures/item`: the `item`
+type with every field of 06 §9.1 that has a meaning yet, `modifiers` and
+`holder_tags` (D-561), and `contains`, `guards`, `grants`, `traits`,
+`rules`, `ages` and `keeps` carried; the `Item` and `Holds` components;
+`create`, a debug command `CreateItem`, colours picked by seed;
+grasps on the channel slots of working parts, wearing at layers over the
+parts a `wear` selects, containers with volume, mass and tags, all through
+`relocate`, which now tells the holder when anything leaves it (D-560);
+what a grasped or worn item confers, applied and taken back exactly
+(a property test against recomputation); stacks that split and rejoin
+(D-562); item damage, broken items, worn layers handed to `body::apply_hit`
+and damaged by what they absorbed (D-563); what a disabled, severed or
+destroyed part held, and parts that come off as items (D-565); latent
+contents from a container's own list and seed (D-564); fourteen verbs,
+eighteen properties, ten events and two hooks, twenty-one reasons
+(06 §9.2, §13); plain items in `mods/core/data/items.json`, with the
+channel `arm` they grip by. Stubbed, each waiting for what it needs:
+ageing and the script `the_larder` (temperature, V1); `gas_mask` and what
+`guards` keep out (exposure by route); `round` and ammunition (C-series),
+`look` (U4), `interactions` and `device` (E12, G1); `content_table`
+(WG8); the kernel applying hits and body changes, which is when it calls
+`worn_layers_of`, `apply_worn_hits`, `part_item` and `on_body_changes`;
+the kernel joining stats, when `confer::with_stats` stops building the
+tables for each change and the `attr_changed` of conferring is raised;
+seats and fixed holds (vehicles, devices). A simple item measures about
+400 bytes with the kernel's record, over the 300 of 06 §15; the item's
+own component is 56.
+
 ### E9 — Templates and creation
 
 **Spec** 06 §10 · **Size** L
@@ -317,6 +395,17 @@ Done when
 - The same spec and seed give the same entity hash (invariant B4).
 - Each choice kind has passing and failing fixtures.
 - A fixture species with its own choices builds without engine changes.
+
+Beta (decisions D-556 to D-558): `clash_sim::template`: the `template`
+type with every kind of choice and options that nest; character specs
+with default and seeded random selection; `Sim::spawn_template`, the
+verb `spawn`, the debug command `spawn` and the answer to
+`spawn_requested`; the creation session for `app.creation`; anonymous
+and notable as far as spawning needs; `person` and `dog` in
+`mods/core/data/life`. Stubbed: the `creature` type; adding the parts
+an `assemble` choice chose (E6); option conditions and a range's
+`apply`; traits and items, which are carried as ids for E3 and E8;
+`apply_template` on an existing entity; test scripts.
 
 ### E10 — Movement
 
@@ -334,6 +423,30 @@ Done when
   hook does not grant it.
 - Scenario `dash_through_wall`: a sweep at high speed strikes a wall as a
   body impact.
+
+Beta: built ahead of the action runtime, in
+`clash_sim::movement` (decisions D-570 to D-576). Built: the `movement`
+and `posture` definition types with every field of 06 §11 and §11.1;
+the `mover` component (ways of moving, posture, path, where a fall set
+off), saved and hashed;
+a mover's rules as the world's `MoveRules`, from its definitions, its
+posture, its body's slots and its `speed` expressions; the verbs `step`
+(06 §11's `move`), `move_to`, `set_posture`, `plan_path`, `follow_path`,
+`clear_path` and `set_movement`; `step_time` and the properties, events,
+hooks and reasons tabled in 06 §11; the occupancy rule and the swap
+through `passage_requested`; paths planned from belief behind
+`movement::belief`; loss of footing on `entity_unsupported` into a world
+body (W14) and back on `body_landed`; and the
+actions `step`, `go_to` and `set_posture` in `mods/core/data/movement.json`.
+Step legality is tested against a table in `movement::rules`, the rest in
+`crates/clash-sim/tests/movement.rs` over the test city. Stubbed, each
+waiting for the package that owns it: `sweep`, `leap` and the scenario
+`dash_through_wall` (they launch a mover on purpose, as a fall now
+does), `set_altitude` and `teleport` (realm transfer); catching a
+falling entity; belief reads truth (perception, S2); a posture
+scales the `Physical` height but not a body's bands, and gives no traits
+(bodies in the simulation); the tests drive `step` and `go_to` through
+the verbs and a hand-made loop until the action runtime (T3) runs them.
 
 ### E11 — Coming and going
 
@@ -678,6 +791,45 @@ Done when
 - Golden frames for `wall_punch` at fixed time steps.
 - Every shown event has a log line (invariant V5).
 
+Beta: built in `clash_scene::playback`. The application calls
+`Scene::push_events` with each drained batch, `Scene::advance` every
+frame, `Scene::playback_caught_up` to know whether input applies to the
+present and `Scene::skip_playback`; in debug builds
+`Scene::check_caught_up` with a fresh view model. The queue paces each
+stretch by 12 §7.1 (groups by tick, long waits cut to two seconds,
+`stretch_time`, `min_time`, the `playback_speed` preference with 0
+instant, catching up from any backlog, the `skip` key); the `show` and
+`anim` definition types say how each event changes the picture, what it
+animates, its line worded for the reader, what is shown if it was only
+heard, its importance and a sound cue (decisions D-600 to D-602); the
+host says what the party perceived and what it sees
+(`SceneHost::perceived`, `seen_cell`, `seen_sprite`, D-603); the
+message log folds
+repeated lines, keeps a scrollback and is wrapped, filtered by
+importance and kept at the newest line by the `log` widget (D-604);
+bindings are asked as of the moment playback has reached
+(`SceneHost::as_of`, D-605); glides with afterimages, animations at a
+cell or along a path, shake and flash are drawn over the picture
+(D-606); `mods/ui/data/playback.json` has shows for every kernel and
+world event and the preference `effects` (D-607); a decision's prompt
+waits for playback. Tested through the null frontend in
+`crates/clash-scene/tests/playback.rs`: golden frames of a wall broken
+three ticks after a step at fixed time steps, of a heard event and of a
+projectile, and a property test that caught-up playback equals a fresh
+view (D-608). Stubbed, each waiting for what it needs: perception
+answers through a stand-in in `clash_scene::testing` (S9); events carry
+no duration, so a glide lasts its show's `time`, and bodies in flight are
+drawn where they start, strike and land and not along their paths, which
+no event carries (W14); floating text, particles and effects
+shaped by an event's fields are not built; cutscenes cannot yet choose
+when the events of their span are played (U10); `message` effects reach
+the log only through `Scene::log_mut` until the simulation reports them
+(K9); no event is marked player-relevant, so the linter's V5 warning is
+not given and steps write no line; events of other packages (hits,
+wounds) have no bundled show; `stretch_time` is set from Rust until
+settings exist (P6); looks (12 §4.4) are not drawn, since no event
+reports one yet (E3, E10); no benchmark of ingesting events.
+
 ### U6a — Toolkit: layout and widgets
 
 **Spec** 12 §10.1–10.3 · **Size** L
@@ -843,6 +995,22 @@ Build
 Done when
 - Launching with a profile shows its boot screen; a session can be saved,
   quit and resumed.
+
+Beta (the first walk): `clash` loads a profile, shows located load errors
+and leaves with failure, opens the boot screen, offers the `start`
+definitions on `ui:new_game`, makes a world and a character, and runs the
+frame loop in a terminal or headless from a script (12 §3). Preferences
+and key bindings are kept in the user's data directory. Golden frames
+cover the title, the new-game screen, the first play frame, inside a
+house and at a wall; a total conversion and a broken mod are tested.
+Stubbed behind named seams: actions (`shim`: `step`, `go_to`, `wait` as
+debug moves), perception (`perception_shim`: sight from the character's
+cell), playback (`present::present_events`), saving (`saves::SaveBackend`
+with nothing built in, so saving, loading and resuming are not done),
+characters from templates (`session::make_player`) and game scenarios
+(the `start` type). Not built: the window frontend and frontend choice,
+switching profiles or reloading mods while running, a benchmark of the
+loop.
 
 ### Z1 — Benchmarks and budget gate
 

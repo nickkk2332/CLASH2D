@@ -716,6 +716,13 @@ impl Bus {
             bus.types
                 .insert(info.name.to_owned(), EventType::of_engine(info));
         }
+        for info in crate::movement::MOVEMENT_EVENTS {
+            bus.types
+                .insert(info.name.to_owned(), EventType::of_engine(info));
+        }
+        for hook in crate::movement::hook_types() {
+            bus.types.insert(hook.name.clone(), hook);
+        }
         if let Some(registry) = defs.try_registry::<EventDef>() {
             for (id, def) in registry.iter() {
                 let name = registry.name(id).to_owned();
@@ -733,7 +740,33 @@ impl Bus {
                 bus.types.insert(name, ty);
             }
         }
+        for info in crate::action::ACT_EVENTS {
+            bus.types
+                .insert(info.name.to_owned(), EventType::of_engine(info));
+        }
+        for ty in crate::action::hook_types() {
+            bus.types.insert(ty.name.clone(), ty);
+        }
+        // The events of the packages that raise their own.
+        for ty in crate::item::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
+        // The events and hooks of living things (06 §13), unless a mod
+        // has taken a name.
+        for ty in crate::life::events::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         bus
+    }
+
+    /// Whether anything listens for events of a type: a global handler,
+    /// or any attached one. Whoever raises a hook that nothing listens
+    /// for may skip it.
+    pub(crate) fn has_listeners(&self, event: &str) -> bool {
+        self.global
+            .get(event)
+            .is_some_and(|listeners| listeners.len() > 0)
+            || self.attached.keys().any(|(_, name)| name == event)
     }
 }
 

@@ -142,6 +142,9 @@ pub use physical::{
 pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::body::Body;
+use crate::item::{Holds, Item};
+use crate::mind::{Driver, Mind};
+use crate::movement::Mover;
 use crate::perception::{Awareness, Beliefs, MapMemory, Senses, Signature};
 use crate::stats::Stats;
 
@@ -487,6 +490,21 @@ components! {
     stats: Stats = "stats";
     /// Parts, wounds and what the body can do. On creatures.
     body: Body = "body";
+    /// What makes a thing an item: its definition, material, count,
+    /// damage and colour (06 §9.1). On items.
+    item: Item = "item";
+    /// How an entity holds what is inside it: in a grasp, worn, stowed
+    /// (06 §9.2). On whatever holds something in particular.
+    holds: Holds = "holds";
+    /// The ways of moving an entity has, its posture and the path it is
+    /// following. On whatever has been told one of them.
+    mover: Mover = "mover";
+    /// What decides for a body, and whether it does. On anything that
+    /// decides.
+    mind: Mind = "mind";
+    /// Who acts for a body without being its mind. On a body that is
+    /// driven.
+    driver: Driver = "driver";
     /// The senses it perceives with and which way it faces (15 §4). On
     /// whatever perceives.
     senses: Senses = "senses";

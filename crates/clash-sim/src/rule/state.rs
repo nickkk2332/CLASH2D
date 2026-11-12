@@ -10,9 +10,13 @@ use clash_data::{DefLabel, Defs, Diagnostic, Severity};
 use clash_expr::{DefTypeId, EventId, Handle, KindId, Value};
 use serde::{Deserialize, Serialize};
 
+use clash_world::Cause;
+
 use super::def::{EOC_TYPE, EocDef, ReasonDef, RuleGroupDef};
 use super::host::RuleFault;
+use super::tree::{Ask, AskOptions, Block, EffectKind};
 use super::{EocId, ReasonDefId, RuleGroupId};
+use crate::decision::ChoiceId;
 use crate::reason::Reason;
 
 /// A subject as state keeps it: the number of its kind and the
@@ -54,6 +58,92 @@ pub struct RunRecord {
 }
 
 impl_state_hash!(RunRecord { runs, last });
+
+/// Where an effect is written: the definition it is in and its JSON
+/// path there. This, and not a number, is what state keeps of a place
+/// in the definitions, so that it still names the place after a load.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub struct EffectSite {
+    /// The JSON name of the definition's type: `eoc`, `action`.
+    pub def_type: String,
+    /// The definition's qualified id.
+    pub def: String,
+    /// The JSON path of the effect inside it: `do[2]`.
+    pub path: String,
+}
+
+impl_state_hash!(EffectSite {
+    def_type,
+    def,
+    path
+});
+
+/// One option of a choice that is waiting for its answer.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct StoredOption {
+    /// What it says, as it was rendered for the one who chooses.
+    pub label: String,
+    /// Whether it may be taken.
+    pub available: bool,
+    /// For an option gathered when the `ask` ran: the qualified id of
+    /// the rule to run if it is chosen. `None` for one written in the
+    /// `ask`.
+    pub rule: Option<String>,
+    /// The values to run that rule with, a map by parameter name; null
+    /// otherwise.
+    pub with: clash_core::Value,
+}
+
+impl_state_hash!(StoredOption {
+    label,
+    available,
+    rule,
+    with
+});
+
+/// A choice a rule's `ask` put to someone who has not answered yet
+/// (05 §10.6): what the chosen option's effects need to run with the
+/// subjects and locals of where the `ask` is written.
+///
+/// It is the first continuation the rule runtime keeps (05 §13.4): plain
+/// data, saved with the simulation.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct PendingChoice {
+    /// Who chooses.
+    pub who: SubjectKey,
+    /// The question, as it was rendered.
+    pub prompt: String,
+    /// The options, in the order written.
+    pub options: Vec<StoredOption>,
+    /// Where the `ask` is written.
+    pub site: EffectSite,
+    /// What the rule that asked is attached to, if it is attached.
+    pub owner: Option<SubjectKey>,
+    /// The names of the subjects bound where the `ask` is written, by
+    /// slot.
+    pub names: Vec<String>,
+    /// Their values.
+    pub subjects: Vec<clash_core::Value>,
+    /// The locals of the list the `ask` is written in, by slot.
+    pub locals: Vec<clash_core::Value>,
+    /// The name of the event that was being handled, and its fields.
+    pub event: Option<(String, Vec<clash_core::Value>)>,
+    /// What the option's effects are caused by.
+    pub cause: Cause,
+}
+
+impl_state_hash!(PendingChoice {
+    who,
+    prompt,
+    options,
+    site,
+    owner,
+    names,
+    subjects,
+    locals,
+    event,
+    cause
+});
 
 /// A rule waiting in the queue: `queue` worked out which rule, its
 /// arguments and the subjects it is given when the effect ran.
@@ -112,6 +202,10 @@ pub struct RuleState {
     /// Rule groups switched by `set_rule_group`, whatever their
     /// `enabled` says.
     groups: BTreeMap<RuleGroupId, bool>,
+    /// The choices put by `ask` that are waiting for an answer.
+    choices: BTreeMap<ChoiceId, PendingChoice>,
+    /// How many choices have been put: the number of the next.
+    next_choice: u64,
     #[serde(skip)]
     pub(crate) running: Running,
 }
@@ -119,7 +213,9 @@ pub struct RuleState {
 impl_state_hash!(RuleState {
     attached,
     records,
-    groups
+    groups,
+    choices,
+    next_choice
 });
 
 impl RuleState {
@@ -176,6 +272,40 @@ impl RuleState {
         let key = SubjectKey::from(owner);
         self.attached.remove(&key);
         self.records.retain(|(_, have), _| *have != Some(key));
+        self.choices.retain(|_, choice| choice.who != key);
+    }
+
+    /// The number of the next choice: no two choices of one simulation
+    /// have the same.
+    pub fn next_choice(&mut self) -> ChoiceId {
+        let id = ChoiceId::new(self.next_choice);
+        self.next_choice = self.next_choice.saturating_add(1);
+        id
+    }
+
+    /// Keeps a choice until it is answered.
+    pub fn keep_choice(&mut self, id: ChoiceId, choice: PendingChoice) {
+        self.choices.insert(id, choice);
+    }
+
+    /// A choice that is waiting for an answer.
+    pub fn choice(&self, id: ChoiceId) -> Option<&PendingChoice> {
+        self.choices.get(&id)
+    }
+
+    /// Takes a choice out: it has been answered, or will not be.
+    pub fn take_choice(&mut self, id: ChoiceId) -> Option<PendingChoice> {
+        self.choices.remove(&id)
+    }
+
+    /// The choices waiting for one subject's answer, oldest first.
+    pub fn choices_of(&self, who: Handle) -> Vec<ChoiceId> {
+        let key = SubjectKey::from(who);
+        self.choices
+            .iter()
+            .filter(|(_, choice)| choice.who == key)
+            .map(|(id, _)| *id)
+            .collect()
     }
 
     /// When a rule last ran for an owner, if it is one that counts: a
@@ -327,6 +457,60 @@ pub struct RuleSet {
     defs: Arc<Defs>,
     eoc_type: Option<DefTypeId>,
     by_event: Vec<Listeners>,
+    roots: Vec<EffectRoots>,
+}
+
+/// Finds the compiled lists of effects of one definition that is not a
+/// rule: given the definitions, the JSON name of a definition type and
+/// a qualified id, it adds every list of that definition to `out`, and
+/// nothing if the type is not its own. A package whose definitions hold
+/// [`Effects`](super::Effects) writes one and lists it where the
+/// simulation builds its [`RuleSet`], so that an effect written in one
+/// of them can be found again from an [`EffectSite`].
+pub type EffectRoots = for<'a> fn(&'a Defs, &str, &str, &mut Vec<&'a Block>);
+
+/// Looks for the `ask` written at a path in a block and the blocks
+/// inside it.
+fn ask_at<'a>(block: &'a Block, path: &str) -> Option<&'a Ask> {
+    for effect in block.effects() {
+        // An effect inside this one has a path that starts with its.
+        if !path.starts_with(&*effect.path) {
+            continue;
+        }
+        let inner: Vec<&Block> = match &effect.kind {
+            EffectKind::Ask(ask) => {
+                if &*effect.path == path {
+                    return Some(ask);
+                }
+                match &ask.options {
+                    AskOptions::Listed(options) => {
+                        options.iter().map(|option| &option.body).collect()
+                    }
+                    AskOptions::Computed(_) => Vec::new(),
+                }
+            }
+            EffectKind::If {
+                then, otherwise, ..
+            } => vec![then, otherwise],
+            EffectKind::First { entries } => entries.iter().map(|(_, body)| body).collect(),
+            EffectKind::Switch { cases, default, .. } => cases
+                .iter()
+                .map(|(_, body)| body)
+                .chain([default])
+                .collect(),
+            EffectKind::ForEach { body, .. }
+            | EffectKind::Repeat { body, .. }
+            | EffectKind::While { body, .. }
+            | EffectKind::Rebind { body, .. } => vec![body],
+            EffectKind::Weighted { entries } => entries.iter().map(|(_, body)| body).collect(),
+            EffectKind::Timer(timer) => vec![&timer.body],
+            _ => Vec::new(),
+        };
+        if let Some(found) = inner.into_iter().find_map(|block| ask_at(block, path)) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 impl RuleSet {
@@ -370,7 +554,44 @@ impl RuleSet {
             defs,
             eoc_type,
             by_event,
+            roots: Vec::new(),
         }
+    }
+
+    /// These rules, knowing also where the lists of effects of other
+    /// definition types are: see [`EffectRoots`].
+    #[must_use]
+    pub fn with_roots(mut self, roots: Vec<EffectRoots>) -> RuleSet {
+        self.roots = roots;
+        self
+    }
+
+    /// The `ask` written at a place in the definitions, if it is still
+    /// there.
+    pub(crate) fn ask_at(&self, site: &EffectSite) -> Option<&Ask> {
+        let mut blocks: Vec<&Block> = Vec::new();
+        if site.def_type == EOC_TYPE {
+            let rule = self.lookup(&site.def).and_then(|id| self.rule(id))?;
+            blocks.extend(rule.effects.block());
+            blocks.extend(rule.otherwise.block());
+        } else {
+            for roots in &self.roots {
+                roots(&self.defs, &site.def_type, &site.def, &mut blocks);
+            }
+        }
+        blocks
+            .into_iter()
+            .find_map(|block| ask_at(block, &site.path))
+    }
+
+    /// Where the effect with an origin number is written.
+    pub fn site_of(&self, origin: u64) -> Option<EffectSite> {
+        let origin = self.defs.exprs().origin(origin)?;
+        Some(EffectSite {
+            def_type: origin.definition.type_name.clone(),
+            def: origin.definition.id.clone(),
+            path: origin.path.clone(),
+        })
     }
 
     /// Whether any rule listens for an event type: a global one, or an

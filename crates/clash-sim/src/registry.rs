@@ -329,9 +329,11 @@ impl FunctionDef {
 /// Every property the simulation offers. A package that adds properties
 /// adds its table here.
 pub fn engine_properties() -> Vec<PropertyDef> {
-    let mut table = crate::props::properties();
-    table.extend(crate::perception::props::properties());
-    table
+    let mut properties = crate::props::properties();
+    properties.extend(crate::item::properties());
+    properties.extend(crate::movement::properties());
+    properties.extend(crate::perception::props::properties());
+    properties
 }
 
 /// Every function the simulation offers beyond those the expression
@@ -396,6 +398,8 @@ pub fn register_engine(registry: &mut Registry) {
             let _ = registry.add_def_type(name, doc);
         }
     }
+    crate::item::register_types(registry);
+    crate::movement::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)
@@ -413,6 +417,14 @@ pub fn register_engine(registry: &mut Registry) {
     }
     crate::verb::register_engine_verbs(registry);
     for info in KERNEL_EVENTS.iter().chain(WORLD_EVENTS) {
+        mirror_event(registry, info);
+    }
+    for info in crate::action::ACT_EVENTS {
+        mirror_event(registry, info);
+    }
+    crate::action::register_hooks(registry);
+    crate::item::register_events(registry);
+    for info in crate::movement::MOVEMENT_EVENTS {
         mirror_event(registry, info);
     }
 }

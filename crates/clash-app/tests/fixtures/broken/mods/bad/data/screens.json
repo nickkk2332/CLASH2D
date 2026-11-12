@@ -1,0 +1,6 @@
+[
+  { "type": "screen", "id": "front_door",
+    "title": "Broken",
+    "layout": { "rows": [ { "text": "This never shows." } ] },
+    "colour_of_the_sky": "green" }
+]

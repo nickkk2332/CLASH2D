@@ -393,3 +393,16 @@ pub fn remove_modifier<H: Host + ?Sized>(
     drop_modifiers(cx, entity, source, Some(attr), &mut out)?;
     Ok(out)
 }
+
+/// Removes every modifier one source added, to any attribute, and leaves
+/// the rates it applied to pools: the verb `remove_modifier` with no
+/// attribute named (06 §4.4).
+pub fn remove_modifiers<H: Host + ?Sized>(
+    cx: &mut StatsCx<'_, H>,
+    entity: EntityId,
+    source: Source,
+) -> Result<Changes, StatsError> {
+    let mut out = Changes::new();
+    drop_modifiers(cx, entity, source, None, &mut out)?;
+    Ok(out)
+}

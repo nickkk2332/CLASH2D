@@ -506,6 +506,27 @@ pub fn add_pool<H: Host + ?Sized>(
     Ok(())
 }
 
+/// Gives an entity a pool that held `level` elsewhere, with the rates
+/// it had there: a pool that came with a mind (06 §8.2). The level is
+/// kept within the pool's bounds for its new owner. Nothing is
+/// reported: the pool is not said to cross what it arrives beyond.
+pub(super) fn add_pool_at<H: Host + ?Sized>(
+    cx: &mut StatsCx<'_, H>,
+    entity: EntityId,
+    pool: PoolId,
+    level: Real,
+    rates: Vec<PoolRate>,
+    out: &mut Changes,
+) -> Result<(), StatsError> {
+    add_pool(cx, entity, pool)?;
+    with_pool(cx, entity, pool, false, out, |inst, def, _| {
+        inst.level = level.clamp(Real::ZERO, inst.max);
+        inst.rates = rates;
+        inst.band = inst.first_band(def);
+        Ok(())
+    })
+}
+
 /// Takes a pool away from an entity, with its rates and its wake-up.
 /// Nothing is reported.
 pub fn remove_pool<H: Host + ?Sized>(
