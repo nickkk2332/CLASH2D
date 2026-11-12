@@ -1182,6 +1182,107 @@ pub const KERNEL_EVENTS: &[EventInfo] = &[
         ],
         doc: "A part came off a body with everything on it and in it: cut off or destroyed by a hit, or taken off by an edit (06 §7.5). `self` is whose body it was and `here` is where that body stands. In Rust the event carries the part itself, for whoever makes an item of it.",
     },
+    // ---- Minds (09 §17) -------------------------------------------------
+    EventInfo {
+        name: "goal_adopted",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("goal", "string", "The qualified id of the goal taken up."),
+            (
+                "about",
+                "any",
+                "What it is about: an entity, a memory as a map, a cell, or null.",
+            ),
+            ("score", "real", "Its score when it was taken up."),
+            (
+                "previous",
+                "string?",
+                "The qualified id of the goal it displaced, if any.",
+            ),
+        ],
+        doc: "`self`'s mind took up a goal (09 §3.3): it scored best by more than the held goal's `commit`, or a rule set it.",
+    },
+    EventInfo {
+        name: "goal_done",
+        subjects: &[("self", "entity")],
+        fields: &[("goal", "string", "The qualified id of the goal.")],
+        doc: "The goal `self`'s mind held is done: its `done` held (09 §3.2).",
+    },
+    EventInfo {
+        name: "goal_failed",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("goal", "string", "The qualified id of the goal."),
+            ("code", "string", "The stable code of the reason."),
+            ("message", "string", "Why, in words."),
+        ],
+        doc: "The goal `self`'s mind held failed: its `fail` held, or no method of it could be used. It is set aside for its `retry_after` (09 §4).",
+    },
+    EventInfo {
+        name: "step_failed",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("goal", "string", "The qualified id of the goal."),
+            ("step", "string?", "The kind of step: `go`, `do`, …"),
+            ("code", "string", "The stable code of the reason."),
+            ("message", "string", "Why, in words."),
+        ],
+        doc: "A step of the method `self`'s mind was following failed: its action was refused or interrupted, or it could not find its target (09 §4). The method is given up and the next is tried.",
+    },
+    EventInfo {
+        name: "method_chosen",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("goal", "string", "The qualified id of the goal."),
+            (
+                "method",
+                "int",
+                "The method's position in the goal's `methods`.",
+            ),
+        ],
+        doc: "`self`'s mind began to follow a method of its goal (09 §17). Raised only while something listens for it.",
+    },
+    EventInfo {
+        name: "step_started",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("goal", "string", "The qualified id of the goal."),
+            ("step", "string", "The kind of step."),
+        ],
+        doc: "`self`'s mind began a step (09 §17). Raised only while something listens for it.",
+    },
+    EventInfo {
+        name: "option_chosen",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("purpose", "string", "The purpose the `choose` step named."),
+            (
+                "action",
+                "string",
+                "The qualified id of the action started.",
+            ),
+        ],
+        doc: "A `choose` step of `self`'s mind started an action (09 §17). Raised only while something listens for it.",
+    },
+    EventInfo {
+        name: "said",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("text", "string", "What was said."),
+            (
+                "volume",
+                "real",
+                "How loud, as a factor content gives its signal; 1 for an ordinary voice.",
+            ),
+        ],
+        doc: "`self` said something (a `say` step, 09 §4). Content gives it a signal with an `event_signal`, so that others hear it. Speech (15 §11) will raise its own.",
+    },
+    EventInfo {
+        name: "route_blocked",
+        subjects: &[("self", "entity"), ("here", "loc")],
+        fields: &[],
+        doc: "A change in the world blocked the path `self` was following at `here`: the path is planned again before its next step (09 §5.2).",
+    },
 ];
 
 /// The world's events as the kernel passes them on (02 §7.4): the names
