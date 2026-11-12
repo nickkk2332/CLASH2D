@@ -375,6 +375,7 @@ its phases.
 | `deflect` | Share of the strike's energy turned aside on success |
 | `holds` | The most energy, in joules, the defender can turn aside |
 | `brace` | Share of the push the defender resists |
+| `evasion` | What it adds, while in force, to the defender's value in the aim of a strike at it (section 4.2): a sway makes someone harder to land on squarely |
 
 A defence need not be a reaction. Held up in advance, as a held phase
 (03 §6.4), it is a guard: in force for as long as it is kept, at the cost of
@@ -422,6 +423,68 @@ started a reaction that became ready before impact.
 
 Someone too slow to notice has no defence. Someone caught in a recovery
 phase that cannot be cancelled has none either.
+
+### 5.5 As built
+
+Package C4 (decisions D-712, D-713), in `clash_sim::combat::defence`.
+The block's fields, as read:
+
+| Field | Type | Meaning as built |
+|-------|------|------------------|
+| `during` | phase id, required | The phase in which it is in force, and only then (invariant C3). A held phase is a guard, in force while it is held |
+| `form` | `avoid` or `interpose`, required | |
+| `with` | object, or a list of them | For `interpose`, required: a held item or a part, written as an attack's `with` (section 3.1), not inline. Of a list the first that answers when the strike lands is used: a shield if one is held, else the arm. Not allowed for `avoid` |
+| `protects` | expression, `entity?` | Whom it defends, read when the strike lands with `self` and the action's locals. Left out: the defender. Someone else is defended only while the defender stands beside them (no gap between them) |
+| `covers` | `{ "arc": degrees, "parts": [names] }` | `arc`, centred on the defender's facing (15 §4), the strike must come from; left out, or for one with no senses, every direction. `parts`, each a part's name, the id of its definition or a tag, the strike must land on; left out, or where the body picks the part, any |
+| `handles` | int at least 1, or `"all"` | How many strikes it is tried against while in force: each phase it comes into force in counts afresh. Default 1 |
+| `contest` | `{ "id": contest, "by": expr, "against": expr }` | At or above zero it succeeds; drawn from the rule stream. Left out: it always succeeds |
+| `deflect`, `brace` | expression, 0 to 1 | Default 0. A value outside is brought to the nearest end |
+| `holds` | expression, joules | Left out: no limit |
+| `evasion` | expression | Default none |
+
+`contest`, `deflect`, `holds`, `brace` and `evasion` read truth when the
+strike lands, with the subjects `self` (the defender), `attacker` and
+`target` (the one struck), then the action's locals.
+
+**Step 5.** The defences in force for the target are tried in the order
+of section 3.4: others' that protect it, then its own, each group by
+when its phase began, then entity, then action. One is tried if it has
+not been tried `handles` times in this phase, covers the strike and,
+for `interpose`, finds what it puts in the way now. The hook
+`defence_resolving` may change it; `strike_defended` reports it.
+
+- `avoid` that succeeds: the strike misses (`strike_missed` with `why`
+  `defence`), and nothing after it is tried.
+- `interpose` that succeeds: `turned = deflect × min(energy, holds)` is
+  taken off, and the next meets the rest. The push share of what is
+  left after turning pushes the target, less the largest `brace` of
+  those that succeeded; the rest lands on each interposed surface in
+  turn as a packet of the strike's kind at the energy over **that
+  surface's own** area times its give (a broad, yielding face spreads
+  it); what passes the last goes on to the part aimed at, struck by the
+  attacker's surface. What a surface was not affected by comes back
+  into the striking surface as recoil. A part put in the way is struck
+  with no direction: what exits it goes on to the part aimed at, not to
+  the wall behind.
+- If the surfaces took all of it, nothing reached the body: the strike
+  is stopped (`strike_stopped` with `combat.defended`, `on_stopped`),
+  `$landed` stays false, and the push and the recoil still happen.
+
+`evasion`: before aim, the target's own defences in force that cover the
+direction the strike comes from add their `evasion` to the aim's
+`against`.
+
+**Leaving** needs nothing: a defender out of reach at impact is missed
+at step 2 with no contest. A reaction turns its reactor to face the
+window's source when it starts (03 §7.3), which is what a parry's arc is
+measured from.
+
+`entity.defending` (`bool`) is whether a defence of its own is in force
+now. What defences in force have dealt with is kept, saved and hashed,
+in the simulation's window table.
+
+Not built: a gripped creature put in the way (C7), defences against
+shots (C9), the query `defences`, and previews of defences (C11).
 
 ## 6. Delivery
 
@@ -581,9 +644,10 @@ handed to the world as a body (`WorldCtx::launch`, owner the entity)
 from its cell's middle at half its height, with its mass, volume,
 cross-section and planes; movement takes it back when it lands
 (06 §11, `landed`), and what it struck on the way is the world's
-`body_impact` (06 §7.4). `launched` reports it. Until defences exist
-nothing braces (`brace` 0). Push is applied only for a strike that
-landed.
+`body_impact` (06 §7.4). `launched` reports it. `brace` is the largest of
+the defences that put something in the strike's way (section 5.5).
+Push is applied only for a strike that landed, or that a defence put
+something in the way of.
 
 A shove is an attack whose `push` is nearly 1. A cut's is nearly 0. A
 punch from someone who can put a megajoule into it, with a third set aside
@@ -1046,14 +1110,17 @@ from its cause: for a strike, the attacker.
 |-------|----------|--------|
 | `strike_resolving` (hook) | `self`, the attacker | `action` (`string`), the qualified id of the action; `attack` (`string`), the attack's id; `target` (`entity?`), whom it strikes, null for a cell; `part` (`part?`), the part aimed at; `energy` (`real`), joules at full effort; `effort` (`real`). A handler may change `target`, `part`, `energy` and `effort`, or cancel: nothing is struck. |
 | `strike_landed` | `self`; `target?`, the one struck; `here?`, the cell, for a strike at a cell | `action`, `attack` (`string`); `part` (`part?`), the part it landed on; `kind` (`id<damage_type>`); `energy` (`real`), joules delivered as harm, the push taken out; `intensity` (`real`), pascals; `absorbed` (`real`), joules the target's layers and what it wears, or the element, took; `passed` (`real`), joules that went on beyond it; `returned` (`real`), joules that came back as recoil; `push` (`real`), joules set aside to push; `effort` (`real`); `margin` (`real?`), the margin of its aim, null where it did not aim. |
-| `strike_missed` | `self`; `target?` | `action`, `attack` (`string`); `why` (`string`): `reach`, `aim` or `nothing` (a target with no body that is not an item); `margin` (`real?`). |
-| `strike_stopped` | `self`; `target?` | `action`, `attack` (`string`); `code`, `message` (`string`): why nothing was delivered. A handler of `hit_incoming` cancelled the hit. |
+| `strike_missed` | `self`; `target?` | `action`, `attack` (`string`); `why` (`string`): `reach`, `aim`, `defence` (a defence that avoids succeeded) or `nothing` (a target with no body that is not an item); `margin` (`real?`), of the aim, or of the defence's contest. |
+| `strike_stopped` | `self`; `target?` | `action`, `attack` (`string`); `code`, `message` (`string`): why nothing was delivered. A handler of `hit_incoming` cancelled the hit, or what defences put in the way took all of it (`combat.defended`). |
+| `strike_defended` | `self`, the attacker; `target`, the one struck; `defender`, whose defence it is | `action`, `attack` (`string`); `defence` (`string`), the qualified id of the defending action; `form` (`string`), `avoid` or `interpose`; `succeeded` (`bool`); `margin` (`real?`), of its contest; `turned` (`real`), joules it turned aside. Raised for each defence tried at step 5, in order. |
+| `defence_resolving` (hook) | `self`, the defender; `attacker`; `target` | `action` (`string`), the defending action; `form` (`string`); `succeeded` (`bool`); `margin` (`real?`); `deflect` (`real`); `holds` (`real?`), null for no limit; `brace` (`real`). A handler may change `succeeded`, `deflect`, `holds` and `brace`; cancelling makes it fail. |
 | `strike_recoiled` | `self`; `weapon?`, the item that took it | `action`, `attack` (`string`); `part` (`part?`), the part of `self` that took it; `energy` (`real`), joules that came back; `absorbed` (`real`), joules of it the part or the item took. Not raised for an inline surface. |
 | `knockback_incoming` (hook) | `self`, the one pushed | `speed` (`real`), metres a second; `dir` (`list<real>`), east, south, up, of length one. A handler may change both, or cancel: nothing moves it. |
 | `staggered` | `self` | `speed` (`real`); `severity` (`real`), where the speed lies between `combat.stagger_at` and `combat.launch_at`, from 0 to 1; `dir` (`list<real>`). |
 | `launched` | `self` | `speed` (`real`); `dir` (`list<real>`); `added` (`bool`), true if it was in flight already and the push was added to its velocity. |
 
-`strike_defended`, `clash_resolved` and the rest wait for their packages.
+`clash_resolved` and the rest wait for their packages. The property
+`entity.defending` (`bool`) is built (section 5.5).
 
 | Reason | When | Values |
 |--------|------|--------|
@@ -1065,6 +1132,7 @@ from its cause: for a strike, the attacker.
 | `combat.not_its_part` | The part aimed at is not the target's | `target` |
 | `combat.nothing_there` | A strike at a cell found no floor, block or fixture there, or the cell not loaded | `cell` |
 | `combat.too_deep` | A strike was resolved inside eight others | `limit` |
+| `combat.defended` | What defences put in a strike's way took all of it: carried by `strike_stopped` | `target` |
 
 | Setting | Meaning |
 |---------|---------|
@@ -1083,8 +1151,20 @@ nearly all push, `knock_down` prone), `smash` (a fist at a cell) and
 each with a windup that opens a `strike` window, an impact and a
 recovery. `mods/core/data/life/surfaces.json` gives the humanoid's hands
 a `palm`, its feet a `sole` and its head a `brow`, and
-`mods/core/data/world/severing.json` flags `cut` as severing. Not built yet: the `defence` and `cutscene`
-blocks, `projectile`, `strike_preview` and the other functions, queries
+`mods/core/data/world/severing.json` flags `cut` as severing.
+`mods/core/data/combat/reactions.json` (decision D-714) gives the
+`strike` window kind a `notice` of `2 / wits` seconds (a fifth of a
+second at wits 10) and a `reach` of 3 m; the contests `control` and
+`slip`; the reactions `parry` (the flat of a held blade, deflect 0.9,
+holds 60 J for each point of strength, brace 0.3), `block` (a held
+shield's face, else the forearm), `dodge` (avoid, with `evasion`) and
+`step_back` (a step straight away from the window's source); the guard
+`guard`, a held phase; the rule `ask_player_to_react`; and the stances
+`parry_on_notice`, `block_on_notice`, `dodge_on_notice` and
+`step_back_on_notice`, rules to attach. `mods/core/data/shields.json`
+gives the knife and the club a `flat`, the arm a `forearm`, and adds a
+`buckler`. Not built yet: the `cutscene`
+block, `projectile`, `strike_preview` and the other functions, queries
 and properties listed above, swings meeting the world, contact surfaces
 (section 6.5), reach in height (section 4.3) and `closing_energy`
 (section 3.5).

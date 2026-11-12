@@ -191,6 +191,11 @@ macro_rules! giving {
             /// A mind, none, or a behaviour profile.
             #[serde(default)]
             pub mind: Option<MindField>,
+            /// Senses it is given (15 §4), by id as written: given
+            /// when it is made, where perception's definitions are
+            /// loaded.
+            #[serde(default)]
+            pub senses: Vec<String>,
         }
 
         impl $name {
@@ -208,6 +213,7 @@ macro_rules! giving {
                     items: &self.items,
                     scale: self.scale,
                     mind: self.mind.as_ref(),
+                    senses: &self.senses,
                 }
             }
 
@@ -247,10 +253,26 @@ pub struct Gives<'a> {
     pub scale: Option<Real>,
     /// A mind, none, or a behaviour profile.
     pub mind: Option<&'a MindField>,
+    /// Senses it is given, by id as written.
+    pub senses: &'a [String],
 }
 
 impl Gives<'_> {
     fn validate(&self, cx: &mut ValidateCx<'_>) {
+        // A sense is checked where senses are loaded at all.
+        let senses: Vec<&str> = cx
+            .defs()
+            .iter::<crate::perception::SenseDef>()
+            .filter_map(|(id, _)| cx.defs().name::<crate::perception::SenseDef>(id))
+            .collect();
+        for sense in self.senses {
+            let known = senses.iter().any(|name| {
+                *name == sense.as_str() || name.rsplit(':').next() == Some(sense.as_str())
+            });
+            if !senses.is_empty() && !known {
+                cx.error(format!("there is no sense `{sense}`"));
+            }
+        }
         for base in self.attributes.values() {
             if !base.is_finite() {
                 cx.error("a base given to an attribute must be a finite number");

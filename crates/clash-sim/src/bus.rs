@@ -791,6 +791,10 @@ impl Bus {
         for ty in crate::combat::event_types() {
             bus.types.entry(ty.name.clone()).or_insert(ty);
         }
+        // The events of windows (03 §13), unless a mod has taken a name.
+        for ty in crate::action::windows::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         bus
     }
 

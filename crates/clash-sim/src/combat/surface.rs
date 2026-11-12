@@ -54,7 +54,7 @@ pub struct Surface {
 
 /// Whether a part answers to a name: its name in the body, the id of
 /// its definition (qualified or bare) or a tag its definition carries.
-fn answers(sim: &Sim, part: &PartInst, name: &str) -> bool {
+pub(crate) fn answers(sim: &Sim, part: &PartInst, name: &str) -> bool {
     if part.name() == name {
         return true;
     }

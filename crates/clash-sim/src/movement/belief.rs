@@ -69,6 +69,9 @@ pub fn believed_path(
     // hidden it has not noted does not open, and a mover with map memory
     // keeps to what it has seen where it can (decision D-619).
     let rules = crate::perception::believed_move_rules_with(sim, entity, rules).on_grid(from.grid);
+    // What a mind adds: detours round creatures it saw, the cost of
+    // hazards it knows of, room for a wide footprint (09 §5.3, §5.4).
+    let rules = crate::ai::with_mind_costs(sim, entity, rules);
     sim.truth().cosmos().find_path(from, to, &rules, limits)
 }
 

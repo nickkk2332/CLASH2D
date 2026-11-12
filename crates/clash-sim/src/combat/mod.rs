@@ -16,6 +16,7 @@
 //! | [`Surface`], [`Striker`] | What strikes: a part, an item held, an inline surface (07 §3.2) | [`surface`] |
 //! | [`strike`](strike::strike), [`run_strike`], [`StrikeArgs`], [`StrikeTally`] | The strike, in order, with delivery, recoil and passing through (07 §3.4, §6) | [`strike`] |
 //! | [`aim`](aim::aim) | Where a strike lands (07 §4.2) | [`aim`] |
+//! | [`DefenceDef`], [`defending`] | The `defence` block of an action, what is in force and what it does at step 5 (07 §5) | [`defence`] |
 //! | [`push`](push::push), [`Push`], [`Pushed`] | What the push share does (07 §7) | [`push`] |
 //! | [`COMBAT_EVENTS`], [`COMBAT_REASONS`], [`COMBAT_SETTINGS`] | Events and hooks, refusals, settings | [`events`], [`reason`] |
 //!
@@ -31,14 +32,15 @@
 //!
 //! # What is not built here yet
 //!
-//! Defences (07 §5), clashes (§8), grips and throws (§9), takedowns
-//! (§10), projectiles and ranged weapons (§11) and previews (§13) are
-//! the later packages of `docs/plans/combat.md`. The strike calls a
-//! step for each of the first two and finds none.
+//! Clashes (§8), grips and throws (§9), takedowns (§10), projectiles
+//! and ranged weapons (§11) and previews (§13) are the later packages of
+//! `docs/plans/combat.md`. The strike calls a step for clashes and finds
+//! none.
 
 pub mod aim;
 pub mod attack;
 pub mod contest;
+pub mod defence;
 pub mod events;
 pub mod push;
 pub mod reason;
@@ -54,6 +56,7 @@ pub use attack::{
     WEAPON_SUBJECT, WithDef, WithSource,
 };
 pub use contest::{ContestDef, ContestForm, ContestId};
+pub use defence::{Covers, DefenceContest, DefenceDef, DefenceForm, Handles, WithList, defending};
 pub use events::{COMBAT_EVENTS, CombatEvent, event_types};
 pub use push::{Push, Pushed};
 pub use reason::{COMBAT_REASONS, COMBAT_SETTINGS};

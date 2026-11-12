@@ -135,8 +135,9 @@ pub enum ActEvent {
         /// it.
         reason: Option<Reason>,
     },
-    /// A phase that opens a reaction window began (03 §7.1). Windows
-    /// are a later package's: nobody is offered it yet.
+    /// A phase that opens a reaction window began (03 §7.1). Its
+    /// candidates are worked out next ([`windows`](super::windows)); the
+    /// window itself reaches rules through `window_noticed`.
     WindowOpened {
         /// Whose action opened it.
         actor: EntityId,
@@ -569,7 +570,7 @@ pub const ACT_EVENTS: &[EventInfo] = &[
             ),
             ("count", "int", "How many it is aimed at."),
         ],
-        doc: "A phase that opens a reaction window began (03 §7.1). Until windows are built nobody is offered it and the action carries on.",
+        doc: "A phase that opens a reaction window began (03 §7.1). Its candidates are worked out next and start to notice it (03 §7.2); the window itself reaches rules through `window_noticed`.",
     },
     EventInfo {
         name: "decision_needed",

@@ -48,6 +48,36 @@ impl StateHash for ChoiceOption {
     }
 }
 
+/// One way to answer a window (03 §7.3), as whoever is asked is shown
+/// it: a reaction that lists the window's kind.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct ReactionOption {
+    /// The reaction.
+    pub action: crate::action::ActionDefId,
+    /// What it is called, rendered for the one asked: its `name`, or
+    /// its id.
+    pub label: String,
+    /// Whether its `ready` phase would begin before the window is
+    /// expected to close (03 §7.3); true where the deadline is not
+    /// known. One that would not may still be chosen.
+    pub in_time: bool,
+    /// Why it cannot be started now, if it cannot: the reactor's own
+    /// actions hold the slots it needs in phases that cannot be
+    /// cancelled (`engine:reaction_cannot_cancel`), its `requires`
+    /// fails, and the rest of 03 §6.6. One with a reason is shown and
+    /// refused.
+    pub refused: Option<Reason>,
+}
+
+impl StateHash for ReactionOption {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.action.state_hash(hasher);
+        hasher.write_str(&self.label);
+        self.in_time.state_hash(hasher);
+        self.refused.state_hash(hasher);
+    }
+}
+
 /// A request for a directly controlled entity to choose (03 §5.2).
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct DecisionRequest {
@@ -80,6 +110,19 @@ pub enum DecisionKind {
         prompt: String,
         /// The options, in the order written.
         options: Vec<ChoiceOption>,
+    },
+    /// How to answer a window the entity noticed before it closes
+    /// (03 §5.2, §7.3), put by `ask_reaction`. `React` answers with one
+    /// of the options' actions; `Pass` declines.
+    Reaction {
+        /// The window.
+        window: crate::action::WindowId,
+        /// The universal tick the window is expected to close at; `None`
+        /// where that is not known.
+        deadline: Option<clash_core::Tick>,
+        /// The reactions that list the window's kind and may answer it
+        /// for this entity, in order of definition.
+        options: Vec<ReactionOption>,
     },
 }
 
@@ -116,6 +159,16 @@ impl StateHash for DecisionKind {
                 hasher.write_u8(1);
                 choice.state_hash(hasher);
                 hasher.write_str(prompt);
+                options.state_hash(hasher);
+            }
+            DecisionKind::Reaction {
+                window,
+                deadline,
+                options,
+            } => {
+                hasher.write_u8(2);
+                window.state_hash(hasher);
+                deadline.state_hash(hasher);
                 options.state_hash(hasher);
             }
         }
@@ -213,7 +266,7 @@ impl DecisionQueue {
             .flatten()
             .filter_map(|kind| match kind {
                 DecisionKind::Choice { choice, .. } => Some(*choice),
-                DecisionKind::Free { .. } => None,
+                _ => None,
             })
     }
 
