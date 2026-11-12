@@ -3698,9 +3698,11 @@ Distance and line of sight are the functions `dist` and `los`, and
 `light(at)` reads the light (05 §17). Variables at cell, area, site,
 tract, realm and global scope are read and written as 05 §6 lays down.
 
-Not bound yet, each for a reason: a field's value (`loc.field(kind)`),
-because fields are being built and have no definition type an id could
-name; ambient temperature, because the world has no function that gives
+A field's level in a cell is `loc.field(kind: string)`: `int?`, 0 to 255,
+0 where there is none of it, null for a cell that is not loaded or a
+field no definition names (decision D-687).
+
+Not bound yet, each for a reason: ambient temperature, because the world has no function that gives
 the temperature of a cell; drift, because it is a vector with a medium
 and there is no value for one; the marks in a cell (`decals`), which
 want a query; a region's kind, field values and variables, because the

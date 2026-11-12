@@ -220,6 +220,8 @@ pub mod codes {
     /// Run time: something was asked for that the engine does not offer
     /// yet.
     pub const RUN_UNAVAILABLE: Code = Code("X909");
+    /// Run time: the host refused a query (05 §11).
+    pub const RUN_QUERY: Code = Code("X910");
 
     /// Every code with its one-line explanation, in order of code.
     pub const ALL: &[(Code, &str)] = &[
@@ -361,6 +363,7 @@ pub mod codes {
             RUN_UNAVAILABLE,
             "run time: something was asked for that the engine does not offer yet",
         ),
+        (RUN_QUERY, "run time: a query was refused"),
     ];
 }
 

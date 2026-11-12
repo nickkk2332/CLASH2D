@@ -148,6 +148,7 @@ use crate::mind::{Driver, Mind};
 use crate::movement::Mover;
 use crate::perception::{Awareness, Beliefs, MapMemory, Senses, Signature};
 use crate::stats::Stats;
+use crate::traits::Traits;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
 ///
@@ -522,6 +523,9 @@ components! {
     /// What makes an entity a device: its definition and the element it
     /// is bound to (16 §4.1). On devices.
     device: Device = "device";
+    /// The trait instances an entity has and what they put on it
+    /// (06 §5). On whatever has been given a trait.
+    traits: Traits = "traits";
 }
 
 // A `ComponentKinds` has one bit for each kind.

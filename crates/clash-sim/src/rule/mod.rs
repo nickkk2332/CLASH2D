@@ -116,15 +116,18 @@
 //! 6. **Destroyed subjects.** When an entity is removed, the kernel
 //!    calls [`RuleState::forget`] with its handle.
 //!
-//! # What is not here yet
+//! # Timers and queries
 //!
-//! - Timers: `after`, `every` and `cancel_timer` are compiled and kept,
-//!   and report [`reason::TIMERS_UNAVAILABLE`] when they run. A rule's
-//!   own `every` is read and kept ([`EocDef::every`]); nothing
-//!   schedules it. Package K7.
-//! - Queries: `for_each` over a query is kept as written and reports
-//!   [`reason::QUERIES_UNAVAILABLE`]; a value source over a query in an
-//!   argument is the expression field's and gives null. Package K6.
+//! - Timers (05 §10.4, §13.4): `after` and `every` hand the host a
+//!   [`TimerSet`] ([`RuleHost::set_timer`]); the simulation keeps a
+//!   [`TimerRecord`] with a [`Continuation`] in the [`RuleState`] and
+//!   runs it on its owner's clock, through [`RuleSet::resume_timer`].
+//!   A rule's own `every` is a timer too, run by
+//!   [`RuleSet::run_recurring`]. A host without timers refuses with
+//!   [`reason::TIMERS_UNAVAILABLE`].
+//! - Queries (05 §11): `for_each` over a query is compiled by the data
+//!   layer ([`Items::Compiled`]) and run through the expression host,
+//!   whose `query` the simulation answers (`clash_sim::query`).
 //! - The world's verbs are package K8's.
 //!
 //! # Messages and choices
@@ -151,6 +154,7 @@ mod interp;
 pub mod reason;
 mod state;
 pub mod testing;
+mod timer;
 mod tree;
 mod value;
 
@@ -174,6 +178,11 @@ pub use state::{
     EffectRoots, EffectSite, Occurrence, PendingChoice, RuleSet, RuleState, RunRecord,
     StoredOption, SubjectKey,
 };
+pub use timer::{
+    Continuation, MAX_MISSED_RUNS, TimerBody, TimerPlan, TimerRecord, TimerSet, TimerState, Timers,
+    WhileAway, stagger,
+};
+pub(crate) use timer::{properties as timer_properties, timer_wake};
 pub use tree::{
     Arg, Ask, AskOption, AskOptions, Block, Call, Effect, EffectKind, Emit, Items, Target, Timer,
     TimerKind,

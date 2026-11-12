@@ -206,6 +206,8 @@ pub struct RuleState {
     choices: BTreeMap<ChoiceId, PendingChoice>,
     /// How many choices have been put: the number of the next.
     next_choice: u64,
+    /// Every timer and continuation (05 §10.4, §13.4).
+    pub(crate) timers: super::Timers,
     #[serde(skip)]
     pub(crate) running: Running,
 }
@@ -215,7 +217,8 @@ impl_state_hash!(RuleState {
     records,
     groups,
     choices,
-    next_choice
+    next_choice,
+    timers
 });
 
 impl RuleState {
@@ -273,6 +276,12 @@ impl RuleState {
         self.attached.remove(&key);
         self.records.retain(|(_, have), _| *have != Some(key));
         self.choices.retain(|_, choice| choice.who != key);
+        self.timers.forget(key);
+    }
+
+    /// Every timer (05 §10.4).
+    pub fn timers(&self) -> &super::Timers {
+        &self.timers
     }
 
     /// The number of the next choice: no two choices of one simulation
@@ -564,6 +573,23 @@ impl RuleSet {
     pub fn with_roots(mut self, roots: Vec<EffectRoots>) -> RuleSet {
         self.roots = roots;
         self
+    }
+
+    /// Every compiled list of effects of the definition a site names,
+    /// in which the effect at the site may be found.
+    pub(crate) fn blocks_at(&self, site: &EffectSite) -> Vec<&Block> {
+        let mut blocks: Vec<&Block> = Vec::new();
+        if site.def_type == EOC_TYPE {
+            if let Some(rule) = self.lookup(&site.def).and_then(|id| self.rule(id)) {
+                blocks.extend(rule.effects.block());
+                blocks.extend(rule.otherwise.block());
+            }
+        } else {
+            for roots in &self.roots {
+                roots(&self.defs, &site.def_type, &site.def, &mut blocks);
+            }
+        }
+        blocks
     }
 
     /// The `ask` written at a place in the definitions, if it is still

@@ -556,7 +556,7 @@ fn a_random_function_cannot_be_used_where_purity_is_required() {
   { "type": "trap", "id": "a", "energy": 1, "shown": { "call": "lucky" } },
   { "type": "trap", "id": "b", "energy": 1,
     "shown": { "pick": { "entities": { "around": "self" } } } },
-  { "type": "trap", "id": "c", "energy": { "pick": { "entities": { "around": "self" } } } }
+  { "type": "trap", "id": "c", "energy": { "pick": { "list": "[1, 2, 3]" } } }
 ]"#,
             ),
         ],

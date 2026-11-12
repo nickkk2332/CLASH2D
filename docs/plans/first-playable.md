@@ -21,10 +21,10 @@ actions that call `hit`.
 |----|-------|------|------------|--------|
 | E1 | Component store and core components | M | K1, K7 | beta |
 | E2 | Attributes, pools, tracks | M | E1, K5 | beta |
-| E3 | Traits | M | E2 | todo |
+| E3 | Traits | M | E2 | beta |
 | E4 | Bodies | L | E2, T3 | beta |
 | E5 | Hits and wounds | L | E4, W12 | beta |
-| E6 | Body editing | M | E4 | todo |
+| E6 | Body editing | M | E4 | beta |
 | E7 | Minds and vital state | M | E1, T4 | beta |
 | E8 | Items and holds | L | E5 | beta |
 | E9 | Templates and creation | L | E3, E6, E8 | beta |
@@ -197,6 +197,26 @@ Done when
 - Removing a trait removes exactly what it added.
 - Durations behave across unloading as 03 §9 specifies.
 
+Beta: built in `clash_sim::traits` (decisions D-630 to D-635). Built: the
+`trait` definition type with every field of 06 §5 and the new
+`while_unloaded`; the `Traits` component, the eighth, with instances by
+giver; `add_trait`, `remove_trait`, `withdraw` and the verbs `add_trait`
+and `remove_trait`; stacking `none`, `refresh` and `stack` with `max`;
+groups; dormancy by `while`; modifiers and pool rates under the instance
+as source, tags and attached rules recorded and taken back exactly;
+durations as wake-ups on the holder's clock, taken off the timeline when
+it leaves the world and put back when it returns, `pause` or `elapse`;
+the hooks `trait_adding` and `trait_removing`, the events `trait_added`,
+`trait_removed` and `trait_expired`, five properties and five reasons;
+`look` reported with the events; the traits of items and postures given
+and withdrawn with them; plain traits in `mods/core/data/traits.json`.
+Tests in `crates/clash-sim/tests/traits.rs`, a property test among them.
+`on_apply` and `on_remove` run against the simulation. Stubbed: what
+`grants`, `abilities`, `senses`, `bound`, `goals`, `weights` and `seat`
+give; applying `channels` (read by `traits::channel_change`); keeping
+`while` current until reactive expressions; no `.scn` test script and
+no benchmark.
+
 ### E4 — Bodies
 
 **Spec** 06 §6.1–6.4 · **Size** L
@@ -310,6 +330,20 @@ Done when
   test).
 - Scenario `reshaping_touch`: a rule adds, removes, replaces and
   re-materials parts of a target.
+
+Beta: built in `clash_sim::body::edit` and `clash_sim::reshape`
+(decisions D-636 to D-639), over the kernel's body wiring (D-550). Built:
+every edit of 06 §6.5 as a function of the body model, and `add_part`,
+`replace_part`, `graft_part`, `set_layer`, `scale_part`, `scale_body`,
+`set_body_plan` and `damage_part` as verbs beside the body package's
+`heal_part`, `disable_part`, `restore_part` and `remove_part`; socket and
+name checks; the hook `body_changing` and the event `body_changed`; the
+events of 06 §7.6 for what changed, `part_detached` and items for what
+comes off, what is grasped and worn let go; nine new reasons. Tests in
+`crates/clash-sim/tests/reshape.rs`: a property test of B2, B3 and the
+tree under random edits, and `reshaping_touch`, which runs the fixture
+rule `reshapefix:apply_form` against the simulation. Stubbed: a footprint
+that follows a change of plan; a `.scn` script; no benchmark.
 
 ### E7 — Minds and vital state
 

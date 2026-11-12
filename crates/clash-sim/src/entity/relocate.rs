@@ -174,6 +174,18 @@ impl Sim {
         }
         let was_in_world = self.entities.location(id).is_some();
         self.index(id, &presence, to, cause)?;
+        // Whether it leaves the world or comes back to it: durations are
+        // taken off the timeline before it goes, and put back once it is
+        // back (03 §9).
+        let was_in = self.entities.location(id).is_some();
+        let goes_in = match to {
+            Place::At { .. } => true,
+            Place::In(container) => self.entities.location(container).is_some(),
+            Place::Stored => false,
+        };
+        if was_in && !goes_in {
+            crate::traits::leaving_world(self, id);
+        }
         self.entities.set_place(id, to);
         if to != Place::Stored {
             // Whoever gives it a place takes it off the shelf of an
@@ -191,6 +203,9 @@ impl Sim {
             self.refresh_mass(new, cause);
         }
         self.sync_clocks_under(id);
+        if !was_in && goes_in {
+            crate::traits::returned_to_world(self, id, cause);
+        }
         if self.entities.location(id).is_none() {
             self.drop_wakes(id);
             for inside in self.entities.contents_deep(id) {

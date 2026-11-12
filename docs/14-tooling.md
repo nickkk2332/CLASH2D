@@ -192,12 +192,32 @@ thread count, start from a profile and a seed, and build a small world.
 
 The console's host over the real simulation (`clash_save::host::GameHost`,
 D-581) carries out `use`, `gen`, `eval`, `assert`, `advance`, `until`,
-`step`, `save`, `load`, `hash`, `hash <subsystem>`, `check`, `inspect` and
-`size`, and adds the commands below, as registrations with help. The
-other built-in commands are refused with `console.not_built` until what
-they need is built; a verb, `do` and `run` are refused with
-`console.rules_unbound` until the rule runtime is bound to the simulation,
-at one function of the host that is the seam for it.
+`step`, `save`, `load`, `hash`, `hash <subsystem>`, `check`, `inspect`,
+`size`, `do`, `run` and one command for each verb, and adds the commands
+below, as registrations with help. The other built-in commands are
+refused with `console.not_built` until what they need is built.
+
+What reaches the rule runtime (decision D-687):
+
+- **A verb of the engine** is called with its arguments by name, `self`
+  bound to the `as` subject, else the active character; a word where the
+  verb wants an id names the definition (qualified, or else in `core`).
+  It prints what the verb gave, and `as=` names it if it is a subject.
+  A verb the simulation does not carry out is refused with
+  `rule.verb_unbound`.
+- **A rule used as a verb**, **`do`** and **`run`** are compiled as a
+  list of one effect against the loaded definitions
+  (`Sim::compile_effects`), in a scope that binds `self` (as above),
+  `here` (the cursor) and `global`, and run with `Sim::run_effects`. A
+  rule used as a verb is given its arguments as locals; `run <rule>
+  with={…}` gives `with` as JSON, whose texts are expressions in that
+  scope. Bare names in the effect resolve in the engine's namespace
+  only: a mod's variable is written `self.var('core:weariness')`. An
+  effect typed at the console cannot set a timer or ask a choice that
+  waits, since neither can be found again among the definitions.
+- What they change is caused by the debug cause and is not in the input
+  log: the transcript replays it, as it does `damage` and `field`
+  (D-585). Events are delivered and tickets reconciled afterwards.
 
 | Command | Does |
 |---------|------|
