@@ -15,7 +15,7 @@
 //! | [`MindState`], [`AiState`] | The `mind_state` component; what the simulation keeps for every mind | [`state`] |
 //! | [`think_due`], [`prompt`] | When minds think, choosing, pursuing | [`think`] |
 //! | [`MindCosts`], [`recheck_routes`], [`away_from`] | Navigation for minds, the beta subset | [`nav`] |
-//! | Properties, verbs, events | What rules and expressions see | [`props`], [`events`] |
+//! | Properties, verbs, events | What rules and expressions see | [`properties`], [`verbs`], [`events`] |
 //!
 //! # Belief, not truth
 //!
