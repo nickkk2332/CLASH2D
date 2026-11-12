@@ -1117,6 +1117,9 @@ sealed volume with compartments and pressure (11 §10).
 | `leak` | How fast a sealed area's held temperature moves toward the outside (11 §4.6). Stored as written. |
 | `ambience` | How it looks inside (12 §6.4). Stored as written. |
 | `rules` | Rule ids or inline rules (05 §9.3). The world carries them as written for the rule runtime. |
+| `gravity` | Gravity inside every area of the kind, in place of the stratum's: a number scales the stratum's (0 is weightlessness, 3 a crushing pull), a list of three numbers replaces it (m/s² east, south and up). An area's own override is laid over it. Not finite: a load error. |
+| `light` | A source of light every area of the kind carries at the middle of its shape, written as an element's (`{ "intensity", "radius"? }`, 15 §3.3). A negative intensity darkens; the light of a cell never goes below zero. An area's own light takes its place. |
+| `suppresses` | Tags of abilities suppressed in every entity inside an area of the kind (08 §6.2). The world carries them for the simulation. |
 
 An area with a clock is how scene S10 works. Occupants, bodies and processes
 inside it are re-parented to the area's clock on entry and back on exit.

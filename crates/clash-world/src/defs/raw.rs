@@ -752,6 +752,79 @@ pub struct AreaKindDef {
     /// inline rules. Carried as written until the rule runtime exists.
     #[serde(default)]
     pub rules: Vec<serde_json::Value>,
+    /// Gravity inside every area of this kind, in place of the
+    /// stratum's (02 §8.3): a number scales the stratum's gravity (0 is
+    /// weightlessness), a list of three numbers replaces it (m/s² east,
+    /// south and up). An area's own override is laid over it.
+    #[serde(default)]
+    pub gravity: Option<GravitySpec>,
+    /// A source of light every area of this kind carries at the middle
+    /// of its shape (15 §3.3), as an element writes one: a negative
+    /// intensity darkens.
+    #[serde(default)]
+    pub light: Option<LightSpec>,
+    /// Tags of abilities suppressed in everyone inside an area of this
+    /// kind (08 §6.2). The world carries them for the simulation.
+    #[serde(default)]
+    pub suppresses: Vec<String>,
+}
+
+/// Gravity an `area_kind` sets, as mods write it: a number is a scale
+/// of the stratum's gravity, a list of three numbers an acceleration in
+/// m/s² east, south and up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GravitySpec {
+    /// The stratum's gravity times this.
+    Scale(Real),
+    /// This acceleration, whatever the stratum says.
+    Vector([Real; 3]),
+}
+
+// Read by the kind of value written, as `EdgeSpec` is.
+impl<'de> Deserialize<'de> for GravitySpec {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<GravitySpec, D::Error> {
+        struct GravityVisitor;
+
+        impl<'de> Visitor<'de> for GravityVisitor {
+            type Value = GravitySpec;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a scale of the stratum's gravity, or a list of three accelerations")
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<GravitySpec, E> {
+                Ok(GravitySpec::Scale(Real::of(value)))
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, value: i64) -> Result<GravitySpec, E> {
+                Ok(GravitySpec::Scale(Real::from_i64(value)))
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, value: u64) -> Result<GravitySpec, E> {
+                Ok(GravitySpec::Scale(Real::from_i64(
+                    i64::try_from(value).unwrap_or(i64::MAX),
+                )))
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<GravitySpec, A::Error> {
+                let mut out = [Real::ZERO; 3];
+                for (at, slot) in out.iter_mut().enumerate() {
+                    *slot = seq
+                        .next_element::<Real>()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(at, &self))?;
+                }
+                if seq.next_element::<serde::de::IgnoredAny>()?.is_some() {
+                    return Err(serde::de::Error::invalid_length(4, &self));
+                }
+                Ok(GravitySpec::Vector(out))
+            }
+        }
+
+        deserializer.deserialize_any(GravityVisitor)
+    }
 }
 
 /// The raw definitions of the world model, each with its qualified id

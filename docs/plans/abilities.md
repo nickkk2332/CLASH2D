@@ -20,9 +20,9 @@ the rest of this plan. Build it early.
 | A2 | Abilities: definition, sources, rank, parameters | L | E3, E9 | beta |
 | A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | beta |
 | A4 | Modes, upkeep, charging | M | A3 | beta |
-| A5 | Dormancy, suppression, loss | M | A2, A1 | todo |
-| A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | todo |
-| A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | todo |
+| A5 | Dormancy, suppression, loss | M | A2, A1 | done |
+| A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | in progress |
+| A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | in progress |
 | A8 | Snapshots, journals, restoring as generated | L | E8, W6, K7, W8 | todo |
 | A9 | Relays, appraisal, field movement, force at range, contest bias | M | S5, C7, W16 | todo |
 | A10 | Reference abilities | L | A4, A6, A7, A8, A9, C12 | todo |
@@ -160,6 +160,13 @@ Done when
 - Scenario `null_field`: entering a suppressing area ends a running mode;
   leaving restores the ability but not the mode.
 - A rule on `ability_suppressing` resists.
+
+Done (decision D-770; 08 §12.1). Suppression by `suppress_abilities`
+(for a time on the owner's own time, or until `restore_abilities`), by
+a trait's `suppresses` and by an area kind's `suppresses`; the hook
+`ability_suppressing`, where a cancel resists for as long as the
+suppression lasts. Tests: `crates/clash-sim/tests/abilities_world.rs`;
+the test script `scenarios/powers/null_field.scn`.
 
 ### A6 — Anchored areas and ambient overrides
 

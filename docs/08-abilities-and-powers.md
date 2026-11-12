@@ -1,8 +1,8 @@
 # 08 — Abilities and Powers
 
-Status: design complete. Sections 3 to 6.1 and 7.1 are built (packages
-A1 to A4); what was built, and where it differs from the design, is in
-section 12.1.
+Status: design complete. Sections 3 to 6 and 7.1 to 7.3 are built
+(packages A1 to A7); what was built, and where it differs from the
+design, is in section 12.1.
 Implementation plan: [plans/abilities.md](plans/abilities.md).
 Serves scenes S3, S10, S15, S16, S17 and S20 of [00-vision.md](00-vision.md),
 and supplies the means for most of the rest.
@@ -1037,6 +1037,40 @@ no windup. A mode that should take time is a grant whose action calls
 raises a variable, and `Cancel` (a command) or `cancel_action` (an
 effect) lets the hold go, which counts as release.
 
+**Suppression** (section 6.2; package A5, decision D-770). Three things
+suppress an instance, each by the tags of the abilities it names (an
+ability is reached when it has any of them):
+
+| Suppressor | Lasts | Made by |
+|------------|-------|---------|
+| `effect` | Until its `for` runs out on the owner's own time, or `restore_abilities` lifts it | `suppress_abilities`; with no `tags`, every ability |
+| `trait` | While the owner has a trait instance whose definition lists `suppresses`, and it is not dormant | Giving the trait (06 §5) |
+| `area` | While the owner is inside an area whose kind lists `suppresses` (02 §8.3) | The owner moving in, or the area being made, moved or reshaped over it |
+
+Before a suppression takes hold of an instance, the hook
+`ability_suppressing` runs once for that instance and that suppressor;
+a handler that cancels makes it **resist**, and that suppressor passes
+it over for as long as it lasts. A suppressed instance confers nothing
+(invariant A2): its modes end (`how` `suppressed`), what it conferred is
+taken back, what is bound to end on suppression ends (section 7.3), and
+its grants and modes are refused with `ability.suppressed`. When its
+last suppressor lifts (`ability_restored`) it confers again with its
+rank, cooldowns and bindings that did not end as they were; its modes
+stay off. An instance gained while a suppression lasts is suppressed
+from the start, before it confers anything (`ability_suppressed`
+follows `ability_granted`). Its `state` reads `suppressed` while it is
+active and suppressed. What suppresses each instance and what it
+resisted are kept in it, and the imposed suppressions in the owner's
+`Abilities` (save layout 13), so nothing is derived.
+
+Dormancy (section 6.1) is as A1 to A4 built it: an ability's `while` is
+kept current, and a trait's where everything it reads names its events.
+The rounds of re-evaluation are counted afresh by each pump.
+
+**Loss** (section 6.3). Revoking an instance, or losing its last
+source, ends its modes (`revoked`, `lost`) and everything bound to it
+(section 7.3, invariant A3), then takes back what it conferred.
+
 **Events**, each with the owner as `self`:
 
 | Event | Fields |
@@ -1045,8 +1079,10 @@ effect) lets the hold go, which counts as release.
 | `ability_revoked` | `ability`, `how` (string: `revoked`, `lost`, `moved`) |
 | `ability_dormant`, `ability_active` | `ability` |
 | `rank_changed` | `ability`, `old`, `new` (int) |
+| `ability_suppressed` | `ability`, `by` (string: `effect`, `trait`, `area`, what took hold first) |
+| `ability_restored` | `ability` |
 | `mode_started` | `ability`, `mode` (string) |
-| `mode_ended` | `ability`, `mode`, `how` (string: `ended`, `empty`, `dormant`, `revoked`, `lost`, `rank`, `moved`) |
+| `mode_ended` | `ability`, `mode`, `how` (string: `ended`, `empty`, `dormant`, `suppressed`, `revoked`, `lost`, `rank`, `moved`) |
 | `ability_used` | `ability`, `action` (string), `cost` (map of each pool's or item's qualified id to what was spent, overdraw included) |
 | `ability_refused` | `ability`, `action`, `reason` (string, the code), `message` (string) |
 
@@ -1057,6 +1093,7 @@ effect) lets the hold go, which counts as release.
 | `ability_using` | `ability`, `action` (string); `params` (map of name to value); `cost` (map of qualified id to amount) | Change `params` (each held to its type again) and `cost` (an amount of zero or more), for this use; cancel |
 | `ability_granting` | `ability`, `source` (`rule`) | Cancel. Raised by `grant_ability` only |
 | `ability_revoking` | `ability` | Cancel. Raised by `revoke_ability` only, for an ability held |
+| `ability_suppressing` | `ability`; `by` (string: `effect`, `trait`, `area`); `source` (any: the area for `area`, the trait's qualified id for `trait`, null for `effect`) | Cancel: the ability resists that suppression while it lasts |
 
 **Verbs:**
 
@@ -1068,6 +1105,8 @@ effect) lets the hold go, which counts as release.
 | `use_ability` | `who: entity`, `ability: id<ability>`, `action: id<action>?`, `params: any?` (a map) | `bool`, whether it started; when not, `ability_refused` says why |
 | `start_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`, true |
 | `end_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`, true |
+| `suppress_abilities` | `who: entity`, `tags: list<string>?` (left out: every ability), `for: real?` (seconds of `who`'s own time; left out: until lifted) | `int`, how many of its abilities it suppresses now |
+| `restore_abilities` | `who: entity`, `tags: list<string>?` | `int`, how many imposed suppressions were lifted: those naming any of `tags`, or naming none, or all with no `tags` |
 
 **Commands** (03 §4.4): `UseAbility { entity, ability, action, params }`
 and `SetMode { entity, ability, mode, on }`.
@@ -1080,7 +1119,9 @@ id<ability>, action: id<action>?)` (`string?`, the code of the reason a
 use would be refused now, null if it would not). The first four change
 with `ability_granted` and `ability_revoked`. On the kind `ability`:
 `rank` (`int`, changed by `rank_changed`), `owner` (`entity?`),
-`state` (`string?`, by `ability_dormant` and `ability_active`), `def`
+`state` (`string?`: `active`, `dormant` or `suppressed`; by
+`ability_dormant`, `ability_active`, `ability_suppressed` and
+`ability_restored`), `def`
 (`id<ability>?`), `id` (`string?`), `tags` (`list<string>?`),
 `mode_on(mode: string)` (`bool`, by `mode_started` and `mode_ended`),
 `cooldown(action: id<action>)` (`real`, seconds left, 0 when ready), and
@@ -1099,8 +1140,10 @@ seconds), `ability.condition` (`ability`, `action`),
 (`cost`), `ability.mode_unknown`, `ability.mode_on`, `ability.mode_off`
 (`ability`, `mode`), `ability.upkeep` (`ability`, `mode`, `pool`),
 `ability.rank_from_track` (`ability`), `ability.bad_rank` (`rank`),
-`ability.bad_argument` (`arg`), `ability.not_registered`. The faults of
-05 §7.5: `reactive.rounds`, `reactive.unwatchable`.
+`ability.bad_argument` (`arg`), `ability.not_registered`,
+`ability.suppressed` (`ability`, `by`), `ability.bad_duration`
+(`seconds`). The faults of 05 §7.5: `reactive.rounds`,
+`reactive.unwatchable`.
 
 **For the application and the AI layer.** `ability::options(sim,
 entity)` lists every grant of every ability held, with its action, its
@@ -1110,9 +1153,7 @@ asks one. Both read the owner's own state and the grant's `if` in its
 mind. A choice is carried out with `UseAbility` and `SetMode` (or the
 verbs, from a rule).
 
-**Not built.** Suppression, `ability_suppressing` and
-`restore_abilities` (A5); bindings, `bound`, `ability.bound(name)`,
-`summon`, `conjure`, `dispel`, `binding_ending` (A7); snapshots and
+**Not built.** Snapshots and
 journals (A8); relays, appraisal, moving fields, contest bias (A9); the
 reference abilities of section 8 (A10). Costs from a store (16 §5).
 Variables on the kind `ability` (`ability.var.x`). A rule attached by an

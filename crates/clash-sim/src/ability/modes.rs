@@ -101,6 +101,9 @@ pub fn start_mode(
                 .with("ability", name.as_str()),
         );
     }
+    if let Some(by) = current.suppressed_by().first() {
+        return Err(super::suppress::suppressed(&name, *by));
+    }
     let rank = super::rank(sim, entity, &current);
     if let Some(needed) = ability.modes[mode].at_rank
         && rank < needed

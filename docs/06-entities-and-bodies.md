@@ -464,7 +464,10 @@ once for each stack (08 §4.2): a list of
 each naming one ability or a tag (not both) and a parameter; `add`
 defaults to 0 and `mul` to 1. An ability that names nothing, both or
 neither of `ability` and `tag`, and an `add` or `mul` that is not finite
-are load errors.
+are load errors. `suppresses` (a list of tags; package A5, decision
+D-770) suppresses the holder's abilities that carry any of them while
+the instance lasts and is not dormant (08 §6.2): a null collar, a
+dampener.
 
 **Durations** are wake-ups on the holder's clock (03 §3.4), so they speed
 and slow with it and move with it from clock to clock. When the holder

@@ -9,6 +9,8 @@
 //! | `use_ability` | `who: entity`, `ability: id<ability>`, `action: id<action>?`, `params: map?` | `bool`: whether the action started | [`use_ability`](super::use_ability); a refusal raises `ability_refused` |
 //! | `start_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`: true | [`start_mode`](super::start_mode) |
 //! | `end_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`: true | [`end_mode`](super::end_mode) |
+//! | `suppress_abilities` | `who: entity`, `tags: list<string>?`, `for: real?` | `int`: how many abilities it suppresses now | [`suppress_abilities`](super::suppress_abilities) |
+//! | `restore_abilities` | `who: entity`, `tags: list<string>?` | `int`: how many suppressions were lifted | [`restore_abilities`](super::restore_abilities) |
 //!
 //! An argument missing or of the wrong kind is refused with
 //! `ability.bad_argument`.
@@ -73,6 +75,34 @@ fn action(sim: &Sim, call: &VerbCall<'_>, index: usize) -> Result<Option<ActionD
             .map(Some)
             .ok_or_else(|| bad_argument("action", "an `action` definition")),
         _ => Err(bad_argument("action", "an `action` definition")),
+    }
+}
+
+/// An optional list of texts: tags.
+fn tags(call: &VerbCall<'_>, index: usize, name: &str) -> Result<Option<Vec<String>>, Reason> {
+    match arg(call, index) {
+        Value::Null => Ok(None),
+        Value::List(items) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| bad_argument(name, "a list of texts"))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some),
+        _ => Err(bad_argument(name, "a list of texts")),
+    }
+}
+
+/// An optional number.
+fn real(call: &VerbCall<'_>, index: usize, name: &str) -> Result<Option<clash_core::Real>, Reason> {
+    match arg(call, index) {
+        Value::Null => Ok(None),
+        value => value
+            .as_number()
+            .map(Some)
+            .ok_or_else(|| bad_argument(name, "a number")),
     }
 }
 
@@ -307,6 +337,63 @@ pub fn verbs() -> Vec<VerbDef> {
                 let mode = text(call, 2, "mode")?;
                 super::end_mode(sim, who, def, mode, cause)?;
                 Ok(Value::Bool(true))
+            },
+        },
+        VerbDef {
+            name: "suppress_abilities",
+            build: |registry| {
+                spec(
+                    registry,
+                    "suppress_abilities",
+                    "Suppresses an entity's abilities that have any of `tags`, or every one (08 §6.2): each confers nothing, its modes end (`how` `suppressed`), what was bound to end on suppression ends, and its grants cannot be used, until the suppression lifts. Abilities gained while it lasts are suppressed too. Before it takes hold of each ability the hook `ability_suppressing` runs, and a handler may resist. It lasts `for` seconds of the entity's own time, or until `restore_abilities`. Returns how many of its abilities it suppresses now. Refused with `ability.bad_duration`.",
+                    &[
+                        WHO,
+                        (
+                            "tags",
+                            "list<string>",
+                            true,
+                            "The tags of the abilities it suppresses: any of them. Left out, every ability.",
+                        ),
+                        (
+                            "for",
+                            "real",
+                            true,
+                            "How long it lasts, in seconds of the entity's own time. Left out, until it is lifted.",
+                        ),
+                    ],
+                )
+            },
+            run: |sim, call, cause| {
+                let who = entity(sim, call, 0, "who")?;
+                let tags = tags(call, 1, "tags")?;
+                let seconds = real(call, 2, "for")?;
+                let count = super::suppress_abilities(sim, who, tags, seconds, cause)?;
+                Ok(Value::Int(i64::from(count)))
+            },
+        },
+        VerbDef {
+            name: "restore_abilities",
+            build: |registry| {
+                spec(
+                    registry,
+                    "restore_abilities",
+                    "Lifts early the suppressions `suppress_abilities` imposed on an entity that name any of `tags`, or every one (08 §12). What a trait of its or an area it is inside suppresses lasts as long as they do. Abilities no longer suppressed confer again (`ability_restored`); their modes stay off. Returns how many suppressions were lifted.",
+                    &[
+                        WHO,
+                        (
+                            "tags",
+                            "list<string>",
+                            true,
+                            "Lifts only the suppressions that name any of these tags, or that name none. Left out, every one.",
+                        ),
+                    ],
+                )
+            },
+            run: |sim, call, cause| {
+                let who = entity(sim, call, 0, "who")?;
+                let tags = tags(call, 1, "tags")?;
+                let count = super::restore_abilities(sim, who, tags.as_deref(), cause)?;
+                Ok(Value::Int(i64::from(count)))
             },
         },
     ]

@@ -65,7 +65,7 @@ pub(super) fn inst_of(sim: &Sim, entity: EntityId, def: AbilityId) -> Option<&Ab
     sim.components.get::<Abilities>(entity)?.of(def)
 }
 
-fn inst_mut(sim: &mut Sim, entity: EntityId, number: u64) -> Option<&mut AbilityInst> {
+pub(super) fn inst_mut(sim: &mut Sim, entity: EntityId, number: u64) -> Option<&mut AbilityInst> {
     abilities_mut(sim, entity)?.by_number_mut(number)
 }
 
@@ -414,6 +414,7 @@ pub fn grant(
             if let Some(inst) = inst_mut(sim, entity, number) {
                 inst.state = if holds { State::Active } else { State::Dormant };
             }
+            let suppressed = super::suppress::on_gained(sim, entity, number, cause);
             settle(sim, entity, number, cause);
             let rank = inst(sim, entity, number).map_or(0, |inst| super::rank(sim, entity, inst));
             notify(
@@ -425,6 +426,9 @@ pub fn grant(
                     .with("rank", i64::from(rank)),
                 cause,
             );
+            if suppressed {
+                super::suppress::announce(sim, entity, number, cause);
+            }
         }
         return Ok(number);
     }
@@ -449,11 +453,14 @@ pub fn grant(
             modes: Vec::new(),
             cooldowns: Vec::new(),
             applied: Vec::new(),
+            suppressed_by: Vec::new(),
+            resisted: Vec::new(),
         });
     let holds = watch_while(sim, entity, number);
     if let Some(inst) = inst_mut(sim, entity, number) {
         inst.state = if holds { State::Active } else { State::Dormant };
     }
+    let suppressed = super::suppress::on_gained(sim, entity, number, cause);
     settle(sim, entity, number, cause);
     let rank = inst(sim, entity, number).map_or(0, |inst| super::rank(sim, entity, inst));
     notify(
@@ -465,6 +472,9 @@ pub fn grant(
             .with("rank", i64::from(rank)),
         cause,
     );
+    if suppressed {
+        super::suppress::announce(sim, entity, number, cause);
+    }
     Ok(number)
 }
 
@@ -936,7 +946,10 @@ fn move_numbers(sim: &mut Sim, from: EntityId, to: EntityId, numbers: &[u64], ca
         let holds = watch_while(sim, to, *number);
         if let Some(inst) = inst_mut(sim, to, *number) {
             inst.state = if holds { State::Active } else { State::Dormant };
+            inst.suppressed_by.clear();
+            inst.resisted.clear();
         }
+        let _ = super::suppress::on_gained(sim, to, *number, cause);
         settle(sim, to, *number, cause);
         let rank = inst(sim, to, *number).map_or(0, |inst| super::rank(sim, to, inst));
         let source = moved.sources.first().map_or("rule", |source| source.name());

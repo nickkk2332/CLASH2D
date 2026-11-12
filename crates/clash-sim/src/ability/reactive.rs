@@ -847,5 +847,11 @@ pub(crate) fn settle(sim: &mut Sim) -> bool {
             tell(sim, watcher, value);
         }
     }
-    !sim.events.is_empty() || !sim.ability_rt.reactive.stale.is_empty()
+    let more = !sim.events.is_empty() || !sim.ability_rt.reactive.stale.is_empty();
+    if !more {
+        // The pump ends here unless something else raises: the rounds
+        // are counted afresh by the next one.
+        sim.ability_rt.reactive.rounds = 0;
+    }
+    more
 }

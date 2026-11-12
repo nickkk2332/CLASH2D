@@ -209,7 +209,7 @@ pub fn property(sim: &Sim, property: PropertyId, subject: Handle, args: &[Value]
     Some(match prop {
         Prop::Rank => Value::Int(i64::from(super::rank(sim, owner, inst))),
         Prop::Owner => sim.subject_value(Subject::Entity(owner)),
-        Prop::State => Value::from(inst.state().name()),
+        Prop::State => Value::from(inst.state_name()),
         Prop::Def => sim
             .exprs
             .registry()
