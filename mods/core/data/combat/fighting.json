@@ -130,5 +130,48 @@
         "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
       { "id": "impact", "time": 0,
         "do": [ { "strike": { "attack": "palms", "target": "$target", "effort": "$effort" } } ] },
-      { "id": "recover", "time": "400 ms" } ] }
+      { "id": "recover", "time": "400 ms" } ] },
+
+  { "//": "A punch at what stands in a cell beside the actor: a door, a wall, a crate. What the element is not affected by comes back into the fist (07 §6.3).",
+    "type": "action", "id": "smash", "name": "Smash",
+    "uses": { "arm": 1 },
+    "params": {
+      "at":     "cell",
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $at) < 2",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "fist": {
+        "with":   { "part": "hand", "surface": "fist" },
+        "energy": "(self.attr.strength ?? 10) * 8" } },
+    "phases": [
+      { "id": "windup", "time": "250 ms", "cancel": true },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "at": "$at", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "300 ms" } ] },
+
+  { "//": "A cut turned right round with a blade held in the hand: whoever stands within reach is met in turn, and each takes what passed the one before (07 §6.4). Aimed at a part, it is aimed at that part of each.",
+    "type": "action", "id": "whirl", "name": "Whirl",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "part":   { "type": "part?", "default": "null" },
+      "effort": { "type": "real", "default": "1" } },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["strike"],
+    "attacks": {
+      "round": {
+        "with":   { "held": "blade", "surface": "edge" },
+        "energy": "(self.attr.strength ?? 10) * 5",
+        "push":   0.02,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" },
+        "arc":    { "sweep": 360, "max": 8, "through": true } } },
+    "phases": [
+      { "id": "windup", "time": "450 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
+      { "id": "impact", "time": 0,
+        "do": [ { "strike": { "attack": "round", "target": "$target", "part": "$part", "effort": "$effort" } } ] },
+      { "id": "recover", "time": "500 ms" } ] }
 ]

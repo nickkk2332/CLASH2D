@@ -12,8 +12,10 @@
 //! at the energy the body model predicts; save and load in the middle of
 //! a strike's phases and replay change nothing.
 //!
-//! `own_fist` and `one_cut` are Rust tests: the console host has not
-//! landed on the build branch.
+//! `own_fist` and `one_cut` are Rust tests: the console host has landed,
+//! but it refuses verbs, `do` and `run` (`console.rules_unbound`), so a
+//! test script can neither spawn a person from a template nor start an
+//! action.
 
 mod common;
 
@@ -659,6 +661,70 @@ fn one_cut() {
 }
 
 #[test]
+fn the_bundled_smash_comes_back_into_the_hand_and_whirl_cuts_all_round() {
+    // `smash`: a strength of 125 puts 1 kJ of fist into concrete.
+    let (mut sim, people) = row(59, &["Ada"]);
+    let ada = people[0];
+    let at = common::at(11, 10);
+    let wall = common::wall(&sim);
+    debug(
+        &mut sim,
+        DebugCommand::SetElement {
+            loc: at,
+            layer: Layer::Block,
+            state: wall.raw(),
+        },
+    );
+    set_strength(&mut sim, ada, 125.0);
+    sim.drain_events();
+    let params = vec![(
+        "at".to_owned(),
+        sim.subject_value(Subject::Loc(at)).to_stored(),
+    )];
+    act(&mut sim, ada, "smash", params);
+    run_for(&mut sim, 700 * MS);
+    let told = sim.drain_events();
+    assert_eq!(faults(&told), Vec::<String>::new());
+    let landed = named(&told, "strike_landed");
+    assert_eq!(landed.len(), 1);
+    assert_eq!(field(landed[0], "returned"), Real::of(1000.0));
+    assert_eq!(named(&told, "strike_recoiled").len(), 1);
+    assert!(!sim.components().body.get(ada).unwrap().wounds().is_empty());
+
+    // `whirl`: three round a swordsman, met in turn, each taking what
+    // passed the one before.
+    let mut sim = common::sim_over(Arc::clone(&DEFS), 61);
+    let swordsman = spawn(&mut sim, "Ada", common::on(10, 10));
+    let ring = [
+        spawn(&mut sim, "Bram", common::on(11, 10)),
+        spawn(&mut sim, "Cora", common::on(10, 11)),
+        spawn(&mut sim, "Dov", common::on(9, 10)),
+    ];
+    sim.pump();
+    arm(&mut sim, swordsman, "core:knife");
+    let head = part_value(&sim, ring[0], "head");
+    sim.drain_events();
+    let params = vec![
+        ("target".to_owned(), entity_value(&sim, ring[0])),
+        ("part".to_owned(), head),
+    ];
+    act(&mut sim, swordsman, "whirl", params);
+    run_for(&mut sim, 1_000 * MS);
+    let told = sim.drain_events();
+    assert_eq!(faults(&told), Vec::<String>::new());
+    let landed = named(&told, "strike_landed");
+    assert_eq!(landed.len(), 3, "each of the three is met");
+    for pair in landed.windows(2) {
+        assert!(
+            (field(pair[1], "energy").get() - field(pair[0], "passed").get() * 0.98).abs() < 1e-9
+        );
+    }
+    for who in ring {
+        assert!(layers(&sim, who, "head")[0] > 0);
+    }
+}
+
+#[test]
 fn a_punch_to_an_unarmoured_head_wounds_and_the_blood_drains() {
     let (mut sim, ada, bram) = city(13);
     let head = part_value(&sim, bram, "head");
@@ -944,6 +1010,222 @@ fn a_target_that_does_not_perceive_its_attacker_is_hit_where_aimed() {
     // Between equals, about half land on the mark.
     assert!(aware_on_mark < punches, "{aware_on_mark}");
     assert!(aware_on_mark > 0, "{aware_on_mark}");
+}
+
+// ---- C5: push ----------------------------------------------------------------
+
+fn set_strength(sim: &mut Sim, who: EntityId, value: f64) {
+    let strength = sim
+        .stat_defs()
+        .unwrap()
+        .attribute_id("core:strength")
+        .unwrap();
+    sim.set_attr_base(who, strength, Some(Real::of(value)), Cause::DEBUG)
+        .unwrap();
+}
+
+fn mass(sim: &Sim, who: EntityId) -> f64 {
+    sim.components().body.get(who).unwrap().mass().get()
+}
+
+#[test]
+fn an_ordinary_shove_staggers() {
+    // 250 J at full effort, 95 % of it a push: 237.5 J into some 75 kg,
+    // 2.5 m/s, between `combat.stagger_at` and `combat.launch_at`.
+    let (mut sim, ada, bram) = city(41);
+    sim.drain_events();
+    let params = vec![("target".to_owned(), entity_value(&sim, bram))];
+    act(&mut sim, ada, "shove", params);
+    run_for(&mut sim, 400 * MS);
+    let told = sim.drain_events();
+    assert_eq!(faults(&told), Vec::<String>::new());
+    let staggered = named(&told, "staggered");
+    let all: Vec<&str> = told.iter().map(SimEvent::name).collect();
+    assert_eq!(staggered.len(), 1, "{all:?}");
+    assert!(about(staggered[0], bram));
+    let speed = field(staggered[0], "speed").get();
+    let expected = (2.0 * 250.0 * 0.95 / mass(&sim, bram)).sqrt();
+    assert!(
+        (speed - expected).abs() < 1e-9,
+        "{speed} against {expected}"
+    );
+    let severity = field(staggered[0], "severity").get();
+    assert!((severity - (expected - 0.5) / 2.5).abs() < 1e-9);
+    assert!(named(&told, "launched").is_empty());
+    assert!(sim.truth().cosmos().body_of(bram).is_none());
+}
+
+#[test]
+fn a_shove_into_a_wall_launches_the_target_who_is_hurt_by_the_wall() {
+    // Bram stands on the sidewalk at (15, 9), with the building's east
+    // wall at (14, 9) behind him; Ada, very strong, shoves him west
+    // from (16, 9).
+    let (mut sim, ada, bram) = city(43);
+    debug(
+        &mut sim,
+        DebugCommand::MoveEntity {
+            entity: ada,
+            to: Place::at(cell(16, 9)),
+        },
+    );
+    debug(
+        &mut sim,
+        DebugCommand::MoveEntity {
+            entity: bram,
+            to: Place::at(cell(15, 9)),
+        },
+    );
+    let wall = sim
+        .truth()
+        .cosmos()
+        .grid(GRID)
+        .unwrap()
+        .element(CellPos::new(14, 9, 0), Layer::Block)
+        .unwrap();
+    assert!(!wall.is_none(), "the building's wall stands at (14, 9)");
+    set_strength(&mut sim, ada, 1700.0);
+    let weight = mass(&sim, bram);
+    sim.drain_events();
+    let params = vec![("target".to_owned(), entity_value(&sim, bram))];
+    act(&mut sim, ada, "shove", params);
+    run_for(&mut sim, 3_000 * MS);
+    let told = sim.drain_events();
+    assert_eq!(faults(&told), Vec::<String>::new());
+    let all: Vec<&str> = told.iter().map(SimEvent::name).collect();
+    let launched = named(&told, "launched");
+    assert_eq!(launched.len(), 1, "{all:?}");
+    let speed = field(launched[0], "speed").get();
+    let energy = 1700.0 * 25.0 * 0.95;
+    assert!(
+        (speed - (2.0 * energy / weight).sqrt()).abs() < 1e-6,
+        "{speed}"
+    );
+    // The world carried him into the wall: the blow was the world's, and
+    // what it did to him arrived as hits after it.
+    let impact = told
+        .iter()
+        .position(|event| event.name() == "body_impact")
+        .unwrap_or_else(|| panic!("{all:?}"));
+    let hurt = told
+        .iter()
+        .skip(impact)
+        .any(|event| event.name() == "hit_landed" && about(event, bram));
+    assert!(hurt, "{all:?}");
+    // He landed, and is down.
+    assert!(
+        named(&told, "landed")
+            .iter()
+            .any(|event| about(event, bram))
+    );
+    assert!(sim.truth().cosmos().body_of(bram).is_none());
+    let prone = sim
+        .defs()
+        .lookup::<clash_sim::movement::PostureDef>("core:prone")
+        .unwrap();
+    assert_eq!(clash_sim::movement::posture_of(&sim, bram), Some(prone));
+}
+
+#[test]
+fn a_target_in_the_air_takes_all_of_a_push() {
+    // Bram is thrown straight up; a light blow with a push that would
+    // move nobody standing (0.5 m/s at most) is added to his flight.
+    let (mut sim, people) = row(47, &["Ada", "Bram"]);
+    let (ada, bram) = (people[0], people[1]);
+    let weight = mass(&sim, bram);
+    let r = Real::of;
+    let body = clash_world::Body::of_mass(
+        clash_world::BodyOwner::Entity(bram),
+        GRID,
+        [r(11.5), r(10.5), r(0.5)],
+        [r(0.0), r(0.0), r(6.0)],
+        Real::of(weight),
+        Cause::DEBUG,
+    );
+    let flying = sim.world(|ctx| ctx.launch(body)).unwrap();
+    sim.drain_events();
+    let before = sim.truth().cosmos().body(flying).unwrap().vel;
+    let energy = 2.0;
+    strike_with(
+        &mut sim,
+        ada,
+        "test_ram",
+        bram,
+        None,
+        &[
+            ("energy", Value::Real(Real::of(energy))),
+            ("push", Value::Real(Real::ONE)),
+        ],
+    );
+    let told = sim.drain_events();
+    assert_eq!(faults(&told), Vec::<String>::new());
+    let launched = named(&told, "launched");
+    assert_eq!(launched.len(), 1);
+    let added = launched[0]
+        .body
+        .field("added")
+        .and_then(|value| value.plain().and_then(clash_core::Value::as_bool));
+    assert_eq!(added, Some(true));
+    let speed = (2.0 * energy / weight).sqrt();
+    assert!(speed < 0.5, "below what moves anyone standing");
+    let after = sim.truth().cosmos().body(flying).unwrap().vel;
+    // East, the way the blow went.
+    assert!(
+        after[0].get() > before[0].get() + speed * 0.99,
+        "{before:?} {after:?}"
+    );
+}
+
+#[test]
+fn bar_fight() {
+    // 07 §7 and 02 §12.2: a person thrown at some 600 m/s carries about
+    // 14 MJ into a concrete wall at hundreds of megapascals. The wall
+    // gives way and the energy left carries the body on through it.
+    let (mut sim, ada, bram) = city(53);
+    debug(
+        &mut sim,
+        DebugCommand::MoveEntity {
+            entity: ada,
+            to: Place::at(cell(16, 9)),
+        },
+    );
+    debug(
+        &mut sim,
+        DebugCommand::MoveEntity {
+            entity: bram,
+            to: Place::at(cell(15, 9)),
+        },
+    );
+    set_strength(&mut sim, ada, 670_000.0);
+    sim.drain_events();
+    let params = vec![("target".to_owned(), entity_value(&sim, bram))];
+    act(&mut sim, ada, "shove", params);
+    run_for(&mut sim, 3_000 * MS);
+    let told = sim.drain_events();
+    assert_eq!(faults(&told), Vec::<String>::new());
+    let all: Vec<&str> = told.iter().map(SimEvent::name).collect();
+    assert_eq!(named(&told, "launched").len(), 1, "{all:?}");
+    // The wall failed because of the impact, and he went through it.
+    let impact = told
+        .iter()
+        .position(|event| event.name() == "body_impact")
+        .unwrap_or_else(|| panic!("{all:?}"));
+    let broken = told
+        .iter()
+        .skip(impact)
+        .any(|event| event.name() == "element_destroyed");
+    assert!(broken, "{all:?}");
+    let hurt = told
+        .iter()
+        .skip(impact)
+        .any(|event| event.name() == "hit_landed" && about(event, bram));
+    assert!(hurt, "{all:?}");
+    let x = sim
+        .truth()
+        .place(bram)
+        .and_then(Place::loc)
+        .map(|loc| loc.cell.x)
+        .unwrap();
+    assert!(x < 14, "he is beyond the wall, at x = {x}");
 }
 
 // ---- save, load and replay --------------------------------------------------

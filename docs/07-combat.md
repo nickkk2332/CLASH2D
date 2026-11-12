@@ -182,7 +182,8 @@ The `strike` effect resolves one attack against one target:
 A strike at a cell rather than a creature skips steps 3 to 5 and delivers
 its whole energy to the element as a packet (02 §12): the cell's block,
 else its fixture, else its floor, by `WorldEdit::damage_along` in the
-direction from the attacker. An element it does not affect returns all of
+direction from the attacker. Reach applies to the cell as to anyone
+standing in it; out of reach, `strike_missed` is raised with no target. An element it does not affect returns all of
 it as recoil (section 6.3); what passes an element it destroys is spent
 there.
 
@@ -1069,7 +1070,18 @@ from its cause: for a strike, the attacker.
 | `combat.launch_at` | Metres a second: a push at least this fast launches its target. Default 3. |
 
 The functions `contest` and `odds` are stated in section 4.1, the effect
-`strike` in section 3.4. Not built yet: the `defence` and `cutscene`
+`strike` in section 3.4.
+
+The `core` mod (`mods/core/data/combat/fighting.json`) bundles the window
+kind `strike`, the contest `melee`, the functions `fighting(who)` and
+`evasion(who, from)`, and the actions `punch` (fist), `kick` (heel),
+`slash` (a held blade's edge), `stab` (its point), `shove` (both palms,
+nearly all push, `knock_down` prone), `smash` (a fist at a cell) and
+`whirl` (a held blade's edge in a sweep of 360 degrees with `through`),
+each with a windup that opens a `strike` window, an impact and a
+recovery. `mods/core/data/life/surfaces.json` gives the humanoid's hands
+a `palm`, its feet a `sole` and its head a `brow`, and
+`mods/core/data/world/severing.json` flags `cut` as severing. Not built yet: the `defence` and `cutscene`
 blocks, `projectile`, `strike_preview` and the other functions, queries
 and properties listed above, swings meeting the world, contact surfaces
 (section 6.5), reach in height (section 4.3) and `closing_energy`

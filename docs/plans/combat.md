@@ -20,7 +20,7 @@ With packages C1 to C8, C11 and C12 the first playable build of
 | C2 | Surfaces and delivery | L | E5, E8, C1 | beta |
 | C3 | Aim | M | C2, S4 | beta |
 | C4 | Defences | L | C3, T5 | todo |
-| C5 | Push | M | C2, E10 | todo |
+| C5 | Push | M | C2, E10 | beta |
 | C6 | Clashes | L | C4, C5, W15 | todo |
 | C7 | Grips and throws | L | C4, C5, T6 | todo |
 | C8 | Takedowns | M | C2, T6 | todo |
@@ -94,7 +94,8 @@ Done when
 
 Beta (decisions D-641, D-642): built and tested in
 `crates/clash-sim/tests/combat.rs`, with `own_fist` and `one_cut` as Rust
-tests (the console host had not landed). Stubbed: clash and defences are
+tests (the console host refuses verbs and `do` until the rule runtime is
+bound to it, so a test script cannot spawn from a template or act). Stubbed: clash and defences are
 steps that find none (C6, C4); `with` a gripped thing is refused (C7);
 swings meeting the world (`swing`, review row "Swings meet the world"),
 contact surfaces (`the_pit`) and `closing_energy` are not built; `height`,
@@ -152,6 +153,15 @@ Done when
 - Scenario `bar_fight`: a punch launches a target through a wall; the
   wall's failure and the target's injuries both come from the impact.
 - A braced defender is pushed by the unbraced share only.
+
+Beta (decision D-644): push speed, `knockback_incoming`, stagger, launch
+through the world's bodies and back through movement's landing,
+`knock_down`, the settings, and a target in flight taking all of a push
+are built; `bar_fight` and a shove into a wall are Rust tests in
+`crates/clash-sim/tests/combat.rs`. Stubbed: bracing waits for defences
+(C4: `brace` is 0, and the formula is tested on its own); of the review
+row "In the air", a leaping attacker's strike with the leap's speed waits
+for `leap` and `closing_energy`.
 
 ### C6 — Clashes
 

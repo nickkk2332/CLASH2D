@@ -989,15 +989,34 @@ fn strike_cell(
     let surface = striking.surface;
     let intensity = intensity_of(&surface, energy);
     let packet = DamagePacket::new(surface.kind, energy, intensity, striking.cause);
-    let dir = point_of(sim, striking.actor).and_then(|(from, p)| {
+    let offset = point_of(sim, striking.actor).and_then(|(from, _)| {
         let delta = sim.truth().cosmos().delta(from, cell)?;
-        let _ = p;
-        unit([
+        Some([
             Real::from_i64(i64::from(delta.x)) * CELL_M,
             Real::from_i64(i64::from(delta.y)) * CELL_M,
             Real::from_i64(i64::from(delta.z)) * STOREY_M,
         ])
     });
+    // Step 2: reach, to the cell as to anyone standing in it.
+    let reach = striking
+        .eval(sim, None, |attack| attack.reach.as_ref())
+        .unwrap_or(striking.surface.reach);
+    if !(reach.is_finite() && reach >= Real::ZERO) {
+        return Err(bad_number("reach", reach));
+    }
+    let within = offset.is_some_and(|v| (norm(v) - CELL_M).max(Real::ZERO) <= reach);
+    if !within {
+        let payload = striking
+            .payload(STRIKE_MISSED)
+            .with("why", "reach")
+            .with("margin", FieldValue::Null);
+        emit(sim, striking, payload);
+        return Ok(StrikeTally {
+            put_in: energy,
+            ..StrikeTally::default()
+        });
+    }
+    let dir = offset.and_then(unit);
     let outcome = sim
         .world(|ctx| {
             ctx.edit(striking.cause)
