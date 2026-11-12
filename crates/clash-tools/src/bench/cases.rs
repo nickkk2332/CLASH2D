@@ -99,6 +99,11 @@ pub const BENCHES: &[Bench] = &[
         run: crowd_of_fifty,
     },
     Bench {
+        name: "perception.party_sweep",
+        what: "a sweep of sight by a directly controlled character: its view, map memory and frame",
+        run: party_sweep,
+    },
+    Bench {
         name: "expr.condition",
         what: "a condition of about ten operations over a person and locals, through the runner",
         run: condition,
@@ -742,6 +747,37 @@ fn crowd_of_fifty(kit: &mut Kit) -> Result<Measured, String> {
         }
     }
     Ok(Measured::new(best, note))
+}
+
+fn party_sweep(kit: &mut Kit) -> Result<Measured, String> {
+    let mut sim = city_sim(kit)?;
+    let me = create(&mut sim, Place::at(sim_street(20)))?;
+    give(&mut sim, me, "core:human_sight")?;
+    perception::set_facing(&mut sim, me, Real::of(90.0)).map_err(|reason| reason.to_string())?;
+    debug(
+        &mut sim,
+        DebugCommand::SetControl {
+            entity: me,
+            control: clash_sim::Control::Direct,
+        },
+    )?;
+    // The first sweep fills the light cache and the map memory.
+    let started = std::time::Instant::now();
+    perception::search(&mut sim, me, Real::ONE).map_err(|reason| reason.to_string())?;
+    let first = started.elapsed().as_nanos() as f64;
+    let ns = best_ns(5, 4, || {
+        let swept = perception::search(&mut sim, me, Real::ONE);
+        let _ = perception::drain_frames(&mut sim);
+        swept
+    });
+    let memory = perception::party::map_memory(&sim, me).map_or(0, |memory| memory.len());
+    Ok(Measured::new(
+        ns,
+        format!(
+            "again from where it stands; the first sweep {}; {memory} cells remembered",
+            super::show_ns(first)
+        ),
+    ))
 }
 
 fn condition(kit: &mut Kit) -> Result<Measured, String> {
