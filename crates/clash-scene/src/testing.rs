@@ -36,7 +36,17 @@
 //! The registry also holds the rest of the simulation's kinds of
 //! subject and the kernel's and the world's events, as the simulation
 //! registers them (`clash_sim::KERNEL_EVENTS`, `WORLD_EVENTS`), so that
-//! `show` definitions compile against it as they do in the game.
+//! `show` definitions compile against it as they do in the game; and
+//! every property, function and event of the kernel, the items, the
+//! movement package and the bodies whose name the table above does not
+//! take, so that the bundled screens, which read what a character
+//! holds and the parts of its body, compile against it too.
+//!
+//! [`FakeHost::over`] is a host over another registry: the one a load
+//! with the simulation's own types made, for tests of screens as the
+//! game compiles them. It answers every property by its name from what
+//! a test says ([`FakeHost::set`]), a property with an argument by the
+//! argument as text, or by a definition's qualified id.
 //!
 //! Its world holds three entities: Mara (1) and Jonas (2), who are the
 //! party, Mara being `view`, and a stranger (3) whom Mara has seen.
@@ -49,6 +59,7 @@
 //! their own articles. Once a test says who reads
 //! ([`FakeHost::read_as`]), that one is "you": `verb` agrees with it and
 //! the pronouns are the second person's. Until then nobody is.
+//! `list(xs)` writes out what each is called: `a, b and c`.
 //!
 //! # A stand-in for perception
 //!
@@ -85,10 +96,13 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use clash_core::{EntityId, Real, Rng, Tick};
+use clash_data::Defs;
 use clash_expr::{
     DefRef, EventSpec, FunctionId, FunctionSpec, Handle, Host, KindId, KindSpec, PropertyId,
     PropertySpec, Registry, RuntimeWarning, Type, Value,
 };
+use clash_sim::stats::AttributeDef;
+use clash_sim::template::{CharacterSpec, CreationSession, Selection, TemplateDef};
 use clash_sim::{CAUSE_SUBJECTS, KERNEL_EVENTS, SimEvent, WORLD_EVENTS};
 use clash_world::{CellPos, Location};
 
@@ -198,6 +212,11 @@ pub fn registry() -> Registry {
             .add_event(spec)
             .expect("the simulation's events have distinct names");
     }
+    // The rest of the engine's, where the fake has not taken the name:
+    // what the bundled screens read of a character's holdings and body.
+    clash_sim::register_engine(&mut registry);
+    clash_sim::body::props::register(&mut registry)
+        .expect("the bodies' kinds and properties fit beside the fake ones");
     registry
 }
 
@@ -265,6 +284,8 @@ fn lock<T>(state: &Mutex<T>) -> MutexGuard<'_, T> {
 #[derive(Clone, Debug)]
 pub struct FakeHost {
     world: Arc<Mutex<World>>,
+    /// The registry again, outside the lock, to name definitions by.
+    names: Option<Arc<Registry>>,
 }
 
 impl Default for FakeHost {
@@ -290,6 +311,7 @@ impl FakeHost {
             loc: kind(KIND_LOC),
         };
         let host = FakeHost {
+            names: Some(Arc::new(registry.clone())),
             world: Arc::new(Mutex::new(World {
                 registry: Some(registry),
                 kinds: Some(kinds),
@@ -364,6 +386,7 @@ impl FakeHost {
             ("items", Value::list([item("Crowbar", 3.0)])),
         ]);
         let host = FakeHost {
+            names: None,
             world: Arc::new(Mutex::new(World {
                 hearing: HEARING_DEFAULT,
                 ..World::default()
@@ -372,6 +395,55 @@ impl FakeHost {
         host.set_view(mara.clone());
         host.set_party(Value::list([mara, jonas]));
         host
+    }
+
+    /// A host over a registry a test brings: the one a load with the
+    /// simulation's own types made, so that screens are compiled and
+    /// read as they are in the game. Its world is empty: `view` is null
+    /// and `party` is empty until the test says otherwise. Items are
+    /// entities, and pools are read through `pools`, as in the
+    /// simulation.
+    ///
+    /// # Panics
+    ///
+    /// If the registry has no `entity` or `loc` kind: a mistake in a
+    /// test.
+    pub fn over(registry: Registry) -> FakeHost {
+        let kind = |name: &str| registry.kind_id(name);
+        let entity = kind(KIND_ENTITY).expect("the registry has entities");
+        let kinds = Kinds {
+            entity,
+            item: entity,
+            pool: kind("pools").unwrap_or(entity),
+            loc: kind(KIND_LOC).expect("the registry has cells"),
+        };
+        let host = FakeHost {
+            names: Some(Arc::new(registry.clone())),
+            world: Arc::new(Mutex::new(World {
+                registry: Some(registry),
+                kinds: Some(kinds),
+                hearing: HEARING_DEFAULT,
+                ..World::default()
+            })),
+        };
+        host.set_party(Value::list([]));
+        host
+    }
+
+    /// The handle of a subject of a kind, by the kind's name, with this
+    /// number: a part, a wound, the stats of an entity.
+    ///
+    /// # Panics
+    ///
+    /// If the host's registry has no such kind: a mistake in a test.
+    pub fn subject(&self, kind: &str, number: u64) -> Handle {
+        let world = lock(&self.world);
+        let id = world
+            .registry
+            .as_ref()
+            .and_then(|registry| registry.kind_id(kind))
+            .unwrap_or_else(|| panic!("the fake host's registry has no kind `{kind}`"));
+        Handle::new(id, number)
     }
 
     /// The registry the host answers by, if it has one: give a clone to
@@ -687,11 +759,21 @@ impl Host for FakeHost {
             .get(&(subject, name))
             .cloned()
             .unwrap_or_default();
-        // A property with an argument is kept as a map by the argument.
-        match args.first().and_then(Value::as_str) {
+        // A property with an argument is kept as a map by the argument:
+        // a text as it is, a definition's id by its qualified id.
+        let key = match args.first() {
+            Some(Value::Id(id)) => world
+                .registry
+                .as_ref()
+                .and_then(|registry| registry.def_name(*id))
+                .map(str::to_owned),
+            Some(other) => other.as_str().map(str::to_owned),
+            None => None,
+        };
+        match key {
             Some(key) => value
                 .as_map()
-                .and_then(|map| map.get(key))
+                .and_then(|map| map.get(key.as_str()))
                 .cloned()
                 .unwrap_or_default(),
             None => value,
@@ -741,6 +823,17 @@ impl Host for FakeHost {
         };
         match (name.as_str(), args) {
             (FN_NAME | "the" | "a", [value]) => called(value).0,
+            ("list", [Value::List(items)]) => {
+                let names: Vec<String> = items
+                    .iter()
+                    .map(|item| called(item).0.as_str().unwrap_or_default().to_owned())
+                    .collect();
+                Value::text(match names.split_last() {
+                    None => String::new(),
+                    Some((only, [])) => only.clone(),
+                    Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+                })
+            }
             ("they", [value]) => person(value, "you", "they"),
             ("them", [value]) => person(value, "you", "them"),
             ("their", [value]) => person(value, "your", "their"),
@@ -773,8 +866,8 @@ impl Host for FakeHost {
 
     fn warn(&mut self, _warning: RuntimeWarning) {}
 
-    fn def_name(&self, _id: DefRef) -> Option<&str> {
-        None
+    fn def_name(&self, id: DefRef) -> Option<&str> {
+        self.names.as_deref()?.def_name(id)
     }
 }
 
@@ -790,6 +883,161 @@ struct Shelf {
     can_load: bool,
     requests: Vec<AppRequest>,
     refused: Vec<AppService>,
+    templates: Vec<AppEntry>,
+    maker: Option<Maker>,
+}
+
+/// What the fake application makes characters with: the definitions,
+/// the session in progress and what was finished.
+#[derive(Debug)]
+struct Maker {
+    defs: Arc<Defs>,
+    session: Option<CreationSession>,
+    name: String,
+    seed: i64,
+    finished: Option<Finished>,
+}
+
+/// A character the player finished making: what `new_game` would make
+/// the player's character from.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Finished {
+    /// The complete spec.
+    pub spec: CharacterSpec,
+    /// The name the player typed.
+    pub name: String,
+    /// The seed the player chose.
+    pub seed: i64,
+}
+
+impl Maker {
+    /// `app.creation`: the session as the simulation gives it, with the
+    /// `name` and `seed` the player typed and the `attributes` the
+    /// templates and the options chosen give, each a map of `name` and
+    /// `value`.
+    fn value(&self) -> Value {
+        let Some(session) = &self.session else {
+            return Value::Null;
+        };
+        let mut entries: BTreeMap<String, Value> = session
+            .to_value(&self.defs)
+            .as_map()
+            .map(|map| {
+                map.iter()
+                    .map(|(key, value)| (key.to_string(), value.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        entries.insert("name".to_owned(), Value::text(&self.name));
+        entries.insert("seed".to_owned(), Value::Int(self.seed));
+        let attributes = clash_sim::template::resolve(&self.defs, session.spec())
+            .map(|resolved| {
+                resolved
+                    .attributes
+                    .iter()
+                    .map(|(id, base)| {
+                        let table = self.defs.registry::<AttributeDef>();
+                        let name = table.get(*id).name.as_ref().map_or_else(
+                            || table.name(*id).to_owned(),
+                            |name| name.raw().to_owned(),
+                        );
+                        Value::map([("name", Value::text(name)), ("value", Value::Real(*base))])
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        entries.insert("attributes".to_owned(), Value::list(attributes));
+        Value::map(
+            entries
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.clone())),
+        )
+    }
+
+    /// The service `creation`, as the application answers it. The name
+    /// and the seed are kept whether or not a session is in progress,
+    /// for the game the next `new_game` starts.
+    fn serve(&mut self, request: &AppRequest) -> Result<(), String> {
+        let op = request.text("op").unwrap_or_default();
+        let value = request.args.get("value").cloned().unwrap_or_default();
+        match op {
+            "begin" => {
+                let template = request
+                    .text("template")
+                    .ok_or("`begin` needs the id of the `template` to make a character from")?;
+                let session = CreationSession::new(&self.defs, [template])
+                    .map_err(|reason| reason.to_string())?;
+                self.session = Some(session);
+                self.finished = None;
+                return Ok(());
+            }
+            "name" => {
+                value
+                    .as_str()
+                    .ok_or("a name is a text")?
+                    .clone_into(&mut self.name);
+                return Ok(());
+            }
+            "seed" => {
+                self.seed = match value {
+                    Value::Int(seed) => seed,
+                    _ => return Err("a seed is a whole number".to_owned()),
+                };
+                return Ok(());
+            }
+            _ => {}
+        }
+        let defs = Arc::clone(&self.defs);
+        let session = self
+            .session
+            .as_mut()
+            .ok_or("no character is being made: `begin` one first")?;
+        match op {
+            "select" => {
+                let key = request
+                    .text("key")
+                    .ok_or("`select` needs the choice's `key`")?;
+                let selection = selection_of(&value)
+                    .ok_or("a selection is a list of ids, a number or a text")?;
+                session
+                    .select(&defs, key, selection)
+                    .map_err(|reason| reason.to_string())
+            }
+            "clear" => {
+                let key = request
+                    .text("key")
+                    .ok_or("`clear` needs the choice's `key`")?;
+                session.clear(&defs, key);
+                Ok(())
+            }
+            "finish" => {
+                let spec = session.finish(&defs).map_err(|reason| reason.to_string())?;
+                self.finished = Some(Finished {
+                    spec,
+                    name: self.name.clone(),
+                    seed: self.seed,
+                });
+                Ok(())
+            }
+            other => Err(format!("`{other}` is not something `creation` does")),
+        }
+    }
+}
+
+/// A value from a screen as a selection: a list of ids, a number or a
+/// text.
+fn selection_of(value: &Value) -> Option<Selection> {
+    match value {
+        Value::List(items) => items
+            .iter()
+            .map(|item| item.as_str().map(str::to_owned))
+            .collect::<Option<Vec<_>>>()
+            .map(Selection::Options),
+        Value::Int(number) => Some(Selection::Number(Real::from_i64(*number))),
+        Value::Real(number) => Some(Selection::Number(*number)),
+        Value::Str(text) => Some(Selection::Text(text.to_string())),
+        _ => None,
+    }
 }
 
 /// An application that is not one. See the [module](self)
@@ -846,8 +1094,52 @@ impl FakeApp {
                 can_load: true,
                 requests: Vec::new(),
                 refused: Vec::new(),
+                templates: Vec::new(),
+                maker: None,
             })),
         }
+    }
+
+    /// The same application, making characters from the `template`
+    /// definitions of a load: `app.templates` lists them, in order of
+    /// qualified id, and the service `creation` works on a session over
+    /// them as the creation-session contract says (12 §10.4), with
+    /// `app.creation` the session's value with the `name` and `seed`
+    /// typed and the `attributes` its templates and options give.
+    pub fn making(self, defs: Arc<Defs>) -> FakeApp {
+        {
+            let mut shelf = lock(&self.shelf);
+            let table = defs.try_registry::<TemplateDef>();
+            shelf.templates = table
+                .into_iter()
+                .flat_map(|table| table.iter().map(move |(id, def)| (table.name(id), def)))
+                .map(|(qualified, def)| {
+                    let qualified = qualified.to_owned();
+                    let name = def
+                        .name
+                        .as_ref()
+                        .map_or_else(|| qualified.clone(), |name| name.raw().to_owned());
+                    let kind = def.kind.clone().unwrap_or_default();
+                    entry(&qualified, &name, &kind, "")
+                })
+                .collect();
+            shelf.maker = Some(Maker {
+                defs,
+                session: None,
+                name: String::new(),
+                seed: 1,
+                finished: None,
+            });
+        }
+        self
+    }
+
+    /// The character the player finished making, if one was.
+    pub fn finished(&self) -> Option<Finished> {
+        lock(&self.shelf)
+            .maker
+            .as_ref()
+            .and_then(|maker| maker.finished.clone())
     }
 
     /// Every service the application carried out, in order.
@@ -895,6 +1187,17 @@ impl AppState for FakeApp {
         lock(&self.shelf).can_load
     }
 
+    fn creation(&self) -> Value {
+        lock(&self.shelf)
+            .maker
+            .as_ref()
+            .map_or(Value::Null, Maker::value)
+    }
+
+    fn templates(&self) -> Vec<AppEntry> {
+        lock(&self.shelf).templates.clone()
+    }
+
     fn service(&mut self, request: &AppRequest) -> Result<(), String> {
         let mut shelf = lock(&self.shelf);
         if shelf.refused.contains(&request.service) {
@@ -904,6 +1207,10 @@ impl AppState for FakeApp {
             ));
         }
         match request.service {
+            AppService::Creation => match shelf.maker.as_mut() {
+                Some(maker) => maker.serve(request)?,
+                None => return Err("the fake application makes no characters".to_owned()),
+            },
             AppService::Save => {
                 if !shelf.can_save {
                     return Err("the scenario does not allow saving now".to_owned());

@@ -44,7 +44,7 @@ fn defs(extra: bool) -> Arc<Defs> {
                        "glyph": { "ch": "x", "fg": "material" } } ]"#,
             )],
         );
-        loader.load_mods(&["core", "ui", "extra"])
+        loader.load_mods(&["core", "ui", "core_ui", "extra"])
     } else {
         loader.load_profile("default")
     };
@@ -263,7 +263,7 @@ fn a_game_saved_in_the_middle_of_a_collapse_and_a_walk_goes_on_the_same() {
     assert_eq!(read.app, [1, 2, 3]);
     assert_eq!(read.profile, "default");
     let mods: Vec<&str> = read.mods.iter().map(|stamp| stamp.id.as_str()).collect();
-    assert_eq!(mods, ["core", "ui"]);
+    assert_eq!(mods, ["core", "ui", "core_ui"]);
     assert_eq!(read.fingerprint, defs.fingerprint());
     assert_eq!(read.tick, first.now());
     assert_eq!(read.state_hash, mid.total);

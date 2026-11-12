@@ -826,6 +826,8 @@ on top. Look mode and the map pickers show them.
 | `cursor_sight` | What the view model knows of the cell: `seen`, `remembered` or `unknown` |
 | `cursor_distance` | How far the cursor is from the followed character, in metres |
 | `cursor_target` | What the reader calls the perceived thing there (`name`, 05 §4.6); empty if there is none |
+| `cursor_things` | What the reader calls every perceived thing in the cell, the topmost first, written out as a list (`Jonas and a knife`); empty if there is none |
+| `cursor_ground` | What the view model holds of the cell: its fixture, block and floor as last seen, top first, joined by semicolons, each by its definition's id without the namespace and its state's name after a comma (`door, open; boards`), with `several things` first where items lie in a pile; empty for a cell not known |
 | `cursor_reach` | While a parameter is asked for: `yes` if the action's `requires` (03 §6.1) holds with the place as that parameter, as the actor believes; `no` if it does not; empty where there is nothing to say |
 | `cursor_why` | With `cursor_reach` at `no`: the action's `fail_text` |
 | `cursor_advice` | What the parameter's `check` (03 §6.3) says of the place; empty if it is sound |
@@ -1534,7 +1536,7 @@ The set is fixed. Widgets are composed and styled, not programmed.
 | `text` | `value`; `wrap` (true unless given); `align`: `left`, `centre` or `right`. May be written as a bare string. |
 | `art` | `value`: the asset file, relative to its mod, drawn as written without inline styles |
 | `list`, `table`, `tree`, `menu` | `rows` (a query or a list), how each row is shown, `on_select` and `on_activate` (UI effects, with the row as `it`), `selected` (a screen variable to keep the choice in) |
-| `list`, `tree`, `menu` | `item`: how a row from a query is shown, a text over `it`. `list` and `tree`: `empty`, shown when there are no rows. `tree`: `children`, an expression giving the rows beneath `it`. |
+| `list`, `tree`, `menu` | `item`: how a row from a query is shown, a text over `it`. `list` and `tree`: `empty`, shown when there are no rows. `tree`: `children`, an expression giving the rows beneath `it`, and `open`, `true` for its branches to start open (left out, they start closed). |
 | `table` | `columns`: each with `title`, `value` (a text over `it`, for rows from a query), `width` and `align`; `empty` |
 | `button` | `label`, `on_activate` |
 | `input`, `number`, `toggle`, `choice` | `bind` (the screen variable or preference it edits), `on_change`, `label` |
@@ -1713,8 +1715,17 @@ properties, all safe for belief:
 | `profile`, `scenario` | `app_entry?` | The ones in use |
 | `pref(id)` | `any` | A preference's value (below). `id` is the id of a `preference`, checked when mods load. |
 | `creation` | `any` | The character being made (06 §10.3, section 3.4): null while no creation session is in progress, else the map `CreationSession::to_value` gives (`templates`; `choices`, each a map of `key`, `name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`, `max`, `max_length`, `options` with `id`, `name`, `cost` and `chosen`, `parts`, `value` and `by_default`; `complete`; `problem`) with `template`, the first template's qualified id, `name`, `seed`, and `finished`, whether `new_game` will make this character. |
+| `templates` | `list<app_entry>` | The templates a character may be made from: each by its qualified `id`, its `name` and, as its `description`, its `kind` |
+| `keys(context)` | `list<map>` | What the keymap in force binds in a context (section 9.2): one map for each name a key there is given, in order of what it is called, with `name`; `label`, the `name` of the control of that name, or else the name; `doc`, the control's `doc`, or empty; and `keys`, every key given that name as a keymap writes it, joined by commas |
 | `size` | `list<int>` | The grid, as `[columns, rows]` |
 | `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
+
+**The creation session.** Where the application can say what the
+character being made would have, it adds to `app.creation`
+`attributes`: a list of maps with `name` and `value`, what the
+templates and the options chosen give. The creation screen shows them
+where it is given (section 10.7). The service `creation` (section
+10.5) changes the session.
 
 An `app_entry` has `id` (a save's file name, a qualified id), `name`,
 `description` and `state` (a word: `enabled`, `disabled`, `broken`,
@@ -1813,7 +1824,7 @@ screen's bindings (section 10.4): a text is written `"'like this'"`.
 
 | Effect | Written | Arguments |
 |--------|---------|-----------|
-| `open` | `"id"`, or an object | `screen`: the screen's id. `with`: a value for each of its parameters, by name. |
+| `open` | `"id"`, or an object | `screen`: the screen's id. `with`: by name, a value for each of its parameters, and for any of its variables (section 10.1) that should start with something else than it declares: a screen that edits something starts from what it edits. A variable is given only a value of its own kind, a flag, a number or a text. |
 | `close` | `{}` | None. Closes the top screen. |
 | `replace` | As `open` | As `open`. Closes the top screen and opens another in its place. |
 | `set` | An object | For each key, `screen.name` or `pref.id`, the value it is given. A screen variable holds a flag, a number or a text. |
@@ -1837,7 +1848,7 @@ screen's bindings (section 10.4): a text is written `"'like this'"`.
 | `set_pref` | `pref`: the preference's id. `value`. |
 | `rebind` | `context`, `key`, `name`: as a keymap writes them (section 9.2) |
 | `select_profile` | `profile`: the profile's id |
-| `creation` | `op`: `begin`, `select`, `clear`, `name`, `seed` or `finish`; `template` for `begin`; `key` for `select` and `clear`; `value` for `select`, `name` and `seed` (section 3.4) |
+| `creation` | `op`; and for the op `begin`, `template`: a template's qualified id, which begins a session over it, every choice at its default; `select`, `key`: a choice's `key`, and `value`: a list of option or part ids, a number or a text; `clear`, `key`, which puts a choice back to its default; `name` and `seed`, `value`: a text and a whole number, kept for the game; `finish`, which checks the character and keeps it for `new_game`, or is refused with the reason. A selection the choice does not take is refused, with the reason, and changes nothing. |
 | `edit_creation` | `field`, `value`: the older form of `creation`'s `name` and `seed` |
 
 A list is run in order, in the screen that asked: its expressions read
@@ -1987,7 +1998,7 @@ role the profile leaves out is found out when it is needed: the effect
 that wanted its screen fails with the reason.
 
 The bundled profile names the `ui` mod's screens: `ui:play` for `play`
-and `decision.free`, `ui:reaction`, `ui:choice`, `ui:confirm`,
+and `decision.free`, `ui:create` for `creation`, `ui:reaction`, `ui:choice`, `ui:confirm`,
 `ui:error`, `ui:notice`, `ui:pick_list`, `ui:pick_entity`, `ui:pick_cell`,
 `ui:pick_direction`, `ui:pick_number`, `ui:pick_text`, `ui:pick_multi`
 and `ui:context_menu`; its `boot_screen` is `ui:title`.
@@ -2021,21 +2032,66 @@ control `interact`, on `e` in play, opens `ui:interact`, the list of
 `view.offers_near`; the controls `bump` and `bump_ask` are what walking
 into something closed runs, by the preference `bump` (`at_once`, `ask`
 or `never`).
+
 **The play screen** (`ui:play`) is a `map_view`, the `log` beneath it
-and a status column: who the active character is, by `name(view)`, and
-two slots, `ui:play.bars` for a character's reserves and `ui:play.side`
-for anything else. Its context is `play`, and it binds no key itself:
-every key in play is a control. The `ui` mod's controls are the ten
-directions (`north` to `north_west`, `up`, `down`), which start the
-action `step` with a `dir`; `wait`, the command of that name for one
-second; `look`, which opens look mode (`ui:look`), a free cursor over
-the map with what the party knows of the place under it; `inventory`,
-`condition`, `abilities`, `map` and `journal`, which open screens that
-are empty and titled until they are built; `options`, which opens
-`ui:options`; `interact`, on `e`, which opens `ui:interact` (section
-3.7); `pause`, which opens `ui:pause`; `omniscient`, the
-development profile's view of the truth (section 3.2); and `click` and
-`click_second` (section 9.4).
+and a status column: who the active character is, by `name(view)`; the
+slot `ui:play.bars` for a character's reserves; what it holds in a
+grasp (`view.held('grasp')`, written out by `list`); the slot
+`ui:play.side` for anything else; and a line naming the keys. Its
+context is `play`, and it binds no key itself: every key in play is a
+control. The `ui` mod's controls are the ten directions (`north` to
+`north_west`, `up`, `down`), which start the action `step` with a
+`dir`; `wait`, the command of that name for one second; `look`, which
+opens look mode (`ui:look`); `inventory` and `condition`, which open
+`ui:inventory` and `ui:condition`; `abilities`, `map` and `journal`,
+which open screens that are empty and titled until they are built;
+`help`, which opens `ui:help`; `interact`, on `e`, which opens
+`ui:interact` (section 3.7); `options`, which opens `ui:options`;
+`pause`, which opens `ui:pause`; `omniscient`, the development
+profile's view of the truth (section 3.2); and `click` and
+`click_second` (section 9.4). Every screen they open is left by Esc,
+back to play.
+
+**Look mode** (`ui:look`) is a free cursor over the map, the line of
+what the party knows of the place under it, and a side panel: whether
+the place is in sight or remembered and how far it is, its ground
+(`cursor_ground`) and the things perceived there (`cursor_things`),
+all from the view model and named by the reader (section 6.3), and the
+slot `ui:look.side`.
+
+**Inventory** (`ui:inventory`) lists what the active character holds,
+wears and carries (`view.carried`): each container before what is in
+it, what is in a container indented under it, each with how it is held
+(`in hand`, `worn`, `in` its container) and, for a container, how much
+it holds of what it can (`carried_mass` of `capacity_mass`). Beside it
+is the body as a tree of the parts on the outside, each with what is
+worn over it (`view.worn_on`), and beneath, the mass carried. Enter on
+a thing opens `ui:item` with the thing, how it is held and what it is
+called: a button for each verb of the items package that applies to
+how it is held, each the action of that name, named bare as the
+walking controls name `step`, with the thing as `what`: `drop`; `wear`
+unless worn; `remove` (Take off) if worn; `stow` unless stowed;
+`put_in` (Put in), which asks which of what the character carries with
+the `pick` effect and gives it as `container`; `take_out` if stowed,
+with the character as `to`; and `give`, whose other parameters are
+asked for (`"needed"`). The `core` mod defines none of these actions
+yet: until a mod does, the simulation refuses each with its reason,
+which the log shows. The popup closes once the action is taken. The
+slot `ui:inventory.extra` is beneath the list.
+
+**Condition** (`ui:condition`) shows the active character's body as a
+tree of parts (`view.parts`, opened from the root by `attached` and
+`inside`), each with its condition as a share, its state and how many
+wounds it has; every wound (`view.wounds`) with its part, its kind, its
+state and how many layers deep it goes or that it is a stump; and the
+slots `ui:condition.pools` and `ui:condition.attributes`, which content
+fills with its reserves as bars and its attributes, as it fills
+`ui:play.bars` (`mods/core_ui/data/bars.json`), and `ui:condition.extra`.
+Everything it reads is the character's own.
+
+**Keys** (`ui:help`) lists the controls of the `play` context with
+every key bound to each, from the keymap in force (`app.keys('play')`),
+so that a key the player binds shows as it is.
 
 **Fitting** shows an assembly (16 §11): its slots, what is in each, what
 could go in each from what is at hand, and what the whole offers and draws
@@ -2050,6 +2106,62 @@ attributes, traits, and the body as a `figure` and a `tree` of parts. The
 `assemble` choice gets a part browser and a socket list. All of it is
 driven by the templates' data, so a new species with new choices needs no
 new screen.
+
+As built, `ui:create` is the screen of the role `creation`, opened from
+the new-game screen with F2 (the name `more`) for the start selected
+there, which it is given as `scenario`. With no session in progress it
+lists `app.templates`, and Enter begins one (`creation` with `begin`).
+Then it has the name and the seed, which `Roll` draws afresh from the
+one before, each passed to the session as it changes; what it is made
+from; every choice open, indented by depth, with what is chosen; the
+result, `app.creation.attributes` where the application gives them,
+and the slot `ui:create.result`; whether the character is complete or
+the session's `problem`; `Begin`, shown only while it is complete,
+which finishes it and asks for `new_game` at the start; and `Start
+over`, which picks another template to begin from. Enter on a choice
+opens `ui:create_choice` with the choice's number in `app.creation.choices`
+and its value to start from: the options of a `pick` or a `points`
+choice, each taken or put back with Enter (a pick puts the new option
+in place of the first chosen once it has its count); the parts an
+`assemble` choice allows, each with how many are chosen, Enter adding
+one and Backspace taking every one of it back; a `number` within a
+`range` choice's bounds, stepped by a tenth of them; an `input` for a
+`text`. Enter takes the number or the text. Whatever the session
+refuses opens the screen of the role `error` with the reason, and
+changes nothing. Not built: the body as a `figure` and a tree of parts
+in the result, traits, a part browser with sockets for `assemble`,
+which waits for `add_part`, and a text's `suggestions`.
+
+**Every bundled screen** of the `ui` mod, with the role a profile names
+it for, the parameters it is opened with, and its slots:
+
+| Screen | Role | Parameters | Slots | Is |
+|--------|------|------------|-------|----|
+| `ui:title` | the profile's `boot_screen` | | | New game, Continue, Options, Quit |
+| `ui:new_game` | | | | Name, seed and where to begin; F2 opens `ui:create` |
+| `ui:create` | `creation` | `scenario` | `ui:create.result` | Character creation |
+| `ui:create_choice` | | `index` | | One choice of the session, by kind |
+| `ui:options` | | | `ui:options.prefs` | Preferences and binding a key |
+| `ui:pause` | | | | Resume, save, load, options, leave |
+| `ui:load` | | | | The saved games |
+| `ui:error` | `error` | `text` | | Why a service failed |
+| `ui:play` | `play`, `decision.free` | | `ui:play.bars`, `ui:play.side` | The map, the log and the status column |
+| `ui:look` | | | `ui:look.side` | Look mode with its side panel |
+| `ui:inventory` | | | `ui:inventory.extra` | What is held, worn and carried |
+| `ui:item` | | `item`, `hold`, `name` | | What can be done with one thing |
+| `ui:condition` | | | `ui:condition.pools`, `ui:condition.attributes`, `ui:condition.extra` | The body, wounds, reserves and attributes |
+| `ui:help` | | | | The keys of play |
+| `ui:abilities`, `ui:map`, `ui:journal` | | | | Empty and titled until built |
+| `ui:context_menu` | `context_menu` | `place` | | What the second button opens; empty until built |
+| `ui:confirm` | `confirm` | `text`, `yes`, `no` | | A question |
+| `ui:pick_list` | `picker.list` | `options`, `title` | | One of a list |
+| `ui:pick_entity`, `ui:pick_cell` | `picker.entity`, `picker.cell` | `title` | | A cursor over the map |
+| `ui:pick_direction` | `picker.direction` | `title`, `value` | | One key |
+| `ui:pick_number`, `ui:pick_text` | `picker.number`, `picker.text` | `title` | | A number, a line |
+| `ui:pick_multi` | `picker.multi` | `title`, `options`, `min`, `max` | | Several of a list |
+| `ui:reaction` | `decision.reaction` | `who`, `options`, `time_left`, `time_total` | | The reaction prompt |
+| `ui:choice` | `decision.choice` | `who`, `prompt`, `options` | | The choice prompt |
+| `ui:gallery`, `ui:gallery_more` | | `who` (the second) | `ui:gallery.extra`, `ui:gallery_more.extra` | Every widget, for looking at and testing |
 
 ## 11. Frontends
 
@@ -2167,7 +2279,26 @@ load's warnings are introduced, and the summary a save is given, are
 the application's. A `message` to the
 player and a fault are written in the log by the application as they
 are reported, in the categories `message` and `fault`, and not as they
-are played; no `show` can word or pace them. The words `Yes` and `No` of the bundled confirm
+are played; no `show` can word or pace them.
+The bundled screens read what the simulation registers, and it
+registers no property for a character's vital state (06 §8.4), no
+list of the pools and attributes an entity has and no pool's
+thresholds: the screens show none of these themselves, and content
+puts its reserves and attributes into the slots `ui:play.bars`,
+`ui:condition.pools` and `ui:condition.attributes`, as the mod `core_ui` does for `core`, so that neither `core` nor `ui` needs the other.
+What a thing is called comes from the reader helpers the host answers,
+which call an item with no name of its own `something` until they name
+it by its definition; a wound's kind and an assemble choice's parts are
+shown by their qualified ids, and an element in look mode by its id
+without the namespace. The body tree grows from a body's first part
+where that is its root, and lists every part flat where it is not. The
+inventory names the item actions `drop`, `wear`, `remove`, `stow`,
+`put_in`, `take_out` and `give` bare, with the parameters `what`,
+`container` and `to`, and a mod that defines them under other
+parameters is not asked for them. Rolling a seed on the creation screen
+draws the next one from the last by a fixed rule in the screen, since
+a binding may not be random.
+The words `Yes` and `No` of the bundled confirm
 screen are that screen's, and a mod changes them by overriding it.
 How playback is paced beyond `stretch_time` and `playback_speed` is
 the engine's: that a long wait counts for two seconds, that a backlog

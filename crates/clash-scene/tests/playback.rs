@@ -846,7 +846,7 @@ fn a_show_that_is_wrong_is_reported_where_it_is_written() {
         Ok(_) => panic!("the mod should not load"),
         Err(diagnostics) => diagnostics.render(),
     };
-    for expected in ["expected a character", "`loc` has no property `block`"] {
+    for expected in ["expected a character", "`loc.block` is not safe for belief"] {
         assert!(found.contains(expected), "`{expected}` in:\n{found}");
     }
     let colour =
