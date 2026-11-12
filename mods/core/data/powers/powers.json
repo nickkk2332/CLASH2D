@@ -1,0 +1,141 @@
+[
+  { "//": "A sampler of powers (08), plain and generic, built only from mechanisms the engine has: actions, traits, pools, releases, fields and hits. Nobody has them by default; the template `power_sampler` and the trait of the same name give all five. Values are illustrative. Two pools pay for them: the `stamina` of `traits.json` and the `reserve` below.",
+    "type": "pool", "id": "reserve", "name": "Reserve",
+    "max": 100, "start": "max", "regen": 2,
+    "thresholds": [0.0, 0.25, 0.5] },
+
+  { "//": "What using the fire bolt teaches: its rank.",
+    "type": "track", "id": "pyromancy", "name": "Pyromancy", "seat": "mind",
+    "levels": "4 * $level ^ 1.5" },
+
+  { "//": "A burst of speed. While it lasts the holder has a way of moving three times as fast as walking.",
+    "type": "trait", "id": "dashing", "name": "Dashing",
+    "duration": "3 s", "stacking": "refresh",
+    "tags": ["dashing"], "look": "dashing" },
+
+  { "//": "Walking at a dash: a way of moving every creature has, whose speed is nothing unless it is dashing, so that it counts only then.",
+    "type": "movement", "id": "walk_dashing", "name": "dashing",
+    "surface": "standable",
+    "speed": "if self.trait_active('core:dashing') then 4.2 / (1 + (self.carried_mass ?? 0) / 60) else 0",
+    "step_up": 0.5,
+    "noise": 0.6,
+    "default": true },
+
+  { "//": "Held up while the shield is on: each hit comes through at two fifths of its energy.",
+    "type": "trait", "id": "shielded", "name": "Shielded",
+    "tags": ["shielded"], "look": "shielded",
+    "rules": [
+      { "on": "hit_incoming",
+        "do": [ { "modify": { "event.energy": "event.energy * 0.4" } } ] } ] },
+
+  { "//": "Gives every power of this file, for rules and the console: `add_trait to=@a trait=core:power_sampler`.",
+    "type": "trait", "id": "power_sampler", "name": "Gifted",
+    "abilities": ["dash", "force_push", "firebolt", "shield", "heal"] },
+
+  { "//": "The actions the powers start. Each takes what it needs as parameters, which the ability's grant supplies from its own numbers; tagged `power`, so that whoever offers actions can offer these through their abilities.",
+    "type": "action", "id": "dash", "name": "Dash",
+    "params": { "seconds": "real" },
+    "tags": ["power"],
+    "phases": [
+      { "id": "burst", "time": "100 ms",
+        "do": [ { "add_trait": { "to": "self", "trait": "dashing", "duration": "$seconds" } } ] } ] },
+
+  { "//": "A cone of kinetic energy let go one cell in front of the user, toward a cell: it throws whoever it reaches hard enough, and what is thrown strikes what is in its way.",
+    "type": "action", "id": "force_push", "name": "Force push",
+    "params": { "to": "cell", "energy": "real" },
+    "requires": "(dist(self, $to) ?? 0) >= 1",
+    "fail_text": "Push toward somewhere else.",
+    "tags": ["power"],
+    "phases": [
+      { "id": "gather", "time": "300 ms" },
+      { "id": "push", "time": 0,
+        "do": [ { "release": { "at": "offset(self.loc ?? $to, dir(self, $to)[0] ?? 0, dir(self, $to)[1] ?? 0) ?? $to",
+                               "kind": "impact", "energy": "$energy",
+                               "shape": "cone", "dir": "$to", "half_angle": 0.5 } } ] },
+      { "id": "recover", "time": "400 ms" } ] },
+
+  { "//": "Charged: held, it gathers a charge every quarter of a second, for up to three seconds; let go (a `Cancel`), or at the end of the three, a beam of heat goes toward the cell and fire is set where it lands, both stronger for every charge.",
+    "type": "action", "id": "firebolt", "name": "Fire bolt",
+    "params": { "to": "cell", "energy": "real", "fire": "real" },
+    "vars": { "charge": { "type": "int", "default": 0 } },
+    "requires": "(dist(self, $to) ?? 0) >= 1",
+    "fail_text": "Aim somewhere else.",
+    "tags": ["power"],
+    "phases": [
+      { "id": "charge", "time": "hold", "max": "3 s",
+        "tick": { "every": "250 ms", "do": [ { "set": { "$charge": "$charge + 1" } } ] } },
+      { "id": "loose", "time": 0,
+        "do": [
+          { "release": { "at": "offset(self.loc ?? $to, dir(self, $to)[0] ?? 0, dir(self, $to)[1] ?? 0) ?? $to",
+                         "kind": "heat", "energy": "$energy * (1 + $charge)",
+                         "shape": "beam", "dir": "$to", "radius": 0.3,
+                         "range": "dist(self, $to) ?? 1" } },
+          { "add_field": { "at": "$to", "field": "fire",
+                           "amount": "min(255, round($fire * (1 + $charge)))" } } ] },
+      { "id": "recover", "time": "300 ms" } ] },
+
+  { "//": "A touch that closes a body's open wounds and mends a share of every part.",
+    "type": "action", "id": "heal", "name": "Heal",
+    "params": { "target": "entity", "share": "real" },
+    "requires": "(dist(self, $target) ?? 99) <= 1.5",
+    "fail_text": "Get close enough to touch them.",
+    "tags": ["power"],
+    "phases": [
+      { "id": "lay_hands", "time": "1 s", "cancel": true },
+      { "id": "mend", "time": 0,
+        "do": [
+          { "for_each": "$target.wounds", "as": "wound",
+            "do": [ { "if": "$wound.state == 'open'", "then": [ { "close_wound": "$wound" } ] } ] },
+          { "for_each": "$target.parts", "as": "part",
+            "do": [ { "heal_part": { "part": "$part", "share": "$share" } } ] } ] } ] },
+
+  { "type": "ability", "id": "dash", "name": "Dash",
+    "description": "A burst of speed, paid for in stamina.",
+    "tags": ["movement"],
+    "params": { "seconds": "2 + ability.rank" },
+    "grants": [
+      { "action": "dash", "params": { "seconds": "ability.seconds" },
+        "cost": { "stamina": 25 }, "cooldown": "8 s", "intent": "escape" } ] },
+
+  { "type": "ability", "id": "force_push", "name": "Force push",
+    "description": "A cone of force that throws people.",
+    "tags": ["force"], "seat": "mind",
+    "params": { "power": "3.0e6 * 1.5 ^ (ability.rank - 1)" },
+    "grants": [
+      { "action": "force_push", "params": { "energy": "ability.power" },
+        "cost": { "reserve": 30 }, "cooldown": "5 s", "intent": "harm" } ] },
+
+  { "//": "Its rank is its track's level, and each use feeds the track.",
+    "type": "ability", "id": "firebolt", "name": "Fire bolt",
+    "description": "A bolt of heat that sets fire where it lands; held, it grows.",
+    "tags": ["elemental", "fire"], "seat": "mind",
+    "track": "pyromancy",
+    "params": { "power": "2.0e4 * 2 ^ ability.rank", "fire": "20 + 5 * ability.rank" },
+    "grants": [
+      { "action": "firebolt", "params": { "energy": "ability.power", "fire": "ability.fire" },
+        "cost": { "reserve": 20 }, "cooldown": "2 s", "intent": "harm" } ],
+    "rules": [
+      { "on": "ability_used", "if": "event.ability == 'core:firebolt'",
+        "do": [ { "advance_track": { "who": "self", "track": "pyromancy", "amount": 1 } } ] } ] },
+
+  { "type": "ability", "id": "shield", "name": "Shield",
+    "description": "Held up, it turns three fifths of every hit aside, for as long as the reserve lasts.",
+    "tags": ["protection"], "seat": "mind",
+    "params": { "drain": "5" },
+    "modes": [
+      { "id": "raised", "name": "Shield raised", "trait": "shielded",
+        "upkeep": { "reserve": "ability.drain" }, "look": "shielded" } ] },
+
+  { "type": "ability", "id": "heal", "name": "Heal",
+    "description": "A touch that closes wounds.",
+    "tags": ["healing"],
+    "params": { "share": "0.5" },
+    "grants": [
+      { "action": "heal", "params": { "share": "ability.share" },
+        "cost": { "reserve": 25 }, "cooldown": "3 s", "intent": "aid" } ] },
+
+  { "//": "Someone with every power of the sampler and the pools to pay for them: what the test scripts under `scenarios/powers` make, and what a start offers once the application offers abilities.",
+    "type": "template", "id": "power_sampler", "copy_from": "person", "name": "Gifted person",
+    "pools": ["blood", "pain", "stamina", "reserve"],
+    "abilities": ["dash", "force_push", "firebolt", "shield", "heal"] }
+]

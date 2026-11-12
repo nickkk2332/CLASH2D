@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 11;
+pub const SAVE_VERSION: u32 = 13;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -121,6 +121,16 @@ pub struct Sim {
     pub(crate) perception: PerceptionState,
     /// Not state: the tables of perception, from the definitions.
     pub(crate) perception_defs: Arc<PerceptionDefs>,
+    /// Which entity holds each ability instance, and the number the
+    /// next takes (08 §3.2).
+    pub(crate) abilities: crate::ability::AbilityIndex,
+    /// Not state: the tables of abilities and the expressions kept
+    /// current (05 §7.5).
+    pub(crate) ability_rt: crate::ability::Runtime,
+    /// What minds keep that belongs to no one mind (09 §3.3).
+    pub(crate) ai: crate::ai::AiState,
+    /// Not state: the tables of minds, from the definitions.
+    pub(crate) ai_defs: Arc<crate::ai::AiDefs>,
     /// Not state: how many strikes are being resolved inside one another
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
@@ -180,7 +190,8 @@ pub struct SimHashes {
     pub rng: Hash128,
     /// The kernel's own: events and decisions waiting, application
     /// requests, who owns which wake-up, the entities shelved with
-    /// unloaded tracts, the count of wake-ups handled.
+    /// unloaded tracts, the count of wake-ups handled, perception's and
+    /// the minds' own.
     pub kernel: Hash128,
     /// All of the above.
     pub total: Hash128,
@@ -210,6 +221,8 @@ struct SavedRef<'a> {
     wakes: &'a WakeOwners,
     steps: u64,
     perception: &'a PerceptionState,
+    abilities: &'a crate::ability::AbilityIndex,
+    ai: &'a crate::ai::AiState,
     ranged: &'a crate::combat::ranged::RangedState,
 }
 
@@ -235,6 +248,8 @@ struct Saved {
     wakes: WakeOwners,
     steps: u64,
     perception: PerceptionState,
+    abilities: crate::ability::AbilityIndex,
+    ai: crate::ai::AiState,
     ranged: crate::combat::ranged::RangedState,
 }
 
@@ -269,6 +284,8 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
+        let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
         let mut sim = Sim {
             life,
             defs,
@@ -298,6 +315,10 @@ impl Sim {
             rt,
             perception: PerceptionState::default(),
             perception_defs,
+            abilities: crate::ability::AbilityIndex::default(),
+            ability_rt,
+            ai: crate::ai::AiState::default(),
+            ai_defs,
             strike_depth: 0,
             ranged: crate::combat::ranged::RangedState::default(),
         };
@@ -702,6 +723,8 @@ impl Sim {
         self.shelf.state_hash(&mut kernel);
         kernel.write_u64(self.steps);
         self.perception.state_hash(&mut kernel);
+        self.abilities.state_hash(&mut kernel);
+        self.ai.state_hash(&mut kernel);
         // A simulation that has never fired hashes as one from before
         // shots were kept.
         if !self.ranged.is_pristine() {
@@ -762,6 +785,8 @@ impl Sim {
                 wakes: &self.wakes,
                 steps: self.steps,
                 perception: &self.perception,
+                abilities: &self.abilities,
+                ai: &self.ai,
                 ranged: &self.ranged,
             },
         )
@@ -814,6 +839,8 @@ impl Sim {
         let rt = crate::rule::Runtime::for_defs(&defs);
         let life = Sim::life_for(&defs, cosmos.defs());
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
+        let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
+        let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
         let mut sim = Sim {
             life,
             defs,
@@ -843,6 +870,10 @@ impl Sim {
             rt,
             perception: saved.perception,
             perception_defs,
+            abilities: saved.abilities,
+            ability_rt,
+            ai: saved.ai,
+            ai_defs,
             strike_depth: 0,
             ranged: saved.ranged,
         };

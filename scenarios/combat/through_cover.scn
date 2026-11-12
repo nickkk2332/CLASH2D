@@ -26,4 +26,4 @@ advance 300ms
 expect event projectile_hit
 assert "@c:12,14,0.block.def_id == 'core:wall'"
 assert "len(@e:4.wounds) == 0"
-expect hash ba0ddb7bd17dad110e6f4a87757e19a9
+expect hash a87b7145df6a24b061195101c9a4a6fb

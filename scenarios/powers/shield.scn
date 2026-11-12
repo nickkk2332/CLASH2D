@@ -1,0 +1,20 @@
+# Shield (mods/core/data/powers): a mode whose trait and upkeep begin
+# and end together. Raised, it drains the reserve at five a second
+# against two of regeneration; it ends by itself the tick the reserve
+# runs dry, and the reserve fills again (08 §5.4).
+use default seed=24
+gen core:test_city size=1
+look @c:17,20,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+start_mode who=@e:0 ability=core:shield mode=raised
+expect event mode_started ability=core:shield mode=raised
+assert "@e:0.has_trait('core:shielded') and @e:0.ability('core:shield').mode_on('raised')"
+assert "@e:0.pool.rate('core:reserve') == -3"
+advance 10s
+assert "@e:0.pool.reserve > 69.9 and @e:0.pool.reserve < 70.1"
+advance 24s
+expect event mode_ended ability=core:shield mode=raised how=empty
+assert "not @e:0.has_trait('core:shielded') and not @e:0.ability('core:shield').mode_on('raised')"
+advance 5s
+assert "@e:0.pool.reserve > 9"
+expect hash 0e64da5875b95c69a3d8df764a434bd4

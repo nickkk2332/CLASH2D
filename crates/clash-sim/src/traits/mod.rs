@@ -70,12 +70,13 @@
 //!
 //! # What is not built here
 //!
-//! `grants`, `abilities`, `senses`, `bound`, `goals`, `weights` and
-//! `seat` are read, checked and carried for the packages that give them
-//! effect (actions, abilities, perception, minds). `channels` is read by
-//! [`channel_change`] for the action runtime to apply. `while` is worked
-//! out when a trait of the holder is added or removed and by
-//! [`reconsider`], until reactive expressions keep it current.
+//! `grants`, `senses`, `bound`, `goals`, `weights` and `seat` are read,
+//! checked and carried for the packages that give them effect (actions,
+//! perception, minds). `abilities` and `ability_params` are given effect
+//! by [`crate::ability`]. `channels` is read by [`channel_change`] for
+//! the action runtime to apply. `while` is worked out when a trait of
+//! the holder is added or removed and by [`reconsider`], and kept current
+//! by [`crate::ability::reactive`] where what it reads can be watched.
 
 mod confer;
 mod defs;

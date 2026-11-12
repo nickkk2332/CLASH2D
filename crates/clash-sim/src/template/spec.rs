@@ -147,10 +147,14 @@ pub struct Resolved {
     pub rules: Vec<EocId>,
     /// Traits it starts with, as written, in order.
     pub traits: Vec<String>,
+    /// Abilities it is given, as written, in order.
+    pub abilities: Vec<String>,
     /// Items it starts with, as written, in order.
     pub items: Vec<String>,
     /// A mind: `None` for none, `Some(profile)` for one.
     pub mind: Option<Option<String>>,
+    /// Senses, by id as written, in the order first given.
+    pub senses: Vec<String>,
     /// Its own name, from a `text` choice that sets it.
     pub name: Option<String>,
     /// Its own description, from a `text` choice that sets it.
@@ -194,7 +198,17 @@ fn gather(out: &mut Resolved, gives: Gives<'_>) {
             out.rules.push(rule.id());
         }
     }
+    for sense in gives.senses {
+        if !out.senses.contains(sense) {
+            out.senses.push(sense.clone());
+        }
+    }
     out.traits.extend(gives.traits.iter().cloned());
+    for ability in gives.abilities {
+        if !out.abilities.contains(ability) {
+            out.abilities.push(ability.clone());
+        }
+    }
     out.items.extend(gives.items.iter().cloned());
     if let Some(scale) = gives.scale {
         out.scale *= scale;

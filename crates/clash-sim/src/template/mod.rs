@@ -391,6 +391,13 @@ impl Sim {
         if let Some(profile) = &resolved.mind {
             self.create_mind(entity, profile.clone(), cause)?;
         }
+        // Senses where perception's definitions are loaded; the
+        // template's check says whether each names one.
+        for name in &resolved.senses {
+            if let Some(sense) = self.perception_defs.sense_named(name) {
+                crate::perception::attach_sense(self, entity, sense)?;
+            }
+        }
         if !resolved.rules.is_empty()
             && let Some(handle) = self.exprs.kinds().handle(Subject::Entity(entity))
         {
@@ -398,6 +405,8 @@ impl Sim {
                 self.rules.attach(handle, *rule);
             }
         }
+        // Abilities, with the template as their source (08 §3.3).
+        crate::ability::grant_from_template(self, entity, &resolved.abilities, cause);
         Ok(())
     }
 

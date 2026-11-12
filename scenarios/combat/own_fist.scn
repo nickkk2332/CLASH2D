@@ -18,4 +18,4 @@ expect event strike_landed
 expect event strike_recoiled
 assert "@c:11,10,0.block.def_id == 'core:wall'"
 assert "len(@e:1.wounds) > 0"
-expect hash 9866b25daad96b1a963ef92586593744
+expect hash ec7ca041f37ec01de5e68eaf089c4ab0

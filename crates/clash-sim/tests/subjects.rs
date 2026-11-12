@@ -483,12 +483,15 @@ fn an_entity_answers_for_itself() {
     // Those of items are read in `tests/items.rs`, those of devices in
     // `tests/devices.rs`, those of interactions in
     // `tests/interactions.rs`, those of traits in `tests/traits.rs`,
-    // those of ranged combat in `tests/ranged.rs`.
+    // those of abilities in `tests/abilities.rs`, those of minds in
+    // `tests/ai.rs`, and those of ranged combat in `tests/ranged.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::device::properties().iter())
         .chain(clash_sim::interaction::properties().iter())
         .chain(clash_sim::traits::properties().iter())
+        .chain(clash_sim::ability::properties().iter())
+        .chain(clash_sim::ai::properties().iter())
         .chain(clash_sim::combat::ranged::properties().iter())
         .map(|property| property.name)
         .collect();

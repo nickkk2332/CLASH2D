@@ -195,6 +195,22 @@ pub fn follow_path(sim: &mut Sim, entity: EntityId, cause: Cause) -> Result<Step
     }
 }
 
+/// Marks the path an entity is following as one that must be planned
+/// again before its next step: what minds do when a change in the world
+/// blocks a route in use (09 §5.2). Returns whether it was following
+/// one.
+pub fn mark_journey_stale(sim: &mut Sim, entity: EntityId) -> bool {
+    let following = sim
+        .components()
+        .get::<Mover>(entity)
+        .and_then(Mover::journey)
+        .is_some();
+    if following {
+        mark_stale(sim, entity, None);
+    }
+    following
+}
+
 /// Marks an entity's path as one that must be planned again, and adds
 /// a cell to those it has learned to avoid.
 fn mark_stale(sim: &mut Sim, entity: EntityId, avoid: Option<clash_world::CellPos>) {
