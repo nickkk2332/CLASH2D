@@ -75,6 +75,7 @@ pub fn engine_verbs() -> Vec<VerbDef> {
     let mut verbs = Vec::new();
     verbs.extend(crate::item::verbs());
     verbs.extend(crate::movement::verbs());
+    verbs.extend(crate::traits::verbs());
     verbs
 }
 

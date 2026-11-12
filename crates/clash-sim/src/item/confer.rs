@@ -30,6 +30,11 @@ use super::{Holds, Item, def_of};
 use crate::Sim;
 use crate::host::{Bound, SimHost};
 use crate::stats::{self, Changes, Modifier, Source, SourceKind, StatDefs, Stats, StatsCx};
+use crate::traits::Giver;
+
+/// The cause the traits an item gives and takes back are given: the
+/// holding functions that come here do not pass one on.
+const CONFERRING: clash_world::Cause = clash_world::Cause::new(clash_world::CauseKind::Process);
 
 /// The source an item's modifiers are added under.
 pub(crate) fn source_of(item: EntityId) -> Source {
@@ -148,13 +153,25 @@ pub(super) fn add(sim: &mut Sim, holder: EntityId, item: EntityId) {
         });
         stat_changes(sim, changes.unwrap_or_default());
     }
+    if !def.traits.is_empty() {
+        // The traits an item gives are its holder's while it is held
+        // (06 §9.1): given under the item, and withdrawn when it goes.
+        crate::traits::give_named(sim, holder, &def.traits, Giver::item(item), CONFERRING);
+    }
     if def.holder_tags.is_empty() {
         return;
     }
     let mut fresh = Vec::new();
+    // A tag the holder has only because of a trait is counted as the
+    // item's too, so that it stays while either confers it.
+    let traited: Vec<bool> = def
+        .holder_tags
+        .iter()
+        .map(|tag| crate::traits::confers_tag(sim, holder, tag))
+        .collect();
     if let Some(entity) = sim.entities.get_mut(holder) {
-        for tag in &def.holder_tags {
-            if entity.tags.insert(tag.clone()) {
+        for (tag, traited) in def.holder_tags.iter().zip(traited) {
+            if entity.tags.insert(tag.clone()) || traited {
                 fresh.push(tag.clone());
             }
         }
@@ -190,6 +207,11 @@ fn settle_tags(sim: &mut Sim, holder: EntityId) {
         return;
     }
     tags.retain(|tag| wanted.contains(tag));
+    // A tag a trait of the holder confers stays with the trait.
+    let gone: Vec<String> = gone
+        .into_iter()
+        .filter(|tag| !crate::traits::confers_tag(sim, holder, tag))
+        .collect();
     if let Some(entity) = sim.entities.get_mut(holder) {
         for tag in &gone {
             entity.tags.remove(tag);
@@ -214,6 +236,7 @@ pub(super) fn remove(sim: &mut Sim, holder: EntityId, item: EntityId) {
         });
         stat_changes(sim, changes.unwrap_or_default());
     }
+    crate::traits::withdraw(sim, holder, Giver::item(item), CONFERRING);
     settle_tags(sim, holder);
 }
 

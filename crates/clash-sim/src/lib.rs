@@ -77,6 +77,7 @@ pub mod rule;
 mod sim;
 pub mod stats;
 pub mod subject;
+pub mod traits;
 pub mod vars;
 pub mod verb;
 
@@ -128,4 +129,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     body::register_defs(types);
     item::register_defs(types);
     movement::register_defs(types);
+    traits::register_defs(types);
 }

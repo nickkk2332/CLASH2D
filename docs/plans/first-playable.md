@@ -21,7 +21,7 @@ actions that call `hit`.
 |----|-------|------|------------|--------|
 | E1 | Component store and core components | M | K1, K7 | beta |
 | E2 | Attributes, pools, tracks | M | E1, K5 | beta |
-| E3 | Traits | M | E2 | todo |
+| E3 | Traits | M | E2 | beta |
 | E4 | Bodies | L | E2, T3 | beta |
 | E5 | Hits and wounds | L | E4, W12 | beta |
 | E6 | Body editing | M | E4 | todo |
@@ -178,6 +178,27 @@ Build
 Done when
 - Removing a trait removes exactly what it added.
 - Durations behave across unloading as 03 §9 specifies.
+
+Beta: built in `clash_sim::traits` (decisions D-630 to D-635). Built: the
+`trait` definition type with every field of 06 §5 and the new
+`while_unloaded`; the `Traits` component, the eighth, with instances by
+giver; `add_trait`, `remove_trait`, `withdraw` and the verbs `add_trait`
+and `remove_trait`; stacking `none`, `refresh` and `stack` with `max`;
+groups; dormancy by `while`; modifiers and pool rates under the instance
+as source, tags and attached rules recorded and taken back exactly;
+durations as wake-ups on the holder's clock, taken off the timeline when
+it leaves the world and put back when it returns, `pause` or `elapse`;
+the hooks `trait_adding` and `trait_removing`, the events `trait_added`,
+`trait_removed` and `trait_expired`, five properties and five reasons;
+`look` reported with the events; the traits of items and postures given
+and withdrawn with them; plain traits in `mods/core/data/traits.json`.
+Tests in `crates/clash-sim/tests/traits.rs`, a property test among them.
+Stubbed: what `grants`, `abilities`, `senses`, `bound`, `goals`,
+`weights` and `seat` give; applying `channels` (read by
+`traits::channel_change`); running `on_apply` and `on_remove` until rules
+run against the simulation; keeping `while` current until reactive
+expressions; the stats' events for what traits confer; no test script
+yet, since rules do not run against the simulation, and no benchmark.
 
 ### E4 — Bodies
 

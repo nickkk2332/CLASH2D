@@ -145,6 +145,7 @@ use crate::body::Body;
 use crate::item::{Holds, Item};
 use crate::movement::Mover;
 use crate::stats::Stats;
+use crate::traits::Traits;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
 ///
@@ -497,6 +498,9 @@ components! {
     /// The ways of moving an entity has, its posture and the path it is
     /// following. On whatever has been told one of them.
     mover: Mover = "mover";
+    /// The trait instances an entity has and what they put on it
+    /// (06 §5). On whatever has been given a trait.
+    traits: Traits = "traits";
 }
 
 // A `ComponentKinds` has one bit for each kind.

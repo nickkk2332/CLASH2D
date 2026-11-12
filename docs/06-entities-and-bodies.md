@@ -358,30 +358,113 @@ a species feature, a mutation, a perk, a blessing, a curse, a drug, a stun.
   "modifiers": [ { "attr": "quickness", "mul": 1.3 }, { "attr": "pain_felt", "mul": 0.3 } ],
   "tags": ["stimulated"],
   "grants": ["reckless_charge"],
-  "rules": [ { "on": "trait_removed", "do": [ { "add_trait": { "to": "self", "trait": "crash" } } ] } ] }
+  "on_remove": [ { "add_trait": { "to": "self", "trait": "crash" } } ] }
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `modifiers` | Attribute modifiers while present |
-| `rates` | Pool rates while present |
-| `tags` | Added to the entity |
-| `grants` | Actions the entity may use (03 §6). An entry may carry a cost, a cooldown and a condition (08 §5.1). |
-| `abilities` | Abilities conferred while the trait is present (08 §3.3) |
-| `channels` | Channel slots added or disabled |
-| `senses` | Senses added or altered (15) |
-| `rules` | Attached rules (05 §9.3) |
-| `on_apply`, `on_remove` | Effect lists, which may edit the body |
-| `duration` | If present, the trait ends by itself. A timer (03 §9). |
-| `stacking` | `none`, `refresh`, or `stack` with a `max`; a stacked trait has a `stacks` count its expressions can read |
-| `group` | Traits in the same group exclude each other: adding one removes the others. Stances, forms, moods. |
-| `while` | A reactive condition (05 §7.5). While false the trait is dormant and confers nothing. |
-| `bound` | When added by an ability: the trait ends when that ability does (08 §7.3) |
-| `look` | How its holder appears while it lasts (12 §4.4) |
-| `goals`, `weights` | Goals added to the holder's mind, and changes to the weights it scores them by (09 §3) |
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name`, `description` | text | What a reader calls it, and what a closer look says |
+| `seat` | `body` or `mind` | Which it stays with when they part (section 8.2). Default `body`. |
+| `modifiers` | list of `{ attr, add, mul }` | Attribute modifiers while present (section 4.1), once for each stack. `add` defaults to 0, `mul` to 1. |
+| `rates` | list of `{ pool, rate }` | Pool rates while present (section 4.2), per second of the holder's time, negative to drain; times the stacks |
+| `tags` | list of tags | Added to the entity |
+| `grants` | list | Actions the entity may use (03 §6). An entry is an action's id, or `{ action, cost, cooldown, at_rank, if }` (08 §5.1). |
+| `abilities` | list of ids | Abilities conferred while the trait is present (08 §3.3) |
+| `channels` | map of `id<channel>` to count | Channel slots added (a count above zero) or disabled (below zero) |
+| `senses` | list of names | Senses added or altered (15) |
+| `rules` | list of rule ids or rules | Attached rules (05 §9.3), attached to the holder while the trait confers |
+| `on_apply`, `on_remove` | effects | Effect lists, which may edit the body, run with the holder as `self`: when the trait is first given, and when it ends however it ends |
+| `duration` | time | If present, the trait ends by itself. A timer (03 §9). Above zero. |
+| `while_unloaded` | `pause` or `elapse` | What the duration does while the holder is out of the simulation (03 §9). Default `pause`. |
+| `stacking` | `none`, `refresh` or `stack` | What giving it again does. Default `none`. |
+| `max` | int | For `stack`: the most stacks, from 1 to 1,000. Default 1,000. |
+| `group` | text | Traits in the same group exclude each other: adding one removes the others. Stances, forms, moods. |
+| `while` | condition | A reactive condition (05 §7.5) about the holder, `self`. While false the trait is dormant and confers nothing. |
+| `bound` | bool | When added by an ability: the trait ends when that ability does (08 §7.3) |
+| `look` | text | How its holder appears while it lasts (12 §4.4), as written; reported with `trait_added` and `trait_removed` |
+| `goals`, `weights` | list of ids; map of names to numbers | Goals added to the holder's mind, and changes to the weights it scores them by (09 §3) |
 
 There is no separate concept of "status effect", "mutation" or "perk".
 A trait with a duration is a status. Without one it lasts until removed.
+
+**Instances and givers.** An entity has a trait once for each thing that
+gave it, its **giver**: every rule is one giver, each item held or worn is
+another, the posture it is in another, and an ability or a template
+another. Each instance has its own stacks and its own duration, and each
+confers what the trait lists. `has_trait` is true while any giver's
+instance is there.
+
+**Giving it again.** A trait given again by the same giver does what its
+`stacking` says: `none` changes nothing and raises nothing; `refresh`
+starts its duration again; `stack` adds a stack, up to `max`, and starts
+its duration again. A trait given by a new giver is a new instance with
+one stack. Adding a trait of a `group` first removes every trait of the
+same group the entity has, from any giver.
+
+**Exactly what it added.** What an instance confers is applied when it is
+given and taken back exactly when it goes. Its modifiers and rates are
+kept by the stats under the instance as their source (section 4.1), so
+removing it removes those and nothing else. A tag is recorded as the
+trait's only if the entity did not carry it of its own, and a rule only
+if it was not attached already; a tag or a rule two instances confer
+stays until neither does, and a tag an item confers too (section 9.1)
+stays while either does. A trait's attached rules are detached when it
+ends, before its `trait_removed` is delivered: a trait answers its own
+ending with `on_remove`.
+
+**Dormancy.** A trait whose `while` does not hold confers nothing; its
+duration still runs. Until reactive expressions are built `while` is
+worked out when a trait of the holder is added or removed, and when the
+kernel asks (`traits::reconsider`).
+
+**Durations** are wake-ups on the holder's clock (03 §3.4), so they speed
+and slow with it and move with it from clock to clock. When the holder
+leaves the simulation (its tract unloads, it is stored, or it is put
+inside something that is not in the world) each is taken off the timeline
+with the local time it had left; when it returns, a `pause` duration goes
+on with that, and an `elapse` one has the local time that passed on the
+clock it left taken off. One whose time has run out then ends at once,
+those that ran out first first. A trait given while its holder is out of
+the world waits with all its time.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `trait_added` | `self` | `trait` (`string`), its qualified id; `giver` (`string`): `rule`, `item`, `posture`, `ability`, `template` or `other`; `stacks` (`int`), the instance's stacks now; `first` (`bool`), false for a refresh or another stack; `duration` (`real?`), seconds, null for none; `look` (`string`) |
+| `trait_removed` | `self` | `trait`, `giver`; `stacks` (`int`), how many went; `left` (`int`), how many the instance has left, 0 when it is gone; `how` (`string`): `removed`, `expired`, `replaced` (by its group) or `withdrawn` (by its giver); `look` |
+| `trait_expired` | `self` | `trait`, `giver`. Its duration ran out; `trait_removed` follows. |
+| `trait_adding` (hook) | `self` | `trait`, `giver`; `stacks` (`int`), the stacks it will have; `duration` (`real?`), which a handler may change to another time above zero, or null. A handler may cancel. Not raised when giving it would change nothing. |
+| `trait_removing` (hook) | `self` | `trait`; `stacks` (`int`), how many would go. A handler may cancel. Raised by `remove_trait` only: not when a trait expires, is replaced by its group or is withdrawn by its giver. |
+
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `add_trait` | `to: entity`, `trait: id<trait>`, `duration: real?` | `int`, the instance's stacks | Gives a trait as a rule gives it. `duration`, in seconds above zero, stands in for the definition's this time. |
+| `remove_trait` | `from: entity`, `trait: id<trait>`, `stacks: int?` | `int`, the stacks that went | Removes a trait whoever gave it: every stack, or that many, taken from the instances in the order they were given. A trait the entity lacks changes nothing. |
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.has_trait(trait: id<trait>)` | `bool` | Whether it has the trait, from any giver, dormant or not |
+| `entity.traits` | `list<id<trait>>` | The traits it has, each once, in the order first given |
+| `entity.trait_stacks(trait: id<trait>)` | `int` | Its stacks over every giver; 0 for one it lacks |
+| `entity.trait_active(trait: id<trait>)` | `bool` | Whether some giver's instance is not dormant |
+| `entity.trait_left(trait: id<trait>)` | `real?` | Seconds of its own time until the trait ends by itself, the longest over its givers; null if it lacks it or has it for good |
+
+None is settable and none is safe for belief: a character reads its own
+(05 §7.3). The first three name `trait_added` and `trait_removed` as the
+events that change them (05 §7.5).
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `trait.unknown` | The id is not a `trait` definition | `trait` |
+| `trait.bad_duration` | A duration given, or left by a handler of `trait_adding`, is not a finite time above zero | `duration` |
+| `trait.bad_stacks` | A count of stacks to remove is not a whole number above zero | `stacks` |
+| `trait.bad_argument` | A verb's argument is missing or of the wrong kind | `arg` |
+| `trait.not_registered` | The definitions were loaded without the `trait` type | — |
+
+A trait an item or a posture names that no definition has is a load
+error at the definition that names it. A name is a qualified id, or a bare
+one looked up in sorted namespace order.
 
 ## 6. Bodies
 
@@ -1068,7 +1151,7 @@ material and volume. Weapons notch and break; armour wears through.
 | `stack` | bool | Whether items equal in every respect (definition, material, damage, colour, tags, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
 | `modifiers` | list of `{ attr, add, mul }` | Attribute modifiers on whoever holds it in a grasp or wears it, under the item as their source (section 4.1). `add` defaults to 0, `mul` to 1. |
 | `holder_tags` | list of tags | Tags whoever holds it in a grasp or wears it carries while they do |
-| `grants`, `traits`, `rules` | lists | Given to whoever holds or wears it. Carried until actions, traits and the rule runtime read them. |
+| `grants`, `traits`, `rules` | lists | Given to whoever holds or wears it. Its `traits`, by id, are given to the holder with the item as their giver (section 5) and withdrawn when it leaves the grasp or comes off; `grants` and `rules` are carried until actions and the rule runtime read them. |
 | `guards` | map of route to share | While worn, the share of exposure it keeps out, by route: `{ "breath": 0.95 }` for a mask (02 §16). Carried until exposure reads it. |
 | `contains` | volume | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup. Carried until substances are built. |
 | `color` | colour name, or a list | A colour this particular item carries: fixed, or picked from a list by the item's seed when it is made. `set_color` changes it. Glyphs draw it with `"fg": "own"` and descriptions name it (12 §4.3). Creatures may carry one too. |
@@ -1587,7 +1670,7 @@ nothing about it.
 | `speed`, `movement` | A factor on the speed of every way of moving (1 if left out), and which ways of moving are allowed (all if left out) |
 | `signature` | A factor on how easily the body is perceived (15 §5.3); 1 if left out |
 | `occupies` | Channel slots unavailable while in it, written as an action's `uses` |
-| `traits` | Whatever else content wants it to carry: a steadier aim, a weaker guard |
+| `traits` | Whatever else content wants it to carry: a steadier aim, a weaker guard. Given with the posture as their giver (section 5) while the entity is in it |
 | `look` | How the body is drawn in it (12 §4.4), reported with `posture_changed` |
 
 Changing posture is an action, with a time and a noise. `set_posture`
@@ -1658,18 +1741,20 @@ Body flags on `damage_type` (`severs`).
 `part_severed`, `part_destroyed`, `body_changed`, `body_cells_damaged`,
 `wound_closed`, `wound_reopened`, `function_changed`, `attr_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
-`item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
+`trait_expired`, `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
 `item_repaired`, `item_broken`, `item_split`, `item_merged`,
 `item_stage_reached`, `item_turned`, `posture_changed`,
 `contents_materialised`, `became_notable`, `step_refused`, `path_failed`,
-`fell`, `landed`. Those of items are described with their fields in
-section 9.2, and those of movement and posture in section 11.
+`fell`, `landed`. Those of traits are described with their fields in
+section 5, those of items in section 9.2, and those of movement and
+posture in section 11.
 
 **Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
 `trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
 `item_leaving`, `body_changing`, `mind_transferring`, `posture_changing`,
 `passage_requested`. Each is described in the table below, the last two
-with their fields in section 11,
+with their fields in section 11, `trait_adding` and `trait_removing`
+with theirs in section 5,
 `pool_changing` with its fields in section 4.4, and `hit_incoming` with
 its fields, and the events of bodies and wounds with theirs, in
 section 7.6.
@@ -1689,7 +1774,7 @@ arguments: `take`, `drop`, `give`, `wear`, `remove`, `stow`, `put_in`,
 | `hit_incoming` | A hit is applied to a body (section 7.1) | Change its energy, intensity, part and direction; cancel |
 | `exposure_incoming` | A dose reaches a body by any route (02 §16; 16 §9.5) | Change the amount; cancel |
 | `entity_dying` | An entity stops for good (section 8.3) | Cancel |
-| `trait_adding`, `trait_removing` | A trait is added or removed | Cancel |
+| `trait_adding`, `trait_removing` | A trait is given, or `remove_trait` removes one (section 5) | Cancel; on `trait_adding`, change `duration` |
 | `pool_changing` | A verb changes a pool's level (section 4.4). Rates and regeneration do not raise it. | Change the amount; cancel |
 | `item_taking`, `item_leaving` | An item enters or leaves a hold | Cancel: a thing that will not be picked up, or will not come off |
 | `body_changing` | Any body verb of section 6.5 | Cancel: a body that cannot be reshaped |
@@ -1714,7 +1799,8 @@ absorb destroys it outright, section 7.4).
 **Properties**: `attr.*`, `pool.*`, `track.*` (section 4.4); `fn.*`,
 `scale`, `reach`, `part(name)`, `parts`, `wounds` and the properties of a
 part and of a wound (section 6.7); `mass`, `height`, `volume`;
-`has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
+`has_trait(trait)`, `traits`, `trait_stacks(trait)`, `trait_active(trait)`,
+`trait_left(trait)` (section 5), `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
 `templates`, `name`, `posture`, `velocity`, `color`; on items, `age`;
 `speed`, `can_step(dir)`, `step_fault(dir)`, `step_time(dir)`,
@@ -1763,6 +1849,17 @@ is not reachable from a mind (05 §7.3). Those that follow holding name
 | `entity.is_latent` | `bool`: a container whose contents have not been made |
 | `entity.conferred_tags` | `list<string>`: the tags it carries only because of what it grasps or wears |
 
+**Traits** are built with their definition type, verbs, properties,
+events, hooks and reasons (section 5), and items and postures give
+theirs. Not yet: what `grants`, `abilities`, `senses`, `bound`, `goals`,
+`weights` and `seat` give, which are read, checked and carried for the
+packages of actions, abilities, perception and minds; the slots a
+trait's `channels` adds or disables, which `traits::channel_change`
+gives the action runtime; running `on_apply` and `on_remove`, which are
+compiled and kept until rules run against the simulation; keeping
+`while` current, which waits for reactive expressions; and the query
+`traits` (05 §11), which is the list property until queries are built.
+
 **Gaps.** Reachable only from Rust for now: `templates`, until
 `template` is a definition type an id can name; the name and the
 description an entity takes from its definition, which need a way to
@@ -1778,7 +1875,7 @@ items, dropping what a part that can no longer hold was grasping, and
 making the item a part that came off leaves. The query `held` (05 §11) is
 a list property until queries are built. Not built: ageing (section 9.4),
 `look`, `round`, `interactions` and `device` on items, `content_table`,
-what `grants`, `traits`, `rules`, `guards` and `contains` give (carried
+what `grants`, `rules`, `guards` and `contains` give (carried
 as data), what seats and fixed holds mean, a check of an item's colour
 names against the `color` definitions, and `age`.
 Attributes, pools and tracks are built with their
@@ -1805,7 +1902,7 @@ properties, events, hooks and reasons (section 11), and the bundled
 yet: the verbs `sweep`, `leap`, `set_altitude` and `teleport`; catching
 a falling entity, and a body that leaves loaded space; what a mover
 believes, which reads truth behind one seam until perception is
-built; a posture's effect on a body's part bands, its `traits` and the
+built; a posture's effect on a body's part bands and the
 `limp` posture, and the slots it `occupies` being held against actions,
 which is a function in Rust (`posture_occupies`) until the action
 runtime claims slots; `noise` and `signature`, which are carried for

@@ -436,9 +436,11 @@ fn an_entity_answers_for_itself() {
 
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
-    // Those of items are read in `tests/items.rs`.
+    // Those of items are read in `tests/items.rs`, and those of traits
+    // in `tests/traits.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
+        .chain(clash_sim::traits::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {
