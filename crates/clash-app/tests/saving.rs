@@ -193,7 +193,7 @@ fn with_extra_mod(data: &Path) -> PathBuf {
     let default = std::fs::read_to_string(repo().join("profiles/default.json")).unwrap();
     let mut profile: serde_json::Value = serde_json::from_str(&default).unwrap();
     profile["id"] = "with_extra".into();
-    profile["mods"] = serde_json::json!(["core", "ui", "extra"]);
+    profile["mods"].as_array_mut().unwrap().push("extra".into());
     let path = data.join("with_extra.json");
     std::fs::write(&path, profile.to_string()).unwrap();
     path
@@ -284,7 +284,7 @@ fn with_policies(data: &Path) -> PathBuf {
     let default = std::fs::read_to_string(repo().join("profiles/default.json")).unwrap();
     let mut profile: serde_json::Value = serde_json::from_str(&default).unwrap();
     profile["id"] = "policies".into();
-    profile["mods"] = serde_json::json!(["core", "ui", "policies"]);
+    profile["mods"].as_array_mut().unwrap().push("policies".into());
     let path = data.join("policies.json");
     std::fs::write(&path, profile.to_string()).unwrap();
     path
