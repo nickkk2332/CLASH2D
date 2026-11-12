@@ -823,10 +823,22 @@ fn at_target(
     // Step 3: a clash. Not built (C6).
 
     // Step 4: aim.
-    let at = if striking.sure || attack.aim.is_none() {
-        aim::Aimed::Lands(aim::mark(sim, target, part), None)
-    } else {
-        aim::aim(sim, target, part)
+    let at = match (&attack.aim, striking.sure) {
+        (Some(aimed), false) => {
+            let contest = aimed.contest.id();
+            let by = striking
+                .eval(sim, Some(target), |attack| {
+                    attack.aim.as_ref().map(|aim| &aim.by)
+                })
+                .unwrap_or(Real::ZERO);
+            let against = striking
+                .eval(sim, Some(target), |attack| {
+                    attack.aim.as_ref().map(|aim| &aim.against)
+                })
+                .unwrap_or(Real::ZERO);
+            aim::aim(sim, target, part, contest, by, against)
+        }
+        _ => Aimed::Lands(aim::mark(sim, target, part), None),
     };
     let (at, margin) = match at {
         Aimed::Lands(at, margin) => (at, margin),

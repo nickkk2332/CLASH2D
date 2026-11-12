@@ -2,9 +2,9 @@
   { "//": "Hand-to-hand fighting for people, written as any mod would write it (07). Nothing here is a bonus: each blow is so many joules on a surface, and what it does is the body model's to say. Values are illustrative: an ordinary person of strength 10 punches with about 80 J, kicks with about 200 J and cuts with a knife with about 50 J.",
     "type": "window_kind", "id": "strike" },
 
-  { "//": "Who hits where they aim. The difference of the two sides' values decides; a spread of 2 leaves room for luck, and a margin within 2 of zero still lands, beside the mark.",
+  { "//": "Who hits where they aim. How many times the one is the other decides: between equals half of all blows land on the mark, a third beside it and the rest miss. Against nothing (an evasion of zero) every blow lands where it was aimed.",
     "type": "contest", "id": "melee", "name": "Melee",
-    "form": "difference", "factor": 1, "spread": 2, "near": 2 },
+    "form": "ratio", "factor": 3, "spread": 1, "near": 1.5 },
 
   { "type": "function", "id": "fighting",
     "params": { "who": "entity" },
@@ -15,8 +15,8 @@
   { "type": "function", "id": "evasion",
     "params": { "who": "entity", "from": "entity" },
     "returns": "real",
-    "value": "fighting($who)",
-    "doc": "How hard someone is to land a blow on, against a given attacker." },
+    "value": "if perceives($who, $from) ?? false then fighting($who) else 0",
+    "doc": "How hard someone is to land a blow on, against a given attacker: nothing at all for someone who does not perceive the attacker (15 §6), who is simply hit; otherwise how well they fight." },
 
   { "//": "A punch with the fist. It is aimed at a part, or at none and lands where the body offers; effort holds it back.",
     "type": "action", "id": "punch", "name": "Punch",

@@ -18,7 +18,7 @@ With packages C1 to C8, C11 and C12 the first playable build of
 |----|-------|------|------------|--------|
 | C1 | Contests | S | X4, K5 | done |
 | C2 | Surfaces and delivery | L | E5, E8, C1 | beta |
-| C3 | Aim | M | C2, S4 | todo |
+| C3 | Aim | M | C2, S4 | beta |
 | C4 | Defences | L | C3, T5 | todo |
 | C5 | Push | M | C2, E10 | todo |
 | C6 | Clashes | L | C4, C5, W15 | todo |
@@ -112,6 +112,12 @@ Done when
 - Outcome frequencies follow the contest's margin bands.
 - A target that does not perceive its attacker is hit, using a content
   function that reads perception.
+
+Beta (decision D-643): aim by margin bands, the parts beside a part, and
+unaimed strikes by exposure are built and tested; the bundled `evasion`
+reads `perceives`. Not built: reach in height (07 §4.3, review rows
+"Reach in height" and "Reach and cover by posture"); `height` is read and
+carried.
 
 ### C4 — Defences
 

@@ -307,6 +307,24 @@ held, or cannot move. Such a target is simply hit. Striking from where the
 target cannot see is an advantage because of perception, not because of a
 rule about backs.
 
+As built (decision D-643). The attacker's and the target's values are
+evaluated with the target bound, and one margin is drawn from the rule
+stream. The parts **beside** a part are those joined to it on the
+outside: the part it is `on`, and the parts `on` it, that are there and
+sit inside no other. One of them is chosen by exposed area (06 §7.1),
+with one more draw from the rule stream; where there are none, or no part
+was aimed at, the body picks one by exposure. A part aimed at that is gone
+is no part: the body picks. A strike that is `sure`, or whose attack has
+no `aim`, does not aim and lands on its mark. The margin is reported in
+`strike_landed` and `strike_missed`.
+
+The bundled `melee` contest compares by **ratio** (`factor` 3, `spread` 1,
+`near` 1.5): between equals half of all blows land on the mark, a third
+beside it, and the rest miss. Its `evasion(who, from)` is
+`fighting(who)` for someone who perceives the attacker and zero for
+someone who does not, and in a ratio nothing is below anything: an
+unaware target is always hit where it was aimed at.
+
 ### 4.3 Reach in height
 
 An attack reaches a band of heights above the attacker's footing. A part

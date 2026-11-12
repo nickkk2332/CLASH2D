@@ -41,6 +41,17 @@ const MS: i64 = 1_000;
 /// with the command, so that one blow can be compared with another; a
 /// blade long enough to cut down a rank; a closed helm.
 const FIXTURES: &str = r#"[
+  { "type": "contest", "id": "test_aim", "form": "difference", "factor": 1, "spread": 1, "near": 1 },
+
+  { "type": "action", "id": "test_aimed",
+    "params": { "target": "entity", "part": { "type": "part?", "default": "null" },
+                "skill": "real" },
+    "attacks": { "touch": { "with": { "part": "hand", "surface": "fist" },
+                            "energy": 0.001, "reach": 2,
+                            "aim": { "contest": "test_aim", "by": "$skill", "against": "0" } } },
+    "phases": [ { "id": "hit", "time": 0,
+      "do": [ { "strike": { "target": "$target", "part": "$part" } } ] } ] },
+
   { "type": "item", "id": "visor", "name": "visor",
     "material": "steel", "mass": "2 kg", "volume": 0.0005, "length": "0.3 m",
     "grip": { "arm": 1 },
@@ -133,6 +144,7 @@ fn items() -> String {
 static DEFS: LazyLock<Arc<Defs>> = LazyLock::new(|| {
     let mut owned = core_dir("life");
     owned.extend(core_dir("combat"));
+    owned.extend(core_dir("perception"));
     let movement = common::mods_dir().join("core/data/movement.json");
     owned.push((
         "data/movement.json".to_owned(),
@@ -809,6 +821,129 @@ proptest! {
         prop_assert!((tally.put_in.get() - energy).abs() <= 1e-9);
         prop_assert_eq!(faults(&sim.drain_events()), Vec::<String>::new());
     }
+}
+
+// ---- C3: aim ----------------------------------------------------------------
+
+/// The part a `strike_landed` names, by its name in the body.
+fn landed_on(sim: &Sim, event: &SimEvent) -> Option<String> {
+    let field = event.body.field("part")?;
+    let clash_core::Value::Subject { kind, payload } = field.plain()? else {
+        return None;
+    };
+    let handle = clash_expr::Handle::new(clash_expr::KindId::new(*kind), *payload);
+    let (owner, key) = clash_sim::body::props::part_of_handle(&sim.components().body, handle)?;
+    sim.components()
+        .body
+        .get(owner)?
+        .part(key)
+        .map(|part| part.name().to_owned())
+}
+
+/// The logistic function, which gives a contest's odds (07 §4.1).
+fn logistic(x: f64) -> f64 {
+    1.0 / (1.0 + Real::of(-x).exp().get())
+}
+
+#[test]
+fn outcome_frequencies_follow_the_contests_margin_bands() {
+    // `test_aim`: a difference with a spread of 1 and a near band of 1.
+    // At a difference of d the strike lands on the mark with the odds
+    // σ(d), beside it with σ(d + 1) − σ(d), and misses otherwise.
+    let draws = 3000;
+    for skill in [0.0, 1.5, -1.0] {
+        let (mut sim, people) = row(31, &["Ada", "Bram"]);
+        let (ada, bram) = (people[0], people[1]);
+        sim.drain_events();
+        let (mut on, mut beside, mut missed) = (0u32, 0u32, 0u32);
+        for _ in 0..draws {
+            strike_with(
+                &mut sim,
+                ada,
+                "test_aimed",
+                bram,
+                Some("l_arm"),
+                &[("skill", Value::Real(Real::of(skill)))],
+            );
+            for event in sim.drain_events() {
+                match event.name() {
+                    "strike_missed" => missed += 1,
+                    "strike_landed" => match landed_on(&sim, &event).as_deref() {
+                        Some("l_arm") => on += 1,
+                        Some("torso" | "l_hand") => beside += 1,
+                        other => panic!("landed on {other:?}"),
+                    },
+                    _ => {}
+                }
+            }
+        }
+        assert_eq!(on + beside + missed, draws);
+        let n = f64::from(draws);
+        let expected = [
+            logistic(skill),
+            logistic(skill + 1.0) - logistic(skill),
+            1.0 - logistic(skill + 1.0),
+        ];
+        let observed = [
+            f64::from(on) / n,
+            f64::from(beside) / n,
+            f64::from(missed) / n,
+        ];
+        for (want, got) in expected.iter().zip(observed) {
+            let tolerance = 4.0 * (want * (1.0 - want) / n).sqrt() + 0.005;
+            assert!(
+                (want - got).abs() <= tolerance,
+                "skill {skill}: expected {expected:?}, observed {observed:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_target_that_does_not_perceive_its_attacker_is_hit_where_aimed() {
+    // The bundled punch aims by `melee`, a ratio, against `evasion`,
+    // which is zero for whoever does not perceive the attacker.
+    let punches = 30;
+    let mut aware_on_mark = 0;
+    for aware in [false, true] {
+        let (mut sim, ada, bram) = city(37);
+        if aware {
+            let sight = sim
+                .defs()
+                .lookup::<clash_sim::perception::defs::SenseDef>("core:human_sight")
+                .unwrap();
+            clash_sim::perception::attach_sense(&mut sim, bram, sight).unwrap();
+            clash_sim::perception::set_awareness(&mut sim, bram, ada, sight, Real::ONE).unwrap();
+        }
+        assert_eq!(clash_sim::perception::perceives(&sim, bram, ada), aware);
+        let arm = part_value(&sim, bram, "l_arm");
+        sim.drain_events();
+        let mut on_mark = 0;
+        for _ in 0..punches {
+            let params = vec![
+                ("target".to_owned(), entity_value(&sim, bram)),
+                ("part".to_owned(), arm.clone()),
+                ("effort".to_owned(), real(0.001)),
+            ];
+            act(&mut sim, ada, "punch", params);
+            run_for(&mut sim, 600 * MS);
+            for event in sim.drain_events() {
+                if event.name() == "strike_landed"
+                    && landed_on(&sim, &event).as_deref() == Some("l_arm")
+                {
+                    on_mark += 1;
+                }
+            }
+        }
+        if aware {
+            aware_on_mark = on_mark;
+        } else {
+            assert_eq!(on_mark, punches, "every blow lands where it was aimed");
+        }
+    }
+    // Between equals, about half land on the mark.
+    assert!(aware_on_mark < punches, "{aware_on_mark}");
+    assert!(aware_on_mark > 0, "{aware_on_mark}");
 }
 
 // ---- save, load and replay --------------------------------------------------
