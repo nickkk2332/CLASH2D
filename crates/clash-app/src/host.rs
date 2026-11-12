@@ -12,7 +12,7 @@
 //! | `view`, `party` | The player's character, as the simulation's value for it |
 //! | `reader` | Itself, as a `clash_expr::Host` that reads the simulation and writes nothing. Bindings of ordinary screens were compiled in the mind context of the party (05 §7.3), so what they can ask for is already held to what the character may know. |
 //! | `submit` | [`command_for`]: the one place a `UiCommand` becomes a command of the simulation |
-//! | `pending_decision` | The front of the simulation's decision queue (03 §5.2): a free decision, or a choice a rule's `ask` put |
+//! | `pending_decision` | The front of the simulation's decision queue (03 §5.2): a free decision, a choice a rule's `ask` put, or a reaction to a window `ask_reaction` put, with its options and the time left in the character's own time |
 //! | `perceived` | How the party perceived the event: the simulation's tag of it (`Sim::party_perceived`, 15 §13) |
 //! | `seen_cell`, `seen_sprite` | What is in a cell of the party's view and how a thing in view is perceived, as the batch ended ([`crate::perception`]) |
 //! | `as_of` | Nothing: the simulation keeps no history, so bindings are answered as of the present (D-605) |
@@ -29,7 +29,9 @@
 //! | `command cancel { action, abandon? }` | `Cancel` of one of the character's running actions, by its number |
 //! | `command clear_plan` | `ClearPlan` |
 //! | `command choose { entity, choice, option }` | `Choose`: the answer to a choice prompt (12 §9.5) |
-//! | `command react`, `command pass`, a `run` of a rule | Refused, with the reason: windows (03 §7) and the `Ui` command are not built |
+//! | `command react { entity, window, action, params }` | `React`: the reaction chosen at the reaction prompt (03 §7.3) |
+//! | `command pass { entity, window }` | `Pass`: the prompt declined, the blow let happen |
+//! | a `run` of a rule | Refused, with the reason: the `Ui` command is not built |
 //!
 //! A refusal is the simulation's reason, which the frame loop writes in
 //! the log. A step refused because the way is closed is noted
@@ -76,6 +78,10 @@ pub const COMMAND_CANCEL: &str = "cancel";
 pub const COMMAND_CLEAR_PLAN: &str = "clear_plan";
 /// The command that answers a choice.
 pub const COMMAND_CHOOSE: &str = clash_scene::control::COMMAND_CHOOSE;
+/// The command that answers a window with a reaction.
+pub const COMMAND_REACT: &str = clash_scene::control::COMMAND_REACT;
+/// The command that declines to react to a window.
+pub const COMMAND_PASS: &str = clash_scene::control::COMMAND_PASS;
 
 /// The part of a qualified id after its namespace.
 fn bare(name: &str) -> &str {
@@ -99,6 +105,13 @@ pub fn action_named(defs: &Defs, name: &str) -> Option<ActionDefId> {
         .filter(|qualified| bare(qualified) == name)
         .min()?;
     actions.lookup(qualified)
+}
+
+/// A length of time in seconds, for showing: the bar of a reaction
+/// prompt. Never read by the simulation.
+fn seconds(dur: Dur) -> f64 {
+    const MICROS_PER_SECOND: f64 = 1_000_000.0;
+    dur.as_micros() as f64 / MICROS_PER_SECOND
 }
 
 /// An argument of a command as a whole number, if it is one.
@@ -157,6 +170,49 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
                 })
             }
             COMMAND_CLEAR_PLAN => Ok(Command::ClearPlan { entity: player }),
+            COMMAND_REACT | COMMAND_PASS => {
+                let entity = match command.args.get("entity") {
+                    Some(value) => match session.sim.subject_of(value) {
+                        Some(Subject::Entity(entity)) => entity,
+                        _ => {
+                            return Err(format!("`{}` names nobody who could react.", command.name));
+                        }
+                    },
+                    None => player,
+                };
+                let window = command
+                    .args
+                    .get("window")
+                    .and_then(|value| session.sim.window_of(value))
+                    .ok_or_else(|| format!("`{}` needs the `window` it answers.", command.name))?;
+                if command.name == COMMAND_PASS {
+                    return Ok(Command::Pass { entity, window });
+                }
+                let name = command
+                    .args
+                    .get("action")
+                    .and_then(Value::as_str)
+                    .ok_or("`react` needs the `action` to answer with.")?;
+                let action = action_named(session.sim.defs(), name).ok_or_else(|| {
+                    format!("Nothing can do `{name}`: no loaded mod defines that action.")
+                })?;
+                let params = command
+                    .args
+                    .get("params")
+                    .and_then(Value::as_map)
+                    .map(|map| {
+                        map.iter()
+                            .map(|(name, value)| (name.to_string(), value.to_stored()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Ok(Command::React {
+                    entity,
+                    window,
+                    action,
+                    params,
+                })
+            }
             COMMAND_CHOOSE => {
                 let entity = match command.args.get("entity") {
                     Some(value) => match session.sim.subject_of(value) {
@@ -296,8 +352,46 @@ impl SceneHost for GameHost {
                     prompt,
                     options: options.into_iter().map(|option| option.label).collect(),
                 },
-                // Reactions come with the package that opens windows to
-                // them (T5).
+                DecisionKind::Reaction {
+                    window,
+                    deadline,
+                    options,
+                } => {
+                    let sim = &session.sim;
+                    let actions = sim.defs().try_registry::<ActionDef>();
+                    let time_left = sim
+                        .window_time_left(window, request.entity)
+                        .map_or(0.0, seconds);
+                    // The whole window in the character's own time: its
+                    // universal length at the rate the time left shows.
+                    let time_total = match (deadline, sim.windows().get(window)) {
+                        (Some(deadline), Some(open)) => {
+                            let total = seconds(deadline.since(open.opened));
+                            let left = seconds(deadline.since(sim.now()));
+                            if left > 0.0 {
+                                total * time_left / left
+                            } else {
+                                total
+                            }
+                        }
+                        _ => time_left,
+                    };
+                    DecisionAsk::Reaction {
+                        window: sim.window_value(window),
+                        options: options
+                            .into_iter()
+                            .map(|option| clash_scene::ReactionOption {
+                                action: actions
+                                    .map(|registry| registry.name(option.action).to_owned())
+                                    .unwrap_or_default(),
+                                label: option.label,
+                                in_time: option.in_time,
+                            })
+                            .collect(),
+                        time_left,
+                        time_total,
+                    }
+                }
                 _ => return None,
             };
             Some(PendingDecision { entity, kind })
