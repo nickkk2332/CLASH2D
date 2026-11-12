@@ -32,6 +32,7 @@ const GRID: GridId = GridId::new(0);
 /// help, a talk option, and a hook that keeps one listener from
 /// understanding anything.
 const FIXTURES: &str = r#"[
+  { "type": "window_kind", "id": "test_threat", "reach": 5 },
   { "type": "event", "id": "theft", "subjects": { "thief": "entity" },
     "doc": "Someone took what was not theirs." },
   { "type": "event_signal", "id": "theft_heard", "event": "core:theft",
@@ -585,6 +586,53 @@ fn a_bodyguard_intervenes_for_whom_it_guards() {
     social::set_relation(&mut sim, guard, toward, guards, Real::ONE, Cause::DEBUG).unwrap();
     assert!(social::intervenes(&sim, guard, ward));
     assert!(!social::intervenes(&sim, ward, guard));
+}
+
+#[test]
+fn a_bodyguard_is_offered_the_window_opened_against_whom_it_guards() {
+    // Cleo threatens Ada. Bram, who guards her, is offered the window by
+    // his relation; Dan, who stands as near and guards nobody, is not.
+    let mut sim = city(16);
+    let ada = person(&mut sim, "Ada", &[], street(2));
+    let bram = person(&mut sim, "Bram", &[], street(4));
+    let cleo = person(&mut sim, "Cleo", &[], street(3));
+    let dan = person(&mut sim, "Dan", &[], street(1));
+    let guards = kind(&sim, "guards");
+    let toward = Toward::Persona(social::persona_of(&sim, bram, ada));
+    social::set_relation(&mut sim, bram, toward, guards, Real::ONE, Cause::DEBUG).unwrap();
+    let threat = sim
+        .defs()
+        .lookup::<clash_sim::action::WindowKindDef>("core:test_threat")
+        .unwrap();
+    let ty = sim.exprs().registry().def_type_id("window_kind").unwrap();
+    let args = [
+        (
+            "kind",
+            Value::Id(clash_expr::DefRef::new(ty, u32::from(threat.raw()))),
+        ),
+        ("source", entity_value(&sim, cleo)),
+        ("for", Value::list([entity_value(&sim, ada)])),
+        ("time", Value::Real(Real::of(2.0))),
+    ];
+    verb(&mut sim, "open_window", &args);
+    let offered: Vec<(EntityId, clash_sim::action::Offered)> = sim
+        .windows()
+        .iter()
+        .find(|(_, window)| window.source == Some(cleo))
+        .map(|(_, window)| {
+            window
+                .candidates
+                .iter()
+                .map(|candidate| (candidate.entity, candidate.offered))
+                .collect()
+        })
+        .unwrap();
+    use clash_sim::action::Offered;
+    assert_eq!(
+        offered,
+        [(ada, Offered::Named), (bram, Offered::Intervenes)]
+    );
+    assert!(!offered.iter().any(|(who, _)| *who == dan));
 }
 
 /// A master and a servant who hears, made loyal to the master.

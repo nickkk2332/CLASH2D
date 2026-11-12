@@ -695,8 +695,8 @@ withdrawn when the relation goes; `relation_kind`s, groups and the rules
 `do_as_ordered` and `stop_when_released` in `mods/core/data/social`. Each
 "Done when" is a test, and `minion_orders` a test script. Review
 additions: "Relations that intervene" is `social::intervenes`, which
-windows (T5, not built) are to ask; the test script `bodyguard` waits for
-them. "Roles that spend" is recorded on the group definition, not yet
+windows ask: a test opens a window against someone and their bodyguard is
+offered it by relation. "Roles that spend" is recorded on the group definition, not yet
 readable by rules. Stubbed: a role's `orders` is not enforced;
 collectives; group variables. Minds (09 §6.6) take their stances from
 relations once they have perceived someone: hostile where `stance_to` is

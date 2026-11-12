@@ -196,6 +196,7 @@ whole of what a modder writes and reads; section 17 lists it by kind.
 | `crowd_cost` | metres, default 3 | What a step into a cell where it saw someone in the last five seconds costs it more (section 5.3) |
 | `hazards` | list of `{ events, radius = 2, cost = 10, below = 0.05 }` | Wherever it remembers one of `events` with salience at least `below`, steps within `radius` metres cost `cost` metres more |
 | `senses` | list of `sense` ids | Given to its character when the mind first thinks, if it has no senses: a character made without any perceives with these. A directly controlled character never thinks, and is given senses by whoever made it |
+| `reactions` | list of `action` ids | The reactions it answers a window its character noticed with, in order of preference (section 6.3). Default none: it answers nothing |
 | `doc` | text | What it is |
 
 `routine` and `tactics` are not built.
@@ -501,6 +502,17 @@ When a character notices a window (03 §7), the bundled rules ask the
 engine for `best_reaction`: the available reaction that would be ready in
 time and most reduces the previewed harm, by its tactics. A character's
 stance (07 §12) may forbid or prefer some.
+
+As built by package T5 (decisions D-711, D-716): when a character that
+is not directly controlled notices a window (`window_noticed`), its mind
+answers with the first of its definition's `reactions` that may start
+and would be ready in time, else the first that may start, through
+`Sim::react`; `Sim::reaction_options(entity, window)` gives each option's
+timing and refusal. A mind with no `reactions` answers nothing, and a
+stance attached as a rule (`core:parry_on_notice` and its like) answers
+beside it. The bundled guard blocks, then ducks; the townsperson and the
+dog answer nothing. `best_reaction`, scored by tactics and previews, is
+not built.
 
 ### 6.4 Positions
 

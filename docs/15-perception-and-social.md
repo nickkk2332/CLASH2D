@@ -1045,7 +1045,7 @@ As built (decisions D-761, D-762, D-765), in `clash_sim::social`:
   `stance_to(x)` (string), `in_group(group)` (bool), `role_in(group)`
   (string?). The function `intervenes(a, b)` (bool?) is whether `a`
   holds toward whom it takes `b` for a kind flagged `intervenes` above
-  its default: whoever builds windows (T5) asks it.
+  its default: what windows ask (03 §7.1), bound with every simulation.
 - **Templates** name the groups a thing made from them joins: `groups`,
   group id to role (`""` for none), joined openly when `entity_spawned`
   is delivered. A group a template names that no definition answers to
@@ -1386,7 +1386,9 @@ settings.
 - Effects: `emit_signal { kind: string, at: any, strength: real, about?:
   entity }` (§3.2); `face { who: entity, toward: any }` (§4);
   `set_awareness { who: entity, of: entity, sense: string, level: real
-  }` (§5.1); `add_track { who: entity, of: entity, at?: any, how?:
+  }` (§5.1); `attach_sense { who: entity, sense: string }`, which gives
+  an entity a sense, refused with `perception.has_sense` for one it has
+  (§4; decision D-715); `add_track { who: entity, of: entity, at?: any, how?:
   string, confidence?: real }`, `clear_track { who: entity, of: entity
   }`, `remember { who: entity, event: string, at?: any, salience?: real,
   actor?: entity }` (§7.1).
@@ -1451,7 +1453,7 @@ content: giving senses from traits (`attach_sense` and
 `detach_sense` are verbs; templates and minds give senses, D-696);
 setting a standing signature (`set_signature`); the list of what one
 can say to another (`social::talk_options`, for the application's talk
-screen); `social::intervenes`, for whoever builds windows (T5);
+screen);
 an explicit search or listen with a bonus (`search`, for the actions);
 noting an element (`note_element`); recording an observed capability
 (`observe_capability`); the omniscient switch (`set_omniscient`); and

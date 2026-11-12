@@ -246,6 +246,80 @@ pub const COMBAT_EVENTS: &[CombatEvent] = &[
         hook: Some(&["speed", "dir"]),
         doc: "Runs before a push moves `self` (07 §7). A handler may change the speed and the direction, or cancel: nothing moves it.",
     },
+    CombatEvent {
+        name: super::defence::DEFENCE_RESOLVING,
+        subjects: &[
+            ("self", "entity"),
+            ("attacker", "entity"),
+            ("target", "entity"),
+        ],
+        fields: &[
+            (
+                "action",
+                "string",
+                "The qualified id of the defending action.",
+            ),
+            ("form", "string", "`avoid` or `interpose`."),
+            (
+                "succeeded",
+                "bool",
+                "Whether it succeeds: its contest's margin was at or above zero, or it has none.",
+            ),
+            (
+                "margin",
+                "real?",
+                "The margin of its contest; null for a defence with none.",
+            ),
+            (
+                "deflect",
+                "real",
+                "The share of the strike's energy it turns aside, 0 to 1.",
+            ),
+            (
+                "holds",
+                "real?",
+                "The most joules it can turn aside; null for no limit.",
+            ),
+            ("brace", "real", "The share of the push it resists, 0 to 1."),
+        ],
+        hook: Some(&["succeeded", "deflect", "holds", "brace"]),
+        doc: "Runs before a defence of `self` in force is applied to a strike by `attacker` at `target` (07 §5, step 5 of 07 §3.4). A handler may change how much it turns (`deflect`, `holds`), what it braces, or make it fail (`succeeded` false, or cancel).",
+    },
+    CombatEvent {
+        name: super::defence::STRIKE_DEFENDED,
+        subjects: &[
+            ("self", "entity"),
+            ("target", "entity"),
+            ("defender", "entity"),
+        ],
+        fields: &[
+            ACTION,
+            ATTACK,
+            (
+                "defence",
+                "string",
+                "The qualified id of the defending action.",
+            ),
+            ("form", "string", "`avoid` or `interpose`."),
+            (
+                "succeeded",
+                "bool",
+                "Whether it succeeded. An `avoid` that succeeded makes the strike miss (`strike_missed` with `why` `defence`).",
+            ),
+            (
+                "margin",
+                "real?",
+                "The margin of the defence's contest; null for one with none.",
+            ),
+            (
+                "turned",
+                "real",
+                "Joules it turned aside (07 §5.3); zero for one that avoids or failed.",
+            ),
+        ],
+        hook: None,
+        doc: "A strike by `self` at `target` met a defence of `defender` in force that covered it (07 §5, step 5 of 07 §3.4). Raised once for each defence tried, in the order they are tried.",
+    },
 ];
 
 /// The type a raised field is checked against, from how it is written.

@@ -372,6 +372,8 @@ pub(crate) fn universal_now(sim: &Sim) -> Dur {
 /// forgotten. Called when a simulation is made and again after a load.
 pub(crate) fn bind(sim: &mut Sim) {
     sim.set_reader_lens(social_lens);
+    // Who is offered a window opened against someone (03 §7.1).
+    sim.set_intervenes(Some(relation::intervenes));
     let _ = sim.on("entity_spawned", Handler::new(group::spawned));
     let _ = sim.on("entity_removed", Handler::new(removed));
 }

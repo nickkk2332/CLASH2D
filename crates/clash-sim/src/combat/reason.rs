@@ -56,6 +56,10 @@ pub const COMBAT_REASONS: &[ReasonInfo] = &[
         code: NOTHING_THERE,
         doc: "A strike at a cell found the cell not loaded, outside its grid, or holding no floor, block or fixture. Values: `cell`.",
     },
+    ReasonInfo {
+        code: super::defence::DEFENDED,
+        doc: "A strike reached its target and nothing of it was delivered: the defences in force turned it aside, and what was put in the way took the rest (07 §5.3). Carried by `strike_stopped`. Values: `target`.",
+    },
 ];
 
 /// The setting below whose push speed a target does not move: metres a

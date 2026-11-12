@@ -74,7 +74,8 @@ pub struct Sim {
     pub(crate) shelf: Shelf,
     /// Every running action. A placeholder until package T3.
     pub actions: ActionTable,
-    /// Every open window. A placeholder until package T5.
+    /// Every open window, and what defences in force have dealt with
+    /// (03 §7, 07 §5).
     pub windows: WindowTable,
     /// What the rule runtime keeps. A placeholder until package K5.
     pub rules: RuleState,
@@ -136,6 +137,10 @@ pub struct Sim {
     /// Not state: how many strikes are being resolved inside one another
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
+    /// Not state: what answers whether one entity holds an `intervenes`
+    /// relation toward another: the social layer's, bound with every
+    /// simulation, unless a test supplies another ([`Sim::set_intervenes`]).
+    pub(crate) intervenes: Option<crate::action::IntervenesFn>,
 }
 
 /// Why saved state could not be loaded.
@@ -321,6 +326,7 @@ impl Sim {
             ai: crate::ai::AiState::default(),
             ai_defs,
             strike_depth: 0,
+            intervenes: None,
         };
         sim.bind_runtime();
         sim
@@ -863,6 +869,7 @@ impl Sim {
             ai: saved.ai,
             ai_defs,
             strike_depth: 0,
+            intervenes: None,
         };
         sim.bind_runtime();
         Ok(sim)

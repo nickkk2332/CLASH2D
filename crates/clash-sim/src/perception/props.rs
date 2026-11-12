@@ -385,6 +385,16 @@ fn verb_set_awareness(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Resu
     Ok(Value::Null)
 }
 
+fn verb_attach_sense(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Result<Value, Reason> {
+    let who = arg_entity(sim, call, 0, "who")?;
+    let name = call.args.get(1).and_then(Value::as_str).unwrap_or("");
+    let sense = sim.perception_defs.sense_named(name).ok_or_else(|| {
+        Reason::new(why::UNKNOWN_SENSE, format!("there is no sense `{name}`")).with("sense", name)
+    })?;
+    super::senses::attach_sense(sim, who, sense)?;
+    Ok(Value::Null)
+}
+
 fn verb_add_track(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Result<Value, Reason> {
     let who = arg_entity(sim, call, 0, "who")?;
     let of = arg_entity(sim, call, 1, "of")?;
@@ -459,13 +469,6 @@ fn sense_arg(sim: &Sim, call: &VerbCall<'_>, at: usize) -> Result<super::SenseId
     })
 }
 
-fn verb_attach_sense(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Result<Value, Reason> {
-    let who = arg_entity(sim, call, 0, "who")?;
-    let sense = sense_arg(sim, call, 1)?;
-    senses::attach_sense(sim, who, sense)?;
-    Ok(Value::Null)
-}
-
 fn verb_detach_sense(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Result<Value, Reason> {
     let who = arg_entity(sim, call, 0, "who")?;
     let sense = sense_arg(sim, call, 1)?;
@@ -476,19 +479,6 @@ fn verb_detach_sense(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Resul
 /// The verbs of perception (15 §15).
 pub(crate) fn verbs() -> Vec<VerbDef> {
     vec![
-        VerbDef {
-            name: "attach_sense",
-            build: |registry: &Registry| {
-                let entity = registry.kind_id("entity")?;
-                Some(
-                    VerbSpec::new("attach_sense")
-                        .arg("who", Type::Subject(entity), "Who is given the sense.")
-                        .arg("sense", Type::Str, "The sense's id, qualified or bare.")
-                        .doc("Gives an entity a sense (15 §4): it sweeps from its next interval. Refused with `perception.unknown_sense` and `perception.has_sense`."),
-                )
-            },
-            run: verb_attach_sense,
-        },
         VerbDef {
             name: "detach_sense",
             build: |registry: &Registry| {
@@ -544,6 +534,19 @@ pub(crate) fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: verb_set_awareness,
+        },
+        VerbDef {
+            name: "attach_sense",
+            build: |registry: &Registry| {
+                let entity = registry.kind_id("entity")?;
+                Some(
+                    VerbSpec::new("attach_sense")
+                        .arg("who", Type::Subject(entity), "Who is given it.")
+                        .arg("sense", Type::Str, "The sense's id, qualified or bare.")
+                        .doc("Gives an entity a sense (15 §4): it sweeps at the sense's interval from now on. Refused for a sense it has already (`perception.has_sense`) or that is not loaded."),
+                )
+            },
+            run: verb_attach_sense,
         },
         VerbDef {
             name: "add_track",
