@@ -318,6 +318,10 @@ pub enum EventBody {
         /// What to make and what else the request says.
         request: SpawnRequest,
     },
+    /// Something happened to an action, a plan or a free decision, a
+    /// rule told a player something, or a tag changed (03 §13,
+    /// 05 §10.6): see [`ActEvent`](crate::action::ActEvent).
+    Act(crate::action::ActEvent),
 }
 
 impl EventBody {
@@ -338,6 +342,7 @@ impl EventBody {
             EventBody::EntityExposed { .. } => "entity_exposed",
             EventBody::SpawnRequested { .. } => "spawn_requested",
             EventBody::VarChanged { .. } => "var_changed",
+            EventBody::Act(event) => event.name(),
         }
     }
 
@@ -384,6 +389,7 @@ impl EventBody {
                 Some(name) => vec![(name, *owner)],
                 None => Vec::new(),
             },
+            EventBody::Act(event) => event.subjects(),
         }
     }
 
@@ -451,6 +457,7 @@ impl EventBody {
             | EventBody::EntityRelocated { .. }
             | EventBody::DecisionRequested { .. }
             | EventBody::EntityUnsupported { .. } => None,
+            EventBody::Act(event) => event.field(name),
         }
     }
 }
@@ -824,6 +831,8 @@ impl StateHash for EventBody {
                 old.state_hash(hasher);
                 new.state_hash(hasher);
             }
+            // The event hashes its own name first.
+            EventBody::Act(event) => event.state_hash(hasher),
         }
     }
 }

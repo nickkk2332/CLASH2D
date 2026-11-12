@@ -286,3 +286,30 @@ pub fn entity_of(event: &SimEvent, name: &str) -> Option<EntityId> {
         _ => None,
     })
 }
+
+/// Loads `mods/core`'s world content and, beside it, fixture mods found
+/// under `search`, by id: the definitions a test of rules or actions
+/// runs on, loaded through the loader as a game's are.
+pub fn defs_with(search: &Path, mods: &[&str]) -> Arc<Defs> {
+    let types = types();
+    let files = core_files();
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect();
+    let mut listed = vec!["core"];
+    listed.extend_from_slice(mods);
+    Loader::new(&types)
+        .expr_registry(&clash_sim::engine_registry())
+        .memory_mod("core", r#"{ "id": "core" }"#, &files)
+        .search_path(search)
+        .load_mods(&listed)
+        .into_result()
+        .unwrap_or_else(|diagnostics| panic!("the fixtures do not load:\n{}", diagnostics.render()))
+}
+
+/// The fixture mods of the tests of rules and actions bound to the
+/// simulation.
+pub fn act_fixtures() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/act/mods")
+}

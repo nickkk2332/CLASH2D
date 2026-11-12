@@ -1614,6 +1614,8 @@ fn every_core_effect_compiles() {
       { "after": "1 s", "do": [] },
       { "every": "1 s", "do": [] },
       { "cancel_timer": "t" },
+      { "message": { "to": "who", "text": "{name(who)} is pinged." } },
+      { "ask": { "who": "who", "prompt": "Answer?", "options": [ { "label": "Yes", "do": [] } ] } },
       { "return": null },
       { "stop": {} }
     ] }

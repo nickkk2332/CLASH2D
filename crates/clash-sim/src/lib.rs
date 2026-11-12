@@ -67,10 +67,12 @@ pub mod entity;
 pub mod event;
 pub mod host;
 pub mod item;
+pub mod kernel_verbs;
 pub mod later;
 pub mod mass;
 pub mod movement;
 mod props;
+pub mod reader;
 pub mod reason;
 pub mod registry;
 pub mod rule;
@@ -92,7 +94,9 @@ pub use bus::{
 };
 pub use clock::ClockTarget;
 pub use command::{Command, CommandError, DebugCommand, InputLog, LogEntry};
-pub use decision::{DecisionKind, DecisionQueue, DecisionRequest, FreeReason};
+pub use decision::{
+    ChoiceId, ChoiceOption, DecisionKind, DecisionQueue, DecisionRequest, FreeReason,
+};
 pub use entity::{
     Control, EntitySpec, EntityTable, KernelEntity, MAX_CONTAINMENT_DEPTH, Place, Presence, Tags,
     Unplaced,

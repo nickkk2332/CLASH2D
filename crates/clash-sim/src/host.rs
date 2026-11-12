@@ -40,16 +40,15 @@
 //! | A subject, a local, an event field, by slot | What was bound; null for a slot nothing was bound to |
 //! | A property of a handle | The getter registered for it, read from truth; null for a subject that no longer exists or a property that is not the simulation's |
 //! | A variable of a handle | What was set; else the declared default; else null |
-//! | A function | The body registered for it; `exists`; the reader's text helpers, in plain forms until the message package gives a reader |
+//! | A function | The body registered for it; `exists`; the reader's text helpers ([`reader`](crate::reader)), for nobody in particular: no one is "you" |
 //! | The random stream | The rule stream, inside [`Sim::with_random`]; none otherwise, and a random function then gives null with a warning |
 //! | A warning | Kept, up to [`MAX_HOST_WARNINGS`], for the caller to take |
 
-use clash_core::{Real, Rng};
+use clash_core::{EntityId, Rng};
 use clash_data::Runner;
 use clash_expr::{Compiled, DefRef, FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value};
 
 use crate::Sim;
-use crate::component::Identity;
 use crate::event::Subject;
 
 /// The name of the random stream rules draw from (05 §4.7).
@@ -118,6 +117,8 @@ pub struct SimHost<'a> {
     rng: Option<Rng>,
     warnings: Vec<RuntimeWarning>,
     dropped: usize,
+    /// Who a text is being written for (05 §4.6), if anyone.
+    reader: Option<EntityId>,
 }
 
 impl<'a> SimHost<'a> {
@@ -172,7 +173,7 @@ impl Host for SimHost<'_> {
     }
 
     fn call(&mut self, function: FunctionId, args: &[Value]) -> Value {
-        self.sim.call_function(function, args)
+        self.sim.call_function_for(function, args, self.reader)
     }
 
     fn rng(&mut self) -> Option<&mut Rng> {
@@ -257,6 +258,19 @@ impl Sim {
     /// The result of a function the simulation registered, by the id
     /// the registry gave it. Null for one that is not the simulation's.
     pub fn call_function(&self, function: FunctionId, args: &[Value]) -> Value {
+        self.call_function_for(function, args, None)
+    }
+
+    /// The result of a function, as [`call_function`](Sim::call_function)
+    /// gives it, where a text is being written for a reader (05 §4.6):
+    /// the text helpers then say "you" of the reader and name everyone
+    /// else as the reader knows them ([`reader`](crate::reader)).
+    pub fn call_function_for(
+        &self,
+        function: FunctionId,
+        args: &[Value],
+        reader: Option<EntityId>,
+    ) -> Value {
         if let Some(def) = self.exprs.function(function) {
             return (def.call)(self, args);
         }
@@ -280,66 +294,9 @@ impl Sim {
                 _ => true,
             }),
             other => self
-                .reader_text(other, &first, args.get(1))
+                .reader_text(other, &first, args.get(1), reader)
                 .map_or(Value::Null, Value::from),
         }
-    }
-
-    /// What something is called, plainly: an entity's own name, a
-    /// site's name, a text as it is.
-    fn plain_name(&self, value: &Value) -> String {
-        let named = match self.subject_of(value) {
-            Some(Subject::Entity(id)) => self
-                .components
-                .get::<Identity>(id)
-                .and_then(Identity::name)
-                .map(str::to_owned),
-            Some(Subject::Site(id)) => self.cosmos.site(id).map(|site| site.name.clone()),
-            _ => None,
-        };
-        match (named, value) {
-            (Some(name), _) => name,
-            (None, Value::Str(text)) => text.to_string(),
-            (None, Value::Subject(_)) => "something".to_owned(),
-            (None, other) => other.to_string(),
-        }
-    }
-
-    /// The text helpers for a reader (05 §4.6), in plain forms: there is
-    /// no reader and no `language` definition until the message package
-    /// (K9) and perception (first-playable S5, S6) are built, so nobody
-    /// is "you" and everything goes by its own name.
-    fn reader_text(&self, helper: &str, first: &Value, second: Option<&Value>) -> Option<String> {
-        let word = second.and_then(Value::as_str).unwrap_or("");
-        Some(match helper {
-            "name" => self.plain_name(first),
-            "the" => format!("the {}", self.plain_name(first)),
-            "a" => format!("a {}", self.plain_name(first)),
-            "they" => "they".to_owned(),
-            "them" => "them".to_owned(),
-            "their" => "their".to_owned(),
-            "themself" => "themself".to_owned(),
-            "verb" => format!("{word}s"),
-            "count" => {
-                let one = first.as_number() == Some(Real::ONE);
-                format!("{first} {word}{}", if one { "" } else { "s" })
-            }
-            "plural" => format!("{}s", first.as_str().unwrap_or("")),
-            "list" => {
-                let names: Vec<String> = first
-                    .as_list()
-                    .unwrap_or(&[])
-                    .iter()
-                    .map(|item| self.plain_name(item))
-                    .collect();
-                match names.split_last() {
-                    None => String::new(),
-                    Some((only, [])) => only.clone(),
-                    Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
-                }
-            }
-            _ => return None,
-        })
     }
 
     /// A host over the simulation for evaluations that only read. A
@@ -352,6 +309,17 @@ impl Sim {
             rng: None,
             warnings: Vec::new(),
             dropped: 0,
+            reader: None,
+        }
+    }
+
+    /// A host as [`host`](Sim::host) makes it, for a text written for a
+    /// reader (05 §4.6): the text helpers say "you" of `reader` and name
+    /// everyone else as `reader` knows them ([`reader`](crate::reader)).
+    pub fn host_for_reader(&self, bound: Bound, reader: EntityId) -> SimHost<'_> {
+        SimHost {
+            reader: Some(reader),
+            ..self.host(bound)
         }
     }
 
@@ -367,6 +335,7 @@ impl Sim {
             rng: Some(rng),
             warnings: Vec::new(),
             dropped: 0,
+            reader: None,
         };
         let result = run(&mut host);
         if let Some(rng) = host.rng.take() {
