@@ -65,7 +65,13 @@ pub fn types() -> DefTypes {
 /// The world definition files of `mods/core`, as paths within the mod
 /// and their text, in file-name order.
 fn core_files() -> Vec<(String, String)> {
-    let dir = mods_dir().join("core/data/world");
+    core_dir_files("world")
+}
+
+/// The definition files of one directory under `mods/core/data`, as
+/// paths within the mod and their text, in file-name order.
+fn core_dir_files(sub: &str) -> Vec<(String, String)> {
+    let dir = mods_dir().join("core/data").join(sub);
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -81,7 +87,7 @@ fn core_files() -> Vec<(String, String)> {
             let name = file.file_name().unwrap_or_default().to_string_lossy();
             let text = std::fs::read_to_string(file)
                 .unwrap_or_else(|error| panic!("{}: {error}", file.display()));
-            (format!("data/world/{name}"), text)
+            (format!("data/{sub}/{name}"), text)
         })
         .collect()
 }
@@ -120,6 +126,25 @@ pub fn try_defs_with(extra: &[(&str, &str)]) -> Result<Arc<Defs>, String> {
         .load_mods(&["core"])
         .into_result()
         .map_err(|diagnostics| diagnostics.render())
+}
+
+/// Loads `mods/core`'s world content and its living things (bodies,
+/// stats, templates), with one more file of definitions.
+pub fn life_defs(extra: &str) -> Arc<Defs> {
+    let life = core_dir_files("life");
+    let mut files: Vec<(&str, &str)> = life
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect();
+    // The channel arms supply is defined with `mods/core`'s items,
+    // which need the interface's colours: here it is on its own.
+    files.push((
+        "data/test/channels.json",
+        r#"[{ "type": "channel", "id": "arm", "name": "arm" }]"#,
+    ));
+    files.push(("data/test/extra.json", extra));
+    try_defs_with(&files)
+        .unwrap_or_else(|error| panic!("the test definitions do not load:\n{error}"))
 }
 
 /// The definitions every test here runs on.

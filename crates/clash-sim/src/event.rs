@@ -322,6 +322,22 @@ pub enum EventBody {
     /// rule told a player something, or a tag changed (03 §13,
     /// 05 §10.6): see [`ActEvent`](crate::action::ActEvent).
     Act(crate::action::ActEvent),
+    /// A part came off a body, with everything on it and in it: cut
+    /// off, destroyed, or taken off by an edit (06 §7.5). The event
+    /// carries the part as it was, for whoever makes an item of it.
+    PartDetached {
+        /// Whose body it came off.
+        entity: EntityId,
+        /// Where that body stands, if it is in the world.
+        loc: Option<Location>,
+        /// Whether the part's definition says it leaves an item, and
+        /// not nothing.
+        leaves_item: bool,
+        /// The part and what went with it: keys, names, layers and
+        /// damage, the wounds that were on them, their mass, how it
+        /// came off and the cause.
+        detached: Box<crate::body::Detached>,
+    },
 }
 
 impl EventBody {
@@ -343,6 +359,7 @@ impl EventBody {
             EventBody::SpawnRequested { .. } => "spawn_requested",
             EventBody::VarChanged { .. } => "var_changed",
             EventBody::Act(event) => event.name(),
+            EventBody::PartDetached { .. } => "part_detached",
         }
     }
 
@@ -390,6 +407,13 @@ impl EventBody {
                 None => Vec::new(),
             },
             EventBody::Act(event) => event.subjects(),
+            EventBody::PartDetached { entity, loc, .. } => {
+                let mut subjects = vec![("self", Subject::Entity(*entity))];
+                if let Some(loc) = loc {
+                    subjects.push(("here", Subject::Loc(*loc)));
+                }
+                subjects
+            }
         }
     }
 
@@ -450,6 +474,25 @@ impl EventBody {
                 "scope" => Some(FieldValue::text(owner.kind())),
                 "old" => Some(old.clone()),
                 "new" => Some(new.clone()),
+                _ => None,
+            },
+            EventBody::PartDetached {
+                leaves_item,
+                detached,
+                ..
+            } => match name {
+                "part" => detached
+                    .parts
+                    .first()
+                    .map(|part| FieldValue::text(part.name())),
+                "how" => Some(FieldValue::text(match detached.how {
+                    crate::body::Detach::Severed => "severed",
+                    crate::body::Detach::Destroyed => "destroyed",
+                    crate::body::Detach::Removed => "removed",
+                })),
+                "mass" => Some(FieldValue::from(detached.mass)),
+                "parts" => Some(FieldValue::from(detached.parts.len() as i64)),
+                "leaves_item" => Some(FieldValue::from(*leaves_item)),
                 _ => None,
             },
             EventBody::EntityCreated { .. }
@@ -833,6 +876,18 @@ impl StateHash for EventBody {
             }
             // The event hashes its own name first.
             EventBody::Act(event) => event.state_hash(hasher),
+            EventBody::PartDetached {
+                entity,
+                loc,
+                leaves_item,
+                detached,
+            } => {
+                hasher.write_str(self.name());
+                entity.state_hash(hasher);
+                loc.state_hash(hasher);
+                hasher.write_bool(*leaves_item);
+                (**detached).state_hash(hasher);
+            }
         }
     }
 }
@@ -1010,6 +1065,34 @@ pub const KERNEL_EVENTS: &[EventInfo] = &[
             ),
         ],
         doc: "A hook was cancelled: what it preceded did not happen. The hook's own subjects are not bound; its cause is carried.",
+    },
+    EventInfo {
+        name: "part_detached",
+        subjects: &[("self", "entity"), ("here?", "loc")],
+        fields: &[
+            (
+                "part",
+                "string",
+                "The name, in the body it came off, of the part that came off.",
+            ),
+            ("how", "string", "`severed`, `destroyed` or `removed`."),
+            (
+                "mass",
+                "real",
+                "The mass of the part and everything that went with it, in kilograms.",
+            ),
+            (
+                "parts",
+                "int",
+                "How many parts came off: the part and what was on it and in it.",
+            ),
+            (
+                "leaves_item",
+                "bool",
+                "Whether the part's definition says it leaves an item, and not nothing.",
+            ),
+        ],
+        doc: "A part came off a body with everything on it and in it: cut off or destroyed by a hit, or taken off by an edit (06 §7.5). `self` is whose body it was and `here` is where that body stands. In Rust the event carries the part itself, for whoever makes an item of it.",
     },
 ];
 

@@ -1,0 +1,42 @@
+[
+  { "//": "What living bodies are made of. Each says what opening it drains, what absorbing a hit adds to, and how fast it mends.",
+    "type": "material", "id": "skin", "density": 1100, "toughness": "2 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "200 kPa" },
+      "cut":    { "threshold": "1 MPa" },
+      "pierce": { "threshold": "1 MPa" },
+      "blast":  { "threshold": "50 kPa" } },
+    "leak":   { "pool": "blood", "rate": 0.05, "closes": "5 min" },
+    "signal": { "pool": "pain", "per_joule": 0.5 },
+    "heal":   "0.5 /d" },
+
+  { "type": "material", "id": "muscle", "density": 1060, "toughness": "1 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "100 kPa" },
+      "cut":    { "threshold": "500 kPa" },
+      "pierce": { "threshold": "500 kPa" },
+      "blast":  { "threshold": "50 kPa" } },
+    "leak":   { "pool": "blood", "rate": 3.0, "closes": "30 min" },
+    "signal": { "pool": "pain", "per_joule": 0.2 },
+    "heal":   "0.1 /d" },
+
+  { "type": "material", "id": "bone", "density": 1900, "toughness": "100 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "2 MPa" },
+      "cut":    { "threshold": "50 MPa" },
+      "pierce": { "threshold": "50 MPa" },
+      "blast":  { "threshold": "500 kPa" } },
+    "signal": { "pool": "pain", "per_joule": 0.1 },
+    "heal":   "0.02 /d" },
+
+  { "//": "Opened, it does not stop bleeding unaided.",
+    "type": "material", "id": "organ", "density": 1050, "toughness": "300 kJ/m3",
+    "resist": {
+      "impact": { "threshold": "50 kPa" },
+      "cut":    { "threshold": "100 kPa" },
+      "pierce": { "threshold": "100 kPa" },
+      "blast":  { "threshold": "30 kPa" } },
+    "leak":   { "pool": "blood", "rate": 40.0 },
+    "signal": { "pool": "pain", "per_joule": 0.5 },
+    "heal":   "0.05 /d" }
+]

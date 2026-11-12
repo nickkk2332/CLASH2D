@@ -25,9 +25,9 @@ actions that call `hit`.
 | E4 | Bodies | L | E2, T3 | beta |
 | E5 | Hits and wounds | L | E4, W12 | beta |
 | E6 | Body editing | M | E4 | todo |
-| E7 | Minds and vital state | M | E1, T4 | todo |
+| E7 | Minds and vital state | M | E1, T4 | beta |
 | E8 | Items and holds | L | E5 | beta |
-| E9 | Templates and creation | L | E3, E6, E8 | todo |
+| E9 | Templates and creation | L | E3, E6, E8 | beta |
 | E10 | Movement | M | E4, W14, W18 | beta |
 | E11 | Coming and going | L | E9, W8 | todo |
 | E12 | Minimal devices | M | E8 | todo |
@@ -125,6 +125,10 @@ removal and writes changed masses to the world's occupant records
 back are registered (06 §13). Still stubbed: definition ids in saved
 components go through no id table (K7); `templates` is not a property.
 
+Since (decisions D-550, D-558): the `Mind` and `Driver` components
+follow `Body` in the list, and `Identity` says whether an individual is
+anonymous; the save layout version is 5.
+
 ### E2 — Attributes, pools, tracks
 
 **Spec** 06 §4 · **Size** M
@@ -166,6 +170,20 @@ calling `refresh` when a reactive input changes (05 §7.5); moving what is
 seated in a mind (E7); a pool that names a substance (G19). No test
 script, since nothing here can be reached from the console until the
 kernel holds it, so `gas_mask` waits with E8; and no benchmark (Z1).
+
+Joined to the simulation since (decisions D-550 to D-552): the tables
+are built at set-up and after a load; `Sim::attach_stats`,
+`give_pool`, `pool_add` (after `pool_changing`), `pool_spend`,
+`pool_rate`, `set_attr_base`, `add_modifier`, `remove_modifier`,
+`advance_track` and `refresh_stats` raise every change as its event in
+order; the `Timer` domain runs crossings; pools follow their entity's
+clock and stand still while it is away (`Pause`); the properties are
+answered by the simulation; stats are worked out again when a body
+function, the mass or a variable they read changes; the six verbs are
+in the engine's verb table; seated stats move with a mind
+(`stats::take_seated`, `give_seated`). Still stubbed: `on_advance`
+(K5 binding), a pool that names a substance (G19), definition ids
+through the save's id table (K7).
 
 ### E3 — Traits
 
@@ -262,6 +280,24 @@ holds bodies: the first in full against a timeline the test drives, the
 second only as far as impact reports becoming hits; both scripts under
 `scenarios/people/` are owed. No benchmark (Z1).
 
+E4 and E5 joined to the simulation since (decisions D-550, D-553):
+`Sim::attach_body` hands mass and size to `Physical` and the world;
+`Sim::hit` raises `hit_incoming`, applies the hit with the `hits`
+stream, raises every change, reports what came off as `part_detached`
+and carries exits on as `hit_exited`; `slots_lost` and `slots_gained`
+are raised for the action runtime to interrupt what held a slot;
+`function_changed` works the stats out again; the world's
+`occupant_exposed` and `occupant_dosed` become a hit and a dose
+(through `exposure_incoming`), and so do `body_impact` of an entity
+and `body_hit_occupant` (`Sim::body_impact`); `hit`, `close_wound`, `reopen_wound`,
+`heal_part`, `disable_part`, `restore_part` and `remove_part` are
+verbs. `one_bad_cut` and a collapse that hurts whoever stands under it
+are integration tests against the real simulation
+(`crates/clash-sim/tests/life.rs`). Hits go through what the item package says is worn, damage it, and
+make items of parts that came off. Still stubbed: the other verbs of
+06 §6.5 (E6), test
+scripts, since the simulation does not implement the console's host.
+
 ### E6 — Body editing
 
 **Spec** 06 §6.5 · **Size** M
@@ -288,6 +324,19 @@ Done when
   body-seated ones.
 - A driven body acts; a mindless undriven one does not.
 - A cancelled `entity_dying` prevents death.
+
+Beta (decisions D-554, D-555): `clash_sim::mind`: the `Mind` and
+`Driver` components; vital state derived from data, `needs` on body
+plans and `stops` on pools; `die` (after `entity_dying`), `revive`,
+`create_mind`, `remove_mind`, `transfer_mind` (after
+`mind_transferring`, with seated stats and control) and `set_driver`
+as functions and verbs; `Sim::can_act` with the reasons a command for a
+dead, unconscious or mindless entity is refused. Tested in
+`crates/clash-sim/tests/life.rs`. Stubbed: beliefs, relations and
+senses moving with a mind (15); the `mind` type (09); abilities after a
+transfer (08 §3.4); ending running actions at death, which is the
+action runtime's answer to `entity_died`; checking `can_act` on an
+`Act` command, which arrives with T4.
 
 ### E8 — Items and holds
 
@@ -346,6 +395,17 @@ Done when
 - The same spec and seed give the same entity hash (invariant B4).
 - Each choice kind has passing and failing fixtures.
 - A fixture species with its own choices builds without engine changes.
+
+Beta (decisions D-556 to D-558): `clash_sim::template`: the `template`
+type with every kind of choice and options that nest; character specs
+with default and seeded random selection; `Sim::spawn_template`, the
+verb `spawn`, the debug command `spawn` and the answer to
+`spawn_requested`; the creation session for `app.creation`; anonymous
+and notable as far as spawning needs; `person` and `dog` in
+`mods/core/data/life`. Stubbed: the `creature` type; adding the parts
+an `assemble` choice chose (E6); option conditions and a range's
+`apply`; traits and items, which are carried as ids for E3 and E8;
+`apply_template` on an existing entity; test scripts.
 
 ### E10 — Movement
 

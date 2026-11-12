@@ -236,6 +236,12 @@ impl Sim {
     /// from truth. Null for a property that is not the simulation's and
     /// for a subject that no longer exists.
     pub fn property(&self, property: PropertyId, subject: Handle, args: &[Value]) -> Value {
+        // The stats' and the bodies' properties are registered for each
+        // loaded definition and answered by their own modules (06 §4.4,
+        // §6.7).
+        if let Some(value) = self.life_property(property, subject, args) {
+            return value;
+        }
         match (self.exprs.property(property), self.exprs.subject(subject)) {
             (Some(def), Some(subject)) => (def.get)(self, subject, args),
             _ => Value::Null,

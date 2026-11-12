@@ -33,7 +33,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 5;
+pub const SAVE_VERSION: u32 = 6;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -112,6 +112,10 @@ pub struct Sim {
     /// whatever else running rules and actions needs set up
     /// ([`rule`](crate::rule)).
     pub(crate) rt: crate::rule::Runtime,
+    /// Not state: the tables of stats, bodies and templates worked out
+    /// from the definitions, and the machines their expressions run on
+    /// (06; see [`life`](crate::life)).
+    pub(crate) life: crate::life::Life,
 }
 
 /// Why saved state could not be loaded.
@@ -249,7 +253,9 @@ impl Sim {
         let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
         let rt = crate::rule::Runtime::for_defs(&defs);
+        let life = Sim::life_for(&defs, cosmos.defs());
         let mut sim = Sim {
+            life,
             defs,
             cosmos,
             timeline,
@@ -594,6 +600,9 @@ impl Sim {
                 }
                 _ => {}
             }
+            // What the world did to someone's body or pools (06 §7.4;
+            // 02 §16), to be carried out once its events are queued.
+            let harm = crate::life::harm::Harm::of(&event);
             let (cause, loc) = (event.cause(), event.location());
             let stamped = self.stamped(Where::Loc(loc), cause, EventBody::World(event));
             self.events.push_back(stamped);
@@ -617,6 +626,9 @@ impl Sim {
                     let event = self.stamped(Where::Entity(entity), cause, body);
                     self.events.push_back(event);
                 }
+            }
+            if let Some(harm) = harm {
+                self.apply_harm(harm);
             }
         }
     }
@@ -764,7 +776,9 @@ impl Sim {
         let exprs = Arc::new(Bindings::for_defs(&defs));
         let generators = clash_gen::generators(cosmos.defs());
         let rt = crate::rule::Runtime::for_defs(&defs);
+        let life = Sim::life_for(&defs, cosmos.defs());
         let mut sim = Sim {
+            life,
             defs,
             cosmos,
             timeline: saved.timeline,
