@@ -662,8 +662,9 @@ As stored (decision D-467):
 
 Not built: the scopes `region` and `subgrid` (their kinds are not
 served yet; the world keeps a region's variables and
-`Cosmos::set_region_var` writes them), `action`, `scenario` and
-`legacy`, which come with their packages.
+`Cosmos::set_region_var` writes them), `action` and `legacy`, which
+come with their packages. A scenario's variables are global variables
+(decision D-754): a game is one scenario.
 
 ## 7. Where expressions appear
 
@@ -847,6 +848,16 @@ Re-evaluation is the last step of the pump (03 §4.3). If telling an owner
 makes others stale they are evaluated in turn, at most
 `rules.max_reactive_rounds` times (default 8). What is still stale then
 is reported, with its chain, and left for the next pump.
+
+As built for a scenario's objectives and endings (decision D-755, 13
+§5.1): staleness is by event type, not by subject. When mods load, each
+condition's properties and functions are looked up for their
+`changed_by` events, and a variable it reads adds `var_changed`; a read
+with no events registered, or a query, makes it stale on every event.
+Re-evaluation is at every safe point rather than the end of each pump,
+and what is still stale after the rounds stays stale, unreported, for
+the next. Nothing else is reactive yet: a rule group's `enabled` is
+evaluated when a rule of it is about to run (section 9.6).
 
 ## 8. Events
 

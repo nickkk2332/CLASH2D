@@ -703,6 +703,11 @@ character knows.
 The notes a player makes in a case file are the character's own
 variables. They are saved, and a rule may read them.
 
+As built: the journal is `ui:journal` over `entity.objectives` (13 §13,
+decision D-756), with each objective's marker given as which way and how
+far, from what the character believes. The case file and the codex are
+not built.
+
 ## 14. Logs and failures
 
 - The engine writes a structured log: time, tick, subsystem, severity,

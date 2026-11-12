@@ -125,18 +125,19 @@ fn row(fields: Vec<(&str, Value)>) -> Value {
     Value::map(fields)
 }
 
-/// The rows of a list of objectives, as `taker` knows them.
+/// The rows of a list of objectives, as the character they are for
+/// knows them: the scenario's own (`mission` 0) or a mission's, one
+/// deeper.
 fn objective_rows(
     sim: &Sim,
     defs: &[ObjectiveDef],
     states: &[Objective],
-    taker: EntityId,
     reader: EntityId,
     params: &[clash_core::Value],
     mission: u32,
-    base: i64,
     out: &mut Vec<Value>,
 ) {
+    let (taker, base) = (reader, i64::from(mission > 0));
     let here = sim.truth().location(reader);
     for (def, state) in defs.iter().zip(states) {
         if state.state == ObjectiveState::Hidden {
@@ -194,9 +195,7 @@ pub fn journal(sim: &Sim, reader: EntityId) -> Vec<Value> {
             &def.objectives,
             &game.objectives,
             reader,
-            reader,
             &[],
-            0,
             0,
             &mut rows,
         );
@@ -229,10 +228,8 @@ pub fn journal(sim: &Sim, reader: EntityId) -> Vec<Value> {
             &def.objectives,
             &mission.objectives,
             reader,
-            reader,
             &mission.params,
             mission.serial,
-            1,
             &mut rows,
         );
     }
