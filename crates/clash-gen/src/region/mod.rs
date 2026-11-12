@@ -60,7 +60,7 @@ pub const MAX_PATH_EDGE: i32 = 8;
 /// The most paths that may cross one edge of a region.
 pub const MAX_EDGE_PATHS: u32 = 8;
 /// The most people one entry may ask for.
-pub const MAX_PEOPLE: u32 = 64;
+pub const MAX_PEOPLE: u32 = 50;
 
 /// The names `near` may take that are built.
 pub const NEAR_ROAD: &str = "road";
