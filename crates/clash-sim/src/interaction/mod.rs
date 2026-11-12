@@ -673,6 +673,76 @@ pub fn offers_near(sim: &Sim, user: EntityId) -> Vec<(Target, Vec<Offer>)> {
         .collect()
 }
 
+/// Where a target is from its user, in a word: `here`, `held`, one of
+/// the eight compass directions on the user's storey, or `up` or
+/// `down`; empty where it cannot be said.
+fn where_from(sim: &Sim, user: EntityId, target: Target) -> &'static str {
+    if let Target::Entity(id) = target
+        && sim.entities.contents_deep(user).contains(&id)
+    {
+        return "held";
+    }
+    let (Some((from, _)), Some((to, _))) =
+        (place_of(sim, Target::Entity(user)), place_of(sim, target))
+    else {
+        return "";
+    };
+    let Some(delta) = sim.cosmos.delta(from, to) else {
+        return "";
+    };
+    match (delta.x.signum(), delta.y.signum(), delta.z.signum()) {
+        (0, 0, 0) => "here",
+        (0, 0, 1) => "up",
+        (0, 0, -1) => "down",
+        (0, -1, _) => "north",
+        (1, -1, _) => "north-east",
+        (1, 0, _) => "east",
+        (1, 1, _) => "south-east",
+        (0, 1, _) => "south",
+        (-1, 1, _) => "south-west",
+        (-1, 0, _) => "west",
+        (-1, -1, _) => "north-west",
+        _ => "",
+    }
+}
+
+/// What [`offers_near`] gives, as the property `offers_near` gives it:
+/// a list of maps, each one interaction one target offers.
+fn offers_near_value(sim: &Sim, user: EntityId) -> Value {
+    let ty = sim.exprs.registry().def_type_id(InteractionDef::TYPE);
+    let mut rows = Vec::new();
+    for (target, offers) in offers_near(sim, user) {
+        let target_value = sim.subject_value(target.subject());
+        let place = where_from(sim, user, target);
+        for offer in offers {
+            let interaction = ty.map_or_else(
+                || Value::from(offer.id.as_str()),
+                |ty| {
+                    Value::Id(clash_expr::DefRef::new(
+                        ty,
+                        u32::from(offer.interaction.raw()),
+                    ))
+                },
+            );
+            let why = offer
+                .refusal
+                .as_ref()
+                .map_or_else(String::new, |reason| reason.message.clone());
+            rows.push(Value::map([
+                ("target", target_value.clone()),
+                ("interaction", interaction),
+                ("id", Value::from(offer.id.as_str())),
+                ("name", Value::from(offer.name.as_str())),
+                ("default", Value::Bool(offer.default)),
+                ("available", Value::Bool(offer.refusal.is_none())),
+                ("why", Value::from(why.as_str())),
+                ("where", Value::from(place)),
+            ]));
+        }
+    }
+    Value::list(rows)
+}
+
 // ---- Doing it --------------------------------------------------------------------
 
 /// The interaction and its definition, or why there is none.
@@ -1126,6 +1196,16 @@ pub fn properties() -> Vec<PropertyDef> {
             },
         )
         .arg("def", "id<item>", "The item definition."),
+        PropertyDef::new(
+            "entity",
+            "offers_near",
+            "list<map<any>>",
+            "What the entity, as it believes, could do within a step: every interaction offered by the elements of its cell and the cells round it on its storey, by what stands there and by what it holds (16 §3.5.1), for a menu. Each is a map: `target` (the element or the entity), `interaction` (its id), `id` (its qualified id as a text), `name` (what a menu calls it), `default` (whether it is the target's default), `available` (whether it can be done now), `why` (the refusal's sentence where it cannot, else empty) and `where` (`here`, `held`, a compass direction such as `north-east`, `up` or `down`).",
+            |sim, subject, _| match subject {
+                Subject::Entity(id) => offers_near_value(sim, id),
+                _ => Value::list([]),
+            },
+        ),
         PropertyDef::new(
             "element",
             "interactions",

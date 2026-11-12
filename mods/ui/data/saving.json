@@ -1,0 +1,40 @@
+[
+  { "//": "Saving and loading (13 §9, 12 §10.7). `ui:pause` opens the first to save the game under a name; the title's Load and the pause menu's Load open the second, the list of `app.saves`, newest first, each with its name, its summary and when it was written, and greyed where it was made with other mods (`state` is `changed`: it loads, and what differs is told) or cannot be read (`broken`). A profile names the third for the role `notice`: the application opens it over the play screen with what a load had to say.",
+    "type": "screen", "id": "save_game",
+    "title": "Save",
+    "popup": { "width": 50, "place": "centre", "dim": true },
+    "vars": { "save_name": "" },
+    "layout": { "frame": "Save the game", "rows": [
+      { "input": { "id": "name", "label": "Name ", "bind": "save_name", "max_len": 32,
+                   "tip": "Left empty, the character's name. A save of the same name is replaced." } },
+      { "height": 1, "spacer": {} },
+      { "button": { "id": "save", "label": "Save",
+                    "on_activate": [ { "app": { "save": { "name": "screen.save_name" } } },
+                                     { "close": {} }, { "close": {} } ] } },
+      { "button": { "id": "cancel", "label": "Back", "on_activate": [ { "close": {} } ] } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "type": "screen", "id": "load",
+    "title": "Load",
+    "popup": { "width": 64, "height": 16, "place": "centre", "dim": true },
+    "layout": { "frame": "Saved games", "rows": [
+      { "fill": 1,
+        "list": { "id": "saves", "rows": "app.saves",
+                  "item": "{if it.state == 'enabled' then it.name else ''}<dim>{if it.state == 'enabled' then '' else it.name}  {it.description}{if it.state == 'changed' then '  (other mods)' else ''}{if it.state == 'broken' then '  (cannot be read)' else ''}</>",
+                  "empty": "There are no saved games.",
+                  "tip": "Enter carries the game on from there.",
+                  "on_activate": [ { "app": { "load": { "save": "it.id" } } } ] } },
+      { "height": 1, "tooltip": { "value": "Up and Down choose, Enter loads, Esc goes back." } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "type": "screen", "id": "notice",
+    "title": "Note",
+    "params": { "title": "string", "text": "string" },
+    "popup": { "width": 64, "place": "centre", "dim": true },
+    "layout": { "frame": "Note", "rows": [
+      { "text": "<header>{$title}</>" },
+      { "text": "{$text}" },
+      { "height": 1, "spacer": {} },
+      { "button": { "id": "ok", "label": "Carry on", "on_activate": [ { "close": {} } ] } } ] },
+    "keys": { "back": [ { "close": {} } ] } }
+]

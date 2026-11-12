@@ -1,0 +1,47 @@
+[
+  { "//": "Using what is near (16 §3, 12 §9.4): a list of every interaction within a step, and what walking into something closed does. Interactions are content of other mods; this mod defines no action, so its controls name `interact` bare, which means whichever loaded mod's action of that name comes first in order of id (the `core` mod's takes `target` and `interaction`). What is offered is the simulation's: `view.offers_near` lists each interaction the things round the character offer, with whether it can be done now and, where it cannot, why.",
+    "type": "screen", "id": "interact",
+    "title": "Use",
+    "popup": { "width": 56, "height": 14, "place": "centre", "dim": true },
+    "layout": { "frame": "Use what is near", "rows": [
+      { "fill": 1,
+        "list": { "id": "offers", "rows": "view.offers_near",
+                  "item": "{if it.available then it.name else ''}<dim>{if it.available then '' else it.name}  {it.where}{if it.available then '' else ': '}{if it.available then '' else it.why}</>",
+                  "empty": "There is nothing within reach to use.",
+                  "tip": "Enter does it; a greyed one says why it cannot.",
+                  "on_activate": [
+                    { "close": {} },
+                    { "act": { "action": "interact",
+                               "params": { "target": "it.target", "interaction": "it.interaction" } } } ] } },
+      { "height": 1, "tooltip": { "value": "Up and Down choose, Enter does it, Esc goes back." } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "//": "The key in play that opens the list above.",
+    "type": "control", "id": "interact", "name": "Use something near",
+    "doc": "List what can be done with the things within a step, and do one.",
+    "do": { "open": "interact" } },
+
+  { "//": "What walking into something closed does, run by the application with what is there as `it` (a map: `target`, `interaction`, `name`, `where`, `available`, `why`). The preference `bump` says which of the two runs: `bump` does it at once, `bump_ask` asks first.",
+    "type": "control", "id": "bump", "name": "Use what is in the way",
+    "doc": "Do what the thing walked into offers by default: open a shut door.",
+    "do": { "act": { "action": "interact",
+                     "params": { "target": "it.target", "interaction": "it.interaction" } } } },
+  { "type": "control", "id": "bump_ask", "name": "Ask before using what is in the way",
+    "doc": "Ask, then do what the thing walked into offers by default.",
+    "do": [ { "confirm": { "text": "{it.name}: {it.where}?", "yes": "{it.name}", "no": "Leave it" } },
+            { "act": { "action": "interact",
+                       "params": { "target": "it.target", "interaction": "it.interaction" } } } ] },
+
+  { "type": "preference", "id": "bump", "kind": "choice", "default": "at_once",
+    "options": ["at_once", "ask", "never"],
+    "name": "Walking into a door",
+    "doc": "What walking into something closed does: what it offers by default is done at once, asked about first, or not done, and the step is refused." },
+
+  { "//": "The preference above, on the options screen.",
+    "type": "ui_part", "id": "bump_option", "into": "options.prefs", "order": 10,
+    "widget": { "choice": { "id": "bump", "bind": "pref.bump", "label": "Into a door    ",
+                            "options": [ { "value": "at_once", "label": "Open it" },
+                                         { "value": "ask", "label": "Ask first" },
+                                         { "value": "never", "label": "Stop" } ],
+                            "tip": "What walking into a shut door does." } } }
+]

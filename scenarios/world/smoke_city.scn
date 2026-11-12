@@ -5,4 +5,4 @@ size 48 16
 look
 expect frame smoke_city.frame
 look @c:40,10,0
-expect hash 72613b5a6d85ca0d0a18937049dd406e
+expect hash 6c9b832cf8151666991c523d89841a3a

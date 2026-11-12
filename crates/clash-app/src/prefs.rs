@@ -22,7 +22,7 @@
 //! reported once and then left alone: nothing is written over it.
 //!
 //! One preference is never kept: the omniscient view's
-//! ([`crate::perception_shim::PREF_OMNISCIENT`]). A debugging view of
+//! ([`crate::perception::PREF_OMNISCIENT`]). A debugging view of
 //! the truth must not outlive the run it was switched on in, nor reach
 //! a profile that cannot switch it off ([`kept`]).
 
@@ -37,9 +37,9 @@ use serde_json::{Map, Value as Json, json};
 pub const PREFS_FILE: &str = "preferences.json";
 
 /// Whether a preference is kept between runs: every one but the one
-/// whose bare name is [`crate::perception_shim::PREF_OMNISCIENT`].
+/// whose bare name is [`crate::perception::PREF_OMNISCIENT`].
 pub fn kept(id: &str) -> bool {
-    id.rsplit(':').next().unwrap_or(id) != crate::perception_shim::PREF_OMNISCIENT
+    id.rsplit(':').next().unwrap_or(id) != crate::perception::PREF_OMNISCIENT
 }
 
 /// One key the player gave a meaning.

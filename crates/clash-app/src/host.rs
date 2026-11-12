@@ -13,10 +13,11 @@
 //! | `reader` | Itself, as a `clash_expr::Host` that reads the simulation and writes nothing. Bindings of ordinary screens were compiled in the mind context of the party (05 §7.3), so what they can ask for is already held to what the character may know. |
 //! | `submit` | [`command_for`]: the one place a `UiCommand` becomes a command of the simulation |
 //! | `pending_decision` | The front of the simulation's decision queue (03 §5.2): a free decision, or a choice a rule's `ask` put |
-//! | `perceived`, `seen_cell`, `seen_sprite` | What the party perceived, as [`crate::perception_shim`] says until perception exists (12 §7.5) |
+//! | `perceived` | How the party perceived the event: the simulation's tag of it (`Sim::party_perceived`, 15 §13) |
+//! | `seen_cell`, `seen_sprite` | What is in a cell of the party's view and how a thing in view is perceived, as the batch ended ([`crate::perception`]) |
 //! | `as_of` | Nothing: the simulation keeps no history, so bindings are answered as of the present (D-605) |
 //! | `cell_value`, `cell_of` | The simulation's `loc` subject for a cell, and back |
-//! | `sprite_value`, `sprite_of` | The entity whose id is the sprite's number ([`crate::perception_shim`] numbers sprites so), and back |
+//! | `sprite_value`, `sprite_of` | The entity whose id is the sprite's number ([`crate::perception`] numbers sprites so), and back |
 //! | `candidates` | Nothing: an entity picker then offers what the view model holds |
 //!
 //! # The commands
@@ -31,7 +32,9 @@
 //! | `command react`, `command pass`, a `run` of a rule | Refused, with the reason: windows (03 §7) and the `Ui` command are not built |
 //!
 //! A refusal is the simulation's reason, which the frame loop writes in
-//! the log.
+//! the log. A step refused because the way is closed is noted
+//! ([`crate::session::Session::bumped`]), and the frame loop offers what
+//! is there instead ([`crate::interact`]).
 //!
 //! # The name of the player's character
 //!
@@ -56,7 +59,7 @@ use clash_sim::{ActionId, Command, DecisionKind, SimEvent, Subject};
 use clash_world::Location;
 
 use crate::app::Shared;
-use crate::perception_shim;
+use crate::perception;
 use crate::session::{Session, player_value};
 
 /// The built-in that gives what the reader calls something (05 §4.6).
@@ -189,13 +192,42 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
 /// [module](self) documentation.
 pub fn command_for(session: &mut Session, command: &UiCommand) -> Result<(), String> {
     let built = build(session, command)?;
-    session
-        .sim
-        .submit(built)
-        .map_err(|refusal| refusal.reason.message)?;
+    session.bumped = None;
+    if let Err(refusal) = session.sim.submit(built) {
+        // Walking into something that could stand aside and does not:
+        // the frame loop offers what is there (12 §3.2).
+        if let Some(dir) = command.args.get(ARG_DIR).and_then(Value::as_str)
+            && (refusal.reason.code == clash_sim::movement::codes::CLOSED
+                || closed_way(&session.sim, session.player, dir))
+        {
+            session.bumped = Some(dir.to_owned());
+        }
+        return Err(refusal.reason.message);
+    }
     session.stale_view = true;
     Ok(())
 }
+
+/// Whether a step a way is one the mover believes is closed: what
+/// stands there could stand aside and does not (`move.closed`). A step
+/// action's `requires` refuses with its `fail_text`, which does not say
+/// so by its code.
+fn closed_way(sim: &clash_sim::Sim, who: EntityId, dir: &str) -> bool {
+    use clash_sim::movement;
+    let Some(kind) = movement::parse_dir(dir) else {
+        return false;
+    };
+    let Some(step) = movement::believed_step(sim, who, kind) else {
+        return false;
+    };
+    matches!(
+        movement::believed_rules(sim, who).judge(&step),
+        Err(movement::StepFault::Closed)
+    )
+}
+
+/// The argument of a step that says which way: what a bump is into.
+pub const ARG_DIR: &str = "dir";
 
 /// The scene's handle on the simulation. See the [module](self)
 /// documentation.
@@ -312,18 +344,18 @@ impl SceneHost for GameHost {
         None
     }
 
-    fn perceived(&mut self, event: &SimEvent, picture: &ViewModel) -> Perceived {
-        self.read(|session| perception_shim::perceived(&session.percepts, event, picture))
+    fn perceived(&mut self, event: &SimEvent, _picture: &ViewModel) -> Perceived {
+        self.read(|session| perception::perceived(&session.sim, event))
             .unwrap_or_default()
     }
 
     fn seen_cell(&mut self, at: Location) -> Option<CellContents> {
-        self.read(|session| perception_shim::seen_cell(&session.percepts, at))
+        self.read(|session| perception::seen_cell(&session.percepts, at))
             .flatten()
     }
 
     fn seen_sprite(&mut self, entity: EntityId) -> Option<(SpriteId, Option<EntitySprite>)> {
-        self.read(|session| perception_shim::seen_sprite(&session.percepts, entity))
+        self.read(|session| perception::seen_sprite(&session.percepts, entity))
             .flatten()
     }
 
