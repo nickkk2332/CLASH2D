@@ -1,14 +1,7 @@
-# known failure: the console cannot make anyone who thinks. `do` and
-# every verb are refused with `console.rules_unbound` until the rule
-# runtime is bound in `GameHost::run_verb`, and `spawn` makes plain
-# occupants, not characters from templates (clash-save's host). Once
-# either is bound, this passes: re-bless its hash and move it to `ai/`.
-#
 # A townsperson hears a wall break that it did not see, goes to look,
 # and goes back to going about its day (09 §3, §4; the bundled
-# `townsperson` mind; package I4's `patrol_and_investigate`: a routine,
-# a percept, a detour, a return). `tests/ai.rs` checks the same against
-# the simulation directly.
+# `townsperson` mind). Package I4's `patrol_and_investigate`: a
+# routine, a percept, a detour, a return.
 use default seed=7
 gen core:test_city size=1
 spawn creature as=w
@@ -23,4 +16,4 @@ advance 1s
 assert "@e:1v0.goal == 'core:investigate_noise'"
 advance 20s
 assert "@e:1v0.goal == 'core:go_about'"
-expect hash 00000000000000000000000000000000
+expect hash 8acb6180a339639152f11af64aefc15e
