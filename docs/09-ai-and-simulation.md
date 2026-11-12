@@ -1214,8 +1214,8 @@ on incidents, `stage`, `cast(role)`.
 
 ## 19. Budgets
 
-Targets, unmeasured but where `cargo xtask bench` measures a row
-(14 §6.3, D-730).
+Targets, unmeasured but where a figure is given: those rows are in
+`budgets.toml` and measured by `cargo xtask bench` (14 §6.3, D-730).
 
 | Operation | Target |
 |-----------|--------|

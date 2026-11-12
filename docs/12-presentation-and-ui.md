@@ -2330,7 +2330,8 @@ event says nothing of what was destroyed that the reader may know.
 
 ## 15. Budgets
 
-Targets, unmeasured.
+Targets, unmeasured but where a figure is given: those rows are in
+`budgets.toml` and measured by `cargo xtask bench` (14 §6.3, D-730).
 
 | Operation | Target |
 |-----------|--------|

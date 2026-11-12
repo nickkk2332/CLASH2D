@@ -497,7 +497,8 @@ pub(super) fn sight_clear(
 }
 
 /// The most heights one [`Cosmos::sight_to_heights`] is asked about.
-pub const SIGHT_HEIGHTS_MAX: usize = 32;
+/// One for each bit of the answer.
+pub const SIGHT_HEIGHTS_MAX: usize = u32::BITS as usize;
 
 /// Which of the points `targets` can be seen from `eye`, as bits: the
 /// answers of [`sight_clear`] for each, an error counting as not seen.

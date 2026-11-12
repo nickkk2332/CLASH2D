@@ -55,6 +55,9 @@ struct Work {
 /// A field in a cell: what a change of level is for.
 type Slot = (GridId, CellPos, FieldId);
 
+/// A field in a chunk: what a table of changes of level is for.
+type ChunkKey = (GridId, ChunkPos, FieldId);
+
 /// The changes of level a step asks for of one field in one cell,
 /// summed, and who is responsible for what was brought there: of
 /// several, the lowest id.
@@ -207,10 +210,10 @@ struct Changes {
     chunks: Vec<ChunkChanges>,
     /// Tables emptied by an earlier step, to use again.
     pool: Vec<Box<[u32]>>,
-    index: LookupMap<(GridId, ChunkPos, FieldId), usize>,
+    index: LookupMap<ChunkKey, usize>,
     /// The two chunks asked about last: the next is nearly always one
     /// of them, a field's own or that of what it gives off.
-    last: [Option<((GridId, ChunkPos, FieldId), usize)>; 2],
+    last: [Option<(ChunkKey, usize)>; 2],
 }
 
 impl Changes {
@@ -309,7 +312,7 @@ impl Changes {
 }
 
 /// How many emptied tables of changes are kept for the next step.
-const CHANGE_TABLES_KEPT: usize = 64;
+const CHANGE_TABLES_KEPT: usize = 48;
 
 /// Sorts changes into the order of their slots: grid, then cell by
 /// storey, row and column, then field. No two share a slot. Where the

@@ -498,13 +498,13 @@ mod tests {
             let idx = CellIdx::from_index((state >> 8) as usize % CHUNK_CELLS).unwrap();
             // Grow for the first half, then mostly shrink.
             let adding = if step < 3000 {
-                state % 5 != 0
+                !state.is_multiple_of(5)
             } else {
-                state % 5 == 0
+                state.is_multiple_of(5)
             };
             let level = (state >> 24) as u8;
             if adding && level > 0 {
-                let new = cell(level, state % 3 != 0);
+                let new = cell(level, !state.is_multiple_of(3));
                 assert_eq!(store.set(field, idx, Some(new)), reference.insert(idx, new));
             } else {
                 assert_eq!(store.set(field, idx, None), reference.remove(idx));

@@ -712,7 +712,7 @@ impl NodeIndex {
 }
 
 /// How many emptied tables a [`PathFinder`] keeps between searches.
-const NODE_TABLES_KEPT: usize = 32;
+const NODE_TABLES_KEPT: usize = 24;
 
 /// The working storage of [`Cosmos::find_path`]: keep one and search
 /// with it again, and a search allocates only its answer.

@@ -11,7 +11,7 @@
 //! `save list` ([`save`]); `replay` between two saves ([`replay`]); and
 //! the terminal world viewer, `worldview` ([`worldview`]); and the
 //! benchmarks against the budgets of the specifications, `bench`
-//! ([`bench`]). `save`, `replay` and `worldview` drive the console's
+//! ([`bench`](mod@bench)). `save`, `replay` and `worldview` drive the console's
 //! host of `clash-save`. `schema` answers that
 //! it is not built yet. The rest is filled in by
 //! `docs/plans/tooling.md`.

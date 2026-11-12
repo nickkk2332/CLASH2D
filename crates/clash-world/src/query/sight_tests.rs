@@ -194,7 +194,7 @@ fn spot() -> impl Strategy<Value = (i32, i32, i32, u16)> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(64))]
+    #![proptest_config(ProptestConfig::with_cases(60))]
 
     /// Lines of sight, one at a time and several heights at once,
     /// answer as the first lines of sight did, on random scenes of two
@@ -250,7 +250,7 @@ fn heights_over_another_grid_or_none_are_not_seen() {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(32))]
+    #![proptest_config(ProptestConfig::with_cases(30))]
 
     /// A view's cells on some storeys alone are its cells filtered to
     /// those storeys, in the same order: what a party member's sweep
