@@ -288,7 +288,7 @@ Done when
 
 ## Test script catalogue
 
-Under `scenarios/games/`.
+Under `scenarios/game/`. `permadeath_run` is an application test (`crates/clash-app/tests/scenarios.rs`): what it checks, a save removed, is the application's.
 
 | Test script | Package | Serves | What it checks |
 |-------------|---------|--------|----------------|

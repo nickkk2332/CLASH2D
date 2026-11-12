@@ -540,6 +540,7 @@ mod tests {
                 "saves",
                 "scenario",
                 "scenarios",
+                "setup",
                 "size",
                 "templates"
             ]

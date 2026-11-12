@@ -1288,7 +1288,6 @@ mod tests {
                 "preference",
                 "screen",
                 "show",
-                "start",
                 "theme",
                 "ui_part"
             ]

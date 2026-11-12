@@ -59,7 +59,7 @@
 //!
 //! Saving, restoring and ending act on the simulation as a whole: the
 //! simulation records what was asked and raises an [`AppRequest`]
-//! (13 §9.1), which [`Sim::advance`] returns at the next safe point
+//! (13 §9.1), which [`Sim::advance`](crate::Sim::advance) returns at the next safe point
 //! (invariant Z6). The application carries it out.
 //!
 //! [`AppRequest`]: crate::AppRequest
