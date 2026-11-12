@@ -36,9 +36,9 @@ actions that call `hit`.
 | S3 | Detection | L | S1, S2, E10 | beta |
 | S4 | Percepts | M | S3, K3 | beta |
 | S5 | Beliefs | M | S4, E7 | beta |
-| S6 | Personas | M | S5 | todo |
-| S7 | Relations, groups, orders | M | S6, T4 | todo |
-| S8 | Speech | M | S7, T6 | todo |
+| S6 | Personas | M | S5 | beta |
+| S7 | Relations, groups, orders | M | S6, T4 | beta |
+| S8 | Speech | M | S7, T6 | beta |
 | S9 | Party perception | M | S5 | beta |
 | S10 | Coloured light (experimental) | S | S1, U4, P4 | todo |
 | U1 | Scene skeleton, frames, themes | M | K2 | beta |
@@ -659,6 +659,18 @@ Done when
   the world's cause names the actor.
 - Seeing through a disguise links the two personas in that observer only.
 
+Beta (D-760, D-761, D-766, D-769): personas with records, presenting,
+copies, `identity_check` at detection, links in one observer only, a
+change of face in view seen, illusions, the persona verbs, tracks and
+memories by the persona the observer takes someone for, and the reader
+lens that names a known persona and describes a stranger by the
+template it looks like. Both "Done when" items are tests in
+`crates/clash-sim/tests/social.rs`, and `frame_job` is a test script
+(`scenarios/social/frame_job.scn`). Stubbed: features and descriptions
+(review addition "Features and descriptions", test script
+`a_tall_figure_in_red`) and `suspects`; pronoun sets are carried, not
+read (review addition "Pronouns").
+
 ### S7 — Relations, groups, orders
 
 **Spec** 15 §9, §10 · **Size** M
@@ -674,6 +686,21 @@ Done when
   holds, must hear the order, and stops obeying when the relation is
   removed.
 
+Beta (D-762, D-763, D-765, D-767): `relation_kind` and `group`, relations
+with fade, group fallback by the strongest, claims (a uniform holds until
+seen through), group knowledge, groups made and dissolved in play,
+templates' `groups`, `order` heard and obeyed by the hearer's relation
+flagged `orders`, `order_received`, `cancel_order`, `until`, orders
+withdrawn when the relation goes; `relation_kind`s, groups and the rules
+`do_as_ordered` and `stop_when_released` in `mods/core/data/social`. Each
+"Done when" is a test, and `minion_orders` a test script. Review
+additions: "Relations that intervene" is `social::intervenes`, which
+windows (T5, not built) are to ask; the test script `bodyguard` waits for
+them. "Roles that spend" is recorded on the group definition, not yet
+readable by rules. Stubbed: a role's `orders` is not enforced;
+collectives; group variables; the AI's stance (09 §3.4) reads `rel` and
+`stance_to` once the AI lands.
+
 ### S8 — Speech
 
 **Spec** 15 §11 · **Size** M
@@ -686,6 +713,16 @@ Done when
 - A report gives the hearer the memory at reduced confidence and marks its
   source.
 - Knowledge reaches a group and is used by a third member.
+
+Beta (D-764, D-765): `message_kind` and `lines`, `say` carried by a
+signal and heard through perception, `understands`, `message_heard`,
+reports that give memories and tracks as told at reduced confidence
+with their source, overheard messages, `talk_options` as a function for
+the application; message kinds, lines for greetings, warnings and calls
+for help, and the rules `heed_help` and `pass_reports_to_the_watch` in
+`mods/core/data/social`. Both "Done when" items are tests. Stubbed:
+exchanges (joint actions, T6), the `talk` interaction, capabilities told
+of, languages as definitions.
 
 ### S9 — Party perception
 

@@ -86,6 +86,7 @@ pub mod registry;
 pub mod reshape;
 pub mod rule;
 mod sim;
+pub mod social;
 pub mod stats;
 pub mod subject;
 pub mod template;
@@ -150,6 +151,7 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     interaction::register_defs(types);
     traits::register_defs(types);
     ability::register_defs(types);
+    social::register_defs(types);
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);

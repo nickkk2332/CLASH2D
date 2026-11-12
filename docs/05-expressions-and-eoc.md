@@ -301,10 +301,14 @@ As built (decision D-542), in `clash_sim::reader`:
 - What a reader knows of another entity is asked of a **reader lens**,
   a function the simulation holds (`Sim::set_reader_lens`): a proper
   name, which takes no article, a description, which does, or nothing,
-  which reads "something". Until perception and personas are built
-  (15 §8) the lens every simulation starts with answers with the truth,
-  the entity's own name; a package or a test puts another in its place.
-  The lens is not state: a loaded simulation has the plain one.
+  which reads "something". The lens every simulation is bound with is
+  the social one (15 §13, decision D-766): the name of the persona the
+  reader takes someone for if it knows it, else the name of the template
+  that persona looks like with its article (`the person`), else
+  `someone`; a thing that is no one goes by its own name. A package or
+  a test may put another in its place with `Sim::set_reader_lens`. The
+  lens is not state: a loaded simulation is bound with the social one
+  again.
 - The English forms are built in until the `language` definition type
   exists: `verb` adds `s`, `es` after a hiss and `ies` after a consonant
   and `y`, with `be`, `have`, `do` and `go` irregular; `plural` follows

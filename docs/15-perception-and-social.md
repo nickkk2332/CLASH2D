@@ -536,8 +536,9 @@ what it is about:
 
 As built (decision D-615), `perceived` binds `self`, the observer, and
 `about`, an `entity`, when the observer made out who or what it was
-about: until personas (section 8) the entity itself, which a mind may
-read only through its belief properties (section 7.2). Its fields:
+about: the entity itself, which a mind may read only through its belief
+properties (section 7.2), and which those translate to the persona the
+observer takes it for (section 8; decision D-760). Its fields:
 
 | Field | Type | Holds |
 |-------|------|-------|
@@ -634,10 +635,9 @@ by the rule or event mapping that created the memory and fades with time.
 As built (decision D-616), beliefs are the `Beliefs` component of a
 mind:
 
-- **Tracks** are kept by persona. Until personas are built (section 8),
-  every entity presents one persona whose id is the entity's
-  (`PersonaId`), so a disguise will change what is believed without
-  changing how it is kept (invariant P2). A track holds the last known
+- **Tracks** are kept by persona (`PersonaId`, section 8): the persona
+  the mind takes an entity for, so a disguise changes what is believed
+  without changing how it is kept (invariant P2). A track holds the last known
   cell, the mind's local time it was last perceived or heard of, how
   (`Knowing`: perceived through a kind of signal, told, inferred,
   carried) and the confidence then. At most `mind.max_tracks` (default
@@ -645,7 +645,9 @@ mind:
   `add_track { who, of, at?, how?, confidence? }` (`how` is `told`, the
   default, `inferred` or `carried`; confidence 0 to 1, default 1) and
   `clear_track { who, of }` (returns whether there was one) change
-  them; a mind keeps no track of itself (`perception.self_track`).
+  them; a mind keeps no track of itself (`perception.self_track`). A
+  track told of (§11) records who told it, as the mind took them
+  (`source`).
 - **Observed capabilities** are recorded on a track by the function
   `observe_capability(sim, mind, entity, what, result, told)`: the
   action's or ability's id, the strongest result, when, and whether it
@@ -654,7 +656,9 @@ mind:
   the oldest, go. The actions package calls it when an action resolves
   in view.
 - **Memories** hold the event type, the cell, the mind's local time,
-  roles as persona or none, how it is known, confidence and salience. At
+  roles as persona or none, how it is known, confidence, salience and,
+  for one told (§11), its `source`: the persona the mind took the teller
+  for. The `actor` of `remember` is the persona the mind takes it for. At
   most `mind.max_memories` (default 32): the least salient now, then the
   oldest, is forgotten, with `memory_forgotten` (`self`; `event`,
   `where`). Remembering raises `memory_added` (`self`; `event`, `where`,
@@ -809,6 +813,71 @@ A crime committed while presenting a copied persona is remembered by its
 witnesses as committed by that persona. The world's cause records
 (02 §7.3) still name the real actor. Scene S15 is the gap between the two.
 
+As built (decisions D-760, D-761), in `clash_sim::social`:
+
+- **A persona** is `PersonaId`: its owner, the entity whose true
+  persona it is or who made it, and a number, 0 for the true persona.
+  Rules write it as text, `7v1/0` (the owner's slot and generation,
+  then the number). A record (`PersonaRecord`) holds what a persona is
+  beyond its number: `name`, `pronouns` (kept, not yet used by text),
+  `tags`, `claims` (group keys, §9.2), `quality` (0 to 1) and `apparent`
+  (a template's qualified id). A true persona needs none until something
+  is set on it; its name is its owner's own (`Identity`'s).
+- **Presenting.** An entity presents its true persona until it assumes
+  one of its own it made, or copies what another presents. A copy has a
+  quality of its own (default 1, a perfect likeness).
+- **Whom an observer takes an entity for** (`persona_of`): what it
+  decided when it last detected it, while the entity presents the same;
+  else what it presents, followed through the links the observer holds.
+  A mind takes itself for its true persona. Every belief property of
+  §7.2 and every relation (§9) is read through it, so rules keep naming
+  entities (`self.knows(x)`) and the answer is about the persona.
+  `perceived` still binds `about` and `about_actor` as entities (D-615).
+- **Recognition.** `identity_check` runs when an observer detects an
+  entity (awareness reaches 1, §5.1) that presents a persona other than
+  its true one and that the observer has not linked to it. It binds the
+  observer as `self` and the entity as `about`, with the fields `sense`
+  (string), `quality` (real), `scrutiny` (real: the sense's), `familiarity`
+  (real: the confidence of the observer's track of the true persona, 0
+  for none) and `holds` (bool, mutable, true). A handler sets `holds`;
+  with none the disguise holds. Not held, the observer takes the entity
+  for its true persona while it goes on perceiving it, and where the
+  persona shown is one the entity made it **links** the two in its own
+  beliefs for good; a copy of someone else's persona is not linked,
+  because that persona is truly another's, and is checked again at the
+  next detection. `disguise_seen_through` (`self`, `about`; `shown`,
+  `seen`: personas as text; `how`: `checked` or `revealed`) follows.
+  When an observer stops perceiving an entity through every sense it
+  forgets what it decided, and takes it for whatever it presents at the
+  next detection.
+- **A change in view is seen.** Whoever perceives an entity at the moment
+  it presents another persona goes on taking it for whom it took it
+  for, and links a persona the entity made to its true one if it knew
+  who it was. A disguise is put on out of sight.
+- **Verbs**: `create_persona { who, name?, tags?, claims?, quality?,
+  apparent? }` gives the persona as text (quality default 0.5);
+  `assume_persona { who, persona }` (one of its own: refused with
+  `social.not_own_persona`, `social.unknown_persona`); `drop_persona {
+  who }`; `copy_persona { who, of, quality? }` presents what `of`
+  presents and gives it; `reveal_persona { who, of }` links, in `who`
+  only, what `of` presents to its true persona, raises
+  `disguise_seen_through` and gives whether anything was hidden;
+  `set_persona { who, persona?, name?, tags?, claims?, quality?,
+  apparent? }`; `create_illusion { at, signals, of? }` makes an entity
+  of kind `other`, tagged `illusion`, that blocks nothing and gives off
+  only the standing signals `signals` names (a map of signal kind to
+  strength), presenting what `of` presents; `learn_name { who, of }`
+  (the reader lens, §13).
+- **Properties** of an entity read of itself: `persona` and
+  `presenting` (string), `persona_of(x)` (string?), `knows_name(x)`
+  (bool).
+- **Not built**: features and descriptions (§8.4): there is no
+  `appearance_feature` type yet, a stranger is described by the name of
+  the template it looks like, and `suspects` and the merging of a
+  stranger's track wait for features; pronoun sets (the `pronouns` type)
+  are carried on a record and not read by text; a template or creation
+  choice does not yet give a persona its pronouns.
+
 ### 8.4 Features and descriptions
 
 An appearance is a set of **features**, each defined by content:
@@ -912,6 +981,77 @@ Groups are also made in play: `create_group { def, name }`,
 `dissolve_group`, and `set_role { who, group, role }`. A gang, a cult, a
 party and a raised horde begin that way.
 
+As built (decisions D-761, D-762, D-765), in `clash_sim::social`:
+
+- **`relation_kind`**: `name?` (text), `kind` (`value`, the default, or
+  `flag`), `range` (two numbers, default `[-1, 1]`; a flag's is `[0,
+  1]`), `default` (real, 0; a flag's is 0), `fade` (real, 0: how far it
+  moves toward `default` each minute of the holder's own time), and the
+  flags `opposes`, `sides_with`, `orders`, `intervenes` (bool, false).
+  A kind cannot both oppose and side with.
+- **Storage.** A mind holds each relation toward a persona or a group (by
+  key), of a kind, with the value it was set to and when, in its own
+  time. Fade is worked out when it is read; a relation at its kind's
+  default is not held. Setting one raises `relation_changed` (`self`;
+  `kind`: qualified id, `toward`: a persona as text or a group's key,
+  `group`: bool, `value`, `was`: real). Fading raises nothing.
+- **Reading** (`self.rel(kind, x)`, `x` an entity or a group's key or
+  id): the mind's own relation toward the persona it takes `x` for;
+  else the strongest of its own relations toward the groups that
+  persona claims; else the strongest of what its groups hold: each
+  group's relation toward the persona, else the strongest of the
+  group's relations toward the groups the persona claims, the group's
+  own toward each before what its definition gives; else the kind's
+  default. The strongest is the value furthest from the default, the
+  first in order of key of equals. `self.stance_to(x)` is `opposes`
+  when a kind flagged `opposes` is held above its default by more than
+  any flagged `sides_with`, `sides_with` the other way round, else
+  `neutral`.
+- **`group`**: `name?` (text), `roles` (by id: `name?`, `orders`: the
+  roles of the group it may order, `spends`: bool), `collective` (kept
+  for the AI), `relations` (for each group by id, each kind by id, a
+  value). A group is named by its **key**: a definition's group by the
+  definition's qualified id (`core:watch`), one made in play by the
+  definition's id and a number (`core:gang#1`). A definition's group
+  exists from the start; what it keeps of its own is made when needed.
+- **Members are entities**, not personas (15 §9.2 wrote personas): a
+  member belongs openly or in secret. A true persona **claims** every
+  group its owner belongs to openly; a persona made with
+  `create_persona` claims what it is given. A uniform is a persona that
+  claims the group: the group's stance applies to its wearer until the
+  observer sees through it (§8.2).
+- **Knowledge.** `report_to_group { who, group, event?, about? }`: a
+  member's memories of an event type, or naming whom it takes `about`
+  for (all of them if neither is given), and its track of `about`, are
+  added to the group's knowledge and told at once to every other member
+  (as told, by the reporter as each takes them, at the reporter's
+  confidence), and to whoever joins later.
+- **Verbs**: `set_relation { who, toward, kind, value }`, `add_relation
+  { who, toward, kind, amount }` (to its own value or the default) and
+  `clear_relation { who, toward, kind? }` (its own only; gives how many
+  went), `toward` an entity, as the persona `who` takes it for, or a
+  group's key or id; `join_group { who, group, role?, secret? }`
+  (`group_joined`: `self`; `group`, `role`), `leave_group { who, group
+  }` (`group_left`, the same fields), `set_role { who, group, role? }`
+  (`role_changed`: `self`; `group`, `role`, `was`), `create_group {
+  def, name? }` (gives the key; `group_created`: `group`, `def`),
+  `dissolve_group { group }` (members leave with `group_left`;
+  `group_dissolved`: `group`), `set_group_relation { group, toward,
+  kind, value }` (`toward` a group, or an entity as the persona it
+  presents).
+- **Properties** of an entity read of itself: `rel(kind, x)` (real?),
+  `stance_to(x)` (string), `in_group(group)` (bool), `role_in(group)`
+  (string?). The function `intervenes(a, b)` (bool?) is whether `a`
+  holds toward whom it takes `b` for a kind flagged `intervenes` above
+  its default: whoever builds windows (T5) asks it.
+- **Templates** name the groups a thing made from them joins: `groups`,
+  group id to role (`""` for none), joined openly when `entity_spawned`
+  is delivered. A group a template names that no definition answers to
+  is a warning at load, and is skipped.
+- **Not built**: a role's `orders` is recorded and not enforced (an order
+  is obeyed by relation, §10); `spends` is recorded for G13; group
+  variables; a collective's mind (09 §8.1).
+
 ## 10. Orders
 
 ```
@@ -932,8 +1072,46 @@ and its `strength`.
 - An order has to arrive. By default it is spoken (section 11) and must be
   heard. A telepathic bond is a sense that receives orders at any distance.
 - The player's commands to `Delegated` characters (03 §5.1) are orders.
-- A summoned or raised servant is created with a `commands` relation from
-  its master. Lose the relation and it is no longer a servant.
+- A summoned or raised servant is created with a relation of a kind
+  flagged `orders` toward its master. Lose the relation and it is no
+  longer a servant.
+
+As built (decision D-763), in `clash_sim::social::order`:
+
+- `order { from, to, action, with?, until?, kind?, signal?, strength? }`
+  says the order aloud (§11) as a message of `kind`, or the first kind,
+  in order of id, that carries orders; `action` is an action's id and
+  `with` its parameters; `until` is how long it stands once received,
+  in seconds. It gives how many it was sent to. Refused with
+  `social.not_an_order` for a kind that does not carry orders.
+- **Obeyed by relation, as the receiver believes.** The one it is given
+  to, if it hears it and makes out who spoke, obeys when it holds toward
+  the persona it takes the giver for a relation of a kind flagged
+  `orders` above its default: the servant's relation toward its master,
+  read as §9 reads every relation. A voice taken for the master's is
+  obeyed. The hook `order_received` (`self`, `giver`; `action`: the
+  action's id, `with`: its parameters, `obeys`: bool, mutable) may
+  change that or cancel. Obeyed, the order is kept and `order_given`
+  (`self`, `giver?`; `order`: int, its number, `action`, `with`,
+  `until`: seconds or null) follows; not, `order_refused` (`self`,
+  `giver?`; `action`, `reason`: `social.not_obeyed`,
+  `social.giver_unknown` or a handler's code, `message`).
+- **Doing it** is a goal's (09 §8.1). Until the AI has one, the bundled
+  rule `core:do_as_ordered` puts the action in the plan when
+  `order_given` is delivered.
+- **Ending.** `cancel_order { who, order? }` withdraws one by number, or
+  all (`social.unknown_order` for one not kept). An order past its
+  `until` no longer stands (`self.standing_orders` does not count it)
+  and is dropped, with `order_cancelled`, when the orders are next
+  changed. When a relation flagged `orders` falls to its default, the
+  orders kept from whom it was held toward that nothing else makes one
+  to obey are withdrawn. `order_cancelled` (`self`; `order`, `how`:
+  `cancelled`, `expired` or `relation_lost`); the bundled
+  `core:stop_when_released` clears the plan on `relation_lost`.
+- **Not built**: a role's `orders` (who in a group may order whom) is not
+  checked; a telepathic bond is a sense of a signal kind that carries
+  orders, and needs nothing more; the player's commands to delegated
+  characters are commands (03 §5), not orders.
 
 ## 11. Speech
 
@@ -970,6 +1148,56 @@ can build them from this; the engine does not.
 **Spreading.** Beliefs move by `report`. A witness tells a guard, the guard
 adds it to the watch's knowledge, and other guards act on it. Away from the
 player the same thing happens abstractly (09).
+
+As built (decisions D-764, D-765), in `clash_sim::social::speech`:
+
+- **`message_kind`**: `name?` (text), `carries` (`nothing`, the default,
+  `report` or `order`), `belief` (0 to 1, default 0.5: the share of the
+  speaker's confidence a report is believed at), `trust` (a relation
+  kind: scales `belief` by where the hearer's relation toward the
+  speaker stands in its range), `signal` (a signal kind; left out, the
+  kind flagged `noise`) and `strength` (default 1).
+- **`lines`**: `lines`, each `text` (a text with `self` the speaker, `to`
+  and `about`, each an entity or null), `if` (a condition, default
+  true) and `weight` (default 1). A line that fits is picked by weight
+  from the random stream `social` when it is said, and written for each
+  hearer as reader (05 §4.6) when heard.
+- `say { who, kind, to?, group?, about?, event?, line?, language?,
+  signal?, strength? }` gives off a signal from the speaker's eye height
+  about the speaker, carrying the message; it gives how many it was sent
+  to. A report carries, as the speaker holds them when it speaks, its
+  latest memories (at most four, `MAX_REPORT_MEMORIES`) of the event
+  type `event`, or naming whom it takes `about` for, and its track of
+  `about`. Refused with `social.unknown_message_kind`,
+  `social.unknown_lines`, `social.unknown_group` and `social.no_voice`.
+- **Hearing.** Whoever perceives the signal (§6) is asked the hook
+  `understands` (`self`, `speaker?`; `kind`, `language`: string or null,
+  `understood`: bool, mutable); with no rule answering it understands.
+  Then `message_heard` (`self`, `speaker?` if made out, `about?`, `to?`;
+  `kind`, `text`: the line for this hearer or null, `addressed`: bool,
+  `report`: bool, `clarity`: real, `where`: loc). A message is
+  **addressed** to its `to`, to the members of its `group`, or, with
+  neither, to everyone; others overhear it.
+- **Reports.** Whom a report is addressed to gains its memories and its
+  track as told (`Knowing::Told`), with confidence times `belief` (times
+  the trust share), now in its own time, each marked with its
+  **source**: the persona it took the speaker for, or none. `Memory`
+  and `Track` carry `source`.
+- **Orders** addressed to the hearer are received as §10 says.
+- **Talking to someone.** `social::talk_options(sim, who, to)` raises
+  the hook `talk_options` (`self`, `to`; `options`: a list, mutable,
+  starting empty) and gives the options rules left, each a map with
+  `id`, `text`, and if it says something `kind` and `lines`. The
+  application offers them through `ask` and says the one chosen.
+- **Properties** of an entity read of itself: `remembers_actor(x,
+  event)` (bool: a memory of the type, `''` for any, names whom it takes
+  `x` for as the actor), `memory_confidence(event)` (real?),
+  `memory_source(event)` (string?: a persona as text), `told_of(event)`
+  (bool), `standing_orders` (int).
+- **Not built**: exchanges wait for joint actions (T6); there is no
+  `talk` interaction yet; a capability told of in a report is not
+  recorded (§7.1); languages are names that `understands` handlers
+  read, with no definition type.
 
 ## 12. Authoring reactions
 
@@ -1013,6 +1241,14 @@ from each. Stories come from their interference.
 
 The player is subject to the same disguises as anyone. What is shown about
 another character is the persona the controlled character perceives.
+
+As built (decision D-766): every simulation is bound with the social
+reader lens (`social::social_lens`, 05 §4.6). For a reader, someone (an
+entity with a mind, or presenting another's persona) is called by the
+name of the persona the reader takes them for if the reader knows it
+(`learn_name`, or its own), else described by the name of the template
+that persona looks like (`the person`), else `someone`; anything else
+goes by its own name, as before.
 
 As built (decision D-618):
 
@@ -1164,14 +1400,56 @@ settings.
   `perception.has_sense`, `perception.no_sense`, `perception.no_senses`,
   `perception.bad_value`, `perception.field_not_sent`,
   `perception.self_track`.
-- Not built: the hooks `identity_check`, `understands`, `talk_options`,
-  `order_received` and `signal_receiving`; `relay_senses`, `appraise`,
-  `forget_memory`; the queries `tracks`, `memories`, `observers`; and
-  everything of sections 8 to 11.
+- Effects `attach_sense { who, sense }` and `detach_sense { who, sense }`
+  (§4), for rules and test scripts until templates and traits carry
+  `senses` (decision D-767).
+- Not built: the hook `signal_receiving`; `relay_senses`, `appraise`,
+  `forget_memory`; the queries `tracks`, `memories`, `observers`.
+
+**As built** (decisions D-760 to D-769), of sections 8 to 11, each with
+the arguments, subjects and fields stated there:
+
+- Definition types: `relation_kind`, `group` (§9), `message_kind`,
+  `lines` (§11); `groups` on templates (§9.2). Not `appearance_feature`
+  or `pronouns`.
+- Events: `disguise_seen_through` (§8), `relation_changed`,
+  `group_joined`, `group_left`, `group_created`, `group_dissolved`,
+  `role_changed` (§9), `order_given`, `order_refused`,
+  `order_cancelled` (§10), `message_heard` (§11). They are the engine's.
+- Hooks: `identity_check` (§8), `order_received` (§10), `understands`,
+  `talk_options` (§11).
+- Effects: `create_persona`, `assume_persona`, `drop_persona`,
+  `copy_persona`, `reveal_persona`, `set_persona`, `create_illusion`,
+  `learn_name` (§8); `set_relation`, `add_relation`, `clear_relation`,
+  `join_group`, `leave_group`, `set_role`, `create_group`,
+  `dissolve_group`, `set_group_relation`, `report_to_group` (§9);
+  `order`, `cancel_order` (§10); `say` (§11).
+- Properties of `entity`, read of the mind itself: `persona`,
+  `presenting`, `persona_of`, `knows_name`, `rel`, `stance_to`,
+  `in_group`, `role_in`, `standing_orders`, `remembers_actor`,
+  `memory_confidence`, `memory_source`, `told_of`. Function:
+  `intervenes(a, b)`.
+- Subjects: `persona`, `track`, `memory` and `group` are not subject kinds
+  yet (decision D-761): a persona is written as text (`7v1/0`), a group
+  by its key, and a mind's tracks and memories are read through the
+  properties above.
+- Refusals: `social.unknown_persona`, `social.not_own_persona`,
+  `social.unknown_relation_kind`, `social.unknown_group`,
+  `social.unknown_role`, `social.not_member`,
+  `social.unknown_message_kind`, `social.unknown_lines`,
+  `social.no_voice`, `social.bad_argument`, `social.not_obeyed`,
+  `social.giver_unknown`, `social.not_an_order`, `social.unknown_order`,
+  `social.not_registered`.
+- Not built: features and descriptions (§8.4) and `suspects`; pronoun
+  sets; exchanges (T6); the `talk` interaction; collectives; group
+  variables; a role's `orders`; the queries `members` and `suspects`.
 
 **Reachable only from Rust**, for the packages that will offer them to
-content: giving and taking senses (`attach_sense`, `detach_sense`, for
-templates and traits); setting a standing signature (`set_signature`);
+content: giving senses from templates and traits (`attach_sense`,
+`detach_sense` are verbs, but nothing gives senses at creation);
+setting a standing signature (`set_signature`); the list of what one
+can say to another (`social::talk_options`, for the application's talk
+screen); `social::intervenes`, for whoever builds windows (T5);
 an explicit search or listen with a bonus (`search`, for the actions);
 noting an element (`note_element`); recording an observed capability
 (`observe_capability`); the omniscient switch (`set_omniscient`); and

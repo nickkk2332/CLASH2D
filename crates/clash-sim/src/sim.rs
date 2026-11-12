@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 11;
+pub const SAVE_VERSION: u32 = 12;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -124,6 +124,8 @@ pub struct Sim {
     /// Which entity holds each ability instance, and the number the
     /// next takes (08 §3.2).
     pub(crate) abilities: crate::ability::AbilityIndex,
+    /// Personas, relations, groups and orders (15 §8 to §11).
+    pub(crate) social: crate::social::SocialState,
     /// Not state: the tables of abilities and the expressions kept
     /// current (05 §7.5).
     pub(crate) ability_rt: crate::ability::Runtime,
@@ -215,6 +217,7 @@ struct SavedRef<'a> {
     steps: u64,
     perception: &'a PerceptionState,
     abilities: &'a crate::ability::AbilityIndex,
+    social: &'a crate::social::SocialState,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -240,6 +243,7 @@ struct Saved {
     steps: u64,
     perception: PerceptionState,
     abilities: crate::ability::AbilityIndex,
+    social: crate::social::SocialState,
 }
 
 impl Sim {
@@ -304,6 +308,7 @@ impl Sim {
             perception: PerceptionState::default(),
             perception_defs,
             abilities: crate::ability::AbilityIndex::default(),
+            social: crate::social::SocialState::default(),
             ability_rt,
             strike_depth: 0,
         };
@@ -700,6 +705,7 @@ impl Sim {
         kernel.write_u64(self.steps);
         self.perception.state_hash(&mut kernel);
         self.abilities.state_hash(&mut kernel);
+        self.social.state_hash(&mut kernel);
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -756,6 +762,7 @@ impl Sim {
                 steps: self.steps,
                 perception: &self.perception,
                 abilities: &self.abilities,
+                social: &self.social,
             },
         )
     }
@@ -838,6 +845,7 @@ impl Sim {
             perception: saved.perception,
             perception_defs,
             abilities: saved.abilities,
+            social: saved.social,
             ability_rt,
             strike_depth: 0,
         };
@@ -851,6 +859,7 @@ impl Sim {
     fn bind_runtime(&mut self) {
         self.bind_rules();
         crate::interaction::bind(self);
+        crate::social::bind(self);
         // Recurring global rules have a timer from the start (05 §9.4).
         self.start_recurring_rules();
     }

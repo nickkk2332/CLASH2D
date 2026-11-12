@@ -87,17 +87,27 @@ pub struct Signal {
     pub event: Option<SignalEvent>,
     /// What made it. Truth: an observer is not told it.
     pub cause: Cause,
+    /// What was said, if it is speech (15 §11): whoever perceives it
+    /// hears the message.
+    pub message: Option<Box<crate::social::Message>>,
 }
 
-impl_state_hash!(Signal {
-    kind,
-    at,
-    alt_mm,
-    strength,
-    about,
-    event,
-    cause
-});
+impl clash_core::StateHash for Signal {
+    fn state_hash(&self, hasher: &mut clash_core::StateHasher) {
+        self.kind.state_hash(hasher);
+        self.at.state_hash(hasher);
+        self.alt_mm.state_hash(hasher);
+        self.strength.state_hash(hasher);
+        self.about.state_hash(hasher);
+        self.event.state_hash(hasher);
+        self.cause.state_hash(hasher);
+        // Hashed only when there is one, so that a signal that is not
+        // speech hashes as it did before speech.
+        if let Some(message) = &self.message {
+            message.state_hash(hasher);
+        }
+    }
+}
 
 impl Signal {
     /// A signal of a kind at a cell, on its floor, about nothing, carrying
@@ -111,6 +121,7 @@ impl Signal {
             about: None,
             event: None,
             cause,
+            message: None,
         }
     }
 
@@ -132,6 +143,13 @@ impl Signal {
     #[must_use]
     pub fn carrying(mut self, event: SignalEvent) -> Signal {
         self.event = Some(event);
+        self
+    }
+
+    /// This signal carrying something said (15 §11).
+    #[must_use]
+    pub fn saying(mut self, message: crate::social::Message) -> Signal {
+        self.message = Some(Box::new(message));
         self
     }
 }

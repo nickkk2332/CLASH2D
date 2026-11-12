@@ -1,0 +1,35 @@
+# frame_job (plans/first-playable.md, S6; scene S15): a trickster wearing
+# a townsman's face smashes a wall in front of a witness. The witness
+# remembers the townsman doing it; the world's cause names the trickster
+# (15 §8.3). Out of sight, the trickster drops the face: seen again, it
+# is not blamed, and the townsman still is.
+use default seed=5
+gen core:testland size=2
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 40, 40, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, -2, 0, 0)" } }
+remove @spot
+set @c:11,10,0 block core:wall
+# Tess (@e:1) takes on Vic's (@e:2) face before Wes (@e:3) can see.
+copy_persona who=@e:1 of=@e:2
+assert "@e:1.presenting == @e:2.persona"
+attach_sense who=@e:3 sense=human_sight
+attach_sense who=@e:3 sense=human_hearing
+face who=@e:3 toward=@e:1
+set_awareness who=@e:3 of=@e:1 sense=human_sight level=1
+assert "@e:3.persona_of(@e:1) == @e:2.persona"
+as @e:1 do { "damage": { "at": "offset(self.loc, 1, 0, 0) ?? self.loc", "kind": "core:impact", "energy": 2000000, "intensity": 100000000 } }
+expect event element_destroyed actor=@e:1
+advance 200ms
+assert "@e:3.remembers_actor(@e:2, 'element_destroyed')"
+assert "@e:3.knows(@e:2) and @e:3.believed_loc(@e:2).x == 10"
+# Out of the witness's sight, the face comes off.
+set_awareness who=@e:3 of=@e:1 sense=human_sight level=0
+drop_persona who=@e:1
+set_awareness who=@e:3 of=@e:1 sense=human_sight level=1
+assert "@e:3.persona_of(@e:1) == @e:1.persona"
+assert "not @e:3.remembers_actor(@e:1, 'element_destroyed')"
+assert "@e:3.remembers_actor(@e:2, 'element_destroyed')"
+advance 1s
+expect hash 61c858304f936c7fc60368ffdef4a8fd
