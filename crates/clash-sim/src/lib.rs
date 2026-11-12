@@ -82,11 +82,13 @@ pub mod query;
 pub mod reader;
 pub mod reason;
 pub mod registry;
+pub mod reshape;
 pub mod rule;
 mod sim;
 pub mod stats;
 pub mod subject;
 pub mod template;
+pub mod traits;
 pub mod vars;
 pub mod verb;
 pub mod world_verbs;
@@ -145,6 +147,7 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     perception::register_defs(types);
     device::register_defs(types);
     interaction::register_defs(types);
+    traits::register_defs(types);
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);
