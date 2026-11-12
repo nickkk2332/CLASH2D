@@ -482,6 +482,8 @@ pub fn grant(
 /// taken back, it is no longer watched, and it leaves the component and
 /// the index.
 fn remove_inst(sim: &mut Sim, entity: EntityId, number: u64, how: &str, cause: Cause) {
+    // Everything bound to it ends first (invariant A3).
+    super::bind::end_all(sim, number, how, cause);
     super::modes::end_all(sim, entity, number, how, cause);
     take_back_all(sim, entity, number, cause);
     reactive::unwatch(sim, Watcher::Ability { entity, number });
@@ -570,6 +572,7 @@ pub fn revoke(
     if trait_sources.is_empty() {
         remove_inst(sim, entity, number, "revoked", cause);
     } else {
+        super::bind::end_all(sim, number, "revoked", cause);
         super::modes::end_all(sim, entity, number, "revoked", cause);
         if let Some(inst) = inst_mut(sim, entity, number) {
             inst.revoked = true;
@@ -617,6 +620,7 @@ pub(crate) fn set_dormant(
     }
     if dormant {
         super::modes::end_all(sim, entity, number, "dormant", cause);
+        super::bind::ending_on(sim, number, super::bind::ends_on::DORMANT, "dormant", cause);
     }
     if let Some(inst) = inst_mut(sim, entity, number) {
         inst.state = state;
@@ -928,6 +932,8 @@ fn move_numbers(sim: &mut Sim, from: EntityId, to: EntityId, numbers: &[u64], ca
             cause,
         );
         if inst_of(sim, to, moved.def()).is_some() {
+            // The other holds it already: what this one bound ends.
+            super::bind::end_all(sim, *number, "moved", cause);
             sim.abilities.owners.remove(number);
             for source in moved.sources.clone() {
                 let _ = grant(sim, to, moved.def(), source, None, cause);
@@ -935,6 +941,7 @@ fn move_numbers(sim: &mut Sim, from: EntityId, to: EntityId, numbers: &[u64], ca
             continue;
         }
         sim.abilities.owners.insert(*number, to);
+        super::bind::moved(sim, *number, to);
         let mut arriving = moved.clone();
         arriving.modes.clear();
         arriving.applied.clear();

@@ -22,7 +22,7 @@
 //! | `launch` | `what: entity`, `vel: any` | null | `WorldCtx::launch` |
 //! | `impulse` | `what: entity`, `j: any` | null | `WorldCtx::impulse` |
 //! | `arrest` | `what: entity` | null | `WorldCtx::arrest` |
-//! | `create_area` | `at: loc`, `to: loc?`, `radius: real?`, `kind: id<area_kind>?`, `tags: list<string>?`, `clock_rate: real?`, `priority: int?`, `anchor: entity?`, `gravity: any?`, `light: real?`, `light_radius: real?` | `area` | `WorldCtx::create_area` |
+//! | `create_area` | `at: loc`, `to: loc?`, `radius: real?`, `kind: id<area_kind>?`, `tags: list<string>?`, `clock_rate: real?`, `priority: int?`, `anchor: entity?`, `gravity: any?`, `light: real?`, `light_radius: real?`, `bound: bool?` and the terms of a binding (`ability`, `for`, `ends_on`, `on_end`, `as`; 08 §7.3) | `area` | `WorldCtx::create_area` |
 //! | `remove_area` | `area: area` | null | `WorldCtx::remove_area` |
 //! | `enclose` | `from: loc`, `kind: id<area_kind>?`, `limit: int?` | `area` | `WorldCtx::enclose` |
 //!
@@ -661,7 +661,14 @@ fn area_value(sim: &Sim, id: clash_world::AreaId) -> Value {
 
 fn create_area(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value, Reason> {
     const VERB: &str = "create_area";
-    let at = cell_arg(sim, VERB, call, 0, "at")?;
+    // Left out, `at` is where the anchor is.
+    let at = match (arg(call, 0), subject_arg(sim, call, 7)) {
+        (Value::Null, Some(Subject::Entity(anchor))) => sim
+            .entities
+            .location(anchor)
+            .ok_or_else(|| bad_argument(VERB, "at", "a cell, or an anchor that is in the world"))?,
+        _ => cell_arg(sim, VERB, call, 0, "at")?,
+    };
     let to = match arg(call, 1) {
         Value::Null => None,
         _ => Some(cell_arg(sim, VERB, call, 1, "to")?),
@@ -742,9 +749,17 @@ fn create_area(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value
         spec.light = LightSource::shining(intensity, radius)
             .map_err(|why| bad_argument(VERB, "light_radius", &why))?;
     }
+    // Bound to an ability (08 §7.3): checked before anything is made.
+    let terms = crate::ability::bind::area_terms(sim, call, 11)?;
+    if let Some(terms) = &terms {
+        crate::ability::bind::check_room(sim, terms.number)?;
+    }
     let id = sim
         .world(|ctx| ctx.create_area(spec, cause))
         .map_err(|error| world(&error))?;
+    if let Some(terms) = &terms {
+        crate::ability::bind::bind_area(sim, terms, id, cause);
+    }
     Ok(area_value(sim, id))
 }
 
@@ -1099,7 +1114,12 @@ pub fn world_verbs() -> Vec<VerbDef> {
                     "create_area",
                     "Makes an area (02 §8.3): a box from `at` to `to`, every cell within `radius` metres of `at`, or the one cell `at`; anchored to an entity, it moves with it; it may set gravity inside it and carry a light. Whoever it comes over is told (`area_entered`). Returns the area. Refused for a box in two grids, a kind that does not exist, an anchor that does not exist, gravity that is neither a scale nor three numbers, a light whose radius is out of range, and a shape larger than the engine allows.",
                     &[
-                        ("at", "loc", false, "A corner of the box, or the middle."),
+                        (
+                            "at",
+                            "loc",
+                            true,
+                            "A corner of the box, or the middle. Left out, the cell its `anchor` is in.",
+                        ),
                         ("to", "loc", true, "The other corner of a box."),
                         (
                             "radius",
@@ -1150,6 +1170,17 @@ pub fn world_verbs() -> Vec<VerbDef> {
                             true,
                             "How far that light shines, in metres, at most 16. Left out, as far as it stays noticeable.",
                         ),
+                        (
+                            "bound",
+                            "bool",
+                            true,
+                            "Whether it is bound to an ability (08 §7.3) and removed when the binding ends. Giving any of the binding's terms below binds it too.",
+                        ),
+                        crate::ability::bind::TERM_ARGS[0],
+                        crate::ability::bind::TERM_ARGS[1],
+                        crate::ability::bind::TERM_ARGS[2],
+                        crate::ability::bind::TERM_ARGS[3],
+                        crate::ability::bind::TERM_ARGS[4],
                     ],
                 )
             },

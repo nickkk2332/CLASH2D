@@ -1080,6 +1080,60 @@ may carry a light at its middle, negative for darkness, which moves
 with it; light is never below zero. `create_area` takes `anchor`,
 `gravity`, `light` and `light_radius`.
 
+**Bindings** (section 7.3; package A7, decision D-772). What an
+ability leaves in the world is kept by the simulation as a binding with
+a number given once in its life: the instance it belongs to and its
+owner, what it holds, its name, the mode whose `on_start` made it, when
+it ends and what then happens.
+
+| Holds (`what`) | Made by | `remove` | `restore` | `release` |
+|----------------|---------|----------|-----------|-----------|
+| `trait`: a trait on someone, given with the binding as its giver | `bind_trait` | Taken away | As `remove` | Stays, given by no one who takes it back |
+| `entity`: one made from a template | `summon` | Removed from the simulation | As `remove` | Stays, free |
+| `edit`: elements placed in cells of one layer, with what was there | `conjure` | Taken away where the cell is still what was conjured | What was there put back where the cell is still what was conjured | Left |
+| `area` | `create_area` with `bound` or any term | Removed | As `remove` | Stays |
+| `rule`: a rule attached to someone | `bind_rule` | Detached | As `remove` | Stays attached |
+
+The terms are arguments of each verb that binds, beside its own (not
+the object `bound` of section 7.3, which an argument written as an
+object cannot be: 05 §6 reads it as a value source):
+
+| Argument | Type | Meaning |
+|----------|------|---------|
+| `ability` | `ability?` | The instance it is bound to. Left out, the `ability` bound where the effect is written: a mode's `on_start` and `on_end`, what an ability works out about itself. An action is handed its ability by its grant (`"params": { "by": "ability" }`, a parameter of type `ability`) |
+| `for` | `real?` | Seconds of the owner's own time it lasts; it stands still while the owner is out of the world |
+| `ends_on` | `list<string>?` | Of `mode` (the mode that made it ends), `suppressed`, `dormant` (its ability is), `owner_stops` (its owner dies). Left out, all four |
+| `on_end` | `string?` | `remove`, `restore` or `release`. Left out, `restore` for `conjure`, `remove` for the rest |
+| `as` | `string?` | Its name, for `ability.bound(name)` |
+
+A binding also always ends, whatever `ends_on` says, when its ability
+is revoked (`revoked`) or loses its last source (`lost`), moves with a
+mind to an entity that already holds it (`moved`; otherwise it moves
+with the instance), or its owner is removed from the simulation
+(`owner_removed`): invariant A3. A binding whose thing is removed by
+something else is forgotten. Before a binding ends the hook
+`binding_ending` runs; a handler may change `on_end`, set `prolong` to
+keep it that many more seconds, or cancel to keep it (one whose time ran
+out then lasts until something else ends it); when its ability is gone
+neither keeps it. Each ability holds at most `rules.max_bindings`
+bindings (default 64).
+
+`summon { template, at, mind?, obey?, … }` makes the entity through the
+template service (06 §10.3), thinking by `mind` if given. With `obey`
+(default true) it takes the stances its summoner's mind holds toward
+others (09 §3.4), holds none toward its summoner, and is given a track
+of its summoner as if told (15 §7); it is given the senses its mind
+names, and thinks at once. `conjure { at, to?, layer?, what, … }`
+places what as data writes a state in the cell, or in each cell of the
+straight line from `at` to `to` (at most 64), through `WorldEdit`,
+refusing before anything changes if a cell cannot be read.
+`dismiss { who, ability, as?, how? }` ends an owner's bindings of an
+ability, or the one of a name, `how` in place of each `on_end`.
+`dispel { tags?, owner?, at?, radius? }` ends the bindings whose
+ability has any of the tags, whose owner is `owner` and whose thing is
+within `radius` metres of `at`. Portals are not built (02 §19): nothing
+is bound to one.
+
 **Loss** (section 6.3). Revoking an instance, or losing its last
 source, ends its modes (`revoked`, `lost`) and everything bound to it
 (section 7.3, invariant A3), then takes back what it conferred.
@@ -1094,6 +1148,8 @@ source, ends its modes (`revoked`, `lost`) and everything bound to it
 | `rank_changed` | `ability`, `old`, `new` (int) |
 | `ability_suppressed` | `ability`, `by` (string: `effect`, `trait`, `area`, what took hold first) |
 | `ability_restored` | `ability` |
+| `binding_created` | `ability`, `name` (string, empty for none), `what` (string: `trait`, `entity`, `edit`, `area`, `rule`), `on_end` (string) |
+| `binding_ended` | `ability`, `name`, `what`, `why` (string: `duration`, `dismissed`, `dispelled`, `mode`, `suppressed`, `dormant`, `owner_stops`, `revoked`, `lost`, `moved`, `owner_removed`), `how` (string: the `on_end` carried out), `thing` (any: the entity, the area, the one a trait or rule was on, or the first conjured cell) |
 | `mode_started` | `ability`, `mode` (string) |
 | `mode_ended` | `ability`, `mode`, `how` (string: `ended`, `empty`, `dormant`, `suppressed`, `revoked`, `lost`, `rank`, `moved`) |
 | `ability_used` | `ability`, `action` (string), `cost` (map of each pool's or item's qualified id to what was spent, overdraw included) |
@@ -1107,6 +1163,7 @@ source, ends its modes (`revoked`, `lost`) and everything bound to it
 | `ability_granting` | `ability`, `source` (`rule`) | Cancel. Raised by `grant_ability` only |
 | `ability_revoking` | `ability` | Cancel. Raised by `revoke_ability` only, for an ability held |
 | `ability_suppressing` | `ability`; `by` (string: `effect`, `trait`, `area`); `source` (any: the area for `area`, the trait's qualified id for `trait`, null for `effect`) | Cancel: the ability resists that suppression while it lasts |
+| `binding_ending` | `ability`, `name`, `what`, `why` (as `binding_ended`); `on_end` (string); `prolong` (real, 0) | Change `on_end`; set `prolong` above zero to keep it that many seconds more; cancel to keep it. Neither keeps one whose ability is gone |
 
 **Verbs:**
 
@@ -1120,6 +1177,13 @@ source, ends its modes (`revoked`, `lost`) and everything bound to it
 | `end_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`, true |
 | `suppress_abilities` | `who: entity`, `tags: list<string>?` (left out: every ability), `for: real?` (seconds of `who`'s own time; left out: until lifted) | `int`, how many of its abilities it suppresses now |
 | `restore_abilities` | `who: entity`, `tags: list<string>?` | `int`, how many imposed suppressions were lifted: those naming any of `tags`, or naming none, or all with no `tags` |
+| `summon` | `template: id<template>`, `at: loc`, `mind: string?`, `obey: bool?`, and the terms | `entity`, the one made |
+| `conjure` | `at: loc`, `to: loc?`, `layer: string?` (default `block`), `what: string`, and the terms | `int`, how many cells |
+| `bind_trait` | `to: entity`, `trait: id<trait>`, and the terms | `int`, the stacks it has |
+| `bind_rule` | `to: entity`, `eoc: id<eoc>` (a rule with `on`), and the terms | `bool`, whether it was attached; one attached already binds nothing |
+| `dismiss` | `who: entity`, `ability: id<ability>`, `as: string?`, `how: string?` | `int`, how many ended |
+| `dispel` | `tags: list<string>?`, `owner: entity?`, `at: loc?`, `radius: real?` (default 0) | `int`, how many ended |
+| `create_area` | as 02 §23 lists it, with `bound: bool?` and the terms | `area` |
 
 **Commands** (03 §4.4): `UseAbility { entity, ability, action, params }`
 and `SetMode { entity, ability, mode, on }`.
@@ -1127,7 +1191,10 @@ and `SetMode { entity, ability, mode, on }`.
 **Properties.** On an entity: `has_ability(ability: id<ability>)`
 (`bool`); `ability(ability: id<ability>)` (`ability?`, the instance, the
 owner's own); `abilities` (`list<id<ability>>`, in the order gained);
-`abilities_with(tag: string)` (`list<ability>`); `cannot_use(ability:
+`abilities_with(tag: string)` (`list<ability>`); `bound_by`
+(`entity?`: the owner of the ability a summoned entity is bound to,
+readable of oneself in a mind; it moves with bindings and cannot be kept
+current); `cannot_use(ability:
 id<ability>, action: id<action>?)` (`string?`, the code of the reason a
 use would be refused now, null if it would not). The first four change
 with `ability_granted` and `ability_revoked`. On the kind `ability`:
@@ -1137,6 +1204,9 @@ with `ability_granted` and `ability_revoked`. On the kind `ability`:
 `ability_restored`), `def`
 (`id<ability>?`), `id` (`string?`), `tags` (`list<string>?`),
 `mode_on(mode: string)` (`bool`, by `mode_started` and `mode_ended`),
+`bound(name: string)` (`any`: what its binding of that name holds, as
+`binding_ended`'s `thing` says, and for an `edit` every cell as a list
+of `loc`; by `binding_created` and `binding_ended`),
 `cooldown(action: id<action>)` (`real`, seconds left, 0 when ready), and
 each parameter by name (`real`). None is safe for belief or settable.
 `cooldown`, `cannot_use` and parameters move with time and anything
@@ -1155,7 +1225,8 @@ seconds), `ability.condition` (`ability`, `action`),
 `ability.rank_from_track` (`ability`), `ability.bad_rank` (`rank`),
 `ability.bad_argument` (`arg`), `ability.not_registered`,
 `ability.suppressed` (`ability`, `by`), `ability.bad_duration`
-(`seconds`). The faults of 05 §7.5: `reactive.rounds`,
+(`seconds`), `ability.no_binder`, `ability.too_many_bindings`
+(`limit`), `ability.bad_binding` (`arg`). The faults of 05 §7.5: `reactive.rounds`,
 `reactive.unwatchable`.
 
 **For the application and the AI layer.** `ability::options(sim,

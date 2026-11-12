@@ -192,7 +192,10 @@ pub fn start_mode(
             wake: None,
         });
     }
+    // What `on_start` binds ends with the mode (08 §7.3).
+    let making = sim.ability_rt.making.replace((number, index));
     run(sim, entity, number, &ability.modes[mode].on_start, cause);
+    sim.ability_rt.making = making;
     schedule(sim, entity, number, index);
     notify(
         sim,
@@ -305,6 +308,7 @@ pub(super) fn end_one(
     }
     crate::traits::withdraw(sim, entity, mode_giver(number, mode), cause);
     run(sim, entity, number, &mode_def.on_end, cause);
+    super::bind::mode_ended(sim, number, mode, cause);
     let name = name_of(&defs, current.def());
     notify(
         sim,

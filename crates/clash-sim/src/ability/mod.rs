@@ -84,6 +84,7 @@
 //! | A property of a handle is read | Asks [`property`] first |
 //! | A template has made an entity | Calls [`grant_from_template`] |
 
+pub mod bind;
 mod defs;
 mod modes;
 mod ops;
@@ -115,6 +116,7 @@ use crate::stats::PoolDef;
 use crate::template::TemplateDef;
 use crate::traits::{TraitDef, TraitId};
 
+pub use bind::{Binding, Bound, Conjured, OnEnd, binding_giver, bound_by, bound_value};
 pub use defs::{
     ALWAYS_SLOT, AbilityDef, AbilityGrantDef, AbilityId, Always, AlwaysDef, CostDef, Costs,
     DEFAULT_RANK, Intent, MAX_MODES, MAX_RANK, ModeDef, OverdrawDef, ParamModifierDef,
@@ -506,9 +508,18 @@ impl Abilities {
 pub struct AbilityIndex {
     next: u64,
     owners: BTreeMap<u64, EntityId>,
+    /// The number the next binding takes (08 §7.3).
+    next_binding: u64,
+    /// Every binding, by its number.
+    bindings: BTreeMap<u64, bind::Binding>,
 }
 
-impl_state_hash!(AbilityIndex { next, owners });
+impl_state_hash!(AbilityIndex {
+    next,
+    owners,
+    next_binding,
+    bindings
+});
 
 impl AbilityIndex {
     /// The entity that holds the instance with a number.
@@ -524,6 +535,11 @@ impl AbilityIndex {
     /// Whether no instance exists.
     pub fn is_empty(&self) -> bool {
         self.owners.is_empty()
+    }
+
+    /// A binding by its number.
+    pub fn binding(&self, id: u64) -> Option<&bind::Binding> {
+        self.bindings.get(&id)
     }
 }
 
@@ -647,6 +663,7 @@ pub(crate) enum Prop {
     Tags,
     ModeOn,
     Cooldown,
+    Bound,
     Param(String),
 }
 
@@ -706,6 +723,7 @@ impl Tables {
                 ("tags", Prop::Tags),
                 ("mode_on", Prop::ModeOn),
                 ("cooldown", Prop::Cooldown),
+                ("bound", Prop::Bound),
             ] {
                 if let Some(id) = registry.property_id(kind, name) {
                     props.insert(id, prop);
@@ -778,6 +796,9 @@ pub struct Runtime {
     pub tables: Arc<Tables>,
     /// The expressions kept current (05 §7.5).
     pub reactive: reactive::Reactive,
+    /// While a mode's `on_start` runs: the instance and the mode, so
+    /// that what it binds ends with the mode (08 §7.3).
+    pub(crate) making: Option<(u64, u16)>,
 }
 
 impl Runtime {
@@ -787,6 +808,7 @@ impl Runtime {
         Runtime {
             tables: Arc::new(Tables::new(defs, registry)),
             reactive: reactive::Reactive::default(),
+            making: None,
         }
     }
 }
@@ -850,6 +872,12 @@ pub mod codes {
     pub const SUPPRESSED: &str = "ability.suppressed";
     /// A duration that is not above zero.
     pub const BAD_DURATION: &str = "ability.bad_duration";
+    /// Something was to be bound and there is no ability to bind it to.
+    pub const NO_BINDER: &str = "ability.no_binder";
+    /// The ability holds as many bindings as `rules.max_bindings` allows.
+    pub const TOO_MANY_BINDINGS: &str = "ability.too_many_bindings";
+    /// A term of a binding is not one there is.
+    pub const BAD_BINDING: &str = "ability.bad_binding";
 }
 
 /// The reasons this module refuses for, for the generated reference.
@@ -938,6 +966,18 @@ pub const ABILITY_REASONS: &[ReasonInfo] = &[
         code: codes::BAD_DURATION,
         doc: "A duration given to a verb of abilities is not above zero or not finite. Values: `seconds`.",
     },
+    ReasonInfo {
+        code: codes::NO_BINDER,
+        doc: "Something was to be bound (08 §7.3) and there is no ability held to bind it to: no `ability` was given and none is bound where the effect is written. Nothing was made. Values: none.",
+    },
+    ReasonInfo {
+        code: codes::TOO_MANY_BINDINGS,
+        doc: "The ability holds as many bindings as `rules.max_bindings` allows (default 64). Nothing was made. Values: `limit`.",
+    },
+    ReasonInfo {
+        code: codes::BAD_BINDING,
+        doc: "A term of a binding is not one there is: `for` not above zero, a word of `ends_on` other than `mode`, `suppressed`, `dormant` and `owner_stops`, an `on_end` or `how` other than `remove`, `restore` and `release`, an empty `as`. Values: `arg`.",
+    },
 ];
 
 // ---- Events --------------------------------------------------------------------------
@@ -967,6 +1007,12 @@ pub const ABILITY_SUPPRESSED: &str = "ability_suppressed";
 pub const ABILITY_RESTORED: &str = "ability_restored";
 /// The hook raised before a suppression takes hold of an ability.
 pub const ABILITY_SUPPRESSING: &str = "ability_suppressing";
+/// Raised when something is bound to an ability.
+pub const BINDING_CREATED: &str = "binding_created";
+/// Raised when a binding has ended.
+pub const BINDING_ENDED: &str = "binding_ended";
+/// The hook raised before a binding ends.
+pub const BINDING_ENDING: &str = "binding_ending";
 /// The hook raised before a granted action is started.
 pub const ABILITY_USING: &str = "ability_using";
 /// The hook raised before a rule grants an ability.
@@ -1095,6 +1141,54 @@ pub const ABILITY_EVENTS: &[EventInfo] = &[
         fields: &[ABILITY_FIELD],
         doc: "The last suppression of an ability lifted: it confers again, unless it is dormant. Its modes do not come back by themselves.",
     },
+    EventInfo {
+        name: BINDING_CREATED,
+        subjects: &[("self", "entity")],
+        fields: &[
+            ABILITY_FIELD,
+            ("name", "string", "The name it was given (`as`), or empty."),
+            (
+                "what",
+                "string",
+                "What is bound: `trait`, `entity`, `edit` (conjured cells), `area` or `rule`.",
+            ),
+            (
+                "on_end",
+                "string",
+                "What will happen to it when it ends: `remove`, `restore` or `release`.",
+            ),
+        ],
+        doc: "Something was bound to an ability (08 §7.3): a trait, a summoned entity, conjured cells, an area or a rule.",
+    },
+    EventInfo {
+        name: BINDING_ENDED,
+        subjects: &[("self", "entity")],
+        fields: &[
+            ABILITY_FIELD,
+            ("name", "string", "The name it was given, or empty."),
+            (
+                "what",
+                "string",
+                "`trait`, `entity`, `edit`, `area` or `rule`.",
+            ),
+            (
+                "why",
+                "string",
+                "`duration`, `dismissed`, `dispelled`, `mode`, `suppressed`, `dormant`, `owner_stops`, `revoked`, `lost`, `moved` or `owner_removed`.",
+            ),
+            (
+                "how",
+                "string",
+                "What was done: `remove`, `restore` or `release`.",
+            ),
+            (
+                "thing",
+                "any",
+                "What it held: the entity, the area, the one a trait or rule was on, or the first conjured cell.",
+            ),
+        ],
+        doc: "A binding ended (08 §7.3) and what it held was removed, restored or released.",
+    },
 ];
 
 /// The hooks of abilities (05 §8.2; 08 §7.9, §12): entered in the event
@@ -1143,6 +1237,32 @@ pub fn hook_types() -> Vec<EventType> {
             )
             .hook(Vec::<String>::new())
             .doc("Runs before a suppression takes hold of one ability (08 §6.2, §7.9): once for each ability and each suppression, when the suppression is imposed, the trait is given, the owner comes into the area or the ability is gained. A handler may cancel, with a reason: the ability resists, and that suppression passes it over for as long as it lasts."),
+        EventType::new(BINDING_ENDING)
+            .subject("self", "entity")
+            .field(ABILITY_FIELD.0, FieldType::Str, ABILITY_FIELD.2)
+            .field("name", FieldType::Str, "The name the binding was given, or empty.")
+            .field(
+                "what",
+                FieldType::Str,
+                "What is bound: `trait`, `entity`, `edit`, `area` or `rule`.",
+            )
+            .field(
+                "why",
+                FieldType::Str,
+                "Why it ends: `duration`, `dismissed`, `dispelled`, `mode`, `suppressed`, `dormant`, `owner_stops`, `revoked`, `lost`, `moved` or `owner_removed`.",
+            )
+            .field(
+                "on_end",
+                FieldType::Str,
+                "What will happen to what is bound: `remove`, `restore` or `release`. A handler may change it.",
+            )
+            .field(
+                "prolong",
+                FieldType::Real,
+                "0. A handler that sets seconds above zero keeps the binding that much longer of its owner's own time, in place of ending it.",
+            )
+            .hook(["on_end", "prolong"])
+            .doc("Runs before a binding ends (08 §7.3, §7.9). A handler may change how it ends (`on_end`), prolong it (`prolong`), or cancel, with a reason, to keep it: one whose time ran out then lasts until something else ends it. When its ability is revoked, lost or moved, or its owner removed, prolonging and cancelling are not honoured: it ends, as `on_end` then says."),
     ]
 }
 
@@ -1210,6 +1330,13 @@ pub(crate) const FIXED_PROPERTIES: &[FixedProperty] = &[
         Some(("action", "id<action>")),
         &[],
         "Seconds of its owner's own time before the grant of an action can be used again: 0 when it is ready. Moves with time, so it cannot be kept current.",
+    ),
+    (
+        "bound",
+        "any",
+        Some(("name", "string")),
+        &[BINDING_CREATED, BINDING_ENDED],
+        "What its binding of a name holds (08 §7.3), if it is still there: the summoned entity, the area, the one a bound trait or rule is on, or the conjured cells as a list of `loc`; null otherwise.",
     ),
 ];
 
@@ -1494,7 +1621,9 @@ pub fn handle_wake(sim: &mut Sim, id: WakeId, wake: Wake) -> bool {
     }
     let entity = EntityId::from_bits(wake.id);
     if wake.arg & 0xFF == TIMER_SLOT {
-        suppress::on_wake(sim, id, entity);
+        if !suppress::on_wake(sim, id, entity) {
+            bind::on_wake(sim, id, entity);
+        }
         return true;
     }
     let number = (wake.arg >> 8) & ((1 << 52) - 1);
@@ -1527,6 +1656,7 @@ pub fn on_event(sim: &mut Sim, event: &SimEvent) {
     }
     let Some(entity) = event.subject("self").and_then(|subject| subject.entity()) else {
         if let crate::event::EventBody::EntityRemoved { entity } = &event.body {
+            bind::removed(sim, *entity, event.cause);
             ops::forget_entity(sim, *entity);
         }
         return;
@@ -1544,8 +1674,13 @@ pub fn on_event(sim: &mut Sim, event: &SimEvent) {
         "entity_relocated" => {
             modes::reschedule_all(sim, entity);
             suppress::reschedule(sim, entity);
+            bind::reschedule(sim, entity);
         }
-        "entity_removed" => ops::forget_entity(sim, entity),
+        "entity_died" => bind::on_event(sim, name, entity, event.cause),
+        "entity_removed" => {
+            bind::removed(sim, entity, event.cause);
+            ops::forget_entity(sim, entity);
+        }
         _ => {}
     }
 }

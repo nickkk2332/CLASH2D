@@ -199,9 +199,7 @@ fn refresh(
         }
         let resisted = resists(sim, entity, number, by, cause);
         // A handler may have taken the ability away.
-        let Some(inst) = super::ops::inst_mut(sim, entity, number) else {
-            return None;
-        };
+        let inst = super::ops::inst_mut(sim, entity, number)?;
         if resisted {
             inst.resisted.push(by);
         } else {
@@ -223,6 +221,13 @@ fn changed(sim: &mut Sim, entity: EntityId, number: u64, suppressed: bool, cause
     let name = name_of(&sim.defs, current.def());
     if suppressed {
         super::modes::end_all(sim, entity, number, "suppressed", cause);
+        super::bind::ending_on(
+            sim,
+            number,
+            super::bind::ends_on::SUPPRESSED,
+            "suppressed",
+            cause,
+        );
         super::ops::settle(sim, entity, number, cause);
         let by = current
             .suppressed_by

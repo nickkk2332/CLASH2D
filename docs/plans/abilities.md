@@ -22,7 +22,7 @@ the rest of this plan. Build it early.
 | A4 | Modes, upkeep, charging | M | A3 | beta |
 | A5 | Dormancy, suppression, loss | M | A2, A1 | done |
 | A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | done |
-| A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | in progress |
+| A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | beta |
 | A8 | Snapshots, journals, restoring as generated | L | E8, W6, K7, W8 | todo |
 | A9 | Relays, appraisal, field movement, force at range, contest bias | M | S5, C7, W16 | todo |
 | A10 | Reference abilities | L | A4, A6, A7, A8, A9, C12 | todo |
@@ -210,6 +210,19 @@ Done when
 - Scenario `conjured_wall`: a wall placed over a street is removed and the
   street restored; a cell that was since altered is left alone.
 - `release` leaves the thing in place, unbound.
+
+Beta (decisions D-772 to D-774; 08 §12.1). Bindings of traits
+(`bind_trait`), entities (`summon`), cells (`conjure`), areas
+(`create_area` with `bound`) and rules (`bind_rule`), with durations on
+the owner's own time, `ends_on`, `on_end`, `dismiss`, `dispel`,
+`binding_ending`, `ability.bound(name)` (so costs `from` a bound
+companion work) and `bound_by`. Summoned servants obey through the AI's
+stances. Stubbed: portals (not built, 02 §19); `add_trait` and
+`attach_rule` with `bound` (use `bind_trait` and `bind_rule`); orders to
+a servant until the social layer (S7) lands; the queries `bindings` and
+`modes`. Tests: `crates/clash-sim/tests/abilities_world.rs`; test
+scripts `scenarios/powers/summon_expires.scn` and `conjured_wall.scn`;
+the bundled powers of D-774.
 
 ### A8 — Snapshots, journals, restoring as generated
 

@@ -11,6 +11,7 @@
 //! | `end_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`: true | [`end_mode`](super::end_mode) |
 //! | `suppress_abilities` | `who: entity`, `tags: list<string>?`, `for: real?` | `int`: how many abilities it suppresses now | [`suppress_abilities`](super::suppress_abilities) |
 //! | `restore_abilities` | `who: entity`, `tags: list<string>?` | `int`: how many suppressions were lifted | [`restore_abilities`](super::restore_abilities) |
+//! | `summon`, `conjure`, `bind_trait`, `bind_rule`, `dismiss`, `dispel` | See [`super::bind`] | | Bindings (08 §7.3) |
 //!
 //! An argument missing or of the wrong kind is refused with
 //! `ability.bad_argument`.
@@ -136,8 +137,15 @@ const ABILITY: (&str, &str, bool, &str) = ("ability", "id<ability>", false, "The
 const MODE: (&str, &str, bool, &str) =
     ("mode", "string", false, "The mode's id within the ability.");
 
-/// The verbs of abilities, for [`crate::verb::engine_verbs`].
+/// The verbs of abilities, for [`crate::verb::engine_verbs`]: those
+/// here and those of bindings ([`super::bind::verbs`]).
 pub fn verbs() -> Vec<VerbDef> {
+    let mut all = own_verbs();
+    all.extend(super::bind::verbs());
+    all
+}
+
+fn own_verbs() -> Vec<VerbDef> {
     vec![
         VerbDef {
             name: "grant_ability",
