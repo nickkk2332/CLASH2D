@@ -94,6 +94,7 @@
 
 pub mod bind;
 mod defs;
+pub mod edit;
 pub mod hit;
 pub mod props;
 mod verbs;

@@ -92,18 +92,26 @@ fn the_hosts_commands_register_beside_the_built_in_ones_and_the_verbs() {
     assert!(codes.contains(&reasons::RULES_UNBOUND));
     assert!(reasons::ALL.iter().all(|(_, doc)| !doc.is_empty()));
 
-    // Through to the host, a verb waits for the rule runtime.
+    // Through to the host, a verb reaches the rule runtime: one the
+    // simulation does not carry out is refused with a reason, an effect
+    // that does not compile says why, and one that does runs.
     let mut console = Console::new();
     console.table = table;
     console.ok("use default seed=1");
     console.ok("gen flat size=1");
-    assert_eq!(console.refused("ignite @here"), reasons::RULES_UNBOUND);
     assert_eq!(
-        console.refused(r#"do { "note": { "text": "hello" } }"#),
-        reasons::RULES_UNBOUND
+        console.refused("ignite @here"),
+        clash_sim::rule::reason::VERB_UNBOUND
     );
     let refusal = console.host.last_refusal().expect("the refusal is kept");
-    assert_eq!(refusal.code, reasons::RULES_UNBOUND);
+    assert_eq!(refusal.code, clash_sim::rule::reason::VERB_UNBOUND);
+    match console.run(r#"do { "note": { "text": "hello" } }"#) {
+        Err(ConsoleError::Failed(message)) => {
+            assert!(message.contains("does not compile"), "{message}");
+        }
+        other => panic!("an unknown effect was not reported: {other:?}"),
+    }
+    console.ok(r#"do { "let": { "x": 1 } }"#);
 }
 
 #[test]

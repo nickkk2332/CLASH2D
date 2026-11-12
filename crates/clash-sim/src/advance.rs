@@ -157,11 +157,12 @@ impl Default for Handlers {
         handlers.set(WakeDomain::Action, crate::action::run::action_wake);
         // Pools and bodies keep their wake-ups in the `Timer` domain and
         // are handed theirs before anyone else (`dispatch`). What is
-        // left goes to the handler of the domain: by default one that
-        // reports it as unhandled; a package or a test with timers of
-        // its own registers one with `Sim::set_wake_handler`.
-        handlers.set(WakeDomain::Timer, crate::life::timer_wake);
+        // left goes to the handler of the domain: traits' durations,
+        // and anything else is reported as unhandled.
+        handlers.set(WakeDomain::Timer, crate::traits::on_timer);
         handlers.set(WakeDomain::Perception, crate::perception::on_wake);
+        // Timers and recurring rules (05 §10.4, §9.4).
+        handlers.set(WakeDomain::Rule, crate::rule::timer_wake);
         handlers
     }
 }

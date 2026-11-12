@@ -1,0 +1,115 @@
+[
+  { "//": "A person whose shoulders take arms or tentacles and whose back takes anything, a tentacle that brings an organ with it, and a plan to turn the person into something that crawls. Values are illustrative.",
+    "type": "channel", "id": "arm", "name": "arm" },
+  { "type": "channel", "id": "leg", "name": "leg" },
+
+  { "type": "body_function", "id": "walking", "name": "Walking", "combine": "sum" },
+  { "type": "body_function", "id": "grasping", "name": "Grasping", "combine": "sum" },
+
+  { "type": "material", "id": "skin", "density": 1100, "toughness": "2 MJ/m3",
+    "resist": { "core:impact": { "threshold": "200 kPa" }, "core:cut": { "threshold": "1 MPa" } } },
+  { "type": "material", "id": "muscle", "density": 1060, "toughness": "1 MJ/m3",
+    "resist": { "core:impact": { "threshold": "100 kPa" }, "core:cut": { "threshold": "500 kPa" } } },
+  { "type": "material", "id": "bone", "density": 1900, "toughness": "100 MJ/m3",
+    "resist": { "core:impact": { "threshold": "2 MPa" }, "core:cut": { "threshold": "50 MPa" } } },
+  { "type": "material", "id": "chitin", "density": 1300, "toughness": "30 MJ/m3",
+    "resist": { "core:impact": { "threshold": "5 MPa" }, "core:cut": { "threshold": "20 MPa" } } },
+
+  { "type": "body_part", "id": "torso", "name": "torso",
+    "mass": "35 kg", "length": "0.6 m", "girth": "0.35 m",
+    "layers": [
+      { "material": "skin",   "thickness": "2 mm",  "weight": 0.05 },
+      { "material": "muscle", "thickness": "40 mm", "weight": 0.45 },
+      { "material": "bone",   "thickness": "15 mm", "weight": 0.50 } ],
+    "sockets": {
+      "neck":     { "count": 1, "accepts": ["head"] },
+      "shoulder": { "count": 2, "accepts": ["arm", "tentacle"] },
+      "hip":      { "count": 2, "accepts": ["leg"] },
+      "back":     { "count": 2 } } },
+
+  { "type": "body_part", "id": "head", "name": "head",
+    "mass": "5 kg", "length": "0.25 m", "girth": "0.18 m",
+    "layers": [
+      { "material": "skin", "thickness": "2 mm", "weight": 0.1 },
+      { "material": "bone", "thickness": "7 mm", "weight": 0.9 } ] },
+
+  { "type": "body_part", "id": "arm", "name": "arm",
+    "mass": "4 kg", "length": "0.7 m", "girth": "0.09 m",
+    "layers": [
+      { "material": "skin",   "thickness": "2 mm",  "weight": 0.05 },
+      { "material": "muscle", "thickness": "30 mm", "weight": 0.50 },
+      { "material": "bone",   "thickness": "20 mm", "weight": 0.45 } ],
+    "sockets": { "wrist": { "count": 1, "accepts": ["hand", "claw"] } },
+    "tags": ["limb"] },
+
+  { "type": "body_part", "id": "hand", "name": "hand",
+    "mass": "0.5 kg", "length": "0.18 m", "girth": "0.08 m",
+    "layers": [
+      { "material": "skin",   "thickness": "1.5 mm", "weight": 0.10 },
+      { "material": "muscle", "thickness": "10 mm",  "weight": 0.50 },
+      { "material": "bone",   "thickness": "8 mm",   "weight": 0.40 } ],
+    "provides": { "grasping": 0.5 },
+    "channels": { "arm": 1 },
+    "tags": ["limb"] },
+
+  { "type": "body_part", "id": "claw", "name": "claw",
+    "mass": "0.6 kg", "length": "0.2 m", "girth": "0.06 m",
+    "layers": [ { "material": "chitin", "thickness": "6 mm" } ],
+    "provides": { "grasping": 0.2 },
+    "channels": { "arm": 1 },
+    "tags": ["limb"] },
+
+  { "type": "body_part", "id": "tentacle", "name": "tentacle",
+    "mass": "5 kg", "length": "1.2 m", "girth": "0.07 m",
+    "layers": [ { "material": "skin", "thickness": "2 mm" }, { "material": "muscle", "thickness": "30 mm" } ],
+    "provides": { "grasping": 0.3 },
+    "channels": { "arm": 1 },
+    "inside": [ { "id": "sac", "part": "sac" } ],
+    "tags": ["limb"] },
+
+  { "type": "body_part", "id": "sac", "name": "sac",
+    "mass": "0.3 kg", "length": "0.1 m", "girth": "0.05 m",
+    "layers": [ { "material": "muscle", "thickness": "5 mm" } ] },
+
+  { "type": "body_part", "id": "wing", "name": "wing",
+    "mass": "3 kg", "length": "1.5 m", "girth": "0.05 m",
+    "layers": [ { "material": "skin", "thickness": "2 mm" }, { "material": "bone", "thickness": "5 mm" } ],
+    "tags": ["limb"] },
+
+  { "type": "body_part", "id": "leg", "name": "leg",
+    "mass": "11 kg", "length": "0.9 m", "girth": "0.15 m",
+    "layers": [
+      { "material": "skin",   "thickness": "2 mm",  "weight": 0.05 },
+      { "material": "muscle", "thickness": "50 mm", "weight": 0.50 },
+      { "material": "bone",   "thickness": "25 mm", "weight": 0.45 } ],
+    "provides": { "walking": 0.5 },
+    "channels": { "leg": 1 },
+    "tags": ["limb"] },
+
+  { "type": "body_plan", "id": "humanoid", "name": "humanoid",
+    "height": "1.75 m",
+    "parts": [
+      { "id": "torso",  "part": "torso" },
+      { "id": "head",   "part": "head",  "on": "torso",  "socket": "neck" },
+      { "id": "l_arm",  "part": "arm",   "on": "torso",  "socket": "shoulder", "side": "left" },
+      { "id": "r_arm",  "part": "arm",   "on": "torso",  "socket": "shoulder", "side": "right" },
+      { "id": "l_hand", "part": "hand",  "on": "l_arm",  "socket": "wrist",    "side": "left" },
+      { "id": "r_hand", "part": "hand",  "on": "r_arm",  "socket": "wrist",    "side": "right" },
+      { "id": "l_leg",  "part": "leg",   "on": "torso",  "socket": "hip",      "side": "left" },
+      { "id": "r_leg",  "part": "leg",   "on": "torso",  "socket": "hip",      "side": "right" }
+    ] },
+
+  { "type": "body_plan", "id": "crawler", "name": "crawler",
+    "height": "0.9 m",
+    "parts": [
+      { "id": "torso",  "part": "torso" },
+      { "id": "head",   "part": "head",     "on": "torso", "socket": "neck" },
+      { "id": "l_arm",  "part": "arm",      "on": "torso", "socket": "shoulder", "side": "left", "scale": 1.2 },
+      { "id": "r_arm",  "part": "tentacle", "on": "torso", "socket": "shoulder", "side": "right" },
+      { "id": "l_claw", "part": "claw",     "on": "l_arm", "socket": "wrist",    "side": "left" },
+      { "id": "l_leg",  "part": "leg",      "on": "torso", "socket": "hip",      "side": "left" },
+      { "id": "r_leg",  "part": "leg",      "on": "torso", "socket": "hip",      "side": "right" }
+    ] },
+
+  { "type": "attribute", "id": "heft", "name": "Heft", "base": 1 }
+]

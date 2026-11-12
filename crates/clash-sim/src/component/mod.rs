@@ -149,6 +149,7 @@ use crate::mind::{Driver, Mind};
 use crate::movement::Mover;
 use crate::perception::{Awareness, Beliefs, MapMemory, Senses, Signature};
 use crate::stats::Stats;
+use crate::traits::Traits;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
 ///
@@ -523,6 +524,9 @@ components! {
     /// What makes an entity a device: its definition and the element it
     /// is bound to (16 §4.1). On devices.
     device: Device = "device";
+    /// The trait instances an entity has and what they put on it
+    /// (06 §5). On whatever has been given a trait.
+    traits: Traits = "traits";
     /// The goal a mind holds, how far it has got, its own stream and its
     /// stances (09 §3, §4). On characters whose mind has thought.
     mind_state: MindState = "mind_state";
