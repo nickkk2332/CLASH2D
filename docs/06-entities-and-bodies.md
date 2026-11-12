@@ -1454,7 +1454,8 @@ gives (invariant B3), and a record never names something that is not
 there (B6).
 
 **Containers.** A thing goes into a container if the container has
-`holds`, it carries one of the tags `accepts` lists (if any), and the
+`holds` (an item's, or a device's by its definition, 16 §4.3), it
+carries one of the tags `accepts` lists (if any), and the
 volume and the mass of what is directly inside, with it, are within the
 container's. Mass counts everything inside the thing. Carried mass reaches
 the holder's `Physical` through containment (section 3.1).

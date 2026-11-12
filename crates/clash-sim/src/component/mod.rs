@@ -142,6 +142,7 @@ pub use physical::{
 pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::body::Body;
+use crate::device::Device;
 use crate::item::{Holds, Item};
 use crate::mind::{Driver, Mind};
 use crate::movement::Mover;
@@ -519,6 +520,9 @@ components! {
     /// What places looked like when last seen (15 §13). On directly
     /// controlled characters.
     map_memory: MapMemory = "map_memory";
+    /// What makes an entity a device: its definition and the element it
+    /// is bound to (16 §4.1). On devices.
+    device: Device = "device";
     /// The trait instances an entity has and what they put on it
     /// (06 §5). On whatever has been given a trait.
     traits: Traits = "traits";

@@ -401,6 +401,9 @@ pub struct ItemDef {
     /// What it keeps for its contents. Carried as data.
     #[serde(default)]
     pub keeps: Option<KeepsDef>,
+    /// The interactions it offers (16 §3.2), done to it as an entity.
+    #[serde(default)]
+    pub interactions: Vec<Ref<crate::interaction::InteractionDef>>,
 }
 
 impl ItemDef {
