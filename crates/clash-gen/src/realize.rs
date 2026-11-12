@@ -67,23 +67,28 @@
 //! region's plan that the generator keeps.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use clash_core::{HashDomain, IVec2, Real, Rot4, Turn, VarMap, pos_hash, pos_rng};
 use clash_world::dims::{REGION_CELLS, REGION_TRACT_COUNT, REGION_TRACTS, TRACT_XY};
 use clash_world::{
     CellBox, CellPos, ColumnBuilder, GenCtx, GenError, GeneratorRegistry, GeneratorRequest,
-    Generators, Placement, RealizedTract, RealmInfo, RegionPos, RegionRecord, RegionSurvey,
-    RegionSurveyResult, RegionSurveyor, TractDefId, TractPos, TractRealizer, TractRecord,
-    TractRecords3x3, WorldDefs, WorldGenerator,
+    Generators, PathLine, Placement, RealizedTract, RealmInfo, RegionKindId, RegionPos,
+    RegionRecord, RegionSurvey, RegionSurveyResult, RegionSurveyor, SiteDefId, SiteSpec,
+    TractDefId, TractPos, TractRealizer, TractRecord, TractRecords3x3, WorldDefs, WorldGenerator,
 };
 
 use crate::ground::{Ground, GroundRun, MAX_SCATTER_MAP_SIDE};
 use crate::map::{Base, MapId, Sit, nested_origin};
+use crate::map::{ResolvedSpawn, SpawnPlace};
 use crate::noise::{Extent, FieldSpec};
 use crate::place::{
     self, Canvas, Heights, MapMode, PlacedMap, TractCanvas, boxes_overlap, placement_box,
 };
+use crate::region::plan::plan_region;
+use crate::region::{People, PeoplePlace, PlannedSite, RegionPlan, Seg, SiteShortfall};
+use crate::settlement::layout::{SettlementAt, lay_out};
+use crate::settlement::{LotFill, SettlementPlan};
 use crate::tractdef::{GenDefs, TractKind};
 
 /// The name realm definitions give this generator by.
@@ -119,9 +124,85 @@ const LAYOUT: &str = "layout";
 const HEIGHT: &str = "height";
 const SURFACE_Z: &str = "surface_z";
 const PLACE: &str = "place";
+const REGIONS: &str = "regions";
+const SETTLEMENTS: &str = "settlements";
 
 /// Every parameter the generator takes.
-const PARAMS: [&str; 6] = [TRACTS, PATCH, LAYOUT, HEIGHT, SURFACE_Z, PLACE];
+const PARAMS: [&str; 8] = [
+    TRACTS,
+    PATCH,
+    LAYOUT,
+    HEIGHT,
+    SURFACE_Z,
+    PLACE,
+    REGIONS,
+    SETTLEMENTS,
+];
+
+/// The domain of which kind a region is.
+const REGION_DOMAIN: HashDomain = HashDomain::new("gen.survey.region");
+/// The domain of the seed of a settlement the realm places.
+const SETTLEMENT_DOMAIN: HashDomain = HashDomain::new("gen.survey.settlement");
+/// The domain of how many people a lot or a site is given.
+const PEOPLE_DOMAIN: HashDomain = HashDomain::new("gen.survey.people");
+
+/// The most settlements a realm definition may place by hand.
+const MAX_SETTLEMENTS: usize = 256;
+
+/// The most plans the generator keeps of regions and of settlements,
+/// each: past it, all are forgotten and worked out again when asked.
+const MAX_KEPT_PLANS: usize = 256;
+
+/// Plans worked out once and kept, because every tract near a region's
+/// sites or a settlement asks for the same one. A pure function of
+/// what they are keyed by, so keeping them changes no result.
+#[derive(Debug, Default)]
+pub(crate) struct PlanCache {
+    regions: Mutex<BTreeMap<(u64, i32, i32), Arc<RegionPlan>>>,
+    settlements: Mutex<KeptSettlements>,
+}
+
+/// Settlement plans by realm seed and position in the realm's list.
+type KeptSettlements = BTreeMap<(u64, usize), Option<Arc<SettlementPlan>>>;
+
+/// Looks up a kept plan, or works it out and keeps it.
+fn kept<K: Ord + Copy, V: Clone>(
+    store: &Mutex<BTreeMap<K, V>>,
+    key: K,
+    make: impl FnOnce() -> V,
+) -> V {
+    if let Some(found) = store
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&key)
+    {
+        return found.clone();
+    }
+    // Worked out without the lock, so threads do not wait on each
+    // other; two that race make the same plan.
+    let made = make();
+    let mut held = store
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if held.len() >= MAX_KEPT_PLANS {
+        held.clear();
+    }
+    held.entry(key).or_insert(made).clone()
+}
+
+/// What a survey could not do (10 §13): placements dropped for
+/// overlap, sites a settlement must have that could not be placed, and
+/// kinds of site of which fewer were placed than asked for.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct SurveyReport {
+    /// Placements that met one written before them.
+    pub dropped: Vec<DroppedPlacement>,
+    /// `must_have` sites of settlements centred in the region that
+    /// could not be placed: an error in the survey's report.
+    pub missing: Vec<SiteDefId>,
+    /// Kinds of site of which fewer were placed than asked for.
+    pub shortfalls: Vec<SiteShortfall>,
+}
 
 /// Tract definitions written as rows of characters.
 #[derive(Clone, Debug)]
@@ -185,6 +266,26 @@ pub struct StandardGenerator {
     authored: Vec<Authored>,
     /// The ground of a tract that has none: the realm's fill.
     bare: Ground,
+    /// The region kinds regions are given, with their weights.
+    regions: Vec<(RegionKindId, Real)>,
+    regions_total: Real,
+    /// The settlements the realm places by hand.
+    settlements: Vec<SettlementPlace>,
+    /// Plans worked out and kept.
+    plans: Arc<PlanCache>,
+}
+
+/// A settlement a realm definition places by hand: until realm plans
+/// exist (WG6), this is the plan's list of settlements.
+#[derive(Clone, Copy, Debug)]
+struct SettlementPlace {
+    def: crate::settlement::SettlementId,
+    at: TractPos,
+    /// Its seed, if the definition gives one; else drawn from the
+    /// realm's seed and where it is.
+    seed: Option<u64>,
+    /// Its extent in tracts: north-west and south-east, included.
+    tracts: (TractPos, TractPos),
 }
 
 /// A placement gathered for a tract, with what its realiser needs to
@@ -196,6 +297,9 @@ struct Near {
     sit: Sit,
     /// The storey of the map's level 0.
     level: i32,
+    /// People asked for besides the map's own spawns: a zone's or a
+    /// site's.
+    people: Vec<People>,
 }
 
 impl Near {
@@ -603,6 +707,127 @@ impl StandardGenerator {
             }
         }
 
+        // The kinds of its regions.
+        let mut regions = Vec::new();
+        if let Some(value) = params.get(REGIONS) {
+            let wrong = || {
+                request.error(
+                    REGIONS,
+                    "must be a list of `{ \"kind\": id, \"weight\": number }`",
+                )
+            };
+            for entry in value.as_array().ok_or_else(wrong)? {
+                let object = entry.as_object().ok_or_else(wrong)?;
+                if object.keys().any(|key| key != "kind" && key != "weight") {
+                    return Err(wrong());
+                }
+                let name = object
+                    .get("kind")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(wrong)?;
+                let kind = defs.resolve_region_kind(name, namespace).ok_or_else(|| {
+                    request.error(REGIONS, format!("there is no region kind `{name}`"))
+                })?;
+                let weight = match object.get("weight") {
+                    None => Real::ONE,
+                    Some(weight) => weight
+                        .as_f64()
+                        .and_then(|weight| Real::new(weight).ok())
+                        .filter(|weight| *weight >= Real::ZERO && weight.is_finite())
+                        .ok_or_else(|| {
+                            request.error(REGIONS, "a weight is a number that is not negative")
+                        })?,
+                };
+                regions.push((kind, weight));
+            }
+        }
+        let regions_total = regions
+            .iter()
+            .fold(Real::ZERO, |sum, (_, weight)| sum + *weight);
+
+        // The settlements it places by hand.
+        let mut settlements: Vec<SettlementPlace> = Vec::new();
+        if let Some(value) = params.get(SETTLEMENTS) {
+            let wrong = |what: String| request.error(SETTLEMENTS, what);
+            let list = value.as_array().ok_or_else(|| {
+                wrong("must be a list of `{ \"settlement\": id, \"at\": [x, y] }`".to_owned())
+            })?;
+            if list.len() > MAX_SETTLEMENTS {
+                return Err(wrong(format!("has at most {MAX_SETTLEMENTS} settlements")));
+            }
+            for entry in list {
+                let object = entry
+                    .as_object()
+                    .ok_or_else(|| wrong("a settlement is an object".to_owned()))?;
+                const KEYS: [&str; 3] = ["settlement", "at", "seed"];
+                if let Some(unknown) = object.keys().find(|key| !KEYS.contains(&key.as_str())) {
+                    return Err(wrong(format!(
+                        "a settlement has no key `{unknown}`; it takes: {}",
+                        KEYS.join(", ")
+                    )));
+                }
+                let name = object
+                    .get("settlement")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| wrong("a settlement names its `settlement`".to_owned()))?;
+                let def = defs
+                    .resolve_settlement(name, namespace)
+                    .ok_or_else(|| wrong(format!("there is no settlement `{name}`")))?;
+                let size = defs.settlement(def).map_or((1, 1), |kind| kind.size());
+                let at: Vec<i32> = object
+                    .get("at")
+                    .and_then(|v| v.as_array())
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|n| n.as_i64().and_then(|n| i32::try_from(n).ok()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let [x, y] = at.as_slice() else {
+                    return Err(wrong(
+                        "`at` is `[x, y]`: the settlement's north-west tract".to_owned(),
+                    ));
+                };
+                let seed = match object.get("seed") {
+                    None => None,
+                    Some(seed) => Some(
+                        seed.as_u64()
+                            .ok_or_else(|| wrong("`seed` is a whole number".to_owned()))?,
+                    ),
+                };
+                let first = TractPos::new(*x, *y);
+                let last =
+                    TractPos::new(x.saturating_add(size.0 - 1), y.saturating_add(size.1 - 1));
+                // It must lie in the realm, and meet no other.
+                let topology = request.kind.topology;
+                for corner in [first, last] {
+                    let cell = corner.origin(topology.z_min);
+                    if topology.normalize(cell) != Ok(cell) {
+                        return Err(wrong(format!(
+                            "the settlement `{name}` at [{x}, {y}] reaches beyond the realm"
+                        )));
+                    }
+                }
+                if settlements.iter().any(|other| {
+                    other.tracts.0.x <= last.x
+                        && first.x <= other.tracts.1.x
+                        && other.tracts.0.y <= last.y
+                        && first.y <= other.tracts.1.y
+                }) {
+                    return Err(wrong(format!(
+                        "the settlement `{name}` at [{x}, {y}] meets another: settlements may \
+                         not overlap"
+                    )));
+                }
+                settlements.push(SettlementPlace {
+                    def,
+                    at: first,
+                    seed,
+                    tracts: (first, last),
+                });
+            }
+        }
+
         Ok(StandardGenerator {
             defs: Arc::clone(defs),
             tracts,
@@ -621,6 +846,10 @@ impl StandardGenerator {
                 steps: Vec::new(),
                 scatter_reach: 0,
             },
+            regions,
+            regions_total,
+            settlements,
+            plans: Arc::new(PlanCache::default()),
         })
     }
 
@@ -653,15 +882,31 @@ impl StandardGenerator {
             .saturating_add((value + Real::of(0.5)).floor().to_i32())
     }
 
-    /// The definition a tract is given: the layout's, or else one of
-    /// the realm's list by weight, drawn from the positional hash of
-    /// the tract's patch.
-    ///
-    /// This is where a region's kind will decide (10 §8.1, §8.2): the
-    /// packages that survey regions replace it.
+    /// The definition a tract is given: the layout's; or the tract
+    /// definition of a settlement it lies in, if the settlement names
+    /// one; or, in a realm whose regions have kinds, one of the
+    /// region kind's list by weight (10 §8.1); or else one of the
+    /// realm's list by weight. A weighted choice is drawn from the
+    /// positional hash of the tract's patch.
     pub fn tract_def(&self, seed: u64, tract: TractPos) -> TractDefId {
         if let Some(def) = self.layout.as_ref().and_then(|layout| layout.get(tract)) {
             return def;
+        }
+        // A settlement's own tract definition, if it names one.
+        if let Some(def) = self
+            .settlement_at(tract)
+            .and_then(|index| self.settlements.get(index))
+            .and_then(|place| self.defs.settlement(place.def))
+            .and_then(|kind| kind.tract())
+        {
+            return def;
+        }
+        // The region's kind.
+        if let Some(kind) = self
+            .region_kind(seed, tract.region())
+            .and_then(|kind| self.defs.region_kind(kind))
+        {
+            return kind.tract_def(seed, TRACT_DOMAIN, tract.x, tract.y);
         }
         if self.tracts.is_empty() || self.total <= Real::ZERO {
             return TractDefId::new(0);
@@ -684,7 +929,7 @@ impl StandardGenerator {
 
     /// The storey a map's level 0 goes at, by what the map sits on
     /// (10 §3.1, `base`).
-    fn base_level(&self, seed: u64, base: Base, x: i32, y: i32) -> i32 {
+    pub(crate) fn base_level(&self, seed: u64, base: Base, x: i32, y: i32) -> i32 {
         match base {
             Base::Ground | Base::SeaFloor => self.surface(seed, x, y),
             Base::SeaLevel => self.sea_level.unwrap_or_else(|| self.surface(seed, x, y)),
@@ -693,7 +938,7 @@ impl StandardGenerator {
     }
 
     /// The realm's own placements whose boxes meet a box.
-    fn authored_in(&self, seed: u64, within: CellBox) -> Vec<Placement> {
+    pub(crate) fn authored_in(&self, seed: u64, within: CellBox) -> Vec<Placement> {
         let maps = self.defs.maps();
         self.authored
             .iter()
@@ -727,7 +972,8 @@ impl StandardGenerator {
     /// written, in the order of the definition, and those dropped.
     ///
     /// A pure function of the seed, the position and the definition.
-    /// This is where a settlement's lots will be written (10 §8.4).
+    /// A tract inside a settlement has none: its lots are what stands
+    /// there (10 §8.4).
     pub fn placements_of(
         &self,
         seed: u64,
@@ -735,6 +981,10 @@ impl StandardGenerator {
         def: TractDefId,
     ) -> (Vec<Placement>, Vec<DroppedPlacement>) {
         let (mut written, mut dropped) = (Vec::new(), Vec::new());
+        // A settlement's lots are what stands in it.
+        if self.settlement_at(tract).is_some() {
+            return (written, dropped);
+        }
         let Some(kind) = self.defs.tract(def).filter(|kind| !kind.place.is_empty()) else {
             return (written, dropped);
         };
@@ -802,6 +1052,185 @@ impl StandardGenerator {
             .collect()
     }
 
+    /// The kind of a region: one of the realm's `regions` by weight,
+    /// drawn from the positional hash of the region. `None` in a realm
+    /// that gives regions no kinds.
+    pub fn region_kind(&self, seed: u64, region: RegionPos) -> Option<RegionKindId> {
+        if self.regions.is_empty() || self.regions_total <= Real::ZERO {
+            return None;
+        }
+        let mut left =
+            pos_rng(seed, REGION_DOMAIN, region.x, region.y, 0, 0).unit() * self.regions_total;
+        for (kind, weight) in &self.regions {
+            if left < *weight {
+                return Some(*kind);
+            }
+            left -= *weight;
+        }
+        self.regions.last().map(|(kind, _)| *kind)
+    }
+
+    /// The settlement the realm places whose extent holds a tract, by
+    /// its position in the realm's list.
+    pub fn settlement_at(&self, tract: TractPos) -> Option<usize> {
+        self.settlements.iter().position(|place| {
+            (place.tracts.0.x..=place.tracts.1.x).contains(&tract.x)
+                && (place.tracts.0.y..=place.tracts.1.y).contains(&tract.y)
+        })
+    }
+
+    /// The layout of a settlement the realm places, by its position in
+    /// the realm's list: worked out once and kept.
+    pub fn settlement_plan(&self, seed: u64, index: usize) -> Option<Arc<SettlementPlan>> {
+        let place = *self.settlements.get(index)?;
+        kept(&self.plans.settlements, (seed, index), || {
+            let at = SettlementAt {
+                def: place.def,
+                at: place.at,
+                seed: place.seed.unwrap_or_else(|| {
+                    pos_hash(
+                        seed,
+                        SETTLEMENT_DOMAIN,
+                        place.at.x,
+                        place.at.y,
+                        0,
+                        index as u64,
+                    )
+                }),
+            };
+            lay_out(self, seed, &at).map(Arc::new)
+        })
+    }
+
+    /// The layouts of every settlement the realm places, in its order.
+    pub fn settlement_plans(&self, seed: u64) -> Vec<Arc<SettlementPlan>> {
+        (0..self.settlements.len())
+            .filter_map(|index| self.settlement_plan(seed, index))
+            .collect()
+    }
+
+    /// What a region holds besides its tracts' definitions: its kind,
+    /// the paths crossing its edges and its kind's sites. Worked out
+    /// once and kept.
+    pub fn region_plan(&self, realm: &RealmInfo, region: RegionPos) -> Arc<RegionPlan> {
+        kept(
+            &self.plans.regions,
+            (realm.seed, region.x, region.y),
+            || Arc::new(plan_region(self, realm, region)),
+        )
+    }
+
+    /// What a survey of a region could not do (10 §13).
+    pub fn survey_report(&self, realm: &RealmInfo, region: RegionPos) -> SurveyReport {
+        let seed = realm.seed;
+        let mut report = SurveyReport {
+            dropped: self.dropped_in(seed, region),
+            ..SurveyReport::default()
+        };
+        for plan in self.settlement_plans(seed) {
+            let (x, y) = plan.centre;
+            if CellPos::new(x, y, 0).region() == region {
+                report.missing.extend(plan.missing.iter().copied());
+            }
+            report.dropped.extend(
+                plan.dropped
+                    .iter()
+                    .filter(|dropped| dropped.placement.origin.region() == region)
+                    .cloned(),
+            );
+        }
+        report
+            .shortfalls
+            .extend(self.region_plan(realm, region).shortfalls.iter().copied());
+        report
+    }
+
+    /// The people a lot or a site of a settlement asks for, by the
+    /// lot's fill.
+    fn people_of_lot(&self, plan: &SettlementPlan, fill: LotFill) -> Vec<People> {
+        let kind = self.defs.settlement(plan.def);
+        match fill {
+            LotFill::Map { zone } => kind
+                .and_then(|kind| kind.zones().get(zone))
+                .map_or_else(Vec::new, |zone| zone.people().to_vec()),
+            LotFill::Site { site } => plan
+                .sites
+                .get(site)
+                .and_then(|site| self.defs.site(site.def))
+                .map_or_else(Vec::new, |site| site.staff().to_vec()),
+        }
+    }
+
+    /// Every placement of settlements and of regions' sites whose box
+    /// meets a box, with the people each asks for: the placements of
+    /// 10 §8.2 steps 3 and 4.
+    fn planned_in(&self, realm: &RealmInfo, within: CellBox) -> Vec<(Placement, Vec<People>)> {
+        let seed = realm.seed;
+        let mut found = Vec::new();
+        for plan in self.settlement_plans(seed) {
+            if !plan.near(within.min.x, within.min.y, within.max.x, within.max.y, 0) {
+                continue;
+            }
+            for lot in &plan.lots {
+                if boxes_overlap(lot.bounds, within) {
+                    found.push((lot.placement.clone(), self.people_of_lot(&plan, lot.fill)));
+                }
+            }
+        }
+        let (low, high) = (within.min.region(), within.max.region());
+        for ry in low.y..=high.y {
+            for rx in low.x..=high.x {
+                let plan = self.region_plan(realm, RegionPos::new(rx, ry));
+                for site in &plan.sites {
+                    if boxes_overlap(site.bounds, within) {
+                        let staff = self
+                            .defs
+                            .site(site.def)
+                            .map_or_else(Vec::new, |kind| kind.staff().to_vec());
+                        found.push((site.placement.clone(), staff));
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// Every path line that may cross a box: the streets of the
+    /// settlements near it and the paths of the regions it touches,
+    /// streets first.
+    fn paths_near(&self, realm: &RealmInfo, within: CellBox) -> Vec<Seg> {
+        let seed = realm.seed;
+        let mut segs = Vec::new();
+        for plan in self.settlement_plans(seed) {
+            if plan.near(
+                within.min.x,
+                within.min.y,
+                within.max.x,
+                within.max.y,
+                TRACT_XY,
+            ) {
+                segs.extend(plan.streets.iter().copied());
+            }
+        }
+        let (low, high) = (within.min.region(), within.max.region());
+        for ry in low.y..=high.y {
+            for rx in low.x..=high.x {
+                segs.extend(
+                    self.region_plan(realm, RegionPos::new(rx, ry))
+                        .paths
+                        .iter()
+                        .copied(),
+                );
+            }
+        }
+        segs
+    }
+
+    /// Whether a column lies inside a settlement the realm places.
+    fn in_settlement(&self, x: i32, y: i32) -> bool {
+        self.settlement_at(CellPos::new(x, y, 0).tract()).is_some()
+    }
+
     fn near(&self, placement: Placement) -> Option<Near> {
         let maps = self.defs.maps();
         let compiled = maps.get(place::gen_map_id(placement.map))?;
@@ -818,6 +1247,7 @@ impl StandardGenerator {
             placement,
             bounds,
             level,
+            people: Vec::new(),
         })
     }
 
@@ -838,7 +1268,12 @@ impl StandardGenerator {
 
 impl RegionSurveyor for StandardGenerator {
     fn survey(&self, _: &GenCtx<'_>, realm: &RealmInfo, pos: RegionPos) -> RegionSurveyResult {
-        let mut record = RegionRecord::new(RegionSurvey::default());
+        let seed = realm.seed;
+        let plan = self.region_plan(realm, pos);
+        let mut record = RegionRecord::new(RegionSurvey {
+            kind: plan.kind,
+            ..RegionSurvey::default()
+        });
         let first = pos.origin().origin(0);
         let whole = CellBox::new(
             CellPos::new(first.x, first.y, i32::MIN),
@@ -850,17 +1285,81 @@ impl RegionSurveyor for StandardGenerator {
         );
         // What the realm places by hand is listed in every region it
         // touches.
-        record.placements = self.authored_in(realm.seed, whole);
+        record.placements = self.authored_in(seed, whole);
         record.placements.sort_by_key(written_order);
         for index in 0..REGION_TRACT_COUNT {
             let tract = pos.tract(index);
-            let def = self.tract_def(realm.seed, tract);
+            let def = self.tract_def(seed, tract);
             record.tract_mut(tract).def = def;
             record
                 .placements
-                .extend(self.placements_of(realm.seed, tract, def).0);
+                .extend(self.placements_of(seed, tract, def).0);
         }
-        RegionSurveyResult::new(record)
+        // Settlements' lots, and the region kind's sites: a lot is
+        // listed in every region it touches.
+        record.placements.extend(
+            self.planned_in(realm, whole)
+                .into_iter()
+                .map(|(placement, _)| placement),
+        );
+
+        // The lines crossing it: streets, then the paths of its edges,
+        // each as the cells of its centre line inside the region, at
+        // the surface the height field gives.
+        let mut lines: Vec<Seg> = Vec::new();
+        for settlement in self.settlement_plans(seed) {
+            lines.extend(settlement.streets.iter().copied());
+        }
+        lines.extend(plan.paths.iter().copied());
+        for seg in lines {
+            let points: Vec<CellPos> = seg
+                .line()
+                .into_iter()
+                .filter(|(x, y)| {
+                    CellPos::new(*x, *y, 0).region() == pos
+                        && !(seg.minor && self.in_settlement(*x, *y))
+                })
+                .map(|(x, y)| CellPos::new(x, y, self.surface(seed, x, y)))
+                .collect();
+            if !points.is_empty() {
+                record.paths.push(PathLine {
+                    kind: seg.kind,
+                    points,
+                });
+            }
+        }
+
+        // Sites: the region kind's, and the `must_have` sites of
+        // settlements that lie in the region.
+        let mut sites: Vec<PlannedSite> = plan.sites.clone();
+        for settlement in self.settlement_plans(seed) {
+            sites.extend(
+                settlement
+                    .sites
+                    .iter()
+                    .filter(|site| site.bounds.min.region() == pos)
+                    .cloned(),
+            );
+        }
+        let specs = sites
+            .into_iter()
+            .filter_map(|site| {
+                let kind = self.defs.site(site.def)?;
+                Some(SiteSpec {
+                    def: site.def,
+                    name: kind.label().to_owned(),
+                    realm: realm.id,
+                    tracts: site.tracts,
+                    anchor: site.anchor,
+                    vars: VarMap::new(),
+                    tags: kind.tags().to_vec(),
+                })
+            })
+            .collect();
+        RegionSurveyResult {
+            record,
+            sites: specs,
+        }
     }
 }
 
@@ -898,7 +1397,31 @@ impl TractRealizer for StandardGenerator {
                     .filter_map(|placement| self.near(placement)),
             );
         }
+        // Settlements' lots and regions' sites near the tract, with the
+        // people they ask for.
+        let gather = tract_box(pos, GATHER_MARGIN);
+        near.extend(self.planned_in(realm, gather).into_iter().filter_map(
+            |(placement, people)| {
+                let mut found = self.near(placement)?;
+                found.people = people;
+                Some(found)
+            },
+        ));
         near.sort_by_key(|near| written_order(&near.placement));
+
+        // The paths that cross the tract: what the ground's `paths`
+        // step lays.
+        let segs = self.paths_near(realm, gather);
+        let skip = |x: i32, y: i32| self.in_settlement(x, y);
+        let laid = crate::region::paths::paint(&self.defs, pos, &segs, &skip);
+        let tract_origin = pos.origin(0);
+        let path_floor = |x: i32, y: i32| {
+            let (dx, dy) = (x - tract_origin.x, y - tract_origin.y);
+            if !(0..TRACT_XY).contains(&dx) || !(0..TRACT_XY).contains(&dy) {
+                return None;
+            }
+            laid.get((dy * TRACT_XY + dx) as usize).copied().flatten()
+        };
 
         // 1. The surface: the height field, flat under levelled maps.
         let height = |x: i32, y: i32| {
@@ -936,6 +1459,7 @@ impl TractRealizer for StandardGenerator {
             sea_level: self.sea_level,
             realm_fill: realm.below_fill,
             built: &built,
+            paths: &path_floor,
         };
         let mut placed: Vec<PlacedMap> = ground.run(&run, &mut canvas);
 
@@ -948,7 +1472,11 @@ impl TractRealizer for StandardGenerator {
         let drawn: Vec<PlacedMap> = near
             .iter()
             .filter(|near| boxes_overlap(near.bounds, own))
-            .filter_map(|near| PlacedMap::resolve(maps, &near.placement).ok().flatten())
+            .filter_map(|near| {
+                let mut placed = PlacedMap::resolve(maps, &near.placement).ok().flatten()?;
+                add_people(&mut placed, &near.people);
+                Some(placed)
+            })
             .collect();
         for map in &drawn {
             place::prepare(&mut canvas, map, MapMode::Replace);
@@ -981,6 +1509,36 @@ impl TractRealizer for StandardGenerator {
         realised.spawns = spawns;
         realised.areas = areas;
         realised
+    }
+}
+
+/// Adds the people a zone or a site asks for to a placed map's
+/// spawns: how many, and whether any, drawn from the placement's seed;
+/// where, as the map's own spawns go (10 §4.1).
+fn add_people(placed: &mut PlacedMap, people: &[People]) {
+    for (index, entry) in people.iter().enumerate() {
+        let mut rng = pos_rng(placed.placement.seed, PEOPLE_DOMAIN, index as i32, 0, 0, 0);
+        if !rng.chance(entry.chance) {
+            continue;
+        }
+        let count = rng.range(i64::from(entry.count.0), i64::from(entry.count.1)) as u32;
+        let place = match &entry.place {
+            PeoplePlace::Area(name) if placed.map.areas.iter().any(|area| area.name == *name) => {
+                SpawnPlace::Area(name.clone())
+            }
+            PeoplePlace::Mark(name) => {
+                match placed.map.marks.get(name).and_then(|cells| cells.first()) {
+                    Some(cell) => SpawnPlace::Cell(*cell),
+                    None => SpawnPlace::Anywhere,
+                }
+            }
+            _ => SpawnPlace::Anywhere,
+        };
+        placed.map.spawns.push(ResolvedSpawn {
+            who: entry.who.clone(),
+            count,
+            place,
+        });
     }
 }
 

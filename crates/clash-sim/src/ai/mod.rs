@@ -433,7 +433,14 @@ fn on_custom(sim: &mut Sim, event: &SimEvent, name: &str) {
                 prompt(sim, observer);
             }
         }
-        "entity_spawned" | "entity_woke" | "entity_revived" => {
+        // Coming to perceive someone, losing them, and remembering
+        // something are always worth a thought.
+        crate::perception::events::DETECTED
+        | crate::perception::events::LOST_TRACK
+        | crate::perception::events::MEMORY_ADDED
+        | "entity_spawned"
+        | "entity_woke"
+        | "entity_revived" => {
             if let Some(entity) = entity_subject(event, "self") {
                 prompt(sim, entity);
             }

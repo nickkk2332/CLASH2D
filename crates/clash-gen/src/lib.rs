@@ -59,6 +59,8 @@ pub mod noise;
 mod parallel;
 pub mod place;
 pub mod realize;
+pub mod region;
+pub mod settlement;
 mod standalone;
 pub mod tractdef;
 
@@ -81,14 +83,15 @@ pub use place::{
     apply_pending_maps, boxes_overlap, place_map, placement_box,
 };
 pub use realize::{
-    DroppedPlacement, STANDARD_GENERATOR, StandardGenerator, generators_with, register_standard,
-    registry_with,
+    DroppedPlacement, STANDARD_GENERATOR, StandardGenerator, SurveyReport, generators_with,
+    register_standard, registry_with,
 };
 pub use standalone::realize_tracts;
 pub use tractdef::{GenDefs, TractDef, TractKind};
 
 /// Registers the definition types of this crate with the loader: `map`,
-/// `palette`, `ground` and `tract`.
+/// `palette`, `ground`, `tract`, `path_kind`, `site`, `region_kind` and
+/// `settlement`.
 ///
 /// The application and the tools call this, with every other crate's
 /// function of the same name, before they load (04 §9).
@@ -96,6 +99,10 @@ pub fn register_defs(types: &mut DefTypes) {
     map::register_defs(types);
     types.register::<GroundDef>();
     types.register::<TractDef>();
+    types.register::<region::PathKindDef>();
+    types.register::<region::SiteDef>();
+    types.register::<region::RegionKindDef>();
+    types.register::<settlement::SettlementDef>();
 }
 
 /// Everything wrong with the generation definitions that only shows

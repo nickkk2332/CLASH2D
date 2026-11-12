@@ -17,8 +17,16 @@
 //! Each cell is the character of its topmost element's glyph: a
 //! fixture's if it has one, else its block's, else its floor's. With
 //! the definitions of `mods/core`: `"` grass, `Y` tree, `*` bush, `o`
-//! boulder, `<` ramp, `.` paving and indoor floor, `#` wall, `=`
-//! window, `+` door, `~` roofing.
+//! boulder, `<` ramp, `.` asphalt and indoor floor, `,` pavement, `#`
+//! wall, `=` window, `+` door, `~` roofing, `[` shelf, `c` counter,
+//! `n` desk, `b` bed, `^` and `v` stairs.
+//!
+//! The generated town of `core:town` lies across tracts 60 to 67 east
+//! and 28 to 35 south, with its main roads crossing near tract 63, 31:
+//!
+//! ```bash
+//! cargo run -p clash-gen --example tract_ascii -- town 1 62 30 0 3 2
+//! ```
 //!
 //! With no arguments the realm definitions the generator can make are
 //! listed.

@@ -143,6 +143,7 @@ pub use store::{ComponentStore, PAGE_SLOTS};
 
 use crate::ai::MindState;
 use crate::body::Body;
+use crate::device::Device;
 use crate::item::{Holds, Item};
 use crate::mind::{Driver, Mind};
 use crate::movement::Mover;
@@ -519,6 +520,9 @@ components! {
     /// What places looked like when last seen (15 §13). On directly
     /// controlled characters.
     map_memory: MapMemory = "map_memory";
+    /// What makes an entity a device: its definition and the element it
+    /// is bound to (16 §4.1). On devices.
+    device: Device = "device";
     /// The goal a mind holds, how far it has got, its own stream and its
     /// stances (09 §3, §4). On characters whose mind has thought.
     mind_state: MindState = "mind_state";

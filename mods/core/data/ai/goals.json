@@ -55,7 +55,8 @@
     "retry_after": "5 s",
     "methods": [
       { "steps": [
-          { "say": { "text": "Help!", "volume": 2 } },
+          { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Help!", "volume": 2 } },
+          { "if": "now() - self.var.called_out_at > 30", "set": { "var": "core:called_out_at", "value": "now()" } },
           { "keep_from": { "from": "$about.loc", "distance": 12 } },
           { "wait": { "time": "3 s" } },
           { "settle": true } ] },
@@ -65,7 +66,7 @@
     ] },
 
   { "type": "goal", "id": "flee_feared",
-    "doc": "Keeping away from someone feared, while they are believed to be close.",
+    "doc": "Keeping away from someone feared, while they are believed to be close, calling out for help now and then.",
     "about": { "track": {
       "where": "self.fears(it) and (self.confidence(it) ?? 0) > 0.3 and (dist(self, self.believed_loc(it)) ?? 99) < 12",
       "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
@@ -74,13 +75,15 @@
     "interrupts": true,
     "methods": [
       { "steps": [
+          { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Help!", "volume": 2 } },
+          { "if": "now() - self.var.called_out_at > 30", "set": { "var": "core:called_out_at", "value": "now()" } },
           { "keep_from": { "from": "$about", "distance": 15 } },
           { "wait": { "time": "2 s" } } ] },
       { "steps": [ { "wait": { "time": "2 s" } } ] }
     ] },
 
-  { "type": "variable", "id": "warned_at", "scope": "entity", "value": "real", "default": -1000,
-    "doc": "When a character last called on someone to stop, in seconds of universal time: a guard calls once, not at every step." },
+  { "type": "variable", "id": "called_out_at", "scope": "entity", "value": "real", "default": -1000,
+    "doc": "When a character last called out, in seconds of universal time: a character calls once in a while, not at every step." },
 
   { "type": "goal", "id": "confront",
     "doc": "Going for someone held hostile who is in sight: up to them, then at them with whatever serves to harm, or, with nothing that does, standing over them.",
@@ -92,8 +95,8 @@
     "interrupts": true,
     "methods": [
       { "steps": [
-          { "if": "now() - self.var.warned_at > 30", "say": { "text": "Stop right there!", "volume": 2 } },
-          { "if": "now() - self.var.warned_at > 30", "set": { "var": "core:warned_at", "value": "now()" } },
+          { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Stop right there!", "volume": 2 } },
+          { "if": "now() - self.var.called_out_at > 30", "set": { "var": "core:called_out_at", "value": "now()" } },
           { "go": { "to": "$about", "within": 1.5 } },
           { "choose": { "purpose": "harm", "target": "$about" } } ] },
       { "steps": [

@@ -344,6 +344,7 @@ impl Sim {
             // have had their say.
             crate::movement::on_event(self, &event);
             crate::perception::observe_event(self, &event);
+            crate::device::on_event(self, &event);
             crate::ai::on_event(self, &event);
             self.out.push(event);
         }

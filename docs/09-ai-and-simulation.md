@@ -226,7 +226,9 @@ goal whose `about` finds nothing is not wanted. A track or a memory the
 `settle` step marked is passed over: a track until it is perceived again.
 
 **Thinking** (D-690). A mind is prompted by `decision_needed`, by a
-percept at least as clear as `wake_clarity`, by a `wake_on` event, by
+percept at least as clear as `wake_clarity`, by coming to perceive
+someone or losing them (`detected`, `lost_track`), by remembering
+something (`memory_added`), by a `wake_on` event, by
 entering the world or leaving direct control, by `entity_spawned`,
 `entity_woke`, `entity_revived` and `mind_transferred`, by the end of a
 step's action, by coming close enough on a step that moves, and by the
@@ -307,9 +309,11 @@ when that is more than `within`, or 1.5 m, from where the step was
 going. At most `ai.max_steps_per_thought` steps that take no time run in
 one thought. Every act is an action, a wait, a turn or speech that a
 player could have chosen (invariant N2): actions start through the same
-`start_action` that the `Act` command uses. `use`, `job`, `goal`,
-`follow` and `run` steps are not built; they wait for interactions, jobs
-and queries.
+`start_action` that the `Act` command uses. An interaction (16 §3) is
+done as a player does one, by a `do` step of the action that does
+interactions (in `mods/core`, `core:interact` with `target` and
+`interaction`); a `use` step of its own is not built, nor are `job`,
+`goal`, `follow` and `run`, which wait for jobs and queries.
 
 ## 5. Navigation
 

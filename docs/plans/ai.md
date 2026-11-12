@@ -152,8 +152,10 @@ Beta (09 §4.1): the `method` type; the steps `go`, `do`, `choose`,
 `keep_from`; failure, fallback methods and goals set aside; the events
 of 09 §17 that are listed as built. `patrol_and_investigate` is the test
 script `scenarios/ai/investigate.scn` and the guard and townsperson
-tests of `tests/ai.rs`. Stubbed: the `use`, `job`, `goal`, `follow` and
-`run` steps (interactions, jobs, queries), paces of `go`.
+tests of `tests/ai.rs`. Interactions are done by a `do` step of the
+interaction action. Stubbed: the `use` step as a step of its own, the
+`job`, `goal`, `follow` and `run` steps (jobs, queries), paces of `go`,
+minds opening doors in their way.
 
 ### I5 — Options, threat, positions, reactions
 

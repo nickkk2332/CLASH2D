@@ -877,6 +877,10 @@ fn a_minds_acts_replayed_as_commands_reach_the_same_place() {
     // acts are given as commands.
     let (mut replay, people) = town(23);
     let them = people[0];
+    // Its mind thinks by no `mind` definition: nothing decides for it
+    // but the commands.
+    replay.remove_mind(them, Cause::DEBUG).unwrap();
+    replay.create_mind(them, None, Cause::DEBUG).unwrap();
     common::debug(
         &mut replay,
         DebugCommand::SetControl {
