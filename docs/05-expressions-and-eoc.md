@@ -565,6 +565,12 @@ are `los` and `light`: the tag `hidden` cannot be honoured until
 perception is built, and a read that ignored it would leak. They become
 safe when document 15 supplies the belief side.
 
+Document 15 now supplies it (decisions D-616, D-617): a mind reads what
+it believes through properties of its own subject (`self.believed_loc(x)`,
+`self.perceives(x)`, `self.could_perceive(at, kind)`, `self.remembers(at)`,
+`self.knows_element(at, layer)`; 15 §7.2), and the marks above stand.
+15 §7.3 says which may later be relaxed, and how.
+
 ## 6. Variables
 
 Content stores its own state in **variables** on subjects.
@@ -1833,7 +1839,7 @@ is not there, nothing runs and `rule.timer_lost` is reported. The
 record also holds the owner, the name, the interval and runs left, the
 `while_unloaded` mode and the wake-up, or, while its owner is away,
 the local time left and the clock and time it left on. The rule state,
-timers included, is saved and hashed; the save layout is version 7.
+timers included, is saved and hashed; the save layout is version 9.
 
 ### 13.5 Level of detail
 

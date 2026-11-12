@@ -203,6 +203,8 @@ What reaches the rule runtime (decision D-687):
   bound to the `as` subject, else the active character; a word where the
   verb wants an id names the definition (qualified, or else in `core`).
   It prints what the verb gave, and `as=` names it if it is a subject.
+  A verb the simulation does not carry out is refused with
+  `rule.verb_unbound`.
 - **A rule used as a verb**, **`do`** and **`run`** are compiled as a
   list of one effect against the loaded definitions
   (`Sim::compile_effects`), in a scope that binds `self` (as above),

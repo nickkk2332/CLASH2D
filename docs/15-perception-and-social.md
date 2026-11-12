@@ -1,6 +1,7 @@
 # 15 — Perception, Belief and Social Behaviour
 
-Status: design complete, ready for implementation.
+Status: design complete; sections 3 to 7, 13 and 14 built for the beta
+(decisions D-610 to D-619), as their "As built" notes say.
 Implementation plan: [plans/first-playable.md](plans/first-playable.md).
 Serves scenes S6, S7, S13, S15 and S16 of [00-vision.md](00-vision.md).
 
@@ -48,29 +49,68 @@ has and the events to hang reactions on.
 
 ```json
 [
-  { "type": "signal_kind", "id": "sight", "model": "line",    "falloff": 1, "uses_light": true },
-  { "type": "signal_kind", "id": "sound", "model": "through", "falloff": 2, "delay": true },
+  { "type": "signal_kind", "id": "sight", "model": "line",    "falloff": 1, "uses_light": true,
+    "standing": 1, "contained": 0, "identifies": true },
+  { "type": "signal_kind", "id": "sound", "model": "through", "falloff": 2, "delay": true,
+    "noise": true, "block": { "default": 0.3, "materials": { "glass": 0.5 }, "tags": { "mineral": 0.8 } } },
   { "type": "signal_kind", "id": "scent", "model": "field",   "field": "scent" }
 ]
 ```
 
 | Model | How strength reaches an observer |
 |-------|----------------------------------|
-| `line` | Needs line of sight (02 §22). `received = strength × exposed × light / max(1, d)^falloff`. `exposed` is the fraction of the source not hidden by intervening elements, from their heights. |
-| `through` | Passes obstacles with loss. `received = strength / max(1, d)^falloff × Π (1 − block)`, where each element on the straight path blocks by its material's `sound_block` (or the named property) scaled by its coverage. |
-| `field` | The observer reads a field (02 §16) in its own cell. Direction comes from which neighbouring cell has more. |
+| `line` | Needs line of sight (02 §22). `received = strength × exposed × light / max(1, d)^falloff`. `exposed` is the fraction of the source not hidden by intervening elements, from their heights: of four points spread up the source's height (`EXPOSURE_SAMPLES`), the share a line of sight from the observer's eye reaches. A point source, such as a signal that was given off, is seen or not. A field that hides sight (02 §16, `opaque_from`) in a cell strictly between the two hides the source. `light` is the light at the source's cell now (§3.3), for a kind with `uses_light`, and 1 otherwise. |
+| `through` | Passes obstacles with loss. `received = strength / max(1, d)^falloff × Π (1 − block × coverage)` over each block and fixture in the cells strictly between source and observer on the straight line from the one to the other, `block` being what the element's material holds back of the kind (`block` below) and `coverage` the share of its cell's cross-section the element closes. A floor the line passes through between storeys counts with a coverage of 1. Space that is not loaded passes nothing. |
+| `field` | The observer reads a field (02 §16) in its own cell: `received` is its level over 255. Direction comes from which neighbouring cell on its storey has more; where none has, the observer's own cell. |
+
+`d` is the distance in metres between the two cells' centres, a storey
+counting three, the shorter way round on wrapped axes; closer than a
+metre counts as a metre. An observer's eye is nine tenths of the way up
+its height (its `Physical`), or 1.5 m above the base of its cell for one
+whose body gives no height; a source with no height of its own is taken
+to be 1.7 m tall (`SOURCE_HEIGHT_MM`).
 
 With `"delay": true` the signal arrives after `distance / speed`, where
-speed is the medium's (02 §4.1; 11 §4.1). Sound is slower than a fast enough
-character.
+speed is the kind's own `speed` or else the speed of sound of the
+atmosphere where it starts (02 §4.1; 11 §4.1). In vacuum such a signal
+goes nowhere. Sound is slower than a fast enough character. The signal
+is sent to each observer within reach when it is given off; when its
+front reaches where that observer stood, an observer still there, or
+nearer, receives it, from where it now stands; one that has moved
+further off is followed by the front, until it is out of its sense's
+range. An observer that comes within reach after the signal was given
+off does not receive it.
 
 Mods add kinds: heat, vibration, a magical aura, radio.
+
+The fields of a `signal_kind`:
+
+| Field | Meaning |
+|-------|---------|
+| `model` | `line`, `through` or `field`. Required. |
+| `falloff` | The power of `max(1, d)` strength is divided by. Default 1. |
+| `uses_light` | For `line` only: whether `received` is scaled by the light at the source. Default false. |
+| `delay` | Whether it takes `distance / speed` to arrive. Not for `field`. Default false. |
+| `speed` | The speed a delayed signal travels at, in m/s. Left out, the speed of sound where it starts. |
+| `field` | For `field`, and only for it: the field read. Required for `field`. |
+| `block` | For `through`: what holds it back, each a share from 0 to 1. `materials` names materials; `tags` gives a share to every material that carries a tag, the largest where a material carries several; `default` is for every other material, 0 if left out. A named material takes its own share before its tags. |
+| `standing` | The standing signature of a creature that has not been given one of this kind (§3.2). Default 0. |
+| `contained` | The share of a standing signature that leaves a container its owner is inside, and of a signal that reaches an observer inside one: 0 for sight, 1 for sound (§5.3). Default 1. |
+| `noise` | Whether a bare `noise` number means this kind (§3.2). At most one kind may say so; a second is a load error. Default false. |
+| `identifies` | Whether receiving a signal of this kind tells who stands where it came from (§6). Default false: a sound tells where, not who. |
+| `exposes` | What a standing source does to the pools of those it reaches, below. |
+| `name`, `doc` | What a reader calls it; what it is, for the reference. |
+
+As built (decision D-611), what stands in the way holds a signal back by
+the table on the signal kind and not by a property of the material: a
+mod that adds a material gives it a tag the kinds it matters to already
+name, or patches those kinds.
 
 A signal kind may **expose** as well as inform:
 
 ```json
 { "type": "signal_kind", "id": "radiation", "model": "through", "falloff": 2,
-  "block_by": "radiation_block",
+  "block": { "tags": { "metal": 0.9 } },
   "exposes": { "pool": "dose", "per_strength": 0.001, "step": "1 s" } }
 ```
 
@@ -79,6 +119,10 @@ has the strength it receives, after distance and whatever stands between,
 added to the pool. Walls of the right material shelter. An emitter steps
 only while someone is within its reach. This is how radiation, a baleful
 aura and a cold that goes through stone are made.
+
+As built, `exposes` is read and checked (`pool`, `per_strength`, `step`
+above zero) and does nothing yet: the emitter's step waits for the
+stats to be wired to the kernel, which is what adds to a pool.
 
 ### 3.2 Where signals come from
 
@@ -91,6 +135,48 @@ aura and a cold that goes through stone are made.
 
 A signal carries what it is about (an entity, an event, or nothing in
 particular), where it came from, and its strength.
+
+As built (decision D-612):
+
+- **Standing signatures** are the `Signature` component: a strength for
+  each kind an entity has been given (`set_signature`), and for a kind
+  it has not, the kind's `standing` if it is a creature and nothing
+  otherwise. Inside a container the signature is multiplied by the
+  kind's `contained`. Templates and traits will give signatures from
+  their expressions (06); until then the simulation's own functions do.
+- **Giving one off**: the function `emit_signal(sim, signal)` and the
+  effect of the same name, `{ "emit_signal": { "kind": "sound", "at":
+  "self", "strength": 0.5, "about": "self" } }`. `kind` is a signal
+  kind's id, qualified or bare; `at` is a cell or something that is
+  somewhere; `strength` is a number of zero or more; `about`, an entity,
+  is optional. The effect returns how many observers it was sent to. A
+  `field` kind cannot be given off (`perception.field_not_sent`). A
+  signal goes to every entity within its kind's reach (the furthest any
+  sense of the kind reaches) that has a sense of its kind, those inside
+  containers included, but not to what it is about.
+- **Events** give off signals by an `event_signal`:
+
+```json
+{ "type": "event_signal", "id": "element_breaks", "event": "element_destroyed",
+  "signal": "sound", "strength": "1 + event.absorbed / 2000", "salience": 0.6 }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `event` | The event type: an engine event by its name, a mod's by its qualified id. Required. |
+| `signal` | The kind given off. Required. |
+| `strength` | An expression in the event's scope, pure. Required. A strength that is null, not finite or not above zero gives off nothing. |
+| `if` | A condition in the event's scope. Default true. |
+| `about` | The name of one of the event's subjects that the signal is about: whose awareness it builds in those who receive it. Left out, it is about nothing: breaking glass tells where, not who broke it. Naming a subject the event does not have is a load error. |
+| `salience` | The salience, 0 to 1, a percept of it is remembered with (§7.1); 0, the default, is not remembered. |
+| `doc` | What it is, for the reference. |
+
+  The signal comes from the event's `here`, or else from where the
+  subject it is about stands, or else from the first of its subjects
+  that is somewhere, and carries the event's type and the actor of its
+  cause.
+- `signals` on actions and phases and `noise` on movement wait for the
+  packages that run actions and movement, which call `emit_signal`.
 
 ### 3.3 Light
 
@@ -273,12 +359,17 @@ alone, as before, and nothing in the simulation reads a light's colour.
 
 | Field | Meaning |
 |-------|---------|
-| `signal` | The kind this sense receives |
-| `range` | Beyond this nothing is considered |
-| `arc` | The whole angle, in degrees, that the sense covers, centred on the facing; 360 for hearing |
-| `threshold` | Minimum received strength to register. An expression, so injury, darkness adaptation and traits matter. |
-| `gain`, `decay` | How fast awareness builds and fades (section 5) |
-| `interval` | How often the sense sweeps for standing signatures |
+| `signal` | The kind this sense receives. Required. |
+| `range` | Beyond this nothing is considered, in metres. Required. |
+| `arc` | The whole angle, in degrees, that the sense covers, centred on the facing; 360 for hearing. Above 0 and at most 360; default 360. |
+| `threshold` | Minimum received strength to register. An expression about the owner (`self`), pure, so injury, darkness adaptation and traits matter. Required. Worked out at each sweep; one that comes to null receives nothing. |
+| `gain`, `decay` | How fast awareness builds and fades (section 5), per second. Defaults 4 and 0.5. |
+| `interval` | How often the sense sweeps for standing signatures, in the owner's time. Default 500 ms. |
+| `suspect` | The awareness at which something is suspected (section 5.1), above 0 and below 1. Default 0.3. |
+| `function` | A `body_function` the sense works by. An owner with a body whose capacity of it is zero receives nothing through the sense; an owner with no body is not asked. A creature without a working seeing function does not see: by data, never by naming eyes. |
+| `planes` | Whether the sense receives from every plane (02 §8.2), not only those its owner is on. Default false. |
+| `scrutiny` | How hard it looks through a disguise; given to `identity_check` (section 8.2). Default 0. |
+| `name`, `doc` | What a reader calls it; what it is, for the reference. |
 
 Senses come from templates and traits (06). A creature may have any number.
 A device may have senses too: a camera, a tripwire, sonar (11).
@@ -292,6 +383,19 @@ a mind: a recorder. Its memories can be read by whoever can operate it
 (13 §8.4).
 
 The `Senses` component holds which senses an entity has and its **facing**.
+
+As built (decision D-610): facing is in degrees clockwise from north
+(the direction of falling `y`), from 0 to 360. An entity with senses
+that moves from one cell of its grid to another turns to face the way it
+moved; the effect `face { who, toward }` turns it to face a cell,
+something that is somewhere, or a number of degrees, and the function
+`set_facing` does the same. A sense is given with `attach_sense` and
+taken away with `detach_sense`, which forgets what was known through it
+(both functions of the simulation until templates and traits give
+senses). Refusals: `perception.unknown_sense`, `perception.has_sense`,
+`perception.no_sense`, `perception.no_senses`, `perception.bad_value`.
+
+`relay_senses` and recorders are not built.
 
 ## 5. Detection
 
@@ -316,6 +420,37 @@ A signal several times over threshold detects at once. A figure in shadow
 at the edge of vision takes seconds, and may slip away first. Thresholds
 and rates are data on the sense.
 
+As built (decision D-614):
+
+- `ε` is 0.1 (`AWARENESS_EPSILON`): a signal exactly at its threshold
+  still builds, slowly. The level is kept from 0 to 1.
+- For a sweep, `dt` is the time since the sense last swept, in the
+  observer's own time. A signal that was given off has no length of its
+  own: it counts as standing for one interval of the sense that receives
+  it.
+- Awareness is the `Awareness` component of the observer: for each
+  target and sense, the level, when it was brought up to date, and
+  whether it is suspected and detected. A pair is made only when
+  something is received at or over the threshold, and dropped when its
+  level falls to 0. An observer keeps at most `perception.max_awareness`
+  pairs (default 128); past that the faintest that is not detected goes
+  first, then the longest unchanged. A sweep considers at most
+  `perception.max_candidates` of the entities in range (default 32), the
+  nearest first and then by id, besides those already in the observer's
+  awareness through the sense.
+- The events bind the observer as `self` and the target as `about`:
+  `suspicion_raised` (fields `sense`, the sense's qualified id, and
+  `level`), `detected` (`sense`, `where`: the cell it was perceived in)
+  and `lost_track` (`sense`, `where`: the last known place, where the
+  track ends). Detection also raises `perceived` (section 6) and brings
+  the observer's track up to date (section 7). While a target stays
+  detected and is received, its track follows it. The cause of every
+  perception event names no actor.
+- `set_awareness { who, of, sense, level }` sets a level through a sense
+  the observer has, raising what crossing it raises; the function
+  `set_awareness` does the same. `perceives(a, b)` is true from
+  detection until the level falls to 0.
+
 ### 5.2 When detection is evaluated
 
 Nothing scans every tick.
@@ -331,6 +466,20 @@ Nothing scans every tick.
 Only hot entities sweep; warm ones receive only strong signals
 (section 14). Pairs with nothing received and no awareness are
 not stored.
+
+As built (decision D-614):
+
+| Trigger | What runs |
+|---------|-----------|
+| A sense's `interval` elapses | The sense sweeps: each entity within its range (those inside containers too), and each target already in the observer's awareness through it, is brought up to date. One wake-up of the domain `Perception` for each observer and sense, on the observer's clock. A sense's first sweep falls at a point of its first interval drawn from a positional hash of the observer and the sense, never from the order senses were given. |
+| An observer moves or turns | Each of its senses that has not swept for a quarter of its interval sweeps at the next wake-up, at the same tick. |
+| An entity moves, acts, or its signature changes | Caught by the next sweep of every observer within range: at most one evaluation of a pair for each interval. A move makes noise only through the signals it gives off (an `event_signal` on `entity_relocated`, a movement's `noise`). |
+| A signal is given off | Its observers within reach, at once or when a delayed one arrives (§3.1). |
+| An explicit `search` or `listen` | The function `search(sim, observer, bonus)`: every sense of the observer sweeps now with its threshold divided by `bonus` (1 for none). The actions that call it come with the actions package. |
+
+Whatever the order observers sweep and signals arrive in, each pair's
+level depends only on that pair (invariant P4). Events of one sweep are
+raised in order of target.
 
 ### 5.3 Concealment
 
@@ -349,6 +498,11 @@ Being hard to perceive is not a special state. It follows from the numbers:
 | Another plane (02 §8.2) | Not received unless the sense spans planes |
 
 Scene S13 is the row about containers plus section 7.2.
+
+As built: inside a container is the kind's `contained` (0 for the
+bundled sight, 1 for sound), both for a target inside one and for an
+observer looking out of one; posture and size are what signatures
+data gives; modifiers on signature from traits wait for traits (E3).
 
 ## 6. Percepts
 
@@ -374,10 +528,38 @@ Filters (05 §8.4) select by sense, by underlying event type, and by tags of
 what it is about:
 
 ```json
-{ "on": "perceived", "filter": { "event": "element_destroyed", "sense": "sound" },
+{ "on": "perceived", "attached": true,
+  "filter": { "event": "element_destroyed", "signal": "core:sound" },
   "if": "event.clarity > 2 and not self.has_trait('deaf')",
   "do": [ { "enqueue_action": { "entity": "self", "action": "investigate", "params": { "at": "event.where" } } } ] }
 ```
+
+As built (decision D-615), `perceived` binds `self`, the observer, and
+`about`, an `entity`, when the observer made out who or what it was
+about: until personas (section 8) the entity itself, which a mind may
+read only through its belief properties (section 7.2). Its fields:
+
+| Field | Type | Holds |
+|-------|------|-------|
+| `percept` | `string` | `detection`: awareness of `about` reached 1; `signal`: a signal that was given off was received |
+| `sense` | `string` | The sense's qualified id |
+| `signal` | `string` | The qualified id of the kind of signal that carried it |
+| `event` | `string?` | The type of the event the signal carried |
+| `about_actor` | `entity?` | Whom the observer took the event's actor for, or null |
+| `where` | `loc?` | Where it seemed to come from |
+| `clarity` | `real` | `received / threshold` |
+
+A filter names a field with a constant: ids are written qualified. The
+observer makes out what a signal is about, and the actor of the event it
+carries, only if it has them detected through some sense already, or the
+signal's kind `identifies` and they stand where the signal came from;
+otherwise `about` is unbound and `about_actor` null. The cause of
+`perceived` names no actor, so `actor` and `instigator` are not bound
+either. A signal received builds the observer's awareness of what it is
+about (section 5), raises `perceived`, has the observer remember the
+event it carries if the `event_signal` gave a salience (section 7.1),
+and, for a controlled character, notes it in the party's next frame
+(section 13).
 
 Two functions give rules access to perception:
 
@@ -387,6 +569,21 @@ Two functions give rules access to perception:
 | `could_perceive(a, loc, kind)` | A signal of that kind at that place would reach `a` now |
 
 Window kinds (03 §7.1) use `perceives(self, source)` as their `noticed_if`.
+
+As built: `perceives(a: entity, b: entity) -> bool?` and
+`could_perceive(a: entity, at: any, kind: string) -> bool?`, where `at`
+is a cell or something that is somewhere and `kind` a signal kind's id,
+qualified or bare; each is null for an argument that names nothing.
+`could_perceive` asks whether a signal of the kind's `standing`
+strength (or 1, where that is 0) at that place, at the height given,
+would reach one of `a`'s senses at or over its threshold, within its
+arc; a `field` kind is never reached from another place. Both read
+truth about `a` and are not safe for belief: a mind asks the properties
+of the same names of itself (section 7.2). Whoever builds windows asks
+`notices_source(sim, candidate, source)` before a candidate's
+`noticed_if`: a window with no source is noticed, a candidate notices
+its own, and otherwise only a candidate that currently perceives the
+source does.
 
 **Something is not as it was.** A map may mark doors, containers, fixtures
 and placed items as `watched` (10 §3.2). A character whose routine belongs
@@ -398,6 +595,9 @@ what, where, what was expected and what was found.
 That is all the engine does. What an open door means, and whether to look
 into it, shout or shrug, is for rules. This is map memory in miniature:
 only for watched things, and only for those whose place it is to mind them.
+
+Not built: watched things and the `discrepancy` percept wait for maps to
+mark things `watched` (10 §3.2) and for routines.
 
 ## 7. Beliefs
 
@@ -431,6 +631,44 @@ Free-form beliefs are variables on the mind.
 Memories are bounded. The least salient are forgotten first. Salience is set
 by the rule or event mapping that created the memory and fades with time.
 
+As built (decision D-616), beliefs are the `Beliefs` component of a
+mind:
+
+- **Tracks** are kept by persona. Until personas are built (section 8),
+  every entity presents one persona whose id is the entity's
+  (`PersonaId`), so a disguise will change what is believed without
+  changing how it is kept (invariant P2). A track holds the last known
+  cell, the mind's local time it was last perceived or heard of, how
+  (`Knowing`: perceived through a kind of signal, told, inferred,
+  carried) and the confidence then. At most `mind.max_tracks` (default
+  64): the least confident, then the oldest, go first. The effects
+  `add_track { who, of, at?, how?, confidence? }` (`how` is `told`, the
+  default, `inferred` or `carried`; confidence 0 to 1, default 1) and
+  `clear_track { who, of }` (returns whether there was one) change
+  them; a mind keeps no track of itself (`perception.self_track`).
+- **Observed capabilities** are recorded on a track by the function
+  `observe_capability(sim, mind, entity, what, result, told)`: the
+  action's or ability's id, the strongest result, when, and whether it
+  was told rather than seen (seen once stays seen). At most
+  `track_capabilities` (default 8), strongest first; the weakest, then
+  the oldest, go. The actions package calls it when an action resolves
+  in view.
+- **Memories** hold the event type, the cell, the mind's local time,
+  roles as persona or none, how it is known, confidence and salience. At
+  most `mind.max_memories` (default 32): the least salient now, then the
+  oldest, is forgotten, with `memory_forgotten` (`self`; `event`,
+  `where`). Remembering raises `memory_added` (`self`; `event`, `where`,
+  `salience`). The effect `remember { who, event, at?, salience?, actor?
+  }` remembers as inferred (salience default 0.5); a percept of an event
+  whose `event_signal` gives a salience is remembered as perceived.
+- **Salience** halves every `mind.salience_halflife` seconds of the
+  mind's time (default 600) for choosing what to forget; **confidence**
+  halves every `mind.confidence_halflife` seconds (default 60).
+- **Noted things** hold the cell, the layer, the element's state and
+  when; at most `mind.max_noted` (default 32), the oldest going first.
+  The function `note_element(sim, mind, loc, layer)` notes what is there
+  now; the search and interaction packages call it.
+
 ### 7.2 Staleness
 
 A track is a fact about the past. Confidence decays. The region where the
@@ -449,6 +687,30 @@ outward from the last known position because that is all it has.
 persona `self` perceives it as. If `self` has never perceived it, the
 answers are `null`.
 
+As built (decision D-616), these are properties of an `entity`, read of
+the character itself, with these types and companions:
+
+| Property | Type | Gives |
+|----------|------|-------|
+| `self.knows(x: entity)` | `bool` | Whether there is a track; false for the never-perceived |
+| `self.believed_loc(x: entity)` | `loc?` | Last known cell |
+| `self.last_seen(x: entity)` | `real?` | Seconds of the mind's own time since it last perceived `x` or heard of it |
+| `self.last_seen_at(x: entity)` | `real?` | The mind's local time, in seconds, when it last did |
+| `self.confidence(x: entity)` | `real?` | 0 to 1, halved every `mind.confidence_halflife` since |
+| `self.awareness(x: entity)` | `real?` | The highest awareness through any sense |
+| `self.seen_how(x: entity)` | `string?` | The qualified id of the kind of signal it was last perceived by, or `told`, `inferred`, `carried` |
+| `self.perceives(x: entity)` | `bool` | Whether `x` is detected now |
+| `self.could_perceive(at: any, kind: string)` | `bool?` | As the function of section 6, for `self` |
+| `self.remembers(at: any)` | `bool` | Whether its map memory holds the cell (section 13) |
+| `self.knows_element(at: any, layer: string)` | `bool?` | Whether it knows the floor, block or fixture of a cell for what it is (section 7.3) |
+| `self.facing` | `real?` | Which way it faces, in degrees |
+
+None is marked safe for belief: a mind context reads them because they
+are read of its own subject (05 §7.3), and read of another entity they
+would tell one mind what another believes. Their results are not the
+character's own: `self.believed_loc(x).x` is safe, and
+`self.believed_loc(x).light` is refused.
+
 ### 7.3 What rules may read
 
 A rule or behaviour that decides what a character does must read these
@@ -462,6 +724,37 @@ Path-finding and movement use the true layout of walls, floors and doors.
 Elements tagged `hidden` (a secret door, a trap) are excluded until the
 character has perceived them. Dynamic facts are never free: who is where,
 what is inside a container, whether a door is locked.
+
+As built (decision D-617):
+
+- **The linter.** Each rule attached to an entity (`attached`, or
+  written inside another definition) whose `self` is an entity has its
+  condition compiled again in the mind context, `self` as its own
+  subject. What that refuses as unsafe for belief is reported as a
+  warning on the rule, naming the belief property to read instead. The
+  rule still loads and runs. Effect arguments are not checked yet.
+- **Hidden elements.** An element whose definition carries the tag
+  `hidden` is known for what it is only by a mind that has noted it
+  (section 7.1). Paths over belief (decision D-619): the function
+  `believed_move_rules(sim, mind)` gives movement rules that take
+  something hidden and unnoted, which would have to be opened to pass,
+  for a wall; `believed_move_rules_with(sim, mind, rules)` wraps the
+  mover's own rules the same way. A character with map memory plans
+  through cells it has never seen at 1.5 times the cost
+  (`UNKNOWN_CELL_FACTOR`). How a hidden element looks is its
+  definition's: the view model is given it as it is.
+- **What may now be relaxed.** The kernel marked a cell's contents,
+  `los` and `light` unsafe for belief until perception was built
+  (decision D-466). Their believed counterparts are the properties
+  above: `self.could_perceive(at, kind)` for whether a place is in view,
+  `self.perceives(x)` and `self.believed_loc(x)` for where someone is,
+  `self.remembers(at)` and `self.knows_element(at, layer)` for what a
+  place holds. A cell's shape (`standable`, `is_open`,
+  `obstacle_height`, `has_flag`, `under_open_sky`) and `los` between two
+  cells may be marked safe once their getters answer by the static
+  layout with elements tagged `hidden` taken for what they appear to be;
+  what a cell holds (`block`, `fixture`, `floor`, `occupants`,
+  `tags`), `light` and everything about entities stay truth.
 
 ## 8. Identity
 
@@ -721,6 +1014,49 @@ from each. Stories come from their interference.
 The player is subject to the same disguises as anyone. What is shown about
 another character is the persona the controlled character perceives.
 
+As built (decision D-618):
+
+- **The party** is every entity whose control is direct (03 §5.1) and
+  that has senses. Each time a member's sense of a kind that uses light
+  sweeps, the member **observes**: the cells it sees are those in its
+  field of view (02 §22) within the sense's range and arc, from one
+  storey above its own to three below (`PARTY_VIEW_UP`,
+  `PARTY_VIEW_DOWN`), where a creature standing in the cell would be
+  received at or over the threshold by the light there.
+- **Map memory** is the member's `MapMemory` component: for each cell it
+  has seen, its floor, block and fixture, the strongest field and its
+  level, the most marked decal, whether it was open to the sky, its
+  light from 0 to 255 for 0 to 1, and when. It is kept in slabs of one
+  storey of one tract, at most `perception.map_slabs_max` (default
+  1024), the slab seen longest ago going first. What is remembered is
+  what was there when it was last seen, not what is there now.
+- **Frames.** Each observation queues a `PartyFrame`: the cells that came
+  into the party's view or changed since the member last saw them, with
+  what is there; the cells that left the view of the whole party; every
+  entity standing in a cell in view, with its cell and height, but for
+  those given no signature of a kind that uses light; and what members
+  heard since the last frame (who, from where, the kind, the clarity,
+  the event). The application takes them with `drain_frames(sim)`,
+  which also says whether frames were dropped (more than 256 waited);
+  `snapshot(sim, member)` gives a member's whole map memory, each cell
+  marked in view or not, for a fresh view model. A hidden element is
+  given as it is: its look is its definition's.
+- **Tags.** Every event delivered is tagged as the party perceived it:
+  `Seen` if it happened to a member or where the party's view was at
+  their last observations; `Heard { from }` if a signal it gave off (an
+  `event_signal`) would reach a member's sense at or over its threshold;
+  `Not` otherwise. `Sim::party_perceived(&event)` answers for the last
+  8192 events delivered (`PARTY_TAGS_KEPT`); playback asks it.
+- **The omniscient switch** is the setting `perception.omniscient`
+  (`set_omniscient`): with it on, every event is `Seen`. A debug profile
+  sets it; the application then fills the view model from truth.
+- Frames and tags are records of output: saved, so that a loaded game
+  answers for events delivered before, and not hashed. The party's view
+  is hashed with the rest.
+- Not built: moving sources of light (carried lamps, fields that give
+  light) are not counted in what a member sees; neither are they in
+  `light` for the line model.
+
 ## 14. Level of detail
 
 | Level | Perception |
@@ -728,6 +1064,13 @@ another character is the persona the controlled character perceives.
 | Hot | As specified |
 | Warm | Does not sweep. Receives only emitted signals strong enough to exceed a multiple of threshold; receiving one promotes the entity (03 §10) |
 | Cold | None. Beliefs are stored with the agent. The cold simulation moves knowledge between agents and groups at its own scale (09). |
+
+As built: an observer standing in a warm tract does not sweep, and
+receives a signal only at or over `perception.warm_factor` times its
+threshold (default 4). Promoting it (03 §10) waits for the attention
+of 09 §9.3. An entity that leaves the world with its tract keeps its
+components, beliefs included, unchanged; its sweeps begin again when it
+returns (invariant P6).
 
 ## 15. Modding surface
 
@@ -789,6 +1132,47 @@ sources, which the simulation does not hand in yet; the constants of section 3.3
 mattering, the count of sources a chunk takes) are named constants, not
 settings.
 
+**As built** (decisions D-610 to D-619), of the lists above:
+
+- Definition types: `signal_kind` (§3.1), `sense` (§4), `event_signal`
+  (§3.2), with every field stated there. `exposes` is read and does
+  nothing yet.
+- Events: `perceived` (§6), `suspicion_raised`, `detected`, `lost_track`
+  (§5.1), `memory_added`, `memory_forgotten` (§7.1), each with the
+  subjects and fields stated there. They are the engine's: content
+  cannot raise them.
+- Effects: `emit_signal { kind: string, at: any, strength: real, about?:
+  entity }` (§3.2); `face { who: entity, toward: any }` (§4);
+  `set_awareness { who: entity, of: entity, sense: string, level: real
+  }` (§5.1); `add_track { who: entity, of: entity, at?: any, how?:
+  string, confidence?: real }`, `clear_track { who: entity, of: entity
+  }`, `remember { who: entity, event: string, at?: any, salience?: real,
+  actor?: entity }` (§7.1).
+- Functions: `perceives(a, b)`, `could_perceive(a, at, kind)` (§6).
+- Properties of `entity`: those of §7.2 as built, and `facing`.
+- Settings: `perception.warm_factor` (default 4), `perception.max_awareness`
+  (128), `perception.max_candidates` (32), `perception.omniscient`
+  (false), `perception.map_slabs_max` (1024), `mind.max_tracks` (64),
+  `mind.max_memories` (32), `mind.max_noted` (32), `track_capabilities`
+  (8), `mind.confidence_halflife` (60 s), `mind.salience_halflife`
+  (600 s).
+- Refusals: `perception.unknown_sense`, `perception.unknown_kind`,
+  `perception.has_sense`, `perception.no_sense`, `perception.no_senses`,
+  `perception.bad_value`, `perception.field_not_sent`,
+  `perception.self_track`.
+- Not built: the hooks `identity_check`, `understands`, `talk_options`,
+  `order_received` and `signal_receiving`; `relay_senses`, `appraise`,
+  `forget_memory`; the queries `tracks`, `memories`, `observers`; and
+  everything of sections 8 to 11.
+
+**Reachable only from Rust**, for the packages that will offer them to
+content: giving and taking senses (`attach_sense`, `detach_sense`, for
+templates and traits); setting a standing signature (`set_signature`);
+an explicit search or listen with a bonus (`search`, for the actions);
+noting an element (`note_element`); recording an observed capability
+(`observe_capability`); the omniscient switch (`set_omniscient`); and
+the frames of §13 (`drain_frames`, `snapshot`).
+
 ## 16. Invariants
 
 | # | Invariant |
@@ -809,10 +1193,17 @@ Targets, unmeasured.
 | Light at a cell, cached, in a fill | under 30 ns (measured: 1 to 3 ns) |
 | Light at one cell asked for alone, cached | under 1 µs (measured: 0.5 µs) |
 | Light of an 80 × 50 view after one edit that light cares about | under 1 ms (measured: 0.03 ms in the open, 0.2 ms in a building) |
-| One observer-target evaluation, including line of sight at 30 m | under 2 µs |
-| Emitting a signal to 50 observers in range | under 100 µs |
-| One simulated second of perception for 300 hot characters in a crowd | under 4 ms |
+| One observer-target evaluation, including line of sight at 30 m | under 2 µs (measured: 5 to 8 µs: four lines of sight for `exposed`) |
+| Emitting a signal to 50 observers in range | under 100 µs (measured: 33 µs to send a delayed one, 2 ms for all fifty to receive it with their events) |
+| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 23 ms for fifty walking in one street, all in range of each other, with sight and hearing and footsteps) |
 | Memory per mind, typical | under 4 KB |
+
+Measured with the ignored test `timing_of_perception_in_a_city_block`
+of `crates/clash-sim/tests/perception.rs`, in a release build. A crowd
+is over its target: a sweep considers at most `perception.max_candidates`
+of those in range, the nearest first, and a target whose signal could
+not reach the threshold with nothing in the way costs no line of sight,
+but each evaluation in view still follows four.
 
 ## 18. Open questions
 

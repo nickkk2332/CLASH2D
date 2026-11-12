@@ -973,15 +973,19 @@ impl Game {
         let global = self.sim.subject_value(Subject::Global);
         let registry = Arc::clone(self.sim.defs().expr_registry());
         let refused = |reason: Reason| refusal_of(&reason);
-        // A verb of the engine: called directly, for what it gives.
+        // A verb of the engine: called directly, for what it gives. One
+        // the simulation does not carry out is refused there, with
+        // `rule.verb_unbound`.
         if command.source == CommandSource::Verb
-            && let Some(verb) = registry
-                .verb_id(&command.name)
-                .and_then(|id| registry.verb(id))
             && self.sim.rule_set().lookup(&command.name).is_none()
         {
+            let params = registry
+                .verb_id(&command.name)
+                .and_then(|id| registry.verb(id))
+                .map(|verb| verb.spec.args.clone())
+                .unwrap_or_default();
             let mut args: Vec<(String, Value)> = Vec::new();
-            for param in &verb.spec.args {
+            for param in &params {
                 let value = self.verb_value(command, &param.name, &param.ty)?;
                 args.push((param.name.clone(), value));
             }

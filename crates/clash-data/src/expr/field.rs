@@ -188,7 +188,7 @@ impl<T: Def> ExprType for IdOf<T> {
 }
 
 /// A query (05 §11) as it was written, with the place of each of its
-/// parts. Compiled with the field it is in ([`compile_query`]).
+/// parts. Compiled with the field it is in ([`compile_query`](super::compile_query)).
 #[derive(Clone, PartialEq, Debug)]
 pub struct Query {
     /// The query as JSON.

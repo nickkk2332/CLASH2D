@@ -762,6 +762,8 @@ impl WorldEdit<'_> {
     pub fn set_fixture(&mut self, loc: Location, s: FixtureState) -> Result<FixtureState, WorldError>;
     pub fn set_element(&mut self, loc: Location, layer: Layer, s: ElementState) -> Result<ElementState, WorldError>;
     pub fn set_material(&mut self, loc: Location, layer: Layer, m: MaterialId) -> Result<ElementState, WorldError>;
+    pub fn set_state_bits(&mut self, loc: Location, layer: Layer, bits: u16) -> Result<ElementState, WorldError>;   // another state of the same element
+    pub fn destroy(&mut self, loc: Location, layer: Layer, kind: DamageTypeId) -> Result<bool, WorldError>;         // section 12.3, outright
     pub fn set_damage(&mut self, loc: Location, layer: Layer, damage: u8) -> Result<u8, WorldError>;
     pub fn damage(&mut self, loc: Location, layer: Layer, p: DamagePacket) -> Result<DamageOutcome, WorldError>;   // section 12
     pub fn damage_along(&mut self, loc: Location, layer: Layer, p: DamagePacket, dir: Option<[Real; 3]>) -> Result<DamageOutcome, WorldError>;
@@ -795,6 +797,13 @@ An edit is never refused because someone is standing there (section 23).
 - **A replaced element starts undamaged.** Setting a floor, block or
   fixture clears the accumulated damage of that layer. `set_material`
   transmutes: the element keeps its definition, its state and its damage.
+  `set_state_bits` changes only the state: a door that is opened keeps
+  its definition, its material and its damage (decision D-620).
+- **`destroy`** destroys an element outright, as section 12.3 does for a
+  packet that is more than it can take, by a kind of damage and with
+  nothing absorbed: it becomes its `on_destroy` state or is removed, its
+  matter is left as rubble, no fragments fly, and `ElementDestroyed`
+  follows. It is how a rule destroys by other means than energy.
 - **`set_damage`** writes an element's accumulated damage, in 255ths and
   at most 254, and emits `ElementDamaged`. It is what `damage` and
   destruction are built on (section 12); where there is no element it
@@ -3709,6 +3718,54 @@ through an id, such as a material's density (05 §17).
 `release_ticket`, `add_pending_edit`, `transfer`, `set_plane`,
 `set_liquid_level`.
 
+**The verbs as bound** (package K8, decision D-620;
+`clash_sim::world_verbs`). Each calls the one function of the world
+named beside it, inside `Sim::world`, with the cause the rule runtime
+hands it, so that every change carries that cause and the world's own
+events follow. A refusal is the world's (`world.not_loaded`,
+`world.outside_realm`, `world.unknown_area`, `world.refused` with the
+world's message) or one of `world.bad_argument` (`verb`, `arg`),
+`world.unknown_state` (`state`), `world.unknown_def` (`def`),
+`world.no_element` (`layer`) and `world.not_in_world` (`entity`). An id
+argument also takes the qualified id as a text.
+
+| Verb | Arguments | Returns | Calls | Raises |
+|------|-----------|---------|-------|--------|
+| `set_floor`, `set_block`, `set_fixture` | `at: loc`; `to: string?`, a state as data writes it (`def`, `def@material`, `def#state`), null to clear | null | `WorldEdit::set_element` | `element_changed`; `occupant_displaced` or `occupant_entombed` |
+| `set_material` | `of: element`, `material: id<material>` | null | `set_material` | `element_changed` |
+| `set_state` | `of: element`, `state: string` (a declared state's name, or the bits written as a number) | null | `set_state_bits` | `element_changed` |
+| `damage` | `at: any` (a cell, or an element, which names its layer), `layer: string?` (default `block`), `kind: id<damage_type>`, `energy: real` (J), `intensity: real` (Pa), `dir: any?` (three numbers, or something to strike toward) | `string`: `unaffected`, `damaged`, `destroyed` | `damage_along` | `element_damaged` or `element_destroyed` |
+| `destroy` | `of: element`, `kind: id<damage_type>` | `bool`: there was one | `destroy` | `element_destroyed` |
+| `check_stability` | `at: loc` | null | `WorldCtx::check_stability` | `collapse_started` if something gives way |
+| `release` | `at: any` (a cell, an element's cell, an entity where it stands), `kind: id<damage_type>`, `energy: real`, `shape: string?` (`sphere`, `cone`, `beam`), `dir: any?`, `half_angle: real?`, `radius: real?`, `range: real?`, `burst: bool?`, `speed: real?`, `height: real?` (m above the cell's base) | null | `WorldCtx::release` | `release_started`, later `energy_released` |
+| `add_field` | `at: loc`, `field: id<field>`, `amount: int` | `int`: the level before | `add_field` | `field_appeared`, `field_vanished` |
+| `set_field` | `at: loc`, `field: id<field>`, `level: int` | `int`: the level before | `set_field` | the same |
+| `launch` | `what: entity` standing in the world, `vel: any` (three numbers, m/s) | null | `WorldCtx::launch`, as `Body::of_mass` with its `Physical` | `body_launched` |
+| `impulse` | `what: entity` in flight, `j: any` (three numbers, kg·m/s) | null | `WorldCtx::impulse` | — |
+| `arrest` | `what: entity` in flight | null | `WorldCtx::arrest` | — |
+| `create_area` | `at: loc`, `to: loc?` (a box's other corner), `radius: real?`, `kind: id<area_kind>?`, `tags: list<string>?`, `clock_rate: real?`, `priority: int?` | `area` | `WorldCtx::create_area` | `area_entered` |
+| `remove_area` | `area: area` | null | `WorldCtx::remove_area` | `area_exited` |
+| `enclose` | `from: loc`, `kind: id<area_kind>?`, `limit: int?` (default 65,536) | `area` | `WorldCtx::enclose` | `area_entered` |
+
+A release's shape is three flat arguments rather than the nested object
+of the sketch above, so that each is checked against its type at load.
+Cell variables are the kernel's `set` and `unset` (05 §10.3), which
+write through `WorldEdit::set_var`.
+
+**Not bound yet, each for a reason** (D-620): `tremor` and `devastate`,
+whose world functions are not built (W24, W17); `detach` and `merge`
+(subgrids, section 18); `open_portal` and `close_portal` (section 19);
+`create_realm`, `destroy_realm` and `transfer` (section 21); `apply_map`
+at a location, which wants a map id the simulation's registry does not
+yet name and a placement of the generator's; `hold_ticket`,
+`release_ticket` and `add_pending_edit`, which want an anchor and a
+pending edit as values rules can write; `set_plane`, which is the
+kernel's presence and waits for the planes kind; `set_liquid_level`
+(11 §4.4); `add_decal` and `remove_decal`, because no definition type
+names a kind of mark; and `steer`, because a body is not a subject
+kind. An area's clock rate is set by the kernel's verb `set_clock_rate
+{ of, rate }` (03 §13).
+
 **When an edit meets an occupant.** An edit never fails because someone is
 standing there. If it puts something an occupant cannot share a cell with
 into that cell, the occupant is displaced to the nearest cell it can
@@ -3771,11 +3828,9 @@ thrown. Sliding friction is the `friction` of the material a body lies
 on, a half (`BODY_DEFAULT_FRICTION`) where the material states none.
 `REST_SPEED` is a named constant, 0.5 m/s.
 
-**Releases, for whoever binds them.** `release { at, kind, energy,
-shape, speed }` takes the fields of `EnergyRelease` (section 13): a
-location with a height, a damage type, joules, one of `sphere`,
-`{ cone: { dir, half_angle } }` and `{ beam: { dir, radius, range,
-burst } }`, and optionally a speed. Reachable only from Rust so far: the
+**Releases.** `release` takes the fields of `EnergyRelease` (section
+13), with the shape's own as arguments beside it: see the table of
+bound verbs above. Reachable only from Rust so far: the
 releases still spreading (`releases`), `intensity_at` and `reach` of a
 release, and the settings, which are constants until settings are
 bound: `world.min_intensity` (`WORLD_MIN_INTENSITY`, 5 kPa),
@@ -3785,10 +3840,11 @@ bound: `world.min_intensity` (`WORLD_MIN_INTENSITY`, 5 kPa),
 thrown occupant starts at (1 m), the bins of the map (16 to 48 a side)
 and the cells a confining space may hold (4000) are named constants.
 
-**Bodies, for whoever binds them.** `launch { body }` takes the fields
-of `Body` (section 15); `impulse { body, j }` an impulse in kg·m/s;
-`steer { body, toward }` a point in metres or nothing; `arrest { body }`
-returns the body. A subject of kind `body` is a `BodyId`. Reachable
+**Bodies.** As bound, `launch`, `impulse` and `arrest` take the entity
+that is or becomes the body (the table above): a body is not yet a kind
+of subject. A projectile, a fragment and a body with a drive are
+launched from Rust with the fields of `Body` (section 15), and `steer
+{ body, toward }` waits for the kind `body`, a `BodyId`. Reachable
 only from Rust so far: the bodies in flight and the body an entity is
 (`bodies`, `body`, `body_flight`, `body_of`), the number of fragments
 in flight (`debris_in_flight`), and the constants of flight and debris:
@@ -3863,8 +3919,8 @@ override, priority or anchor after it is made; an occupant's footprint
 element's damage directly (`set_damage`); the fill that `enclose` uses, as
 a query (`enclosed_cells`); and the occupant queries of section 8.1, which
 rules reach only through their own queries over entities (05). From
-damage and collapse: asking for a stability check (`check_stability`);
-what a check would find, with carriers and loads (`assess_stability`);
+damage and collapse (asking for a stability check is the verb
+`check_stability`): what a check would find, with carriers and loads (`assess_stability`);
 where something dropped comes to rest (`resting_cell`); the amount a
 pile of rubble holds (`rubble_units`); the direction of a hit
 (`damage_along`); and the collapses in progress and masses in flight

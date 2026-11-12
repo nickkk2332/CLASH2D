@@ -90,7 +90,7 @@
 //! their field: the query's kind, its arguments, and its `where`,
 //! `sort` and `limit`, which see the candidate as `it`. `list` and
 //! `defs` are answered here; every other kind is registered by the host
-//! and answered by [`Host::query`](clash_expr::Host::query). A field
+//! and answered by [`Host::query`]. A field
 //! type of another crate that holds a query compiles it with
 //! [`compile_query`] and runs it with [`Evaluator::query`]. See
 //! `query.rs`.

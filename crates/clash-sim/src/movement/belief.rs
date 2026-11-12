@@ -14,7 +14,10 @@
 //! | [`believed_step_time`] | How long it expects a step to take | `entity.step_time`, and so the phases of the `step` and `go_to` actions |
 //!
 //! **Until perception is built (document 15) the first three read
-//! truth.**
+//! truth.** [`believed_path`] now plans through the perception
+//! package's believed rules (decision D-619): static geometry is common
+//! knowledge, hidden elements count only once noted, unseen cells cost
+//! more for a mover with map memory.
 //! That is the stand-in, and it is here and nowhere else: the
 //! perception package replaces the bodies of these functions with reads
 //! of what the entity has seen and remembers, and nothing that calls
@@ -61,7 +64,11 @@ pub fn believed_path(
     let rules = believed_rules(sim, entity)
         .through_openable()
         .avoiding(avoid);
-    // Stand-in: searches the world as it is.
+    // Static geometry is common knowledge (15 §7.3): the search walks the
+    // world's layout, judged by what the mover knows of it: something
+    // hidden it has not noted does not open, and a mover with map memory
+    // keeps to what it has seen where it can (decision D-619).
+    let rules = crate::perception::believed_move_rules_with(sim, entity, rules).on_grid(from.grid);
     sim.truth().cosmos().find_path(from, to, &rules, limits)
 }
 

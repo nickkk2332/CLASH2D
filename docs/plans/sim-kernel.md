@@ -44,7 +44,7 @@ start while the world model is being built.
 | K5 | Rule runtime | L | K3, K4, X4 | beta |
 | K6 | Queries and value sources | M | K5 | beta |
 | K7 | Timers, continuations, simulation saves | L | K5, W10 | done |
-| K8 | World verbs | M | K5 | todo |
+| K8 | World verbs | M | K5 | done |
 | K9 | Messages and choices | S | K5 | beta |
 | K10 | Tracing, explain, profile, console | M | K5, W11 | beta |
 | T1 | Clock assignment | M | K1 | beta |
@@ -601,7 +601,7 @@ one file and loads it back, invisibly (01 §11.2, D-580), and the
 scenario runner's save-and-load mode runs through it for every script.
 Timers (decisions D-684 to D-686): `after`, `every`, `cancel_timer` and
 `owner.timer(name)`, kept as `TimerRecord`s with continuations in the
-rule state (save layout 7), on the owner's clock, wake-ups of the `Rule`
+rule state (save layout 9), on the owner's clock, wake-ups of the `Rule`
 domain; a rule's own `every`, global ones from the start and attached
 ones from `attach_rule`, staggered by a positional hash of owner and
 rule; `while_unloaded` (`pause`, `elapse`, `all`, `skip`, `once`) as an
@@ -624,6 +624,14 @@ Build
 Done when
 - Each bound verb has a test showing the world event it produces.
 - No verb mutates the world except through `WorldCtx`.
+
+As built (decision D-620), in `clash_sim::world_verbs`: seventeen verbs,
+each a call of one world function inside `Sim::world` with the cause it
+is handed, listed with their arguments in 02 §23 beside those not bound
+and why. `crates/clash-sim/tests/world_verbs.rs` calls each as the rule
+runtime does and finds its world event carrying the verb's cause; the
+refusals carry reasons and change nothing. The world gained
+`WorldEdit::set_state_bits` and `WorldEdit::destroy`.
 
 ### K9 — Messages and choices
 

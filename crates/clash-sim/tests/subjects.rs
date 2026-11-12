@@ -434,11 +434,59 @@ fn an_entity_answers_for_itself() {
     assert_eq!(probe.get(g, "path_next"), Value::Null);
     assert_eq!(probe.get(g, "path_stale"), Value::Bool(false));
 
+    // Perception's beliefs, of what has never been perceived: tests of
+    // perception read them as they change.
+    let other = probe.value(c);
+    for name in [
+        "believed_loc",
+        "last_seen",
+        "last_seen_at",
+        "confidence",
+        "awareness",
+        "seen_how",
+    ] {
+        assert_eq!(
+            probe.call(g, name, std::slice::from_ref(&other)),
+            Value::Null,
+            "{name}"
+        );
+    }
+    for name in ["knows", "perceives"] {
+        assert_eq!(
+            probe.call(g, name, std::slice::from_ref(&other)),
+            Value::Bool(false),
+            "{name}"
+        );
+    }
+    assert_eq!(probe.get(g, "facing"), Value::Null);
+    assert_eq!(
+        probe.call(g, "remembers", std::slice::from_ref(&other)),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        probe.call(
+            g,
+            "could_perceive",
+            &[other.clone(), Value::from("no_such_kind")]
+        ),
+        Value::Null
+    );
+    assert_eq!(
+        probe.call(g, "knows_element", &[other, Value::from("no_such_layer")]),
+        Value::Null
+    );
+    // A timer it does not have (`tests/timers.rs` sets them).
+    assert_eq!(probe.call(g, "timer", &[Value::from("none")]), Value::Null);
+
     // Everything registered for an entity was read.
     let read = probe.read.into_inner();
-    // Those of items are read in `tests/items.rs`.
+    // Those of items are read in `tests/items.rs`, those of devices in
+    // `tests/devices.rs`, those of interactions in
+    // `tests/interactions.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
+        .chain(clash_sim::device::properties().iter())
+        .chain(clash_sim::interaction::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {
@@ -771,10 +819,32 @@ fn the_world_answers_for_cells_elements_areas_sites_tracts_and_realms() {
     assert_eq!(probe.get(Subject::Global, "kind"), Value::from("global"));
     assert_eq!(probe.get(Subject::Global, "now"), real(7200.0));
 
-    // Every property that is not an entity's was read.
+    // ---- what a cell holds, and timers (`tests/timers.rs` sets them)
+    assert_eq!(
+        probe.call(here, "field", &[Value::from("core:fire")]),
+        Value::Int(0)
+    );
+    assert_eq!(
+        probe.call(here, "field", &[Value::from("no_such_field")]),
+        Value::Null
+    );
+    for owner in [here, a, s, r, Subject::Global] {
+        assert_eq!(
+            probe.call(owner, "timer", &[Value::from("none")]),
+            Value::Null
+        );
+    }
+
+    // Every property that is not an entity's was read, but those of
+    // devices, which `tests/devices.rs` reads.
     let read = probe.read.into_inner();
+    let elsewhere: Vec<(&str, &str)> = clash_sim::device::properties()
+        .iter()
+        .chain(clash_sim::interaction::properties().iter())
+        .map(|property| (property.kind, property.name))
+        .collect();
     for property in engine_properties() {
-        if property.kind != "entity" {
+        if property.kind != "entity" && !elsewhere.contains(&(property.kind, property.name)) {
             assert!(
                 read.contains(&(property.kind.to_owned(), property.name.to_owned())),
                 "{}.{} is not tested",
