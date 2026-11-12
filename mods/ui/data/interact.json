@@ -8,7 +8,7 @@
         "list": { "id": "offers", "rows": "view.offers_near",
                   "item": "{if it.available then it.name else ''}<dim>{if it.available then '' else it.name}  {it.where}{if it.available then '' else ': '}{if it.available then '' else it.why}</>",
                   "empty": "There is nothing within reach to use.",
-                  "tip": "Enter does it; greyed, it cannot be done now, and says why.",
+                  "tip": "Enter does it; a greyed one says why it cannot.",
                   "on_activate": [
                     { "close": {} },
                     { "act": { "action": "interact",
