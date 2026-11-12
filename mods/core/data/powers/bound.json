@@ -1,0 +1,61 @@
+[
+  { "//": "Powers that leave something in the world bound to them (08 §7.3): a summoned hound and a conjured wall. Each ends with its binding: the hound is gone, the street comes back. Nobody has them by default; the template and the trait `power_sampler` give them. Values are illustrative.",
+    "type": "goal", "id": "heel",
+    "doc": "Staying at the heel of whoever the character serves: the owner of the ability it is bound to, kept within two metres of where it believes them to be. Wanted only by a character bound to someone.",
+    "score": "if self.bound_by != null then 0.5 else 0",
+    "methods": [
+      { "steps": [ { "keep_near": { "who": "self.bound_by", "within": 2 } } ] } ] },
+
+  { "type": "mind", "id": "hound",
+    "doc": "A summoned hound. Takes its summoner's quarrels as its own: goes for anyone it holds hostile while it can see them. Otherwise keeps at its summoner's heel.",
+    "goals": ["confront", "heel", "go_about"],
+    "weights": { "duty": 0.9, "curiosity": 0.3, "caution": 0.1 },
+    "think": "500 ms",
+    "wake_clarity": 50,
+    "go_action": "go_to",
+    "senses": ["human_sight", "human_hearing"] },
+
+  { "//": "Calls a dog to a cell close by, bound to the ability for a while: it thinks as a `hound` and takes its summoner's stances (09 §3.4). When the time runs out, or the summoner dies, or the ability is lost, it is gone.",
+    "type": "action", "id": "summon_hound", "name": "Summon hound",
+    "params": { "to": "cell", "seconds": "real", "by": "ability" },
+    "requires": "(dist(self, $to) ?? 99) <= 3",
+    "fail_text": "Call it somewhere closer.",
+    "tags": ["power"],
+    "phases": [
+      { "id": "call", "time": "1 s", "cancel": true },
+      { "id": "arrive", "time": 0,
+        "do": [ { "summon": { "template": "core:dog", "at": "$to", "mind": "core:hound",
+                              "ability": "$by", "for": "$seconds", "as": "hound" } } ] } ] },
+
+  { "type": "ability", "id": "summon_hound", "name": "Summon hound",
+    "description": "A hound comes to your call and serves you for a while.",
+    "tags": ["power", "summoning"], "seat": "mind",
+    "params": { "seconds": "30 + 10 * ability.rank" },
+    "grants": [
+      { "action": "summon_hound", "params": { "seconds": "ability.seconds", "by": "ability" },
+        "cost": { "reserve": 40 }, "cooldown": "20 s", "intent": "aid" } ] },
+
+  { "//": "Raises a wall across the way toward a cell: a line of wall blocks through it, square to the user's way, put there through `WorldEdit` and bound to the ability. When the binding ends each cell that is still the wall is put back as it was; one knocked down or changed since is left alone.",
+    "type": "action", "id": "stone_wall", "name": "Stone wall",
+    "params": { "to": "cell", "half": "int", "seconds": "real", "by": "ability" },
+    "requires": "(dist(self, $to) ?? 0) >= 1",
+    "fail_text": "Raise it somewhere in front of you.",
+    "tags": ["power"],
+    "phases": [
+      { "id": "raise", "time": "700 ms" },
+      { "id": "stand", "time": 0,
+        "do": [ { "conjure": {
+          "at": "offset($to, 0 - (dir(self, $to)[1] ?? 0) * $half, (dir(self, $to)[0] ?? 0) * $half) ?? $to",
+          "to": "offset($to, (dir(self, $to)[1] ?? 0) * $half, 0 - (dir(self, $to)[0] ?? 0) * $half) ?? $to",
+          "what": "wall", "ability": "$by", "for": "$seconds", "as": "wall" } } ] },
+      { "id": "recover", "time": "300 ms" } ] },
+
+  { "type": "ability", "id": "stone_wall", "name": "Stone wall",
+    "description": "A wall rises across the way and sinks back when the power ends.",
+    "tags": ["power", "earth"], "seat": "mind",
+    "params": { "half": "1 + floor(ability.rank / 2)", "seconds": "20 + 10 * ability.rank" },
+    "grants": [
+      { "action": "stone_wall",
+        "params": { "half": "round(ability.half)", "seconds": "ability.seconds", "by": "ability" },
+        "cost": { "reserve": 30 }, "cooldown": "15 s", "intent": "protect" } ] }
+]

@@ -15,6 +15,12 @@
 //! | A6 | An anchored area with a clock rehomes what it comes over | `an_anchored_clock_area_stops_what_it_comes_over_and_not_its_maker` |
 //! | A6 | Light is never negative | `darkness_lowers_light_and_never_below_zero` |
 //! | A6 | `create_area` with an anchor, gravity and a light | `create_area_takes_an_anchor_gravity_and_a_light` |
+//! | A7 | Revoking ends everything bound by its declared `on_end` (A3) | `revoking_an_ability_ends_everything_bound_to_it_by_its_on_end` |
+//! | A7 | `summon_expires`: a servant obeys, then is gone when its summoner stops | `a_summoned_hound_obeys_and_is_gone_when_its_summoner_dies`, `what_a_mode_binds_ends_with_it_and_suppression_ends_what_ends_then` |
+//! | A7 | `conjured_wall`: the street restored, an altered cell left alone | `a_conjured_wall_gives_the_street_back_and_leaves_an_altered_cell_alone`, `a_stone_wall_rises_across_the_way_and_sinks_back` |
+//! | A7 | `release` leaves the thing in place, unbound | `release_leaves_the_thing_in_place_unbound` |
+//! | A7 | Durations, `binding_ending`, costs from a bound companion, `dispel`, refusals | `a_binding_lasts_its_time_on_its_owners_clock_and_survives_a_save`, `a_rule_on_binding_ending_prolongs_it_or_changes_how_it_ends`, `a_cost_drawn_from_a_bound_companion_is_theirs_to_pay`, `dispel_ends_bindings_by_tag_and_by_place`, `binding_with_no_ability_or_bad_terms_is_refused_with_a_reason` |
+//! | Content | Each bundled power used by a spawned person | `time_stop_…`, `a_null_field_…`, `a_gravity_well_…`, `floating_…`, `a_summoned_hound_…`, `a_stone_wall_…`, `a_shadow_…` |
 
 mod common;
 
@@ -54,7 +60,22 @@ const TEST_DEFS: &str = r#"[
   { "type": "eoc", "id": "stubborn_gift", "on": "ability_suppressing", "if": "self.var.stubborn",
     "do": [ { "cancel_event": {} } ] },
   { "type": "template", "id": "tester", "copy_from": "person",
-    "pools": ["blood", "pain", "stamina", "reserve", "mana"] }
+    "pools": ["blood", "pain", "stamina", "reserve", "mana"] },
+  { "type": "trait", "id": "hexed", "tags": ["hexed"] },
+  { "type": "variable", "id": "watched", "scope": "entity", "value": "bool", "default": false, "doc": "Set by a bound rule." },
+  { "type": "variable", "id": "keep", "scope": "entity", "value": "bool", "default": false, "doc": "Whether the next binding to run out is kept five seconds more." },
+  { "type": "variable", "id": "free", "scope": "entity", "value": "bool", "default": false, "doc": "Whether bindings that end are released." },
+  { "type": "eoc", "id": "watchful", "on": "tag_changed", "attached": true,
+    "do": [ { "set": { "self.var.watched": true } } ] },
+  { "type": "eoc", "id": "keeper", "on": "binding_ending", "if": "self.var.keep and event.why == 'duration'",
+    "do": [ { "modify": { "event.prolong": "5" } }, { "set": { "self.var.keep": false } } ] },
+  { "type": "eoc", "id": "freer", "on": "binding_ending", "if": "self.var.free",
+    "do": [ { "modify": { "event.on_end": "release" } } ] },
+  { "type": "ability", "id": "binder", "tags": ["test", "binding"],
+    "grants": [ { "action": "zap", "params": { "energy": 1 },
+                  "cost": { "blood": { "amount": 0.01, "from": "ability.bound('pet')" } } } ],
+    "modes": [ { "id": "ward", "upkeep": { "mana": 1 },
+                 "on_start": [ { "create_area": { "radius": 2, "anchor": "self", "as": "ward" } } ] } ] }
 ]"#;
 
 /// One directory of `mods/core/data`, as paths within the mod and text.
@@ -737,7 +758,7 @@ fn a_body_falling_through_weightlessness_stops_gaining_speed_inside_it() {
         .map(|(_, vz)| *vz)
         .collect();
     assert!(inside.len() >= 3, "{samples:?}");
-    assert!(above.len() >= 2 && below.len() >= 1, "{samples:?}");
+    assert!(above.len() >= 2 && !below.is_empty(), "{samples:?}");
     // It gains speed falling toward the area, keeps the speed it had
     // inside, and gains again below.
     assert!(above.windows(2).all(|pair| pair[1] < pair[0]), "{above:?}");
@@ -910,4 +931,823 @@ fn create_area_takes_an_anchor_gravity_and_a_light() {
             .unwrap_err();
         assert_eq!(reason.code, "world.bad_argument", "{name}");
     }
+}
+
+// ---- A7: bindings -----------------------------------------------------------------
+
+/// Calls a verb as a rule would, and delivers what it raised.
+trait RunVerb {
+    fn run_verb(&mut self, verb: &str, args: &[(&str, Value)]) -> Result<Value, clash_sim::Reason>;
+}
+
+impl RunVerb for Sim {
+    fn run_verb(&mut self, verb: &str, args: &[(&str, Value)]) -> Result<Value, clash_sim::Reason> {
+        let made = self.call_verb(verb, args, &[], cause());
+        self.pump();
+        made
+    }
+}
+
+fn loc_value(sim: &Sim, x: i32, y: i32) -> Value {
+    sim.subject_value(Subject::Loc(common::at(x, y)))
+}
+
+fn def_value(sim: &Sim, ty: &str, name: &str) -> Value {
+    let registry = sim.defs().expr_registry();
+    let ty = registry.def_type_id(ty).unwrap();
+    Value::Id(registry.def_ref(ty, name).unwrap())
+}
+
+fn entity_of(sim: &Sim, value: &Value) -> EntityId {
+    match sim.subject_of(value) {
+        Some(Subject::Entity(id)) => id,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn block_at(sim: &Sim, x: i32, y: i32) -> clash_world::ElementState {
+    sim.truth()
+        .cosmos()
+        .grid(common::GRID)
+        .unwrap()
+        .element(CellPos::new(x, y, 0), clash_world::Layer::Block)
+        .unwrap()
+}
+
+fn set_block(sim: &mut Sim, x: i32, y: i32, name: Option<&str>) {
+    let state = name.map_or(clash_world::ElementState::NONE, |name| {
+        sim.truth()
+            .cosmos()
+            .defs()
+            .block_state(name, None)
+            .unwrap()
+            .raw()
+    });
+    sim.world(|ctx| {
+        ctx.edit(cause())
+            .set_element(common::at(x, y), clash_world::Layer::Block, state)
+    })
+    .unwrap();
+    sim.pump();
+}
+
+fn wall_state(sim: &Sim) -> clash_world::ElementState {
+    common::wall(sim).raw()
+}
+
+fn summon_dog(sim: &mut Sim, by: &Value, x: i32, y: i32, extra: &[(&str, Value)]) -> EntityId {
+    let mut args = vec![
+        ("template", def_value(sim, "template", "core:dog")),
+        ("at", loc_value(sim, x, y)),
+        ("ability", by.clone()),
+    ];
+    args.extend(extra.iter().cloned());
+    let dog = sim.run_verb("summon", &args).unwrap();
+    entity_of(sim, &dog)
+}
+
+fn ended(events: &[SimEvent]) -> Vec<(String, String, String)> {
+    events
+        .iter()
+        .filter(|event| event.name() == ability::BINDING_ENDED)
+        .map(|event| (text(event, "what"), text(event, "why"), text(event, "how")))
+        .collect()
+}
+
+#[test]
+fn revoking_an_ability_ends_everything_bound_to_it_by_its_on_end() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let other = spawn(&mut sim, "tester", 14, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    sim.run_verb(
+        "bind_trait",
+        &[
+            ("to", entity_value(&sim, other)),
+            ("trait", def_value(&sim, "trait", "core:hexed")),
+            ("ability", by.clone()),
+        ],
+    )
+    .unwrap();
+    assert!(has_trait(&sim, other, "hexed"));
+    let dog = summon_dog(&mut sim, &by, 12, 12, &[("as", Value::from("pet"))]);
+    assert_eq!(
+        eval_of(&sim, who, "self.ability('core:binder').bound('pet')"),
+        entity_value(&sim, dog)
+    );
+    assert_eq!(eval_of(&sim, dog, "self.bound_by"), entity_value(&sim, who));
+    let placed = sim
+        .run_verb(
+            "conjure",
+            &[
+                ("at", loc_value(&sim, 20, 20)),
+                ("to", loc_value(&sim, 22, 20)),
+                ("what", Value::from("wall")),
+                ("ability", by.clone()),
+            ],
+        )
+        .unwrap();
+    assert_eq!(placed, Value::Int(3));
+    sim.run_verb(
+        "conjure",
+        &[
+            ("at", loc_value(&sim, 20, 24)),
+            ("what", Value::from("wall")),
+            ("ability", by.clone()),
+            ("on_end", Value::from("release")),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        sim.run_verb(
+            "bind_rule",
+            &[
+                ("to", entity_value(&sim, other)),
+                ("eoc", def_value(&sim, "eoc", "core:watchful")),
+                ("ability", by.clone()),
+            ],
+        )
+        .unwrap(),
+        Value::Bool(true)
+    );
+    let area = sim
+        .run_verb(
+            "create_area",
+            &[
+                ("at", loc_value(&sim, 30, 30)),
+                ("radius", Value::Real(Real::of(2.0))),
+                ("bound", Value::Bool(true)),
+                ("ability", by.clone()),
+            ],
+        )
+        .unwrap();
+    let Some(Subject::Area(area)) = sim.subject_of(&area) else {
+        panic!("{area:?}");
+    };
+    assert_eq!(sim.bindings().count(), 6);
+    sim.drain_events();
+
+    ability::revoke(&mut sim, who, ability_id("binder"), cause()).unwrap();
+    sim.pump();
+    // Invariant A3: each by its declared `on_end`.
+    let events = sim.drain_events();
+    let mut ends = ended(&events);
+    ends.sort();
+    let want = |what: &str, how: &str| (what.to_owned(), "revoked".to_owned(), how.to_owned());
+    let mut expected = vec![
+        want("trait", "remove"),
+        want("entity", "remove"),
+        want("edit", "restore"),
+        want("edit", "release"),
+        want("rule", "remove"),
+        want("area", "remove"),
+    ];
+    expected.sort();
+    assert_eq!(ends, expected);
+    assert!(!has_trait(&sim, other, "hexed"));
+    assert!(!sim.truth().entity(dog).is_some());
+    for x in 20..=22 {
+        assert_eq!(block_at(&sim, x, 20), clash_world::ElementState::NONE);
+    }
+    assert_eq!(
+        block_at(&sim, 20, 24),
+        wall_state(&sim),
+        "released: it stays"
+    );
+    assert!(sim.truth().cosmos().area(area).is_none());
+    let handle = sim.exprs().kinds().handle(Subject::Entity(other)).unwrap();
+    let watchful = DEFS
+        .lookup::<clash_sim::rule::EocDef>("core:watchful")
+        .unwrap();
+    assert!(!sim.rules.attached_to(handle).contains(&watchful));
+    assert_eq!(sim.bindings().count(), 0);
+}
+
+#[test]
+fn release_leaves_the_thing_in_place_unbound() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    let dog = summon_dog(&mut sim, &by, 12, 12, &[("as", Value::from("pet"))]);
+    sim.drain_events();
+    let count = sim
+        .run_verb(
+            "dismiss",
+            &[
+                ("who", entity_value(&sim, who)),
+                ("ability", def_value(&sim, "ability", "core:binder")),
+                ("as", Value::from("pet")),
+                ("how", Value::from("release")),
+            ],
+        )
+        .unwrap();
+    assert_eq!(count, Value::Int(1));
+    assert_eq!(
+        ended(&sim.drain_events()),
+        vec![(
+            "entity".to_owned(),
+            "dismissed".to_owned(),
+            "release".to_owned()
+        )]
+    );
+    assert!(sim.truth().entity(dog).is_some());
+    assert_eq!(eval_of(&sim, dog, "self.bound_by"), Value::Null);
+    assert_eq!(
+        eval_of(&sim, who, "self.ability('core:binder').bound('pet')"),
+        Value::Null
+    );
+    // Revoking now leaves it: it is bound to nothing.
+    ability::revoke(&mut sim, who, ability_id("binder"), cause()).unwrap();
+    sim.pump();
+    assert!(sim.truth().entity(dog).is_some());
+}
+
+#[test]
+fn a_conjured_wall_gives_the_street_back_and_leaves_an_altered_cell_alone() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    set_block(&mut sim, 21, 20, Some("pillar"));
+    let pillar = block_at(&sim, 21, 20);
+    sim.run_verb(
+        "conjure",
+        &[
+            ("at", loc_value(&sim, 20, 20)),
+            ("to", loc_value(&sim, 23, 20)),
+            ("what", Value::from("wall")),
+            ("ability", by.clone()),
+            ("as", Value::from("wall")),
+        ],
+    )
+    .unwrap();
+    for x in 20..=23 {
+        assert_eq!(block_at(&sim, x, 20), wall_state(&sim));
+    }
+    let cells = eval_of(&sim, who, "len(self.ability('core:binder').bound('wall'))");
+    assert_eq!(cells, Value::Int(4));
+    // One cell is changed since: a window put in.
+    set_block(&mut sim, 22, 20, Some("window"));
+    let window = block_at(&sim, 22, 20);
+    // Saved and loaded in the middle: nothing changes.
+    let hash = sim.state_hash();
+    let (mut loaded, _) = common::save_and_load(&sim);
+    loaded.pump();
+    assert_eq!(loaded.state_hash(), hash);
+    loaded
+        .run_verb(
+            "dismiss",
+            &[
+                ("who", entity_value(&loaded, who)),
+                ("ability", def_value(&loaded, "ability", "core:binder")),
+            ],
+        )
+        .unwrap();
+    assert_eq!(block_at(&loaded, 20, 20), clash_world::ElementState::NONE);
+    assert_eq!(
+        block_at(&loaded, 21, 20),
+        pillar,
+        "what was there comes back"
+    );
+    assert_eq!(
+        block_at(&loaded, 22, 20),
+        window,
+        "what was altered is left"
+    );
+    assert_eq!(block_at(&loaded, 23, 20), clash_world::ElementState::NONE);
+    // A cell that is not loaded refuses the whole of it, changing nothing.
+    let reason = loaded
+        .run_verb(
+            "conjure",
+            &[
+                ("at", loc_value(&loaded, 60, 20)),
+                ("to", loc_value(&loaded, 70, 20)),
+                ("what", Value::from("wall")),
+                ("ability", by),
+            ],
+        )
+        .unwrap_err();
+    assert_eq!(reason.code, "world.not_loaded");
+    assert_eq!(block_at(&loaded, 60, 20), clash_world::ElementState::NONE);
+}
+
+#[test]
+fn a_binding_lasts_its_time_on_its_owners_clock_and_survives_a_save() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    let dog = summon_dog(
+        &mut sim,
+        &by,
+        12,
+        12,
+        &[("for", Value::Real(Real::of(10.0)))],
+    );
+    advance(&mut sim, Dur::from_secs(6));
+    assert!(sim.truth().entity(dog).is_some());
+    let hash = sim.state_hash();
+    let (mut loaded, _) = common::save_and_load(&sim);
+    loaded.pump();
+    assert_eq!(loaded.state_hash(), hash);
+    advance(&mut loaded, Dur::from_secs(3));
+    assert!(loaded.truth().entity(dog).is_some());
+    loaded.drain_events();
+    advance(&mut loaded, Dur::from_secs(2));
+    assert!(!loaded.truth().entity(dog).is_some());
+    assert_eq!(
+        ended(&loaded.drain_events()),
+        vec![(
+            "entity".to_owned(),
+            "duration".to_owned(),
+            "remove".to_owned()
+        )]
+    );
+    // The same from the start gives the same hash: nothing in it is
+    // left to chance or to the order of a map.
+    let mut again = crate::sim();
+    let who_again = spawn(&mut again, "tester", 10, 10);
+    let number = grant(&mut again, who_again, "binder");
+    let by = ability::handle_value(&again, number);
+    summon_dog(
+        &mut again,
+        &by,
+        12,
+        12,
+        &[("for", Value::Real(Real::of(10.0)))],
+    );
+    advance(&mut again, Dur::from_secs(6));
+    assert_eq!(again.state_hash(), hash);
+}
+
+#[test]
+fn a_rule_on_binding_ending_prolongs_it_or_changes_how_it_ends() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    let set = |sim: &mut Sim, name: &str, on: bool| {
+        sim.set_var(
+            Subject::Entity(who),
+            &format!("core:{name}"),
+            Value::Bool(on),
+            cause(),
+        )
+        .unwrap();
+    };
+    set(&mut sim, "keep", true);
+    let dog = summon_dog(
+        &mut sim,
+        &by,
+        12,
+        12,
+        &[("for", Value::Real(Real::of(4.0)))],
+    );
+    advance(&mut sim, Dur::from_secs(6));
+    assert!(
+        sim.truth().entity(dog).is_some(),
+        "prolonged by five seconds"
+    );
+    advance(&mut sim, Dur::from_secs(4));
+    assert!(!sim.truth().entity(dog).is_some());
+    set(&mut sim, "free", true);
+    let freed = summon_dog(
+        &mut sim,
+        &by,
+        12,
+        13,
+        &[("for", Value::Real(Real::of(2.0)))],
+    );
+    sim.drain_events();
+    advance(&mut sim, Dur::from_secs(3));
+    let events = sim.drain_events();
+    assert_eq!(
+        ended(&events),
+        vec![(
+            "entity".to_owned(),
+            "duration".to_owned(),
+            "release".to_owned()
+        )]
+    );
+    assert!(sim.truth().entity(freed).is_some(), "released, not removed");
+    assert_eq!(sim.bindings().count(), 0);
+}
+
+#[test]
+fn a_cost_drawn_from_a_bound_companion_is_theirs_to_pay() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    let reason =
+        ability::available(&sim, who, ability_id("binder"), Some(action("zap"))).unwrap_err();
+    assert_eq!(reason.code, codes::COST_SOURCE_GONE);
+    let dog = summon_dog(&mut sim, &by, 12, 12, &[("as", Value::from("pet"))]);
+    let before = level(&sim, dog, "blood");
+    assert!(use_it(&mut sim, who, "binder", "zap").unwrap());
+    assert!(level(&sim, dog, "blood") < before);
+    sim.run_verb(
+        "dismiss",
+        &[
+            ("who", entity_value(&sim, who)),
+            ("ability", def_value(&sim, "ability", "core:binder")),
+        ],
+    )
+    .unwrap();
+    let reason =
+        ability::available(&sim, who, ability_id("binder"), Some(action("zap"))).unwrap_err();
+    assert_eq!(reason.code, codes::COST_SOURCE_GONE);
+}
+
+#[test]
+fn what_a_mode_binds_ends_with_it_and_suppression_ends_what_ends_then() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    ability::start_mode(&mut sim, who, ability_id("binder"), "ward", cause()).unwrap();
+    sim.pump();
+    let ward = eval_of(&sim, who, "self.ability('core:binder').bound('ward')");
+    let Some(Subject::Area(ward)) = sim.subject_of(&ward) else {
+        panic!("{ward:?}");
+    };
+    // It moves with its owner, and goes when the mode ends.
+    step_to(&mut sim, who, 11, 10);
+    assert_eq!(
+        sim.truth().cosmos().area(ward).unwrap().shape.centre(),
+        Some(CellPos::new(11, 10, 0))
+    );
+    ability::end_mode(&mut sim, who, ability_id("binder"), "ward", cause()).unwrap();
+    sim.pump();
+    assert!(sim.truth().cosmos().area(ward).is_none());
+    // One that ends only with its mode outlasts a suppression; one that
+    // ends on everything does not.
+    let kept = summon_dog(&mut sim, &by, 12, 12, &[("ends_on", texts(&["mode"]))]);
+    let lost = summon_dog(&mut sim, &by, 12, 13, &[]);
+    sim.call_verb(
+        "suppress_abilities",
+        &[
+            ("who", entity_value(&sim, who)),
+            ("tags", texts(&["binding"])),
+        ],
+        &[],
+        cause(),
+    )
+    .unwrap();
+    sim.pump();
+    assert!(sim.truth().entity(kept).is_some());
+    assert!(!sim.truth().entity(lost).is_some());
+    // Its owner dying ends what ends then; `mode` does not.
+    let third = summon_dog(
+        &mut sim,
+        &by,
+        12,
+        14,
+        &[("ends_on", texts(&["owner_stops"]))],
+    );
+    sim.run_verb("die", &[("who", entity_value(&sim, who))])
+        .unwrap();
+    assert!(!sim.truth().entity(third).is_some());
+    assert!(sim.truth().entity(kept).is_some());
+}
+
+#[test]
+fn dispel_ends_bindings_by_tag_and_by_place() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    let near = summon_dog(&mut sim, &by, 30, 30, &[]);
+    let far = summon_dog(&mut sim, &by, 50, 50, &[]);
+    let none = sim
+        .run_verb("dispel", &[("tags", texts(&["fire"]))])
+        .unwrap();
+    assert_eq!(none, Value::Int(0));
+    let one = sim
+        .run_verb(
+            "dispel",
+            &[
+                ("tags", texts(&["binding"])),
+                ("at", loc_value(&sim, 31, 30)),
+                ("radius", Value::Real(Real::of(3.0))),
+            ],
+        )
+        .unwrap();
+    assert_eq!(one, Value::Int(1));
+    assert!(!sim.truth().entity(near).is_some());
+    assert!(sim.truth().entity(far).is_some());
+    let rest = sim
+        .run_verb("dispel", &[("owner", entity_value(&sim, who))])
+        .unwrap();
+    assert_eq!(rest, Value::Int(1));
+    assert!(!sim.truth().entity(far).is_some());
+}
+
+#[test]
+fn binding_with_no_ability_or_bad_terms_is_refused_with_a_reason() {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    let number = grant(&mut sim, who, "binder");
+    let by = ability::handle_value(&sim, number);
+    let reason = sim
+        .run_verb(
+            "summon",
+            &[
+                ("template", def_value(&sim, "template", "core:dog")),
+                ("at", loc_value(&sim, 12, 12)),
+            ],
+        )
+        .unwrap_err();
+    assert_eq!(reason.code, codes::NO_BINDER);
+    for (name, value) in [
+        ("for", Value::Real(Real::of(-1.0))),
+        ("ends_on", texts(&["sunset"])),
+        ("on_end", Value::from("explode")),
+    ] {
+        let reason = sim
+            .run_verb(
+                "summon",
+                &[
+                    ("template", def_value(&sim, "template", "core:dog")),
+                    ("at", loc_value(&sim, 12, 12)),
+                    ("ability", by.clone()),
+                    (name, value),
+                ],
+            )
+            .unwrap_err();
+        assert_eq!(reason.code, codes::BAD_BINDING, "{name}");
+    }
+    sim.set_setting("rules.max_bindings", clash_core::Value::Int(1));
+    summon_dog(&mut sim, &by, 12, 12, &[]);
+    let reason = sim
+        .run_verb(
+            "summon",
+            &[
+                ("template", def_value(&sim, "template", "core:dog")),
+                ("at", loc_value(&sim, 13, 12)),
+                ("ability", by),
+            ],
+        )
+        .unwrap_err();
+    assert_eq!(reason.code, codes::TOO_MANY_BINDINGS);
+}
+
+// ---- The bundled powers ------------------------------------------------------------
+
+/// Uses one of the sampler's powers toward a cell.
+fn power_at(sim: &mut Sim, who: EntityId, name: &str, x: i32, y: i32) -> bool {
+    let to = sim
+        .subject_value(Subject::Loc(common::at(x, y)))
+        .to_stored();
+    let started = ability::use_ability(
+        sim,
+        who,
+        ability_id(name),
+        None,
+        &vec![("to".to_owned(), to)],
+        cause(),
+    )
+    .unwrap_or_else(|reason| panic!("{reason:?}"));
+    sim.pump();
+    started.is_some()
+}
+
+fn mode_on(sim: &mut Sim, who: EntityId, name: &str, mode: &str) {
+    ability::start_mode(sim, who, ability_id(name), mode, cause())
+        .unwrap_or_else(|reason| panic!("{reason:?}"));
+    sim.pump();
+}
+
+fn gravity_at(sim: &Sim, x: i32, y: i32) -> Real {
+    sim.truth()
+        .cosmos()
+        .ambient(common::at(x, y))
+        .unwrap()
+        .gravity
+}
+
+#[test]
+fn time_stop_stops_everyone_else_while_its_maker_walks_on() {
+    let mut sim = sim();
+    let user = spawn(&mut sim, "power_sampler", 20, 20);
+    let other = spawn(&mut sim, "person", 26, 20);
+    mode_on(&mut sim, user, "time_stop", "stopped");
+    assert!(has_trait(&sim, user, "outside_time"));
+    // The maker walks up; the bubble comes over the other, who stops.
+    step_to(&mut sim, user, 24, 20);
+    let stopped = sim.truth().own_time(other);
+    let user_before = sim.truth().own_time(user);
+    advance(&mut sim, Dur::from_secs(4));
+    let user_ran = sim.truth().own_time(user) - user_before;
+    let other_ran = sim.truth().own_time(other) - stopped;
+    assert_eq!(user_ran, Dur::from_secs(4));
+    assert!(other_ran < Dur::from_millis(10), "{other_ran:?}");
+    // Saved and loaded in the middle: nothing changes.
+    let hash = sim.state_hash();
+    let (mut loaded, _) = common::save_and_load(&sim);
+    loaded.pump();
+    assert_eq!(loaded.state_hash(), hash);
+    // The reserve runs dry: the mode ends, the bubble goes, time resumes.
+    loaded.drain_events();
+    advance(&mut loaded, Dur::from_secs(20));
+    let events = loaded.drain_events();
+    let mode = events
+        .iter()
+        .find(|event| event.name() == ability::MODE_ENDED)
+        .expect("the mode ends");
+    assert_eq!(text(mode, "how"), "empty");
+    assert!(ended(&events).contains(&("area".to_owned(), "mode".to_owned(), "remove".to_owned())));
+    let resumed = loaded.truth().own_time(other);
+    advance(&mut loaded, Dur::from_secs(2));
+    assert_eq!(loaded.truth().own_time(other) - resumed, Dur::from_secs(2));
+}
+
+#[test]
+fn a_null_field_ends_anothers_power_and_spares_its_makers_own() {
+    let mut sim = sim();
+    let maker = spawn(&mut sim, "power_sampler", 20, 20);
+    let other = spawn(&mut sim, "power_sampler", 34, 20);
+    mode_on(&mut sim, maker, "null_field", "on");
+    mode_on(&mut sim, maker, "shield", "raised");
+    assert!(!inst(&sim, maker, "shield").is_suppressed());
+    assert_eq!(inst(&sim, maker, "shield").resisted().len(), 1);
+    mode_on(&mut sim, other, "shield", "raised");
+    assert!(has_trait(&sim, other, "shielded"));
+    sim.drain_events();
+    step_to(&mut sim, other, 22, 20);
+    let events = sim.drain_events();
+    let ended_mode = events
+        .iter()
+        .find(|event| event.name() == ability::MODE_ENDED)
+        .expect("the other's shield ends");
+    assert_eq!(text(ended_mode, "how"), "suppressed");
+    assert!(!has_trait(&sim, other, "shielded"));
+    assert!(has_trait(&sim, maker, "shielded"));
+    // Its field moves with it: walking away leaves the other's powers
+    // to come back, without the mode.
+    step_to(&mut sim, maker, 10, 20);
+    assert!(!inst(&sim, other, "shield").is_suppressed());
+    assert!(!has_trait(&sim, other, "shielded"));
+    assert!(ability::start_mode(&mut sim, other, ability_id("shield"), "raised", cause()).is_ok());
+}
+
+#[test]
+fn a_gravity_well_weighs_six_times_for_a_while() {
+    let mut sim = sim();
+    let user = spawn(&mut sim, "power_sampler", 20, 20);
+    let normal = gravity_at(&sim, 26, 20);
+    assert!(power_at(&mut sim, user, "gravity_well", 26, 20));
+    advance(&mut sim, Dur::from_secs(1));
+    assert!((gravity_at(&sim, 26, 20) - normal * Real::of(6.0)).abs() < Real::of(1.0e-9));
+    assert!((gravity_at(&sim, 26, 22) - normal * Real::of(6.0)).abs() < Real::of(1.0e-9));
+    assert_eq!(gravity_at(&sim, 20, 20), normal);
+    assert!(
+        eval_of(
+            &sim,
+            user,
+            "self.ability('core:gravity_well').bound('well') != null"
+        ) == Value::Bool(true)
+    );
+    advance(&mut sim, Dur::from_secs(9));
+    assert_eq!(gravity_at(&sim, 26, 20), normal, "its time is up");
+}
+
+#[test]
+fn floating_keeps_its_maker_from_falling_when_thrown() {
+    let mut sim = sim();
+    let floater = spawn(&mut sim, "power_sampler", 20, 20);
+    let sinker = spawn(&mut sim, "power_sampler", 20, 30);
+    mode_on(&mut sim, floater, "float", "floating");
+    assert_eq!(gravity_at(&sim, 20, 20), Real::ZERO);
+    for who in [floater, sinker] {
+        sim.run_verb(
+            "launch",
+            &[
+                ("what", entity_value(&sim, who)),
+                (
+                    "vel",
+                    Value::list([Real::of(4.0), Real::ZERO, Real::of(2.0)].map(Value::Real)),
+                ),
+            ],
+        )
+        .unwrap();
+    }
+    advance(&mut sim, Dur::from_millis(500));
+    let vertical = |sim: &Sim, who: EntityId| {
+        let body = sim.truth().cosmos().body_of(who).unwrap();
+        sim.truth().cosmos().body(body).unwrap().vel[2]
+    };
+    assert!(
+        vertical(&sim, floater) > Real::ZERO,
+        "nothing pulls it down"
+    );
+    let height = |sim: &Sim, who: EntityId| {
+        let body = sim.truth().cosmos().body_of(who).unwrap();
+        sim.truth().cosmos().body(body).unwrap().pos[2]
+    };
+    assert!(height(&sim, floater) > Real::of(0.5));
+    assert!(
+        height(&sim, sinker) < Real::of(0.1),
+        "the other has come down"
+    );
+}
+
+#[test]
+fn a_summoned_hound_obeys_and_is_gone_when_its_summoner_dies() {
+    let mut sim = sim();
+    let summoner = spawn(&mut sim, "power_sampler", 20, 20);
+    let enemy = spawn(&mut sim, "person", 27, 20);
+    clash_sim::ai::set_stance(
+        &mut sim,
+        summoner,
+        enemy,
+        Some(clash_sim::ai::Stance::Hostile),
+    );
+    assert!(power_at(&mut sim, summoner, "summon_hound", 21, 20));
+    advance(&mut sim, Dur::from_millis(1500));
+    let hound = sim
+        .bindings()
+        .find_map(|binding| match binding.what {
+            ability::Bound::Entity { id } => Some(id),
+            _ => None,
+        })
+        .expect("a hound came");
+    assert_eq!(
+        eval_of(&sim, hound, "self.bound_by"),
+        entity_value(&sim, summoner)
+    );
+    // It took its summoner's quarrel.
+    assert_eq!(
+        clash_sim::ai::stance_toward(&sim, hound, enemy),
+        Some(clash_sim::ai::Stance::Hostile)
+    );
+    assert_ne!(
+        clash_sim::ai::stance_toward(&sim, hound, summoner),
+        Some(clash_sim::ai::Stance::Hostile)
+    );
+    let distance = |sim: &Sim| {
+        let a = sim.truth().location(hound).unwrap().cell;
+        let b = sim.truth().location(enemy).unwrap().cell;
+        (a.x - b.x).abs().max((a.y - b.y).abs())
+    };
+    let before = distance(&sim);
+    advance(&mut sim, Dur::from_secs(4));
+    assert!(distance(&sim) < before, "it goes for the one held hostile");
+    // Its summoner stops: it is gone.
+    sim.run_verb("die", &[("who", entity_value(&sim, summoner))])
+        .unwrap();
+    assert!(sim.truth().entity(hound).is_none());
+}
+
+#[test]
+fn a_stone_wall_rises_across_the_way_and_sinks_back() {
+    let mut sim = sim();
+    let user = spawn(&mut sim, "power_sampler", 20, 20);
+    set_block(&mut sim, 23, 21, Some("pillar"));
+    let pillar = block_at(&sim, 23, 21);
+    assert!(power_at(&mut sim, user, "stone_wall", 23, 20));
+    advance(&mut sim, Dur::from_secs(1));
+    for y in 19..=21 {
+        assert_eq!(block_at(&sim, 23, y), wall_state(&sim), "{y}");
+    }
+    let hash = sim.state_hash();
+    let (mut loaded, _) = common::save_and_load(&sim);
+    loaded.pump();
+    assert_eq!(loaded.state_hash(), hash);
+    advance(&mut loaded, Dur::from_secs(31));
+    assert_eq!(block_at(&loaded, 23, 19), clash_world::ElementState::NONE);
+    assert_eq!(block_at(&loaded, 23, 20), clash_world::ElementState::NONE);
+    assert_eq!(block_at(&loaded, 23, 21), pillar);
+}
+
+#[test]
+fn a_shadow_darkens_round_its_maker_and_follows_them() {
+    let mut sim = sim();
+    let user = spawn(&mut sim, "power_sampler", 30, 30);
+    for (x, y) in [(31, 30), (41, 30)] {
+        let lamp = stone(&mut sim, x, y);
+        let bright = clash_world::LightSource::shining(Real::of(2.0), Some(Real::of(8.0)))
+            .unwrap()
+            .unwrap();
+        bubble(&mut sim, lamp, 0.0, |spec| spec.light = Some(bright));
+    }
+    let light_at = |sim: &Sim, x: i32, y: i32| {
+        let cosmos = sim.truth().cosmos();
+        let time = clash_world::SkyTime::now(cosmos, sim.timeline(), common::GRID).unwrap();
+        cosmos.light(common::at(x, y), time).unwrap()
+    };
+    let lit_here = light_at(&sim, 30, 30);
+    let lit_there = light_at(&sim, 40, 30);
+    mode_on(&mut sim, user, "shadow", "shrouded");
+    assert!(light_at(&sim, 30, 30) < lit_here);
+    assert!(light_at(&sim, 30, 30) >= Real::ZERO);
+    assert_eq!(light_at(&sim, 40, 30), lit_there);
+    step_to(&mut sim, user, 40, 30);
+    assert_eq!(light_at(&sim, 30, 30), lit_here);
+    assert!(light_at(&sim, 40, 30) < lit_there);
+    ability::end_mode(&mut sim, user, ability_id("shadow"), "shrouded", cause()).unwrap();
+    sim.pump();
+    assert_eq!(light_at(&sim, 40, 30), lit_there);
 }

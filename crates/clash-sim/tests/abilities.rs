@@ -127,6 +127,10 @@ fn try_load(extra: &str) -> Result<Arc<Defs>, String> {
     let mut files = dir_files("world");
     files.extend(dir_files("life"));
     files.extend(dir_files("powers"));
+    // The powers name minds, goals and senses (a summoned hound).
+    for sub in ["ai", "perception", "combat"] {
+        files.extend(dir_files(sub));
+    }
     files.push(core_file("traits.json"));
     files.push(core_file("movement.json"));
     files.push((
@@ -892,7 +896,17 @@ fn a_mode_ends_the_tick_its_pool_runs_dry_with_nothing_between() {
     sim.pump();
     // 99 at 4 a second: 24.75 seconds.
     let due = started + Dur::from_micros(24_750_000);
-    let wakes = sim.truth().wakes_of(who);
+    // The character's mind keeps wake-ups of its own; the mode has one.
+    let wakes: Vec<_> = sim
+        .truth()
+        .wakes_of(who)
+        .into_iter()
+        .filter(|wake| {
+            sim.timeline()
+                .wake(*wake)
+                .is_some_and(|wake| ability::is_mode_wake(&wake))
+        })
+        .collect();
     assert_eq!(wakes.len(), 1, "one wake-up for the whole of it: {wakes:?}");
     assert_eq!(sim.timeline().due(wakes[0]), Some(due));
     sim.advance(AdvanceLimit::Until(due - Dur::from_micros(1)));
@@ -1215,7 +1229,9 @@ fn a_power_too_dear_is_refused_with_what_is_short() {
     );
     assert_eq!(push.cost[0].what, "core:reserve");
     assert_eq!(push.cost[0].amount, Real::of(30.0));
-    assert_eq!(options.len(), 4, "the shield has no grant, only a mode");
+    // Of the twelve, the shield, time stop, null field, float and
+    // shadow have no grant, only a mode.
+    assert_eq!(options.len(), 7, "a grant for each power that has one");
 }
 
 #[test]
