@@ -143,6 +143,18 @@ pub(crate) enum Op {
         /// The number its sprite is known by.
         id: SpriteId,
     },
+    /// A perceived thing is looked at again where it is drawn: an event
+    /// no show gives changes for is about it. Its look is taken from how
+    /// the party perceives it, and it stays where it is drawn: a thing
+    /// moves only where an event says it does, or where it is perceived
+    /// once its batch has been played (decision D-655). One not drawn
+    /// yet appears where it is perceived.
+    Look {
+        /// The number its sprite is known by.
+        id: SpriteId,
+        /// How it looks, if the party perceives it.
+        look: Option<EntitySprite>,
+    },
 }
 
 /// Where an effect plays: a cell, or wherever a sprite is when the
@@ -759,6 +771,23 @@ impl Playback {
                 }
             }
             Op::Gone { id } => world.model_mut().remove_sprite(id).is_some(),
+            Op::Look { id, look } => {
+                let Some(look) = look else {
+                    return false;
+                };
+                let now = match world.model().sprite(id) {
+                    Some(old) => EntitySprite {
+                        loc: old.loc,
+                        ..look
+                    },
+                    None => look,
+                };
+                if world.model().sprite(id) == Some(&now) {
+                    return false;
+                }
+                world.model_mut().upsert_sprite(id, now);
+                true
+            }
         }
     }
 

@@ -469,7 +469,10 @@ As built (decision D-364):
   `Sim::set_wake_handler`. The world's wake-ups (the `World` domain) go
   through the same loop: their handler hands the wake-up to the world
   through `Sim::world`. A wake-up whose domain has no handler is dropped
-  and reported as a fault.
+  and reported as a fault. The `Timer` domain is shared (decision D-651):
+  every timer goes to life first (`life::handle_wake`: pools' crossings,
+  wounds' closing and healing), and only the rest to the domain's
+  handler, so a handler registered for `Timer` never takes life's away.
 - **Faults.** What the engine contains (an unhandled wake-up, a limit
   exceeded) is reported as a `fault` event that goes straight to the
   output and is not delivered to handlers.
@@ -563,7 +566,10 @@ As built (decision D-365):
   definition's dense id, `params` the parameters by name (stored values),
   and `how` is `start` or `enqueue`. They address an entity under
   `Direct` or `Delegated` control and are refused with
-  `command.not_controlled` for any other. `Act` with `start` is refused
+  `command.not_controlled` for any other. `Act`, with `start` or
+  `enqueue`, is refused with life's reason for an entity whose mind has
+  stopped (`entity_unconscious`, `entity_dead`, `no_mind`: 06 §8.4,
+  decision D-650). `Act` with `start` is refused
   with the reason the action cannot start (section 6.6); one that a
   handler of `action_starting` refuses is taken, since the handlers ran,
   and raises `action_refused`. `Cancel` with `abandon` false lets a held
@@ -948,7 +954,10 @@ began and is due. It is saved and hashed with the simulation.
 
 - **Starting** checks, in this order, and refuses with the first reason
   that applies, changing nothing: the actor is known and in the world
-  (`entity.stored`) and the definition is loaded (`action.unknown`); a
+  (`entity.stored`) and the definition is loaded (`action.unknown`);
+  life lets it act (`Sim::life_lets_act`: `entity_unconscious`,
+  `entity_dead`, `no_mind`; 06 §8.4, decision D-650), whether the start
+  is a command's, a rule's or a plan step's; a
   parameter given is one of the action's (or a role's name) and every
   parameter has a value of its type, from the command or from its
   `default` worked out in order, and a list is within its bounds; a role
@@ -998,11 +1007,25 @@ began and is due. It is saved and hashed with the simulation.
   `Cancel` respect the phase's `cancel`. A slot disabled under an action
   interrupts it, newest first, with `engine:action_channel_disabled`;
   `Sim::check_slots` does this for whatever takes slots away, a body
-  that loses a part among them. An actor that leaves the world, by being
+  that loses a part among them: the runtime answers `slots_lost` with
+  it. An actor that leaves the world, by being
   stored, shelved with its tract or removed, abandons its actions
   (section 9).
 - Effect lists run with the action's locals, which `set` and `add`
   change in place, and are caused by the actor with the kind `action`.
+- **Life** (decision D-650). The kernel hands every event, once its
+  handlers have run, to the runtime as it does to movement, and the
+  runtime answers what living things report (06 §8.4). At
+  `entity_died` the entity's running actions are abandoned
+  (`on_abandon`, `action_abandoned`), and its wait and plan are
+  dropped; at `entity_unconscious` its actions are interrupted with the
+  reason `entity_unconscious` (`on_interrupt`, `action_interrupted`)
+  and its wait and plan dropped. Neither asks anyone: a free decision
+  is not requested and `decision_needed` is not raised for an entity
+  whose mind has stopped and that nobody drives. At `entity_woke` and
+  `entity_revived` it is free, as one that has just `started`, and
+  whoever decides for it is asked. An entity that has something
+  driving it is not stopped by its own mind's state (06 §8.2).
 
 ## 7. Windows and reactions
 
