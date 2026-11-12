@@ -13,14 +13,17 @@ use clash_data::diag::{closest, did_you_mean};
 use clash_data::expr::codes;
 use clash_data::expr::{TypeSpec, Written};
 use clash_data::{
-    Code, CompileCx, Cond, Diagnostic, Diagnostics, Member, Node, Scope, Site, Span, ValidateCx,
-    ValueSource, from_node_at,
+    Code, CompileCx, Cond, Diagnostic, Diagnostics, Member, Node, Scope, Site, Span, Text,
+    ValidateCx, ValueSource, from_node_at,
 };
 use clash_expr::{DefRef, EventId, Place, PlaceRoot, Type, Value, is_keyword};
 
 use super::def::{EOC_TYPE, EocDef, REASON_TYPE, RULE_GROUP_TYPE};
 use super::effects::Compiled;
-use super::tree::{Arg, Block, Call, Effect, EffectKind, Emit, Items, Target, Timer, TimerKind};
+use super::tree::{
+    Arg, Ask, AskOption, AskOptions, Block, Call, Effect, EffectKind, Emit, Items, Target, Timer,
+    TimerKind,
+};
 use super::value::literal_type;
 use super::{EocId, ReasonDefId, RuleGroupId};
 
@@ -173,6 +176,16 @@ pub const CORE_EFFECTS: &[EffectInfo] = &[
         name: "cancel_timer",
         form: r#"{ "cancel_timer": "name" }"#,
         doc: "Cancels a named timer (05 §10.4). Read and kept; timers are not built yet.",
+    },
+    EffectInfo {
+        name: "message",
+        form: r#"{ "message": { "text": template, "to": entity, "style": string } }"#,
+        doc: "Puts a line in the message log of whoever controls `to`, written for `to` as its reader (05 §4.6). `to` defaults to `self`; `style` names how the interface shows it. `{ \"message\": \"…\" }` gives the text alone.",
+    },
+    EffectInfo {
+        name: "ask",
+        form: r#"{ "ask": { "who": entity, "prompt": template, "options": [ { "label": template, "if": cond, "do": […] } ] } }"#,
+        doc: "Offers a choice. A directly controlled entity is asked and time stops until it answers; anyone else takes the first option whose `if` holds. The chosen option's `do` runs with the subjects and locals of where the `ask` is written. `options` may instead be an expression giving a list of maps, each with `label`, `eoc` and `with`. `who` defaults to `self`.",
     },
 ];
 
@@ -1256,8 +1269,205 @@ impl Compiler<'_, '_> {
                     })));
                 }
             }
+            "message" => {
+                let (text_node, text_path, inner) = match value.as_object() {
+                    Some(members) => {
+                        let inner = Keys { members };
+                        self.only(&inner, &at, "message", &["text", "to", "style"]);
+                        let Some(text) = inner.get("text") else {
+                            self.error(
+                                codes::BAD_EFFECT,
+                                value.span,
+                                &at,
+                                "`message` needs `text`: the line, as a text template",
+                            );
+                            return;
+                        };
+                        (&text.value, child(&at, "text"), Some(inner))
+                    }
+                    None => (value, at.clone(), None),
+                };
+                let text = self.text(text_node, &text_path);
+                let to = self.reader(inner.as_ref(), "to", head, &at, "message");
+                let style = inner
+                    .as_ref()
+                    .and_then(|inner| inner.get("style"))
+                    .and_then(|member| self.arg(&member.value, &child(&at, "style"), &Type::Str));
+                if let (Some(text), Ok(to)) = (text, to) {
+                    out.push(EffectKind::Message { text, to, style });
+                }
+            }
+            "ask" => {
+                let Some(members) = value.as_object() else {
+                    self.error(
+                        codes::BAD_EFFECT,
+                        value.span,
+                        &at,
+                        "`ask` takes `{ \"who\": entity, \"prompt\": text, \"options\": [ … ] }`",
+                    );
+                    return;
+                };
+                let inner = Keys { members };
+                self.only(&inner, &at, "ask", &["who", "prompt", "options"]);
+                let who = self.reader(Some(&inner), "who", head, &at, "ask");
+                let prompt = match inner.get("prompt") {
+                    Some(member) => self.text(&member.value, &child(&at, "prompt")),
+                    None => {
+                        self.error(
+                            codes::BAD_EFFECT,
+                            value.span,
+                            &at,
+                            "`ask` needs `prompt`: the question, as a text template",
+                        );
+                        None
+                    }
+                };
+                let options = match inner.get("options") {
+                    Some(member) => self.ask_options(member, &child(&at, "options")),
+                    None => {
+                        self.error(
+                            codes::BAD_EFFECT,
+                            value.span,
+                            &at,
+                            "`ask` needs `options`: what may be chosen",
+                        );
+                        None
+                    }
+                };
+                if let (Ok(who), Some(prompt), Some(options)) = (who, prompt, options) {
+                    out.push(EffectKind::Ask(Box::new(Ask {
+                        who,
+                        prompt,
+                        options,
+                    })));
+                }
+            }
             _ => self.verb(head, path, out),
         }
+    }
+
+    /// Reads and compiles a text template in the scope the effect
+    /// stands in. A mistake in it is reported and breaks the definition.
+    fn text(&mut self, node: &Node, path: &str) -> Option<Text> {
+        let mut read = Diagnostics::new();
+        let text: Option<Text> = from_node_at(node, self.cx.sources(), &mut read, None, path);
+        for diagnostic in read.iter() {
+            self.sound &= !diagnostic.is_error();
+            self.cx.report(diagnostic.clone());
+        }
+        let mut text = text?;
+        self.cx.compile(&mut text, &self.scope);
+        Some(text)
+    }
+
+    /// Who a `message` or an `ask` is for: the argument under `key`,
+    /// or, if it is left out, `self`, which must then be bound where
+    /// the effect is written (05 §10.6). `Err` if neither is there.
+    fn reader(
+        &mut self,
+        keys: Option<&Keys<'_>>,
+        key: &str,
+        head: &Member,
+        path: &str,
+        what: &str,
+    ) -> Result<Option<Arg>, ()> {
+        if let Some(member) = keys.and_then(|keys| keys.get(key)) {
+            let wanted = self
+                .cx
+                .registry()
+                .kind_id("entity")
+                .map_or(Type::Any, Type::Subject);
+            return self
+                .arg(&member.value, &child(path, key), &wanted)
+                .map(Some)
+                .ok_or(());
+        }
+        if self
+            .subjects
+            .iter()
+            .any(|(name, _)| &**name == super::OWNER_SUBJECT)
+        {
+            return Ok(None);
+        }
+        self.error(
+            codes::MISPLACED_EFFECT,
+            head.key_span,
+            path,
+            format!(
+                "`{what}` is for `self` unless `{key}` says who, and no `self` is bound here: add `\"{key}\"`"
+            ),
+        );
+        Err(())
+    }
+
+    /// The options of an `ask`: a list written in place, or an
+    /// expression that gives one when the effect runs.
+    fn ask_options(&mut self, member: &Member, path: &str) -> Option<AskOptions> {
+        let Some(items) = member.value.as_array() else {
+            let wanted = Type::list(Type::map(Type::Any));
+            return self
+                .arg(&member.value, path, &wanted)
+                .map(AskOptions::Computed);
+        };
+        if items.is_empty() {
+            self.error(
+                codes::BAD_EFFECT,
+                member.value.span,
+                path,
+                "`ask` offers at least one option",
+            );
+            return None;
+        }
+        let mut options = Vec::with_capacity(items.len());
+        let mut sound = true;
+        for (index, item) in items.iter().enumerate() {
+            let entry_path = format!("{path}[{index}]");
+            let Some(members) = item.as_object() else {
+                self.error(
+                    codes::BAD_EFFECT,
+                    item.span,
+                    &entry_path,
+                    "an option of `ask` is `{ \"label\": text, \"if\": cond, \"do\": […] }`",
+                );
+                sound = false;
+                continue;
+            };
+            let entry = Keys { members };
+            self.only(
+                &entry,
+                &entry_path,
+                "an option of `ask`",
+                &["label", "if", "do"],
+            );
+            let label = match entry.get("label") {
+                Some(label) => self.text(&label.value, &child(&entry_path, "label")),
+                None => {
+                    self.error(
+                        codes::BAD_EFFECT,
+                        item.span,
+                        &entry_path,
+                        "an option of `ask` needs `label`: what it says",
+                    );
+                    None
+                }
+            };
+            let cond = match entry.get("if") {
+                Some(cond) => match self.cond(&cond.value, &child(&entry_path, "if")) {
+                    Some(cond) => Some(cond),
+                    None => {
+                        sound = false;
+                        None
+                    }
+                },
+                None => None,
+            };
+            let body = self.body(&entry, item.span, &entry_path, "an option of `ask`");
+            match label {
+                Some(label) => options.push(AskOption { label, cond, body }),
+                None => sound = false,
+            }
+        }
+        sound.then_some(AskOptions::Listed(options))
     }
 
     /// The type a `return` here must give, if this is in a rule.
@@ -1968,6 +2178,13 @@ fn check_block(block: &Block, names: &mut Vec<Arc<str>>, cx: &mut ValidateCx<'_>
                 names.truncate(before);
             }
             EffectKind::Timer(timer) => check_block(&timer.body, names, cx),
+            EffectKind::Ask(ask) => {
+                if let AskOptions::Listed(options) = &ask.options {
+                    for option in options {
+                        check_block(&option.body, names, cx);
+                    }
+                }
+            }
             EffectKind::Run { call, .. } | EffectKind::Queue { call } => {
                 let Target::Rule(id) = &call.rule else {
                     continue;

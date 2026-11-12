@@ -68,16 +68,21 @@ pub mod entity;
 pub mod event;
 pub mod host;
 pub mod item;
+pub mod kernel_verbs;
 pub mod later;
+pub mod life;
 pub mod mass;
+pub mod mind;
 pub mod movement;
 mod props;
+pub mod reader;
 pub mod reason;
 pub mod registry;
 pub mod rule;
 mod sim;
 pub mod stats;
 pub mod subject;
+pub mod template;
 pub mod vars;
 pub mod verb;
 pub mod world_verbs;
@@ -94,7 +99,9 @@ pub use bus::{
 };
 pub use clock::ClockTarget;
 pub use command::{Command, CommandError, DebugCommand, InputLog, LogEntry};
-pub use decision::{DecisionKind, DecisionQueue, DecisionRequest, FreeReason};
+pub use decision::{
+    ChoiceId, ChoiceOption, DecisionKind, DecisionQueue, DecisionRequest, FreeReason,
+};
 pub use entity::{
     Control, EntitySpec, EntityTable, KernelEntity, MAX_CONTAINMENT_DEPTH, Place, Presence, Tags,
     Unplaced,
@@ -128,7 +135,11 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     action::register_defs(types);
     stats::register_defs(types);
     body::register_defs(types);
+    template::register_defs(types);
     item::register_defs(types);
     movement::register_defs(types);
     device::register_defs(types);
+    // Last: the events of living things name the kinds the steps above
+    // registered, and so do some of the engine's verbs.
+    types.add_registry_step(life::events::registry_step);
 }

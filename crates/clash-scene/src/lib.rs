@@ -60,6 +60,7 @@ pub mod glyph;
 pub mod golden;
 pub mod input;
 pub mod picker;
+pub mod playback;
 pub mod scene;
 pub mod start;
 pub mod testing;
@@ -88,6 +89,10 @@ pub use input::{
     CONTEXT_MENU, InputEvent, KeyChord, KeyCode, KeyError, KeymapDef, Mods, MouseButton,
     MouseEvent, MouseKind,
 };
+pub use playback::{
+    AnimDef, AnimId, Importance, MessageLog, Perceived, Playback, ShowDef, ShowId, Shows, SoundCue,
+    ViewDrift,
+};
 pub use scene::{
     NoHost, NoReader, NoSimulation, PREF_KEYMAP, PREF_THEME, ROLE_CONFIRM, ROLE_PICK_LIST, Scene,
     SceneHost, Turn, UiCommand, UiOutcome,
@@ -97,5 +102,6 @@ pub use text::{RichText, TextError};
 pub use theme::{BordersDef, FontDef, Style, StyleDef, Theme, ThemeDef, ThemeError};
 pub use view::{
     Ambience, AmbienceDef, Camera, CellContents, EntitySprite, HeardMarker, KnownCell, Overlay,
-    OverlayDef, SectionAxis, SpriteId, SpriteKind, ViewModel, WorldGlyphs, WorldView,
+    OverlayDef, SectionAxis, SpriteId, SpriteKind, ViewDifference, ViewFx, ViewModel, WorldGlyphs,
+    WorldView,
 };

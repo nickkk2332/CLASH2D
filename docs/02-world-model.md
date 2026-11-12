@@ -3760,9 +3760,9 @@ yet name and a placement of the generator's; `hold_ticket`,
 pending edit as values rules can write; `set_plane`, which is the
 kernel's presence and waits for the planes kind; `set_liquid_level`
 (11 §4.4); `add_decal` and `remove_decal`, because no definition type
-names a kind of mark; `steer`, because a body is not a subject kind;
-and `set_clock_rate` of an area, which the kernel's clock verbs (T1)
-are to take.
+names a kind of mark; and `steer`, because a body is not a subject
+kind. An area's clock rate is set by the kernel's verb `set_clock_rate
+{ of, rate }` (03 §13).
 
 **When an edit meets an occupant.** An edit never fails because someone is
 standing there. If it puts something an occupant cannot share a cell with

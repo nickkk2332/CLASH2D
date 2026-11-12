@@ -346,6 +346,36 @@ These are refused with a reason (14 §5) and change nothing:
 | `no_clock` | The clock the pools run on is gone | — |
 | `stats_not_registered` | The definitions were loaded without the stats' definition types and properties | — |
 
+As built (decision D-550). The simulation holds the stats and raises
+`attr_changed`, `pool_crossed` and `track_advanced` from every change,
+in order; `pool_changing` is raised by `pool_add` before the level
+moves. Each event binds `self` and the cause's `actor` and
+`instigator`. The verbs take their arguments in this order:
+`set_attr_base { who, attr, base? }`, `add_modifier { who, attr, key,
+add?, mul? }` (`add` defaults to 0 and `mul` to 1), `remove_modifier {
+who, key, attr? }`, `pool_add { who, pool, amount }`, which gives what
+was in fact added, `pool_rate { who, pool, key, rate? }` and
+`advance_track { who, track, amount }`. `attr`, `pool` and `track` are
+ids of their types, or texts holding qualified ids. A `key` is a text:
+whatever is added under it is removed by the same key, whichever rule
+asks (the source of kind `rule` numbered by the key's 64-bit FNV-1a
+hash). An argument that is null where it is needed, or of the wrong
+sort, is refused with `verb.bad_argument` and the value `argument`.
+
+Stats are worked out again from scratch when a function of the body
+moves, when the entity's mass or the mass of what it holds changes, and
+when a variable of the entity changes that an attribute's `base` or a
+pool's `max` or `regen` reads directly. Pools run on the clock the
+entity is on and follow it to another; they stand still while the
+entity is out of the world, and no time passes for them there: a pool
+is a `Pause` timer (03 §9; decision D-552).
+
+A pool's `stops` (section 8.3) are a field of the pool definition:
+
+| Field | Meaning |
+|-------|---------|
+| `stops` | A list of `{ at, when, state }`: while the level is `below` (the default) or `above` the threshold `at`, which must be one of the pool's `thresholds`, an owner with a mind is `unconscious` or `dead`. |
+
 ## 5. Traits
 
 A **trait** is anything an entity *has* that changes what it is or can do:
@@ -608,6 +638,15 @@ data for whoever makes an item of it (section 7.5), and either leaves them
 listed as gone or, as an edit, takes them out of the body altogether; and
 `heal_part { part, share }`, which takes a share of a whole layer off the
 damage of every layer of a part. Removing the root is refused.
+
+As verbs (decision D-550): a part and a wound are subjects of their own
+kinds that say whose body they are of, so these verbs take no `who`.
+`close_wound { wound }`, `reopen_wound { wound }`, `heal_part { part,
+share }`, `disable_part { part }`, `restore_part { part }` and
+`remove_part { part, sever? }`: with `sever` true the parts stay listed
+as gone, as a hit that severs leaves them, and left out the body no
+longer has them. Each gives null. What came off is reported as
+`part_detached` (section 7.6).
 
 ### 6.6 Bodies made of cells
 
@@ -918,6 +957,29 @@ the body absorbed.
 | A body impact (02 §15.2): the energy the flying creature lost, and the intensity | Spread, with all of that energy and the direction of travel. If what it struck has a contact surface of its own (07 §6.5), a hit `Any` with that surface's kind, area and span instead. |
 | A field's `damage` rule (02 §16) | As `OccupantExposed`, with the field's level times its `energy_per_level` and `intensity_per_level`. |
 
+As built (decision D-553). The simulation answers the world's
+`occupant_exposed` after it has passed on its own `entity_exposed`: an
+entity with a body takes the spread hit through `hit_incoming` and the
+layers like any other, and one with none is not hurt. The world's
+`body_impact` whose body is an entity hurts that entity with all the
+energy it lost: spread with no direction, or with the element's contact
+surface, its kind, area and span (the square root of its area if it
+gives none), as a hit `Any`; a world with no kinetic damage type hurts
+nothing. The world's `body_hit_occupant` hurts the occupant struck with
+the blow's packet, spread, travelling the way the body was. Both are
+`Sim::body_impact`. The world's `occupant_dosed` (02 §16) raises the hook
+`exposure_incoming` and then adds what its handlers left of the amount
+to the named pool, stopping at its bounds; a body with no stats or
+without that pool takes nothing. The pool is text, resolved as a
+tissue's is (section 6.1). The route is told to the hook and applied by
+no one else: a mask is a handler (06 §9.1 `guards`, the item
+package's).
+
+What exits a body with a direction is carried on: the block of the next
+cell along that direction is struck with it by the world's own rule
+(02 §12.2), and `hit_exited` reports it. Which cell is next: each axis
+steps whose share of the direction is at least half the greatest.
+
 ### 7.5 Destruction and remains
 
 A part every layer of which is gone is **destroyed**. If it is `on`
@@ -951,6 +1013,19 @@ working but is not destroyed is still that body.
 | `part_disabled`, `part_restored`, `part_destroyed` | `self` | `part` (`part`) |
 | `part_severed` | `self` | `part` (`part`), `parent` (`part?`). For the part cut, not for what went with it. |
 | `function_changed` | `self` | `function` (`id<body_function>`), `old`, `new` (`real`) |
+| `slots_lost`, `slots_gained` | `self` | `part` (`part`), the part that stopped or started working or came off; `channels` (`list<id<channel>>`), in order of channel; `counts` (`list<int>`), how many slots of each. The action runtime interrupts whatever held a slot that went (03 §6.2). |
+| `body_destroyed` | `self` | None. The root was destroyed: the body is in pieces (section 7.5). |
+| `part_detached` | `self`, `here?` | `part` (`string`), the name of the part that came off; `how` (`string`), `severed`, `destroyed` or `removed`; `mass` (`real`), kilograms of it and everything that went with it; `parts` (`int`), how many parts came off; `leaves_item` (`bool`), whether its definition says it leaves an item. In Rust it carries the part itself, for whoever makes an item of it (section 7.5). |
+| `hit_exited` | `self`, `here?` | `part` (`part?`), the part it left through; `kind` (`id<damage_type>`); `energy`, `intensity` (`real`); `dir` (`list<real>?`) |
+| `exposure_incoming` (hook) | `self`, `here?` | `pool` (`id<pool>`), `amount` (`real`), `route` (`string`: `breath`, `skin` or `any`), `field` (`string`, the qualified id of the field). A handler may change `amount`, or cancel. |
+
+The hit is the verb `hit { target, kind, energy, intensity, part?,
+height?, spread?, area?, span?, dir? }`: with `spread` true it is spread
+over the body, with a `part` (of the target's body) it is aimed at it,
+with a `height` it arrives at that height, and otherwise it lands
+anywhere. It gives a map: `absorbed`, `returned` and `exited` (joules),
+`destroyed` and `cancelled` (`bool`). Every event above binds the cause's
+`actor` and `instigator` after its own subjects.
 
 These are refused with a reason (14 §5) and change nothing:
 
@@ -1029,6 +1104,72 @@ zero. An undead template simply does not include that rule.
 After `die` the entity is still there with its body, wounds and holdings. It
 can be carried, searched, eaten, raised, or have its mind taken. The
 `mind_released` event at death is the hook for anything that collects them.
+
+### 8.4 As built
+
+Decisions D-554 and D-555. A mind is the component `Mind`: the
+behaviour profile it was given, as text, and its **vital state**,
+`awake`, `unconscious` or `dead`. What is seated in a mind is kept with
+the rest of the entity's stats and moved with it. A driver is the
+component `Driver` of the body's entity: who acts for it.
+
+**When a creature stops is data.** Two fields say it, and the engine
+knows nothing of blood or brains:
+
+| Definition | Field | Says |
+|------------|-------|------|
+| `body_plan` | `needs: { <function>: <state> }` | While the body can do none of a function (its capacity is zero), its owner is in that state. |
+| `pool` | `stops: [ { at, when, state } ]` | Section 4.4. |
+
+where a state is `unconscious` or `dead`. Whenever a pool crosses a
+threshold, a body changes, a mind arrives or a creature is made, the
+simulation asks what these say and the worst holds: `dead` is `die`;
+`unconscious` stops the mind until nothing says so (`entity_unconscious`,
+then `entity_woke`). Only `revive` starts the dead; one that still
+lacks what it needs stops again at once. An entity with no mind is
+never stopped. A body in pieces (section 7.5) is stopped by whatever its
+plan `needs`, since none of its functions is left.
+
+`die` releases control of the entity (`control_changed`), forgets any
+decision it was asked for, and raises `entity_died` and then
+`mind_released`. Its body, wounds and holdings remain. Ending its
+running actions is the action runtime's answer to `entity_died`.
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `die` | `who` | Section 8.3, after the hook `entity_dying` |
+| `revive` | `who` | Section 8.3 |
+| `create_mind` | `in`, `def?` | A new mind, awake; `def` is the behaviour profile, as text |
+| `remove_mind` | `from` | Removes it with what is seated in it; control is released |
+| `transfer_mind` | `from`, `to`, `swap?` | After the hook `mind_transferring`; with `swap` a mind `to` has goes the other way. The mind's vital state goes with it, and is then asked afresh of the body it arrives in |
+| `set_driver` | `of`, `driver?` | After the hook `mind_transferring`; left out, nobody drives it |
+
+Each gives null.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `entity_dying` (hook) | `self` | None. A handler may cancel. |
+| `entity_died`, `mind_released`, `entity_revived`, `entity_unconscious`, `entity_woke` | `self` | None |
+| `mind_transferring` (hook) | `self`, `target?` | `swap` (`bool`). A handler may cancel. |
+| `mind_transferred` | `self`, `target` | `swap` (`bool`) |
+| `driver_changed` | `self`, `driver?` | None |
+
+Whoever turns a command into an action asks `Sim::can_act(entity)`: an
+entity acts if its mind is awake or it has a driver. These are refused
+with a reason and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `no_mind` | It has no mind (and, for acting, no driver) | `entity` |
+| `has_mind` | `create_mind` in, or `transfer_mind` without `swap` into, something that has a mind | `entity` |
+| `entity_dead` | It is dead: it cannot act, and cannot die again | `entity` |
+| `entity_unconscious` | It is unconscious: it cannot act | `entity` |
+| `not_dead` | `revive` of one that is not dead | `entity` |
+| `same_entity` | An entity named as its own driver or as where its own mind goes | `entity` |
+
+Not built: beliefs, relations and senses moving with a mind (15); the
+`mind` definition type (09); where abilities come from after a transfer
+(08 §3.4).
 
 ## 9. Items and holding
 
@@ -1371,6 +1512,96 @@ edits, what a scenario supplies for pre-made characters, and what a
 `unselected` says what to do with choices the definition does not fix:
 `default` or `random` (positionally seeded).
 
+### 10.4 As built
+
+Decisions D-556 to D-558. A `template` has these fields, every one
+optional:
+
+| Field | Meaning |
+|-------|---------|
+| `kind`, `name` | A free-form label and what a reader calls it |
+| `body` | A body plan. A later template's replaces an earlier one's |
+| `attributes` | `{ <attribute>: <number> }`: bases of its own. A later contribution replaces an earlier |
+| `pools` | Pools it is given, at their `start` |
+| `tracks` | `{ <track>: <amount> }`: added to the counter |
+| `tags` | Tags of the entity |
+| `variables` | `{ <name>: <constant expression> }` |
+| `rules` | Rules (`eoc`) attached to the entity (05 §9.3) |
+| `traits`, `items` | Ids as written, carried for whoever gives traits and makes items: `entity_spawned` names them |
+| `scale` | A factor on the body's size |
+| `mind` | `true` for a mind, `false` for none, or the id of a behaviour profile as text |
+| `glyph` | `{ ch, fg?, bg? }`: one character and colours by name, for presentation. A later template's replaces an earlier one's |
+| `remains` | What is left of a body destroyed entirely, as written |
+| `blocks` | Whether it blocks movement through its cell. Default true for one with a body |
+| `choices` | Section 10.2 |
+
+A choice has an `id` (no `.`), a `name`, a `kind` and a `default`; a
+`pick` has `options` and `count` (default 1); `points` has `options`,
+each with a `cost` (default 1), and a `budget`; `range` has `min`,
+`max` and either `sets: "scale"` (the body's size is multiplied by the
+value) or an `attribute` whose base the value becomes; `text` has
+`max_length` (default 64), `suggestions` (what a random choice picks
+from) and `sets: "name"` or `"description"`; `assemble` has the `parts`
+it allows and a `budget`, one point a part. An option has an `id`, a
+`name`, a `cost`, everything a template gives except `body`, `glyph`,
+`remains` and `blocks`, and `choices` of its own, at most eight deep.
+
+A **character spec** is `{ templates, select, unselected, seed,
+anonymous }`. A choice is named by its template's id, qualified or
+bare, and its own: `core:person.stature`; one inside an option by the
+choice, the option and its own: `core:person.craft.smith.metal`. A
+selection is a list of option or part ids, a number or a text. Every
+choice is visited in the order written, nested choices right after the
+option that opens them; one not selected takes its `default` (a
+`pick`'s first `count` options, a `range`'s `min`, nothing for the
+rest) or, with `unselected: random`, a selection drawn from a stream
+seeded by `seed` alone. A selection for a choice that is not open, and
+one that does not suit its choice, are refused.
+
+Spawning makes the entity out of the world with its tags and
+variables; gives it its body, then stats if anything gives a body or a
+stat, bases, pools and tracks; its `Identity`, naming the first
+template as its definition, every template applied, and its own name
+and description; a mind; its rules; puts it in its place; and raises
+`entity_spawned`. It is `Sim::spawn_template`, the verb `spawn`, the
+debug command `spawn`, and the answer to a loaded tract's
+`spawn_requested` whose `what` names a template, which makes an
+anonymous individual whose random selections are seeded by where it
+stands.
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `spawn` | `template`, `at?`, `in?`, `also?` (more templates), `random?`, `seed?`, `anonymous?` | Gives the entity made; with neither `at` nor `in` it is made out of the world |
+| `make_notable` | `who` | Section 12.2; gives null |
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `entity_spawned` | `self`, `here?` | `templates`, `items`, `traits` (`list<string>`): the qualified ids applied, and what it is to start with, as written |
+| `became_notable` | `self` | None |
+
+| Reason | When | Values |
+|--------|------|--------|
+| `templates_not_registered` | The definitions were loaded without the `template` type | — |
+| `no_templates` | A spec names no template | — |
+| `unknown_template` | An id names no template | `what` |
+| `unknown_choice` | A selection names a choice the spec's templates do not open | `choice` |
+| `bad_selection` | A selection does not suit its choice: an option it lacks, too many or too few, over budget, out of range, too long, of the wrong shape | `choice`, `why` |
+
+The **creation session** is the state a creation screen edits: a spec
+whose every change is checked as it is made. It lists the choices open
+now with their options, costs, budget spent and current selection,
+drops selections for choices a change closes, and gives the complete
+spec when the player is done. The application hands it to the interface
+as `app.creation`: a map of `templates`, `choices` (each a map of `key`,
+`name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`,
+`max`, `max_length`, `options`, `parts`, `value`, `by_default`),
+`complete` and `problem`.
+
+Not built: the `creature` type; `apply_template` on an entity that
+exists; adding the parts an `assemble` choice chose, which waits for
+`add_part`; conditions on options; a range's `apply` effects and
+`body_edits`, which wait for the rule runtime and body editing.
+
 ## 11. Movement
 
 Moving is an action (03 §6.6) whose effect is one of these verbs. A verb
@@ -1637,6 +1868,14 @@ When a tract unloads:
 Named characters created by scenarios or generation are notable from the
 start. `make_anonymous` makes an individual anonymous again.
 
+As built: an `Identity` says whether its entity is anonymous; anything
+without one is notable. A spawn is notable unless it asks to be
+anonymous, and a template's answer to `spawn_requested` is anonymous. A
+wound and a variable set on it make an anonymous individual notable,
+and so does `make_notable`, each raising `became_notable`. Not built:
+populations, trait, item and relation changes as triggers, and
+`make_anonymous`.
+
 ### 12.3 Stored entities
 
 A stored entity keeps every component. Its timers follow 03 §9. Its place is
@@ -1648,8 +1887,8 @@ A stored entity keeps every component. Its timers follow 03 §9. Its place is
 `body_plan`, `body_function`, `template`, `creature`, `mind`, `item`,
 `movement`, `posture`, `population`, `content_table`. Tissue extras on
 `material` (`leak`, `signal`, `heal`; section 6.1). `seat` on attributes,
-pools, tracks and traits. `limp` and `postures` on body plans; `remains`
-on templates.
+pools, tracks and traits. `limp`, `postures` and `needs` on body plans;
+`stops` on pools; `remains` on templates.
 `ages` on items and `keeps` on containers.
 Body flags on `damage_type` (`severs`).
 
@@ -1663,8 +1902,11 @@ Body flags on `damage_type` (`severs`).
 `item_repaired`, `item_broken`, `item_split`, `item_merged`,
 `item_stage_reached`, `item_turned`, `posture_changed`,
 `contents_materialised`, `became_notable`, `step_refused`, `path_failed`,
-`fell`, `landed`. Those of items are described with their fields in
-section 9.2, and those of movement and posture in section 11.
+`fell`, `landed`; as built also `slots_lost`, `slots_gained`,
+`body_destroyed`, `part_detached`, `hit_exited`, `entity_unconscious`,
+`entity_woke`, `driver_changed` and `entity_spawned`. Those of items
+are described with their fields in section 9.2, and those of movement
+and posture in section 11.
 
 **Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
 `trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
@@ -1771,35 +2013,46 @@ read a field of a definition of any type; and `scale`, `color`,
 `velocity` and the rest of the list above, which wait for the
 components that hold them.
 Whether an entity has a component of a given kind is the property
-`entity.has_component`. Items and holding are built with their
+`entity.has_component`, by the component's name: `identity`,
+`physical`, `stats`, `body`, `item`, `holds`, `mind` or `driver`.
+Items and holding are built with their
 definition type, components, verbs, properties, events and refusals
-(section 9). Reachable only from Rust until the kernel applies hits and
-body changes: handing worn layers to a hit and what they took back to the
-items, dropping what a part that can no longer hold was grasping, and
-making the item a part that came off leaves. The query `held` (05 §11) is
+(section 9). A hit goes through what is worn (`Sim::hit` asks the item
+package), what the worn layers took is damage to the items, a part that
+came off becomes an item with what was worn on it, and what a part that
+can no longer hold was grasping is dropped. The query `held` (05 §11) is
 a list property until queries are built. Not built: ageing (section 9.4),
 `look`, `round`, `interactions` and `device` on items, `content_table`,
 what `grants`, `traits`, `rules`, `guards` and `contains` give (carried
 as data), what seats and fixed holds mean, a check of an item's colour
 names against the `color` definitions, and `age`.
-Attributes, pools and tracks are built with their
-definition types, properties and events; the verbs of section 4.4 are
-functions in Rust until the rule runtime registers them, a track's
-`on_advance` is kept and not yet run, and what is seated in a mind does
-not yet move with it. A pool cannot yet name a substance (16 §9.5).
-Bodies, hits and wounds are built with their definition types, properties
-and events (sections 6.1 to 6.4, 6.7 and 7). Reachable only from Rust
-until the kernel and the rule runtime call them: giving an entity a body;
-applying a hit, which waits for the kernel to raise `hit_incoming` and
-the events, to hand on what exits and what came off, and to interrupt
-actions whose slots went; the verbs `close_wound`, `reopen_wound`,
-`heal_part`, `disable_part`, `restore_part` and `remove_part`; and the
-conversion of the world's exposure and impact reports into hits. The
-queries `parts` and `wounds` (05 §11) are list properties until queries
-are built. Not built: the other verbs of section 6.5, bodies made of
-cells (section 6.6), shared parts (section 6.4), which parts face a
-hit's direction (section 7.4), and what a pool that names a substance
-spills.
+
+Built and reachable from rules once the rule runtime is bound to the
+simulation: attributes, pools and tracks with their definition types,
+properties, events, hook and verbs (section 4.4); bodies, hits and
+wounds with theirs (sections 6.5, 6.7 and 7), harm from the world
+(section 7.4); minds and vital state (section 8.4); templates, specs,
+spawning and the creation session (section 10.4). The reasons of each
+are tabled in its section; a verb's argument that is null or of the
+wrong sort is `verb.bad_argument`, with the value `argument`. A stat's
+expression that raises a run-time warning while it is worked out is
+reported as the fault `stats.expression_warning`, with `entity`,
+`count` and `warning`.
+
+**Gaps.** Reachable only from Rust for now: `templates` as a property,
+the name and description an entity takes from its definition, and
+`scale`, `color`, `velocity`, `is_alive`, `has_mind`, `driver` and
+`is_notable` as properties (the simulation answers `Sim::vital`,
+`Sim::driver` and `Sim::is_notable`); a template's glyph
+(`Sim::glyph`); and the creation session, which the application
+holds. A track's `on_advance` is kept and not yet run. A pool cannot
+yet name a substance (16 §9.5). The queries `parts` and `wounds`
+(05 §11) are list properties until queries are built. Not built: the
+other verbs of section 6.5, bodies made of cells (section 6.6), shared
+parts (section 6.4), which parts face a hit's direction (section 7.4),
+what a pool that names a substance spills, the `creature` and `mind`
+types, and populations.
+
 Movement and posture are built with their definition types, verbs,
 properties, events, hooks and reasons (section 11), and the bundled
 `step`, `go_to` and `set_posture` actions are data that calls them. Not

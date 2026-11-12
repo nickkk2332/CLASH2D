@@ -349,6 +349,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(HIT_INCOMING)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("part", part_ty.clone().nullable(), "The part the hit is aimed at. Null for a hit at a height, anywhere, or spread over the body.")
             .field("height", Type::Real.nullable(), "The height above the target's footing it arrives at, in metres, for a hit aimed at a height.")
             .field("spread", Type::Bool, "Whether it is spread over the whole body.")
@@ -364,6 +366,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(HIT_LANDED)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("part", part_ty.clone(), "The part struck.")
             .field("kind", kind_ty.clone(), "The kind of damage.")
             .field("absorbed", Type::Real, "Joules the part's own layers took.")
@@ -374,6 +378,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(WOUND_INFLICTED)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("wound", wound_ty.clone(), "The wound.")
             .field("part", part_ty.clone(), "The part it is on.")
             .field("kind", kind_ty.clone(), "The kind of damage.")
@@ -384,6 +390,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     let of_wound = |name: &str, doc: &str| {
         EventSpec::new(name)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("wound", wound_ty.clone(), "The wound.")
             .field("part", part_ty.clone(), "The part it is on.")
             .doc(doc)
@@ -399,6 +407,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(WOUND_HEALED)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("part", part_ty.clone(), "The part it was on.")
             .field("kind", kind_ty.clone(), "The kind of damage it was.")
             .doc("A wound is gone: every layer it went through is whole again."),
@@ -406,6 +416,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     let of_part = |name: &str, doc: &str| {
         EventSpec::new(name)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("part", part_ty.clone(), "The part.")
             .doc(doc)
     };
@@ -431,6 +443,8 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.add_event(
         EventSpec::new(FUNCTION_CHANGED)
             .subject("self", entity)
+            .subject("actor", entity)
+            .subject("instigator", entity)
             .field("function", Type::Id(body_function), "The function.")
             .field("old", Type::Real, "Its capacity before.")
             .field("new", Type::Real, "Its capacity now.")

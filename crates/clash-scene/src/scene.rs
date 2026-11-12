@@ -47,13 +47,14 @@
 use core::fmt;
 use std::collections::BTreeMap;
 
-use clash_core::{Rng, Value, VarMap};
+use clash_core::{EntityId, Rng, Tick, Value, VarMap};
 use clash_data::Runner;
 use clash_expr::{
     DefRef, FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value as ExprValue,
 };
 use thiserror::Error;
 
+use clash_sim::SimEvent;
 use clash_world::Location;
 
 use crate::app::{AppIds, AppReader, AppRequest, AppState, NoApp, pref_request};
@@ -61,7 +62,8 @@ use crate::control::{Collecting, ParamAsk, PendingDecision};
 use crate::defs::{UiDefs, namespace_of};
 use crate::frame::{Frame, FrameCell};
 use crate::frontend::Frontend;
-use crate::input::{InputEvent, KeyChord, KeymapDef};
+use crate::input::{CONTEXT_MENU, InputEvent, KeyChord, KeymapDef};
+use crate::playback::{NAV_SKIP, Perceived, Playback, Shows};
 use crate::theme::Theme;
 use crate::ui::{
     AppService, Args, BindScope, Binding, CameraEffect, Collect, CommandKind, Evaluator,
@@ -69,7 +71,7 @@ use crate::ui::{
     ScreenDef, TextProp, UiData, UiEffect, UiEffects, UiEvent, ValueProp, VarRef, ViewPainter,
     from_var, to_var,
 };
-use crate::view::{SpriteId, WorldView};
+use crate::view::{CellContents, EntitySprite, SpriteId, ViewModel, WorldView};
 
 /// The role of the screen the `confirm` effect opens (12 §10.7).
 pub const ROLE_CONFIRM: &str = "confirm";
@@ -194,6 +196,41 @@ pub trait SceneHost {
     fn candidates(&mut self, _ask: &ParamAsk<'_>) -> Option<Vec<ExprValue>> {
         None
     }
+
+    /// How the directly controlled characters perceived an event
+    /// (15 §13): seen, only heard, or not at all. Playback shows only
+    /// what was perceived, in the manner it was perceived (12 §5).
+    /// `picture` is the view model as playback has it, for a host that
+    /// decides by what is in view. A host that says nothing shows
+    /// nothing.
+    fn perceived(&mut self, _event: &SimEvent, _picture: &ViewModel) -> Perceived {
+        Perceived::Not
+    }
+
+    /// What the party sees in a cell now: asked when an event that was
+    /// seen changes it. `None` if the cell is not in view, in which
+    /// case what is known of it stays as it is.
+    fn seen_cell(&mut self, _at: Location) -> Option<CellContents> {
+        None
+    }
+
+    /// How the party perceives an entity: the number its sprite is
+    /// known by in the view model, and how it looks now, or `None` in
+    /// place of the look if it is not perceived now. `None` altogether
+    /// for an entity the party has never perceived, which playback then
+    /// leaves alone. Asked when an event that was seen is about the
+    /// entity.
+    fn seen_sprite(&mut self, _entity: EntityId) -> Option<(SpriteId, Option<EntitySprite>)> {
+        None
+    }
+
+    /// Tells the host the moment playback has reached, before bindings
+    /// are evaluated: the instant before the next event to be played,
+    /// or `None` once playback has caught up with the simulation. A
+    /// host that can answer its reader as of a moment does, so that a
+    /// bar does not drop before the blow is seen (12 §10.4); one that
+    /// cannot answers as of the present.
+    fn as_of(&mut self, _moment: Option<Tick>) {}
 }
 
 /// What a scene with no simulation reads from: nothing. Every answer is
@@ -464,6 +501,15 @@ pub struct Scene<H: SceneHost = NoHost> {
     /// The decision the scene has shown, so that it is shown once
     /// (12 §9.5).
     pub(crate) deciding: Option<PendingDecision>,
+    /// The queue of what happened, played over real time (12 §7).
+    pub(crate) playback: Playback,
+    /// The `show` definitions under the theme in force.
+    pub(crate) shows: Shows,
+    /// The qualified id of the preference that scales playback.
+    pub(crate) pref_speed: Option<String>,
+    /// The qualified id of the preference that says which animations
+    /// play.
+    pub(crate) pref_effects: Option<String>,
 }
 
 impl<H: SceneHost + fmt::Debug> fmt::Debug for Scene<H> {
@@ -694,6 +740,10 @@ impl<H: SceneHost> Scene<H> {
             warnings: 0,
             collecting: None,
             deciding: None,
+            playback: Playback::new(),
+            shows: Shows::new(),
+            pref_speed: None,
+            pref_effects: None,
         }
     }
 
@@ -717,6 +767,7 @@ impl<H: SceneHost> Scene<H> {
         self.prefs = ui.pref_defaults();
         self.roles = ui.profile_roles();
         self.ui = Some(ui);
+        self.ready_playback();
         self.stale = true;
         self
     }
@@ -1016,13 +1067,37 @@ impl<H: SceneHost> Scene<H> {
         }
         self.screens = restyled;
         self.theme = theme;
+        self.ready_playback();
         self.stale = true;
         Ok(())
     }
 
     /// Passes input to the top screen and returns what it asks for,
     /// without running any effect: see [`Scene::handle`].
+    ///
+    /// While anything is being played back, a key press first jumps
+    /// playback to its end (12 §7.1). If the keymap in force gives some
+    /// key the name `skip`, only that key does, and it does nothing
+    /// else.
     pub fn input(&mut self, event: &InputEvent) -> Vec<UiEvent> {
+        if let InputEvent::Key(chord) = event
+            && !self.playback.is_idle()
+        {
+            let context = self.screens.last().map_or(CONTEXT_MENU, Screen::context);
+            let named = |context: &str| self.keymap.name(context, *chord) == Some(NAV_SKIP);
+            let skips = named(context) || named(CONTEXT_MENU);
+            let bound = self
+                .keymap
+                .contexts
+                .values()
+                .any(|keys| keys.values().any(|name| name == NAV_SKIP));
+            if skips || !bound {
+                self.skip_playback();
+            }
+            if skips {
+                return Vec::new();
+            }
+        }
         let Scene {
             screens,
             keymap,
@@ -1067,10 +1142,20 @@ impl<H: SceneHost> Scene<H> {
     }
 
     /// Advances the scene by real time, in seconds. The application
-    /// measures it; tests pass a fixed step (12 §12).
+    /// measures it; tests pass a fixed step (12 §12). Playback plays
+    /// what falls due in that time into the picture of the world and
+    /// the log (12 §7): see [`crate::playback`].
     pub fn advance(&mut self, seconds: f64) {
         if seconds.is_finite() && seconds > 0.0 {
             self.elapsed += seconds;
+        }
+        let speed = self.playback_speed();
+        let played = self
+            .playback
+            .advance(seconds, speed, self.world.as_mut(), &mut self.log);
+        if played.changed || played.events > 0 {
+            // The moment bindings on the view show has moved on.
+            self.stale = true;
         }
     }
 
@@ -1137,6 +1222,8 @@ impl<H: SceneHost> Scene<H> {
             return;
         }
         self.stale = false;
+        // Bindings on the view show the moment playback has reached.
+        self.host.as_of(self.playback.moment());
         let first = self.lowest_shown();
         self.with_reader(|reader, screens| {
             let theme = reader.theme;
@@ -1161,6 +1248,9 @@ impl<H: SceneHost> Scene<H> {
         }
         self.refresh();
         frame.clear(FrameCell::blank(self.theme.base()));
+        // What playback is in the middle of showing: drawn over the
+        // views of the world and given to the frame.
+        let effects = self.playback.render(self.world.as_mut());
         let data = UiData {
             log: Some(&self.log),
             views: self.world.as_ref().map(|world| world as &dyn ViewPainter),
@@ -1170,8 +1260,25 @@ impl<H: SceneHost> Scene<H> {
             if screen.popup().is_some_and(|popup| popup.dim) {
                 dim(frame);
             }
+            // A sprite of a screen beneath does not show through this
+            // one.
+            let beneath = frame.sprites.len();
             screen.draw(frame, &data);
+            if beneath > 0 {
+                let area = screen.area();
+                let mut kept = 0;
+                for index in 0..beneath {
+                    let (x, y) = frame.sprites[index].cell();
+                    if !area.contains(x, y) {
+                        frame.sprites.swap(kept, index);
+                        kept += 1;
+                    }
+                }
+                frame.sprites.drain(kept..beneath);
+            }
         }
+        frame.fx.shake = effects.shake;
+        frame.fx.flash = effects.flash;
     }
 }
 
@@ -1736,8 +1843,9 @@ where
     /// ([`Scene::running_effects`]), what they came to.
     pub fn turn(&mut self, front: &mut dyn Frontend, frame: &mut Frame, seconds: f64) -> Turn {
         let mut turn = Turn::default();
-        if self.run_effects {
-            // A decision the simulation is waiting for gets its screen.
+        if self.run_effects && self.playback.is_caught_up() {
+            // A decision the simulation is waiting for gets its screen
+            // once playback has reached it (12 §9.5).
             turn.outcomes.extend(self.sync_decision());
         }
         for event in front.poll() {

@@ -1,5 +1,5 @@
 [
-  { "//": "The player's choices about display and input. They are kept outside saves and no rule can read them. The engine acts on the ones named `theme` and `keymap` itself; playback reads `playback_speed` and `cutscenes`.",
+  { "//": "The player's choices about display and input. They are kept outside saves and no rule can read them. The engine acts on the ones named `theme` and `keymap` itself; playback reads `playback_speed` and `effects` (in playback.json), and cutscenes will read `cutscenes`.",
     "type": "preference", "id": "theme", "kind": "text", "default": "ui:default",
     "name": "Theme",
     "doc": "The theme every screen is drawn with: the qualified id of a `theme` definition. Changing it restyles every open screen." },

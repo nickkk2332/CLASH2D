@@ -619,6 +619,58 @@ impl Timeline {
         self.clocks.keys().copied()
     }
 
+    /// A copy of this timeline's time and clocks with nothing scheduled:
+    /// what time it is, here and on every clock, to read while the
+    /// timeline itself is lent out to be changed.
+    ///
+    /// The copy answers [`now`](Timeline::now),
+    /// [`local_now`](Timeline::local_now), [`rate`](Timeline::rate),
+    /// [`effective_rate`](Timeline::effective_rate),
+    /// [`parent`](Timeline::parent) and [`has_clock`](Timeline::has_clock)
+    /// exactly as the original does. It holds no wake-up, so it costs a
+    /// walk over the clocks whatever is scheduled.
+    ///
+    /// ```
+    /// use clash_core::{Dur, Real, Tick};
+    /// use clash_time::{ClockId, Timeline, Wake, WakeDomain};
+    ///
+    /// let mut timeline = Timeline::new();
+    /// let slow = timeline.create_clock(ClockId::UNIVERSAL, Real::of(0.5)).unwrap();
+    /// timeline.schedule(slow, Dur::from_secs(9), Wake::new(WakeDomain::Timer, 1, 0)).unwrap();
+    /// timeline.advance_to(Tick(4_000_000));
+    ///
+    /// let view = timeline.clocks_only();
+    /// assert_eq!(view.now(), timeline.now());
+    /// assert_eq!(view.local_now(slow), timeline.local_now(slow));
+    /// assert_eq!(view.wake_count(), 0);
+    /// ```
+    pub fn clocks_only(&self) -> Timeline {
+        Timeline {
+            now: self.now,
+            next_wake: self.next_wake,
+            next_clock: self.next_clock,
+            clocks: self
+                .clocks
+                .iter()
+                .map(|(id, clock)| {
+                    let clock = Clock {
+                        parent: clock.parent,
+                        rate: clock.rate,
+                        local: clock.local,
+                        frac: clock.frac,
+                        synced: clock.synced,
+                        effective: clock.effective,
+                        children: clock.children.clone(),
+                        wakes: BTreeSet::new(),
+                    };
+                    (*id, clock)
+                })
+                .collect(),
+            wakes: LookupMap::new(),
+            queue: BTreeSet::new(),
+        }
+    }
+
     // ---- Internals -------------------------------------------------------
 
     fn clock(&self, id: ClockId) -> Result<&Clock, TimeError> {

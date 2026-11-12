@@ -47,7 +47,9 @@ use clash_world::{CellPos, ElementState, GridId, Layer, Location};
 
 use super::ambience::Ambience;
 use super::glyphs::WorldGlyphs;
-use super::model::{EntitySprite, GridReader, KnownCell, LIGHT_FULL, SpriteKind, ViewModel};
+use super::model::{
+    EntitySprite, GridReader, KnownCell, LIGHT_FULL, SpriteId, SpriteKind, ViewModel,
+};
 use super::overlay::{Overlay, OverlayValues};
 use crate::color::{Ansi16, Color, Rgb};
 use crate::frame::{CellStyle, FrameCell};
@@ -150,6 +152,9 @@ pub struct Composer<'a> {
     pub look_down: u8,
     /// The overlay drawn over the cells.
     pub overlay: OverlayDraw<'a>,
+    /// Sprites that are not drawn in the cell they are in: playback
+    /// draws them between cells while they glide (12 §7.2).
+    pub hidden: &'a [SpriteId],
 }
 
 /// `rgb` at a share of its brightness, in thousandths.
@@ -228,6 +233,7 @@ impl<'a> Composer<'a> {
             ambience: None,
             look_down: LOOK_DOWN_DEFAULT,
             overlay: OverlayDraw::None,
+            hidden: &[],
         }
     }
 
@@ -350,7 +356,11 @@ impl<'a> Composer<'a> {
             &mut layers,
             Rank::Fixture,
         );
-        let sprite = reader.top_sprite_at(at);
+        let sprite = if self.hidden.is_empty() {
+            reader.top_sprite_at(at)
+        } else {
+            reader.top_sprite_at_except(at, self.hidden)
+        };
         if known.pile() {
             self.lay(marks.pile, None, None, &mut layers, Rank::Items);
         } else if let Some(object) = sprite.filter(|sprite| sprite.kind == SpriteKind::Object) {

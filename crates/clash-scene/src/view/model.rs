@@ -538,6 +538,36 @@ impl ViewModel {
         object
     }
 
+    /// The sprite drawn in a cell when the sprites in `hidden` are not
+    /// drawn where they are: what [`ViewModel::top_sprite_at`] gives of
+    /// the rest. Playback hides a sprite while it glides between cells.
+    pub fn top_sprite_at_except(
+        &self,
+        grid: GridId,
+        cell: CellPos,
+        hidden: &[SpriteId],
+    ) -> Option<&EntitySprite> {
+        if self.sprites_at.is_empty() {
+            return None;
+        }
+        let lo = (grid, cell, SpriteId::new(u64::MIN));
+        let hi = (grid, cell, SpriteId::new(u64::MAX));
+        let mut object = None;
+        for (_, _, id) in self.sprites_at.range(lo..=hi) {
+            if hidden.contains(id) {
+                continue;
+            }
+            let Some(sprite) = self.sprites.get(id) else {
+                continue;
+            };
+            match sprite.kind {
+                SpriteKind::Creature => return Some(sprite),
+                SpriteKind::Object => object = object.or(Some(sprite)),
+            }
+        }
+        object
+    }
+
     /// The number of the sprite drawn in a cell: the one
     /// [`ViewModel::top_sprite_at`] gives.
     pub fn top_sprite_id_at(&self, grid: GridId, cell: CellPos) -> Option<SpriteId> {
@@ -616,6 +646,140 @@ impl ViewModel {
     }
 }
 
+/// One way in which two view models differ: what
+/// [`ViewModel::differences`] lists.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ViewDifference {
+    /// A cell is known differently, or known to one and not the other.
+    Cell {
+        /// The cell.
+        loc: Location,
+        /// What this view model holds for it.
+        here: Option<KnownCell>,
+        /// What the other holds.
+        there: Option<KnownCell>,
+    },
+    /// A sprite differs, or one has it and the other does not.
+    Sprite {
+        /// The sprite's number.
+        id: SpriteId,
+        /// What this view model holds.
+        here: Option<EntitySprite>,
+        /// What the other holds.
+        there: Option<EntitySprite>,
+    },
+    /// The shape of a grid differs, or one was told it and the other
+    /// was not.
+    Shape {
+        /// The grid.
+        grid: GridId,
+    },
+}
+
+impl core::fmt::Display for ViewDifference {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let cell = |cell: &Option<KnownCell>| match cell {
+            None => "unknown".to_owned(),
+            Some(cell) => format!(
+                "{} floor {} block {} fixture {} light {}{}{}",
+                if cell.seen() { "seen" } else { "remembered" },
+                cell.floor.raw().def,
+                cell.block.raw().def,
+                cell.fixture.raw().def,
+                cell.light,
+                if cell.field.is_some() { " field" } else { "" },
+                if cell.pile() { " pile" } else { "" },
+            ),
+        };
+        let sprite = |sprite: &Option<EntitySprite>| match sprite {
+            None => "absent".to_owned(),
+            Some(sprite) => format!("at {}", sprite.loc.cell),
+        };
+        match self {
+            ViewDifference::Cell { loc, here, there } => write!(
+                f,
+                "cell {} of grid {}: played {}; fresh {}",
+                loc.cell,
+                loc.grid.raw(),
+                cell(here),
+                cell(there)
+            ),
+            ViewDifference::Sprite { id, here, there } => write!(
+                f,
+                "sprite {}: played {}; fresh {}",
+                id.raw(),
+                sprite(here),
+                sprite(there)
+            ),
+            ViewDifference::Shape { grid } => {
+                write!(f, "the shape of grid {} differs", grid.raw())
+            }
+        }
+    }
+}
+
+impl ViewModel {
+    /// How this view model's knowledge differs from another's: cells,
+    /// then sprites, then grid shapes, at most `most` of them. Markers
+    /// of what was only heard are not compared: they are shown for a
+    /// while and are not knowledge of the world. An empty list means
+    /// the two hold the same cells, sprites and shapes.
+    pub fn differences(&self, other: &ViewModel, most: usize) -> Vec<ViewDifference> {
+        let mut found = Vec::new();
+        let keys: BTreeSet<&SlabKey> = self.slabs.keys().chain(other.slabs.keys()).collect();
+        for key in keys {
+            let (grid, z, tract) = *key;
+            let (mine, theirs) = (self.slabs.get(key), other.slabs.get(key));
+            if mine == theirs {
+                continue;
+            }
+            for index in 0..SLAB_CELLS {
+                let known = |slab: Option<&Slab>| {
+                    slab.map(|slab| slab.cells[index]).filter(KnownCell::known)
+                };
+                let (here, there) = (known(mine), known(theirs));
+                if here != there {
+                    if found.len() >= most {
+                        return found;
+                    }
+                    found.push(ViewDifference::Cell {
+                        loc: Location::new(grid, tract.cell(index, z)),
+                        here,
+                        there,
+                    });
+                }
+            }
+        }
+        let ids: BTreeSet<&SpriteId> = self.sprites.keys().chain(other.sprites.keys()).collect();
+        for id in ids {
+            let (here, there) = (
+                self.sprites.get(id).copied(),
+                other.sprites.get(id).copied(),
+            );
+            if here != there {
+                if found.len() >= most {
+                    return found;
+                }
+                found.push(ViewDifference::Sprite {
+                    id: *id,
+                    here,
+                    there,
+                });
+            }
+        }
+        let grids: BTreeSet<&GridId> = self.shapes.keys().chain(other.shapes.keys()).collect();
+        for grid in grids {
+            if self.shapes.get(grid) != other.shapes.get(grid) {
+                if found.len() >= most {
+                    return found;
+                }
+                found.push(ViewDifference::Shape { grid: *grid });
+            }
+        }
+        found
+    }
+}
+
 /// How many slabs a [`GridReader`] remembers: one for each of this many
 /// consecutive storeys, which is as far as a view looks down by default
 /// and the storey it looks down from.
@@ -684,6 +848,17 @@ impl<'a> GridReader<'a> {
     #[inline]
     pub fn top_sprite_at(&self, cell: CellPos) -> Option<&'a EntitySprite> {
         self.model.top_sprite_at(self.grid, cell)
+    }
+
+    /// The sprite drawn in a cell, leaving some out: see
+    /// [`ViewModel::top_sprite_at_except`].
+    #[inline]
+    pub fn top_sprite_at_except(
+        &self,
+        cell: CellPos,
+        hidden: &[SpriteId],
+    ) -> Option<&'a EntitySprite> {
+        self.model.top_sprite_at_except(self.grid, cell, hidden)
     }
 }
 

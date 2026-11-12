@@ -523,6 +523,18 @@ impl Game {
             };
             let next = target.min(session.sim.now() + SIM_STEP);
             match session.sim.advance(AdvanceLimit::Until(next)) {
+                // A free character is asked what it does next (03 §5.2).
+                // Until the interface's commands become the simulation's,
+                // the stand-in answers for it by waiting no time.
+                Advance::NeedInput(request)
+                    if matches!(request.kind, clash_sim::DecisionKind::Free { .. })
+                        && session
+                            .sim
+                            .submit(clash_sim::Command::Wait {
+                                entity: request.entity,
+                                dur: Dur::ZERO,
+                            })
+                            .is_ok() => {}
                 // Time does not move until the decision is answered.
                 Advance::NeedInput(_) => {
                     session.busy_until = None;

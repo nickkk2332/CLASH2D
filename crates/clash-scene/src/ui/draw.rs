@@ -13,7 +13,10 @@ use crate::text::RichText;
 
 use super::def::Align;
 use super::layout::{TREE_INDENT, write_number};
-use super::screen::{Flavour, Kind, Listing, LiveText, LogLine, Screen, UiData};
+use super::screen::{
+    Flavour, Kind, Listing, LiveText, LogLine, LogRows, MessageLog, Screen, UiData,
+};
+use crate::playback::log::Importance;
 
 /// A short text built on the stack.
 struct Small {
@@ -46,11 +49,48 @@ impl fmt::Write for Small {
     }
 }
 
-/// Whether a log line passes a widget's filter.
-fn passes(filter: &Option<Vec<String>>, line: &LogLine) -> bool {
-    filter
-        .as_ref()
-        .is_none_or(|categories| categories.contains(&line.category))
+/// Whether a log line passes a widget's filter: its category is one of
+/// those shown and it matters at least as much as the widget asks.
+fn passes(filter: &Option<Vec<String>>, least: Importance, line: &LogLine) -> bool {
+    line.importance >= least
+        && filter
+            .as_ref()
+            .is_none_or(|categories| categories.contains(&line.category))
+}
+
+/// The count written after a log line that was said more than once:
+/// ` (x3)`.
+fn count_suffix(count: u32) -> Small {
+    let mut suffix = Small::new();
+    let _ = write!(suffix, " (x{count})");
+    suffix
+}
+
+/// How a log line falls into rows at a width: how many, and whether the
+/// count of a folded line has a row of its own because it does not fit
+/// after the text.
+fn line_rows(line: &LogLine, width: usize) -> (usize, bool) {
+    let (mut rows, mut last) = (0, 0);
+    line.text.wrap_each(width, |(from, to)| {
+        rows += 1;
+        last = to - from;
+    });
+    let apart = line.count > 1 && last + count_suffix(line.count).as_str().len() > width;
+    (rows + usize::from(apart), apart)
+}
+
+/// How many rows the lines of a log that pass a filter take at a width.
+fn log_rows(
+    log: &MessageLog,
+    filter: &Option<Vec<String>>,
+    least: Importance,
+    width: usize,
+) -> usize {
+    log.lines()
+        .iter()
+        .filter(|line| passes(filter, least, line))
+        .map(|line| line_rows(line, width).0)
+        .sum()
 }
 
 /// Where a text of `len` cells starts in a space of `width` cells.
@@ -95,17 +135,59 @@ impl Screen {
         }
     }
 
-    /// Keeps each log's scroll position within what the log holds.
+    /// Works out how each log's lines fall into rows, and keeps its
+    /// scroll position within what the log holds. A log scrolled back
+    /// stays on the lines it shows as newer ones arrive; one that is
+    /// not follows the newest.
     fn clamp_logs(&mut self, data: &UiData<'_>) {
         for node in &mut self.nodes {
-            if let Kind::Log { filter, back, .. } = &mut node.kind {
-                let total = data.log.map_or(0, |log| {
-                    log.lines()
-                        .iter()
-                        .filter(|line| passes(filter, line))
-                        .count()
-                });
-                *back = (*back).min(total.saturating_sub(node.inner.h.max(0) as usize));
+            let size = (node.inner.w, node.inner.h);
+            if let Kind::Log {
+                filter,
+                least,
+                back,
+                rows_seen,
+                rows_cache,
+                ..
+            } = &mut node.kind
+            {
+                let visible = size.1.max(0) as usize;
+                let rows = match (data.log, *rows_cache) {
+                    (None, _) => LogRows {
+                        revision: 0,
+                        size,
+                        width: size.0.max(1) as usize,
+                        total: 0,
+                    },
+                    (Some(log), Some(rows))
+                        if rows.revision == log.revision() && rows.size == size =>
+                    {
+                        rows
+                    }
+                    (Some(log), _) => {
+                        // One column goes to the scrollbar when there
+                        // are more rows than fit.
+                        let full = size.0.max(1) as usize;
+                        let mut width = full;
+                        let mut total = log_rows(log, filter, *least, width);
+                        if total > visible && full > 1 {
+                            width = full - 1;
+                            total = log_rows(log, filter, *least, width);
+                        }
+                        LogRows {
+                            revision: log.revision(),
+                            size,
+                            width,
+                            total,
+                        }
+                    }
+                };
+                *rows_cache = data.log.map(|_| rows);
+                if *back > 0 && rows.total > *rows_seen {
+                    *back = back.saturating_add(rows.total - *rows_seen);
+                }
+                *rows_seen = rows.total;
+                *back = (*back).min(rows.total.saturating_sub(visible));
             }
         }
     }
@@ -492,33 +574,70 @@ impl Screen {
                         .draw_line(&mut canvas, inner.x + 2, inner.y, inner.w - 4, style);
                 canvas.print(inner.x + 2 + len, inner.y, " ]", style);
             }
-            Kind::Log { filter, back, .. } => {
-                if let Some(log) = data.log {
+            Kind::Log {
+                filter,
+                least,
+                back,
+                rows_cache,
+                ..
+            } => {
+                if let (Some(log), Some(rows)) = (data.log, rows_cache) {
                     let visible = inner.h.max(0) as usize;
-                    let total = log
-                        .lines()
-                        .iter()
-                        .filter(|line| passes(filter, line))
-                        .count();
-                    let first = total.saturating_sub(visible + back);
-                    let overflow = i32::from(total > visible);
-                    let shown = log
-                        .lines()
-                        .iter()
-                        .filter(|line| passes(filter, line))
-                        .skip(first)
-                        .take(visible);
-                    for (row, line) in shown.enumerate() {
-                        line.text.draw_line(
-                            &mut canvas,
-                            inner.x,
-                            inner.y + row as i32,
-                            inner.w - overflow,
-                            base,
-                        );
+                    let first = rows.total.saturating_sub(visible + back);
+                    // The newest line that starts at or before the first
+                    // row on show: found from the end, so that a long
+                    // log costs what is on show and not its length.
+                    let mut row = rows.total;
+                    let mut start = log.lines().len();
+                    for (index, line) in log.lines().iter().enumerate().rev() {
+                        if row <= first {
+                            break;
+                        }
+                        if passes(filter, *least, line) {
+                            row -= line_rows(line, rows.width).0;
+                            start = index;
+                        }
+                    }
+                    let shown = first..first + visible;
+                    let count_style = chrome.dim.over(base);
+                    for line in &log.lines()[start..] {
+                        if row >= shown.end {
+                            break;
+                        }
+                        if !passes(filter, *least, line) {
+                            continue;
+                        }
+                        let (_, apart) = line_rows(line, rows.width);
+                        let mut end = (inner.x, row);
+                        line.text.wrap_each(rows.width, |(from, to)| {
+                            if shown.contains(&row) {
+                                let y = inner.y + (row - first) as i32;
+                                let len = line.text.draw(&mut canvas, inner.x, y, (from, to), base);
+                                end = (inner.x + len, row);
+                            }
+                            row += 1;
+                        });
+                        if line.count > 1 {
+                            let suffix = count_suffix(line.count);
+                            if apart {
+                                if shown.contains(&row) {
+                                    let y = inner.y + (row - first) as i32;
+                                    canvas.print(
+                                        inner.x,
+                                        y,
+                                        suffix.as_str().trim_start(),
+                                        count_style,
+                                    );
+                                }
+                                row += 1;
+                            } else if shown.contains(&end.1) && end.1 + 1 == row {
+                                let y = inner.y + (end.1 - first) as i32;
+                                canvas.print(end.0, y, suffix.as_str(), count_style);
+                            }
+                        }
                     }
                     let column = Rect::new(inner.right() - 1, inner.y, 1, inner.h);
-                    self.draw_scrollbar(&mut canvas, column, total, visible, first, thumb);
+                    self.draw_scrollbar(&mut canvas, column, rows.total, visible, first, thumb);
                 }
             }
             Kind::View { kind, def } => match data.views {
