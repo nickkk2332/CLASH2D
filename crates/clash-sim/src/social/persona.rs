@@ -9,7 +9,7 @@
 //!
 //! **Seeing through.** When an observer detects an entity that presents
 //! a persona other than its true one, the hook `identity_check` decides
-//! whether the disguise holds ([`identify`]); with no rule answering, it
+//! whether the disguise holds (`identify`); with no rule answering, it
 //! does. Seen through, the observer takes the entity for its true
 //! persona while it goes on perceiving it, and, where the persona is one
 //! the entity made, links the two for good: a mask it has seen through

@@ -22,18 +22,18 @@
 //!
 //! | When | What |
 //! |------|------|
-//! | An observer detects an entity (15 §8.2) | [`identify`]: the hook `identity_check` decides whether a disguise holds for it; seen through, the observer takes it for its true persona and `disguise_seen_through` is raised |
-//! | An observer stops perceiving an entity through every sense | [`lost_sight`]: it is taken for whatever it presents when next it is detected |
+//! | An observer detects an entity (15 §8.2) | `identify`: the hook `identity_check` decides whether a disguise holds for it; seen through, the observer takes it for its true persona and `disguise_seen_through` is raised |
+//! | An observer stops perceiving an entity through every sense | `lost_sight`: it is taken for whatever it presents when next it is detected |
 //! | An entity presents another persona | Every observer that perceives it at that moment sees the change: it goes on taking it for whom it took it for |
-//! | A signal carrying a message is perceived (15 §11) | [`speech::heard`]: `understands`, `message_heard`, a report's beliefs, an order |
+//! | A signal carrying a message is perceived (15 §11) | `speech::heard`: `understands`, `message_heard`, a report's beliefs, an order |
 //! | An entity is made from templates | It joins the groups its templates name ([`TemplateDef`](crate::template::TemplateDef)'s `groups`) |
 //! | An entity is removed | What the social layer kept of it goes |
 //!
 //! # What the kernel holds and calls
 //!
 //! The simulation holds a [`SocialState`], saved and hashed with the
-//! kernel's state. Perception calls [`persona_of`], [`identify`],
-//! [`lost_sight`] and [`speech::heard`]; the reader lens every simulation
+//! kernel's state. Perception calls [`persona_of`], `identify`,
+//! `lost_sight` and `speech::heard`; the reader lens every simulation
 //! is bound with is [`social_lens`] (05 §4.6).
 
 pub mod defs;

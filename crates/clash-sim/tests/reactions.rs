@@ -114,6 +114,19 @@ fn core_file(name: &str, without: &[&str]) -> (String, String) {
     let path = common::mods_dir().join("core/data").join(name);
     let text = std::fs::read_to_string(path).unwrap();
     let all: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap();
+    let strips = all.iter().any(|def| {
+        without.contains(
+            &def.get("type")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(""),
+        )
+    });
+    if !strips {
+        // Written out again, an object's keys would come in sorted
+        // order, and a parameter's default may name one declared before
+        // it: a file with nothing to strip is given as it is.
+        return (format!("data/{name}"), text);
+    }
     let kept: Vec<serde_json::Value> = all
         .into_iter()
         .filter(|def| {

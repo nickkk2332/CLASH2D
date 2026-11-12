@@ -2,7 +2,7 @@
 //! group, of kinds content defines.
 //!
 //! **Reading.** What a mind holds toward an entity is what it holds
-//! toward the persona it takes the entity for ([`persona_of`]). Where it
+//! toward the persona it takes the entity for ([`persona_of`](super::persona_of)). Where it
 //! holds nothing of a kind of its own, it uses its groups' (15 §9.2), in
 //! this order, the first that holds anything counting:
 //!
