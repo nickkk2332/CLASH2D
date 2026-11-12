@@ -69,12 +69,12 @@ crates/
   clash-world     → core, time, data     cosmos, realms, grids, fields, damage, collapse, bodies in flight
   clash-gen       → world                region survey and tract generation (mapgen)
   clash-sim       → world, gen, expr     entities, actions, combat, powers, AI, EOC runtime, cold sim
-  clash-save      → sim                  save container, versioning, migration
+  clash-save      → sim, scene           save container, versioning, migration; the console's host
   clash-scene     → sim                  presentation model, camera, UI state, cutscene director
   clash-front-window → scene             window + GPU glyph renderer
   clash-front-term   → scene             terminal renderer
   clash-app       → front-*, save        the game binary
-  clash-tools     → sim, save, scene     mod linter, schema dump, headless runner, world viewer, benches
+  clash-tools     → save, front-term     mod linter, schema dump, headless runner, world viewer, benches
 mods/
   core/                                  minimal definitions the tests and tools need
 docs/
@@ -84,6 +84,12 @@ An arrow carries what its target depends on: a crate may depend directly on
 any crate its arrows already reach, as `clash-gen` does on `clash-core` and
 `clash-tools`, through `clash-sim`, on `clash-data`. What stays forbidden is
 a dependency upward or sideways, on a crate the arrows do not lead to.
+
+`clash-save` reaches `clash-scene` because the console's host lives there,
+below both the application and the tools, and loads profiles with every
+definition type and draws frames through the scene's view model (D-581).
+`clash-tools` reaches `clash-front-term` for the terminal world viewer
+(D-582).
 
 `clash-tools` reaches `clash-scene` because the linter must load mods with
 every definition type the game has, and the interface's are the scene's.
@@ -458,6 +464,49 @@ version it found.
 
 The compressed bytes are not a contract: a later compressor may pack the
 same body differently. Bodies are compared and hashed, never blobs.
+
+### 11.2 The save file
+
+A game is saved into one file, a `redb` database (the world's
+`RedbStore`, 02 §11.5) with the extension `.c2save`, written in one
+transaction: a file holds all of one save or all of the one before it.
+`clash-save` writes and reads it (D-580). It holds:
+
+| Part | Blob kind | Holds |
+|------|-----------|-------|
+| Tract blobs, keyed by realm and tract | `TRCT` | The cells of every tract that has been loaded and changed, loaded now or not (02 §11.1) |
+| `world.*` sections | the world's | Realms and region records, areas, sites, tickets, stability and activity, the loaded tracts, the save's tables of ids (02 §11.4) |
+| `sim.state` | the kernel's | The simulation's own state: timeline and clocks, entities and components, rule state, settings, random streams, queues, the entities shelved with unloaded tracts, and the input log since it was last taken |
+| `save.tracts` | `STRC` | The realm, column and row of every tract the save holds a blob for |
+| `save.meta` | `SMET` | The metadata below |
+
+The metadata is what a load screen lists and what a loader compares with
+the definitions it has. It is read without loading the game.
+
+| Field | Holds | Filled in by |
+|-------|-------|--------------|
+| `format` | The save format's version, 1 | Saving |
+| `name`, `summary` | What a load screen shows | The saver |
+| `profile` | The id of the profile the definitions were loaded through, or empty | Saving |
+| `mods` | Each mod's id and version, in load order | Saving |
+| `fingerprint` | The definitions' content fingerprint (04 §9) | Saving |
+| `seed` | The seed the simulation was started with | The saver |
+| `tick` | The universal time of the save | Saving |
+| `experimental` | The experimental features the mods opted in to (04 §8.4) | Saving |
+| `state_hash` | The simulation's state hash when saved; `save verify` compares it with what loads | Saving |
+| `app` | Bytes of the saver's own, neither read nor hashed: the console keeps its cursor, active character, selection, frame size, profile name and seed there | The saver |
+
+Saving follows 02 §11.4: the blobs of tracts that are not loaded are
+carried over from the simulation's own store, `Cosmos::save_world` writes
+the world and the loaded tracts that changed, the simulation's blob and
+the two save sections go in, and one commit makes it durable. Loading
+reads the world first, with placeholders for definitions the mods no
+longer supply, then the simulation over it from the same save, gives it
+the generators and a store in memory holding the save's tract blobs, and
+places every entity again. A save made with other mods loads with
+warnings that say what differs; a damaged file is an error that names
+the section or tract, never a panic. Saving and loading change nothing
+that is hashed (R7).
 
 ## 12. Testing and performance gates
 

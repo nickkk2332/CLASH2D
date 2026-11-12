@@ -5,16 +5,24 @@
 //!
 //! Built so far: the data commands of `docs/04-data-and-modding.md`
 //! section 13 (`lint`, `explain`, `show`), in [`data`], with the
-//! definition types of the world and of the interface registered.
-//! `schema` answers that it is not built yet. The rest is filled in by
-//! W11 of `docs/plans/world-model.md` and by `docs/plans/tooling.md`.
+//! definition types of the world and of the interface registered;
+//! `scenario run`, which runs test scripts against the simulation in
+//! the four modes ([`scenario`]); `save inspect`, `save verify` and
+//! `save list` ([`save`]); `replay` between two saves ([`replay`]); and
+//! the terminal world viewer, `worldview` ([`worldview`]). The last
+//! three drive the console's host of `clash-save`. `schema` answers that
+//! it is not built yet. The rest is filled in by
+//! `docs/plans/tooling.md`.
 
 use std::process::ExitCode;
 
 use clash_data::DefTypes;
 
 mod data;
+mod replay;
+mod save;
 mod scenario;
+mod worldview;
 
 /// Every definition type the engine knows.
 ///
@@ -38,9 +46,12 @@ pub const ENGINE_CHECKS: &[data::BuildCheck] = &[
 
 fn usage() -> String {
     format!(
-        "usage: clash-tools <command> [arguments]\n\n{}\n{}",
+        "usage: clash-tools <command> [arguments]\n\n{}\n{}\n{}\n{}\n{}",
         data::USAGE,
-        scenario::USAGE
+        scenario::USAGE,
+        save::USAGE,
+        replay::USAGE,
+        worldview::USAGE
     )
 }
 
@@ -54,8 +65,14 @@ fn main() -> ExitCode {
         print!("{}", usage());
         return ExitCode::SUCCESS;
     }
-    if command == "scenario" {
-        let output = scenario::run(rest);
+    let own = match command.as_str() {
+        "scenario" => Some(scenario::run(rest)),
+        "save" => Some(save::run(rest)),
+        "worldview" => Some(worldview::run(rest)),
+        "replay" => Some(replay::run(rest)),
+        _ => None,
+    };
+    if let Some(output) = own {
         print!("{}", output.out);
         eprint!("{}", output.err);
         return ExitCode::from(output.code);

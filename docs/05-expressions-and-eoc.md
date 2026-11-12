@@ -565,6 +565,12 @@ are `los` and `light`: the tag `hidden` cannot be honoured until
 perception is built, and a read that ignored it would leak. They become
 safe when document 15 supplies the belief side.
 
+Document 15 now supplies it (decisions D-616, D-617): a mind reads what
+it believes through properties of its own subject (`self.believed_loc(x)`,
+`self.perceives(x)`, `self.could_perceive(at, kind)`, `self.remembers(at)`,
+`self.knows_element(at, layer)`; 15 §7.2), and the marks above stand.
+15 §7.3 says which may later be relaxed, and how.
+
 ## 6. Variables
 
 Content stores its own state in **variables** on subjects.

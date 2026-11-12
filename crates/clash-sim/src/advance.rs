@@ -161,6 +161,7 @@ impl Default for Handlers {
         // reports it as unhandled; a package or a test with timers of
         // its own registers one with `Sim::set_wake_handler`.
         handlers.set(WakeDomain::Timer, crate::life::timer_wake);
+        handlers.set(WakeDomain::Perception, crate::perception::on_wake);
         handlers
     }
 }
@@ -357,6 +358,7 @@ impl Sim {
             // have had their say.
             crate::movement::on_event(self, &event);
             crate::action::run::on_event(self, &event);
+            crate::perception::observe_event(self, &event);
             self.out.push(event);
         }
     }
