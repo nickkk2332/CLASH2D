@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 10;
+pub const SAVE_VERSION: u32 = 11;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -74,7 +74,8 @@ pub struct Sim {
     pub(crate) shelf: Shelf,
     /// Every running action. A placeholder until package T3.
     pub actions: ActionTable,
-    /// Every open window. A placeholder until package T5.
+    /// Every open window, and what defences in force have dealt with
+    /// (03 §7, 07 §5).
     pub windows: WindowTable,
     /// What the rule runtime keeps. A placeholder until package K5.
     pub rules: RuleState,
@@ -124,6 +125,10 @@ pub struct Sim {
     /// Not state: how many strikes are being resolved inside one another
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
+    /// Not state: what answers whether one entity holds an `intervenes`
+    /// relation toward another, until relations exist
+    /// ([`Sim::set_intervenes`]). Set it again after a load.
+    pub(crate) intervenes: Option<crate::action::IntervenesFn>,
 }
 
 /// Why saved state could not be loaded.
@@ -295,6 +300,7 @@ impl Sim {
             perception: PerceptionState::default(),
             perception_defs,
             strike_depth: 0,
+            intervenes: None,
         };
         sim.bind_runtime();
         sim
@@ -824,6 +830,7 @@ impl Sim {
             perception: saved.perception,
             perception_defs,
             strike_depth: 0,
+            intervenes: None,
         };
         sim.bind_runtime();
         Ok(sim)

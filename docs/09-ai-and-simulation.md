@@ -356,6 +356,14 @@ engine for `best_reaction`: the available reaction that would be ready in
 time and most reduces the previewed harm, by its tactics. A character's
 stance (07 §12) may forbid or prefer some.
 
+The seam, as built by package T5 (decision D-711): the AI answers the
+event `window_noticed` for the minds it drives, as a rule would, with
+`react { who, window, action, with? }`; `Sim::reaction_options(entity,
+window)` lists what it chooses among, each with whether it would be ready
+in time and, if it cannot start, why. Until the AI does, a character
+answers only by a stance attached to it (`core:parry_on_notice` and its
+like), and with none it does nothing.
+
 ### 6.4 Positions
 
 `pick_position` scores cells within a radius by an expression. Helpers

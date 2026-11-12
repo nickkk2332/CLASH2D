@@ -19,7 +19,7 @@ With packages C1 to C8, C11 and C12 the first playable build of
 | C1 | Contests | S | X4, K5 | done |
 | C2 | Surfaces and delivery | L | E5, E8, C1 | beta |
 | C3 | Aim | M | C2, S4 | beta |
-| C4 | Defences | L | C3, T5 | todo |
+| C4 | Defences | L | C3, T5 | beta |
 | C5 | Push | M | C2, E10 | beta |
 | C6 | Clashes | L | C4, C5, W15 | todo |
 | C7 | Grips and throws | L | C4, C5, T6 | todo |
@@ -139,6 +139,23 @@ Done when
   strike arriving.
 - Scenario `too_slow`: the third; no defence exists.
 - A defender who has moved out of reach is missed without a contest.
+
+Beta (decisions D-712 to D-714): the `defence` block, in force during
+its phase only, `covers` by arc and part, `handles`, `contest`, `avoid`
+by leaving (step 2) and by slipping, `interpose` with `deflect`, `holds`
+and `brace`, the surfaces put in the way taking the rest and passing on
+what they cannot stop, `protects`, `evasion`, the hook
+`defence_resolving`, `strike_defended`, `entity.defending`; guards as
+held phases; the bundled `parry`, `block`, `dodge`, `step_back` and
+`guard`. Tested in `crates/clash-sim/tests/reactions.rs`:
+`parry_in_time`, `broken_blade` and `too_slow` to the figures of 07 §14,
+invariant C3, leaving, slipping, a guard held and let go, defending
+someone beside (the review row "Defending someone else"), and energy
+accounted for through a guard. `parry_in_time` and `too_slow` are also
+test scripts under `scenarios/combat/`, with the bundled `slash` and
+`parry`. Stubbed: a gripped creature put in the way (C7), defences
+against shots (C9), the query `defences`, previews (C11); the
+`bodyguard` script waits for relations (S7).
 
 ### C5 — Push
 

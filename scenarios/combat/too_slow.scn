@@ -1,0 +1,29 @@
+# too_slow (plans/combat.md, C4; scene S14): the third worked exchange
+# of 07 §14. The same slash; Bram, with wits 6, needs a third of a
+# second to notice a wind-up of 300 ms. The window closes before he
+# knows it opened: there is no parry at all, and the edge cuts his arm.
+use default seed=7
+gen core:testland size=1
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+remove @spot
+control @e:1 delegated
+control @e:2 delegated
+as @e:1 do { "create_item": { "def": "core:knife", "at": "self.loc" } }
+as @e:1 do { "take": { "who": "self", "what": "self.loc.occupants[0]" } }
+as @e:2 do { "create_item": { "def": "core:knife", "at": "self.loc" } }
+as @e:2 do { "take": { "who": "self", "what": "self.loc.occupants[1]" } }
+as @e:1 do { "set_attr_base": { "who": "self", "attr": "core:strength", "base": 36 } }
+as @e:1 do { "set_attr_base": { "who": "self", "attr": "core:wits", "base": 20 } }
+as @e:2 do { "set_attr_base": { "who": "self", "attr": "core:wits", "base": 6 } }
+as @e:2 do { "attach_sense": { "who": "self", "sense": "core:human_sight" } }
+as @e:2 do { "face": { "who": "self", "toward": "offset(self.loc, -1, 0, 0)" } }
+as @e:2 do { "set_awareness": { "who": "self", "of": "offset(self.loc, -1, 0, 0).occupants[0]", "sense": "core:human_sight", "level": 1 } }
+as @e:2 do { "attach_rule": { "to": "self", "eoc": "core:parry_on_notice" } }
+as @e:1 do { "start_action": { "who": "self", "action": "core:slash", "with": "{ 'target': offset(self.loc, 1, 0, 0).occupants[0], 'part': offset(self.loc, 1, 0, 0).occupants[0].part('r_arm') }" } }
+advance 1s
+expect event window_closed
+expect event strike_landed
+assert "len(@e:2.wounds) > 0"
+expect hash 3dbb31af58c0d0642549bdaaff44ed03

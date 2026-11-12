@@ -1,0 +1,112 @@
+[
+  { "//": "Seeing a blow coming (03 §7): an ordinary person of wits 10 takes a fifth of a second of their own time to notice a wind-up, one of wits 20 a tenth. Whoever notices in time may answer; whoever does not, cannot. Anyone directly controlled within 3 m is offered a blow aimed at someone else, for the reactions that may answer for another.",
+    "type": "window_kind", "id": "strike", "patch": true,
+    "notice": "2 / max(self.attr.wits ?? 10, 1)",
+    "reach": "3 m" },
+
+  { "//": "Whether a guard holds against a blow: how many times the one fighter is the other. A guard set in time is easier to keep than a blow is to force through it: each guard below weighs the attacker at half, so between equals a parry holds about nine times in ten.",
+    "type": "contest", "id": "control", "name": "Control",
+    "form": "ratio", "factor": 3, "spread": 1 },
+
+  { "//": "Whether a duck or a sway takes someone out of a blow's way.",
+    "type": "contest", "id": "slip", "name": "Slip",
+    "form": "ratio", "factor": 2, "spread": 1 },
+
+  { "//": "Turning a blow with a blade held in the hand: the flat is set across the blow's line and most of it is turned aside. A parry holds what the parrier's strength can turn; much past that and the blade takes the rest, and what the blade cannot stop goes on to where the blow was aimed (07 §5.3, §14).",
+    "type": "action", "id": "parry", "name": "Parry",
+    "reaction_to": ["strike"], "uses": { "arm": 1 }, "ready": "guard",
+    "tags": ["defence"],
+    "phases": [
+      { "id": "set",     "time": "80 ms" },
+      { "id": "guard",   "time": "250 ms" },
+      { "id": "recover", "time": "150 ms" } ],
+    "defence": {
+      "during": "guard", "form": "interpose",
+      "with": { "held": "blade", "surface": "flat" },
+      "covers": { "arc": 120 },
+      "handles": 1,
+      "contest": { "id": "control", "by": "fighting(self)", "against": "fighting(attacker) / 2" },
+      "deflect": 0.9,
+      "holds": "(self.attr.strength ?? 10) * 60",
+      "brace": 0.3 } },
+
+  { "//": "Taking a blow on a shield, or on the forearm where there is none: less is turned aside than by a parry, and what is not lands on the shield or the arm.",
+    "type": "action", "id": "block", "name": "Block",
+    "reaction_to": ["strike"], "uses": { "arm": 1 }, "ready": "guard",
+    "tags": ["defence"],
+    "phases": [
+      { "id": "set",     "time": "60 ms" },
+      { "id": "guard",   "time": "300 ms" },
+      { "id": "recover", "time": "150 ms" } ],
+    "defence": {
+      "during": "guard", "form": "interpose",
+      "with": [ { "held": "shield", "surface": "face" }, { "part": "arm", "surface": "forearm" } ],
+      "covers": { "arc": 150 },
+      "handles": 1,
+      "contest": { "id": "control", "by": "fighting(self)", "against": "fighting(attacker) / 2" },
+      "deflect": 0.5,
+      "holds": "(self.attr.strength ?? 10) * 80",
+      "brace": 0.5 } },
+
+  { "//": "Ducking or swaying out of a blow's line without leaving the spot: if it works, the blow misses (07 §5.2, slipping); if not, the one ducking is still harder to land on squarely (`evasion`, added to the aim's `against`).",
+    "type": "action", "id": "dodge", "name": "Dodge",
+    "reaction_to": ["strike"], "uses": { "leg": 1 }, "ready": "low",
+    "tags": ["defence"],
+    "phases": [
+      { "id": "duck",    "time": "100 ms" },
+      { "id": "low",     "time": "250 ms" },
+      { "id": "recover", "time": "200 ms" } ],
+    "defence": {
+      "during": "low", "form": "avoid",
+      "covers": { "arc": 180 },
+      "handles": 1,
+      "contest": { "id": "slip", "by": "fighting(self)", "against": "fighting(attacker)" },
+      "evasion": "fighting(self) / 2" } },
+
+  { "//": "A quick step straight away from whoever opened the window: someone out of a blow's reach when it lands is simply missed, with no contest (07 §5.2, leaving). The step is taken as the spring ends, checked against the world as it then is.",
+    "type": "action", "id": "step_back", "name": "Step back",
+    "reaction_to": ["strike"], "uses": { "leg": 1 }, "ready": "clear",
+    "footing": true,
+    "tags": ["defence", "move"],
+    "phases": [
+      { "id": "spring", "time": "60 ms",
+        "on_exit": [ { "step": { "who": "self", "dir": { "expr": "away_from(self, window_source($window)) ?? 'north'" } } } ] },
+      { "id": "clear",  "time": "250 ms" } ] },
+
+  { "//": "A guard held up before anything comes: in force for as long as it is held, at the cost of an arm (07 §5.1). Letting go is a `Cancel`; it is not a foreground action, so its holder goes on deciding what to do.",
+    "type": "action", "id": "guard", "name": "Guard",
+    "uses": { "arm": 1 }, "foreground": false,
+    "tags": ["defence", "stance"],
+    "phases": [
+      { "id": "raise", "time": "200 ms", "cancel": true },
+      { "id": "up",    "time": "hold", "cancel": true } ],
+    "defence": {
+      "during": "up", "form": "interpose",
+      "with": [ { "held": "shield", "surface": "face" }, { "held": "blade", "surface": "flat" }, { "part": "arm", "surface": "forearm" } ],
+      "covers": { "arc": 120 },
+      "handles": "all",
+      "contest": { "id": "control", "by": "fighting(self)", "against": "fighting(attacker) / 2" },
+      "deflect": 0.6,
+      "holds": "(self.attr.strength ?? 10) * 40",
+      "brace": 0.4 } },
+
+  { "//": "The player is asked how to answer a blow they noticed in time, and time stops until they do (03 §7.3). A rule like any other: a mod may replace it, or a setting switch it off.",
+    "type": "eoc", "id": "ask_player_to_react", "on": "window_noticed",
+    "if": "self.control == 'direct' and (setting('core:ask_reactions') ?? true)",
+    "doc": "Asks a directly controlled character how to answer a window it noticed. Off when the setting `core:ask_reactions` is false.",
+    "do": [ { "ask_reaction": { "who": "self", "window": "event.window" } } ] },
+
+  { "//": "Stances that answer by themselves (07 §12): attach one to a character and it reacts to every blow it notices in time. The AI attaches or replaces these as a character's stance changes.",
+    "type": "eoc", "id": "parry_on_notice", "on": "window_noticed", "attached": true,
+    "doc": "Parries every blow its holder notices in time.",
+    "do": [ { "react": { "who": "self", "window": "event.window", "action": "parry" } } ] },
+  { "type": "eoc", "id": "block_on_notice", "on": "window_noticed", "attached": true,
+    "doc": "Blocks every blow its holder notices in time.",
+    "do": [ { "react": { "who": "self", "window": "event.window", "action": "block" } } ] },
+  { "type": "eoc", "id": "dodge_on_notice", "on": "window_noticed", "attached": true,
+    "doc": "Ducks every blow its holder notices in time.",
+    "do": [ { "react": { "who": "self", "window": "event.window", "action": "dodge" } } ] },
+  { "type": "eoc", "id": "step_back_on_notice", "on": "window_noticed", "attached": true,
+    "doc": "Steps back from every blow its holder notices in time.",
+    "do": [ { "react": { "who": "self", "window": "event.window", "action": "step_back" } } ] }
+]

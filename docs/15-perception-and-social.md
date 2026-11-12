@@ -1144,7 +1144,9 @@ settings.
 - Effects: `emit_signal { kind: string, at: any, strength: real, about?:
   entity }` (§3.2); `face { who: entity, toward: any }` (§4);
   `set_awareness { who: entity, of: entity, sense: string, level: real
-  }` (§5.1); `add_track { who: entity, of: entity, at?: any, how?:
+  }` (§5.1); `attach_sense { who: entity, sense: string }`, which gives
+  an entity a sense, refused with `perception.has_sense` for one it has
+  (§4; decision D-715); `add_track { who: entity, of: entity, at?: any, how?:
   string, confidence?: real }`, `clear_track { who: entity, of: entity
   }`, `remember { who: entity, event: string, at?: any, salience?: real,
   actor?: entity }` (§7.1).
