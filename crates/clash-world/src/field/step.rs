@@ -24,6 +24,7 @@ use crate::chunk::FieldId;
 use crate::cosmos::{Cosmos, GridView};
 use crate::damage::DamagePacket;
 use crate::defs::{DamageTypeId, EngineFlag, Layer, WorldDefs};
+use crate::dims::CHUNK_CELLS;
 use crate::dims::{CELL_M, CHUNK_Z_BITS, STOREY_M};
 use crate::edit::WorldCtx;
 use crate::error::WorldError;
@@ -31,7 +32,7 @@ use crate::event::WorldEvent;
 use crate::field::ExposureRoute;
 use crate::grid::Column;
 use crate::occupancy::{OccupantFilter, distinct_ids};
-use crate::pos::{CellPos, GridId, Location, TractPos};
+use crate::pos::{CellIdx, CellPos, ChunkPos, GridId, Location, TractPos};
 
 /// What the positional hash that decides whether a field spreads is
 /// for (01 §4).
@@ -186,13 +187,195 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// The changes of level asked for of one field in the cells of one
+/// chunk: a table from each cell to its place in the list of the cells
+/// asked about, so that a change is summed without a search (D-735).
+struct ChunkChanges {
+    grid: GridId,
+    chunk: ChunkPos,
+    field: FieldId,
+    /// For each cell of the chunk, 0, or one more than the place of its
+    /// entry.
+    at: Box<[u32]>,
+    entries: Vec<(CellIdx, Change)>,
+}
+
+/// The changes of level a step asks for, summed for each field and cell
+/// as they are asked for, kept by chunk.
+#[derive(Default)]
+struct Changes {
+    chunks: Vec<ChunkChanges>,
+    /// Tables emptied by an earlier step, to use again.
+    pool: Vec<Box<[u32]>>,
+    index: LookupMap<(GridId, ChunkPos, FieldId), usize>,
+    /// The two chunks asked about last: the next is nearly always one
+    /// of them, a field's own or that of what it gives off.
+    last: [Option<((GridId, ChunkPos, FieldId), usize)>; 2],
+}
+
+impl Changes {
+    /// The place of a chunk's table in `chunks`, made if `make`.
+    #[inline]
+    fn chunk_at(
+        &mut self,
+        grid: GridId,
+        chunk: ChunkPos,
+        field: FieldId,
+        make: bool,
+    ) -> Option<usize> {
+        let key = (grid, chunk, field);
+        for (have, at) in self.last.iter().flatten() {
+            if *have == key {
+                return Some(*at);
+            }
+        }
+        let at = match self.index.get(&key) {
+            Some(at) => *at,
+            None if make => {
+                let at = self
+                    .pool
+                    .pop()
+                    .unwrap_or_else(|| vec![0; CHUNK_CELLS].into_boxed_slice());
+                self.chunks.push(ChunkChanges {
+                    grid,
+                    chunk,
+                    field,
+                    at,
+                    entries: Vec::new(),
+                });
+                let at = self.chunks.len() - 1;
+                self.index.insert(key, at);
+                at
+            }
+            None => return None,
+        };
+        self.last = [Some((key, at)), self.last[0]];
+        Some(at)
+    }
+
+    /// Adds a change of level to a field in a cell: the sum grows, and
+    /// of those responsible the lowest id is kept.
+    #[inline]
+    fn add(&mut self, slot: Slot, amount: i32, by: Option<EntityId>) {
+        let (grid, cell, field) = slot;
+        let Some(at) = self.chunk_at(grid, cell.chunk(), field, true) else {
+            return;
+        };
+        let chunk = &mut self.chunks[at];
+        let idx = cell.idx();
+        match chunk.at[idx.index()] {
+            0 => {
+                chunk.entries.push((idx, Change { sum: amount, by }));
+                chunk.at[idx.index()] = u32::try_from(chunk.entries.len()).unwrap_or(u32::MAX);
+            }
+            place => {
+                let change = &mut chunk.entries[place as usize - 1].1;
+                change.sum = change.sum.saturating_add(amount);
+                change.by = match (change.by, by) {
+                    (Some(have), Some(more)) => Some(have.min(more)),
+                    (have, more) => have.or(more),
+                };
+            }
+        }
+    }
+
+    /// Whether any change was asked for of a field in a cell.
+    fn contains(&mut self, slot: Slot) -> bool {
+        let (grid, cell, field) = slot;
+        self.chunk_at(grid, cell.chunk(), field, false)
+            .is_some_and(|at| self.chunks[at].at[cell.idx().index()] != 0)
+    }
+
+    /// Every change, in order of grid, cell and field: the order of
+    /// [`LookupMap::into_sorted_vec`] over the slots, which no two share.
+    /// The tables go back to `pool`, emptied, for the next step.
+    fn into_sorted(mut self, pool: &mut Vec<Box<[u32]>>) -> Vec<(Slot, Change)> {
+        pool.append(&mut self.pool);
+        let mut all: Vec<(Slot, Change)> =
+            Vec::with_capacity(self.chunks.iter().map(|chunk| chunk.entries.len()).sum());
+        for chunk in self.chunks {
+            let mut at = chunk.at;
+            for (idx, change) in chunk.entries {
+                at[idx.index()] = 0;
+                all.push(((chunk.grid, chunk.chunk.cell(idx), chunk.field), change));
+            }
+            if pool.len() < CHANGE_TABLES_KEPT {
+                pool.push(at);
+            }
+        }
+        sort_slots(&mut all);
+        all
+    }
+}
+
+/// How many emptied tables of changes are kept for the next step.
+const CHANGE_TABLES_KEPT: usize = 64;
+
+/// Sorts changes into the order of their slots: grid, then cell by
+/// storey, row and column, then field. No two share a slot. Where the
+/// slots differ by few enough bits, each is turned into one number of
+/// its place in that order, with its index below it, and the numbers are
+/// sorted; otherwise the slots are compared as they are.
+fn sort_slots(all: &mut Vec<(Slot, Change)>) {
+    let Some(first) = all.first().map(|(slot, _)| *slot) else {
+        return;
+    };
+    // The least and the most of each part of a slot, as unsigned
+    // numbers in the same order.
+    let parts = |(grid, cell, field): Slot| -> [u64; 5] {
+        let flip = |value: i32| u64::from(value.cast_unsigned() ^ (1 << 31));
+        [
+            u64::from(grid.raw()),
+            flip(cell.z),
+            flip(cell.y),
+            flip(cell.x),
+            u64::from(field.raw()),
+        ]
+    };
+    let mut low = parts(first);
+    let mut high = low;
+    for (slot, _) in all.iter() {
+        for (part, value) in parts(*slot).into_iter().enumerate() {
+            low[part] = low[part].min(value);
+            high[part] = high[part].max(value);
+        }
+    }
+    let width = |span: u64| u64::BITS - span.leading_zeros();
+    let widths: [u32; 5] = core::array::from_fn(|part| width(high[part] - low[part]));
+    let index_bits = width(all.len() as u64);
+    let total: u32 = widths.iter().sum::<u32>() + index_bits;
+    if total > u64::BITS {
+        all.sort_unstable_by_key(|(slot, _)| *slot);
+        return;
+    }
+    let mut keys: Vec<u64> = all
+        .iter()
+        .enumerate()
+        .map(|(index, (slot, _))| {
+            let mut key = 0_u64;
+            for (part, value) in parts(*slot).into_iter().enumerate() {
+                key = (key << widths[part]) | (value - low[part]);
+            }
+            (key << index_bits) | index as u64
+        })
+        .collect();
+    keys.sort_unstable();
+    let mask = (1_u64 << index_bits) - 1;
+    let mut taken: Vec<Option<(Slot, Change)>> =
+        core::mem::take(all).into_iter().map(Some).collect();
+    all.extend(
+        keys.into_iter()
+            .filter_map(|key| taken.get_mut((key & mask) as usize)?.take()),
+    );
+}
+
 /// What a step has gathered so far.
 #[derive(Default)]
 struct Gathered {
     /// The changes of level, summed as they are asked for. Sums do not
     /// depend on the order they are made in, and the changes are
     /// written in order of cell.
-    changes: LookupMap<Slot, Change>,
+    changes: Changes,
     /// What reactions use of each field in each cell this step, so
     /// that nothing is used twice.
     used: BTreeMap<(GridId, CellPos, FieldId), i32>,
@@ -206,25 +389,7 @@ impl Gathered {
         if amount == 0 {
             return;
         }
-        let slot = (work.grid, cell, field);
-        match self.changes.get_mut(&slot) {
-            Some(change) => {
-                change.sum = change.sum.saturating_add(amount);
-                change.by = match (change.by, work.by) {
-                    (Some(have), Some(more)) => Some(have.min(more)),
-                    (have, more) => have.or(more),
-                };
-            }
-            None => {
-                self.changes.insert(
-                    slot,
-                    Change {
-                        sum: amount,
-                        by: work.by,
-                    },
-                );
-            }
-        }
+        self.changes.add((work.grid, cell, field), amount, work.by);
     }
 
     /// What is left of a field in a cell for this step's reactions.
@@ -545,9 +710,13 @@ fn rule(reader: &mut Reader<'_>, cx: &StepCx, work: &Work, def: &Field, out: &mu
         FieldRule::Drift { share, spread } => Some((*share, *spread)),
         _ => None,
     });
+    // Drift is what an area sets: where no area touches the tract there
+    // is none to look for.
     let drift = match carried {
-        Some(_) => reader.view.field_drift(cell).ok().flatten(),
-        None => None,
+        Some(_) if reader.view.any_area_in(cell.tract()) => {
+            reader.view.field_drift(cell).ok().flatten()
+        }
+        _ => None,
     };
 
     for (position, rule) in def.rules.iter().enumerate() {
@@ -779,6 +948,7 @@ impl WorldCtx<'_> {
 
         // Read everything; change nothing.
         let mut out = Gathered::default();
+        out.changes.pool = core::mem::take(&mut self.cosmos.field_tables);
         {
             let cosmos = &*self.cosmos;
             let defs = cosmos.defs();
@@ -825,9 +995,7 @@ impl WorldCtx<'_> {
                 .fields()
                 .get(item.field)
                 .is_some_and(|def| def.rests);
-            let touched = out
-                .changes
-                .contains_key(&(item.grid, item.cell, item.field));
+            let touched = out.changes.contains((item.grid, item.cell, item.field));
             if rests && !touched {
                 self.cosmos
                     .rest_field(Location::new(item.grid, item.cell), item.field);
@@ -836,14 +1004,20 @@ impl WorldCtx<'_> {
 
         // Write every change of level, each cell once, in order of
         // cell and then of field.
-        for ((grid, cell, field), change) in core::mem::take(&mut out.changes).into_sorted_vec() {
+        let mut pool = Vec::new();
+        let changes = core::mem::take(&mut out.changes).into_sorted(&mut pool);
+        self.cosmos.field_tables = pool;
+        for ((grid, cell, field), change) in changes {
+            // Every cell of a change is inside its grid: the level it
+            // held is read where it is written.
             let loc = Location::new(grid, cell);
-            let Ok(old) = self.cosmos.field(loc, field) else {
-                continue;
+            let level_of = |old: u8| {
+                u8::try_from((i32::from(old) + change.sum).clamp(0, FULL)).unwrap_or(u8::MAX)
             };
-            let level =
-                u8::try_from((i32::from(old) + change.sum).clamp(0, FULL)).unwrap_or(u8::MAX);
-            if let Ok(write) = self.cosmos.write_field(loc, field, level, change.by) {
+            if let Ok(write) = self
+                .cosmos
+                .write_field_with(loc, field, level_of, change.by)
+            {
                 self.field_written(loc, field, &write, field_cause(write.by));
             }
         }
@@ -1057,5 +1231,112 @@ impl Cosmos {
             }
         }
         found
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The sums of a step against the first form of them (D-735): a hash
+    //! map from slot to change, summed as asked for and handed out in
+    //! order of slot.
+
+    use proptest::prelude::*;
+
+    use super::*;
+
+    /// How the first form summed a change into its map.
+    fn push_reference(
+        map: &mut LookupMap<Slot, Change>,
+        slot: Slot,
+        amount: i32,
+        by: Option<EntityId>,
+    ) {
+        match map.get_mut(&slot) {
+            Some(change) => {
+                change.sum = change.sum.saturating_add(amount);
+                change.by = match (change.by, by) {
+                    (Some(have), Some(more)) => Some(have.min(more)),
+                    (have, more) => have.or(more),
+                };
+            }
+            None => {
+                map.insert(slot, Change { sum: amount, by });
+            }
+        }
+    }
+
+    fn slot_of(grid: u32, x: i32, y: i32, z: i32, field: u16) -> Slot {
+        (
+            GridId::new(grid),
+            CellPos::new(x, y, z),
+            FieldId::new(field),
+        )
+    }
+
+    fn check(pushes: &[(Slot, i32, Option<u32>)], probes: &[Slot]) -> Result<(), TestCaseError> {
+        let mut changes = Changes::default();
+        let mut reference: LookupMap<Slot, Change> = LookupMap::new();
+        for (slot, amount, by) in pushes {
+            let by = by.map(|slot| EntityId::new(slot, 0));
+            changes.add(*slot, *amount, by);
+            push_reference(&mut reference, *slot, *amount, by);
+        }
+        for probe in probes.iter().chain(pushes.iter().map(|(slot, _, _)| slot)) {
+            prop_assert_eq!(changes.contains(*probe), reference.contains_key(probe));
+        }
+        let mut pool = Vec::new();
+        let sorted = changes.into_sorted(&mut pool);
+        let expected = reference.into_sorted_vec();
+        prop_assert_eq!(sorted.len(), expected.len());
+        for ((slot, change), (want_slot, want)) in sorted.iter().zip(&expected) {
+            prop_assert_eq!(slot, want_slot);
+            prop_assert_eq!((change.sum, change.by), (want.sum, want.by));
+        }
+        // The tables handed back are empty, ready for another step.
+        prop_assert!(pool.iter().all(|table| table.iter().all(|at| *at == 0)));
+        Ok(())
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(128))]
+
+        /// Changes near one another, as a step makes them: a few chunks
+        /// of a few grids and fields.
+        #[test]
+        fn changes_sum_and_come_out_as_the_first_form_did(
+            pushes in prop::collection::vec(
+                ((0_u32..3, -40_i32..80, -40_i32..80, -9_i32..12, 0_u16..4),
+                 -300_i32..300, prop::option::of(0_u32..6)),
+                0..400,
+            ),
+            probes in prop::collection::vec((0_u32..3, -40_i32..80, -40_i32..80, -9_i32..12, 0_u16..4), 0..40),
+        ) {
+            let pushes: Vec<(Slot, i32, Option<u32>)> = pushes
+                .into_iter()
+                .map(|((grid, x, y, z, field), amount, by)| (slot_of(grid, x, y, z, field), amount, by))
+                .collect();
+            let probes: Vec<Slot> = probes
+                .into_iter()
+                .map(|(grid, x, y, z, field)| slot_of(grid, x, y, z, field))
+                .collect();
+            check(&pushes, &probes)?;
+        }
+
+        /// Changes far apart, so that their order cannot be packed into
+        /// one number and the slots are compared as they are.
+        #[test]
+        fn changes_far_apart_come_out_in_order_too(
+            pushes in prop::collection::vec(
+                ((any::<u32>(), any::<i32>(), any::<i32>(), any::<i32>(), any::<u16>()),
+                 -300_i32..300, prop::option::of(any::<u32>())),
+                0..60,
+            ),
+        ) {
+            let pushes: Vec<(Slot, i32, Option<u32>)> = pushes
+                .into_iter()
+                .map(|((grid, x, y, z, field), amount, by)| (slot_of(grid, x, y, z, field), amount, by))
+                .collect();
+            check(&pushes, &[])?;
+        }
     }
 }

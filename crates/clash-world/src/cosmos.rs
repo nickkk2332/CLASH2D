@@ -199,6 +199,13 @@ impl<'a> GridView<'a> {
             .collect())
     }
 
+    /// Whether any area touches a tract of the grid: if none does, every
+    /// cell of it has its stratum's ambient conditions.
+    #[inline]
+    pub(crate) fn any_area_in(&self, tract: TractPos) -> bool {
+        !self.areas.in_tract(self.id, tract).is_empty()
+    }
+
     /// A position brought inside the grid, or the edge it lies beyond.
     #[inline]
     pub fn normalize(&self, cell: CellPos) -> Result<CellPos, WorldError> {
@@ -387,6 +394,9 @@ pub struct Cosmos {
     /// between, which spares a cache comparing revisions chunk by chunk
     /// (D-731). Derived: not state, never saved or hashed.
     epoch: u64,
+    /// Emptied tables the field stepper sums changes of level in, kept
+    /// for its next step. Scratch: not state, never saved or hashed.
+    pub(crate) field_tables: Vec<Box<[u32]>>,
 }
 
 /// The parts of the cosmos that a change to one grid touches, borrowed
@@ -421,6 +431,7 @@ impl Cosmos {
             light: crate::light::LightSlot::new(),
             save: crate::save::SaveState::new(&defs),
             epoch: 0,
+            field_tables: Vec::new(),
             defs,
         }
     }
