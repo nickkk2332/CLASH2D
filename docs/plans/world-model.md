@@ -38,7 +38,7 @@ Section references such as "02 §14" point into those documents.
 | W8 | Tracts, regions, generation, loading | L | W7 | beta |
 | W9 | Tickets and activity | M | W8 | beta |
 | W10 | Persistence | M | W8 | beta |
-| W11 | World viewer and scenario runner | M | W8 | todo |
+| W11 | World viewer and scenario runner | M | W8 | beta |
 | W12 | Damage and destruction | M | W6 | beta |
 | W13 | Structural support and collapse | L | W12, W9 | beta |
 | W14 | Bodies | L | W12, W7, W9 | beta |
@@ -630,6 +630,21 @@ Build
 Done when
 - The test city can be generated and browsed.
 - `smoke_city` runs in CI in all four modes.
+
+Beta: built in `clash-save` (the console's host, `clash_save::host::GameHost`)
+and `clash-tools` (`worldview`, `scenario run`). Built: `clash-tools
+worldview`, a terminal viewer of one storey round the cursor through the
+scene's `WorldView` in omniscient mode, with pan, storey up and down and a
+console line, and a script mode that runs console lines from a file or a
+pipe and prints frames as text; the host's commands `gen`, `spawn`, `move`,
+`remove`, `set`, `control`, `session`, `damage`, `field`, `look`, `frame`,
+`advance`, `step`, `save`, `load`, `hash`, `check`, `inspect` (14 §3.3);
+`scenario run` against the real simulation in the four modes, with
+`--bless`; scripts under `scenarios/world/`, `smoke_city` among them, run
+by `cargo xtask check`. Both "Done when" items hold. Not built: the region
+map of tract kinds and devastation; decals and causes in the cell
+inspector (`look`); the commands `ticket`, `release` and `launch` (`session`
+and `gen` hold tickets; nothing launches a body from the console yet).
 
 ### W12 — Damage and destruction
 

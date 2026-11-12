@@ -1,0 +1,14 @@
+# A wall is punched: a weak blow leaves it standing, a strong one
+# destroys it and leaves its rubble in the cell (02 §12).
+use default seed=5
+gen core:testland size=1
+set @c:10,10,0 block core:wall
+assert "@c:10,10,0.block.def_id == 'core:wall'"
+damage @c:10,10,0 5kJ
+assert "@c:10,10,0.block.def_id == 'core:wall'"
+damage @c:10,10,0 2MJ intensity=100MPa
+expect event element_destroyed layer=block how=damage
+assert "@c:10,10,0.block == null"
+assert "@c:10,10,0.fixture.def_id == 'core:rubble'"
+advance 1s
+expect hash f72585acb8e1b874989ad229439a3111
