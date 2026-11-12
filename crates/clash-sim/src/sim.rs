@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 13;
+pub const SAVE_VERSION: u32 = 14;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -141,6 +141,12 @@ pub struct Sim {
     pub(crate) intervenes: Option<crate::action::IntervenesFn>,
     /// The shots in flight (07 §11; [`ranged`](crate::combat::ranged)).
     pub(crate) ranged: crate::combat::ranged::RangedState,
+    /// Every grip (07 §9; [`grip`](crate::combat::grip)).
+    pub(crate) grips: crate::combat::grip::GripTable,
+    /// Not state: the running action whose effect list is being run now,
+    /// for verbs that belong to the action that runs them (`seize`).
+    /// `None` between any two events.
+    pub(crate) acting: Option<crate::later::ActionId>,
 }
 
 /// Why saved state could not be loaded.
@@ -229,6 +235,7 @@ struct SavedRef<'a> {
     abilities: &'a crate::ability::AbilityIndex,
     ai: &'a crate::ai::AiState,
     ranged: &'a crate::combat::ranged::RangedState,
+    grips: &'a crate::combat::grip::GripTable,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -256,6 +263,7 @@ struct Saved {
     abilities: crate::ability::AbilityIndex,
     ai: crate::ai::AiState,
     ranged: crate::combat::ranged::RangedState,
+    grips: crate::combat::grip::GripTable,
 }
 
 impl Sim {
@@ -327,6 +335,8 @@ impl Sim {
             strike_depth: 0,
             intervenes: None,
             ranged: crate::combat::ranged::RangedState::default(),
+            grips: crate::combat::grip::GripTable::default(),
+            acting: None,
         };
         sim.bind_runtime();
         sim
@@ -736,6 +746,10 @@ impl Sim {
         if !self.ranged.is_pristine() {
             self.ranged.state_hash(&mut kernel);
         }
+        // Nor does one in which nothing is gripped.
+        if !self.grips.is_empty() {
+            self.grips.state_hash(&mut kernel);
+        }
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -794,6 +808,7 @@ impl Sim {
                 abilities: &self.abilities,
                 ai: &self.ai,
                 ranged: &self.ranged,
+                grips: &self.grips,
             },
         )
     }
@@ -883,6 +898,8 @@ impl Sim {
             strike_depth: 0,
             intervenes: None,
             ranged: saved.ranged,
+            grips: saved.grips,
+            acting: None,
         };
         sim.bind_runtime();
         Ok(sim)

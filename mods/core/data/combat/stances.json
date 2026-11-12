@@ -1,0 +1,58 @@
+[
+  { "//": "Fighting stances (07 §12): traits of one group, so that taking one leaves the other. A stance is what it confers and the rules it carries: nothing in the engine knows aggression from caution. Values are illustrative.",
+    "type": "trait", "id": "aggressive", "name": "Aggressive",
+    "description": "Pressing in, every blow thrown hard.",
+    "group": "fighting_stance",
+    "modifiers": [ { "attr": "strength", "mul": 1.15 } ],
+    "tags": ["aggressive"] },
+
+  { "//": "Guarded: a little less behind each blow, and every blow noticed in time is met with a block, on a shield if one is held and on the forearm if not.",
+    "type": "trait", "id": "defensive", "name": "Defensive",
+    "description": "Guard up, giving ground.",
+    "group": "fighting_stance",
+    "modifiers": [ { "attr": "strength", "mul": 0.9 } ],
+    "tags": ["defensive"],
+    "rules": [
+      { "on": "window_noticed",
+        "if": "event.kind == 'core:strike'",
+        "do": [ { "react": { "who": "self", "window": "event.window", "action": "block" } } ] } ] },
+
+  { "//": "Taking a stance, or another one (07 §12): the trait is given as the shift ends, and the other of its group goes.",
+    "type": "action", "id": "take_stance", "name": "Take a stance",
+    "params": { "stance": "id<trait>" },
+    "tags": ["stance"],
+    "phases": [
+      { "id": "shift", "time": "300 ms",
+        "on_exit": [ { "add_trait": { "to": "self", "trait": { "expr": "$stance" } } } ] } ] },
+
+  { "//": "Where a blow is aimed when nobody says (07 §3.1, §4.2): at no part in particular, so that it lands where the body offers.",
+    "type": "function", "id": "auto_part",
+    "params": { "target": "entity" },
+    "returns": "part?",
+    "value": "null",
+    "doc": "The part a blow is aimed at when none is chosen: none, so that it lands where the target's body offers it (07 §4.2)." },
+
+  { "//": "How hard a blow is thrown when nobody says (07 §3.3): all of it, unless a stance says otherwise. The actions give it what their actor knows of itself: whether it stands guarded.",
+    "type": "function", "id": "auto_effort",
+    "params": { "guarded": "bool", "target": "entity" },
+    "returns": "real",
+    "value": "if $guarded then 0.7 else 1",
+    "doc": "The effort of a blow when none is chosen (07 §3.3): full effort, or seven tenths for someone guarded (in a defensive stance). Safe for belief." },
+
+  { "//": "Being badly staggered (07 §7) breaks off a blow under way.",
+    "type": "eoc", "id": "stagger_breaks_blow", "on": "staggered",
+    "if": "event.severity >= 0.5 and (setting('core:staggering') ?? true)",
+    "doc": "A push that staggers someone at half the way to launching them or more interrupts the blows they have under way (actions tagged `strike`). Off when the setting `core:staggering` is false.",
+    "do": [ { "interrupt": { "who": "self", "tag": "strike" } } ] },
+
+  { "//": "Exertion (07 §12): every blow thrown in an aggressive stance costs stamina, for those who have it; out of breath, the stance is dropped.",
+    "type": "eoc", "id": "exertion", "on": "strike_landed",
+    "if": "self.has_tag('aggressive') and self.pool.frac('stamina') != null",
+    "doc": "A blow that lands from someone in an aggressive stance costs them 5 stamina.",
+    "do": [ { "pool_add": { "who": "self", "pool": "stamina", "amount": -5 } } ] },
+
+  { "type": "eoc", "id": "winded", "on": "pool_crossed",
+    "if": "self.has_tag('aggressive') and (self.pool.frac('stamina') ?? 1) < 0.25",
+    "doc": "Someone in an aggressive stance whose stamina falls below a quarter drops the stance.",
+    "do": [ { "remove_trait": { "from": "self", "trait": "aggressive" } } ] }
+]

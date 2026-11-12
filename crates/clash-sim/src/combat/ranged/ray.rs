@@ -150,7 +150,21 @@ pub(crate) fn cast(sim: &mut Sim, ray: &Ray, cause: Cause) -> u32 {
                     give,
                     span,
                 };
-                match flight::strike_creature(sim, occupant, hit.point, surface, energy, cause) {
+                let name = sim
+                    .defs()
+                    .try_registry::<super::defs::ProjectileDef>()
+                    .map(|registry| registry.name(ray.projectile).to_owned())
+                    .unwrap_or_default();
+                match flight::strike_guarded(
+                    sim,
+                    Some(ray.shooter),
+                    &name,
+                    occupant,
+                    hit.point,
+                    surface,
+                    energy,
+                    cause,
+                ) {
                     Struck::Passed => {}
                     Struck::Hit {
                         part,

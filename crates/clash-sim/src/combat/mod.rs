@@ -42,11 +42,14 @@ pub mod attack;
 pub mod contest;
 pub mod defence;
 pub mod events;
+pub mod grip;
+pub mod preview;
 pub mod push;
 pub mod ranged;
 pub mod reason;
 pub mod strike;
 pub mod surface;
+pub mod takedown;
 
 use clash_core::{Real, Rng};
 use clash_data::{Def, DefTypes, ValidateCx};
@@ -57,6 +60,7 @@ pub use attack::{
     WEAPON_SUBJECT, WithDef, WithSource,
 };
 pub use contest::{ContestDef, ContestForm, ContestId};
+pub use grip::{GRIP_EVENTS, GRIP_REASONS, Grip, GripTable};
 pub use defence::{Covers, DefenceContest, DefenceDef, DefenceForm, Handles, WithList, defending};
 pub use events::{COMBAT_EVENTS, CombatEvent, event_types};
 pub use push::{Push, Pushed};
@@ -70,7 +74,7 @@ use crate::registry::FunctionDef;
 use crate::rule::{Block, EffectKind};
 
 /// The heading combat's functions are listed under in the reference.
-const GROUP_COMBAT: &str = "Combat";
+pub(crate) const GROUP_COMBAT: &str = "Combat";
 
 /// Registers combat's definition types with the loader, `contest`, and
 /// its registry step, which enters its events. Called from the crate's
@@ -222,12 +226,61 @@ pub fn odds_fn(sim: &Sim, args: &[Value]) -> Value {
 pub fn functions() -> Vec<FunctionDef> {
     let mut table = melee_functions();
     table.extend(ranged::functions());
+    table.extend(preview::functions());
     table
 }
 
-/// The functions of contests (07 §4.1).
+/// The name of a step on the level by the signs of its two axes.
+fn step_name(x: i32, y: i32) -> Option<&'static str> {
+    Some(match (x.signum(), y.signum()) {
+        (0, -1) => "north",
+        (1, -1) => "north_east",
+        (1, 0) => "east",
+        (1, 1) => "south_east",
+        (0, 1) => "south",
+        (-1, 1) => "south_west",
+        (-1, 0) => "west",
+        (-1, -1) => "north_west",
+        _ => return None,
+    })
+}
+
+/// The body of `aside_from(who, from, right)`: the step across the line
+/// from `from` to `who`, to the left of someone facing away from `from`,
+/// or to the right.
+fn aside_from_fn(sim: &Sim, args: &[Value]) -> Value {
+    let place = |value: Option<&Value>| match value.and_then(|value| sim.subject_of(value)) {
+        Some(crate::event::Subject::Entity(id)) => sim.entities.location(id),
+        Some(crate::event::Subject::Loc(loc)) => Some(loc),
+        _ => None,
+    };
+    let (Some(who), Some(from)) = (place(args.first()), place(args.get(1))) else {
+        return Value::Null;
+    };
+    let right = args.get(2).and_then(Value::as_bool).unwrap_or(false);
+    let Some(delta) = sim.cosmos.delta(from, who) else {
+        return Value::Null;
+    };
+    let (x, y) = (delta.x.signum(), delta.y.signum());
+    // Facing (x, y) with south down the page: the left hand is (y, -x).
+    let (ax, ay) = if right { (-y, x) } else { (y, -x) };
+    step_name(ax, ay).map_or(Value::Null, Value::from)
+}
+
+/// The functions of contests (07 §4.1), and stepping out of a line.
 fn melee_functions() -> Vec<FunctionDef> {
     vec![
+        FunctionDef::new(
+            "aside_from",
+            "string?",
+            GROUP_COMBAT,
+            "The step that takes `who` across the line from `from`, out of the way of what comes along it (07 §5.2, §11.6): `north`, `north_east`, … to the left of someone facing straight away from `from`, or with `right` true to the right. Null for two in one column, or either nowhere. Safe for belief, as `away_from` is.",
+            aside_from_fn,
+        )
+        .arg("who", "any", "Who steps: an entity or a cell.")
+        .arg("from", "any", "What it steps out of the line of: an entity or a cell.")
+        .optional("right", "bool", "Whether to step to the right rather than the left. Default false.")
+        .safe(),
         FunctionDef::new(
             "contest",
             "real?",

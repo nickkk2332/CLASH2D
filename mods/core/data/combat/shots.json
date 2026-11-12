@@ -1,0 +1,69 @@
+[
+  { "//": "Seeing a shot coming (07 §11.2, §11.6): the bundled shots open a window of this kind for whoever is where they are aimed, from when they are fired until they are expected to arrive. A person of wits 10 needs a fifth of a second of their own time to notice it: an arrow loosed from far enough away, or a thrown rock, may be seen coming; a bullet arrives first. Someone on a clock twenty times as fast needs a hundredth of a second, and may step out of its way. Only whoever perceives the one shooting is offered it (03 §7.2).",
+    "type": "window_kind", "id": "shot",
+    "notice": "2 / max(self.attr.wits ?? 10, 1)",
+    "reach": "3 m" },
+
+  { "//": "An arrow caught in flight is an arrow in the hand (07 §11.6, `catch_shot`).",
+    "type": "projectile", "id": "arrow", "patch": true,
+    "item": "arrow" },
+
+  { "//": "Whether a hand closes on something flying past it: how quick the catcher is against how hard it is to follow.",
+    "type": "contest", "id": "catching", "name": "Catching",
+    "form": "ratio", "factor": 3, "spread": 1 },
+
+  { "//": "Catching a slow shot out of the air (07 §11.6): the hand goes up, and while the shot is still coming the catcher tries to close on it as it passes within reach. Whether the hand is quick enough is drawn once, as the catch begins. What is caught ends in the hand: an arrow is an arrow, a thrown knife the knife. A bullet is not caught: it arrives before anyone can begin.",
+    "type": "action", "id": "catch", "name": "Catch",
+    "reaction_to": ["shot"], "uses": { "arm": 1 }, "ready": "snatch",
+    "tags": ["defence"],
+    "vars": { "able": { "type": "bool", "default": false } },
+    "on_start": [ { "set": { "$able": "(contest('catching', fighting(self), 12) ?? -1) >= 0" } } ],
+    "phases": [
+      { "id": "reach", "time": "30 ms" },
+      { "id": "snatch", "time": "hold", "max": "2 s",
+        "tick": { "every": "5 ms",
+                  "do": [ { "if": "$able", "then": [ { "catch_shot": { "who": "self", "window": "$window" } } ] } ] },
+        "until": "not (window_open($window) ?? false)" },
+      { "id": "recover", "time": "200 ms" } ] },
+
+  { "//": "Stepping across the line of a shot or a blow (07 §5.2, leaving): someone who is not where it arrives is simply missed. The step is taken as the spring ends, across the line from whoever opened the window, to the left; on a fast enough clock it is done before the shot arrives.",
+    "type": "action", "id": "step_aside", "name": "Step aside",
+    "reaction_to": ["shot", "strike"], "ready": "clear",
+    "footing": true,
+    "tags": ["defence", "move"],
+    "phases": [
+      { "id": "spring", "time": "60 ms",
+        "on_exit": [ { "step": { "who": "self", "dir": { "expr": "aside_from(self, window_source($window)) ?? 'north'" } } } ] },
+      { "id": "clear", "time": "250 ms" } ] },
+
+  { "//": "A shield raised against what is coming, a shot or a blow (07 §11.6, §5.3): the face is put in its way. A shot meets it with its own point, as it would meet a wall: a buckler stops a thrown stone and an arrow, and a bullet goes through the wood with what it has left. A blow is spread over the face, as a block's is.",
+    "type": "action", "id": "raise_shield", "name": "Raise shield",
+    "reaction_to": ["shot", "strike"], "uses": { "arm": 1 }, "ready": "up",
+    "requires": "self.wielding('shield') != null",
+    "fail_text": "There is no shield in hand.",
+    "tags": ["defence"],
+    "phases": [
+      { "id": "lift",  "time": "80 ms" },
+      { "id": "up",    "time": "700 ms" },
+      { "id": "lower", "time": "150 ms" } ],
+    "defence": {
+      "during": "up", "form": "interpose",
+      "with": { "held": "shield", "surface": "face" },
+      "covers": { "arc": 120 },
+      "handles": "all",
+      "deflect": 0.2,
+      "holds": "(self.attr.strength ?? 10) * 40",
+      "brace": 0.5 } },
+
+  { "//": "Stances that answer shots by themselves: attach one and its holder answers every shot it notices in time.",
+    "type": "eoc", "id": "catch_on_notice", "on": "window_noticed", "attached": true,
+    "if": "event.kind == 'core:shot'",
+    "doc": "Tries to catch every shot its holder notices in time.",
+    "do": [ { "react": { "who": "self", "window": "event.window", "action": "catch" } } ] },
+  { "type": "eoc", "id": "step_aside_on_notice", "on": "window_noticed", "attached": true,
+    "doc": "Steps across the line of every shot or blow its holder notices in time.",
+    "do": [ { "react": { "who": "self", "window": "event.window", "action": "step_aside" } } ] },
+  { "type": "eoc", "id": "shield_on_notice", "on": "window_noticed", "attached": true,
+    "doc": "Raises a shield against every shot or blow its holder notices in time.",
+    "do": [ { "react": { "who": "self", "window": "event.window", "action": "raise_shield" } } ] }
+]

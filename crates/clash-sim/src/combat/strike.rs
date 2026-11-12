@@ -377,7 +377,9 @@ fn resolve(
     let surface = surface::find(sim, actor, &def.with, &action_name, &attack_name)?;
     let body_defs = sim.life.body_defs().ok();
     let weapon = match surface.striker {
-        Striker::Item { item, .. } => sim.subject_value(Subject::Entity(item)),
+        Striker::Item { item, .. } | Striker::Gripped { held: item, .. } => {
+            sim.subject_value(Subject::Entity(item))
+        }
         _ => Value::Null,
     };
     let limb = match (surface.striker, &body_defs) {
@@ -598,19 +600,38 @@ fn through_guard(
     sim: &mut Sim,
     striking: &Striking,
     interposed: &[defence::Interposed],
-    mut harm: Real,
+    harm: Real,
 ) -> Result<(Real, Real, Real), Reason> {
+    guard_takes(sim, &striking.surface, striking.cause, interposed, harm, true)
+}
+
+/// What the surfaces defences put in a blow's way take of it (07 §5.3),
+/// in turn, passing on what each cannot stop. Gives what is left for
+/// what is behind them, what the surfaces took, and what came back from
+/// one that was not affected. `blow` is the surface that strikes; a
+/// creature held in the way is struck with it.
+///
+/// A strike's blow is spread by what is put in its way (`spread`): each
+/// surface takes a packet at the energy over its own area times its
+/// give (decision D-712). A shot's is not: the projectile's point meets
+/// the shield, and each surface takes a packet at the projectile's own
+/// intensity, over the projectile's contact (decision D-811).
+pub(crate) fn guard_takes(
+    sim: &mut Sim,
+    blow: &Surface,
+    cause: Cause,
+    interposed: &[defence::Interposed],
+    mut harm: Real,
+    spread: bool,
+) -> Result<(Real, Real, Real), Reason> {
+    let kind = blow.kind;
     let (mut absorbed, mut returned) = (Real::ZERO, Real::ZERO);
     for put in interposed {
         if harm <= Real::ZERO {
             break;
         }
-        let packet = DamagePacket::new(
-            striking.surface.kind,
-            harm,
-            intensity_of(&put.surface, harm),
-            striking.cause,
-        );
+        let meets = if spread { &put.surface } else { blow };
+        let packet = DamagePacket::new(kind, harm, intensity_of(meets, harm), cause);
         match put.surface.striker {
             Striker::Item { item, .. } => {
                 let hit = crate::item::damage(sim, item, &packet)?;
@@ -629,8 +650,32 @@ fn through_guard(
                     target: put.defender,
                     at: HitAt::Part(key),
                     packet,
-                    area: put.surface.area,
-                    span: put.surface.span,
+                    area: meets.area,
+                    span: meets.span,
+                    dir: None,
+                })?;
+                if outcome.cancelled.is_some() {
+                    harm = Real::ZERO;
+                    continue;
+                }
+                absorbed += outcome.report.absorbed;
+                for worn in &outcome.report.worn {
+                    absorbed += worn.absorbed;
+                }
+                returned += outcome.report.returned;
+                harm = outcome.exited();
+            }
+            Striker::Gripped { held, .. } => {
+                // A creature held in the way (07 §9.2): the blow lands on
+                // its body where it is exposed, with the blow's own
+                // surface.
+                let packet = DamagePacket::new(kind, harm, intensity_of(blow, harm), cause);
+                let outcome = sim.hit(Hit {
+                    target: held,
+                    at: HitAt::Any,
+                    packet,
+                    area: blow.area,
+                    span: blow.span,
                     dir: None,
                 })?;
                 if outcome.cancelled.is_some() {
@@ -1278,6 +1323,31 @@ fn recoil(sim: &mut Sim, striking: &Striking, returned: Real, dir: Option<[Real;
                 return;
             }
         },
+        // A creature swung as a weapon takes the recoil on the part that
+        // struck (07 §9.2).
+        Striker::Gripped { held, part } => {
+            let hit = Hit {
+                target: held,
+                at: part.map_or(HitAt::Any, HitAt::Part),
+                packet,
+                area: surface.area,
+                span: surface.span,
+                dir: back,
+            };
+            match sim.hit(hit) {
+                Ok(outcome) => {
+                    let mut absorbed = outcome.report.absorbed;
+                    for worn in &outcome.report.worn {
+                        absorbed += worn.absorbed;
+                    }
+                    (absorbed, None, Some(held))
+                }
+                Err(reason) => {
+                    sim.fault(reason);
+                    return;
+                }
+            }
+        }
     };
     let body_defs = sim.life.body_defs().ok();
     let mut payload = striking
