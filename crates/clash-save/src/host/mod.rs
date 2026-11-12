@@ -67,9 +67,11 @@
 //!   `GameHost::set_up`, which runs after `use` and after `load`.
 //! - **Spawning from a template.** `spawn` takes a kind of occupant
 //!   until templates are built (06).
-//! - **Decisions.** `advance` refuses with
-//!   [`reasons::DECISION_PENDING`] when a directly controlled entity
-//!   must choose: taking the default waits for the action runtime.
+//! - **Decisions.** When a directly controlled entity is free to act
+//!   and nobody is at the keys, it waits until time has passed as far
+//!   as asked, by a `Wait` command (03 §5.2). A choice a rule puts
+//!   (`ask`) is not answered: time refuses to pass with
+//!   [`reasons::DECISION_PENDING`].
 //! - The commands of 14 §3.3 that have nothing behind them yet are
 //!   refused with [`reasons::NOT_BUILT`].
 
@@ -90,8 +92,8 @@ use clash_sim::console::{
     HostError, HostResult, Output, ParamSpec, ParamType, Record, Reference, Refusal,
 };
 use clash_sim::{
-    Advance, AdvanceLimit, Bound, Command, Control, DebugCommand, EntitySpec, Place, Presence,
-    Reason, Sim, SimEvent, Subject, debug_ticket,
+    Advance, AdvanceLimit, Bound, Command, Control, DebugCommand, DecisionKind, DecisionRequest,
+    EntitySpec, Place, Presence, Reason, Sim, SimEvent, Subject, debug_ticket,
 };
 use clash_time::Timeline;
 use clash_world::defs::GeneratorSpec;
@@ -143,7 +145,8 @@ pub mod reasons {
     /// A verb, a rule or an effect: the rule runtime is not bound to
     /// the simulation yet.
     pub const RULES_UNBOUND: &str = "console.rules_unbound";
-    /// A directly controlled entity must choose, and nobody is there to.
+    /// A rule has put a choice to a directly controlled entity, and
+    /// nobody is there to answer it.
     pub const DECISION_PENDING: &str = "console.decision_pending";
     /// A subsystem `hash` does not know.
     pub const UNKNOWN_SUBSYSTEM: &str = "console.unknown_subsystem";
@@ -205,7 +208,7 @@ pub mod reasons {
         ),
         (
             DECISION_PENDING,
-            "Time cannot pass: a directly controlled entity must choose and nobody is there to. Values: `entity`.",
+            "Time cannot pass: a rule has put a choice to a directly controlled entity and nobody is there to answer it. An entity that is only free to act waits instead. Values: `entity`.",
         ),
         (
             UNKNOWN_SUBSYSTEM,
@@ -1288,9 +1291,9 @@ impl Game {
     fn step(&mut self, command: &BoundCommand) -> HostResult<Output> {
         let count = u32::try_from(command.int("count").unwrap_or(1)).unwrap_or(0);
         let before = self.sim.steps();
-        match self.sim.advance(AdvanceLimit::Work(count)) {
-            Advance::NeedInput(request) => return Err(decision_pending(request.entity)),
-            Advance::Reached(_) | Advance::Yielded | Advance::Request(_) => {}
+        if let Advance::NeedInput(request) = self.sim.advance(AdvanceLimit::Work(count)) {
+            let now = self.sim.now();
+            self.wait_out(&request, now)?;
         }
         Ok(Output::text(format!(
             "handled {} wake-ups; t={}",
@@ -1550,6 +1553,27 @@ impl Game {
 
     // ---- Time ------------------------------------------------------------
 
+    /// Answers a decision the simulation stopped for, as the console
+    /// does with nobody at the keys: an entity free to act waits until
+    /// `until` (03 §5.2), by a `Wait` command, logged like any other. A
+    /// choice put by a rule is not answered: time cannot pass.
+    fn wait_out(&mut self, request: &DecisionRequest, until: Tick) -> HostResult<()> {
+        if !matches!(request.kind, DecisionKind::Free { .. }) {
+            return Err(decision_pending(request.entity));
+        }
+        let dur = if until > self.sim.now() {
+            until - self.sim.now()
+        } else {
+            Dur::ZERO
+        };
+        self.sim
+            .submit(Command::Wait {
+                entity: request.entity,
+                dur,
+            })
+            .map_err(|error| refusal_of(&error.reason))
+    }
+
     /// Runs the simulation up to a tick.
     fn run_until(&mut self, target: Tick) -> HostResult<()> {
         for _ in 0..MAX_ADVANCE_ROUNDS {
@@ -1559,7 +1583,7 @@ impl Game {
                 // application for something the console has no
                 // application to do: go on.
                 Advance::Yielded | Advance::Request(_) => {}
-                Advance::NeedInput(request) => return Err(decision_pending(request.entity)),
+                Advance::NeedInput(request) => self.wait_out(&request, target)?,
             }
         }
         Err(HostError::failed(format!(
@@ -1654,7 +1678,8 @@ impl ConsoleHost for GameHost {
                 // One wake-up, then look again: the condition is
                 // checked between events.
                 if let Advance::NeedInput(request) = game.sim.advance(AdvanceLimit::Work(1)) {
-                    return Err(decision_pending(request.entity));
+                    let next = game.sim.timeline().peek().unwrap_or(deadline).min(deadline);
+                    game.wait_out(&request, next)?;
                 }
             }
             Err(HostError::failed(

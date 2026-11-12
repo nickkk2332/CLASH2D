@@ -220,6 +220,12 @@ commands of the kernel (03 §4.4), validated, logged and replayed. `damage`,
 kernel has no `Debug` command for them yet, so the input log does not hold
 them and only the console's transcript replays them (D-585).
 
+When time passes at the console and a directly controlled entity is free
+to act, nobody is at the keys: it waits until time has passed as far as
+asked, by a `Wait` command (03 §5.2), logged like any other. A choice a
+rule puts to it is not answered, and time refuses to pass with
+`console.decision_pending`.
+
 References: `@here` is the cursor, `@self` the active character, `@sel`
 what the last command named, `@c:x,y,z` a cell in the cursor's grid (or the
 first realm's), `@e:N` or `@e:NvG` an entity by slot and generation,
