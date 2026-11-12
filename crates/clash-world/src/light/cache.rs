@@ -212,6 +212,9 @@ pub(super) struct Lit {
     deps: [u64; BLOCK_CHUNKS],
     /// The pass in which this was last asked for.
     used: u64,
+    /// The cosmos's count of changes to cells when this was last found
+    /// to stand (D-731).
+    epoch: u64,
 }
 
 impl Lit {
@@ -417,6 +420,34 @@ impl LightCache {
     /// The static light of a chunk whose tract is loaded, worked out if
     /// it is not there or no longer stands. `chunk` is inside its grid.
     pub(super) fn lit(&mut self, cosmos: &Cosmos, view: &GridView<'_>, chunk: ChunkPos) -> &Lit {
+        let key = (view.id(), chunk);
+        let epoch = cosmos.epoch();
+        let pass = self.pass;
+        // No cell of any grid has changed since this was last found to
+        // stand: it stands (D-731).
+        match self.lit.get_mut(&key) {
+            Some(lit) if lit.epoch == epoch => lit.used = pass,
+            _ => self.bring_up_to_date(cosmos, view, chunk, epoch),
+        }
+        // The entry is there: it stood or was just put in.
+        self.lit.get_or_insert_with(key, || Lit {
+            sky: Steps::All(SKY_DARK),
+            fixed: Default::default(),
+            deps: [0; BLOCK_CHUNKS],
+            used: pass,
+            epoch,
+        })
+    }
+
+    /// Compares the shapes of a chunk's block with the world and works
+    /// its light out again if what changed was within reach of it.
+    fn bring_up_to_date(
+        &mut self,
+        cosmos: &Cosmos,
+        view: &GridView<'_>,
+        chunk: ChunkPos,
+        epoch: u64,
+    ) {
         let defs: &WorldDefs = cosmos.defs();
         let key = (view.id(), chunk);
         // The block: the chunk and its neighbours, where they exist.
@@ -451,6 +482,7 @@ impl LightCache {
                     // Whatever changed was out of reach.
                     lit.deps = versions;
                     lit.used = pass;
+                    lit.epoch = epoch;
                 }
                 !stale
             }
@@ -470,16 +502,10 @@ impl LightCache {
                     fixed,
                     deps: versions,
                     used: pass,
+                    epoch,
                 },
             );
         }
-        // The entry is there: it stood or was just put in.
-        self.lit.get_or_insert_with(key, || Lit {
-            sky: Steps::All(SKY_DARK),
-            fixed: Default::default(),
-            deps: versions,
-            used: pass,
-        })
     }
 }
 

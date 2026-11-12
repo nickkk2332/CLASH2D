@@ -14,9 +14,10 @@
 //! what the element's material holds back of the kind and `coverage`
 //! the share of its cell's cross-section the element closes.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use clash_core::{Dur, EntityId, Real, impl_state_hash};
+use clash_core::{Dur, EntityId, Real, StateHash, StateHasher, impl_state_hash};
 use clash_time::{Wake, WakeDomain, WakeId};
 use clash_world::dims::STOREY_MM;
 use clash_world::iter::segment_cells;
@@ -24,7 +25,7 @@ use clash_world::{
     Cause, CellPos, Cosmos, Layer, Location, OccupantFilter, PointM, SkyTime, distance_m,
     distinct_ids,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::defs::{KindInfo, PerceptionDefs, SenseId, SignalKindId, SignalModel};
 use super::reason as why;
@@ -163,6 +164,58 @@ impl_state_hash!(Flight {
     wake
 });
 
+/// The delayed signals on their way, by id. Saved and hashed as the
+/// list of them in order of id; kept by id so that one arriving is
+/// taken out without moving the rest (D-733).
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub(super) struct Flights(BTreeMap<u64, Flight>);
+
+impl Flights {
+    /// How many there are.
+    pub(super) fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Adds one, with an id above every one already here.
+    fn push(&mut self, flight: Flight) {
+        self.0.insert(flight.id, flight);
+    }
+
+    /// Takes one out by its id.
+    fn take(&mut self, id: u64) -> Option<Flight> {
+        self.0.remove(&id)
+    }
+
+    /// The one with the highest id.
+    fn last_mut(&mut self) -> Option<&mut Flight> {
+        self.0.values_mut().next_back()
+    }
+}
+
+impl StateHash for Flights {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        hasher.write_len(self.0.len());
+        for flight in self.0.values() {
+            flight.state_hash(hasher);
+        }
+    }
+}
+
+impl Serialize for Flights {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.0.values())
+    }
+}
+
+impl<'de> Deserialize<'de> for Flights {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Flights, D::Error> {
+        let list = Vec::<Flight>::deserialize(deserializer)?;
+        Ok(Flights(
+            list.into_iter().map(|flight| (flight.id, flight)).collect(),
+        ))
+    }
+}
+
 /// What emitting a signal came to.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Emitted {
@@ -217,6 +270,38 @@ pub fn cell_distance(cosmos: &Cosmos, a: Location, b: Location) -> Option<Real> 
 /// [`EXPOSURE_SAMPLES`] points spread up its height, how many the eye
 /// sees (15 §3.1). A point source is seen or not.
 pub fn exposure(cosmos: &Cosmos, eye: Spot, source: Spot) -> Real {
+    let samples = exposure_heights(source);
+    let seen = cosmos
+        .sight_to_heights(eye.loc, eye.alt_mm, source.loc, &samples)
+        .count_ones();
+    Real::from(seen as u16) / Real::from(samples.len() as u16)
+}
+
+/// The heights above the base of its cell that a source is looked at,
+/// for [`exposure`]: one for a point, [`EXPOSURE_SAMPLES`] spread up a
+/// body.
+fn exposure_heights(source: Spot) -> Vec<u16> {
+    let samples = if source.height_mm == 0 {
+        1
+    } else {
+        EXPOSURE_SAMPLES
+    };
+    (0..samples)
+        .map(|sample| {
+            let up = if source.height_mm == 0 {
+                0
+            } else {
+                u32::from(source.height_mm) * (2 * u32::from(sample) + 1) / (2 * u32::from(samples))
+            };
+            (u32::from(source.alt_mm) + up).min(u32::from(STOREY_MM - 1)) as u16
+        })
+        .collect()
+}
+
+/// [`exposure`] as it was first written, one line of sight for each
+/// height: what the faster one is tested against.
+#[cfg(test)]
+pub(super) fn exposure_reference(cosmos: &Cosmos, eye: Spot, source: Spot) -> Real {
     let samples = if source.height_mm == 0 {
         1
     } else {
@@ -283,10 +368,24 @@ pub fn passing(cosmos: &Cosmos, kind: &KindInfo, a: PointM, b: PointM) -> Real {
     let last = CellPos::containing(b);
     let mut pass = Real::ONE;
     let mut prev: Option<(i32, clash_world::CellView)> = None;
+    // The column of the cell before: the cells of a line are nearly
+    // always in the same tract.
+    let mut held: Option<(clash_world::TractPos, &clash_world::Column)> = None;
     for cell in segment_cells(a, b) {
-        let Ok(states) = view.cell(cell) else {
+        let Ok(norm) = view.normalize(cell) else {
             return Real::ZERO;
         };
+        let column = match held {
+            Some((tract, column)) if tract == norm.tract() => column,
+            _ => {
+                let Some(column) = view.column(norm.tract()) else {
+                    return Real::ZERO;
+                };
+                held = Some((norm.tract(), column));
+                column
+            }
+        };
+        let states = column.cell(norm);
         if let Some((prev_z, prev_states)) = prev
             && cell.z != prev_z
         {
@@ -335,6 +434,36 @@ pub fn strength_at(sim: &Sim, kind: &KindInfo, strength: Real, source: Spot, eye
     if strength <= Real::ZERO {
         return Real::ZERO;
     }
+    strength_lit(sim, kind, strength, source, eye, || {
+        source_light(sim, kind, source)
+    })
+}
+
+/// The light at a source as [`strength_at`] and [`bound_at`] take it: the
+/// light at its cell now for a kind of the `line` model that uses light,
+/// and 1 for any other.
+pub(super) fn source_light(sim: &Sim, kind: &KindInfo, source: Spot) -> Real {
+    if kind.model == SignalModel::Line && kind.uses_light {
+        light_now(sim, source.loc)
+    } else {
+        Real::ONE
+    }
+}
+
+/// [`strength_at`] with the light at the source given, worked out only
+/// if it is wanted: a sweep that has read it for [`bound_at`] does not
+/// read it twice.
+pub(super) fn strength_lit(
+    sim: &Sim,
+    kind: &KindInfo,
+    strength: Real,
+    source: Spot,
+    eye: Spot,
+    light: impl FnOnce() -> Real,
+) -> Real {
+    if strength <= Real::ZERO {
+        return Real::ZERO;
+    }
     let Some(distance) = cell_distance(&sim.cosmos, source.loc, eye.loc) else {
         return Real::ZERO;
     };
@@ -353,12 +482,7 @@ pub fn strength_at(sim: &Sim, kind: &KindInfo, strength: Real, source: Spot, eye
             ) {
                 return Real::ZERO;
             }
-            let light = if kind.uses_light {
-                light_now(sim, source.loc)
-            } else {
-                Real::ONE
-            };
-            strength * exposed * light / falloff
+            strength * exposed * light() / falloff
         }
         SignalModel::Through => {
             let pass = passing(
@@ -377,13 +501,28 @@ pub fn strength_at(sim: &Sim, kind: &KindInfo, strength: Real, source: Spot, eye
 /// nothing in the way: [`strength_at`] with the source fully exposed and
 /// nothing holding it back. Never less than what does arrive.
 pub fn bound_at(sim: &Sim, kind: &KindInfo, strength: Real, source: Spot, eye: Spot) -> Real {
+    bound_lit(
+        sim,
+        kind,
+        strength,
+        source,
+        eye,
+        source_light(sim, kind, source),
+    )
+}
+
+/// [`bound_at`] with the light at the source given, as
+/// [`source_light`] gives it.
+pub(super) fn bound_lit(
+    sim: &Sim,
+    kind: &KindInfo,
+    strength: Real,
+    source: Spot,
+    eye: Spot,
+    light: Real,
+) -> Real {
     let Some(distance) = cell_distance(&sim.cosmos, source.loc, eye.loc) else {
         return Real::ZERO;
-    };
-    let light = if kind.model == SignalModel::Line && kind.uses_light {
-        light_now(sim, source.loc)
-    } else {
-        Real::ONE
     };
     match kind.model {
         SignalModel::Field => Real::ZERO,
@@ -606,14 +745,9 @@ fn launch(
 /// moved further off, the front goes on after it, unless it is now out
 /// of the sense's range.
 pub(super) fn arrive(sim: &mut Sim, id: u64) {
-    let Ok(at) = sim
-        .perception
-        .flights
-        .binary_search_by_key(&id, |flight| flight.id)
-    else {
+    let Some(flight) = sim.perception.flights.take(id) else {
         return;
     };
-    let flight = sim.perception.flights.remove(at);
     let Some(eye) = eye_of(sim, flight.observer) else {
         return;
     };
