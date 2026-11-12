@@ -21,27 +21,28 @@
 //! | A game being played | [`session`]: [`session::new_game`], [`session::spawn_player`] |
 //! | The scene's handle on the simulation, and the commands it submits | [`host::GameHost`], [`host::command_for`] |
 //! | Preferences and key bindings between runs | [`prefs`] |
-//! | Saving and loading | [`saves`]: the seam the save crate joins |
+//! | Saving and loading | [`saves`]: [`saves::SaveBackend`], [`saves::FileSaves`] over `clash-save` |
+//! | What the party perceives, for the view model and playback | [`perception`] |
 //! | Running from a script, without a terminal | [`headless`] |
 //!
-//! # Stand-ins
+//! # Seams
 //!
-//! One module stands where a package that is still being built will,
-//! and is deleted when it lands. It says in its own documentation what
-//! replaces it:
-//!
-//! | Module | Stands in for |
-//! |--------|---------------|
-//! | [`perception_shim`] | Perception: what the party perceived of each event, and the view model's map memory and sight, from the character's field of view |
+//! Nothing stands in for a package any more but two small seams, each
+//! named where it is: a game begins from a `start` until game
+//! scenarios exist ([`session`]), and the player's character is given
+//! its senses by the application until templates carry them
+//! ([`perception::give_senses`]).
 //!
 //! # Rules this crate keeps
 //!
 //! - The simulation is advanced only by [`game::Game::pass`], through
-//!   `Sim::advance`, and changed only through `Sim::submit`.
+//!   `Sim::advance`, and changed only through `Sim::submit`, but for
+//!   the senses a new character is given, the debugging switch
+//!   `perception.omniscient` and saving, which changes nothing hashed.
 //! - Nothing an ordinary screen shows reads truth: the view model is
-//!   changed by playback and by what [`perception_shim`] observed from
-//!   the character's cell, and bindings read through
-//!   [`host::GameHost`].
+//!   changed by playback and by what the simulation's perception says
+//!   the party sees and remembers ([`perception`]), and bindings read
+//!   through [`host::GameHost`].
 //! - Bad data is a located message, never a panic: before a scene
 //!   exists it is printed and the program leaves with a failure; after,
 //!   it is a line in the log and the screen of the role `error`.
@@ -54,8 +55,9 @@ pub mod creation;
 pub mod game;
 pub mod headless;
 pub mod host;
+pub mod interact;
 pub mod paths;
-pub mod perception_shim;
+pub mod perception;
 pub mod prefs;
 pub mod saves;
 pub mod session;

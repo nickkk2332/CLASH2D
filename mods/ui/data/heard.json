@@ -1,0 +1,7 @@
+[
+  { "//": "What is only heard of someone moving (12 §7.3, 15 §13): the bundled `step` show draws a step that is seen, and this one says what a step that is only heard sounds like, with a marker where it seemed to come from. Seen, it changes nothing and writes nothing. Several shows may match one event and all apply.",
+    "type": "show", "id": "footsteps_heard", "on": "entity_relocated",
+    "change": [],
+    "heard": { "log": "Footsteps, somewhere close.", "marker": "!" },
+    "importance": "minor", "sound": "footsteps_far" }
+]

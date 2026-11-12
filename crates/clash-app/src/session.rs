@@ -12,7 +12,11 @@
 //! | Seam | Stands in for | Replaced by |
 //! |------|---------------|-------------|
 //! | [`StartDef`] | A game scenario (13 §3) | The `scenario` definition: its `worlds` and `start` |
-//! | [`Session::percepts`] | Each character's percepts and memory (15) | Perception ([`crate::perception_shim`]) |
+//! | [`perception::give_senses`] | Senses from templates (15 §15) | Templates' `senses`, given by `spawn` |
+//!
+//! What the party perceives is the simulation's (15 §13): the session
+//! keeps only what the application has taken of it for the view model
+//! ([`Session::percepts`], [`crate::perception`]).
 
 use std::sync::Arc;
 
@@ -26,8 +30,8 @@ use clash_world::defs::RealmDef;
 use clash_world::{CellPos, Cosmos, GridId, Location, MemoryStore, MoveProfile, MoveRules};
 
 use crate::boot::Loaded;
-use crate::perception_shim::Percepts;
-use crate::saves::SavedGame;
+use crate::perception::{self, Percepts};
+use crate::saves::{SaveMeta, SavedGame};
 
 /// One game being played: the simulation, and whose eyes it is seen
 /// through.
@@ -48,11 +52,20 @@ pub struct Session {
     /// the start's. `None` if neither gives one: it is then drawn as a
     /// presence.
     pub look: Option<GlyphDef>,
-    /// What the character perceives and remembers
-    /// ([`crate::perception_shim`]).
+    /// What the application has taken of the party's perception for the
+    /// view model ([`crate::perception`]).
     pub percepts: Percepts,
+    /// The saving policy of the game (13 §9.2): `free`, `single`,
+    /// `checkpoints` or `none`, as the start says.
+    pub saving: String,
+    /// The seed the game's world was made with: kept in its saves.
+    pub seed: u64,
     /// Whether the simulation has moved since the character last looked.
     pub stale_view: bool,
+    /// The direction of the last step the simulation refused because the
+    /// way is closed (`move.closed`): what the frame loop offers to open.
+    pub bumped: Option<String>,
+
     /// Whether the play screen has been on show for this game. Once it
     /// has, the game is over when it no longer is.
     pub shown: bool,
@@ -65,6 +78,16 @@ impl Session {
     /// world.
     pub fn player_loc(&self) -> Option<Location> {
         self.sim.truth().location(self.player)
+    }
+
+    /// Whether a wake-up is due at the present tick: what the
+    /// simulation runs before it asks for a decision (03 §5.2), such as
+    /// the sweep of a sense whose owner has just moved.
+    pub fn due_now(&self) -> bool {
+        self.sim
+            .timeline()
+            .peek()
+            .is_some_and(|due| due <= self.sim.now())
     }
 
     /// Submits a debug command, turning a refusal into its reason.
@@ -123,21 +146,6 @@ pub fn spawn_player(sim: &mut Sim, spec: CharacterSpec) -> Result<EntityId, Stri
     Ok(id)
 }
 
-/// The glyph a character is drawn with: its templates' (06 §10.4), in
-/// the interface's form, if they give one that reads as one.
-fn template_look(sim: &Sim, entity: EntityId) -> Option<GlyphDef> {
-    let glyph = sim.glyph(entity)?;
-    let mut written = serde_json::Map::new();
-    written.insert("ch".to_owned(), serde_json::Value::from(glyph.ch.clone()));
-    if let Some(fg) = &glyph.fg {
-        written.insert("fg".to_owned(), serde_json::Value::from(fg.clone()));
-    }
-    if let Some(bg) = &glyph.bg {
-        written.insert("bg".to_owned(), serde_json::Value::from(bg.clone()));
-    }
-    serde_json::from_value(serde_json::Value::Object(written)).ok()
-}
-
 /// What a start says, for a session.
 struct StartOf<'a> {
     def: &'a StartDef,
@@ -179,15 +187,18 @@ pub fn start_template(loaded: &Loaded, start: &str) -> Result<Option<String>, St
 
 /// A session round a simulation that has its player.
 fn session_of(sim: Sim, player: EntityId, name: &str, start: StartOf<'_>) -> Session {
-    let look = template_look(&sim, player).or_else(|| start.def.glyph.clone());
+    let look = perception::look_of(&sim, player).or_else(|| start.def.glyph.clone());
     Session {
         sim,
         player,
         name: name.to_owned(),
+        saving: start.def.saving_policy().to_owned(),
         start: start.entry,
         look,
-        percepts: Percepts::default(),
+        percepts: Percepts::afresh(),
         stale_view: true,
+        bumped: None,
+        seed: 0,
         shown: false,
         omniscient: false,
     }
@@ -239,7 +250,11 @@ pub fn new_game(
         _ => return Err(format!("the start `{start}` does not say where it begins")),
     };
     let player = spawn_player(&mut sim, spec)?;
+    // Before it is put in the world, so that its senses sweep as soon as
+    // it is there.
+    perception::give_senses(&mut sim, player, &def.sense_ids(namespace))?;
     let mut session = session_of(sim, player, name, found);
+    session.seed = seed;
 
     // The session: the tracts round the start are loaded and the
     // character is put there. With no storey given it begins at the top
@@ -290,18 +305,88 @@ pub fn new_game(
 }
 
 /// Carries on a game read back from a save: the player's character is
-/// the first directly controlled entity of the simulation.
+/// the one the save names, or else the first directly controlled
+/// entity of the simulation. The view model is built afresh from what
+/// the party remembers and sees, and nothing is played back.
 pub fn resume(loaded: &Loaded, saved: SavedGame) -> Result<Session, String> {
-    let found = start_of(loaded, &saved.meta.start)?;
-    let player = saved
-        .sim
-        .truth()
-        .entities()
-        .iter()
-        .find(|entity| entity.control() == Control::Direct)
-        .map(clash_sim::KernelEntity::id)
+    if saved.meta.start.is_empty() {
+        return Err(
+            "the save does not say how its game began: it was not made by this application"
+                .to_owned(),
+        );
+    }
+    let found = start_of(loaded, &saved.meta.start).map_err(|reason| {
+        format!("the save's game began from a start the loaded mods do not define: {reason}")
+    })?;
+    let named = saved.meta.player.filter(|player| {
+        saved
+            .sim
+            .truth()
+            .entity(*player)
+            .is_some_and(|entity| entity.control() == Control::Direct)
+    });
+    let player = named
+        .or_else(|| {
+            saved
+                .sim
+                .truth()
+                .entities()
+                .iter()
+                .find(|entity| entity.control() == Control::Direct)
+                .map(clash_sim::KernelEntity::id)
+        })
         .ok_or("the save holds no character that is the player's to play")?;
-    Ok(session_of(saved.sim, player, &saved.meta.name, found))
+    let mut session = session_of(saved.sim, player, &saved.meta.name, found);
+    session.seed = saved.meta.seed;
+    // Frames the simulation held when it was saved are not shown: the
+    // picture is built from the map memory.
+    let _ = clash_sim::perception::drain_frames(&mut session.sim);
+    Ok(session)
+}
+
+/// How long a game has run, as a load screen says it: `2:05:09`, hours,
+/// minutes and seconds of the universal time since it began.
+pub fn game_time(now: clash_core::Tick) -> String {
+    let seconds = now.as_micros().max(0) / 1_000_000;
+    format!(
+        "{}:{:02}:{:02}",
+        seconds / 3_600,
+        seconds % 3_600 / 60,
+        seconds % 60
+    )
+}
+
+impl Session {
+    /// The name a save is given when the player gives none: the
+    /// character's, or else the start's.
+    pub fn default_save_name(&self) -> String {
+        if self.name.trim().is_empty() {
+            self.start.name.clone()
+        } else {
+            self.name.clone()
+        }
+    }
+
+    /// What the application writes beside the simulation when it saves
+    /// this game.
+    pub fn save_meta(&self) -> SaveMeta {
+        let who = if self.name.trim().is_empty() {
+            "Someone"
+        } else {
+            self.name.trim()
+        };
+        SaveMeta {
+            start: self.start.id.clone(),
+            name: self.name.clone(),
+            player: Some(self.player),
+            seed: self.seed,
+            summary: format!(
+                "{who}, {}, {} in",
+                self.start.name,
+                game_time(self.sim.now())
+            ),
+        }
+    }
 }
 
 /// The value that stands for the player's character in expressions.

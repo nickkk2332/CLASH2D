@@ -10,6 +10,7 @@
     "decision.choice": "ui:choice",
     "confirm": "ui:confirm",
     "error": "ui:error",
+    "notice": "ui:notice",
     "picker.list": "ui:pick_list",
     "picker.entity": "ui:pick_entity",
     "picker.cell": "ui:pick_cell",

@@ -14,7 +14,7 @@
 //! | `profiles` | Each `profiles/<name>.json` beside a searched mods directory and in the `profiles/` of each loaded mod. `state` is `current` for the one in use, `broken` for one that cannot be read. |
 //! | `mods` | Each directory of a searched mods directory that holds a `mod.json`. `state` is `enabled` for a mod of the profile in use, else `disabled`; `broken` for a manifest that cannot be read. |
 //! | `scenarios` | The `start` definitions of the loaded mods, in id order: the stand-in for game scenarios (`clash_scene::StartDef`). |
-//! | `saves` | What the save backend lists ([`crate::saves`]). |
+//! | `saves` | What the save backend lists, newest first ([`crate::saves`]) |
 //! | `profile`, `scenario` | The profile in use; the start of the game being played. |
 //! | `creation` | The character being made for the next game: null while none is, else the creation session as [`crate::creation`] says. |
 //!
@@ -26,9 +26,25 @@
 //! | `creation` | The creation session: `begin`, `select`, `clear`, `name`, `seed`, `finish` ([`crate::creation`]) |
 //! | `edit_creation` | The older form of `creation`'s `name` and `seed`: sets the `field` `name` or `seed` to a `value` |
 //! | `set_pref`, `rebind` | Keeps what the scene has already changed ([`crate::prefs`]) |
-//! | `save`, `load`, `delete_save` | Through the save backend, which is not built into this binary yet |
+//! | `save` | Saves the game under the `name` given (left out or empty, the character's name, or else the start's), through the save backend ([`crate::saves`]); refused unless the game's saving policy is `free` (13 §9.2) |
+//! | `load` | Loads the `save` with that id and carries it on: from the title, or in a game whose saving policy is `free`. What differs from when it was saved is told (`warnings`) |
+//! | `delete_save` | Deletes the `save` with that id |
 //! | `quit` | Nothing more: the scene has noted it and the loop ends |
 //! | `select_profile`, `reload_mods` | Refused, saying how to do it by starting again |
+//!
+//! # Saving policies (13 §9.2)
+//!
+//! A game has the policy its start names (`saving`), or `free`:
+//!
+//! | Policy | `app.can_save` | `app.can_load` in the game | Saved by the application |
+//! |--------|----------------|----------------------------|--------------------------|
+//! | `free` | While a game is played | While there is a save | Never by itself |
+//! | `single` | False | False | When the game is left, under the character's name |
+//! | `checkpoints` | False | False | When a rule asks for a checkpoint |
+//! | `none` | False | False | Never |
+//!
+//! From the title, `app.can_load` holds while there is any save. A
+//! rule's checkpoint is saved under every policy but `none`.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -43,7 +59,7 @@ use crate::boot::Loaded;
 use crate::creation::{Creation, FIELD_NAME, FIELD_SEED};
 use crate::paths::PROFILES_DIR;
 use crate::prefs::{Binding, PrefStore};
-use crate::saves::{SAVES_DIR, SaveBackend, SaveMeta};
+use crate::saves::{SAVES_DIR, SaveBackend};
 use crate::session::{self, Session};
 
 /// The state of an entry that is in use.
@@ -56,8 +72,12 @@ pub const STATE_DISABLED: &str = "disabled";
 /// The state of an entry whose file cannot be read.
 pub const STATE_BROKEN: &str = "broken";
 
-/// The name a save is given when none is.
-pub const DEFAULT_SAVE: &str = "save";
+/// The saving policy of a game the player saves and loads at will.
+pub const POLICY_FREE: &str = "free";
+/// The saving policy of a game with one save, written on leaving.
+pub const POLICY_SINGLE: &str = "single";
+/// The saving policy of a game with no saves at all.
+pub const POLICY_NONE: &str = "none";
 
 /// Everything the application holds outside the scene. See the
 /// [module](self) documentation.
@@ -85,10 +105,15 @@ pub struct Shared {
     pub data_dir: Option<PathBuf>,
     /// The qualified id of the keymap in force, for stored bindings.
     pub keymap: String,
-    /// Whether a game was started and the loop has yet to show it.
+    /// Whether a game was started or loaded and the loop has yet to
+    /// show it.
     pub started: bool,
+    /// What a load had to say: what differs from when the save was
+    /// made. The loop shows it once the game is.
+    pub warnings: Vec<String>,
+    /// Lines a service has for the log, taken by the loop.
+    pub said: Vec<String>,
 }
-
 impl Shared {
     /// The directory saves are kept in, if there is a data directory.
     pub fn saves_dir(&self) -> Option<PathBuf> {
@@ -318,7 +343,9 @@ impl AppState for App {
     fn entries(&self, list: AppList) -> Vec<AppEntry> {
         let shared = self.shared.borrow();
         match list {
-            AppList::Saves => shared.saves.list(shared.saves_dir().as_deref()),
+            AppList::Saves => shared
+                .saves
+                .list(shared.saves_dir().as_deref(), &shared.loaded),
             AppList::Profiles => shared.profiles.clone(),
             AppList::Mods => shared.mods.clone(),
             AppList::Scenarios => shared.starts.clone(),
@@ -335,12 +362,23 @@ impl AppState for App {
 
     fn can_save(&self) -> bool {
         let shared = self.shared.borrow();
-        shared.saves.available() && shared.session.is_some()
+        shared.saves.available(shared.saves_dir().as_deref())
+            && shared
+                .session
+                .as_ref()
+                .is_some_and(|session| session.saving == POLICY_FREE)
     }
 
     fn can_load(&self) -> bool {
         let shared = self.shared.borrow();
-        shared.saves.available() && !shared.saves.list(shared.saves_dir().as_deref()).is_empty()
+        let dir = shared.saves_dir();
+        let allowed = shared
+            .session
+            .as_ref()
+            .is_none_or(|session| session.saving == POLICY_FREE);
+        allowed
+            && shared.saves.available(dir.as_deref())
+            && !shared.saves.list(dir.as_deref(), &shared.loaded).is_empty()
     }
 
     fn creation(&self) -> ExprValue {
@@ -379,26 +417,44 @@ impl AppState for App {
                 shared.store.rebind(binding)
             }
             AppService::Save => {
-                let name = request.text("name").unwrap_or(DEFAULT_SAVE).to_owned();
                 let Some(session) = shared.session.as_mut() else {
                     return Err("no game is being played, so there is nothing to save".to_owned());
                 };
-                let meta = SaveMeta {
-                    start: session.start.id.clone(),
-                    name: session.name.clone(),
-                };
-                shared
+                if session.saving != POLICY_FREE {
+                    return Err(format!(
+                        "this game cannot be saved by hand: its saving policy is `{}` (13 §9.2)",
+                        session.saving
+                    ));
+                }
+                let name = request
+                    .text("name")
+                    .filter(|name| !name.trim().is_empty())
+                    .map_or_else(|| session.default_save_name(), str::to_owned);
+                let meta = session.save_meta();
+                let id = shared
                     .saves
-                    .save(dir.as_deref(), &mut session.sim, &meta, &name)
+                    .save(dir.as_deref(), &mut session.sim, &meta, &name)?;
+                shared.said.push(format!("Saved as “{}” ({id}).", name.trim()));
+                Ok(())
             }
             AppService::Load => {
                 let save = request
                     .text("save")
                     .ok_or("`load` needs the id of the `save` to load")?;
+                if let Some(session) = &shared.session
+                    && session.saving != POLICY_FREE
+                {
+                    return Err(format!(
+                        "another game cannot be loaded into this one: its saving policy is `{}` (13 §9.2)",
+                        session.saving
+                    ));
+                }
                 let saved = shared.saves.load(dir.as_deref(), &shared.loaded, save)?;
+                let warnings = saved.warnings.clone();
                 let session = session::resume(&shared.loaded, saved)?;
                 shared.session = Some(session);
                 shared.started = true;
+                shared.warnings = warnings;
                 Ok(())
             }
             AppService::DeleteSave => {
