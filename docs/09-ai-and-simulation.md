@@ -209,7 +209,7 @@ whole of what a modder writes and reads; section 17 lists it by kind.
 | `methods` | list of `{ if?, steps }` or `{ if?, method }` | Its ways, in order |
 | `done`, `fail` | conditions, mind context | When it is over; a failed goal is set aside |
 | `commit` | fraction ≥ 0 | How much another must outscore it to displace it |
-| `interrupts` | bool | Whether taking it up cancels what the character is doing, where the action's phase allows |
+| `interrupts` | bool | Whether taking it up cancels what the mind set the character doing (its step's action, where the phase allows, and its own wait); what a command or a rule set going runs on |
 | `retry_after` | time, default `10 s` | How long it is set aside after failing |
 | `noise` | number ≥ 0 | Up to this much is added to its score at each thought, from the character's own stream |
 | `wake_on` | list of event types | Such an event makes every mind that binds it as a subject, and has thought before, think at once |

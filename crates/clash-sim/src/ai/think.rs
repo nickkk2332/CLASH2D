@@ -960,6 +960,26 @@ pub(super) fn adopt(
         .get(mind)
         .and_then(|state| state.held.as_ref())
         .map(|held| held.goal);
+    // What the mind itself set going: the action of the step under way,
+    // and a wait of a step or a rest.
+    let (own_action, own_wait) =
+        sim.components
+            .mind_state
+            .get(mind)
+            .map_or((None, None), |state| {
+                let pending = state.held.as_ref().and_then(|held| held.pending.as_ref());
+                let action = pending.and_then(|pending| pending.action);
+                let waits = pending.is_some_and(|pending| {
+                    pending.action.is_none()
+                        && matches!(
+                            pending.kind(),
+                            StepKind::Wait | StepKind::Look | StepKind::KeepNear
+                        )
+                });
+                let current = sim.actions.wait_of(mind).and_then(|wait| wait.wake);
+                let wait = current.filter(|wake| waits || state.rest == Some(*wake));
+                (action, wait)
+            });
     set_held(
         sim,
         mind,
@@ -978,23 +998,25 @@ pub(super) fn adopt(
     events::goal_adopted(sim, mind, goal, &value, score, previous);
     let interrupts = forced || goal_def(sim, goal).is_some_and(|goal| goal.interrupts);
     if interrupts {
-        stop_doing(sim, mind);
+        stop_doing(sim, mind, own_action, own_wait.is_some());
     }
 }
 
-/// Cancels what the character is doing, where each action's phase
-/// allows it, and ends its wait.
-fn stop_doing(sim: &mut Sim, mind: EntityId) {
+/// Cancels what the mind itself set going, where the action's phase
+/// allows it, and ends its own wait. What a command or a rule set the
+/// character doing runs on: the goal is pursued when it ends (09 §4:
+/// reactions written as rules and goals coexist).
+fn stop_doing(sim: &mut Sim, mind: EntityId, action: Option<crate::later::ActionId>, wait: bool) {
     let cause = cause_of(mind);
-    for id in sim.actions_of(mind).to_vec() {
-        // An action in a phase that cannot be cancelled runs on; the
-        // goal is pursued when it ends.
+    if let Some(id) = action
+        && sim.actions.get(id).is_some()
+    {
+        // An action in a phase that cannot be cancelled runs on.
         let _ = sim.cancel_action(mind, id, true, cause);
     }
-    if sim.actions.wait_of(mind).is_some() {
+    if wait {
         let _ = sim.wait(mind, Dur::ZERO, cause);
     }
-    sim.clear_plan(mind, None, cause);
 }
 
 /// A goal failed: `goal_failed` is raised and it is set aside for its

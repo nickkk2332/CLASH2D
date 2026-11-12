@@ -46,7 +46,7 @@
     "doc": "Getting away from something dangerous that happened close by, seen or heard: a fight, a blast, a collapse. Calls out first.",
     "about": { "memory": {
       "events": ["hit_landed", "wound_inflicted", "release_started", "collapse_started", "entity_died"],
-      "where": "it.age < 20 and it.loc != null and (dist(self, it.loc) ?? 99) < 15",
+      "where": "it.age < 20 and it.loc != null and it.actor != self and (dist(self, it.loc) ?? 99) < 15",
       "best": "it.salience" } },
     "score": "self.weight('caution') * $about.salience * 2.5",
     "commit": 0.3,
