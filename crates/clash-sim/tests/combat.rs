@@ -725,6 +725,38 @@ fn the_bundled_smash_comes_back_into_the_hand_and_whirl_cuts_all_round() {
 }
 
 #[test]
+fn a_blow_that_goes_through_carries_on_to_whoever_stands_behind() {
+    // A strong stab through Bram's torso: the point passes through him,
+    // and what is left of it reaches Cora behind him, out of the knife's
+    // reach, unaimed and unpushed.
+    let (mut sim, people) = row(67, &["Ada", "Bram", "Cora"]);
+    let (ada, bram, cora) = (people[0], people[1], people[2]);
+    arm(&mut sim, ada, "core:knife");
+    set_strength(&mut sim, ada, 100.0);
+    let torso = part_value(&sim, bram, "torso");
+    sim.drain_events();
+    let params = vec![
+        ("target".to_owned(), entity_value(&sim, bram)),
+        ("part".to_owned(), torso),
+    ];
+    act(&mut sim, ada, "stab", params);
+    run_for(&mut sim, 600 * MS);
+    let told = sim.drain_events();
+    assert_eq!(faults(&told), Vec::<String>::new());
+    let landed = named(&told, "strike_landed");
+    assert_eq!(landed.len(), 2, "both are struck");
+    assert_eq!(landed[1].subject("target"), Some(Subject::Entity(cora)));
+    assert!(field(landed[0], "passed") > Real::ZERO);
+    assert_eq!(field(landed[1], "energy"), field(landed[0], "passed"));
+    assert_eq!(field(landed[1], "push"), Real::ZERO);
+    assert!(
+        named(&told, "hit_landed")
+            .iter()
+            .any(|event| about(event, cora))
+    );
+}
+
+#[test]
 fn a_punch_to_an_unarmoured_head_wounds_and_the_blood_drains() {
     let (mut sim, ada, bram) = city(13);
     let head = part_value(&sim, bram, "head");

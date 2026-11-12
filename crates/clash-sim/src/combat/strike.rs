@@ -539,7 +539,18 @@ fn resolve(
             })
         };
         let behind_allowed = queue.is_empty() && arc.is_none();
-        let outcome = at_target(sim, &striking, next, aimed_at, energy_here, &mut tally)?;
+        // Someone behind the target is reached by what went through it:
+        // the blow is not aimed at them and does not push them.
+        let carried_on = arc.is_none() && next != target;
+        let outcome = at_target(
+            sim,
+            &striking,
+            next,
+            aimed_at,
+            energy_here,
+            carried_on,
+            &mut tally,
+        )?;
         match outcome {
             AtTarget::Landed { exits, walled } => {
                 if chained {
@@ -796,7 +807,10 @@ fn standing_behind(
         .find(|id| !struck.contains(id) && sim.components().body.contains(*id))
 }
 
-/// Steps 2 to 8 against one target with `energy` joules (07 §3.4).
+/// Steps 2 to 8 against one target with `energy` joules (07 §3.4). For
+/// a creature `carried_on` to, behind the one struck, only delivery and
+/// results: what went through is not aimed, needs no reach and pushes
+/// nothing.
 #[allow(clippy::too_many_lines)]
 fn at_target(
     sim: &mut Sim,
@@ -804,6 +818,7 @@ fn at_target(
     target: EntityId,
     part: Option<PartKey>,
     energy: Real,
+    carried_on: bool,
     tally: &mut StrikeTally,
 ) -> Result<AtTarget, Reason> {
     let defs = Arc::clone(&striking.defs);
@@ -813,8 +828,10 @@ fn at_target(
     let surface = striking.surface;
 
     // Step 2: reach.
-    let reach = reach_of(sim, striking, target)?;
-    let within = gap(sim, striking.actor, target).is_some_and(|gap| gap <= reach);
+    let within = carried_on || {
+        let reach = reach_of(sim, striking, target)?;
+        gap(sim, striking.actor, target).is_some_and(|gap| gap <= reach)
+    };
     if !within {
         missed(sim, striking, target, "reach", None);
         return Ok(AtTarget::Missed);
@@ -823,7 +840,7 @@ fn at_target(
     // Step 3: a clash. Not built (C6).
 
     // Step 4: aim.
-    let at = match (&attack.aim, striking.sure) {
+    let at = match (&attack.aim, striking.sure || carried_on) {
         (Some(aimed), false) => {
             let contest = aimed.contest.id();
             let by = striking
@@ -851,9 +868,13 @@ fn at_target(
     // Step 5: defences. Not built (C4).
 
     // Step 6: delivery.
-    let push_share = striking
-        .eval(sim, Some(target), |attack| Some(&attack.push))
-        .unwrap_or(Real::ZERO);
+    let push_share = if carried_on {
+        Real::ZERO
+    } else {
+        striking
+            .eval(sim, Some(target), |attack| Some(&attack.push))
+            .unwrap_or(Real::ZERO)
+    };
     if !(push_share.is_finite() && push_share >= Real::ZERO && push_share <= Real::ONE) {
         return Err(bad_number("push", push_share));
     }

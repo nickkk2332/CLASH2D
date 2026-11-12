@@ -468,8 +468,10 @@ the next cell along the strike's direction (06 §7.4, the body wiring's).
 Where that cell holds a block, what the block did not stop is spent there
 and the strike ends. Where it holds none, the energy carries on: with an
 `arc` and `through`, to the arc's next target; with no `arc`, to the
-first creature with a body in that cell, struck where the body offers,
-and on from there, up to 16 creatures beyond the first. An arc without
+first creature with a body in that cell, and on from there, up to 16
+creatures beyond the first. What goes through is not aimed, needs no
+reach and pushes nothing: all of it is delivered, on the part of the
+same name as the one aimed at, or where the body offers. An arc without
 `through` strikes each of its targets with the attack's whole energy,
 each a strike of its own, and what exits each is the body wiring's
 alone.
