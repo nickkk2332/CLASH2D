@@ -78,8 +78,9 @@
     ]
   },
   {
-    "//": "A query is kept as written, and says so when it is iterated.",
+    "//": "A query the host does not answer: it says so when it is iterated.",
     "type": "eoc", "id": "asks",
+    "subjects": { "self": "entity" },
     "do": [
       { "for_each": { "entities": { "around": "self", "radius": 3 } }, "as": "e",
         "do": [ { "note": "found" } ] },

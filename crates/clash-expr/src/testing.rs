@@ -247,6 +247,17 @@ impl TestHost {
                 .expect("the test functions have distinct names");
         }
 
+        // A kind of query this host does not answer: one written in a
+        // field compiles, and is refused as unavailable when it runs.
+        registry
+            .add_query(
+                crate::QuerySpec::new("entities", subject(entity))
+                    .arg("around", Type::Any, "The centre.")
+                    .arg("radius", Type::Real, "How far, in metres.")
+                    .doc("Entities near a place."),
+            )
+            .expect("the test queries have distinct names");
+
         let damaged = registry
             .add_event(
                 EventSpec::new("damaged")

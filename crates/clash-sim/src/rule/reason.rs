@@ -61,6 +61,11 @@ pub const CHOICE_LOST: &str = "rule.choice_lost";
 pub const CHOICE_REFUSED: &str = "rule.choice_refused";
 /// The simulation would not deliver a `message`.
 pub const MESSAGE_REFUSED: &str = "rule.message_refused";
+/// A timer could not be set: its time is not above zero, or its owner
+/// is on no clock.
+pub const TIMER_REFUSED: &str = "rule.timer_refused";
+/// A timer fell due and what it runs is no longer where it was written.
+pub const TIMER_LOST: &str = "rule.timer_lost";
 
 /// The rule runtime's reasons, for the generated reference.
 pub const RULE_REASONS: &[ReasonInfo] = &[
@@ -153,6 +158,14 @@ pub const RULE_REASONS: &[ReasonInfo] = &[
         doc: "An effect called a verb that is in the registry and that nothing in the engine carries out: a verb of a package that is not built into this simulation. Nothing was done. Values: `verb`.",
     },
     ReasonInfo {
+        code: TIMER_REFUSED,
+        doc: "`after` or `every` could not set its timer (05 §10.4): its time came to null or to no time at all, `times` was not an int, or its owner is nothing on a clock (an entity, a cell, an area, a site, a realm or the simulation). Nothing was scheduled and the rule carried on. Values: `rule`, `path`, and `reason` for one the simulation gave.",
+    },
+    ReasonInfo {
+        code: TIMER_LOST,
+        doc: "A timer fell due, and the `after` or `every` that set it, or the recurring rule it runs, is no longer among the definitions: they changed under a save (05 §13.4). Nothing ran and the timer was dropped. Values: `definition`, `path` or `rule`.",
+    },
+    ReasonInfo {
         code: EXPRESSION_WARNING,
         doc: "An expression that a rule or a list of effects evaluated gave a run-time warning (05 §4.5): a division by zero, a value of the wrong type. The operation gave null and the rule carried on. Values: `definition`, `path`, `count`.",
     },
@@ -199,6 +212,8 @@ mod tests {
             CHOICE_LOST,
             CHOICE_REFUSED,
             MESSAGE_REFUSED,
+            TIMER_REFUSED,
+            TIMER_LOST,
         ];
         for code in used {
             assert!(seen.contains(&code), "{code} is used and not listed");

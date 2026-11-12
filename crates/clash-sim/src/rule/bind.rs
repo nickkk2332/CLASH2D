@@ -34,7 +34,8 @@ use std::sync::Arc;
 use clash_core::{Dur, EntityId, Rng, Tick};
 use clash_data::Defs;
 use clash_expr::{
-    DefRef, FunctionId, Handle, Host, PropertyId, RuntimeWarning, Value, VerbId, WarningLimiter,
+    DefRef, Fault, FunctionId, Handle, Host, PropertyId, QueryCall, RuntimeWarning, Value, VerbId,
+    WarningLimiter,
 };
 use clash_world::{Cause, CauseKind};
 
@@ -232,6 +233,10 @@ impl Host for SimRules<'_> {
     fn def_name(&self, id: DefRef) -> Option<&str> {
         self.sim.exprs.registry().def_name(id)
     }
+
+    fn query(&mut self, call: &QueryCall<'_>, out: &mut Vec<Value>) -> Result<(), Fault> {
+        self.sim.answer_query(call, out)
+    }
 }
 
 impl RuleHost for SimRules<'_> {
@@ -420,6 +425,74 @@ impl RuleHost for SimRules<'_> {
             }),
         );
         Ok(())
+    }
+
+    fn set_timer(&mut self, timer: &super::TimerSet<'_>) -> Result<(), Reason> {
+        let (delay, interval, left) = match timer.plan {
+            super::TimerPlan::After(delay) => (delay, None, None),
+            super::TimerPlan::Every { interval, times } => (interval, Some(interval), times),
+        };
+        if delay <= Dur::ZERO {
+            return Err(Reason::new(
+                reason::TIMER_REFUSED,
+                "a timer waits a span of time above zero",
+            ));
+        }
+        let owner = timer
+            .owner
+            .or_else(|| self.sim.default_timer_owner(timer.here))
+            .ok_or_else(|| Reason::new(reason::TIMER_REFUSED, "the timer has no owner"))?;
+        let site = self.rules.site_of(timer.origin).ok_or_else(|| {
+            Reason::new(
+                reason::TIMER_REFUSED,
+                "the effect that sets the timer is not among the definitions",
+            )
+        })?;
+        let registry = Arc::clone(self.rules.defs().expr_registry());
+        let continuation = super::Continuation {
+            site,
+            rule: timer
+                .by
+                .rule
+                .and_then(|id| self.rules.name(id).map(str::to_owned)),
+            owner: timer.by.owner.map(SubjectKey::from),
+            names: timer.by.names.iter().map(|name| name.to_string()).collect(),
+            subjects: timer.by.values.iter().map(Value::to_stored).collect(),
+            locals: timer.locals.iter().map(Value::to_stored).collect(),
+            event: timer.event.and_then(|(event, fields)| {
+                let name = registry.event(event)?.spec.name.clone();
+                Some((name, fields.iter().map(Value::to_stored).collect()))
+            }),
+            cause: self.cause(&timer.by),
+        };
+        let record = super::TimerRecord {
+            owner: SubjectKey::from(owner),
+            name: timer.name.map(str::to_owned),
+            interval,
+            left,
+            away: timer.away,
+            body: super::TimerBody::Effects(Box::new(continuation)),
+            state: super::TimerState::Away {
+                remaining: delay,
+                clock: None,
+                mark: Dur::ZERO,
+                since: self.sim.now(),
+            },
+            catch_up: 0,
+            resume: None,
+        };
+        self.sim.add_timer(record, delay).map(|_| ())
+    }
+
+    fn cancel_timer(&mut self, owner: Option<Handle>, here: Option<Handle>, name: &str) -> bool {
+        match owner.or_else(|| self.sim.default_timer_owner(here)) {
+            Some(owner) => self.sim.cancel_named_timer(owner, name),
+            None => false,
+        }
+    }
+
+    fn recurring(&mut self, owner: Handle, rule: EocId, on: bool) {
+        self.sim.set_recurring(owner, rule, on);
     }
 
     fn offer(&mut self, offer: &Offer<'_>) -> Offered {

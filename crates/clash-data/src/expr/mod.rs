@@ -83,17 +83,30 @@
 //! # }
 //! ```
 //!
+//! # Queries
+//!
+//! A value source over a query (`{ "count": query }` and the rest of
+//! 05 §7.4) and `{ "exists": query }` in a condition are compiled with
+//! their field: the query's kind, its arguments, and its `where`,
+//! `sort` and `limit`, which see the candidate as `it`. `list` and
+//! `defs` are answered here; every other kind is registered by the host
+//! and answered by [`Host::query`](clash_expr::Host::query). A field
+//! type of another crate that holds a query compiles it with
+//! [`compile_query`] and runs it with [`Evaluator::query`]. See
+//! `query.rs`.
+//!
 //! # What is not built yet
 //!
-//! Queries (05 §11). A value source over a query, `{ "exists": query }`
-//! in a condition and `{ "run": … }` are read and kept, and give null
-//! (or false) with a run-time warning when evaluated. Effects are the
-//! rule runtime's.
+//! `{ "run": … }` as a value source is read and kept and gives null with
+//! a run-time warning: a rule's result is taken by a `let` in a list of
+//! effects, which the rule runtime compiles. Effects are the rule
+//! runtime's.
 
 pub mod codes;
 mod defs;
 mod eval;
 mod field;
+mod query;
 mod scope;
 mod stage;
 
@@ -110,6 +123,7 @@ pub use field::{
     Any, Bool, Compile, Cond, Expr, ExprType, IdOf, Int, Number, Query, QueryOp, Str, ValueSource,
     Written,
 };
+pub use query::{CompiledQuery, DEFS_QUERY, IT, LIST_QUERY, QUERY_KEYS, compile_query};
 pub use scope::{CompileCx, Origin, Scope, TypeSpec};
 
 pub(crate) use scope::CompileEnv;

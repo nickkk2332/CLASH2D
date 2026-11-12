@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use clash_data::expr::Any;
-use clash_data::{Cond, Expr, Node, Span, Text};
+use clash_data::{CompiledQuery, Cond, Expr, Node, Span, Text};
 use clash_expr::{EventId, Place, VerbId};
 
 use super::{EocId, ReasonDefId, RuleGroupId};
@@ -288,9 +288,11 @@ pub struct AskOption {
 pub enum Items {
     /// The elements of a list.
     List(Arg),
-    /// The results of a query (05 §11), kept as it was written until
-    /// queries are built.
+    /// A query (05 §11) as it was written, which did not compile. It
+    /// reports when it runs.
     Query(Node),
+    /// The results of a query (05 §11), compiled where it is written.
+    Compiled(Arc<CompiledQuery>),
 }
 
 /// Which rule a call runs.

@@ -100,7 +100,10 @@ pub use defs::{
 pub use diag::{
     CODES, Code, CodeInfo, DefLabel, Diagnostic, Diagnostics, Note, Severity, code, explain,
 };
-pub use expr::{CompileCx, Cond, Evaluator, Expr, ExprDefs, Runner, Scope, ValueSource};
+pub use expr::{
+    CompileCx, CompiledQuery, Cond, Evaluator, Expr, ExprDefs, Runner, Scope, ValueSource,
+    compile_query,
+};
 pub use fields::{
     Energy, Feature, Force, Frequency, FromKind, FromSite, Gated, HasRate, Inline, Kind, KindValue,
     Length, Located, Mass, Power, Pressure, Quantity, Rate, Ref, Seconds, Site, Speed, Tag, TagSet,

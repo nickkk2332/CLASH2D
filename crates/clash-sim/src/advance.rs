@@ -149,6 +149,8 @@ impl Default for Handlers {
         // package with timers of its own calls `life::handle_wake`
         // first and handles the rest.
         handlers.set(WakeDomain::Timer, crate::life::timer_wake);
+        // Timers and recurring rules (05 §10.4, §9.4).
+        handlers.set(WakeDomain::Rule, crate::rule::timer_wake);
         handlers
     }
 }
