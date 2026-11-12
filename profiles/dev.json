@@ -1,10 +1,11 @@
 {
   "id": "dev",
   "name": "CLASH2D (development)",
-  "mods": ["core", "ui"],
+  "mods": ["core", "ui", "core_ui"],
   "boot_screen": "ui:title",
   "screens": {
     "play": "ui:play",
+    "creation": "ui:create",
     "decision.free": "ui:play",
     "decision.reaction": "ui:reaction",
     "decision.choice": "ui:choice",

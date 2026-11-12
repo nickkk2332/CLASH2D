@@ -1,0 +1,112 @@
+[
+  { "//": "Character creation: the screen of the role `creation`, reached from the new-game screen with F2. It edits the creation session the application keeps (06 §10.3), which it reads as `app.creation` and changes through the `app` service `creation`. Everything it shows comes from the templates' data: the choices of every kind, their options, parts, bounds and budgets, what is chosen and whether the character is complete. With no session in progress it lists `app.templates` to begin one from. A choice is changed in the popup `create_choice`, which shows the widget that fits its kind. Begin finishes the character and asks for the game, at the start the screen was opened for (`scenario`).",
+    "type": "screen", "id": "create",
+    "title": "Make a character",
+    "min_size": [60, 20],
+    "params": { "scenario": "string?" },
+    "vars": { "creation_name": "", "creation_seed": 1, "choice": 0, "made_from": "" },
+    "layout": { "frame": "Make a character", "rows": [
+      { "id": "begin_from", "if": "is_null(app.creation)", "fill": 1, "rows": [
+        { "text": "<header>What to make</>" },
+        { "fill": 1,
+          "list": { "id": "templates", "rows": "app.templates",
+                    "item": "{it.name}  <dim>{it.description}</>",
+                    "empty": "The loaded mods offer nothing to make a character from.",
+                    "tip": "Enter begins a character of this kind.",
+                    "on_activate": [
+                      { "app": { "creation": { "op": "'begin'", "template": "it.id" } } },
+                      { "set": { "screen.made_from": "it.name" } } ] } } ] },
+
+      { "id": "session", "if": "not is_null(app.creation)", "fill": 1, "rows": [
+        { "input": { "id": "name", "label": "Name  ", "bind": "creation_name", "max_len": 32,
+                     "tip": "What the character is called.",
+                     "on_change": [ { "app": { "creation": { "op": "'name'", "value": "screen.creation_name" } } } ] } },
+        { "cols": [
+          { "width": 26,
+            "number": { "id": "seed", "label": "Seed  ", "bind": "creation_seed", "min": 0, "max": 999999999,
+                        "tip": "What any choice left to chance is drawn from.",
+                        "on_change": [ { "app": { "creation": { "op": "'seed'", "value": "screen.creation_seed" } } } ] } },
+          { "width": 2, "height": 1, "spacer": {} },
+          { "button": { "id": "roll", "label": "Roll",
+                        "tip": "Another seed.",
+                        "on_activate": [
+                          { "set": { "screen.creation_seed": "(screen.creation_seed * 1103515245 + 12345) % 1000000000" } },
+                          { "app": { "creation": { "op": "'seed'", "value": "screen.creation_seed" } } } ] } } ] },
+        { "text": "<dim>Made from</> {if screen.made_from != '' then screen.made_from else str(app.creation.templates[0] ?? '')}" },
+        { "fill": 1, "cols": [
+          { "fill": 3, "frame": "Choices",
+            "list": { "id": "choices", "rows": "app.creation.choices", "selected": "choice",
+                      "item": "{if it.depth > 0 then '  ' else ''}{it.name}  <dim>{if it.kind == 'text' then (if (it.value ?? '') == '' then 'none yet' else it.value) else if it.kind == 'range' then str(it.value) else if it.kind == 'pick' then (if len(it.value) == 1 then first(it.value) else str(len(it.value)) + ' of ' + str(it.count)) else if it.kind == 'points' then str(it.spent) + ' of ' + str(it.budget) + ' spent' else str(len(it.value)) + ' of ' + str(it.budget) + ' parts'}</>",
+                      "empty": "There is nothing to choose.",
+                      "tip": "Enter changes this choice.",
+                      "on_activate": [
+                        { "open": { "screen": "create_choice",
+                                    "with": { "index": "screen.choice",
+                                              "amount": "if it.kind == 'range' then it.value else 0.0",
+                                              "words": "if it.kind == 'text' then (it.value ?? '') else ''" } } } ] } },
+          { "fill": 2, "frame": "The result", "rows": [
+            { "fill": 1,
+              "list": { "id": "attributes", "rows": "app.creation.attributes ?? []",
+                        "item": "{it.name}  {it.value}",
+                        "empty": "Nothing to show yet." } },
+            { "slot": "create.result" } ] } ] },
+        { "if": "app.creation.complete", "text": "<good>Ready to begin.</>" },
+        { "if": "not app.creation.complete", "text": "<warn>{app.creation.problem ?? 'Not finished.'}</>" },
+        { "cols": [
+          { "if": "app.creation.complete",
+            "button": { "id": "begin", "label": "Begin",
+                        "tip": "Make the character and begin the game.",
+                        "on_activate": [
+                          { "app": { "creation": { "op": "'finish'" } } },
+                          { "app": { "new_game": { "scenario": "$scenario" } } } ] } },
+          { "width": 2, "height": 1, "spacer": {} },
+          { "button": { "id": "over", "label": "Start over",
+                        "tip": "Begin again from a kind of your choosing.",
+                        "on_activate": [
+                          { "pick": { "from": "app.templates", "item": "{it.name}", "title": "Make what?" } },
+                          { "app": { "creation": { "op": "'begin'", "template": "it.id" } } },
+                          { "set": { "screen.made_from": "it.name" } } ] } } ] } ] },
+
+      { "height": 1, "tooltip": { "value": "Tab moves, Enter changes or takes, Esc goes back." } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "//": "One choice of the creation session, opened from the creation screen with its number in `app.creation.choices` and, for a number or a text, the value to start from. It shows the widget that fits the choice's kind: the options of a `pick` or `points` choice, each taken or put back with Enter (a pick of one puts the new one in place of the old); the parts an `assemble` choice allows, Enter adding one and Backspace taking them back; a number for a `range`, within its bounds; a line for a `text`. Enter takes a number or a text; Esc closes.",
+    "type": "screen", "id": "create_choice",
+    "title": "Choose",
+    "params": { "index": "int" },
+    "vars": { "amount": 0.5, "words": "", "part": 0 },
+    "popup": { "width": 50, "height": 14, "place": "centre", "dim": true },
+    "layout": { "frame": "{app.creation.choices[$index].name ?? 'Choose'}", "rows": [
+      { "text": "<dim>{if app.creation.choices[$index].kind == 'pick' then 'Pick ' + str(app.creation.choices[$index].count) + '.' else if app.creation.choices[$index].kind == 'points' then str(app.creation.choices[$index].left) + ' of ' + str(app.creation.choices[$index].budget) + ' points left.' else if app.creation.choices[$index].kind == 'assemble' then str(len(app.creation.choices[$index].value)) + ' of ' + str(app.creation.choices[$index].budget) + ' parts.' else if app.creation.choices[$index].kind == 'range' then 'From ' + str(app.creation.choices[$index].min) + ' to ' + str(app.creation.choices[$index].max) + '.' else 'At most ' + str(app.creation.choices[$index].max_length) + ' letters.'}</>" },
+      { "if": "app.creation.choices[$index].kind == 'pick' or app.creation.choices[$index].kind == 'points'", "fill": 1,
+        "list": { "id": "options", "rows": "app.creation.choices[$index].options",
+                  "item": "{if it.chosen then '[x]' else '[ ]'} {it.name}{if app.creation.choices[$index].kind == 'points' then '  (' + str(it.cost) + ')' else ''}",
+                  "empty": "It offers nothing.",
+                  "on_activate": [
+                    { "app": { "creation": { "op": "'select'", "key": "app.creation.choices[$index].key",
+                      "value": "if app.creation.choices[$index].kind == 'points' then (if it.chosen then without(app.creation.choices[$index].value, it.id) else app.creation.choices[$index].value + [it.id]) else if it.chosen then app.creation.choices[$index].value else if len(app.creation.choices[$index].value) < app.creation.choices[$index].count then app.creation.choices[$index].value + [it.id] else without(app.creation.choices[$index].value, first(app.creation.choices[$index].value)) + [it.id]" } } } ] } },
+      { "if": "app.creation.choices[$index].kind == 'assemble'", "fill": 1,
+        "list": { "id": "parts", "rows": "app.creation.choices[$index].parts", "selected": "part",
+                  "item": "{len(app.creation.choices[$index].value) - len(without(app.creation.choices[$index].value, it))} x {it}",
+                  "empty": "It allows no parts.",
+                  "on_activate": [
+                    { "app": { "creation": { "op": "'select'", "key": "app.creation.choices[$index].key",
+                      "value": "app.creation.choices[$index].value + [it]" } } } ] } },
+      { "if": "app.creation.choices[$index].kind == 'range'",
+        "number": { "id": "amount", "bind": "amount", "label": "Value ",
+                    "min": "app.creation.choices[$index].min", "max": "app.creation.choices[$index].max",
+                    "step": "(app.creation.choices[$index].max - app.creation.choices[$index].min) / 10" } },
+      { "if": "app.creation.choices[$index].kind == 'text'",
+        "input": { "id": "words", "bind": "words", "max_len": 64 } },
+      { "if": "app.creation.choices[$index].kind == 'range' or app.creation.choices[$index].kind == 'text'", "spacer": {} },
+      { "text": "<dim>{if app.creation.choices[$index].kind == 'assemble' then 'Enter adds one, Backspace takes them back, Esc closes.' else if app.creation.choices[$index].kind == 'range' or app.creation.choices[$index].kind == 'text' then 'Enter takes it, Esc leaves it as it was.' else 'Enter takes or puts back, Esc closes.'}</>" } ] },
+    "keys": {
+      "accept": [
+        { "app": { "creation": { "op": "'select'", "key": "app.creation.choices[$index].key",
+          "value": "if app.creation.choices[$index].kind == 'range' then screen.amount else if app.creation.choices[$index].kind == 'text' then screen.words else app.creation.choices[$index].value" } } },
+        { "close": {} } ],
+      "erase": [
+        { "app": { "creation": { "op": "'select'", "key": "app.creation.choices[$index].key",
+          "value": "if app.creation.choices[$index].kind == 'assemble' then without(app.creation.choices[$index].value, app.creation.choices[$index].parts[screen.part]) else app.creation.choices[$index].value" } } } ],
+      "back": [ { "close": {} } ] } }
+]

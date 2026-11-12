@@ -155,6 +155,11 @@ impl ViewMarks {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct ElementLook {
     states: Vec<Option<GlyphPart>>,
+    /// What the element is called where a screen says what a cell
+    /// holds: its id without its namespace, `_` as a space.
+    name: String,
+    /// The names of its declared states, in order.
+    state_names: Vec<String>,
 }
 
 /// How every element state, material and mark is drawn under one theme.
@@ -261,7 +266,13 @@ fn compile_table<I: DenseId>(
                     })
                 })
                 .collect();
-            ElementLook { states }
+            let id = table.name(id);
+            let bare = id.rsplit_once(':').map_or(id, |(_, bare)| bare);
+            ElementLook {
+                states,
+                name: bare.replace('_', " "),
+                state_names: element.state_names.clone(),
+            }
         })
         .collect()
 }
@@ -366,6 +377,21 @@ impl WorldGlyphs {
             Some(part) => *part,
             None => look.states.first().copied().flatten(),
         }
+    }
+
+    /// What an element state is called where a screen says what a cell
+    /// holds (12 §6.3): the definition's id without its namespace, and
+    /// the state's name after a comma where it declares states: `door,
+    /// open`. `None` where there is no element.
+    pub fn element_name(&self, layer: Layer, state: ElementState) -> Option<String> {
+        if state.is_none() {
+            return None;
+        }
+        let look = self.layers[layer.index()].get(usize::from(state.def))?;
+        Some(match look.state_names.get(usize::from(state.bits)) {
+            Some(named) => format!("{}, {}", look.name, named.replace('_', " ")),
+            None => look.name.clone(),
+        })
     }
 
     /// The colour of a material, for `"material"` in a glyph.

@@ -197,10 +197,14 @@ pub enum AppService {
     /// `field` and `value`. The older form of `creation`'s `name` and
     /// `seed`.
     EditCreation,
-    /// `creation`: the creation session (06 §10.3, 12 §10.4).
-    /// Arguments: `op`, one of `begin`, `select`, `clear`, `name`,
-    /// `seed` and `finish`; `template` for `begin`; `key` for `select`
-    /// and `clear`; `value` for `select`, `name` and `seed`.
+    /// `creation`: works on the creation session (06 §10.3), whose
+    /// state `app.creation` reads. Arguments: `op`, one of `begin`
+    /// (with `template`, the template's id), `select` (with `key`, the
+    /// choice's key, and `value`, a list of option or part ids, a
+    /// number or a text), `clear` (with `key`), `name` and `seed` (with
+    /// `value`, a text and a whole number) and `finish`, which checks
+    /// the character and keeps it for `new_game` or is refused with the
+    /// reason.
     Creation,
 }
 
