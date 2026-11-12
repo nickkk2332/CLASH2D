@@ -171,6 +171,8 @@ pub fn registry() -> Registry {
         PropertySpec::new(entity, "at", Type::Subject(loc))
             .belief_safe(true)
             .doc("The cell it is believed to be in."),
+        PropertySpec::new(entity, "offers_near", Type::list(Type::map(Type::Any)))
+            .doc("What it could do within a step, as the simulation's property of that name gives it (16 §3.5.1)."),
         PropertySpec::new(pool, "value", Type::Real).doc("How much there is."),
         PropertySpec::new(pool, "max", Type::Real).doc("The most there can be."),
         PropertySpec::new(pool, "frac", Type::Real).doc("The share there is, from 0 to 1."),

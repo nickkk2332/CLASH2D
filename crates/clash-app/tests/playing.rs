@@ -1,7 +1,7 @@
 //! The game on the real systems (decisions D-652 to D-655): the
 //! player's character is made from the `core:person` template, walks
-//! through an open door with the bundled `core:step` action, is refused
-//! at a shut one with the movement package's reason, and what happens
+//! through an open door with the bundled `core:step` action, opens a
+//! shut one by walking into it (the bundled `core:interact`), and what happens
 //! is played back over time, its lines reaching the log as they are
 //! played: after the `wait` of a script, not before.
 
@@ -170,7 +170,10 @@ fn a_person_walks_through_an_open_door_is_stopped_by_a_shut_one_and_falls_in_the
     );
 
     // Leave, and begin on the lane, whose doors are shut.
-    press(&mut run, &["escape", "down", "down", "enter", "enter"]);
+    press(
+        &mut run,
+        &["escape", "down", "down", "down", "enter", "enter"],
+    );
     assert!(!run.game().playing());
     press(&mut run, &["enter", "tab", "tab", "down", "enter"]);
     assert!(run.game().playing());
@@ -185,21 +188,26 @@ fn a_person_walks_through_an_open_door_is_stopped_by_a_shut_one_and_falls_in_the
         .game()
         .with_session(|session| session.sim.input_log().len())
         .unwrap();
-    // Into the shut door: the action is refused with movement's reason,
-    // nothing moves, no time passes and nothing is logged as done.
+    // Into the shut door: the step is refused by movement, and walking
+    // into it does what the door offers by default instead (D-701): the
+    // bundled `core:interact` opens it. Nothing moves, time passes for
+    // the opening, and the one command logged is the interaction's.
     press(&mut run, &["j"]);
     let (_, still, now) = player(&run);
-    assert_eq!((still, now), (at_door, then));
-    assert_eq!(
-        log(&run).last(),
-        Some(&("refusal".to_owned(), "The way is closed.".to_owned()))
+    assert_eq!(still, at_door);
+    assert!(now > then, "opening took time");
+    assert!(
+        !log(&run).iter().any(|(category, _)| category == "refusal"),
+        "{:?}",
+        log(&run)
     );
     assert_eq!(
         run.game()
             .with_session(|session| session.sim.input_log().len())
             .unwrap(),
-        logged
+        logged + 1
     );
+    assert_eq!(acts(&run, "core:interact"), 1);
 }
 
 #[test]
