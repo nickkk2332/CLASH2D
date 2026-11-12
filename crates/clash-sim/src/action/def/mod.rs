@@ -77,8 +77,12 @@ impl Role {
 /// A role as written.
 #[derive(Deserialize)]
 struct RoleObject {
+    /// The channels a participant in this role occupies, as an action's `uses`.
     #[serde(default)]
     uses: ChannelUse,
+    /// Whether the role is taken without being offered: the participant cannot
+    /// decline (03 §8). Not on the first role, which is whoever starts the
+    /// action. Default false.
     #[serde(default)]
     forced: Option<Located<bool>>,
 }
@@ -177,10 +181,19 @@ pub struct ActionDef {
     /// the mind context of the actor, with no locals.
     #[serde(default)]
     pub name: Option<Text>,
+    /// Channels occupied for the whole action (03 §6.2): an object of channel
+    /// ids, each with a number of slots or `"all"`. Default none. Not allowed
+    /// beside `roles`.
     #[serde(default)]
     uses: ChannelUse,
+    /// Typed parameters, by name, in the order written (03 §6.3): each a type,
+    /// or an object with `type` and, where it has one, a `default` evaluated
+    /// when the command leaves it out.
     #[serde(default)]
     params: Params,
+    /// The action's own variables, by name (03 §6.4): each a type, or an object
+    /// with `type` and `default`, a constant the variable starts as. One with
+    /// no default starts as null.
     #[serde(default)]
     vars: Vars,
     /// The condition that must hold to start. Compiled in the mind
@@ -208,14 +221,19 @@ pub struct ActionDef {
     /// Whether the actor must be standing on something to start.
     #[serde(default = "yes")]
     pub footing: bool,
+    /// The window kinds this action may answer (03 §7): a list of `window_kind`
+    /// ids. Default none.
     #[serde(default)]
     reaction_to: Vec<Located<Ref<WindowKindDef>>>,
     /// Whether, as a reaction, the action may answer a window aimed at
     /// someone else.
     #[serde(default)]
     pub on_behalf: bool,
+    /// For a reaction: the id of the phase from which it counts as ready (03
+    /// §7.3). Left out, the first.
     #[serde(default)]
     ready: Option<PhaseRef>,
+    /// The phases, in order (03 §6.4): at least one. Required.
     phases: Vec<Phase>,
     /// Effects run when the action starts, before its first phase.
     #[serde(default)]
@@ -233,6 +251,9 @@ pub struct ActionDef {
     /// simulation (03 §9).
     #[serde(default)]
     pub on_abandon: Effects,
+    /// The roles of a joint action (03 §8), in the order written, the first
+    /// being whoever starts it: by name, each with the channels it `uses` and
+    /// whether it is `forced`. Not allowed beside `uses`.
     #[serde(default)]
     roles: Option<Located<Roles>>,
     /// Free-form tags, queryable by rules and named by a phase's

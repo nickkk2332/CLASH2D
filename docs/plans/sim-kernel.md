@@ -29,7 +29,7 @@ start while the world model is being built.
 | P2 | Complete merge semantics | M | F4 | done |
 | P3 | Profiles and running without mods | S | F4 | beta |
 | P4 | Typed loading and validation stages | M | P2 | beta |
-| P5 | Schemas, reference, scaffolding | M | P1, P4 | todo |
+| P5 | Schemas, reference, scaffolding | M | P1, P4 | in progress |
 | P6 | Settings | S | K5 | todo |
 | P7 | Migration and obsoletion | M | P4, W10 | todo |
 | P8 | Hot reload | M | K7, P7 | todo |

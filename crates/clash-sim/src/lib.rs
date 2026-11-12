@@ -122,8 +122,8 @@ pub use host::{Bound, MAX_HOST_WARNINGS, RULE_STREAM, SimHost};
 pub use later::{ActionId, ActionTable, ChannelSlots, EocId, Plan, RuleState, WindowTable};
 pub use reason::{KERNEL_REASONS, Reason, ReasonInfo, codes};
 pub use registry::{
-    ArgDef, Bindings, FunctionDef, PropertyDef, engine_functions, engine_properties,
-    engine_registry, register_engine,
+    ArgDef, Bindings, FunctionDef, PropertyDef, ReasonDoc, SettingInfo, engine_functions,
+    engine_properties, engine_reasons, engine_registry, engine_settings, register_engine,
 };
 pub use sim::{LoadError, SAVE_KIND, SAVE_VERSION, Sim, SimHashes, Truth};
 pub use subject::{Kinds, SUBJECT_KIND_DOCS};

@@ -19,9 +19,14 @@ use std::process::ExitCode;
 use clash_data::DefTypes;
 
 mod data;
+mod reference;
+mod refs;
 mod replay;
 mod save;
+mod scaffold;
 mod scenario;
+mod schema;
+mod typedocs;
 mod worldview;
 
 /// Every definition type the engine knows.

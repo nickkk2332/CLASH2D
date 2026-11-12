@@ -32,7 +32,7 @@ says which.
 | TL6 | Test scripts | M | TL1, U1 | beta |
 | TL7 | Invariant checkers | M | TL6 | todo |
 | TL8 | Replay, divergence, diff, rewind | M | K7, TL6 | todo |
-| TL9 | Mod authoring suite | M | P5, P8, U6b | todo |
+| TL9 | Mod authoring suite | M | P5, P8, U6b | in progress |
 | TL10 | Map editor and capture | L | WG2, U7 | todo |
 | TL11 | Comparing incident forms | M | L3, I10 | todo |
 | TL12 | Player aids | M | SC3, SC6, A9 | todo |
