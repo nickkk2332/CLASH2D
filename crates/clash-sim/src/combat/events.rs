@@ -3,7 +3,9 @@
 //! is told so that rules can listen for them.
 //!
 //! Every event also binds `actor` and `instigator` from its cause: for
-//! a strike, the attacker.
+//! a strike, the attacker. Ranged combat's events
+//! ([`RANGED_EVENTS`](super::ranged::RANGED_EVENTS)) are raised and
+//! registered with these.
 
 use clash_data::RegistryCx;
 use clash_expr::{EventSpec, Registry, Type};
@@ -263,6 +265,7 @@ fn field_type(written: &str) -> FieldType {
 pub fn event_types() -> Vec<EventType> {
     COMBAT_EVENTS
         .iter()
+        .chain(super::ranged::RANGED_EVENTS)
         .map(|info| {
             let mut ty = EventType::new(info.name).doc(info.doc);
             for (name, kind) in info.subjects {
@@ -285,7 +288,7 @@ pub fn event_types() -> Vec<EventType> {
 /// Enters in the expression registry the events of [`COMBAT_EVENTS`],
 /// leaving alone whatever is there already.
 pub fn register(registry: &mut Registry) {
-    for info in COMBAT_EVENTS {
+    for info in COMBAT_EVENTS.iter().chain(super::ranged::RANGED_EVENTS) {
         if registry.event_id(info.name).is_some() {
             continue;
         }
@@ -339,6 +342,9 @@ mod tests {
                 );
             }
         }
-        assert_eq!(event_types().len(), COMBAT_EVENTS.len());
+        assert_eq!(
+            event_types().len(),
+            COMBAT_EVENTS.len() + super::super::ranged::RANGED_EVENTS.len()
+        );
     }
 }

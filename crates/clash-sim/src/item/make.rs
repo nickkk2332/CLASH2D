@@ -223,6 +223,27 @@ pub fn destroy(sim: &mut Sim, item: EntityId, cause: Cause) -> Result<(), Reason
     sim.remove_entity(item, cause)
 }
 
+/// Uses up members of an item (07 §11.5: a round fired): a stack loses
+/// `count` of them and keeps its place and hold; an item left with none
+/// is unmade, as [`destroy`] unmakes it. Refused with `item.bad_count`
+/// for none, or more than it has, and `item.not_an_item` for anything
+/// else.
+pub fn spend(sim: &mut Sim, item: EntityId, count: u32, cause: Cause) -> Result<(), Reason> {
+    let have = item_of(sim, item)?.count;
+    if count == 0 || count > have {
+        return Err(refuse(
+            reason::BAD_COUNT,
+            format!("{count} cannot be used up of an item that has {have}"),
+        )
+        .with("count", i64::from(count))
+        .with("have", i64::from(have)));
+    }
+    if count == have {
+        return destroy(sim, item, cause);
+    }
+    set_count(sim, item, have - count, cause)
+}
+
 /// Changes the colour an item carries (06 §9.1), or with `None` takes
 /// it away. Every member of a stack takes it.
 pub fn set_color(sim: &mut Sim, item: EntityId, color: Option<&str>) -> Result<(), Reason> {

@@ -357,6 +357,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::rule::timer_properties());
     properties.extend(crate::query::properties());
     properties.extend(crate::traits::properties());
+    properties.extend(crate::combat::ranged::properties());
     properties
 }
 

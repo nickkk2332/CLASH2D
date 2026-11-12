@@ -118,14 +118,14 @@ use crate::reason::{Reason, ReasonInfo};
 pub use confer::{Conferred, conferred, reconfer};
 pub use defs::{
     ALL_PARTS, AgesDef, ColorChoice, ContentDef, CountRange, HoldsDef, ItemDef, ItemId, KeepsDef,
-    MAX_WEAR_ENTRIES, ModifierDef, PartSelector, StageDef, Wear, WearDef,
+    MAX_WEAR_ENTRIES, ModifierDef, PartSelector, StageDef, StoreOrder, Wear, WearDef,
 };
 pub use hold::{
     GraspSlot, Hold, Holds, WornOn, drop, free_grasp, give, hold_of, holder_of, left_holder,
-    put_in, stow, take, take_off, take_out, take_with, wear,
+    next_in_store, put_in, store_order, stow, take, take_off, take_out, take_with, wear,
 };
 pub use latent::materialise;
-pub use make::{ITEM_STREAM, create, create_seeded, destroy, set_color};
+pub use make::{ITEM_STREAM, create, create_seeded, destroy, set_color, spend};
 pub use props::properties;
 pub use stack::{merge, rejoin, split};
 pub use verbs::verbs;

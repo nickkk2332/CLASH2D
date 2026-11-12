@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 10;
+pub const SAVE_VERSION: u32 = 11;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -124,6 +124,8 @@ pub struct Sim {
     /// Not state: how many strikes are being resolved inside one another
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
+    /// The shots in flight (07 §11; [`ranged`](crate::combat::ranged)).
+    pub(crate) ranged: crate::combat::ranged::RangedState,
 }
 
 /// Why saved state could not be loaded.
@@ -208,6 +210,7 @@ struct SavedRef<'a> {
     wakes: &'a WakeOwners,
     steps: u64,
     perception: &'a PerceptionState,
+    ranged: &'a crate::combat::ranged::RangedState,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -232,6 +235,7 @@ struct Saved {
     wakes: WakeOwners,
     steps: u64,
     perception: PerceptionState,
+    ranged: crate::combat::ranged::RangedState,
 }
 
 impl Sim {
@@ -295,6 +299,7 @@ impl Sim {
             perception: PerceptionState::default(),
             perception_defs,
             strike_depth: 0,
+            ranged: crate::combat::ranged::RangedState::default(),
         };
         sim.bind_runtime();
         sim
@@ -616,7 +621,13 @@ impl Sim {
             }
             // What the world did to someone's body or pools (06 §7.4;
             // 02 §16), to be carried out once its events are queued.
-            let harm = crate::life::harm::Harm::of(&event);
+            // A shot in flight strikes with its own surface (07 §11.1),
+            // in place of the blunt blow the world's event would give.
+            let flight = crate::combat::ranged::flight::FlightNews::of(self, &event);
+            let harm = match &flight {
+                Some(news) if news.replaces_harm() => None,
+                _ => crate::life::harm::Harm::of(&event),
+            };
             let (cause, loc) = (event.cause(), event.location());
             let stamped = self.stamped(Where::Loc(loc), cause, EventBody::World(event));
             self.events.push_back(stamped);
@@ -643,6 +654,9 @@ impl Sim {
             }
             if let Some(harm) = harm {
                 self.apply_harm(harm);
+            }
+            if let Some(news) = flight {
+                crate::combat::ranged::flight::follow(self, news);
             }
         }
     }
@@ -688,6 +702,11 @@ impl Sim {
         self.shelf.state_hash(&mut kernel);
         kernel.write_u64(self.steps);
         self.perception.state_hash(&mut kernel);
+        // A simulation that has never fired hashes as one from before
+        // shots were kept.
+        if !self.ranged.is_pristine() {
+            self.ranged.state_hash(&mut kernel);
+        }
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -743,6 +762,7 @@ impl Sim {
                 wakes: &self.wakes,
                 steps: self.steps,
                 perception: &self.perception,
+                ranged: &self.ranged,
             },
         )
     }
@@ -824,6 +844,7 @@ impl Sim {
             perception: saved.perception,
             perception_defs,
             strike_depth: 0,
+            ranged: saved.ranged,
         };
         sim.bind_runtime();
         Ok(sim)
