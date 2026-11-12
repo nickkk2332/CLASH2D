@@ -360,6 +360,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::combat::defence::properties());
     properties.extend(crate::ability::properties());
     properties.extend(crate::ai::properties());
+    properties.extend(crate::combat::ranged::properties());
     properties
 }
 

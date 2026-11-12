@@ -1,0 +1,29 @@
+# through_cover (plans/combat.md, C9; scene S19): cover is whatever the
+# material in between can stop (07 §11.1). The same shot, a rifle bullet
+# at 3.4 kJ, is fired twice. Through a window: the glass, 0.06 m³ of it
+# worth 3 kJ, is destroyed, and the bullet goes on, slower, into the one
+# behind. At a concrete wall, 0.6 m³ worth 0.6 MJ: it is stopped there,
+# and the one behind is untouched.
+use default seed=5
+gen core:testland size=1
+set @c:12,10,0 block core:window
+set @c:12,14,0 block core:wall
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 5, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 0, 4, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 5, 4, 0)" } }
+remove @spot
+assert "@e:2.loc.x == 15 and @e:4.loc.y == 14 and len(@e:2.wounds) == 0"
+as @e:1 do { "shoot": { "at": "offset(self.loc, 5, 0, 0).occupants[0]", "height": 1.3, "projectile": "core:rifle_bullet", "energy": 3400, "spread": 0 } }
+advance 300ms
+expect event projectile_fired
+expect event projectile_hit
+expect event element_destroyed
+assert "len(@e:2.wounds) > 0"
+as @e:3 do { "shoot": { "at": "offset(self.loc, 5, 0, 0).occupants[0]", "height": 1.3, "projectile": "core:rifle_bullet", "energy": 3400, "spread": 0 } }
+advance 300ms
+expect event projectile_hit
+assert "@c:12,14,0.block.def_id == 'core:wall'"
+assert "len(@e:4.wounds) == 0"
+expect hash a87b7145df6a24b061195101c9a4a6fb
