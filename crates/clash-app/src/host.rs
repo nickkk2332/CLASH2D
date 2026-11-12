@@ -32,7 +32,9 @@
 //! | `command react`, `command pass`, a `run` of a rule | Refused, with the reason: windows (03 §7) and the `Ui` command are not built |
 //!
 //! A refusal is the simulation's reason, which the frame loop writes in
-//! the log.
+//! the log. A step refused because the way is closed is noted
+//! ([`crate::session::Session::bumped`]), and the frame loop offers what
+//! is there instead ([`crate::interact`]).
 //!
 //! # The name of the player's character
 //!

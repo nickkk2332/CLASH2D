@@ -1053,6 +1053,10 @@ As built (decision D-618):
 - Frames and tags are records of output: saved, so that a loaded game
   answers for events delivered before, and not hashed. The party's view
   is hashed with the rest.
+- **The application** gives the player's character its senses, feeds
+  the view model from the frames, the map memory and the cells of the
+  party's view, answers playback with the tags, and sets the
+  omniscient switch with its debugging view (12 §3.5, decision D-700).
 - Not built: moving sources of light (carried lamps, fields that give
   light) are not counted in what a member sees; neither are they in
   `light` for the line model.

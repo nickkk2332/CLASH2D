@@ -582,7 +582,10 @@ under `scenarios/world/`. Not built here: timers and continuations,
 `after`, `every`, `cancel_timer`, recurring rules with staggering and
 `while_unloaded`; the three "Done when" items wait for them. No
 benchmark: the budget "save with 50 dirty tracts" (02 §25) is measured by
-W23.
+W23. The game binary saves and loads through it (12 §3.6, decision
+D-703): the pause menu's Save, the title's Continue and Load, warnings
+for a save made with other mods, the saving policy a start names;
+`crates/clash-app/tests/saving.rs`.
 
 ### K8 — World verbs
 

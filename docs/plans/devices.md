@@ -104,7 +104,11 @@ covers the three items above, a door opened and walked through, a lock
 and its key, hiding in a locker and a blast that spills it, and a save
 in the middle. Stubbed: the channels of `uses` (claimed only as the
 action that does it states), `tools`, `interactions` on templates, true
-networks (G3, G4), the query `interactions`.
+networks (G3, G4), the query `interactions`. The application offers
+them in play (12 §3.7, decisions D-701, D-702): walking into a shut door
+does its default, the property `entity.offers_near` lists what is within
+a step for the `ui` mod's `interact` screen, and a refusal is told with
+its reason; `crates/clash-app/tests/interacting.rs`.
 
 ### G2 — Device model
 

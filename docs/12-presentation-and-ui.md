@@ -112,7 +112,7 @@ to keep anything, and choices last for the run. It holds:
 |------|-------|
 | `preferences.json` | The player's preferences by qualified id, and the keys they bound, each with the keymap it was made in, the context, the key as a keymap writes it, and the name (empty for a key whose meaning was taken away). |
 | `mods/` | Mods searched before the installed mods directory, so that a copy there replaces an installed mod of the same id (04 §3.1). |
-| `saves/` | Saves, once the application can save. |
+| `saves/` | Saves, one file each (section 3.6). |
 
 ```json
 { "preferences": { "ui:theme": "ui:night" },
@@ -170,36 +170,43 @@ D-652):
    `text`. A game that was started or loaded closes every screen and
    opens the one of the role `play`; a game whose play screen has been
    closed is over.
-3. **The simulation.** While the player's character waits on the
-   simulation, which is while no decision is asked of it and it is busy
-   (an action, a wait, a plan) or unconscious, the simulation is
-   advanced toward the character's next decision (03 §5.2) with
-   `advance(Work(256))`, `UntilDecision` in slices, until a decision is
-   needed, nothing is left to happen, 8 ms of the frame have been spent
-   or an hour of simulation time has passed in the pass. A character
-   that is free, dead or out of the world is not waited on. Nothing
-   else advances the simulation.
+3. **The simulation.** What is due at the present tick runs first,
+   even while a decision is asked: the simulation runs it before it
+   asks (03 §5.2), and a sense whose owner has just been put in the
+   world or has just stepped sweeps then, so that the character has
+   looked before it is asked (decision D-700). While the player's
+   character waits on the simulation, which is while no decision is
+   asked of it and it is busy (an action, a wait, a plan) or
+   unconscious, the simulation is advanced toward the character's next
+   decision with `advance(Work(256))`, `UntilDecision` in slices, until
+   a decision is needed, nothing is left to happen, 8 ms of the frame
+   have been spent or an hour of simulation time has passed in the
+   pass. A character that is free, dead or out of the world is not
+   waited on. Nothing else advances the simulation.
 4. **Playback.** What the simulation reported in the pass, the
    commands' events and then the advance's, is drained and handed to
-   the scene as one batch (`push_events`), after the character has
-   looked round, so that the host answers what the party perceived as
-   of the end of the batch (section 7.5). A fault and a `message` for
-   the player also get a line in the log at once (categories `fault`
-   and `message`). The scene is advanced by the real time elapsed and
-   plays what falls due.
+   the scene as one batch (`push_events`), after what the party
+   perceives as the batch ends has been taken from the simulation's
+   perception (section 3.5), so that the host answers what the party
+   perceived as of the end of the batch (section 7.5). A fault and a
+   `message` for the player also get a line in the log at once
+   (categories `fault` and `message`). The scene is advanced by the
+   real time elapsed and plays what falls due.
 5. **The present.** Once playback has caught up, the view model is
-   given what the character perceives that no event said: cells that
-   came into view or left it, and who is in view. In a debug build it
-   is then checked against a fresh view model (section 5), and a drift
-   is written to the log as a fault. A decision that is waiting gets its
-   screen (section 9.5).
+   given what the party perceives that no event said (section 3.5):
+   cells that came into view or left it, and who is in view. In a
+   debug build it is then checked against a fresh view model
+   (section 5), and a drift is written to the log as a fault. A
+   decision that is waiting gets its screen (section 9.5).
 6. **The frame.** The scene builds a frame of the frontend's size, and
    the frontend presents it. The rest of the frame is slept out.
 
 The loop never waits on the simulation: a pass that runs out of its
 slice presents a frame and carries on in the next. A request a rule
 makes of the application (13 §9.1) is a checkpoint save, which goes to
-the save service, or is reported in the log as not yet possible.
+the save backend under the checkpoint's name unless the game's saving
+policy is `none` (section 3.6), or is reported in the log as not yet
+possible.
 
 The commands the play screen submits become the simulation's own
 through the host (`clash_app::host::command_for`): an `act` of an
@@ -211,30 +218,30 @@ the command `wait { dur }` is `Wait`, `cancel { action, abandon? }` is
 option }`, which the choice prompt submits, is `Choose`. `react`,
 `pass` and a `run` of a rule are refused with the reason until windows
 (03 §7) and the `Ui` command are built. A refusal is the simulation's
-reason: walking into a shut door is refused with what the movement
-package says, "The way is closed.". Tools and tests hand the game a
-command of their own with `Game::submit`, through `Sim::submit` as
-everything else.
+reason, written in the log; walking into a shut door is the one
+refusal the loop answers itself (section 3.7). Tools and tests hand the
+game a command of their own with `Game::submit`, through `Sim::submit`
+as everything else.
 
-Two parts of this loop are stand-ins for packages that are not built,
-each a module of its own that is deleted when that package lands:
-
-| Stand-in | For | Does |
-|----------|-----|------|
-| `clash_app::perception_shim` | Perception (15 §13) | After anything happens, the field of view from the character's cell with an eye 1.6 m above its base and a reach of 40 m is worked out, each cell in it is seen with its light, and each occupant in it becomes a sprite: the party's sight as of the end of the batch, written into its map memory. Playback is answered from it: an event was seen if a place it is about (not who did it) is in sight or seen in the picture, and nothing is only heard; a cell is seen as sight says; a thing is perceived as sight says, or known and not perceived now if it was ever seen. Once playback has caught up, every known cell becomes remembered, the cells in sight are seen, and who is in view replaces who was; the fresh view model of the debug check is memory and sight alone. Every creature but the player's own is drawn as the theme's suspected mark. |
-| `clash_app::saves` | Saving (13 §9) | The services `save`, `load` and `delete_save`, `app.saves`, `app.can_save` and `app.can_load` go through one trait. The backend in this binary lists nothing, says neither can be done, and refuses each service with "saving is not built into this binary yet". |
+Nothing stands in for a package any more. Two small seams remain, each
+named where it is: a game begins from a `start` until game scenarios
+exist (section 3.4), and the player's character is given its senses by
+the application until templates carry them (section 3.5).
 
 **The omniscient view.** While a preference whose bare name is
 `omniscient` holds true, the view model is filled from truth round the
-character instead (section 5, `view::omniscient`). Switching either way
-empties the view model first, so nothing learnt from truth is left
-behind as memory, and the preference is never kept between runs. The
-`ui` mod defines it with the control `ui:omniscient` on F12 in play,
-which switches it only while the preference `ui:development` holds. No
-screen offers that one; a development profile sets it, as
-`profiles/dev.json` does, so in any other profile F12 does nothing. The
-toggle moves to the `tools` mod (04 §3.5) when that exists.
-
+character instead (section 5, `view::omniscient`), and the simulation's
+switch `perception.omniscient` is on, so that every event is seen
+(15 §13). Switching it on empties the view model first; switching it
+off turns the simulation's switch off and builds the view model afresh
+from the party's map memory and what it sees, so nothing learnt from
+truth is left behind (decision D-706). The preference is never kept
+between runs. The `ui` mod defines it with the control `ui:omniscient`
+on F12 in play, which switches it only while the preference
+`ui:development` holds. No screen offers that one; a development
+profile sets it, as `profiles/dev.json` does, so in any other profile
+F12 does nothing. The toggle moves to the `tools` mod (04 §3.5) when
+that exists.
 ### 3.3 Headless scripts
 
 `clash --headless script` runs the same loop on the null frontend, on a
@@ -281,6 +288,8 @@ them as `app.scenarios`:
 | `at` | Where the character begins in the realm's base grid: `[x, y]`, the highest cell of that column a walker can stand in, or `[x, y, z]`, that cell. Required. |
 | `template` | The `template` the player's character is made from, every choice at its default, when the player has finished no character of their own (06 §10): a qualified id, or a bare name in the start's own namespace. One no mod defines is a load error, where templates are loaded. Left out, a game begins here only with a character the player made. |
 | `glyph` | How the player's character is drawn when none of its templates gives a glyph, with a `ch`. Left out, such a character is drawn as the theme's suspected mark. |
+| `senses` | The `sense` definitions the player's character perceives with when its templates give it none (section 3.5): qualified ids, or bare names in the start's own namespace. One no mod defines is a load error, where senses are loaded. Left out, every sense the loaded mods define. |
+| `saving` | The game's saving policy (13 §9.2, section 3.6): `free`, `single`, `checkpoints` or `none`. Left out, `free`. Anything else is a load error. |
 
 The service `new_game { scenario }` starts the game: a simulation with
 the realm made from the seed, the generators of the loaded mods and a
@@ -324,6 +333,119 @@ starts with the seed given on the command line, and gives both back
 with `creation` before it asks for `new_game`. The name is the
 character's own when its template has a choice that sets one; where it
 has none, `name()` of the player's character gives it.
+
+### 3.5 What the player perceives
+
+The simulation decides what the party sees and hears (15 §13); the
+application, in `clash_app::perception`, turns that into the view model
+and into the host's answers to playback (decision D-700).
+
+**Senses.** When the player's character is made, before it is put in
+the world, it is given senses if its templates gave it none: those its
+start names in `senses`, or else every `sense` the loaded mods define,
+in order of qualified id, through `attach_sense` (decision D-705). Once
+its control is direct it is of the party. This is the one change to the
+simulation the application makes outside `submit`: templates carry no
+`senses` yet (15 §15).
+
+**As a batch ends**, the frames are taken (`drain_frames`), and what is
+in view is worked out: the cells of the party's view as the members
+last observed (`party_view`), each with what is in it now (its
+elements, strongest field, most marked decal, whether it is open to the
+sky, and its light by the sky and the fixed sources, as map memory
+records them); the party's own members, always, where they are; and
+whatever stands in a cell in view and gives off something a sense of
+light could see. A creature is drawn with its templates' glyph, an item
+with its definition's, anything else as the theme's `suspected` mark.
+
+**Playback is answered** from it: `perceived` is the simulation's tag
+(`Sim::party_perceived`): seen, heard from a place, or neither;
+`seen_cell` is what is in a cell of the view now, or nothing out of
+view; `seen_sprite` is how a thing in view is drawn, or that a thing
+once perceived is not perceived now. What was only heard is a marker
+and the show's `heard` line, by playback; the `ui` mod's
+`heard.json` gives footsteps one. The frames' lists of what was heard
+are the same signals and are not shown again.
+
+**Once playback has caught up** the view model is given what no event
+said: each cell a frame recorded or the view left, as the member's map
+memory holds it and remembered; each cell in view, as it is now and
+seen; and who is in view, each thing that is not leaving the picture.
+So a cell in view is drawn as it is (a door seen opening is drawn open
+at once, before the next sweep records it), and a remembered cell is
+always the simulation's own memory. The fresh view model a debug build
+checks against is made the same way from the map memory (`snapshot`)
+and what is in view. On a game begun or loaded, and when frames were
+dropped, the view model is built afresh so.
+
+### 3.6 Saving and loading
+
+Saves are files in the `saves/` of the user's data directory, one for
+each save, written and read by `clash-save` (`save_game`, `load_game`,
+`read_meta`, `list_saves`; 01 §11.2) through `clash_app::saves::FileSaves`
+(decision D-703). With no data directory nothing can be saved, and the
+services say so.
+
+| Service | Does |
+|---------|------|
+| `save { name? }` | Saves the game as `saves/<id>.c2save`, its id made of the name's letters and digits in lower case with `-` between (a name of nothing is the character's name, or else the start's). A save of the same id is replaced. The metadata holds the name, a summary the application writes (`Ada, The town, 0:04:12 in`: who, where the game began and how long it has run), the seed, and as the saver's own bytes the start, the character's name and who the character is. A line in the log says it was saved. |
+| `load { save }` | Reads the game back over the loaded definitions and the generators bound to them, and carries it on: the screens give way to the play screen, the view model is built afresh from what the party remembers and sees (section 3.5), and nothing is played back. What differs from when it was saved (`load_warnings`: mods missing, added or at another version, definitions that became placeholders) is written in the log and shown on the screen of the role `notice`, with the parameters `title` and `text`. The state hash is what it was when the game was saved. |
+| `delete_save { save }` | Deletes the file. |
+
+`app.saves` lists the saves newest first, by when their files were
+written. An entry's `name` is the name it was given, its `description`
+the summary and when it was written (`2026-11-12 09:30`, UTC), and its
+`state` `enabled` for a save made with the mods loaded now, `changed`
+for one made with other mods or versions (it loads, with warnings) and
+`broken` for one that cannot be read (its `description` says why).
+
+**Saving policies** (13 §9.2). A game has the policy its start names
+(`saving`, section 3.4), or `free` (decision D-704):
+
+| Policy | `app.can_save` | `app.can_load` while playing | Saved by the application |
+|--------|----------------|------------------------------|--------------------------|
+| `free` | True | While there is a save | Never by itself |
+| `single` | False | False | As the game is left, under the character's name: its one save |
+| `checkpoints` | False | False | When a rule asks for a checkpoint |
+| `none` | False | False | Never |
+
+From the title `app.can_load` holds while there is any save. A rule's
+checkpoint is saved under its name under every policy but `none`.
+`single` does not yet save at intervals.
+
+### 3.7 Interactions in play
+
+**Walking into something closed.** A step the simulation refuses
+because the way is closed (`move.closed`: what stands there could
+stand aside and does not, as a shut door; a step action's `requires`
+refuses with its own `fail_text`, so the host asks movement what the
+step would meet) is a bump (decision D-701). The application asks the
+simulation what is there by default (`interaction::bump_default`: the
+block's, else the fixture's, else the floor's default that can be done
+now) and, by the preference whose bare name is `bump`:
+
+| `bump` | Walking into it |
+|--------|-----------------|
+| `at_once` (the default, or no such preference) | Runs the control named `bump` with the offer as `it`: the `ui` mod's starts `interact` with its `target` and `interaction` |
+| `ask` | Runs the control named `bump_ask`: the `ui` mod's asks with `confirm`, then does it |
+| `never` | Nothing: the step's refusal is written in the log |
+
+Where nothing there can be done by default and something would be, the
+refusal of each such default is written in the log in place of the
+step's: walking into a locked door without its key says "It does not
+open. It is locked, and you have no key.". The offer `it` is a map
+with the fields of a row of `offers_near` (below), its `where` the
+direction walked.
+
+**Using what is near.** The control `interact`, on `e` in play, opens
+`ui:interact`: a list of the property `view.offers_near` (16 §3.5.1),
+each row an interaction a thing within a step offers, with where it is
+and, greyed, why it cannot be done now (decision D-702). Choosing a row
+starts the action `interact` (the `core` mod's) with its `target` and
+`interaction`; the simulation tests reach and `if` against truth when
+it starts and refuses with the interaction's reason, which goes to the
+log. Hiding in a locker, getting out of it, opening, closing, locking
+and unlocking are all done so.
 
 ## 4. Glyphs and frames
 
@@ -942,10 +1064,10 @@ draw as a glide, is not a line.
 ### 7.5 What the party perceived
 
 Playback applies only what the party perceived, in the manner it was
-perceived (section 5). It does not decide that: the host does, and
-until perception (15 §13) is built a stand-in in `clash_scene::testing`
-does for tests (decision D-603), and `clash_app::perception_shim` for
-the game (section 3.2, decision D-656).
+perceived (section 5). It does not decide that: the host does. The
+game's host answers from the simulation's perception (15 §13; section
+3.5, decision D-700); tests over the scene alone use a stand-in in
+`clash_scene::testing` (decision D-603).
 
 | The host is asked | When | It answers |
 |-------------------|------|------------|
@@ -1601,7 +1723,10 @@ from each `profiles/` beside a searched mods directory and inside each
 loaded mod, `current` for the one in use and `broken` for a file that
 cannot be read; `mods` from each directory of a searched mods directory
 that holds a `mod.json`, `enabled` for one the profile loaded and
-`disabled` for one it did not; `scenarios` in order of qualified id.
+`disabled` for one it did not; `scenarios` in order of qualified id;
+and `saves` newest first, `enabled` for a save made with the mods
+loaded now, `changed` for one made with others and `broken` for one
+that cannot be read (section 3.6).
 
 **What a screen may know.** In ordinary screens, the party's own
 characters are available in full. Everyone and everything else is available
@@ -1855,6 +1980,7 @@ know-how appear in them with no screen written.
 | `confirm` | The `confirm` effect asks |
 | `tooltip`, `context_menu` | Something is hovered or clicked (section 9.4) |
 | `error` | An `app` service failed: the screen is opened over whatever is on show with the reason as its parameter `text` (section 3.2). Left out, the reason goes to the log alone. |
+| `notice` | A game was loaded from a save made with other mods: the screen is opened over the play screen with `title` and `text`, what differs (section 3.6). Left out, the log alone says it. |
 
 A role that names a screen which does not exist is a load error. A
 role the profile leaves out is found out when it is needed: the effect
@@ -1862,24 +1988,39 @@ that wanted its screen fails with the reason.
 
 The bundled profile names the `ui` mod's screens: `ui:play` for `play`
 and `decision.free`, `ui:reaction`, `ui:choice`, `ui:confirm`,
-`ui:error`, `ui:pick_list`, `ui:pick_entity`, `ui:pick_cell`,
+`ui:error`, `ui:notice`, `ui:pick_list`, `ui:pick_entity`, `ui:pick_cell`,
 `ui:pick_direction`, `ui:pick_number`, `ui:pick_text`, `ui:pick_multi`
 and `ui:context_menu`; its `boot_screen` is `ui:title`.
 
 **The screens a game is started and left from** are in
-`mods/ui/data/app.json`. `ui:title` offers a new game, Continue when
-there is a save (`ui:load`), Options and Quit; Esc quits. `ui:new_game`
+`mods/ui/data/app.json`. `ui:title` offers a new game, Continue (the
+newest save) and Load (`ui:load`) when there is a save, Options and
+Quit; Esc quits. `ui:new_game`
 takes a name and a seed into `app.creation` and lists `app.scenarios`;
 activating one starts the game there. `ui:options` sets the preferences
 `theme`, `playback_speed` and `cutscenes`, has the slot
-`ui:options.prefs` for a mod's own, and gives a key a meaning: the
+`ui:options.prefs` for a mod's own (the `ui` mod puts `bump` there),
+and gives a key a meaning: the
 context, the key and the name, through the `rebind` service.
 `ui:pause`, opened in play by the control `ui:pause` on Esc, resumes,
-saves and loads (each only while `app.can_save` or `app.can_load`
-holds), opens the options, and leaves to the title after asking:
-closing the play screen ends the game. `ui:load` lists `app.saves`.
+saves (`ui:save_game`) and loads (`ui:load`), each only while
+`app.can_save` or `app.can_load` holds, opens the options, and leaves
+to the title after asking: closing the play screen ends the game.
 `ui:error` shows a reason and a button to close it.
 
+**Saving and loading** are in `mods/ui/data/saving.json` (section 3.6):
+`ui:save_game` takes a name and asks for `save`, then closes itself and
+the pause menu; `ui:load` lists `app.saves` with each one's name,
+summary and time, greyed where it was made with other mods or cannot be
+read, and loads the one chosen; `ui:notice`, which the bundled profiles
+name for the role `notice`, shows its `title` and `text` and a button
+to carry on.
+
+**Using things** is in `mods/ui/data/interact.json` (section 3.7): the
+control `interact`, on `e` in play, opens `ui:interact`, the list of
+`view.offers_near`; the controls `bump` and `bump_ask` are what walking
+into something closed runs, by the preference `bump` (`at_once`, `ask`
+or `never`).
 **The play screen** (`ui:play`) is a `map_view`, the `log` beneath it
 and a status column: who the active character is, by `name(view)`, and
 two slots, `ui:play.bars` for a character's reserves and `ui:play.side`
@@ -1891,7 +2032,8 @@ second; `look`, which opens look mode (`ui:look`), a free cursor over
 the map with what the party knows of the place under it; `inventory`,
 `condition`, `abilities`, `map` and `journal`, which open screens that
 are empty and titled until they are built; `options`, which opens
-`ui:options`; `pause`, which opens `ui:pause`; `omniscient`, the
+`ui:options`; `interact`, on `e`, which opens `ui:interact` (section
+3.7); `pause`, which opens `ui:pause`; `omniscient`, the
 development profile's view of the truth (section 3.2); and `click` and
 `click_second` (section 9.4).
 
@@ -1973,10 +2115,14 @@ condition are compiled in, and what the host answers for them: sections
 more for each event of the kernel and the world.
 
 **The application**: the command line, the user's data directory and
-what it holds, and the headless script: sections 3.1 and 3.3. The role
-`error`, the commands the play screen submits, the services `creation`
-and `edit_creation`, `app.creation` and the `creation_<field>`
-variables: sections 3.2, 3.4 and 10.4.
+what it holds, and the headless script: sections 3.1 and 3.3. The roles
+`error` and `notice`, the commands the play screen submits, the services
+`creation` and `edit_creation`, `app.creation` and the
+`creation_<field>` variables: sections 3.2, 3.4 and 10.4. A start's
+`senses` and `saving`: section 3.4. The saves, their ids, summaries and
+states, and the saving policies: section 3.6. The preference `bump` and
+the controls `bump`, `bump_ask` and `interact`, what each is given and
+the property `offers_near` they read: section 3.7.
 
 **Widgets**: section 10.3. **UI effects**: section 10.5.
 **Binding names**: section 10.4. **Navigation names**, and the theme
@@ -2006,15 +2152,19 @@ constant. What is put into a slot is always laid out one below another.
 A screen's `rows` cannot yet come from a query (05 §11), only from an
 expression. An `inspect` cannot yet list the properties of a subject
 given by `of`. Which preferences the engine itself acts on, `theme` and
-`keymap`, and the application, `omniscient`, is fixed. A profile cannot
+`keymap`, and the application, `omniscient` and `bump`, is fixed. A profile cannot
 be switched, nor mods read again, while the application runs: the
 services `select_profile` and `reload_mods` are refused, saying to start
 again. The grid of a headless run, its time step, the frame time and the
 share of it given to the simulation, the wake-ups one call of `advance`
 may handle and the hour of simulation time one pass may cover are the
-application's constants. Until perception lands, the eye height and
-reach of sight of section 3.2 are constants too, nothing is heard, and
-every other creature is drawn as the suspected mark. A `message` to the
+application's constants. The senses a character made without any is
+given are named by its start, or are every sense loaded, and are given
+outside the input log until templates carry `senses` (15 §15). A save's
+id is made from its name by the application's own rule, and `single`
+saves only as a game is left, not at intervals. The words with which a
+load's warnings are introduced, and the summary a save is given, are
+the application's. A `message` to the
 player and a fault are written in the log by the application as they
 are reported, in the categories `message` and `fault`, and not as they
 are played; no `show` can word or pace them. The words `Yes` and `No` of the bundled confirm

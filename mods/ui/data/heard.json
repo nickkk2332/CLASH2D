@@ -3,5 +3,5 @@
     "type": "show", "id": "footsteps_heard", "on": "entity_relocated",
     "change": [],
     "heard": { "log": "Footsteps, somewhere close.", "marker": "!" },
-    "importance": "minor", "sound": "footsteps_far" }
+    "importance": "minor" }
 ]

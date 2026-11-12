@@ -9,9 +9,12 @@
 //!    runs the effects it asks for: screens open and close, commands
 //!    are submitted, services are asked of the application.
 //! 2. **Follow-up.** What the effects came to is acted on: a refusal or
-//!    a failure gets a line in the log, a service that failed opens the
-//!    error screen, a game that was started is shown, one whose play
-//!    screen was left is ended.
+//!    a failure gets a line in the log, a step refused because the way is
+//!    closed offers what is there ([`crate::interact`]), a service that
+//!    failed opens the error screen, a game that was started or loaded is
+//!    shown (with what a load had to say on the screen of the role
+//!    [`ROLE_NOTICE`]), one whose play screen was left is ended, and saved
+//!    first if its saving policy is `single`.
 //! 3. **The simulation.** While the player's character waits on the
 //!    simulation (`Session::waits_on_simulation`: no decision is asked
 //!    of it and it is busy or unconscious), the simulation is advanced
