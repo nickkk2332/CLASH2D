@@ -380,9 +380,14 @@ marked stale, so that `go_to` plans again before its next step, and
 `route_blocked` is raised with the first cell that cannot be entered.
 Paths found this way cost what a brute-force search finds (tested on
 random walls). The region and tract graphs, links over portals and
-subgrids, the flier's straight line and flow fields are not built; a
-path across a tract of the test city was measured in the timing test of
-`tests/ai.rs`.
+subgrids, the flier's straight line and flow fields are not built.
+Measured in the timing tests of `tests/ai.rs`, in a release build on a
+loaded machine: a path across a tract of the test city takes about
+43 µs with the world's caches warm, the same with a mind's costs as
+without; twenty minds in a block of the test city (four of them guards)
+cost about 15 ms of real time for each simulated second, perception and
+movement included, about 37 µs a wake-up. No path is cached per mind:
+none was needed.
 
 ### 5.5 Flow fields
 

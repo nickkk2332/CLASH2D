@@ -945,6 +945,21 @@ fn a_path_across_a_tract_is_within_budget() {
     let rules = nav::mind_rules(&sim, ada, GRID);
     let here = loc_of(&sim, ada);
     let to = street(TRACT_XY - 1);
+    let plain = believed_alone(&sim, ada);
+    // Once each first, so that both are timed with the world's caches
+    // warm.
+    for warm in [true, false] {
+        let found = if warm {
+            sim.truth()
+                .cosmos()
+                .find_path(here, to, &rules, PathLimits::DEFAULT)
+        } else {
+            sim.truth()
+                .cosmos()
+                .find_path(here, to, &plain, PathLimits::DEFAULT)
+        };
+        assert!(found.is_ok());
+    }
     #[allow(clippy::disallowed_types, clippy::disallowed_methods)]
     let started = std::time::Instant::now();
     for _ in 0..100 {
@@ -954,6 +969,29 @@ fn a_path_across_a_tract_is_within_budget() {
             .unwrap();
     }
     let each = started.elapsed().as_secs_f64() / 100.0;
-    println!("a path across a tract: {:.1} µs", each * 1e6);
+    // The same search with the mover's believed rules alone, to see
+    // what a mind's costs add.
+    #[allow(clippy::disallowed_types, clippy::disallowed_methods)]
+    let started = std::time::Instant::now();
+    for _ in 0..100 {
+        sim.truth()
+            .cosmos()
+            .find_path(here, to, &plain, PathLimits::DEFAULT)
+            .unwrap();
+    }
+    let alone = started.elapsed().as_secs_f64() / 100.0;
+    println!(
+        "a path across a tract: {:.1} µs with a mind's costs, {:.1} µs without",
+        each * 1e6,
+        alone * 1e6
+    );
+    // 09 §19: under 150 µs, typical. Measured about 43 µs, with or
+    // without a mind's costs.
     assert!(each < 150.0e-6, "{each}");
+}
+
+/// A mover's believed rules without what its mind adds.
+fn believed_alone(sim: &Sim, who: EntityId) -> impl MoveRules + '_ {
+    let rules = clash_sim::movement::believed_rules(sim, who).through_openable();
+    clash_sim::perception::believed_move_rules_with(sim, who, rules).on_grid(GRID)
 }
