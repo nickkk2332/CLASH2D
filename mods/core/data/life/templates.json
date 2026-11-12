@@ -5,7 +5,6 @@
     "pools": ["blood", "pain"],
     "tags": ["person"],
     "mind": "townsperson",
-    "senses": ["human_sight", "human_hearing"],
     "glyph": { "ch": "@", "fg": "white" },
     "choices": [
       { "id": "name", "name": "Name", "kind": "text", "sets": "name", "max_length": 32,
@@ -30,7 +29,6 @@
     "attributes": { "strength": 6, "wits": 3 },
     "tags": ["animal"],
     "mind": "dog",
-    "senses": ["human_sight", "human_hearing"],
     "glyph": { "ch": "d", "fg": "yellow" } },
 
   { "//": "A watchman: applied after `person`, it makes the person think by the `guard` mind (09 §3.1).",

@@ -801,6 +801,15 @@ pub(super) fn think(sim: &mut Sim, mind: EntityId) {
     if !sim.components.mind_state.contains(mind) {
         let state = new_state(sim, mind, def);
         sim.components.mind_state.insert(mind, state);
+        // A character with nothing to perceive with is given the senses
+        // its mind names.
+        if !sim.components.senses.contains(mind) {
+            for name in &def.senses {
+                if let Some(sense) = sim.perception_defs.sense_named(name) {
+                    let _ = crate::perception::attach_sense(sim, mind, sense);
+                }
+            }
+        }
     }
     let max = sim
         .setting_int(MAX_THOUGHTS_SETTING, DEFAULT_MAX_THOUGHTS)

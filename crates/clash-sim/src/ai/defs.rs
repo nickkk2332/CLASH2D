@@ -274,6 +274,13 @@ pub struct MindDef {
     /// What it routes round, by what it remembers (09 §5.3).
     #[serde(default)]
     pub hazards: Vec<Hazard>,
+    /// Senses its character is given when its mind first thinks, if it
+    /// has none (15 §4), by id as written: what a character that thinks
+    /// by this mind perceives with when its templates gave it nothing
+    /// to perceive with. A directly controlled character never thinks,
+    /// and is given its senses by whoever made it.
+    #[serde(default)]
+    pub senses: Vec<String>,
     /// What it is, for whoever reads the definitions.
     #[serde(default)]
     pub doc: Option<String>,
@@ -341,6 +348,20 @@ impl Def for MindDef {
         }
         if !(self.wake_clarity.is_finite() && self.wake_clarity >= Real::ZERO) {
             cx.error("`wake_clarity` is a number of zero or more");
+        }
+        // A sense is checked where senses are loaded at all.
+        let known: Vec<&str> = cx
+            .defs()
+            .iter::<crate::perception::SenseDef>()
+            .filter_map(|(id, _)| cx.defs().name::<crate::perception::SenseDef>(id))
+            .collect();
+        for sense in &self.senses {
+            let found = known.iter().any(|name| {
+                *name == sense.as_str() || name.rsplit(':').next() == Some(sense.as_str())
+            });
+            if !known.is_empty() && !found {
+                cx.error(format!("there is no sense `{sense}`"));
+            }
         }
         if !(self.crowd_cost.is_finite() && self.crowd_cost >= Real::ZERO) {
             cx.error("`crowd_cost` is a number of metres, zero or more");

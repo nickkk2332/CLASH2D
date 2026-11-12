@@ -421,19 +421,6 @@ fn strike_with(
 
 /// A simulation over flat ground with people standing in a row from
 /// (10, 10) eastward, one for each name.
-/// Takes every sense a character was made with away from it.
-fn blind(sim: &mut Sim, who: EntityId) {
-    let senses: Vec<clash_sim::perception::SenseId> = sim
-        .components()
-        .senses
-        .get(who)
-        .map(|senses| senses.slots().iter().map(|slot| slot.sense()).collect())
-        .unwrap_or_default();
-    for sense in senses {
-        clash_sim::perception::detach_sense(sim, who, sense).unwrap();
-    }
-}
-
 fn row(seed: u64, names: &[&str]) -> (Sim, Vec<EntityId>) {
     let mut sim = common::sim_over(Arc::clone(&DEFS), seed);
     let people = names
@@ -712,11 +699,6 @@ fn the_bundled_smash_comes_back_into_the_hand_and_whirl_cuts_all_round() {
         spawn(&mut sim, "Dov", common::on(9, 10)),
     ];
     sim.pump();
-    // None of the three sees the blade coming, as before people were
-    // made with senses: each is met where the blow passes.
-    for who in ring {
-        blind(&mut sim, who);
-    }
     arm(&mut sim, swordsman, "core:knife");
     let head = part_value(&sim, ring[0], "head");
     sim.drain_events();
@@ -1021,9 +1003,6 @@ fn a_target_that_does_not_perceive_its_attacker_is_hit_where_aimed() {
     let mut aware_on_mark = 0;
     for aware in [false, true] {
         let (mut sim, ada, bram) = city(37);
-        // People are made with sight and hearing (06 §10.4): this one
-        // perceives the attacker only where the test says so.
-        blind(&mut sim, bram);
         if aware {
             let sight = sim
                 .defs()
