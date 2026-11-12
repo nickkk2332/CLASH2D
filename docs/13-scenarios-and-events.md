@@ -426,6 +426,15 @@ returns it (03 §4.3); the application carries it out at a safe point.
 | `checkpoints` | Has only the saves the scenario's rules make |
 | `none` | Cannot save: a single sitting |
 
+As built (decision D-704): until the `scenario` type exists, a `start`
+names its policy in `saving` (12 §3.4), `free` if it names none, and the
+application keeps it (12 §3.6): `app.can_save` holds only under `free`;
+loading into a game being played is allowed only under `free`; `single`
+saves the game under the character's name as it is left, and not yet at
+intervals; a rule's `checkpoint` is saved under every policy but
+`none`. Restoring a checkpoint by rule, endings and `on_party_gone` are
+not built.
+
 ### 9.3 When the party is gone
 
 `on_party_gone` says what follows when no directly controlled character
