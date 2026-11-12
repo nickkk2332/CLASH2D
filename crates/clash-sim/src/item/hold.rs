@@ -900,6 +900,8 @@ pub(crate) fn fits(sim: &Sim, container: EntityId, what: EntityId) -> Result<(),
         .get::<Item>(container)
         .and_then(|item| def_of(&sim.defs, item))
         .and_then(|def| def.holds.as_ref())
+        // A device holds what its definition says (16 §4.2).
+        .or_else(|| crate::device::holds_of(sim, container))
         .ok_or_else(|| not_a_container(container))?;
     if !holds.accepts.is_empty() {
         let tags = &sim.known(what)?.tags;

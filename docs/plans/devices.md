@@ -16,7 +16,7 @@ Vehicle package V5 depends on it.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| G1 | Interactions | M | E12, T3 | todo |
+| G1 | Interactions | M | E12, T3 | beta |
 | G2 | Device model | M | E12 | todo |
 | G3 | Resources and network balancing | L | G2, K7 | todo |
 | G4 | Conduits and ports | L | G3, W6 | todo |
@@ -87,6 +87,24 @@ Done when
 - A rule on `interaction_starting` cancels with a reason that reaches the
   player.
 - A device's rule can `interact` with a neighbouring element.
+
+Beta (decisions D-622, D-623), in `clash_sim::interaction`: the
+`interaction` type with `target`, `reach`, `time`, `if`, `shown_if`,
+`fail_text`, `do`, `default` and `offered_by`; offers from elements,
+devices, items and `any`; `interactions_for`, `default_for`,
+`bump_default` and `offers_near`, read through the belief seam; every
+reach kind, `network` through a stub of `network:` tags; the hooks
+`interaction_reach` and `interaction_starting` and the event
+`interacted`; the verbs `interact` and `complete_interaction`; any action
+with parameters `interaction` and `target` begun through
+`action_starting`; `core:interact` in `mods/core/data/interact.json`;
+the properties of 16 §3.5.1; doors, windows, a lamp switch, a locker and
+a lockable door with its key in `mods/core`. `tests/interactions.rs`
+covers the three items above, a door opened and walked through, a lock
+and its key, hiding in a locker and a blast that spills it, and a save
+in the middle. Stubbed: the channels of `uses` (claimed only as the
+action that does it states), `tools`, `interactions` on templates, true
+networks (G3, G4), the query `interactions`.
 
 ### G2 — Device model
 

@@ -551,6 +551,9 @@ pub(crate) struct GroundRun<'a> {
     /// Whether a column lies under a map that levels or founds its
     /// ground: nothing is scattered there.
     pub(crate) built: &'a dyn Fn(i32, i32) -> bool,
+    /// The floor a path lays in a column of the tract, if one crosses
+    /// it (10 §8.3).
+    pub(crate) paths: &'a dyn Fn(i32, i32) -> Option<FloorState>,
 }
 
 /// A number below one from a hash.
@@ -865,9 +868,13 @@ impl Ground {
                         &mut scattered,
                     );
                 }
-                // Nothing records paths until regions are surveyed
-                // (WG7): there are none to draw.
-                Step::Paths => {}
+                Step::Paths => {
+                    if !laid {
+                        self.lay_strata(run, canvas);
+                        laid = true;
+                    }
+                    lay_paths(run, canvas);
+                }
             }
         }
         if !laid {
@@ -945,6 +952,25 @@ fn lay_surface(
             }
             _ => {}
         }
+    }
+}
+
+/// Lays the paths that cross a tract (10 §5.1, `paths`): in the
+/// surface cell of each column a path crosses, the path's floor, and
+/// no fixture. A block there, such as a ramp, is kept, so a path
+/// follows the ground. Nothing is laid under a map that levels or
+/// founds its ground.
+fn lay_paths(run: &GroundRun<'_>, canvas: &mut TractCanvas<'_>) {
+    for (x, y) in columns(canvas.origin) {
+        let Some(floor) = (run.paths)(x, y) else {
+            continue;
+        };
+        if (run.built)(x, y) {
+            continue;
+        }
+        let at = CellPos::new(x, y, canvas.height(x, y));
+        canvas.builder.set_floor(at, floor);
+        canvas.builder.set_fixture(at, FixtureState::NONE);
     }
 }
 
