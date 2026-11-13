@@ -14,16 +14,16 @@ chars
 |  │Go down                    >                                             █│ │|
 |  │Go there                   -                                             ││ │|
 |  │Go up                      <                                             ││ │|
+|  │Grab or take down          v            Choose a hold, a throw or a taked││ │|
 |  │Inventory                  i                                             ││ │|
 |  │Journal                    shift+j                                       ││ │|
 |  │Keys                       ?, f1        Show every control and its keys i││ │|
-|  │Look around                x                                             ││ │|
-|┌ │Map                        m                                             ││ │|
+|┌ │Look around                x                                             ││ │|
+|│ │Map                        m                                             ││ │|
 |│ │Next target                tab          Select the nearest creature in si││ │|
-|│ │Options                    o                                             ││ │|
-|│ │Pause                      escape       Open the pause menu.             ││t│|
-|│ │Previous target            shift+tab    Select the previous creature in s││y│|
-|│ │Quick slot 1               1            Use the ability on quick slot 1. ││ │|
+|│ │Options                    o                                             ││t│|
+|│ │Pause                      escape       Open the pause menu.             ││y│|
+|│ │Previous target            shift+tab    Select the previous creature in s││ │|
 |└─└──────────────────────────────────────────────────────────────────────────┘─┘|
 fg
 |00222222222222222222222222222222222222222222222222222222222222222222222222222244|

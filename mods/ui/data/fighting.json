@@ -23,6 +23,12 @@
     "doc": "Choose the shot, the target, the place aimed at and the height.",
     "do": { "act": { "action": { "pick": "view.actions_with('shot', app.target)" },
                      "params": "all", "with": { "target": "app.target" } } } },
+  { "//": "Holds, throws of people and takedowns (07 §9, §10): the actions tagged `grip` and `takedown`, listed together, each greyed with its reason where it cannot be done; the target is given, and what else has no default is asked for.",
+    "type": "control", "id": "grapple", "name": "Grab or take down",
+    "doc": "Choose a hold, a throw or a takedown to try on the target.",
+    "do": { "act": { "action": { "pick": "view.actions_with('grip', app.target) + view.actions_with('takedown', app.target)" },
+                     "params": "needed", "with": { "target": "app.target" } } } },
+
   { "//": "`reload` and `throw` are named bare, as `step` is: whichever loaded mod's action of that name comes first in order of id.",
     "type": "control", "id": "reload", "name": "Reload",
     "doc": "Load the weapon in hand from what is carried.",

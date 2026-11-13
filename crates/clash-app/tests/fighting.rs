@@ -142,6 +142,14 @@ fn the_precise_blow_asks_for_the_blow_the_part_and_the_effort() {
     params.sort();
     assert_eq!(action, "core:punch");
     assert_eq!(params, ["effort", "part", "target"]);
+
+    // Holds and takedowns are listed together, at the target.
+    script(&mut run, "wait 60\nv\n");
+    assert_eq!(top(&run), "ui:pick_list");
+    let listed = run.text();
+    assert!(listed.contains("Grab"), "{listed}");
+    script(&mut run, "escape\n");
+    assert_eq!(top(&run), "ui:play");
     let _ = std::fs::remove_dir_all(&data);
 }
 

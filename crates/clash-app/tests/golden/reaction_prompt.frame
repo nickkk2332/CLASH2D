@@ -11,11 +11,11 @@ chars
 |.................│Brute: Punch                                │                │|
 |.................│Something can react, with 0.1 s to spare.   │                │|
 |.................│Time  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│                │|
-|..............   │Block (too late)                            │                │|
-|"""Y""""         │Dodge (too late)                            │                │|
-|"""              │Parry (too late)                            │                │|
-|                 │Step back (too late)                        │                │|
-|                 │                                            │                │|
+|..............   │Block (too late)                           █│                │|
+|"""Y""""         │Dodge (too late)                           █│                │|
+|"""              │Parry (too late)                           █│                │|
+|                 │Raise shield (too late)                    █│                │|
+|                 │Step aside (too late)                      ││                │|
 |                 │[ Let it happen ]                           │                │|
 |                 └────────────────────────────────────────────┘                │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
@@ -36,11 +36,11 @@ fg
 |iiiiiiiiiiiiiiiiigjjjjjjjjjjjjkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkg00000000000000006|
 |iiiiiiiiiiiiiiiiigkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkg00000000000000006|
 |iiiiiiiiiiiiiiiiigkkkkkkjjjjjjjjllllllllllllllllllllllllllllllg00000000000000006|
-|iiiiiiiiiiiiii000ghhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhg00000000000000006|
-|aaaaaaaa000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkg00000000000000006|
-|aaa00000000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkg00000000000000006|
-|00000000000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkg00000000000000006|
-|00000000000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkg00000000000000006|
+|iiiiiiiiiiiiii000ghhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhgg00000000000000006|
+|aaaaaaaa000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkgg00000000000000006|
+|aaa00000000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkgg00000000000000006|
+|00000000000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkgg00000000000000006|
+|00000000000000000gkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkklg00000000000000006|
 |00000000000000000gmmmmmmmmmmmmmmmmmkkkkkkkkkkkkkkkkkkkkkkkkkkkg00000000000000006|
 |00000000000000000gggggggggggggggggggggggggggggggggggggggggggggg00000000000000006|
 |66777666666666666666666666666666666666666666666666666660000000000000000000000006|
@@ -61,7 +61,7 @@ bg
 |99999999999999999hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh11111111111111111|
 |99999999999999999hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh11111111111111111|
 |99999999999999999hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh11111111111111111|
-|99999999999999111hggggggggggggggggggggggggggggggggggggggggggggh11111111111111111|
+|99999999999999111hggggggggggggggggggggggggggggggggggggggggggghh11111111111111111|
 |99999999111111111hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh11111111111111111|
 |99911111111111111hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh11111111111111111|
 |11111111111111111hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh11111111111111111|

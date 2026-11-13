@@ -31,5 +31,5 @@
     "start": {
       "characters": [ { "template": "core:power_sampler" } ],
       "at": [ { "name": "A street corner", "cell": [9, 17] } ],
-      "do": [ { "spawn": { "template": "core:person", "at": "offset(start_cell, 2, 0, 0) ?? start_cell" } } ] } }
+      "do": [ { "spawn": { "template": "core:person", "at": "offset(start_cell, 1, 0, 0) ?? start_cell" } } ] } }
 ]

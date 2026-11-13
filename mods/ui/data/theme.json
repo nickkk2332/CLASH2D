@@ -87,7 +87,7 @@
       "escape": "pause", "f12": "omniscient",
       "tab": "next_target", "shift+tab": "prev_target",
       "f": "attack", "shift+f": "attack_precise",
-      "s": "shoot", "shift+s": "aim", "r": "reload", "t": "throw", "z": "stop",
+      "s": "shoot", "shift+s": "aim", "r": "reload", "t": "throw", "z": "stop", "v": "grapple",
       "shift+t": "talk",
       "1": "slot_1", "2": "slot_2", "3": "slot_3", "4": "slot_4", "5": "slot_5",
       "6": "slot_6", "7": "slot_7", "8": "slot_8", "9": "slot_9"

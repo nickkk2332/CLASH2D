@@ -2185,7 +2185,9 @@ place aimed at is filled in with where the character believes the
 target is, the line drawn to it, and an empty weapon's shot is refused
 with the action's own reason. `reload` (`r`) and `throw` (`t`) name
 those actions bare, as `step` is named, and `stop` (`z`) cancels the
-character's newest action, which lets a held draw go. With no target,
+character's newest action, which lets a held draw go. `grapple` (`v`)
+lists the holds, throws of people and takedowns (the tags `grip` and
+`takedown`, 07 §9, §10) and tries the one chosen on the target. With no target,
 the quick controls ask for one. `attack_bump` and `attack_bump_ask` are
 what walking into someone runs, by the preference `bump_attack`
 (section 3.7), which the options screen sets.
@@ -2517,8 +2519,10 @@ one the player must read about, so the linter's warning of invariant V5
 is not given. The words of a line come from the reader helpers the host
 answers, and the bundled shows name a destroyed block a wall, since an
 event says nothing of what was destroyed that the reader may know.
-Which actions the fighting controls offer is said by two tags, `strike`
-and `shot`, written in the `ui` mod's controls; `reload` and `throw` are
+Which actions the fighting controls offer is said by four tags,
+`strike`, `shot`, `grip` and `takedown`, written in the `ui` mod's
+controls; a stance (`take_stance`) is not offered, since nothing lists
+the stances its `id<trait>` parameter could be chosen from; `reload` and `throw` are
 named bare, and `target` is the name of the parameter `with` and
 `actions_with` fill with the creature. The order in which
 `actions_with` lists them, and so which blow the quick key strikes, is
