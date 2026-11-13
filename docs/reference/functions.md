@@ -497,6 +497,18 @@ The qualified id of the scenario being played (13 §3); null if none is.
 
 Its result changes on `scenario_started`.
 
+## Social
+
+<a id="intervenes"></a>
+### `intervenes`
+
+`intervenes(a: entity, b: entity) -> bool?` · not in a mind context
+
+Whether `a` holds toward `b`, as the persona it takes `b` for, a relation of a kind flagged `intervenes` above its default (15 §9.1): whether `a` is a candidate for windows opened against `b` (03 §7.1). Null if either is not an entity. Reads what `a` holds: for window kinds and world rules, not safe for belief.
+
+- `a` (entity): Who would step in.
+- `b` (entity): For whom.
+
 ## Space
 
 <a id="dir"></a>

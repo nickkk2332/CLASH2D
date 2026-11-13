@@ -1756,6 +1756,7 @@ optional:
 | `blocks` | Whether it blocks movement through its cell. Default true for one with a body. A thing with a body also collides with bodies in flight (02 §15.2; decision D-741) |
 | `choices` | Section 10.2 |
 | `know_how` | Know-how its mind knows (16 §8.5), by id as written: given when `entity_spawned` is raised, without asking what each needs (decision D-825). Not on options |
+| `groups` | The groups a thing made from it joins, by id, each with its role there (`""` for none), openly, when `entity_spawned` is delivered (15 §9.2). A group no definition answers to is a load warning and is skipped (decision D-767) |
 
 A choice has an `id` (no `.`), a `name`, a `kind` and a `default`; a
 `pick` has `options` and `count` (default 1); `points` has `options`,

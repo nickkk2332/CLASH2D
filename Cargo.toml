@@ -47,6 +47,13 @@ redb = "4"
 rayon = "1"
 crossterm = "0.29"
 
+# The window frontend, in `clash-front-window` only (decision D-830). Their
+# default features: X11 and Wayland on Linux, each library loaded when the
+# program runs, so nothing of either is needed to build.
+winit = "0.30"
+softbuffer = "0.4"
+fontdue = "0.9"
+
 # Tests only.
 proptest = { version = "1", default-features = false, features = ["std"] }
 

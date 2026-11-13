@@ -41,10 +41,10 @@ The characters borders are drawn with. Any left out keeps the engine's default l
 <a id="fontdef"></a>
 ### `FontDef`
 
-The font a window frontend draws with. The terminal frontend ignores it.
+The font a window frontend draws with (12 §11). The terminal frontend ignores it. Bold, italic and underline are made from this one file.
 
-- `file` (string; **required**): The font file, relative to the mod's directory.
-- `size` (whole number, 0 or more; **required**): The size of a glyph cell's height in pixels.
+- `file` (string; **required**): The font file (TrueType or OpenType), relative to the directory of the mod whose file wrote this `font`, so that a mod patching a theme ships its font in its own directory (decision D-844).
+- `size` (whole number, 0 or more; **required**): The height of a cell in pixels at the screen's ordinary scale; a screen of scale 2 draws cells twice as high. The window draws between 4 and 512 pixels high.
 
 <a id="glyphdef"></a>
 ### `GlyphDef`

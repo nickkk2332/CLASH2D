@@ -42,29 +42,82 @@ pub const DEFAULT_SALIENCE_HALFLIFE_S: f64 = 600.0;
 
 /// Who an observer takes something to be (15 §8.1).
 ///
-/// Personas are the next package's (S6). Until then every entity presents
-/// one persona, its own, and this is that persona: the entity's id under
-/// another name. Beliefs are kept by persona already, so that a disguise
-/// changes what is believed without changing how it is kept (15
-/// invariant P2).
+/// Every persona belongs to an entity, its **owner**: the one whose true
+/// persona it is (number 0), or the one that made it with
+/// `create_persona` (a number given once in the simulation's life).
+/// Which persona an entity presents, and what each persona is, are kept
+/// by [`social`](crate::social). Beliefs are kept by persona, so that a
+/// disguise changes what is believed without changing how it is kept
+/// (15 invariant P2).
+///
+/// Written as text `7v1/0`: the owner, then the number.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
-pub struct PersonaId(EntityId);
+pub struct PersonaId {
+    owner: EntityId,
+    index: u32,
+}
 
 impl PersonaId {
-    /// The persona an entity presents.
+    /// The true persona of an entity. (The name is from before
+    /// disguises, when every entity presented only its own; what an
+    /// entity presents now is [`social::presenting`](crate::social::presenting).)
     pub const fn presented_by(entity: EntityId) -> PersonaId {
-        PersonaId(entity)
+        PersonaId::true_of(entity)
     }
 
-    /// The entity whose true persona this is.
+    /// The true persona of an entity.
+    pub const fn true_of(entity: EntityId) -> PersonaId {
+        PersonaId {
+            owner: entity,
+            index: 0,
+        }
+    }
+
+    /// A persona an entity made, by its number. Number 0 is the true
+    /// persona.
+    pub const fn made(owner: EntityId, index: u32) -> PersonaId {
+        PersonaId { owner, index }
+    }
+
+    /// The entity whose persona this is: whose true persona it is, or
+    /// who made it.
     pub const fn entity(self) -> EntityId {
-        self.0
+        self.owner
+    }
+
+    /// Its number: 0 for a true persona.
+    pub const fn index(self) -> u32 {
+        self.index
+    }
+
+    /// Whether it is its owner's true persona.
+    pub const fn is_true(self) -> bool {
+        self.index == 0
+    }
+
+    /// The persona a text written by [`Display`](core::fmt::Display)
+    /// names: `7v1/0`.
+    pub fn parse(text: &str) -> Option<PersonaId> {
+        let (owner, index) = text.split_once('/')?;
+        let (slot, generation) = owner.split_once('v')?;
+        Some(PersonaId {
+            owner: EntityId::new(slot.parse().ok()?, generation.parse().ok()?),
+            index: index.parse().ok()?,
+        })
+    }
+}
+
+/// Written as `7v1/0`: the owner, then the number.
+impl core::fmt::Display for PersonaId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}/{}", self.owner, self.index)
     }
 }
 
 impl StateHash for PersonaId {
     fn state_hash(&self, hasher: &mut StateHasher) {
-        self.0.state_hash(hasher);
+        self.owner.state_hash(hasher);
+        hasher.write_u32(self.index);
     }
 }
 
@@ -127,16 +180,26 @@ pub struct Track {
     /// The confidence at `at`; it halves every halflife since.
     confidence: Real,
     capabilities: Vec<Capability>,
+    /// Who told of it, as the mind took them, when it was last told of
+    /// rather than perceived (15 §11).
+    source: Option<PersonaId>,
 }
 
-impl_state_hash!(Track {
-    persona,
-    loc,
-    at,
-    how,
-    confidence,
-    capabilities
-});
+impl StateHash for Track {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.persona.state_hash(hasher);
+        self.loc.state_hash(hasher);
+        self.at.state_hash(hasher);
+        self.how.state_hash(hasher);
+        self.confidence.state_hash(hasher);
+        self.capabilities.state_hash(hasher);
+        // Hashed only when there is one, so that a belief nobody told
+        // hashes as it did before speech (15 §11).
+        if let Some(source) = &self.source {
+            source.state_hash(hasher);
+        }
+    }
+}
 
 impl Track {
     /// Whom it is about.
@@ -168,10 +231,15 @@ impl Track {
     pub fn capabilities(&self) -> &[Capability] {
         &self.capabilities
     }
+
+    /// Who told of it, as the mind took them, if it was last told of.
+    pub fn source(&self) -> Option<PersonaId> {
+        self.source
+    }
 }
 
 /// Something that happened, as a mind remembers it (15 §7.1).
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Memory {
     /// The event type.
     pub event: String,
@@ -189,17 +257,27 @@ pub struct Memory {
     /// How much it matters at `at`, 0 to 1; it halves every halflife
     /// since.
     pub salience: Real,
+    /// Who told of it, as the mind took them: for a memory gained by a
+    /// report (15 §11). `None` for one perceived or worked out, and for
+    /// a report from someone the hearer did not make out.
+    pub source: Option<PersonaId>,
 }
 
-impl_state_hash!(Memory {
-    event,
-    loc,
-    at,
-    roles,
-    how,
-    confidence,
-    salience
-});
+impl StateHash for Memory {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.event.state_hash(hasher);
+        self.loc.state_hash(hasher);
+        self.at.state_hash(hasher);
+        self.roles.state_hash(hasher);
+        self.how.state_hash(hasher);
+        self.confidence.state_hash(hasher);
+        self.salience.state_hash(hasher);
+        // Hashed only when there is one: see `Track`.
+        if let Some(source) = &self.source {
+            source.state_hash(hasher);
+        }
+    }
+}
 
 /// Something a mind noticed about the world itself (15 §7.1): an element
 /// and the state it was in.
@@ -286,10 +364,16 @@ fn faded(value: Real, age: Real, halflife: Real) -> Real {
     value * Real::of(0.5).powf(age / halflife)
 }
 
-/// The persona a mind perceives an entity as. Until personas, the
-/// entity's own (see [`PersonaId`]).
-pub fn persona_of(_sim: &Sim, _mind: EntityId, entity: EntityId) -> PersonaId {
-    PersonaId::presented_by(entity)
+/// The persona a mind perceives an entity as (15 §8.2): what the entity
+/// presents, unless this mind has seen through it. See
+/// [`social::persona_of`](crate::social::persona_of).
+pub fn persona_of(sim: &Sim, mind: EntityId, entity: EntityId) -> PersonaId {
+    crate::social::persona_of(sim, mind, entity)
+}
+
+/// A mind's track of a persona, if it has one.
+pub fn track_of_persona(sim: &Sim, mind: EntityId, persona: PersonaId) -> Option<&Track> {
+    sim.components.beliefs.get(mind)?.track(persona)
 }
 
 /// A mind's track of what it perceives an entity as, if it has one.
@@ -339,6 +423,31 @@ fn put_track(
     confidence: Real,
 ) {
     let persona = persona_of(sim, mind, entity);
+    put_persona_track(sim, mind, persona, loc, how, confidence, None);
+}
+
+/// Brings a mind's track of a persona up to date or makes one, as
+/// [`add_track`] does for an entity: what a report and group knowledge
+/// give a mind (15 §9.2, §11). `source` is who told of it, as the mind
+/// took them. A mind keeps no track of its own true persona, and a
+/// confidence is kept from 0 to 1.
+pub fn put_persona_track(
+    sim: &mut Sim,
+    mind: EntityId,
+    persona: PersonaId,
+    loc: Option<Location>,
+    how: Knowing,
+    confidence: Real,
+    source: Option<PersonaId>,
+) {
+    if persona == PersonaId::true_of(mind) {
+        return;
+    }
+    let confidence = if confidence.is_finite() {
+        confidence.clamp(Real::ZERO, Real::ONE)
+    } else {
+        Real::ZERO
+    };
     let now = local_now(sim, mind);
     let max = count_setting(sim, MAX_TRACKS_SETTING, DEFAULT_MAX_TRACKS);
     let beliefs = sim
@@ -357,6 +466,7 @@ fn put_track(
             track.at = now;
             track.how = how;
             track.confidence = confidence;
+            track.source = source;
         }
         Err(at) => beliefs.tracks.insert(
             at,
@@ -367,6 +477,7 @@ fn put_track(
                 how,
                 confidence,
                 capabilities: Vec::new(),
+                source,
             },
         ),
     }
@@ -589,6 +700,7 @@ pub(super) fn remember_percept(
         how: Knowing::Perceived(kind),
         confidence: Real::ONE,
         salience,
+        source: None,
     };
     let _ = remember(sim, mind, memory);
 }

@@ -187,8 +187,13 @@ fn pure_holds(sim: &Sim, cond: &Cond, me: &Value) -> bool {
 }
 
 /// How a mind stands toward an entity, as it perceives it: the stance it
-/// took, else hostile or feared by the tags the entity presents, if the
-/// mind has perceived it. `None` for neither.
+/// took; else, if the mind has perceived it, what its relations say
+/// (15 §9; decision D-762) and the tags the persona it takes the entity
+/// for presents: hostile toward one it opposes by its relations (a kind
+/// flagged `opposes` held above its default by more than any flagged
+/// `sides_with`) or that presents a tag its mind's `hostile_to` names;
+/// else feared toward one it holds a kind flagged `avoids` toward, or
+/// that presents a tag of `fear_of`. `None` for neither.
 pub fn stance_toward(sim: &Sim, mind: EntityId, other: EntityId) -> Option<Stance> {
     if mind == other {
         return None;
@@ -203,9 +208,20 @@ pub fn stance_toward(sim: &Sim, mind: EntityId, other: EntityId) -> Option<Stanc
         return Some(stance);
     }
     belief::track_of(sim, mind, other)?;
-    let def = mind_def_of(sim, mind).and_then(|id| mind_def(sim, id))?;
-    // What it presents: until personas (S6), its own tags.
-    let tags = &sim.entities.get(other)?.tags;
+    if crate::social::stance_to(sim, mind, other) == crate::social::Stance::Opposes {
+        return Some(Stance::Hostile);
+    }
+    let def = mind_def_of(sim, mind).and_then(|id| mind_def(sim, id));
+    // What the persona it takes the entity for presents (15 §8.1).
+    let tags = crate::social::persona_tags(sim, persona);
+    let tagged = |names: &[String]| names.iter().any(|tag| tags.contains(tag));
+    if def.is_some_and(|def| tagged(&def.hostile_to)) {
+        return Some(Stance::Hostile);
+    }
+    if crate::social::avoids(sim, mind, other) {
+        return Some(Stance::Feared);
+    }
+    let def = def?;
     if def.hostile_to.iter().any(|tag| tags.contains(tag)) {
         Some(Stance::Hostile)
     } else if def.fear_of.iter().any(|tag| tags.contains(tag)) {

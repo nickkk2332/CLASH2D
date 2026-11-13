@@ -1027,6 +1027,7 @@ fn tracks_and_memories_are_bounded() {
                 how: perception::Knowing::Inferred,
                 confidence: Real::ONE,
                 salience: Real::of(salience),
+                source: None,
             },
         )
         .unwrap();

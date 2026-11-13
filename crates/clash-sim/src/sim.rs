@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 18;
+pub const SAVE_VERSION: u32 = 19;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -125,6 +125,8 @@ pub struct Sim {
     /// Which entity holds each ability instance, and the number the
     /// next takes (08 §3.2).
     pub(crate) abilities: crate::ability::AbilityIndex,
+    /// Personas, relations, groups and orders (15 §8 to §11).
+    pub(crate) social: crate::social::SocialState,
     /// Not state: the tables of abilities and the expressions kept
     /// current (05 §7.5).
     pub(crate) ability_rt: crate::ability::Runtime,
@@ -136,8 +138,8 @@ pub struct Sim {
     /// now ([`combat`](crate::combat)). Zero between any two events.
     pub(crate) strike_depth: u8,
     /// Not state: what answers whether one entity holds an `intervenes`
-    /// relation toward another, until relations exist
-    /// ([`Sim::set_intervenes`]). Set it again after a load.
+    /// relation toward another: the social layer's, bound with every
+    /// simulation, unless a test supplies another ([`Sim::set_intervenes`]).
     pub(crate) intervenes: Option<crate::action::IntervenesFn>,
     /// The shots in flight (07 §11; [`ranged`](crate::combat::ranged)).
     pub(crate) ranged: crate::combat::ranged::RangedState,
@@ -246,6 +248,7 @@ struct SavedRef<'a> {
     ranged: &'a crate::combat::ranged::RangedState,
     scenario: &'a crate::scenario::ScenarioState,
     grips: &'a crate::combat::grip::GripTable,
+    social: &'a crate::social::SocialState,
     furnish: &'a crate::furnish::FurnishState,
 }
 
@@ -276,6 +279,7 @@ struct Saved {
     ranged: crate::combat::ranged::RangedState,
     scenario: crate::scenario::ScenarioState,
     grips: crate::combat::grip::GripTable,
+    social: crate::social::SocialState,
     furnish: crate::furnish::FurnishState,
 }
 
@@ -343,6 +347,7 @@ impl Sim {
             perception: PerceptionState::default(),
             perception_defs,
             abilities: crate::ability::AbilityIndex::default(),
+            social: crate::social::SocialState::default(),
             ability_rt,
             ai: crate::ai::AiState::default(),
             ai_defs,
@@ -770,7 +775,9 @@ impl Sim {
         if !self.grips.is_empty() {
             self.grips.state_hash(&mut kernel);
         }
-        // Nor one that holds no latent contents.
+        self.social.state_hash(&mut kernel);
+        // Nothing when no element holds latent contents: a simulation
+        // generation never furnished hashes as before.
         if !self.furnish.is_empty() {
             self.furnish.state_hash(&mut kernel);
         }
@@ -834,6 +841,7 @@ impl Sim {
                 ranged: &self.ranged,
                 scenario: &self.scenario,
                 grips: &self.grips,
+                social: &self.social,
                 furnish: &self.furnish,
             },
         )
@@ -919,6 +927,7 @@ impl Sim {
             perception: saved.perception,
             perception_defs,
             abilities: saved.abilities,
+            social: saved.social,
             ability_rt,
             ai: saved.ai,
             ai_defs,
@@ -943,6 +952,7 @@ impl Sim {
         crate::interaction::bind(self);
         crate::recipe::bind(self);
         crate::scenario::bind(self);
+        crate::social::bind(self);
         // Recurring global rules have a timer from the start (05 §9.4).
         self.start_recurring_rules();
     }

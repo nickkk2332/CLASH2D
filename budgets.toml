@@ -114,6 +114,13 @@ row = "Build a 200 × 60 frame"
 limit = "1.5 ms"
 margin = 0.25
 
+[[budget]]
+bench = "window.draw_frame"
+spec = "12 §15"
+row = "Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080"
+limit = "16 ms"
+margin = 0.25
+
 # ---- 16 §16, devices and machines ------------------------------------------
 
 [[budget]]

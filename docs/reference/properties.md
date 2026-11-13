@@ -11,7 +11,7 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 18 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 130 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 143 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
@@ -268,6 +268,9 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.hostile(x: entity) -> bool`: Whether this character's mind holds `x` hostile (09 §3.4): by a stance it took, or, once it has perceived `x`, by a tag `x` presents that its mind's `hostile_to` names. Relations (15 §9) will take its place.
   Changed by `detected`, `perceived`.
   - `x` (entity): Whom it is asked about.
+- `entity.in_group(group: string) -> bool`: Whether it belongs to a group (15 §9.2), named by key or id.
+  Changed by `group_joined`, `group_left`.
+  - `group` (string): The group's key or id.
 - `entity.in_world -> bool`: Whether the entity is in the world: at a cell, or inside something that is.
   Changed by `entity_relocated`.
 - `entity.interaction_fault(target: any, interaction: id<interaction>) -> string?`: Why the entity, as it believes, cannot do an interaction to a target now: null if it can. A refusal's sentence, for an action's `fail_text`.
@@ -295,6 +298,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.knows_how(what: id<know_how>) -> bool`: Whether the entity's mind knows something (16 §8.5): what a recipe's `know_how` and any condition may ask.
   Changed by `know_how_gained`, `know_how_lost`.
   - `what` (id<know_how>): The know-how.
+- `entity.knows_name(x: entity) -> bool`: Whether this mind knows the name of whom it takes `x` for (05 §4.6): learnt with `learn_name`, or its own.
+  - `x` (entity): Whom it is asked about.
 - `entity.last_failure -> string?`: The code of the reason this character's last step or goal failed (09 §16). Null if none has.
   Changed by `step_failed`, `goal_failed`.
 - `entity.last_seen(x: entity) -> real?`: Seconds of this mind's own time since it last perceived `x` or heard of it (15 §7.2). Null if it never has.
@@ -312,6 +317,12 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.mass -> real?`: The mass of the entity and everything inside it, in kilograms.
   Changed by `entity_relocated`.
 - `entity.material -> id<material>?`: What an item is made of. Null for what is not an item.
+- `entity.memory_confidence(event: string) -> real?`: How sure this mind is of its latest memory of an event type, 0 to 1 (15 §7.1): 1 for what it perceived, less for what it was told (15 §11). Null if it has none.
+  Changed by `memory_added`, `memory_forgotten`.
+  - `event` (string): The event type.
+- `entity.memory_source(event: string) -> string?`: Who told this mind its latest memory of an event type, as the persona it took them for, as text (15 §11). Null if it has none, or perceived it, or did not make out who told it.
+  Changed by `memory_added`, `memory_forgotten`.
+  - `event` (string): The event type.
 - `entity.mind_def -> string?`: The qualified id of the `mind` definition this character thinks by. Null for one that thinks by none.
 - `entity.mixture -> map<real>` · same owner: What one member of an item holds (16 §9.5): the volume of each substance in cubic metres, by qualified id. Empty for one that holds nothing.
 - `entity.mode -> string?`: The mode a device is in (16 §4.2), by name: one of its definition's `modes`. Null for anything that is not a device, or a device whose definition has no modes.
@@ -339,14 +350,29 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.perceives(x: entity) -> bool`: Whether this mind has `x` detected now (15 §6): its awareness reached 1 through some sense and has not fallen to 0.
   Changed by `detected`, `lost_track`.
   - `x` (entity): Whom or what it is asked about.
+- `entity.persona -> string`: Its true persona, as text (`7v1/0`) (15 §8.1).
+- `entity.persona_of(x: entity) -> string?`: The persona this mind takes `x` for, as text (15 §8.2): what `x` presents, unless this mind has seen through it. Null for something that is not an entity.
+  - `x` (entity): Whom it is asked about.
 - `entity.pool -> pools` · same owner: The entity's pools: follow with a definition's id, as in `self.pool.<id>`.
 - `entity.posture -> id<posture>?`: The posture the entity is in (06 §11.1). Null in none.
   Changed by `posture_changed`.
+- `entity.presenting -> string`: The persona it presents now, as text: its true one, one it made, or someone else's it copied (15 §8.1).
 - `entity.reach -> real?`: How far the body can reach to strike, in metres: the greatest length, from the trunk out, among its working parts that have a striking surface. Null for something with no body.
   Changed by `part_disabled`, `part_restored`, `part_severed`, `part_destroyed`.
 - `entity.recipe_options -> list<map<any>>`: What the entity, as it believes, could make here (16 §8; 12 §10.7 Make): every recipe done by hand, and every recipe of each station within a step, in order of recipe. Each is a map: `recipe` (its id), `id` (its qualified id), `name`, `station` (the element or device, null by hand), `where` (`hand`, `here` or a compass direction), `available`, `resumes` (it goes on with work under way there), `why` (the refusal's sentence, else empty), `work` (seconds at a rate of 1), `inputs` (a list of maps: `what`, `need`, `have`, `text`), `takes` and `gives` (texts).
+- `entity.rel(kind: string, x: any) -> real?`: What this mind holds of a kind of relation toward `x` (15 §9.1): an entity, as the persona it takes it for, or a group by key or id. Its own relation, else its groups' (15 §9.2), else the kind's default. Null for a kind or an `x` that names nothing.
+  Changed by `relation_changed`, `group_joined`, `group_left`.
+  - `kind` (string): The relation kind's id, qualified or bare.
+  - `x` (any): An entity, or a group's key or id.
 - `entity.remembers(at: any) -> bool`: Whether this character's map memory holds a cell (15 §13): only directly controlled characters keep one.
   - `at` (any): A cell, or something that is somewhere.
+- `entity.remembers_actor(x: entity, event: string) -> bool`: Whether this mind remembers whom it takes `x` for as the actor of an event of a type (15 §7.1): `''` for any type. What a witness blames, whoever truly did it (scene S15).
+  Changed by `memory_added`, `memory_forgotten`.
+  - `x` (entity): Whom it is asked about.
+  - `event` (string): The event type, or `''` for any.
+- `entity.role_in(group: string) -> string?`: Its role in a group (15 §9.2), or null if it has none or is not a member.
+  Changed by `group_joined`, `group_left`, `role_changed`.
+  - `group` (string): The group's key or id.
 - `entity.room -> real?`: The room left in one member of an item for substances, in cubic metres. Null for what holds none.
 - `entity.rounds -> int`: How many rounds an item can fire before it is empty (07 §11.5): the members of the rounds in its feed. Zero for one with none.
   Changed by `item_taken`, `item_dropped`, `item_merged`, `item_split`, `entity_relocated`, `entity_removed`.
@@ -361,6 +387,11 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.speed -> real?`: How fast the entity moves now by the fastest of its ways of moving that works, its posture included, in metres for each second of its own time. Null if it cannot move.
 - `entity.stance(x: entity) -> string?`: How this character's mind stands toward `x`: `hostile`, `feared`, or null for neither.
   - `x` (entity): Whom it is asked about.
+- `entity.stance_to(x: any) -> string`: How this mind stands toward `x` (09 §3.4): `opposes` if it holds a kind flagged `opposes` above its default by more than any flagged `sides_with`, `sides_with` the other way round, else `neutral`. Read through its groups as `rel` is.
+  Changed by `relation_changed`, `group_joined`, `group_left`.
+  - `x` (any): An entity, or a group's key or id.
+- `entity.standing_orders -> int`: How many orders it keeps that still stand (15 §10).
+  Changed by `order_given`, `order_cancelled`.
 - `entity.step -> string?`: The kind of the step this character's mind is at: `go`, `do`, `choose`, `wait`, `look`, `say`, `set`, `settle`, `stance`, `keep_near` or `keep_from` (09 §4). Null if it holds no goal or has chosen no method.
 - `entity.step_fault(dir: string) -> string?`: Why the entity believes it cannot step in a direction, as a sentence; null if it believes it can.
   - `dir` (string): The direction: `north` to `north_west`, `up` or `down`.
@@ -378,6 +409,9 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `clock_rate_changed`.
 - `entity.timer(name: string) -> real?`: The local time, in seconds, that the timer of this name belonging to it has left (05 §10.4); null if it has none of that name. A timer away with its owner keeps what it had left.
   - `name` (string): The timer's name.
+- `entity.told_of(event: string) -> bool`: Whether this mind's latest memory of an event type was told rather than perceived (15 §11).
+  Changed by `memory_added`, `memory_forgotten`.
+  - `event` (string): The event type.
 - `entity.track -> tracks` · same owner: The entity's tracks: follow with a definition's id, as in `self.track.<id>`.
 - `entity.trait_active(trait: id<trait>) -> bool`: Whether the entity has a trait that is not dormant from some giver: one whose `while` holds, so that it confers what it lists.
   - `trait` (id<trait>): The trait: its id, or its qualified id as text.

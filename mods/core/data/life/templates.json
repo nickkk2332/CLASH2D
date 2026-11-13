@@ -5,6 +5,7 @@
     "pools": ["blood", "pain"],
     "tags": ["person"],
     "mind": "townsperson",
+    "groups": { "townsfolk": "resident" },
     "glyph": { "ch": "@", "fg": "white" },
     "choices": [
       { "id": "name", "name": "Name", "kind": "text", "sets": "name", "max_length": 32,
