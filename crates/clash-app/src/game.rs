@@ -1213,12 +1213,37 @@ fn acts_on_present(event: &InputEvent) -> bool {
 /// `message` a rule sent the player (12 §7.4).
 fn told(event: &SimEvent, player: EntityId) -> Option<(&'static str, String)> {
     match &event.body {
-        EventBody::Fault { reason } => Some((LOG_FAULT, format!("Fault: {reason}"))),
+        EventBody::Fault { reason } => Some((LOG_FAULT, fault_line(reason))),
         EventBody::Act(ActEvent::Message { to, text, .. }) if *to == player => {
             Some((LOG_MESSAGE, text.clone()))
         }
         _ => None,
     }
+}
+
+/// The log's line for a fault the engine contained: what went wrong,
+/// the code of what refused, if something did, and the definition and
+/// the path of the effect, where they are known, so that whoever wrote
+/// it can find it: `Fault: a verb declined (world.no_cell) in
+/// core:last_stand at start.do[4]`.
+fn fault_line(reason: &clash_sim::Reason) -> String {
+    let text = |name: &str| {
+        reason
+            .value(name)
+            .and_then(clash_core::Value::as_str)
+            .map(str::to_owned)
+    };
+    let mut line = format!("Fault: {reason}");
+    if let Some(code) = text("reason") {
+        line.push_str(&format!(" ({code})"));
+    }
+    if let Some(definition) = text("definition") {
+        line.push_str(&format!(" in {definition}"));
+        if let Some(path) = text("path") {
+            line.push_str(&format!(" at {path}"));
+        }
+    }
+    line
 }
 
 /// Runs the loop on a frontend until the player leaves: each pass is

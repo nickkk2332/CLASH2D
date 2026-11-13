@@ -97,9 +97,10 @@ impl Runtime {
             }
         }
         Runtime {
-            rules: Arc::new(
-                RuleSet::new(Arc::clone(defs)).with_roots(vec![crate::action::effect_roots]),
-            ),
+            rules: Arc::new(RuleSet::new(Arc::clone(defs)).with_roots(vec![
+                crate::action::effect_roots,
+                crate::scenario::effect_roots,
+            ])),
             verbs,
             faults: FaultLimiter::new(),
             warnings: WarningLimiter::new(),

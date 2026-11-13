@@ -1537,10 +1537,9 @@ listeners in reach are fewer.
 Performance 2 (D-894, D-897): a footstep is now sent only to those who
 could hear it from where they stand, so most of a crowd's fronts and
 their arrivals are gone, with the same percepts in the crowd; a sweep
-finds its candidates by id alone, nearest first, out from 12 m and
-twice as far each time until `perception.max_candidates` are within
-reach, with the same candidates as before (tested against the first
-forms). In the market town a sweep looks at a range full of furniture
+gathers who is in range in one unordered pass and keeps the nearest
+`perception.max_candidates` without putting the rest in order, with the
+same candidates as before (tested against the first forms). In the market town a sweep looks at a range full of furniture
 and goods, and the 150 hot characters' sweeps are still the larger part
 of a step there (09 §19). A party member's sweep, its view of 60 m,
 map memory and frame, takes 0.9 ms again from where it stands, and

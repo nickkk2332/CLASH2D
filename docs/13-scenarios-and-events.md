@@ -234,6 +234,10 @@ sky starts its clock is the next day). It then spawns the character
    `scenario_started`.
 
 The same answers give the same state hash (test script `fresh_start`).
+A timer `start.do` sets (`after`, `every`) runs when it falls due, the
+rule runtime finding its effects again in the scenario where they are
+written; so do those of an objective's `on_done` and `on_failed`, of
+`on_party_gone`'s `do` and of a mission's effects (decision D-879).
 
 ## 5. Objectives and missions
 

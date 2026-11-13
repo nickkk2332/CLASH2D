@@ -826,25 +826,20 @@ impl Cosmos {
         if radius_m < Real::ZERO {
             return Ok(Vec::new());
         }
-        let reach = radius_m.ceil().to_i32();
-        let storeys = (radius_m / crate::dims::STOREY_M).ceil().to_i32();
-        let cells = CellBox::around(centre.cell, IVec3::new(reach, reach, storeys));
-        let mut out = Vec::new();
-        collect_box(&view, cells, filter, &mut out)?;
-        let topology = view.topology();
-        let reach_sq = radius_m * radius_m;
-        out.retain(|occupied| {
-            let offset = topology.delta(centre.cell, occupied.cell);
-            Real::from_i64(distance_sq_cells(offset)) <= reach_sq
-        });
-        out.sort_by_key(|occupied| (occupied.cell, occupied.id));
+        let mut out = within(&view, centre, radius_m, filter)?;
+        // An occupant has one entry for each cell it fills, so no two
+        // entries share a cell and an id: the order of an unstable sort
+        // is the order of a stable one.
+        out.sort_unstable_by_key(|occupied| (occupied.cell, occupied.id));
         out.dedup_by_key(|occupied| (occupied.cell, occupied.id));
         Ok(out)
     }
 
-    /// Who [`occupants_within`](Cosmos::occupants_within) finds, each
-    /// once, by id: the query a sweep of perception asks (15 §5.2), which
-    /// needs no cells and no order of cells.
+    /// Who is within a distance of a cell that the filter lets through,
+    /// each once, by id: the ids of [`occupants_within`](Self::occupants_within)
+    /// without its order by cell, for a caller that wants only who. A
+    /// sense's sweep asks this many times a second for every creature
+    /// that perceives (decision D-875).
     pub fn occupant_ids_within(
         &self,
         centre: Location,
@@ -855,19 +850,8 @@ impl Cosmos {
         if radius_m < Real::ZERO {
             return Ok(Vec::new());
         }
-        let reach = radius_m.ceil().to_i32();
-        let storeys = (radius_m / crate::dims::STOREY_M).ceil().to_i32();
-        let cells = CellBox::around(centre.cell, IVec3::new(reach, reach, storeys));
-        let mut found = Vec::new();
-        collect_box(&view, cells, filter, &mut found)?;
-        let topology = view.topology();
-        let reach_sq = radius_m * radius_m;
-        let mut ids: Vec<EntityId> = found
-            .iter()
-            .filter(|occupied| {
-                let offset = topology.delta(centre.cell, occupied.cell);
-                Real::from_i64(distance_sq_cells(offset)) <= reach_sq
-            })
+        let mut ids: Vec<EntityId> = within(&view, centre, radius_m, filter)?
+            .into_iter()
             .map(|occupied| occupied.id)
             .collect();
         ids.sort_unstable();
@@ -878,7 +862,7 @@ impl Cosmos {
     /// Who [`occupants_within`](Cosmos::occupants_within) finds, in no
     /// order and once for each of their cells in reach, added to `out`:
     /// for a caller that keeps only a few of them and puts those in order
-    /// itself.
+    /// itself (decision D-897).
     pub fn occupant_ids_within_unordered(
         &self,
         centre: Location,
@@ -890,20 +874,9 @@ impl Cosmos {
         if radius_m < Real::ZERO {
             return Ok(());
         }
-        let reach = radius_m.ceil().to_i32();
-        let storeys = (radius_m / crate::dims::STOREY_M).ceil().to_i32();
-        let cells = CellBox::around(centre.cell, IVec3::new(reach, reach, storeys));
-        let mut found = Vec::new();
-        collect_box(&view, cells, filter, &mut found)?;
-        let topology = view.topology();
-        let reach_sq = radius_m * radius_m;
         out.extend(
-            found
-                .iter()
-                .filter(|occupied| {
-                    let offset = topology.delta(centre.cell, occupied.cell);
-                    Real::from_i64(distance_sq_cells(offset)) <= reach_sq
-                })
+            within(&view, centre, radius_m, filter)?
+                .into_iter()
                 .map(|occupied| occupied.id),
         );
         Ok(())
@@ -1024,6 +997,28 @@ impl Cosmos {
 ///
 /// This relies on a grid's horizontal extents being whole tracts, which
 /// they are: a realm's are whole regions and a subgrid's are unbounded.
+/// The occupants the filter lets through within a distance of a cell,
+/// in no order: [`Cosmos::occupants_within`] before it sorts.
+fn within(
+    view: &GridView<'_>,
+    centre: Location,
+    radius_m: Real,
+    filter: &OccupantFilter,
+) -> Result<Vec<Occupied>, WorldError> {
+    let reach = radius_m.ceil().to_i32();
+    let storeys = (radius_m / crate::dims::STOREY_M).ceil().to_i32();
+    let cells = CellBox::around(centre.cell, IVec3::new(reach, reach, storeys));
+    let mut out = Vec::new();
+    collect_box(view, cells, filter, &mut out)?;
+    let topology = view.topology();
+    let reach_sq = radius_m * radius_m;
+    out.retain(|occupied| {
+        let offset = topology.delta(centre.cell, occupied.cell);
+        Real::from_i64(distance_sq_cells(offset)) <= reach_sq
+    });
+    Ok(out)
+}
+
 fn collect_box(
     view: &GridView<'_>,
     cells: CellBox,

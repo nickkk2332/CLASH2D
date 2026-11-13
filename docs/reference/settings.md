@@ -31,4 +31,5 @@ The engine's settings, in the namespaces reserved for its subsystems (04 §10). 
 | <a id="rules-max-transitions"></a>`rules.max_transitions` | `1000` | The most phase changes an action may make without time passing before it ends with `engine:transition_limit` (03 §13). Default 1,000. |
 | <a id="rules-max-value-depth"></a>`rules.max_value_depth` | `32` | How deeply lists and maps may nest in a value an effect writes. Default 32. |
 | <a id="rules-max-value-size"></a>`rules.max_value_size` | `65536` | The most elements of a list or a map, or bytes of a text, an effect may write. Default 65,536. |
+| <a id="sim-max-hot-minds"></a>`sim.max_hot_minds` | `150` | How many characters with minds are hot at once (09 §9.3); those beyond it, ranked by attention, are stepped warm. |
 | <a id="track-capabilities"></a>`track_capabilities` | `8` | The most observed capabilities one track keeps (15 §15). Default 8. |

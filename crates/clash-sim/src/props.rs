@@ -909,7 +909,7 @@ fn loc_properties(table: &mut Vec<PropertyDef>) {
             "loc",
             "time_of_day",
             "real?",
-            "The time of day at the cell, in seconds since midnight, by the sky its stratum names. Null where there is no sky.",
+            "The time of day at the cell, in seconds since midnight, by the sky its stratum names. Null where there is no sky. Safe for belief: anyone may know the hour, as a screen's clock shows it (decision D-872).",
             |sim, subject, _| {
                 opt(subject.loc().and_then(|loc| {
                     let sky = sim.cosmos.sky(loc).ok()??;
@@ -920,7 +920,8 @@ fn loc_properties(table: &mut Vec<PropertyDef>) {
                     Some(seconds(Dur::from_micros(of_day)))
                 }))
             },
-        ),
+        )
+        .safe(),
         p(
             "loc",
             "occupants",

@@ -674,3 +674,37 @@ fn under_end_the_game_ends_when_the_party_is_gone() {
         "{asked:?}"
     );
 }
+
+/// A scenario whose `start.do` sets a timer, as the last stand sets its
+/// dawn: what it runs when it falls due is found again in the
+/// scenario's own effects (decision D-879).
+const TIMED: &str = r#"[
+  { "type": "variable", "id": "rang", "scope": "global", "value": "bool", "default": false },
+  { "type": "scenario", "id": "timed", "name": "Timed",
+    "worlds": [ { "realm": "testland", "seed": "ask" } ],
+    "start": { "characters": [ { "template": "person" } ],
+               "at": [ { "name": "West", "cell": [10, 10] } ],
+               "do": [ { "after": "2 s", "owner": "global",
+                         "do": [ { "set": { "global.var.rang": true } },
+                                 { "complete_objective": "wait" } ] } ] },
+    "objectives": [ { "id": "wait", "text": "Wait for it." } ] }
+]"#;
+
+#[test]
+fn a_timer_set_in_a_scenarios_start_runs_when_it_falls_due_after_a_load_too() {
+    let defs = common::life_defs(TIMED);
+    let (mut sim, _) = begun(&defs, "core:timed", 3, 0, vec![]);
+    run(&mut sim, Dur::from_millis(1_000));
+    assert_eq!(var(&sim, "core:rang"), clash_expr::Value::Bool(false));
+    let mut loaded = save_and_load(&sim);
+    for sim in [&mut sim, &mut loaded] {
+        run(sim, Dur::from_millis(1_500));
+        assert_eq!(var(sim, "core:rang"), clash_expr::Value::Bool(true));
+        assert_eq!(
+            objective_state(sim, None, "wait"),
+            Some(ObjectiveState::Done)
+        );
+        assert_eq!(sim.rule_fault_count(), 0, "the timer was found");
+    }
+    assert_eq!(loaded.state_hash(), sim.state_hash());
+}

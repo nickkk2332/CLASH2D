@@ -862,7 +862,7 @@ pub(super) fn candidates_reference(
     else {
         return Vec::new();
     };
-    let mut ids = distinct_ids(&found);
+    let mut ids = clash_world::distinct_ids(&found);
     let inside: Vec<EntityId> = ids
         .iter()
         .flat_map(|id| sim.entities.contents_deep(*id))

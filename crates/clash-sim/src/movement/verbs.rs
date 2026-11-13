@@ -81,7 +81,11 @@ fn run_step(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value, R
         .with("dir", dir)
     })?;
     let drop = arg(call, 2).as_bool().unwrap_or(false);
-    let stepped = step::step(sim, who, kind, drop, cause)?;
+    // A step the world refuses is an outcome of moving, not a fault of
+    // the rule that asked: `step_refused` has said why (decision D-870).
+    let Ok(stepped) = step::step(sim, who, kind, drop, cause) else {
+        return Ok(Value::Null);
+    };
     Ok(Value::map([
         ("distance", Value::Real(stepped.length_m)),
         ("cost", Value::Real(stepped.cost_m)),
@@ -120,7 +124,11 @@ fn run_plan_path(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Val
     if let Some(max_cost) = arg(call, 2).as_number() {
         limits.max_cost_m = max_cost;
     }
-    let planned = path::plan_path(sim, who, to, limits, cause)?;
+    // No way there is an outcome, not a fault: `path_failed` has said
+    // why (decision D-870).
+    let Ok(planned) = path::plan_path(sim, who, to, limits, cause) else {
+        return Ok(Value::Null);
+    };
     Ok(Value::map([
         (
             "steps",
@@ -132,7 +140,12 @@ fn run_plan_path(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Val
 
 fn run_follow_path(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value, Reason> {
     let who = entity_arg(sim, call, 0, "who")?;
-    let stepped = path::follow_path(sim, who, cause)?;
+    // A step refused, or a path that must be planned again, is an
+    // outcome: the path is marked stale and `step_refused` says why
+    // (decision D-870).
+    let Ok(stepped) = path::follow_path(sim, who, cause) else {
+        return Ok(Value::Null);
+    };
     Ok(Value::map([
         ("distance", Value::Real(stepped.length_m)),
         ("cost", Value::Real(stepped.cost_m)),
@@ -183,7 +196,7 @@ pub fn verbs() -> Vec<VerbDef> {
                             Type::Bool,
                             "Whether to step off where there is nothing to stand on, and fall. False if left out.",
                         )
-                        .doc("Takes one step to the cell next to the mover, checked against the world as it is now (06 §11). Takes no time itself: the action waits `self.step_time(dir)`. A refusal raises `step_refused`."),
+                        .doc("Takes one step to the cell next to the mover, checked against the world as it is now (06 §11). Takes no time itself: the action waits `self.step_time(dir)`. Gives `distance`, `cost` and `time`; a step the world refuses raises `step_refused` and gives null, and is not a fault of the rule."),
                 )
             },
             run: run_step,
@@ -231,7 +244,7 @@ pub fn verbs() -> Vec<VerbDef> {
                             Type::Number,
                             "The dearest path worth having, in metres of travel. No limit if left out.",
                         )
-                        .doc("Plans a path from what the mover believes and keeps it as the path it is following (06 §11). A refusal raises `path_failed`."),
+                        .doc("Plans a path from what the mover believes and keeps it as the path it is following (06 §11). Gives `steps` and `cost`; finding no way raises `path_failed` and gives null, and is not a fault of the rule."),
                 )
             },
             run: run_plan_path,
@@ -243,7 +256,7 @@ pub fn verbs() -> Vec<VerbDef> {
                     VerbSpec::new("follow_path")
                         .arg("who", entity_type(registry)?, "Who steps.")
                         .direct("who")
-                        .doc("Takes the next step of the path the mover is following, as `step` does (06 §11). A refused step marks the path stale: `plan_path` again."),
+                        .doc("Takes the next step of the path the mover is following, as `step` does (06 §11). A refused step marks the path stale (`plan_path` again) and gives null, as does a path that is stale or none; neither is a fault of the rule."),
                 )
             },
             run: run_follow_path,

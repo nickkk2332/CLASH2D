@@ -4,9 +4,10 @@
 # its seed, which `use` gives; its realm's clock is set to ten at night
 # before anything is in the world; the character is placed in front of
 # the house on the lane; `start.do` brings three strangers, tags them
-# hostile and marks the house's door; both objectives are shown. The
-# same answers give the same state hash, which the runner checks four
-# ways and the golden hash below pins.
+# hostile, marks the nearest door of the house (two cells east of the
+# old fixed offset, which was a wall) and lights a lamp beside it; both
+# objectives are shown. The same answers give the same state hash,
+# which the runner checks four ways and the golden hash below pins.
 use default seed=7
 begin core:last_stand place=0
 assert "scenario_id() == 'core:last_stand'"
@@ -14,10 +15,10 @@ assert "@self.loc.time_of_day == 79200"
 assert "@self.loc.x == 17 and @self.loc.y == 45"
 assert "party()[0] == @self"
 assert "objective_state('inside') == 'active' and objective_state('dawn') == 'active'"
-assert "len(@self.objectives) == 2 and @self.objectives[0].where == 'north, 2 m'"
+assert "len(@self.objectives) == 2 and @self.objectives[0].where == 'north-east, 3 m'"
 assert "@e:1.has_tag('hostile') and @e:2.has_tag('hostile') and @e:3.has_tag('hostile')"
 assert "not @self.has_tag('hostile')"
 expect event scenario_started
 advance 5s
 assert "objective_state('inside') == 'active'"
-expect hash efdcf720cde741c6c47c868b74043596
+expect hash 30a2f8b8293cb91a91d360178cb1e00e
