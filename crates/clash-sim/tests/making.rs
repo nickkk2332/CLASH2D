@@ -990,3 +990,84 @@ fn document_16_states_every_event_verb_property_and_reason_of_making() {
         );
     }
 }
+
+#[test]
+fn every_property_of_making_reads_what_it_says() {
+    let (mut sim, ada, _) = city(60);
+    let at = cell(20, 1);
+    put_fixture(&mut sim, at, "test_kiln");
+    let kiln =
+        device::device_for(&mut sim, Target::Element(at, Layer::Fixture), Cause::DEBUG).unwrap();
+    device::add_resource(&mut sim, kiln, "fuel", Real::of(4.0), Cause::DEBUG).unwrap();
+    device::set_mode(&mut sim, kiln, "on", Cause::DEBUG).unwrap();
+    let get = |sim: &Sim, subject: Subject, name: &str, args: &[Value]| {
+        sim.property_named(subject, name, args)
+    };
+    let kiln_subject = Subject::Entity(kiln);
+    let element = Subject::Element(at, Layer::Fixture);
+    assert_eq!(get(&sim, kiln_subject, "mode", &[]), Value::from("on"));
+    assert_eq!(get(&sim, element, "mode", &[]), Value::from("on"));
+    assert_eq!(
+        get(&sim, kiln_subject, "store", &[Value::from("fuel")]),
+        Value::Real(Real::of(4.0))
+    );
+    assert_eq!(
+        get(&sim, element, "store", &[Value::from("fuel")]),
+        Value::Real(Real::of(4.0))
+    );
+    assert!(get(&sim, kiln_subject, "config", &[]).as_map().is_some());
+    let making = get(&sim, kiln_subject, "making", &[]);
+    assert_eq!(
+        making
+            .as_map()
+            .and_then(|map| map.get("recipe"))
+            .and_then(Value::as_str),
+        Some("core:test_fire")
+    );
+    let me = Subject::Entity(ada);
+    let bandage = Value::from("core:bandage");
+    assert_eq!(
+        get(&sim, me, "can_make", &[bandage.clone(), Value::Null]),
+        Value::Bool(false)
+    );
+    assert!(
+        get(&sim, me, "make_fault", &[bandage, Value::Null])
+            .as_str()
+            .is_some()
+    );
+    assert!(get(&sim, me, "recipe_options", &[]).as_list().is_some());
+    let herbalism = Value::from("core:herbalism");
+    assert_eq!(
+        get(&sim, me, "knows_how", &[herbalism.clone()]),
+        Value::Bool(false)
+    );
+    recipe::know_how::teach(&mut sim, ada, know_how("herbalism"), "taught", Cause::DEBUG).unwrap();
+    assert_eq!(get(&sim, me, "knows_how", &[herbalism]), Value::Bool(true));
+    assert_eq!(
+        get(&sim, me, "know_how", &[]).as_list().map(<[Value]>::len),
+        Some(1)
+    );
+    assert!(
+        get(&sim, me, "know_how_list", &[])
+            .as_list()
+            .is_some_and(|rows| rows.len() >= 3)
+    );
+    let skin = give(&mut sim, ada, "core:waterskin", 1);
+    let held = Subject::Entity(skin);
+    assert_eq!(get(&sim, held, "fill", &[]), Value::Real(Real::of(0.001)));
+    assert_eq!(get(&sim, held, "room", &[]), Value::Real(Real::ZERO));
+    assert_eq!(
+        get(&sim, held, "holds_substance", &[Value::from("core:water")]),
+        Value::Real(Real::of(0.001))
+    );
+    assert!(
+        get(&sim, held, "mixture", &[])
+            .as_map()
+            .is_some_and(|map| map.len() == 1)
+    );
+    assert!(
+        get(&sim, held, "coating", &[])
+            .as_map()
+            .is_some_and(|map| map.is_empty())
+    );
+}

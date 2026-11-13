@@ -1003,25 +1003,6 @@ pub fn properties() -> Vec<PropertyDef> {
             },
         ),
         PropertyDef::new(
-            "loc",
-            "field",
-            "int",
-            "The level of a field in the cell, from 0 to 255 (02 §16): what a recipe's condition on the place reads, or a spill. 0 where the cell is not loaded.",
-            |sim, subject, args| {
-                let (Subject::Loc(loc) | Subject::Element(loc, _)) = subject else {
-                    return Value::Int(0);
-                };
-                let field = args
-                    .first()
-                    .and_then(|value| crate::world_verbs::def_name_of(sim, value))
-                    .and_then(|name| sim.cosmos.defs().fields().resolve(&name, None));
-                field.map_or(Value::Int(0), |field| {
-                    Value::Int(i64::from(sim.cosmos.field(loc, field).unwrap_or(0)))
-                })
-            },
-        )
-        .arg("field", "id<field>", "The field."),
-        PropertyDef::new(
             "entity",
             "coating",
             "map<real>",

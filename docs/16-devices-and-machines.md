@@ -1192,7 +1192,9 @@ or not.
 | `entity.fill` | `real`: how much in all |
 | `entity.room` | `real?`: the room left; null for what holds none |
 | `entity.coating` | `map<real>`: what is on its surfaces |
-| `loc.field(field: id<field>)` | `int`: the level of a field in the cell, 0 to 255 |
+
+A recipe's condition on the place reads a field with the queries'
+`loc.field(field)` (05 §11).
 
 None is safe for belief. Reasons: `substance.unknown` (`substance`),
 `substance.not_a_container` (`entity`), `substance.empty` (`entity`),
