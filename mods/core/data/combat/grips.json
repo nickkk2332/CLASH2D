@@ -1,0 +1,146 @@
+[
+  { "//": "Holding and throwing people (07 §9), written as any mod would write it. A grab is an attack with no energy whose `on_land` takes hold (`seize`): it is aimed, and can be parried or ducked, like any blow. The grip lasts as long as the action that took it, and no longer. Values are illustrative.",
+    "type": "contest", "id": "grapple", "name": "Grapple",
+    "form": "ratio", "factor": 3, "spread": 1 },
+
+  { "type": "function", "id": "drag_limit",
+    "params": { "who": "entity" },
+    "returns": "real",
+    "value": "($who.attr.strength ?? 10) * 12",
+    "doc": "The most mass, in kilograms, someone drags along while they hold it: twelve kilograms for each point of strength, so an ordinary person drags another." },
+
+  { "type": "function", "id": "heave_energy",
+    "params": { "who": "entity" },
+    "returns": "real",
+    "value": "($who.attr.strength ?? 10) * 30",
+    "doc": "The joules someone throws a person they hold with: 300 J at strength 10, which sends eighty kilograms off at under three metres a second; a brawler of strength 80 puts a man through a window." },
+
+  { "//": "A hand on someone: on the part named, pinned, so that what that arm would do cannot be done until the grip ends; with none named, held by the body. Whoever is held cannot step away from the one holding them, and is dragged along when the holder steps. The grip lasts while the hold does: let go with a cancel, or when twenty seconds are up.",
+    "type": "action", "id": "grab", "name": "Grab",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": "entity",
+      "part":   { "type": "part?", "default": "null" } },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["grip"],
+    "attacks": {
+      "hand": {
+        "with":   { "part": "hand", "surface": "palm" },
+        "energy": 0,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" },
+        "on_land": [ { "seize": { "target": "target", "part": "$part", "pins": true, "drags": "drag_limit(self)" } } ] } },
+    "phases": [
+      { "id": "reach", "time": "250 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "seize" } },
+      { "id": "seize", "time": 0,
+        "do": [ { "strike": { "attack": "hand", "target": "$target", "part": "$part" } } ],
+        "next": [ { "if": "$landed and self.gripping != null", "goto": "hold" }, { "goto": "recover" } ] },
+      { "id": "hold", "time": "hold", "max": "20 s", "cancel": true,
+        "tick": { "every": "250 ms" },
+        "until": "self.gripping == null" },
+      { "id": "recover", "time": "300 ms" } ] },
+
+  { "//": "Taking hold of someone with both hands and throwing them (07 §9.2): away from the thrower, as a body in flight at the speed the heave gives their mass. Where they go is the world's to say: a wall stops them, a window may not.",
+    "type": "action", "id": "throw_person", "name": "Throw",
+    "uses": { "arm": 2 },
+    "params": { "target": "entity" },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["grip", "throw"],
+    "attacks": {
+      "hands": {
+        "with":   { "part": "hand", "surface": "palm" },
+        "energy": 0,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" },
+        "on_land": [ { "seize": { "target": "target" } } ] } },
+    "phases": [
+      { "id": "reach", "time": "300 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "seize" } },
+      { "id": "seize", "time": 0,
+        "do": [ { "strike": { "attack": "hands", "target": "$target" } } ],
+        "next": [ { "if": "$landed and self.gripping != null", "goto": "heave" }, { "goto": "recover" } ] },
+      { "id": "heave", "time": "400 ms",
+        "on_exit": [ { "throw": { "what": "$target", "at": "$target", "energy": "heave_energy(self)" } } ] },
+      { "id": "recover", "time": "400 ms" } ] },
+
+  { "//": "Taking hold of someone to drag them: not pinned, but they come along wherever the one holding them steps, as long as they are no heavier than the holder can drag.",
+    "type": "action", "id": "drag", "name": "Drag",
+    "uses": { "arm": 1 },
+    "params": { "target": "entity" },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["grip"],
+    "attacks": {
+      "hand": {
+        "with":   { "part": "hand", "surface": "palm" },
+        "energy": 0,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" },
+        "on_land": [ { "seize": { "target": "target", "drags": "drag_limit(self)" } } ] } },
+    "phases": [
+      { "id": "reach", "time": "250 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "seize" } },
+      { "id": "seize", "time": 0,
+        "do": [ { "strike": { "attack": "hand", "target": "$target" } } ],
+        "next": [ { "if": "$landed and self.gripping != null", "goto": "hold" }, { "goto": "recover" } ] },
+      { "id": "hold", "time": "hold", "max": "30 s", "cancel": true,
+        "tick": { "every": "250 ms" },
+        "until": "self.gripping == null" },
+      { "id": "recover", "time": "300 ms" } ] },
+
+  { "//": "Holding someone up in front as a shield (07 §9.2): while the hold lasts, a blow or a shot at the one holding lands first on the one held, struck with whatever struck, and only what goes through them goes on.",
+    "type": "action", "id": "human_shield", "name": "Hold up as a shield",
+    "uses": { "arm": 2 },
+    "params": { "target": "entity" },
+    "requires": "dist(self, $target) < 3",
+    "fail_text": "That is out of reach.",
+    "tags": ["grip"],
+    "attacks": {
+      "hands": {
+        "with":   { "part": "hand", "surface": "palm" },
+        "energy": 0,
+        "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" },
+        "on_land": [ { "seize": { "target": "target", "drags": "drag_limit(self)" } } ] } },
+    "phases": [
+      { "id": "reach", "time": "300 ms", "cancel": true,
+        "window": { "kind": "strike", "for": ["$target"], "closes": "seize" } },
+      { "id": "seize", "time": 0,
+        "do": [ { "strike": { "attack": "hands", "target": "$target" } } ],
+        "next": [ { "if": "$landed and self.gripping != null", "goto": "hold" }, { "goto": "recover" } ] },
+      { "id": "hold", "time": "hold", "max": "20 s", "cancel": true,
+        "tick": { "every": "250 ms" },
+        "until": "self.gripping == null" },
+      { "id": "recover", "time": "300 ms" } ],
+    "defence": {
+      "during": "hold", "form": "interpose",
+      "with": { "gripped": true },
+      "handles": "all" } },
+
+  { "//": "Wrenching free of a grip (07 §9.1): strength against the holder's, drawn once as the wrench ends. If it works the grip is broken and the holder's hold is over.",
+    "type": "action", "id": "break_free", "name": "Break free",
+    "requires": "self.gripped_by != null",
+    "fail_text": "Nothing holds you.",
+    "tags": ["grip"],
+    "phases": [
+      { "id": "wrench", "time": "600 ms",
+        "on_exit": [
+          { "if": "self.gripped_by != null and (contest('grapple', self.attr.strength ?? 10, self.gripped_by.attr.strength ?? 10) ?? -1) >= 0",
+            "then": [ { "release_grip": { "who": "self" } } ] } ] } ] },
+
+  { "//": "Laying hands on someone held hostile once they are within reach (09 §3.2): a grab, which holds them where they are. A guard who holds someone strikes them with the other hand (`confront`).",
+    "type": "goal", "id": "apprehend",
+    "doc": "Laying hands on someone held hostile who is in sight and within reach: a grab, which keeps them from getting away. Once they are held, other goals go on.",
+    "about": { "track": {
+      "where": "self.hostile(it) and (self.last_seen(it) ?? 99) < 3 and (dist(self, self.believed_loc(it)) ?? 99) < 2",
+      "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
+    "score": "if self.gripping == null then self.weight('duty') * 3.5 else 0",
+    "commit": 0.3,
+    "interrupts": true,
+    "methods": [
+      { "steps": [ { "choose": { "purpose": "grip", "target": "$about" } } ] },
+      { "steps": [ { "look": { "at": "$about", "time": "1 s" } } ] } ] },
+
+  { "//": "Guards lay hands on whoever they go for, once they are close enough.",
+    "type": "mind", "id": "guard", "patch": true, "optional": true,
+    "extend": { "goals": ["apprehend"] } }
+]

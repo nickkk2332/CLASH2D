@@ -722,7 +722,7 @@ with their source, overheard messages, `talk_options` as a function for
 the application; message kinds, lines for greetings, warnings and calls
 for help, and the rules `heed_help` and `pass_reports_to_the_watch` in
 `mods/core/data/social`. Both "Done when" items are tests. Stubbed:
-exchanges (joint actions, T6), the `talk` interaction, capabilities told
+exchanges (joint actions whose phases say lines, not yet written), the `talk` interaction, capabilities told
 of, languages as definitions.
 
 ### S9 — Party perception

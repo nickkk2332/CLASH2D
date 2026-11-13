@@ -756,9 +756,46 @@ pub(crate) fn evasion(sim: &mut Sim, incoming: &Incoming<'_>) -> Real {
 /// The reason a strike that defences stopped delivered nothing.
 pub const DEFENDED: &str = "combat.defended";
 
-/// The property `entity.defending` (07 §16).
+/// The first thing an entity holds in a grasp, in order of id, whose
+/// definition has a striking surface of this id (07 §3.2): what a parry
+/// that puts the flat of something in the way would use.
+pub fn wielding_surface(sim: &Sim, who: EntityId, surface: &str) -> Option<EntityId> {
+    let holds = sim.components().get::<crate::item::Holds>(who)?;
+    holds.iter().find_map(|(item, hold)| {
+        let crate::item::Hold::Grasp(_) = hold else {
+            return None;
+        };
+        let def = sim
+            .components()
+            .get::<crate::item::Item>(item)
+            .and_then(|component| crate::item::def_of(sim.defs(), component))?;
+        def.surfaces
+            .iter()
+            .any(|have| have.id == surface)
+            .then_some(item)
+    })
+}
+
+/// The properties of defences (07 §16): `entity.defending` and
+/// `entity.wielding_surface`.
 pub fn properties() -> Vec<PropertyDef> {
     vec![
+        PropertyDef::new(
+            "entity",
+            "wielding_surface",
+            "entity?",
+            "The first thing it holds in a grasp, in order of id, whose definition has a striking surface of this id (07 §3.2): the knife or the club whose `flat` a parry puts in a blow's way. Null for none. Readable of oneself in a mind context, so that a reaction's `requires` can say it cannot be done with nothing to do it with.",
+            |sim, subject, args| {
+                let surface = args.first().and_then(Value::as_str).unwrap_or_default();
+                subject
+                    .entity()
+                    .and_then(|id| wielding_surface(sim, id, surface))
+                    .map_or(Value::Null, |item| sim.subject_value(Subject::Entity(item)))
+            },
+        )
+        .arg("surface", "string", "The id of the surface: `flat`, `edge`, `face`.")
+        .own()
+        .changed_by(&["item_taken", "item_dropped", "entity_relocated"]),
         PropertyDef::new(
             "entity",
             "defending",

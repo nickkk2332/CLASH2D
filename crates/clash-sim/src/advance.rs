@@ -414,6 +414,7 @@ impl Sim {
             // have had their say.
             crate::movement::on_event(self, &event);
             crate::action::run::on_event(self, &event);
+            crate::combat::grip::on_event(self, &event);
             crate::perception::observe_event(self, &event);
             crate::device::on_event(self, &event);
             crate::ability::on_event(self, &event);

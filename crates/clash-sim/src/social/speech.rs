@@ -23,8 +23,8 @@
 //! holds is picked, by weight, from the random stream `social`, when it
 //! is said, and written for each hearer as reader (05 §4.6) when heard.
 //!
-//! **Exchanges** (a short back-and-forth as a joint action, 03 §8) wait
-//! for joint actions (T6). **Talking to someone**: [`talk_options`]
+//! **Exchanges** (a short back-and-forth as a joint action, 03 §8) are
+//! not written yet: a joint action whose phases `say`. **Talking to someone**: [`talk_options`]
 //! raises the hook `talk_options` for the application's talk screen.
 
 use clash_core::{EntityId, Real, StateHash, StateHasher, impl_state_hash};

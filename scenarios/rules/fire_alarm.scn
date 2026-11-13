@@ -16,4 +16,4 @@ assert "@alarm.timer('ringing') > 0"
 advance 5min
 assert "not @alarm.var('core:ringing')"
 assert "@alarm.timer('ringing') == null"
-expect hash dc8a04b3c93f61b0483279939beb66ec
+expect hash 3418cd5d164fce205843915efbadef84

@@ -1196,7 +1196,7 @@ As built (decisions D-764, D-765), in `clash_sim::social::speech`:
   `x` for as the actor), `memory_confidence(event)` (real?),
   `memory_source(event)` (string?: a persona as text), `told_of(event)`
   (bool), `standing_orders` (int).
-- **Not built**: exchanges wait for joint actions (T6); there is no
+- **Not built**: exchanges, joint actions (T6) whose phases say lines, are not yet written; there is no
   `talk` interaction yet; a capability told of in a report is not
   recorded (§7.1); languages are names that `understands` handlers
   read, with no definition type.

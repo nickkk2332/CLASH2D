@@ -129,6 +129,7 @@ pub struct GuidanceDef {
 /// | `on_impact` | Effects run at the first thing it strikes; it ends there |
 /// | `thrust` | A drive along its path for a time |
 /// | `guidance`, `fuse` | Read and carried |
+/// | `item` | What it is as an item once caught in flight |
 #[derive(Debug, Deserialize)]
 pub struct ProjectileDef {
     /// What a reader calls it.
@@ -167,6 +168,11 @@ pub struct ProjectileDef {
     /// thrown and timed by a rule's `after` (07 §11.5).
     #[serde(default)]
     pub fuse: Option<Time>,
+    /// What it is as an item once it is caught in flight (07 §11.6,
+    /// `catch_shot`): an arrow caught is an arrow in the hand. Left out,
+    /// a projectile caught is stopped and becomes nothing.
+    #[serde(default)]
+    pub item: Option<Ref<ItemDef>>,
 }
 
 impl ProjectileDef {

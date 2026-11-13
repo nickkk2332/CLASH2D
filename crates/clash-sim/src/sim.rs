@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 15;
+pub const SAVE_VERSION: u32 = 16;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -149,6 +149,12 @@ pub struct Sim {
     /// Not state: what the scenarios' objectives watch, from the
     /// definitions.
     pub(crate) scenario_rt: Arc<crate::scenario::Tables>,
+    /// Every grip (07 §9; [`grip`](crate::combat::grip)).
+    pub(crate) grips: crate::combat::grip::GripTable,
+    /// Not state: the running action whose effect list is being run now,
+    /// for verbs that belong to the action that runs them (`seize`).
+    /// `None` between any two events.
+    pub(crate) acting: Option<crate::later::ActionId>,
 }
 
 /// Why saved state could not be loaded.
@@ -238,6 +244,7 @@ struct SavedRef<'a> {
     ai: &'a crate::ai::AiState,
     ranged: &'a crate::combat::ranged::RangedState,
     scenario: &'a crate::scenario::ScenarioState,
+    grips: &'a crate::combat::grip::GripTable,
     social: &'a crate::social::SocialState,
 }
 
@@ -267,6 +274,7 @@ struct Saved {
     ai: crate::ai::AiState,
     ranged: crate::combat::ranged::RangedState,
     scenario: crate::scenario::ScenarioState,
+    grips: crate::combat::grip::GripTable,
     social: crate::social::SocialState,
 }
 
@@ -343,6 +351,8 @@ impl Sim {
             ranged: crate::combat::ranged::RangedState::default(),
             scenario: crate::scenario::ScenarioState::default(),
             scenario_rt,
+            grips: crate::combat::grip::GripTable::default(),
+            acting: None,
         };
         sim.bind_runtime();
         sim
@@ -755,6 +765,10 @@ impl Sim {
         // Nothing when no game is being played: a simulation that was
         // never begun from a scenario hashes as before.
         self.scenario.state_hash(&mut kernel);
+        // Nor does one in which nothing is gripped.
+        if !self.grips.is_empty() {
+            self.grips.state_hash(&mut kernel);
+        }
         self.social.state_hash(&mut kernel);
         let kernel = kernel.finish();
         let total = Hash128::of(&[
@@ -815,6 +829,7 @@ impl Sim {
                 ai: &self.ai,
                 ranged: &self.ranged,
                 scenario: &self.scenario,
+                grips: &self.grips,
                 social: &self.social,
             },
         )
@@ -909,6 +924,8 @@ impl Sim {
             ranged: saved.ranged,
             scenario: saved.scenario,
             scenario_rt,
+            grips: saved.grips,
+            acting: None,
         };
         sim.bind_runtime();
         Ok(sim)

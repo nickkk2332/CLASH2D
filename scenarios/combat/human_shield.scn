@@ -1,0 +1,26 @@
+# human_shield (plans/combat.md, C7): a gripped creature put in the way
+# (07 §9.2). Ada takes hold of Bram and holds him up in front of her.
+# Cora slashes at Ada with a knife: the blow lands on Bram first, with
+# the knife's edge, and only what goes through him goes on to her.
+use default seed=21
+gen core:testland size=1
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 0, 1, 0)" } }
+remove @spot
+control @e:1 delegated
+control @e:2 delegated
+control @e:3 delegated
+as @e:3 do { "create_item": { "def": "core:knife", "at": "self.loc" } }
+as @e:3 do { "take": { "who": "self", "what": "self.loc.occupants[0]" } }
+as @e:3 do { "set_attr_base": { "who": "self", "attr": "core:strength", "base": 20 } }
+as @e:3 do { "set_attr_base": { "who": "self", "attr": "core:wits", "base": 60 } }
+as @e:1 do { "start_action": { "who": "self", "action": "core:human_shield", "with": "{ 'target': offset(self.loc, 1, 0, 0).occupants[0] }" } }
+advance 500ms
+expect event seized
+as @e:3 do { "start_action": { "who": "self", "action": "core:slash", "with": "{ 'target': offset(self.loc, 0, -1, 0).occupants[0] }" } }
+advance 800ms
+expect event strike_defended
+assert "len(@e:2.wounds) > 0"
+expect hash 715fa6f2f13c0b7377652469f3e85844
