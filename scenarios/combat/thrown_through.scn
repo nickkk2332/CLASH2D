@@ -1,0 +1,25 @@
+# thrown_through (plans/combat.md, C7; scene S2): a throw launches the
+# held at the formula's speed and the world resolves what it hits
+# (07 §9.2). A titan of strength 1500 takes hold of Bram and throws him
+# east at 45 kJ, about 34 m/s, into a window a step behind him. The
+# blow on the glass is over its 500 kPa: it breaks, and Bram flies on
+# and lands outside, hurt by the landing.
+use default seed=19
+gen core:testland size=1
+set @c:12,10,0 block core:window
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+remove @spot
+assert "@e:2.loc.x == 11 and @c:12,10,0.block.def_id == 'core:window'"
+control @e:1 delegated
+control @e:2 delegated
+as @e:1 do { "set_attr_base": { "who": "self", "attr": "core:strength", "base": 1500 } }
+as @e:1 do { "start_action": { "who": "self", "action": "core:throw_person", "with": "{ 'target': offset(self.loc, 1, 0, 0).occupants[0] }" } }
+advance 4s
+expect event seized
+expect event thrown
+expect event element_destroyed
+assert "(@c:12,10,0.block.def_id ?? 'none') != 'core:window'"
+assert "@e:2.loc.x > 12"
+expect hash 63aa89be6144f36d9b69f4b919000d88

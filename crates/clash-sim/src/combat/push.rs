@@ -201,19 +201,50 @@ pub fn push(sim: &mut Sim, push: &Push, cause: Cause) -> Pushed {
         );
         return Pushed::Staggered(speed);
     }
-    let Some(Place::At { loc, alt_mm }) = sim.truth().place(push.target) else {
-        return Pushed::Nothing;
-    };
     if let Some(posture) = push.knock_down {
         // A posture the body cannot take changes nothing: the push
         // still launches it.
-        let _ = crate::movement::set_posture(sim, push.target, Some(posture), cause);
+        if matches!(sim.truth().place(push.target), Some(Place::At { .. })) {
+            let _ = crate::movement::set_posture(sim, push.target, Some(posture), cause);
+        }
     }
-    let presence = match sim.known(push.target) {
-        Ok(known) => *known.presence(),
-        Err(_) => return Pushed::Nothing,
+    match launch_body(sim, push.target, vel, cause) {
+        Ok(true) => {
+            launched(sim, push.target, speed, dir, false, cause);
+            Pushed::Launched {
+                speed,
+                added: false,
+            }
+        }
+        Ok(false) => Pushed::Nothing,
+        Err(reason) => {
+            sim.fault(reason);
+            Pushed::Nothing
+        }
+    }
+}
+
+/// Hands an entity standing in the world to the world as a body in
+/// flight (02 §15) at a velocity: from its cell's middle at half its
+/// height, with its mass, volume, cross-section and planes. Movement
+/// takes it back when it lands (06 §11). What a push that launches
+/// does, and what a throw of a creature held does (07 §9.2). `Ok(false)`
+/// for one not standing in a cell; `Err` for the world's refusal.
+pub(crate) fn launch_body(
+    sim: &mut Sim,
+    target: EntityId,
+    vel: [Real; 3],
+    cause: Cause,
+) -> Result<bool, Reason> {
+    let Some(Place::At { loc, alt_mm }) = sim.truth().place(target) else {
+        return Ok(false);
     };
-    let physical = sim.components().get::<Physical>(push.target).copied();
+    let presence = match sim.known(target) {
+        Ok(known) => *known.presence(),
+        Err(_) => return Ok(false),
+    };
+    let mass = mass_of(sim, target);
+    let physical = sim.components().get::<Physical>(target).copied();
     let middle = |at: i32| (Real::from_i64(i64::from(at)) + HALF) * CELL_M;
     let standing = Real::from_i64(i64::from(loc.cell.z)) * STOREY_M
         + Real::from_i64(i64::from(alt_mm)) / MM_PER_M;
@@ -225,14 +256,7 @@ pub fn push(sim: &mut Sim, push: &Push, cause: Cause) -> Pushed {
         middle(loc.cell.y),
         standing + half_height,
     ];
-    let mut body = Body::of_mass(
-        BodyOwner::Entity(push.target),
-        loc.grid,
-        pos,
-        vel,
-        mass,
-        cause,
-    );
+    let mut body = Body::of_mass(BodyOwner::Entity(target), loc.grid, pos, vel, mass, cause);
     if let Some(physical) = &physical {
         if physical.cross_section() > Real::ZERO {
             body.area = physical.cross_section();
@@ -242,23 +266,13 @@ pub fn push(sim: &mut Sim, push: &Push, cause: Cause) -> Pushed {
         }
     }
     body.plane = presence.plane;
-    match sim.world(|ctx| ctx.launch(body)) {
-        Ok(_) => {
-            launched(sim, push.target, speed, dir, false, cause);
-            Pushed::Launched {
-                speed,
-                added: false,
-            }
-        }
-        Err(error) => {
-            sim.fault(Reason::from_world(&error));
-            Pushed::Nothing
-        }
-    }
+    sim.world(|ctx| ctx.launch(body))
+        .map(|_| true)
+        .map_err(|error| Reason::from_world(&error))
 }
 
 /// Raises `launched`.
-fn launched(
+pub(crate) fn launched(
     sim: &mut Sim,
     target: EntityId,
     speed: Real,

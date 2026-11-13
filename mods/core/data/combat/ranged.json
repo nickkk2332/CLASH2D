@@ -67,7 +67,7 @@
       { "id": "raise", "time": "300 ms", "cancel": true },
       { "id": "fire", "time": 0,
         "do": [ { "shoot": {
-          "at": "$at", "height": "$height", "count": "$count",
+          "at": "$at", "height": "$height", "count": "$count", "window": "shot",
           "store": "self.wielding('firearm')", "with": "self.wielding('firearm')",
           "spread": "(self.wielding('firearm').shot('spread') ?? 0.02) * unsteadiness(contest('marksmanship', marksman(self), 10) ?? 0)" } } ] },
       { "id": "recover", "time": "250 ms", "cancel": ["shot"] } ] },
@@ -86,7 +86,7 @@
       { "id": "steady", "time": "1200 ms", "cancel": true },
       { "id": "fire", "time": 0,
         "do": [ { "shoot": {
-          "at": "$at", "height": "$height",
+          "at": "$at", "height": "$height", "window": "shot",
           "store": "self.wielding('firearm')", "with": "self.wielding('firearm')",
           "spread": "(self.wielding('firearm').shot('spread') ?? 0.02) * 0.4 * unsteadiness(contest('marksmanship', marksman(self) + 2, 10) ?? 0)" } } ] },
       { "id": "recover", "time": "300 ms", "cancel": ["shot"] } ] },
@@ -118,7 +118,7 @@
         "tick": { "every": "50 ms", "do": [ { "add": { "$drawn": 0.05 } } ] } },
       { "id": "loose", "time": 0,
         "do": [ { "shoot": {
-          "at": "$at", "height": "$height", "lob": true,
+          "at": "$at", "height": "$height", "lob": true, "window": "shot",
           "store": "self.store_of('arrow')", "with": "self.wielding('bow')",
           "energy": "min(self.wielding('bow').shot('energy') ?? 0, draw_power(self) * $drawn)",
           "spread": "(self.wielding('bow').shot('spread') ?? 0.02) * unsteadiness(contest('marksmanship', marksman(self), 10) ?? 0)" } } ] },
@@ -140,7 +140,7 @@
       { "id": "release", "time": 0,
         "do": [
           { "throw": {
-            "what": "$what", "at": "$at", "height": "$height", "lob": true,
+            "what": "$what", "at": "$at", "height": "$height", "lob": true, "window": "shot",
             "energy": "throw_energy(self)",
             "surface": { "expr": "if $what.has_tag('blade') then 'point' else null" },
             "spread": "0.03 * unsteadiness(contest('marksmanship', marksman(self), 10) ?? 0)" } },

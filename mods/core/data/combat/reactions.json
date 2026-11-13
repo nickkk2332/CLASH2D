@@ -12,9 +12,11 @@
     "type": "contest", "id": "slip", "name": "Slip",
     "form": "ratio", "factor": 2, "spread": 1 },
 
-  { "//": "Turning a blow with a blade held in the hand: the flat is set across the blow's line and most of it is turned aside. A parry holds what the parrier's strength can turn; much past that and the blade takes the rest, and what the blade cannot stop goes on to where the blow was aimed (07 §5.3, §14).",
+  { "//": "Turning a blow with something held in the hand that has a flat, a blade or a club: the flat is set across the blow's line and most of it is turned aside. A parry holds what the parrier's strength can turn; much past that and the blade takes the rest, and what the blade cannot stop goes on to where the blow was aimed (07 §5.3, §14). With nothing such in hand it cannot be done, and says why.",
     "type": "action", "id": "parry", "name": "Parry",
     "reaction_to": ["strike"], "uses": { "arm": 1 }, "ready": "guard",
+    "requires": "self.wielding_surface('flat') != null",
+    "fail_text": "There is nothing in hand to parry with.",
     "tags": ["defence"],
     "phases": [
       { "id": "set",     "time": "80 ms" },
@@ -22,7 +24,7 @@
       { "id": "recover", "time": "150 ms" } ],
     "defence": {
       "during": "guard", "form": "interpose",
-      "with": { "held": "blade", "surface": "flat" },
+      "with": { "held": "", "surface": "flat" },
       "covers": { "arc": 120 },
       "handles": 1,
       "contest": { "id": "control", "by": "fighting(self)", "against": "fighting(attacker) / 2" },

@@ -99,6 +99,20 @@ pub struct Waiting {
 
 impl_state_hash!(Waiting { wake, idle });
 
+/// One participant of a joint action other than its actor (03 §8): who,
+/// and the slots its role holds of that participant's channels.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct Joined {
+    /// The participant.
+    pub entity: EntityId,
+    /// The position of its role among the action's roles.
+    pub role: u16,
+    /// The slots held of its channels, in order of channel.
+    pub held: Vec<(ChannelId, u16)>,
+}
+
+impl_state_hash!(Joined { entity, role, held });
+
 /// Every running action and every wait (03 §6). Kept by the simulation
 /// as [`Sim::actions`](crate::Sim); changed only by the runtime.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
@@ -108,13 +122,23 @@ pub struct ActionTable {
     next: u32,
     running: BTreeMap<ActionId, RunningAction>,
     waits: BTreeMap<EntityId, Waiting>,
+    /// The other participants of running joint actions (03 §8), by
+    /// action. Hashed only when there is one.
+    joined: BTreeMap<ActionId, Vec<Joined>>,
 }
 
-impl_state_hash!(ActionTable {
-    next,
-    running,
-    waits
-});
+impl StateHash for ActionTable {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.next.state_hash(hasher);
+        self.running.state_hash(hasher);
+        self.waits.state_hash(hasher);
+        // A simulation with no joint action running hashes as one from
+        // before joint actions were kept.
+        if !self.joined.is_empty() {
+            self.joined.state_hash(hasher);
+        }
+    }
+}
 
 impl ActionTable {
     /// A running action.
@@ -156,6 +180,39 @@ impl ActionTable {
 
     pub(crate) fn remove(&mut self, id: ActionId) -> Option<RunningAction> {
         self.running.remove(&id)
+    }
+
+    /// The participants of a running joint action other than its actor,
+    /// in the order of their roles. Empty for an ordinary action.
+    pub fn joined(&self, id: ActionId) -> &[Joined] {
+        self.joined.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    /// The slots a running action holds of an entity's channels: its
+    /// actor's, or a participant's of a joint action. `None` for one it
+    /// holds none of.
+    pub fn held_of(&self, id: ActionId, entity: EntityId) -> Option<&[(ChannelId, u16)]> {
+        let action = self.running.get(&id)?;
+        if action.actor == entity {
+            return Some(&action.held);
+        }
+        self.joined
+            .get(&id)?
+            .iter()
+            .find(|joined| joined.entity == entity)
+            .map(|joined| joined.held.as_slice())
+    }
+
+    pub(crate) fn set_joined(&mut self, id: ActionId, joined: Vec<Joined>) {
+        if joined.is_empty() {
+            self.joined.remove(&id);
+        } else {
+            self.joined.insert(id, joined);
+        }
+    }
+
+    pub(crate) fn take_joined(&mut self, id: ActionId) -> Vec<Joined> {
+        self.joined.remove(&id).unwrap_or_default()
     }
 
     pub(crate) fn set_wait(&mut self, entity: EntityId, wait: Waiting) -> Option<Waiting> {
