@@ -333,6 +333,11 @@ impl MindState {
             .map(|at| self.stances[at].1)
     }
 
+    /// Every stance it holds, by persona, in order of persona.
+    pub fn stances(&self) -> &[(PersonaId, Stance)] {
+        &self.stances
+    }
+
     /// Sets or clears its stance toward a persona.
     pub(super) fn set_stance(&mut self, persona: PersonaId, stance: Option<Stance>) {
         match (

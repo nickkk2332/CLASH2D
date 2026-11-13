@@ -420,6 +420,9 @@ fn usable<'a>(
                 .with("ability", name.as_str()),
         );
     }
+    if let Some(by) = inst.suppressed_by().first() {
+        return Err(super::suppress::suppressed(&name, *by));
+    }
     let rank = super::rank(sim, entity, &inst);
     if let Some(needed) = grant.at_rank
         && rank < needed

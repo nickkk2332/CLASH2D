@@ -194,6 +194,11 @@ pub struct TraitDef {
     /// names an ability or a tag, a parameter, and `add` and `mul`.
     #[serde(default)]
     pub ability_params: Vec<crate::ability::ParamModifierDef>,
+    /// Tags of its holder's abilities it suppresses while it lasts and
+    /// is not dormant (08 §6.2): a null collar, a dampener. Given effect
+    /// by [`crate::ability`].
+    #[serde(default)]
+    pub suppresses: Vec<String>,
     /// Channel slots added (a positive count) or disabled (a negative
     /// one) while it lasts (03 §6.2). Read by
     /// [`channel_change`](super::channel_change) for the action runtime.
@@ -325,7 +330,7 @@ impl Def for TraitDef {
         if self.channels.values().any(|count| *count == 0) {
             cx.error("`channels` gives each channel a count of slots: above zero to add, below to disable");
         }
-        if self.tags.iter().any(String::is_empty) {
+        if self.tags.iter().any(String::is_empty) || self.suppresses.iter().any(String::is_empty) {
             cx.error("a tag cannot be empty");
         }
         if self.group.as_deref() == Some("") {

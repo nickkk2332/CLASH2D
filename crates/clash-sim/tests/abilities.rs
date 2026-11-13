@@ -5,7 +5,7 @@
 //!
 //! | Package | Done when | Test |
 //! |---------|-----------|------|
-//! | A1 | A reactive value always equals a fresh evaluation (A6) | `a_kept_value_always_equals_a_fresh_evaluation` |
+//! | A1 | A reactive value always equals a fresh evaluation (A6) | `a_kept_value_always_equals_a_fresh_evaluation`, with the sequences it once failed in `a_kept_value_follows_the_sequences_that_once_left_it_stale` |
 //! | A1 | Re-evaluated exactly when a dependency changed, at most once a pump | `a_condition_is_worked_out_again_only_when_what_it_read_changed` |
 //! | A1 | A property registered without the events that change it fails | `a_kept_condition_may_read_only_what_says_how_it_changes` |
 //! | A2 | Two sources, one instance, lasting as long as either (A8) | `one_ability_from_two_sources_lasts_as_long_as_either` |
@@ -127,6 +127,10 @@ fn try_load(extra: &str) -> Result<Arc<Defs>, String> {
     let mut files = dir_files("world");
     files.extend(dir_files("life"));
     files.extend(dir_files("powers"));
+    // The powers name minds, goals and senses (a summoned hound).
+    for sub in ["ai", "perception"] {
+        files.extend(dir_files(sub));
+    }
     files.push(core_file("traits.json"));
     files.push(core_file("movement.json"));
     files.push((
@@ -405,36 +409,89 @@ fn fresh(sim: &Sim, who: EntityId) -> bool {
     charged && focus >= 1 && !has_trait(sim, who, "lit")
 }
 
+/// Makes the changes one by one, and after each says where the kept
+/// value, the ability's state or what it confers first differs from a
+/// fresh evaluation, if anywhere.
+fn kept_against_fresh(changes: &[Change]) -> Result<(), String> {
+    let mut sim = sim();
+    let who = spawn(&mut sim, "tester", 10, 10);
+    sim.pump();
+    let number = grant(&mut sim, who, "fickle");
+    let watcher = Watcher::Ability {
+        entity: who,
+        number,
+    };
+    let focus = DEFS
+        .lookup::<clash_sim::stats::TrackDef>("core:focus")
+        .unwrap();
+    for (at, change) in changes.iter().enumerate() {
+        match change {
+            Change::Charge(on) => set_var(&mut sim, who, "charged", Value::Bool(*on)),
+            Change::Focus => sim.advance_track(who, focus, Real::ONE, cause()).unwrap(),
+            Change::Light(on) => {
+                if *on {
+                    traits::add_trait(&mut sim, who, trait_id("lit"), Giver::RULE, None, cause())
+                        .unwrap();
+                } else {
+                    traits::remove_trait(&mut sim, who, trait_id("lit"), None, cause()).unwrap();
+                }
+            }
+            Change::Pump => advance(&mut sim, Dur::from_millis(100)),
+        }
+        sim.pump();
+        let expected = fresh(&sim, who);
+        let kept = sim.reactive().value(watcher);
+        let active = state(&sim, who, "fickle") == State::Active;
+        let glowing = has_trait(&sim, who, "glowing");
+        if kept != Some(expected) || active != expected || glowing != expected {
+            return Err(format!(
+                "after change {at} ({change:?}): fresh {expected}, kept {kept:?}, active {active}, glowing {glowing}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(24))]
 
     #[test]
     fn a_kept_value_always_equals_a_fresh_evaluation(changes in prop::collection::vec(change(), 1..24)) {
-        let mut sim = sim();
-        let who = spawn(&mut sim, "tester", 10, 10);
-        sim.pump();
-        let number = grant(&mut sim, who, "fickle");
-        let watcher = Watcher::Ability { entity: who, number };
-        for change in changes {
-            match change {
-                Change::Charge(on) => set_var(&mut sim, who, "charged", Value::Bool(on)),
-                Change::Focus => sim
-                    .advance_track(who, DEFS.lookup::<clash_sim::stats::TrackDef>("core:focus").unwrap(), Real::ONE, cause())
-                    .unwrap(),
-                Change::Light(on) => {
-                    if on {
-                        traits::add_trait(&mut sim, who, trait_id("lit"), Giver::RULE, None, cause()).unwrap();
-                    } else {
-                        traits::remove_trait(&mut sim, who, trait_id("lit"), None, cause()).unwrap();
-                    }
-                }
-                Change::Pump => advance(&mut sim, Dur::from_millis(100)),
-            }
-            sim.pump();
-            let expected = fresh(&sim, who);
-            prop_assert_eq!(sim.reactive().value(watcher), Some(expected));
-            prop_assert_eq!(state(&sim, who, "fickle") == State::Active, expected);
-            prop_assert_eq!(has_trait(&sim, who, "glowing"), expected);
+        let checked = kept_against_fresh(&changes);
+        prop_assert!(checked.is_ok(), "{}", checked.unwrap_err());
+    }
+}
+
+/// Sequences the property test once found failing, kept so that they
+/// are always tried. The rounds of re-evaluation a pump allows were
+/// counted on from one pump to the next, so that after enough ordinary
+/// changes a condition was left stale (decision D-770).
+#[test]
+fn a_kept_value_follows_the_sequences_that_once_left_it_stale() {
+    use Change::{Charge, Focus, Light};
+    for changes in [
+        vec![
+            Focus,
+            Charge(true),
+            Light(true),
+            Light(false),
+            Focus,
+            Charge(true),
+            Charge(false),
+        ],
+        vec![
+            Focus,
+            Charge(true),
+            Light(true),
+            Charge(true),
+            Focus,
+            Focus,
+            Focus,
+            Light(false),
+        ],
+    ] {
+        if let Err(why) = kept_against_fresh(&changes) {
+            panic!("{changes:?}: {why}");
         }
     }
 }
@@ -892,7 +949,17 @@ fn a_mode_ends_the_tick_its_pool_runs_dry_with_nothing_between() {
     sim.pump();
     // 99 at 4 a second: 24.75 seconds.
     let due = started + Dur::from_micros(24_750_000);
-    let wakes = sim.truth().wakes_of(who);
+    // The character's mind keeps wake-ups of its own; the mode has one.
+    let wakes: Vec<_> = sim
+        .truth()
+        .wakes_of(who)
+        .into_iter()
+        .filter(|wake| {
+            sim.timeline()
+                .wake(*wake)
+                .is_some_and(|wake| ability::is_mode_wake(&wake))
+        })
+        .collect();
     assert_eq!(wakes.len(), 1, "one wake-up for the whole of it: {wakes:?}");
     assert_eq!(sim.timeline().due(wakes[0]), Some(due));
     sim.advance(AdvanceLimit::Until(due - Dur::from_micros(1)));
@@ -1215,7 +1282,9 @@ fn a_power_too_dear_is_refused_with_what_is_short() {
     );
     assert_eq!(push.cost[0].what, "core:reserve");
     assert_eq!(push.cost[0].amount, Real::of(30.0));
-    assert_eq!(options.len(), 4, "the shield has no grant, only a mode");
+    // Of the twelve, the shield, time stop, null field, float and
+    // shadow have no grant, only a mode.
+    assert_eq!(options.len(), 7, "a grant for each power that has one");
 }
 
 #[test]

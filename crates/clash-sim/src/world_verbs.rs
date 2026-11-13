@@ -22,7 +22,7 @@
 //! | `launch` | `what: entity`, `vel: any` | null | `WorldCtx::launch` |
 //! | `impulse` | `what: entity`, `j: any` | null | `WorldCtx::impulse` |
 //! | `arrest` | `what: entity` | null | `WorldCtx::arrest` |
-//! | `create_area` | `at: loc`, `to: loc?`, `radius: real?`, `kind: id<area_kind>?`, `tags: list<string>?`, `clock_rate: real?`, `priority: int?` | `area` | `WorldCtx::create_area` |
+//! | `create_area` | `at: loc`, `to: loc?`, `radius: real?`, `kind: id<area_kind>?`, `tags: list<string>?`, `clock_rate: real?`, `priority: int?`, `anchor: entity?`, `gravity: any?`, `light: real?`, `light_radius: real?`, `bound: bool?` and the terms of a binding (`ability`, `for`, `ends_on`, `on_end`, `as`; 08 §7.3) | `area` | `WorldCtx::create_area` |
 //! | `remove_area` | `area: area` | null | `WorldCtx::remove_area` |
 //! | `enclose` | `from: loc`, `kind: id<area_kind>?`, `limit: int?` | `area` | `WorldCtx::enclose` |
 //!
@@ -35,9 +35,10 @@ use clash_expr::{Registry, Value, VerbSpec};
 use clash_world::dims::{CELL_M, STOREY_M};
 use clash_world::field::FieldDef;
 use clash_world::{
-    AREA_MAX_CELLS, AreaKindId, AreaShape, AreaSpec, Body, BodyOwner, Cause, CellBox, DamagePacket,
-    DamageResult, DamageTypeId, ElementState, EnergyRelease, FieldId, Layer, Location, MaterialId,
-    RELEASE_DEFAULT_ALT_MM, ReleaseShape, StateRefError,
+    AREA_MAX_CELLS, AmbientOverride, AreaAnchor, AreaKindId, AreaShape, AreaSpec, Body, BodyOwner,
+    Cause, CellBox, DamagePacket, DamageResult, DamageTypeId, ElementState, EnergyRelease, FieldId,
+    GravityOverride, Layer, LightSource, Location, MaterialId, RELEASE_DEFAULT_ALT_MM,
+    ReleaseShape, StateRefError,
 };
 
 use crate::Sim;
@@ -660,7 +661,14 @@ fn area_value(sim: &Sim, id: clash_world::AreaId) -> Value {
 
 fn create_area(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value, Reason> {
     const VERB: &str = "create_area";
-    let at = cell_arg(sim, VERB, call, 0, "at")?;
+    // Left out, `at` is where the anchor is.
+    let at = match (arg(call, 0), subject_arg(sim, call, 7)) {
+        (Value::Null, Some(Subject::Entity(anchor))) => sim
+            .entities
+            .location(anchor)
+            .ok_or_else(|| bad_argument(VERB, "at", "a cell, or an anchor that is in the world"))?,
+        _ => cell_arg(sim, VERB, call, 0, "at")?,
+    };
     let to = match arg(call, 1) {
         Value::Null => None,
         _ => Some(cell_arg(sim, VERB, call, 1, "to")?),
@@ -702,9 +710,56 @@ fn create_area(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value
                 .ok_or_else(|| bad_argument(VERB, "priority", "a whole number"))?,
         ),
     };
+    // What moves it, what it does to gravity and light (02 §8.3).
+    spec.anchor = match arg(call, 7) {
+        Value::Null => None,
+        _ => match subject_arg(sim, call, 7) {
+            Some(Subject::Entity(entity)) if sim.entities.contains(entity) => {
+                Some(AreaAnchor::Entity(entity))
+            }
+            _ => return Err(bad_argument(VERB, "anchor", "an entity that exists")),
+        },
+    };
+    let gravity = match arg(call, 8) {
+        Value::Null => None,
+        value => match value.as_number() {
+            Some(scale) if scale.is_finite() => Some(GravityOverride::Scale(scale)),
+            Some(_) => {
+                return Err(bad_argument(VERB, "gravity", "a finite scale"));
+            }
+            None => Some(GravityOverride::Vector(
+                vector(sim, value, None).ok_or_else(|| {
+                    bad_argument(
+                        VERB,
+                        "gravity",
+                        "a scale, or a list of three accelerations in m/s²",
+                    )
+                })?,
+            )),
+        },
+    };
+    if let Some(gravity) = gravity {
+        spec.ambient = Some(AmbientOverride {
+            gravity: Some(gravity),
+            drift: None,
+        });
+    }
+    if let Some(intensity) = number(VERB, call, 9, "light")? {
+        let radius = number(VERB, call, 10, "light_radius")?;
+        spec.light = LightSource::shining(intensity, radius)
+            .map_err(|why| bad_argument(VERB, "light_radius", &why))?;
+    }
+    // Bound to an ability (08 §7.3): checked before anything is made.
+    let terms = crate::ability::bind::area_terms(sim, call, 11)?;
+    if let Some(terms) = &terms {
+        crate::ability::bind::check_room(sim, terms.number)?;
+    }
     let id = sim
         .world(|ctx| ctx.create_area(spec, cause))
         .map_err(|error| world(&error))?;
+    if let Some(terms) = &terms {
+        crate::ability::bind::bind_area(sim, terms, id, cause);
+    }
     Ok(area_value(sim, id))
 }
 
@@ -1057,9 +1112,14 @@ pub fn world_verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "create_area",
-                    "Makes an area (02 §8.3): a box from `at` to `to`, every cell within `radius` metres of `at`, or the one cell `at`. Whoever it comes over is told (`area_entered`). Returns the area. Refused for a box in two grids, a kind that does not exist, and a shape larger than the engine allows.",
+                    "Makes an area (02 §8.3): a box from `at` to `to`, every cell within `radius` metres of `at`, or the one cell `at`; anchored to an entity, it moves with it; it may set gravity inside it and carry a light. Whoever it comes over is told (`area_entered`). Returns the area. Refused for a box in two grids, a kind that does not exist, an anchor that does not exist, gravity that is neither a scale nor three numbers, a light whose radius is out of range, and a shape larger than the engine allows.",
                     &[
-                        ("at", "loc", false, "A corner of the box, or the middle."),
+                        (
+                            "at",
+                            "loc",
+                            true,
+                            "A corner of the box, or the middle. Left out, the cell its `anchor` is in.",
+                        ),
                         ("to", "loc", true, "The other corner of a box."),
                         (
                             "radius",
@@ -1086,6 +1146,41 @@ pub fn world_verbs() -> Vec<VerbDef> {
                             true,
                             "Which area applies where several overlap.",
                         ),
+                        (
+                            "anchor",
+                            "entity",
+                            true,
+                            "An entity it moves with (02 §8.3): when the entity moves, the area moves by as much, and who it comes over or leaves is told. An aura, a bubble round its maker.",
+                        ),
+                        (
+                            "gravity",
+                            "any",
+                            true,
+                            "Gravity inside it in place of the stratum's: a number scales the stratum's (0 is weightlessness), a list of three numbers replaces it (m/s² east, south and up). Left out, its kind's.",
+                        ),
+                        (
+                            "light",
+                            "real",
+                            true,
+                            "The intensity of a source of light it carries at its middle (15 §3.3), on the scale where full daylight is 1. Negative darkens; the light of a cell never goes below zero. Left out, its kind's.",
+                        ),
+                        (
+                            "light_radius",
+                            "real",
+                            true,
+                            "How far that light shines, in metres, at most 16. Left out, as far as it stays noticeable.",
+                        ),
+                        (
+                            "bound",
+                            "bool",
+                            true,
+                            "Whether it is bound to an ability (08 §7.3) and removed when the binding ends. Giving any of the binding's terms below binds it too.",
+                        ),
+                        crate::ability::bind::TERM_ARGS[0],
+                        crate::ability::bind::TERM_ARGS[1],
+                        crate::ability::bind::TERM_ARGS[2],
+                        crate::ability::bind::TERM_ARGS[3],
+                        crate::ability::bind::TERM_ARGS[4],
                     ],
                 )
             },
