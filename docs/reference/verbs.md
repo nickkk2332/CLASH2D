@@ -46,6 +46,16 @@ Adds a new part of a definition to a body (06 §6.5), on the part `on` in a sock
 - `side` (string?, optional): Its side label.
 - `scale` (real?, optional): Its size relative to the body, above zero. Default 1.
 
+<a id="add-relation"></a>
+## `add_relation`
+
+Adds to what a mind holds of a kind toward someone (15 §9.1). Raises `relation_changed`. Returns the value now.
+
+- `who` (entity): The mind that holds it.
+- `toward` (any): An entity, as the persona `who` takes it for, or a group's key or id.
+- `kind` (string): The relation kind's id, qualified or bare.
+- `amount` (real): How much to add: to its own value, or to the kind's default.
+
 <a id="add-resource"></a>
 ## `add_resource`
 
@@ -115,6 +125,14 @@ Asks a directly controlled entity how to answer a window it noticed (03 §7.3): 
 - `who` (entity): Who is asked: a directly controlled candidate that noticed the window.
 - `window` (window): The window.
 
+<a id="assume-persona"></a>
+## `assume_persona`
+
+An entity presents another of its own personas (15 §8.3). Whoever perceives it at that moment sees the change. Refused with `social.not_own_persona` and `social.unknown_persona`.
+
+- `who` (entity): Who presents it.
+- `persona` (string): One of its own personas, as text: one it made, or its true one.
+
 <a id="attach-sense"></a>
 ## `attach_sense`
 
@@ -158,6 +176,14 @@ Cancels an entity's running actions that match, each in a phase whose `cancel` i
 - `action` (id<action>, optional): Only actions of this definition.
 - `channel` (id<channel>, optional): Only actions holding slots of this channel.
 - `tag` (string, optional): Only actions whose definition carries this tag.
+
+<a id="cancel-order"></a>
+## `cancel_order`
+
+Withdraws an order an entity keeps, or all of them (15 §10). Raises `order_cancelled`. Returns how many went.
+
+- `who` (entity): Who keeps it.
+- `order` (int, optional): Its number, from `order_given`; left out, every order it keeps.
 
 <a id="cancel-recipe"></a>
 ## `cancel_recipe`
@@ -213,6 +239,15 @@ Forgets the path the mover is following (06 §11).
 Empties a plan (03 §5.3). Raises `plan_cleared` if it held anything.
 
 - `who` (entity): Whose plan.
+
+<a id="clear-relation"></a>
+## `clear_relation`
+
+Takes away what a mind holds toward someone of its own (15 §9.1); what its groups hold stays. Raises `relation_changed` for each. Returns how many went.
+
+- `who` (entity): The mind that holds it.
+- `toward` (any): An entity, as the persona `who` takes it for, or a group's key or id.
+- `kind` (string, optional): The relation kind; left out, every kind.
 
 <a id="clear-track"></a>
 ## `clear_track`
@@ -281,6 +316,15 @@ Places an element in a cell, or in each cell of a straight line from `at` to `to
 - `on_end` (string?, optional): What happens to what is bound when it ends: `remove`, `restore` (cells: put back what was there) or `release` (it stays, unbound).
 - `as` (string?, optional): A name for the binding: `ability.bound(name)` then gives what it holds.
 
+<a id="copy-persona"></a>
+## `copy_persona`
+
+An entity presents what another presents (15 §8.3): a shapeshifter, a perfect mask. What it does is remembered by witnesses as done by that persona; the world's causes still name it. Returns the persona presented, as text.
+
+- `who` (entity): Who takes on the likeness.
+- `of` (entity): Whose likeness: what it presents now.
+- `quality` (real, optional): How well the likeness holds, 0 to 1; 1 if left out.
+
 <a id="create-area"></a>
 ## `create_area`
 
@@ -304,6 +348,23 @@ Makes an area (02 §8.3): a box from `at` to `to`, every cell within `radius` me
 - `on_end` (string?, optional): What happens to what is bound when it ends: `remove`, `restore` (cells: put back what was there) or `release` (it stays, unbound).
 - `as` (string?, optional): A name for the binding: `ability.bound(name)` then gives what it holds.
 
+<a id="create-group"></a>
+## `create_group`
+
+Makes a group in play (15 §9.2): a gang, a cult, a raised horde. Raises `group_created`. Returns its key.
+
+- `def` (string): The group definition's id.
+- `name` (string, optional): What it is called.
+
+<a id="create-illusion"></a>
+## `create_illusion`
+
+Makes an entity that is only signals (15 §8.3): no body, blocking nothing, perceived by the senses of the kinds it gives off. Tagged `illusion`. Returns it.
+
+- `at` (loc): The cell it stands in.
+- `signals` (map<real>): What it gives off: for each signal kind, by id, a standing strength.
+- `of` (entity, optional): Whom it is taken for: it presents what they present.
+
 <a id="create-item"></a>
 ## `create_item`
 
@@ -325,6 +386,18 @@ Gives an entity a new mind, awake. Refused for one that has a mind (06 §8.2).
 
 - `in` (entity): What is given a mind.
 - `def` (string, optional): The behaviour profile for the AI layer: the id of a `mind` definition, kept as written.
+
+<a id="create-persona"></a>
+## `create_persona`
+
+Makes a persona for an entity (15 §8.3): a cover identity, a costume. It is presented only once assumed. Returns the persona, as text.
+
+- `who` (entity): Whose it is.
+- `name` (string, optional): Its name.
+- `tags` (list<string>, optional): Its tags: a uniform, an insignia, a role.
+- `claims` (list<string>, optional): The groups it presents as belonging to, by key or id.
+- `quality` (real, optional): How well it holds as a disguise, 0 to 1.
+- `apparent` (string, optional): The template it looks like, by id.
 
 <a id="damage"></a>
 ## `damage`
@@ -363,6 +436,14 @@ Unmakes an item, with every member of its stack. What it held is first put down 
 `item` may be given directly.
 
 - `item` (entity): The item.
+
+<a id="detach-sense"></a>
+## `detach_sense`
+
+Takes a sense from an entity (15 §4), with what it was aware of through it. Refused with `perception.unknown_sense` and `perception.no_sense`.
+
+- `who` (entity): Who loses the sense.
+- `sense` (string): The sense's id, qualified or bare.
 
 <a id="die"></a>
 ## `die`
@@ -411,6 +492,13 @@ Ends bindings (08 §7.3): those whose abilities have any of `tags`, whose owner 
 - `at` (loc?, optional): Only bindings whose thing is near here: an entity, the one a trait or rule is on, an area's middle, a conjured cell.
 - `radius` (real?, optional): How near `at`, in metres. Default 0: the cell itself.
 
+<a id="dissolve-group"></a>
+## `dissolve_group`
+
+Dissolves a group (15 §9.2): every member leaves it, with `group_left`, and what it kept goes. Raises `group_dissolved`.
+
+- `group` (string): The group's key or id.
+
 <a id="dose"></a>
 ## `dose`
 
@@ -439,6 +527,13 @@ Puts a held thing down where its holder is (06 §9.2): in the holder's cell, or 
 `what` may be given directly.
 
 - `what` (entity): The thing, wherever it is.
+
+<a id="drop-persona"></a>
+## `drop_persona`
+
+An entity presents its true persona again (15 §8.3).
+
+- `who` (entity): Who drops it.
 
 <a id="emit-signal"></a>
 ## `emit_signal`
@@ -634,6 +729,16 @@ Empties a plan and asks what to do next: a `Free` decision for a directly contro
 
 - `who` (entity): Whose plan.
 
+<a id="join-group"></a>
+## `join_group`
+
+An entity joins a group (15 §9.2) and is told what the group knows. Raises `group_joined`.
+
+- `who` (entity): Who joins.
+- `group` (string): The group's key or id.
+- `role` (string, optional): Its role: one of the group definition's.
+- `secret` (bool, optional): True to belong in secret: its true persona does not claim the group.
+
 <a id="launch"></a>
 ## `launch`
 
@@ -649,6 +754,22 @@ Teaches an entity what an item `teaches` (16 §8.5: reading a book), each as `te
 
 - `who` (entity): Who reads.
 - `from` (entity): The item.
+
+<a id="learn-name"></a>
+## `learn_name`
+
+A mind learns the name of whom it takes an entity for (15 §8.1): text it reads names them from now on instead of describing them (05 §4.6).
+
+- `who` (entity): The mind that learns it.
+- `of` (entity): Whose name: of whom it takes them for.
+
+<a id="leave-group"></a>
+## `leave_group`
+
+An entity leaves a group (15 §9.2). Raises `group_left`. Returns whether it was a member.
+
+- `who` (entity): Who leaves.
+- `group` (string): The group's key or id.
 
 <a id="load"></a>
 ## `load`
@@ -695,6 +816,20 @@ Publishes an opportunity (03 §7.1) that no phase closes: it is offered and noti
 - `source` (entity?, optional): Whose doing it is; none for a window no one opened.
 - `for` (list<entity>, optional): Those it is aimed at.
 - `time` (real): How long it stays open, in seconds of universal time: `"2 s"`.
+
+<a id="order"></a>
+## `order`
+
+Gives an order aloud (15 §10). It must be heard; the one it is given to obeys if it holds toward whom it takes the giver for a relation of a kind flagged `orders` (hook `order_received`), and then keeps it (`order_given`), else refuses it (`order_refused`). Returns how many it was sent to.
+
+- `from` (entity): Who gives it.
+- `to` (entity): To whom.
+- `action` (id<action>): What it says to do.
+- `with` (map<any>, optional): The action's parameters, by name.
+- `until` (real, optional): How long it stands once received, in seconds; for good if left out.
+- `kind` (string, optional): The message kind it is said as; left out, the first that carries orders.
+- `signal` (string, optional): The signal kind it is said with, if not the message kind's.
+- `strength` (real, optional): How loud, if not the message kind's.
 
 <a id="plan-path"></a>
 ## `plan_path`
@@ -890,6 +1025,16 @@ Swaps a part's definition (06 §6.5), keeping its name, its place and what is at
 - `part` (part?): The part.
 - `with` (id<body_part>): The new definition.
 
+<a id="report-to-group"></a>
+## `report_to_group`
+
+A member adds what it knows to its group's knowledge (15 §9.2), which counts as told to every other member at once. Returns how many things were added.
+
+- `who` (entity): The member who reports.
+- `group` (string): The group's key or id.
+- `event` (string, optional): The event type of the memories reported.
+- `about` (entity, optional): Whom: the memories naming whom it takes them for, and its track of them.
+
 <a id="restore-abilities"></a>
 ## `restore_abilities`
 
@@ -916,6 +1061,14 @@ Takes back what `disable_part` did: the part works again if its condition allows
 
 - `part` (part): The part.
 
+<a id="reveal-persona"></a>
+## `reveal_persona`
+
+Links, in one mind's beliefs, what an entity presents to its true persona (15 §8.3): it takes it for its true persona from now on, and for good where the persona is one the entity made. Raises `disguise_seen_through`. Returns whether anything was hidden from it.
+
+- `who` (entity): The mind that learns it.
+- `of` (entity): Whose persona it sees through.
+
 <a id="revive"></a>
 ## `revive`
 
@@ -932,6 +1085,22 @@ Takes an ability away from an entity whatever its sources (08 §6.3): its modes 
 
 - `from` (entity): Whose ability.
 - `ability` (id<ability>): The ability.
+
+<a id="say"></a>
+## `say`
+
+Says something aloud (15 §11): a signal carrying a message, which whoever perceives it and understands it hears (`message_heard`). Said to them, a report gives its beliefs and an order is received. Returns how many it was sent to.
+
+- `who` (entity): Who speaks.
+- `kind` (string): The message kind's id.
+- `to` (entity, optional): To whom; left out with no `group`, to nobody in particular.
+- `group` (string, optional): To which group, by key or id.
+- `about` (entity, optional): What it is about. A report carries what the speaker knows of whom it takes them for.
+- `event` (string, optional): For a report: the event type of the memories it carries.
+- `line` (string, optional): The `lines` table it is said with.
+- `language` (string, optional): The language it is said in, for `understands`.
+- `signal` (string, optional): The signal kind it is said with, if not the message kind's.
+- `strength` (real, optional): How loud, if not the message kind's.
 
 <a id="scale-body"></a>
 ## `scale_body`
@@ -1070,6 +1239,16 @@ Makes a mind take up a goal now, stopping what the character is doing where it c
 - `goal` (id<goal>): The goal.
 - `about` (any, optional): What it is about: an entity, as the mind perceives it, or a cell. Left out, nothing.
 
+<a id="set-group-relation"></a>
+## `set_group_relation`
+
+Sets what a group holds of a kind toward someone (15 §9.2): its members who hold nothing of their own use it. Returns the value now.
+
+- `group` (string): The group's key or id.
+- `toward` (any): A group's key or id, or an entity, as the persona it presents.
+- `kind` (string): The relation kind's id, qualified or bare.
+- `value` (real): The value, kept within the kind's range.
+
 <a id="set-home"></a>
 ## `set_home`
 
@@ -1120,6 +1299,19 @@ Says which ways of moving an entity has (06 §11).
 - `who` (entity): Whose ways of moving.
 - `modes` (list<id<movement>>): The ways of moving it has, in the order they are tried. Empty: the definitions flagged `default`, for a creature.
 
+<a id="set-persona"></a>
+## `set_persona`
+
+Sets what a persona of an entity is (15 §8.1): its name, tags, claims, quality and the template it looks like; each left out stays as it is. Returns the persona, as text.
+
+- `who` (entity): Whose persona.
+- `persona` (string, optional): Which of its own, as text; left out, the one it presents if it is its own, else its true one.
+- `name` (string, optional): Its name.
+- `tags` (list<string>, optional): Its tags: a uniform, an insignia, a role.
+- `claims` (list<string>, optional): The groups it presents as belonging to, by key or id.
+- `quality` (real, optional): How well it holds as a disguise, 0 to 1.
+- `apparent` (string, optional): The template it looks like, by id.
+
 <a id="set-posture"></a>
 ## `set_posture`
 
@@ -1136,6 +1328,25 @@ Sets the rank of an ability with no track (08 §4.1): what applies from a rank i
 - `who` (entity): Whose ability.
 - `ability` (id<ability>): The ability.
 - `rank` (int): The rank, from 0 to 10,000.
+
+<a id="set-relation"></a>
+## `set_relation`
+
+Sets what a mind holds of a kind toward someone (15 §9.1). Raises `relation_changed`. Losing a kind flagged `orders` withdraws the orders kept from them. Returns the value now.
+
+- `who` (entity): The mind that holds it.
+- `toward` (any): An entity, as the persona `who` takes it for, or a group's key or id.
+- `kind` (string): The relation kind's id, qualified or bare.
+- `value` (real): The value, kept within the kind's range; at its default the relation is no longer held.
+
+<a id="set-role"></a>
+## `set_role`
+
+Gives a member of a group another role (15 §9.2). Raises `role_changed`.
+
+- `who` (entity): The member.
+- `group` (string): The group's key or id.
+- `role` (string, optional): Its new role; left out, none.
 
 <a id="set-stance"></a>
 ## `set_stance`

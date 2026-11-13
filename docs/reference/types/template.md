@@ -15,6 +15,7 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `blocks` (`true` or `false`, or `null`; optional): Whether a thing made from it blocks movement through its cell (06 §11). Default true for one with a body.
 - `choices` (list of object [`ChoiceDef`](#choicedef); optional): The choices made within it.
 - `know_how` (list of string; optional): Know-how a thing made from it knows (16 §8.5), by id as written: given to its mind when it is made, without asking what each needs.
+- `groups` (object, name → string; optional): The groups a thing made from it joins (15 §9.2), by id, each with its role there, `""` for none: joined openly, with `group_joined`, when `entity_spawned` is delivered.
 - `attributes` (object, id of a [`attribute`](attribute.md) → number; optional): Bases of its own for attributes. A later contribution replaces an earlier one's.
 - `pools` (list of id of a [`pool`](pool.md); optional): Pools it is given, at their definitions' `start`.
 - `tracks` (object, id of a [`track`](track.md) → number; optional): What each track starts with: added to its counter.
