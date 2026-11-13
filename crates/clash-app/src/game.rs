@@ -264,6 +264,7 @@ impl Game {
             started: false,
             warnings: Vec::new(),
             said: Vec::new(),
+            talk: clash_expr::Value::Null,
             loaded,
         }));
 

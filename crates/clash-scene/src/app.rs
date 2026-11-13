@@ -19,6 +19,7 @@
 //! | `creation` | `any` | The character being made (06 §10.3) |
 //! | `setup` | `any` | The game being set up: the scenario chosen, its places, options and seed (13 §12) |
 //! | `templates` | `list<app_entry>` | The templates a character may be made from |
+//! | `talk` | `any` | What the character could say to someone, as the service `talk` last gathered it |
 //! | `keys(context)` | `list<map>` | What each name of a keymap context is bound to |
 //! | `size` | `list<int>` | The grid, as `[columns, rows]` |
 //! | `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
@@ -179,6 +180,17 @@ pub trait AppState {
         Vec::new()
     }
 
+    /// What the character played could say to someone, as the service
+    /// `talk` last gathered it (15 §11), as a value bindings can read:
+    /// `app.talk`. The bundled application gives a map with `to`, the one
+    /// talked to; `options`, each a map with `id`, `text`, `kind` and
+    /// `lines` (null where an option says nothing) and `says`, whether it
+    /// says something; and `why`, the reason nothing can be said, or
+    /// empty. Null when nothing was gathered.
+    fn talk(&self) -> ExprValue {
+        ExprValue::Null
+    }
+
     /// Carries out a service, or says why it cannot. The scene has
     /// already changed a preference or a key binding itself when it
     /// passes `set_pref` or `rebind` on: those are for the application
@@ -221,6 +233,7 @@ enum AppProp {
     Creation,
     Setup,
     Templates,
+    Talk,
     Keys,
     Controls,
     Target,
@@ -280,6 +293,8 @@ pub fn register_expr(registry: &mut Registry) {
             .doc("The game being set up on the new-game screens (13 §12): the scenario chosen, its places, the options it asks about and how its seed is chosen; null when none is."),
         PropertySpec::new(app, "templates", Type::list(Type::Subject(entry)))
             .doc("The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3)."),
+        PropertySpec::new(app, "talk", Type::Any)
+            .doc("What the character played could say to someone, as the service `talk` last gathered it (15 §11): a map with `to`, the one talked to; `options`, each a map with `id`, `text`, `kind` and `lines` (the message kind and the table of lines it is said with, null where it says nothing) and `says`, whether it says something; and `why`, the reason nothing can be said, or empty. Null when nothing was gathered."),
         PropertySpec::new(app, "keys", Type::list(Type::map(Type::Str)))
             .param("context", Type::Str, "A context of the keymap: `play`, `menu`, `targeting`.")
             .doc("What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2)."),
@@ -337,6 +352,7 @@ impl AppIds {
         add(app, "creation", AppProp::Creation);
         add(app, "setup", AppProp::Setup);
         add(app, "templates", AppProp::Templates);
+        add(app, "talk", AppProp::Talk);
         add(app, "keys", AppProp::Keys);
         add(app, "controls", AppProp::Controls);
         add(app, "target", AppProp::Target);
@@ -515,6 +531,7 @@ impl AppReader<'_> {
             AppProp::Pref => args.first().map_or(ExprValue::Null, |id| self.pref(id)),
             AppProp::Creation => self.state.creation(),
             AppProp::Setup => self.state.setup(),
+            AppProp::Talk => self.state.talk(),
             AppProp::Templates => ExprValue::list(
                 (0..self.state.templates().len())
                     .map(|index| self.entry_handle(TEMPLATES_CODE, index)),
@@ -596,6 +613,7 @@ mod tests {
                 "scenarios",
                 "setup",
                 "size",
+                "talk",
                 "target",
                 "templates"
             ]

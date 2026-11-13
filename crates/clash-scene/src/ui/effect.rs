@@ -218,11 +218,15 @@ pub enum AppService {
     /// the character and keeps it for `new_game` or is refused with the
     /// reason.
     Creation,
+    /// `talk`: gathers what the character played could say to someone
+    /// (15 §11), which `app.talk` then reads. Arguments: `to`, the one to
+    /// talk to; null or left out forgets what was gathered.
+    Talk,
 }
 
 impl AppService {
     /// Every service, in the order of 12 §10.5.
-    pub const ALL: [AppService; 11] = [
+    pub const ALL: [AppService; 12] = [
         AppService::NewGame,
         AppService::Save,
         AppService::Load,
@@ -234,6 +238,7 @@ impl AppService {
         AppService::ReloadMods,
         AppService::EditCreation,
         AppService::Creation,
+        AppService::Talk,
     ];
 
     /// The name the service is asked for by.
@@ -250,6 +255,7 @@ impl AppService {
             AppService::ReloadMods => "reload_mods",
             AppService::EditCreation => "edit_creation",
             AppService::Creation => "creation",
+            AppService::Talk => "talk",
         }
     }
 
@@ -270,6 +276,7 @@ impl AppService {
                 ("key", false),
                 ("value", false),
             ],
+            AppService::Talk => &[("to", false)],
         }
     }
 

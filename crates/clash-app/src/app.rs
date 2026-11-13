@@ -303,6 +303,9 @@ pub struct Shared {
     pub warnings: Vec<String>,
     /// Lines a service has for the log, taken by the loop.
     pub said: Vec<String>,
+    /// What the service `talk` last gathered, which `app.talk` reads:
+    /// null when nothing was.
+    pub talk: ExprValue,
 }
 impl Shared {
     /// The directory saves are kept in, if there is a data directory.
@@ -483,6 +486,84 @@ impl App {
 /// ([`Creation::spec_for`]). A scenario that offers a choice of place
 /// or asks about options, asked for with no `place`, is set up instead:
 /// see the [module](self) documentation.
+/// The service `talk` (15 §11; decision D-799): what the character
+/// played could say to `to`, the options the rules leave on the hook
+/// `talk_options`, kept for `app.talk`. The hook is raised on a copy of
+/// the simulation, which is then dropped, so that asking changes nothing
+/// in the game and the input log still replays it. Someone the character
+/// does not perceive now gets no options and a reason; so does a
+/// refusal of the hook. `to` null or left out forgets what was gathered.
+fn gather_talk(shared: &mut Shared, request: &AppRequest) -> Result<(), String> {
+    let Some(to) = request
+        .args
+        .get("to")
+        .filter(|to| **to != ExprValue::Null)
+        .cloned()
+    else {
+        shared.talk = ExprValue::Null;
+        return Ok(());
+    };
+    let session = shared
+        .session
+        .as_ref()
+        .ok_or("no game is being played, so there is nobody to talk to")?;
+    let gathered = |options: Vec<ExprValue>, why: &str| {
+        ExprValue::map([
+            ("to", to.clone()),
+            ("options", ExprValue::list(options)),
+            ("why", ExprValue::from(why)),
+        ])
+    };
+    let entity = match session.sim.subject_of(&to) {
+        Some(clash_sim::Subject::Entity(entity)) => entity,
+        _ => {
+            shared.talk = gathered(Vec::new(), "There is nobody there to talk to.");
+            return Ok(());
+        }
+    };
+    if !clash_sim::perception::perceives(&session.sim, session.player, entity) {
+        shared.talk = gathered(Vec::new(), "You cannot see or hear them now.");
+        return Ok(());
+    }
+    let mut copy = session.sim.clone();
+    shared.talk = match clash_sim::social::talk_options(&mut copy, session.player, entity) {
+        Ok(options) => gathered(
+            options
+                .into_iter()
+                .map(|option| {
+                    let text_or_null = |text: Option<String>| {
+                        text.map_or(ExprValue::Null, |text| ExprValue::from(text.as_str()))
+                    };
+                    ExprValue::map([
+                        ("id", ExprValue::from(option.id.as_str())),
+                        ("text", ExprValue::from(option.text.as_str())),
+                        ("says", ExprValue::Bool(option.kind.is_some())),
+                        ("kind", text_or_null(option.kind)),
+                        ("lines", text_or_null(option.lines)),
+                    ])
+                })
+                .collect(),
+            "",
+        ),
+        Err(reason) => gathered(Vec::new(), &sentence(&reason.message)),
+    };
+    Ok(())
+}
+
+/// A reason's message as a sentence: a capital first letter and a full
+/// stop.
+fn sentence(message: &str) -> String {
+    let mut chars = message.trim().chars();
+    let mut out: String = chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default();
+    if !out.ends_with('.') {
+        out.push('.');
+    }
+    out
+}
+
 fn start_game(shared: &mut Shared, request: &AppRequest) -> Result<(), String> {
     let scenario = match request.text("scenario") {
         Some(id) => id.to_owned(),
@@ -615,6 +696,10 @@ impl AppState for App {
         shared.creation.value(&shared.loaded.defs)
     }
 
+    fn talk(&self) -> ExprValue {
+        self.shared.borrow().talk.clone()
+    }
+
     fn setup(&self) -> ExprValue {
         let shared = self.shared.borrow();
         shared
@@ -628,7 +713,11 @@ impl AppState for App {
         let shared = &mut *shared;
         let dir = shared.saves_dir();
         match request.service {
-            AppService::NewGame => start_game(shared, request),
+            AppService::NewGame => {
+                shared.talk = ExprValue::Null;
+                start_game(shared, request)
+            }
+            AppService::Talk => gather_talk(shared, request),
             AppService::EditCreation => edit_creation(shared, request),
             AppService::Creation if request.text("op") == Some(OP_OPTION) => {
                 let key = request
@@ -712,6 +801,7 @@ impl AppState for App {
                 let warnings = saved.warnings.clone();
                 let session = session::resume(&shared.loaded, saved)?;
                 shared.session = Some(session);
+                shared.talk = ExprValue::Null;
                 shared.started = true;
                 shared.warnings = warnings;
                 Ok(())

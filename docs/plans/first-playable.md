@@ -723,7 +723,10 @@ the application; message kinds, lines for greetings, warnings and calls
 for help, and the rules `heed_help` and `pass_reports_to_the_watch` in
 `mods/core/data/social`. Both "Done when" items are tests. Stubbed:
 exchanges (joint actions whose phases say lines, not yet written), the `talk` interaction, capabilities told
-of, languages as definitions.
+of, languages as definitions. The application's third pass (D-799)
+offers `talk_options` on `ui:talk` and says the one chosen with the
+action `say`, with the rules `offer_greeting`, `offer_warning` and
+`greet_back` in `mods/core/data/talk.json`.
 
 ### S9 — Party perception
 
@@ -1107,11 +1110,12 @@ keys 1 to 9 in play); `ui:map` draws what the character knows zoomed
 out with the journal's markers pinned, the sites it knows by name
 (`view.known_sites`) and the objectives; `ui:help` lists every control,
 bound or not (`app.controls`); `ui:context_menu` offers attack, shoot,
-talk, go there, use and look; `ui:talk` says why nothing can be said
-yet; the reaction prompt shows `what` is happening; the pick list greys
+talk, go there, use and look; `ui:talk` lists what can be said
+(`app.talk`, which the service `talk` gathers) and says one with the
+`core` mod's action `say`; the reaction prompt shows `what` is happening; the pick list greys
 an action that cannot be done with its reason; the fighting controls
 are in `fighting.json`; the item popup throws. The `core_ui` mod plays
-blows and powers back. Tested in `clash-scene` (`controls`, `screens`)
+blows, powers and speech back. Tested in `clash-scene` (`controls`, `screens`)
 and the application's tests; the golden frames `help`,
 `inventory_item`, `reaction_prompt`, `play_first`, `play_status`, the
 pickers' and the playback's changed for the status column's line of
@@ -1216,18 +1220,19 @@ filled in with where the target is believed to be, the line drawn), `r`
 reloads, `t` throws, `z` stops; the reaction prompt says what is
 happening; `use_ability` and `set_mode` reach the simulation as
 `UseAbility` and `SetMode`; the application answers a picker for a part
-and pins the journal's markers on the view. Tested in
-`tests/fighting.rs`, `shooting.rs`, `powers.rs`, `play_screens.rs` and
-`reacting.rs`, over the bundled profile and the fixture `armoury` (a
+and pins the journal's markers on the view; talking gathers what can
+be said on a copy of the simulation (the service `talk`) and says it
+with `say`, and the one greeted greets back in the log. Tested in
+`tests/fighting.rs`, `shooting.rs`, `powers.rs`, `play_screens.rs`,
+`talking.rs` and `reacting.rs`, over the bundled profile and the fixture `armoury` (a
 game with a pistol and one with every power), with the new golden
 frames `target_selected`, `struck`, `attack_choose`, `attack_part`,
 `bump_ask`, `context_menu`, `empty_weapon`, `aim_choose`, `aim_cell`,
 `abilities`, `abilities_cooling`, `errand_map`, `help_controls`,
-`talk_unavailable` and `reaction_prompt`; `first_play`, `inside_house`,
+`talk_options`, `talk_reply` and `reaction_prompt`; `first_play`, `inside_house`,
 `wall`, `door_opened`, `through_door`, `door_locked`, `carried_on`,
 `errand_intro` and `errand_summary` changed for the status column's new
-line of keys. Stubbed: talking, until the simulation offers
-`talk_options` (D-799); previews of a blow (07 §13), since
+line of keys. Stubbed: previews of a blow (07 §13), since
 `strike_preview` reads the target as it is and a screen may not call
 it; the region map.
 

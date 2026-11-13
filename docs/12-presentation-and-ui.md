@@ -1833,6 +1833,7 @@ properties, all safe for belief:
 | `keys(context)` | `list<map>` | What the keymap in force binds in a context (section 9.2): one map for each name a key there is given, in order of what it is called, with `name`; `label`, the `name` of the control of that name, or else the name; `doc`, the control's `doc`, or empty; and `keys`, every key given that name as a keymap writes it, joined by commas |
 | `controls(context?)` | `list<map>` | Every control the loaded mods define, bound or not, in order of what it is called (decision D-797): one map for each with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, or empty; and `keys`, every key the keymap in force gives it in the context (left out, `play`), joined by commas, or empty |
 | `target` | `any` | The creature selected as the target in play (the `camera` effect's `target`), while the party perceives it; null otherwise. Read of it only what may be read of anyone the party perceives (decision D-793). |
+| `talk` | `any` | What the character played could say to someone, as the service `talk` last gathered it (15 §11; decision D-799): a map with `to`, the one talked to; `options`, in the order the rules on the hook `talk_options` left them, each a map with `id`, `text`, `kind` and `lines` (the message kind and the table of lines it is said with, null where it says nothing) and `says`, whether it says something; and `why`, the reason nothing can be said, or empty. Null when nothing was gathered. |
 | `size` | `list<int>` | The grid, as `[columns, rows]` |
 | `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
 
@@ -1966,6 +1967,7 @@ screen's bindings (section 10.4): a text is written `"'like this'"`.
 | `select_profile` | `profile`: the profile's id |
 | `creation` | `op`; and for the op `begin`, `template`: a template's qualified id, which begins a session over it, every choice at its default; `select`, `key`: a choice's `key`, and `value`: a list of option or part ids, a number or a text; `clear`, `key`, which puts a choice back to its default; `name` and `seed`, `value`: a text and a whole number, kept for the game; `finish`, which checks the character and keeps it for `new_game`, or is refused with the reason. A selection the choice does not take is refused, with the reason, and changes nothing. |
 | `edit_creation` | `field`, `value`: the older form of `creation`'s `name` and `seed` |
+| `talk` | `to` (may be left out): the one to talk to. Gathers what the character played could say to them into `app.talk`: the bundled application raises the hook `talk_options` on a copy of the simulation, so that asking changes nothing in the game. Someone the character does not perceive now gets no options and a `why`. Null or left out, what was gathered is forgotten. |
 
 A list is run in order, in the screen that asked: its expressions read
 that screen's variables and parameters, and `it` where the event has a
@@ -2244,10 +2246,17 @@ their markers are. The direction keys move the view six cells at a
 time and << and > change storey. The region map and the chart are not
 built.
 
-**Talking** (`ui:talk`, `mods/ui/data/talk.json`) is opened by the
-control `talk` (shift+t) about the target, or from the context menu
-about the creature clicked. Until the simulation offers what a character
-could say, it says why nothing can be (decision D-799).
+**Talking** (`ui:talk`, `mods/ui/data/talk.json`; decision D-799) is
+opened by the control `talk` (shift+t) about the target, or from the
+context menu about the creature clicked, each after asking for the
+service `talk` with whom. It lists `app.talk.options`, greying one that
+says nothing, or says why nothing can be said; Enter says the one
+chosen with the action `say` (named bare: the `core` mod's takes `to`,
+`kind` and `lines`), which anyone in earshot hears. What is said back
+is written in the log by the `core_ui` mod's shows `heard_said`, the
+line as it was worded for the character that heard it, and `said_to`,
+that a character the player plays spoke to someone, without the words,
+which were worded for the hearer.
 
 **The context menu** (`ui:context_menu`, the role `context_menu`) is
 what the second button opens over the map with the place clicked: for a
@@ -2368,7 +2377,7 @@ it for, the parameters it is opened with, and its slots:
 | `ui:help` | | | | The keys of play and every control |
 | `ui:abilities` | | | | The uses and modes of the character's abilities, and the quick slots |
 | `ui:map` | | | | What the character knows of the place, with the journal's markers and the sites it knows |
-| `ui:talk` | | `who` | | Talking to someone: why nothing can be said yet |
+| `ui:talk` | | `who` | | Talking to someone: what can be said to them (`app.talk`), or why nothing can |
 | `ui:context_menu` | `context_menu` | `place` | | What can be done with the place or creature clicked |
 | `ui:confirm` | `confirm` | `text`, `yes`, `no` | | A question |
 | `ui:pick_list` | `picker.list` | `options`, `title` | | One of a list |
@@ -2632,8 +2641,11 @@ compiled in the mind context, may not call it; and a part's appearance
 abilities only, and the keys `1` to `9` only those; an action is put on
 a key by rebinding. The map is a map view zoomed out by a fixed three:
 the region map and the chart (section 6.2) are not built, and a pin is
-drawn only where a marker falls inside the view. Talking says only
-that nothing can be said until the simulation offers `talk_options`.
+drawn only where a marker falls inside the view. What can be said is
+gathered once, as the talk screen opens, and is not gathered again
+while it is open; an option says a message kind with a table of lines,
+since that is all `talk_options` gives (15 §11), and the `say` it
+starts takes a second.
 The context menu's offers are written out in the screen, not listed
 from what the place offers. A held phase (a bow drawn, a charge) runs
 to its `max` in one pass, since the loop advances the simulation as far

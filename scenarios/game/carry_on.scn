@@ -20,4 +20,4 @@ assert "party()[0].loc.x == 2040 and party()[0].loc.y == 898"
 assert "is_null(scenario_id()) == false"
 advance 10s
 assert "len(party()) == 1"
-expect hash 7aeca006bf51ed3f619263dd415c8e5a
+expect hash 0090facd4c86ae0cc66af263ff0c5531

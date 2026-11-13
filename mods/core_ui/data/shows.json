@@ -22,5 +22,14 @@
     "log": "{the(self)} {verb(self, 'use')} a power.", "importance": "normal", "sound": "power" },
   { "type": "show", "id": "ability_refused", "on": "ability_refused",
     "change": [],
-    "log": "{event.message}", "importance": "normal" }
+    "log": "{event.message}", "importance": "normal" },
+  { "//": "Speech (15 §11): what a character the player plays hears said is written in the log, the line as it was worded for that character; what one of them says to someone else is written once, from the one it was said to, without the words, which were worded for the hearer. The party sees every hearing that has one of its own among its subjects, so `party()` tells whose hearing it was.",
+    "type": "show", "id": "heard_said", "on": "message_heard",
+    "if": "not is_null(event.text) and self in party()",
+    "change": [],
+    "log": "{event.text}", "importance": "normal" },
+  { "type": "show", "id": "said_to", "on": "message_heard",
+    "if": "not is_null(speaker) and not is_null(to) and to == self and speaker in party() and not (self in party())",
+    "change": [],
+    "log": "{the(speaker)} {verb(speaker, 'speak')} to {the(self)}.", "importance": "minor" }
 ]

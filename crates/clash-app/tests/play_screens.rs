@@ -1,8 +1,7 @@
 //! The screens of play that are not fighting (12 §10.7), headless from
 //! the title: the map, drawn from what the character remembers with the
-//! journal's marker pinned; the journal, opened from play; the keys,
-//! with every control the mods define; and talking, which says why
-//! nothing can be said until the simulation offers what to say.
+//! journal's marker pinned; the journal, opened from play; and the keys,
+//! with every control the mods define. Talking is `tests/talking.rs`.
 //!
 //! The golden frames are written with `BLESS=1 cargo test -p clash-app`.
 
@@ -49,7 +48,7 @@ fn the_map_shows_what_is_known_with_the_marker_pinned() {
 }
 
 #[test]
-fn the_keys_list_every_control_and_talking_says_why_it_cannot() {
+fn the_keys_list_every_control() {
     let data = data_dir("keys");
     let mut run = boot_default(&data);
     begin(&mut run, TOWN, "Ada");
@@ -61,11 +60,6 @@ fn the_keys_list_every_control_and_talking_says_why_it_cannot() {
     assert!(listed.contains("Attack who is in the way"), "{listed}");
     assert!(listed.contains("shift+f"), "{listed}");
     assert_golden(golden("help_controls"), run.frame());
-
-    script(&mut run, "escape\nshift+t\n");
-    assert_eq!(top(&run), "ui:talk");
-    assert!(run.text().contains("talk_options"), "{}", run.text());
-    assert_golden(golden("talk_unavailable"), run.frame());
     script(&mut run, "escape\n");
     assert_eq!(top(&run), "ui:play");
     let _ = std::fs::remove_dir_all(&data);

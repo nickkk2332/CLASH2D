@@ -1082,3 +1082,92 @@ fn an_action_no_mod_defines_is_the_hosts_to_refuse() {
     assert_eq!(submitted(&outcomes).name, "step");
     assert!(frame.text().contains("Mara"));
 }
+
+/// The one service among the outcomes that was asked for.
+fn service(outcomes: &[UiOutcome]) -> &clash_scene::AppRequest {
+    let found: Vec<&clash_scene::AppRequest> = outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            UiOutcome::Service(request) => Some(request),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(found.len(), 1, "one service: {outcomes:?}");
+    found[0]
+}
+
+#[test]
+fn talking_asks_the_application_what_can_be_said_and_says_the_one_chosen() {
+    let mut run = Run::new();
+    // With nobody selected the application is asked with nothing, and
+    // the screen says how to choose someone.
+    let asked = service(&run.press(&["shift+t"])).clone();
+    assert_eq!(asked.service, AppService::Talk);
+    assert!(asked.args.get("to").is_none_or(|to| *to == Value::Null));
+    assert_eq!(run.top(), "ui:talk");
+    assert!(run.row_with("Nobody is chosen").contains("Tab"));
+    run.press(&["escape"]);
+
+    // Someone selected: what the application gathered is listed, and
+    // the one chosen is said to them with the action `say`.
+    // In this harness the target cycle may pick anyone in sight: the
+    // request says whom.
+    run.press(&["tab"]);
+    let option = |id: &str, text: &str, kind: Value, lines: Value| {
+        Value::map([
+            ("id", Value::from(id)),
+            ("text", Value::from(text)),
+            ("says", Value::Bool(kind != Value::Null)),
+            ("kind", kind),
+            ("lines", lines),
+        ])
+    };
+    let gathered = |to: Value| {
+        Value::map([
+            ("to", to),
+            (
+                "options",
+                Value::list([
+                    option(
+                        "greet",
+                        "Greet",
+                        Value::from("fix:greet"),
+                        Value::from("fix:greetings"),
+                    ),
+                    option("stare", "Stare", Value::Null, Value::Null),
+                ]),
+            ),
+            ("why", Value::from("")),
+        ])
+    };
+    let asked = service(&run.press(&["shift+t"])).clone();
+    let who = asked.args.get("to").cloned().unwrap_or(Value::Null);
+    assert_ne!(who, Value::Null);
+    // What the application gathers for them as it carries the service
+    // out, before the screen opens.
+    run.press(&["escape"]);
+    run.app.set_talk(gathered(who.clone()));
+    run.press(&["shift+t"]);
+    assert!(run.row_with("Greet").contains("Greet"));
+    assert!(run.row_with("Stare").contains("says nothing"));
+    let said = run.press(&["enter"]);
+    let command = submitted(&said);
+    assert_eq!(command.name, "say");
+    assert_eq!(command.args.get("to"), Some(&who));
+    assert_eq!(command.args.get("kind"), Some(&Value::from("fix:greet")));
+    assert_eq!(
+        command.args.get("lines"),
+        Some(&Value::from("fix:greetings"))
+    );
+    assert_eq!(run.top(), "ui:play");
+
+    // Nothing can be said: the application's reason is shown.
+    run.app.set_talk(Value::map([
+        ("to", who),
+        ("options", Value::list([])),
+        ("why", Value::from("You cannot see or hear them.")),
+    ]));
+    run.press(&["shift+t"]);
+    assert!(run.row_with("cannot see or hear").contains("You cannot"));
+    assert!(run.row_with("There is nothing to say").contains("nothing"));
+}

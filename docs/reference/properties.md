@@ -6,12 +6,12 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | Kind | What it refers to | Properties |
 |------|-------------------|-----------:|
 | [`ability`](#ability) | An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself. | 9 |
-| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 14 |
+| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 17 |
 | [`app_entry`](#app-entry) | One entry of a list `app` offers: a save, a profile, a mod or a scenario. | 4 |
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 17 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 143 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 147 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
@@ -54,6 +54,8 @@ Things outside the simulation: saves, profiles, mods, scenarios, preferences and
 
 - `app.can_load -> bool` · safe for belief: Whether the scenario's saving policy allows loading now.
 - `app.can_save -> bool` · safe for belief: Whether the scenario's saving policy allows saving now (13 §9.2).
+- `app.controls(context?: string) -> list<map<string>>` · safe for belief: Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; and `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty.
+  - `context` (string, optional): A context of the keymap whose keys are listed: left out, `play`.
 - `app.creation -> any` · safe for belief: The character being made (06 §10.3); null when none is.
 - `app.keys(context: string) -> list<map<string>>` · safe for belief: What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2).
   - `context` (string): A context of the keymap: `play`, `menu`, `targeting`.
@@ -67,6 +69,8 @@ Things outside the simulation: saves, profiles, mods, scenarios, preferences and
 - `app.scenarios -> list<app_entry>` · safe for belief: The game scenarios the loaded mods define (13).
 - `app.setup -> any` · safe for belief: The game being set up on the new-game screens (13 §12): the scenario chosen, its places, the options it asks about and how its seed is chosen; null when none is.
 - `app.size -> list<int>` · safe for belief: The grid, as `[columns, rows]`.
+- `app.talk -> any` · safe for belief: What the character played could say to someone, as the service `talk` last gathered it (15 §11): a map with `to`, the one talked to; `options`, each a map with `id`, `text`, `kind` and `lines` (the message kind and the table of lines it is said with, null where it says nothing) and `says`, whether it says something; and `why`, the reason nothing can be said, or empty. Null when nothing was gathered.
+- `app.target -> any` · safe for belief: The creature selected as the target in play (the `camera` effect's `target`), while the party perceives it; null when none is or it is no longer perceived. Read of it only what may be read of anyone the party perceives.
 - `app.templates -> list<app_entry>` · safe for belief: The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3).
 
 <a id="app-entry"></a>
@@ -164,6 +168,12 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.ability(ability: id<ability>) -> ability?` · same owner: The instance of an ability the entity holds (08 §3.2), to read its rank, state, parameters and cooldowns; null if it does not hold it.
   Changed by `ability_granted`, `ability_revoked`.
   - `ability` (id<ability>): The ability: its id, or its qualified id as text.
+- `entity.ability_modes -> list<map<any>>`: Every mode of every ability the entity holds (08 §5.4): one row for each, with `ability`, `id`, `name` (the ability's), `mode` (the mode's id), `label` (what the mode is called), `rank`, `on`, `available` and `why`. Read of the character itself in a mind context.
+- `entity.ability_uses(ability?: any) -> list<map<any>>`: Every use of every ability the entity holds (08 §5.1, `ability::options`), or of the one named, for an abilities screen: one row for each grant, with `value` (the action's id), `ability` (the ability's id), `label`, `id` (the ability's qualified id), `name`, `action_name`, `rank`, `state` (`ready`, `cooling`, `dormant`, `suppressed` or `unavailable`), `cost` (a text: `25 stamina`), `cooldown` (seconds of its own time left), `given` (the names of the parameters the grant supplies), `available` and `why`. Read of the character itself in a mind context.
+  - `ability` (any, optional): An ability: its id, or its qualified id as text.
+- `entity.actions_with(tag: string, target?: any) -> list<map<any>>`: What the entity could start of the actions that carry a tag, as it believes (12 §10.7): one row for each, those that could start first, then those that strike with something held, then those that take fewer slots, then by qualified id, with `value` (the action's id), `label` and `name` (what a reader calls it), `id` (its qualified id as a text), `available` (whether it could start now) and `why` (the refusal's sentence where it could not, else empty). With `target`, that is given to an action that has a parameter or role named `target`; its `requires` is judged once every parameter without a default is given. Read of the character itself in a mind context.
+  - `tag` (string): The tag the actions carry: the `ui` mod asks for `strike`, `shot`, `grip`, `takedown`.
+  - `target` (any, optional): Who the actions are aimed at, if anyone.
 - `entity.altitude -> real?`: How high the entity stands above the base of its cell, in metres. Null if it is not at a cell itself.
   Changed by `entity_relocated`.
 - `entity.attr -> attrs` · same owner: The entity's attributes: follow with a definition's id, as in `self.attr.<id>`.
@@ -287,6 +297,7 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.know_how -> list<string>`: The qualified ids of what the entity's mind knows, in order of id.
   Changed by `know_how_gained`, `know_how_lost`.
 - `entity.know_how_list -> list<map<any>>`: Every piece of know-how there is, as the entity stands to it, for the know-how screen (12 §10.7): one map each, in order of id: `id`, `name`, `group`, `known`, `ready` (known, or all it needs is known), `makes` (the names of the recipes that need it) and `needs` (the names of what it needs).
+- `entity.known_sites -> list<map<any>>`: The sites whose anchor the entity's map memory holds (15 §13), on its grid, nearest first: each with `name`, `at` (the anchor) and `where` (`12 m north-east`). Only directly controlled characters keep a map memory. Read of the character itself in a mind context.
 - `entity.knows(x: entity) -> bool`: Whether this mind has a track of what it perceives `x` as (15 §7.2). False for what it has never perceived.
   Changed by `detected`, `lost_track`.
   - `x` (entity): Whom or what it is asked about.

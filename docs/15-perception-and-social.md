@@ -1195,7 +1195,19 @@ As built (decisions D-764, D-765), in `clash_sim::social::speech`:
   the hook `talk_options` (`self`, `to`; `options`: a list, mutable,
   starting empty) and gives the options rules left, each a map with
   `id`, `text`, and if it says something `kind` and `lines`. The
-  application offers them through `ask` and says the one chosen.
+  application gathers them with its service `talk`, on a copy of the
+  simulation so that asking changes nothing, lists them on `ui:talk`
+  and says the one chosen with the action `say` (12 §10.7, decision
+  D-799).
+- **Bundled** (`mods/core/data/talk.json`): the action `say`
+  (`to`: entity, `kind`: a message kind's id, `lines`: a table of lines,
+  optional), a second long, whose phase runs the verb `say`; the rules
+  `offer_greeting` and `offer_warning` on `talk_options`, a greeting
+  (`core:greet` with `core:greetings`) and a warning to stay back
+  (`core:warn` with `core:warnings`) to anyone; and `greet_back`, in the
+  group `social_life`: someone a player does not decide for, greeted
+  and having made out who spoke, greets the speaker back, at most every
+  half minute (the variable `greeted_back_at`).
 - **Properties** of an entity read of itself: `remembers_actor(x,
   event)` (bool: a memory of the type, `''` for any, names whom it takes
   `x` for as the actor), `memory_confidence(event)` (real?),
@@ -1457,12 +1469,14 @@ the arguments, subjects and fields stated there:
 content: giving senses from traits (`attach_sense` and
 `detach_sense` are verbs; templates and minds give senses, D-696);
 setting a standing signature (`set_signature`); the list of what one
-can say to another (`social::talk_options`, for the application's talk
-screen);
+can say to another (`social::talk_options`), which a rule cannot read,
+since it raises a hook;
 an explicit search or listen with a bonus (`search`, for the actions);
 noting an element (`note_element`); recording an observed capability
 (`observe_capability`); the omniscient switch (`set_omniscient`); and
-the frames of §13 (`drain_frames`, `snapshot`).
+the frames of §13 (`drain_frames`, `snapshot`). The list of what one
+can say to another is reached by the application's service `talk`
+(12 §10.5), not by content.
 
 ## 16. Invariants
 

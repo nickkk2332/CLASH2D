@@ -1,16 +1,26 @@
 [
-  { "//": "Talking (15 §11): a stub until the simulation offers what a character could say. The control `talk` (shift+t) opens `ui:talk` about the target, or the creature clicked; the screen says why nothing can be said yet. When the social layer lands, the screen lists `view.talk_options(who)` and each row says it with the action `say`; what is said in reply is in the log by playback.",
+  { "//": "Talking (15 §11; 12 §10.7; decision D-799). The control `talk` (shift+t) and the context menu's Talk first ask the application for the service `talk` with whom to talk to, then open this screen about them. The application gathers what the character could say to them, the options rules leave on the hook `talk_options`, on a copy of the simulation, so that asking changes nothing; `app.talk` reads them. Each says something with the action `say`, named bare here: whichever loaded mod's action of that name comes first in order of id (the `core` mod's takes `to`, `kind` and `lines`). What anyone says back is heard by the character and written in the log by playback.",
     "type": "screen", "id": "talk", "title": "Talk",
     "params": { "who": "any" },
-    "popup": { "width": 52, "place": "centre", "dim": true },
+    "popup": { "width": 60, "height": 12, "place": "centre", "dim": true },
     "layout": { "frame": "{if is_null($who) then 'Talk' else 'Talk to ' + the($who)}", "rows": [
       { "if": "is_null($who)", "text": "Nobody is chosen to talk to: select someone with Tab, or click them with the second button." },
-      { "text": "<dim>Nothing can be said yet: the simulation offers no `talk_options` in this build, so there is nothing to choose from.</>" },
-      { "height": 1, "spacer": {} },
-      { "button": { "id": "close", "label": "Back", "on_activate": [ { "close": {} } ] } } ] },
+      { "if": "not is_null($who) and (app.talk.why ?? '') != ''", "text": "<dim>{app.talk.why}</>" },
+      { "if": "not is_null($who)", "fill": 1,
+        "list": { "id": "options", "rows": "app.talk.options ?? []",
+                  "item": "{if it.says then it.text else ''}<dim>{if it.says then '' else it.text + ': says nothing'}</>",
+                  "empty": "There is nothing to say to {the($who)}.",
+                  "tip": "Enter says it; what is said back is in the log.",
+                  "on_activate": [
+                    { "act": { "action": "say",
+                               "params": { "to": "$who", "kind": "it.kind", "lines": "it.lines" } } },
+                    { "close": {} } ] } },
+      { "if": "is_null($who)", "fill": 1, "spacer": {} },
+      { "height": 1, "tooltip": { "value": "Up and Down choose, Enter says it, Esc goes back." } } ] },
     "keys": { "back": [ { "close": {} } ] } },
 
   { "type": "control", "id": "talk", "name": "Talk",
-    "doc": "Talk to the target.",
-    "do": { "open": { "screen": "talk", "with": { "who": "app.target" } } } }
+    "doc": "Talk to the target: list what the character could say to them, and say one.",
+    "do": [ { "app": { "talk": { "to": "app.target" } } },
+            { "open": { "screen": "talk", "with": { "who": "app.target" } } } ] }
 ]

@@ -220,8 +220,11 @@ fn a_blow_noticed_in_time_asks_and_a_reaction_chosen_answers() {
     let asked_at = now(&run);
     // What is happening, as the character perceives it, the reactions
     // with their reasons and the time left.
+    // The one striking is named as the character knows them: it has not
+    // learned Brute's name (15 §8).
     let prompt = run.text();
-    assert!(prompt.contains("Brute: Punch"), "{prompt}");
+    assert!(prompt.contains("The person: Punch"), "{prompt}");
+    assert!(!prompt.contains("Brute"), "{prompt}");
     assert!(prompt.contains("Let it happen"), "{prompt}");
     clash_scene::assert_golden(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/reaction_prompt.frame"),

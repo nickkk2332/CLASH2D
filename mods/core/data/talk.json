@@ -1,0 +1,30 @@
+[
+  { "//": "Saying something to someone (15 §11): a message of a kind with a line from a table of lines, heard by anyone in earshot. The application's talk screen offers what the rules on `talk_options` leave and starts this with the one chosen; minds and rules may start it too.",
+    "type": "action", "id": "say", "name": "Say",
+    "params": { "to": "entity", "kind": "string", "lines": { "type": "string?", "default": "null" } },
+    "phases": [
+      { "id": "speak", "time": "1 s",
+        "do": [ { "first": [
+          { "if": "$lines != null",
+            "do": [ { "say": { "who": "self", "to": "$to", "kind": { "expr": "$kind" }, "line": { "expr": "$lines ?? ''" } } } ] },
+          { "do": [ { "say": { "who": "self", "to": "$to", "kind": { "expr": "$kind" } } } ] } ] } ] } ] },
+
+  { "type": "variable", "id": "greeted_back_at", "scope": "entity", "value": "real", "default": -1000,
+    "doc": "When, in the simulation's seconds, this character last greeted someone back: one greeting is answered at most every half minute, so that two people do not greet each other for ever." },
+
+  { "//": "What anyone can say to anyone (15 §11): a greeting, and a warning to stay back. A mod adds its own options with rules of its own on `talk_options`.",
+    "type": "eoc", "id": "offer_greeting", "on": "talk_options",
+    "doc": "Offers a greeting to whoever one talks to.",
+    "do": [ { "set": { "event.options": "event.options + [{'id': 'greet', 'text': 'Greet', 'kind': 'core:greet', 'lines': 'core:greetings'}]" } } ] },
+  { "type": "eoc", "id": "offer_warning", "on": "talk_options",
+    "doc": "Offers a warning to stay back to whoever one talks to.",
+    "do": [ { "set": { "event.options": "event.options + [{'id': 'warn', 'text': 'Tell them to stay back', 'kind': 'core:warn', 'lines': 'core:warnings'}]" } } ] },
+
+  { "//": "A greeting said to someone who made out who spoke is greeted back, at most every half minute, unless a player decides for them.",
+    "type": "eoc", "id": "greet_back", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:greet" },
+    "if": "event.addressed and speaker != null and self.control != 'direct' and now() - self.var.greeted_back_at > 30",
+    "doc": "Someone greeted greets the speaker back, unless a player decides for them.",
+    "do": [ { "set": { "self.var.greeted_back_at": "now()" } },
+            { "say": { "who": "self", "to": "speaker", "kind": "core:greet", "line": "core:greetings" } } ] }
+]
