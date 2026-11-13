@@ -793,11 +793,11 @@ Makes an anonymous individual notable, so that it is kept when its tract unloads
 <a id="materialise-contents"></a>
 ## `materialise_contents`
 
-Opens a container whose contents have not been made (06 §9.3): makes them from its definition's `contents`, drawn from its own seed, and stows them. Raises `contents_materialised`. Returns what was made: nothing for a container opened before. Refused with `item.not_an_item`.
+Opens a container whose contents have not been made (06 §9.3): makes them from its definition's `contents`, drawn from its own seed, and stows them; for an element whose contents generation left latent, promotes it to its device, which makes them inside it. Raises `contents_materialised`. Returns what was made, or for an element what its device holds: nothing for a container opened before. Refused with `item.not_an_item` for an entity that is not an item or a device, and as `promote` refuses for an element.
 
 `container` may be given directly.
 
-- `container` (entity): The container.
+- `container` (any): The container: an item, a device, or an element.
 
 <a id="move-to"></a>
 ## `move_to`

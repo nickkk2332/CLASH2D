@@ -21,4 +21,4 @@ assert "@c:8,12,0.field('core:fire') > 200"
 assert "@e:0.track.amount('core:pyromancy') == 1"
 until "(@c:7,12,0.field('core:fire') ?? 0) > 0 or (@c:9,12,0.field('core:fire') ?? 0) > 0" max=60s
 advance 1s
-expect hash a98539c1bef858fba8f802c9a0e90479
+expect hash 085848571c66a03d891b125eee515230

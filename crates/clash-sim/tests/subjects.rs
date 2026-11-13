@@ -863,11 +863,13 @@ fn the_world_answers_for_cells_elements_areas_sites_tracts_and_realms() {
     }
 
     // Every property that is not an entity's was read, but those of
-    // devices, which `tests/devices.rs` reads.
+    // devices, which `tests/devices.rs` reads, and furnishing's, which
+    // `tests/furnish.rs` reads.
     let read = probe.read.into_inner();
     let elsewhere: Vec<(&str, &str)> = clash_sim::device::properties()
         .iter()
         .chain(clash_sim::interaction::properties().iter())
+        .chain(clash_sim::furnish::properties().iter())
         .map(|property| (property.kind, property.name))
         .collect();
     for property in engine_properties() {

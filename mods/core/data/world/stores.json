@@ -1,0 +1,40 @@
+[
+  { "//": "Furniture that holds things (06 §9.2, 16 §4.3): a chest, a cupboard, a wardrobe a person can hide in, and a market stall. Each is a cell of the grid until someone opens it, puts something in it or hides in it, when it becomes the device of `containers.json` that holds what is inside. What a map puts in one is latent until then (06 §9.3): it is made the first time the thing is opened, searched or broken. Values are illustrative.",
+    "type": "fixture", "id": "chest", "material": "wood",
+    "height": 0.6, "fill": 0.3,
+    "states": {
+      "closed": {},
+      "open": { "glyph": { "ch": "⌂" } }
+    },
+    "interactions": ["open", "close", "store", "retrieve"],
+    "device": "chest",
+    "glyph": { "ch": "≡", "fg": "material" } },
+
+  { "type": "fixture", "id": "cupboard", "material": "wood",
+    "height": 2.0, "fill": 0.4, "flags": ["opaque"],
+    "states": {
+      "closed": {},
+      "open": { "remove_flags": ["opaque"], "glyph": { "ch": "∏" } }
+    },
+    "interactions": ["open", "close", "store", "retrieve"],
+    "device": "cupboard",
+    "glyph": { "ch": "∩", "fg": "material" } },
+
+  { "//": "A wardrobe holds clothes, or a person who wants not to be found.",
+    "type": "fixture", "id": "wardrobe", "material": "wood",
+    "height": 2.0, "fill": 0.5, "flags": ["opaque"],
+    "states": {
+      "closed": {},
+      "open": { "remove_flags": ["opaque"], "glyph": { "ch": "[" } }
+    },
+    "interactions": ["open", "close", "store", "retrieve", "hide_inside", "get_out"],
+    "device": "wardrobe",
+    "glyph": { "ch": "Θ", "fg": "material" } },
+
+  { "//": "A trader's stall: a board under an awning with goods laid out on it, to be taken.",
+    "type": "fixture", "id": "stall", "material": "wood",
+    "height": 1.0, "fill": 0.3,
+    "interactions": ["store", "retrieve"],
+    "device": "stall",
+    "glyph": { "ch": "τ", "fg": "material" } }
+]
