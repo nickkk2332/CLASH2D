@@ -495,8 +495,9 @@ fn an_entity_answers_for_itself() {
     // ranged combat in `tests/ranged.rs`, those of scenarios in
     // `tests/scenario.rs`, those of grips and takedowns in
     // `tests/grips.rs`, those of recipes and substances in
-    // `tests/making.rs`, and those of the social layer in
-    // `tests/social.rs`.
+    // `tests/making.rs`, those of the social layer in
+    // `tests/social.rs`, and those of what a character could do in
+    // `tests/offer.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::recipe::properties().iter())
@@ -512,6 +513,7 @@ fn an_entity_answers_for_itself() {
         .chain(clash_sim::combat::grip::properties().iter())
         .chain(clash_sim::combat::takedown::properties().iter())
         .chain(clash_sim::social::properties().iter())
+        .chain(clash_sim::offer::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {

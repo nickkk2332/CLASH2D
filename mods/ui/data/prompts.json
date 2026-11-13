@@ -13,13 +13,14 @@
         { "button": { "id": "no", "label": "{$no ?? 'No'}", "on_activate": [ { "answer": false } ] } } ] } ] },
     "keys": { "back": [ { "answer": false } ] } },
 
-  { "//": "What the `pick` effect opens for a list: one row for each entry, shown as the effect's `item` says. A profile names it for the role `picker.list`. Activating a row answers with that entry; Esc leaves without choosing. It is also the picker for a parameter chosen from a list, and then the selection starts on the value the parameter is filled in with.",
+  { "//": "What the `pick` effect opens for a list: one row for each entry, shown as the effect's `item` says. A profile names it for the role `picker.list`. Activating a row answers with that entry; Esc leaves without choosing. It is also the picker for a parameter chosen from a list, and then the selection starts on the value the parameter is filled in with; and the list an action is picked from, where an entry that cannot be done now (`available` false) is greyed with `why`, and choosing it is refused with that reason.",
     "type": "screen", "id": "pick_list",
     "title": "Choose",
     "params": { "options": "list<any>", "title": "string?" },
-    "popup": { "width": 44, "height": 12, "place": "centre", "dim": true },
+    "popup": { "width": 60, "height": 12, "place": "centre", "dim": true },
     "layout": { "frame": "{$title ?? 'Choose'}",
-                "list": { "id": "options", "rows": "$options", "item": "{it.label}",
+                "list": { "id": "options", "rows": "$options",
+                          "item": "{if has(it, 'available') and it.available == false then '' else it.label}<dim>{if has(it, 'available') and it.available == false then it.label + ': ' + it.why else ''}</>",
                           "empty": "There is nothing to choose from.",
                           "on_activate": [ { "answer": "it.value" } ] } },
     "keys": { "back": [ { "close": {} } ] } }

@@ -32,7 +32,7 @@
       { "height": 1, "tooltip": { "value": "Up and Down scroll, Esc goes back." } } ] },
     "keys": { "back": [ { "close": {} } ] } },
 
-  { "//": "The keys in play that open the two screens above. The default keymap (theme.json) binds neither: a profile's keymap, or the player through Options, gives each a key.",
+  { "//": "The keys in play that open the two screens above. The default keymap (theme.json) binds them to shift+m and shift+k; a profile's keymap, or the player through Options, may give each another key.",
     "type": "control", "id": "make", "name": "Make something",
     "doc": "List what can be made here, by hand and at the stations within a step, and start one.",
     "do": { "open": "make" } },

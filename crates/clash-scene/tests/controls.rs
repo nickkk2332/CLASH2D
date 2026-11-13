@@ -323,7 +323,8 @@ fn the_play_screen_shows_the_map_the_log_and_a_status_column_with_slots() {
     let outcomes = run.press(&["s"]);
     assert_eq!(submitted(&outcomes).name, "shout");
 
-    // The bundled screens are placeholders: an empty titled screen.
+    // The bundled screens open, titled, and Esc leaves each (the map
+    // gives the camera back as it goes).
     for (key, screen, title) in [
         ("i", "ui:inventory", "Inventory"),
         ("c", "ui:condition", "Condition"),
@@ -335,8 +336,8 @@ fn the_play_screen_shows_the_map_the_log_and_a_status_column_with_slots() {
         assert_eq!(outcomes, [UiOutcome::Opened(screen.to_owned())]);
         assert!(run.shown().row_text(0).contains(title));
         assert_eq!(
-            run.press(&["escape"]),
-            [UiOutcome::Closed(screen.to_owned())]
+            run.press(&["escape"]).last(),
+            Some(&UiOutcome::Closed(screen.to_owned()))
         );
     }
     assert_eq!(run.top(), "ui:play");
@@ -815,6 +816,7 @@ fn reaction(run: &Run) -> PendingDecision {
             ],
             time_left: 0.25,
             time_total: 0.4,
+            what: "The fixture: Punch".to_owned(),
         },
     }
 }
@@ -831,7 +833,14 @@ fn a_reaction_prompt_appears_for_a_pending_decision_and_the_response_is_submitte
     );
     assert_eq!(run.scene.decision(), Some(&reaction(&run)));
     let text = run.shown().text();
-    assert!(text.contains("Mara can react."), "{text}");
+    assert!(
+        text.contains("Mara can react, with 0.2 s to spare."),
+        "{text}"
+    );
+    assert!(
+        text.contains("The fixture: Punch"),
+        "what is happening: {text}"
+    );
     assert!(text.contains("Parry (too late)"), "{text}");
     assert_golden(golden("reaction_prompt"), run.shown());
     // It is shown once, however many passes go by.
@@ -1072,4 +1081,93 @@ fn an_action_no_mod_defines_is_the_hosts_to_refuse() {
     let outcomes = scene.handle(&InputEvent::key("h").unwrap());
     assert_eq!(submitted(&outcomes).name, "step");
     assert!(frame.text().contains("Mara"));
+}
+
+/// The one service among the outcomes that was asked for.
+fn service(outcomes: &[UiOutcome]) -> &clash_scene::AppRequest {
+    let found: Vec<&clash_scene::AppRequest> = outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            UiOutcome::Service(request) => Some(request),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(found.len(), 1, "one service: {outcomes:?}");
+    found[0]
+}
+
+#[test]
+fn talking_asks_the_application_what_can_be_said_and_says_the_one_chosen() {
+    let mut run = Run::new();
+    // With nobody selected the application is asked with nothing, and
+    // the screen says how to choose someone.
+    let asked = service(&run.press(&["shift+t"])).clone();
+    assert_eq!(asked.service, AppService::Talk);
+    assert!(asked.args.get("to").is_none_or(|to| *to == Value::Null));
+    assert_eq!(run.top(), "ui:talk");
+    assert!(run.row_with("Nobody is chosen").contains("Tab"));
+    run.press(&["escape"]);
+
+    // Someone selected: what the application gathered is listed, and
+    // the one chosen is said to them with the action `say`.
+    // In this harness the target cycle may pick anyone in sight: the
+    // request says whom.
+    run.press(&["tab"]);
+    let option = |id: &str, text: &str, kind: Value, lines: Value| {
+        Value::map([
+            ("id", Value::from(id)),
+            ("text", Value::from(text)),
+            ("says", Value::Bool(kind != Value::Null)),
+            ("kind", kind),
+            ("lines", lines),
+        ])
+    };
+    let gathered = |to: Value| {
+        Value::map([
+            ("to", to),
+            (
+                "options",
+                Value::list([
+                    option(
+                        "greet",
+                        "Greet",
+                        Value::from("fix:greet"),
+                        Value::from("fix:greetings"),
+                    ),
+                    option("stare", "Stare", Value::Null, Value::Null),
+                ]),
+            ),
+            ("why", Value::from("")),
+        ])
+    };
+    let asked = service(&run.press(&["shift+t"])).clone();
+    let who = asked.args.get("to").cloned().unwrap_or(Value::Null);
+    assert_ne!(who, Value::Null);
+    // What the application gathers for them as it carries the service
+    // out, before the screen opens.
+    run.press(&["escape"]);
+    run.app.set_talk(gathered(who.clone()));
+    run.press(&["shift+t"]);
+    assert!(run.row_with("Greet").contains("Greet"));
+    assert!(run.row_with("Stare").contains("says nothing"));
+    let said = run.press(&["enter"]);
+    let command = submitted(&said);
+    assert_eq!(command.name, "say");
+    assert_eq!(command.args.get("to"), Some(&who));
+    assert_eq!(command.args.get("kind"), Some(&Value::from("fix:greet")));
+    assert_eq!(
+        command.args.get("lines"),
+        Some(&Value::from("fix:greetings"))
+    );
+    assert_eq!(run.top(), "ui:play");
+
+    // Nothing can be said: the application's reason is shown.
+    run.app.set_talk(Value::map([
+        ("to", who),
+        ("options", Value::list([])),
+        ("why", Value::from("You cannot see or hear them.")),
+    ]));
+    run.press(&["shift+t"]);
+    assert!(run.row_with("cannot see or hear").contains("You cannot"));
+    assert!(run.row_with("There is nothing to say").contains("nothing"));
 }

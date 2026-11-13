@@ -1,0 +1,418 @@
+[
+  {
+    "//": "The abilities screen (08 §5, 12 §10.7): the character's abilities as `view.ability_uses` gives them, one row for each use, with its rank, what it costs, whether it is ready, cooling down or dormant, and the quick slot it is on; and the modes of its abilities (`view.ability_modes`), each on or off. Enter on a use closes the screen and uses it: its parameters are asked for with the pickers, but for those the ability's grant supplies, and the command is `use_ability`; one that cannot be used now is refused with its reason. Enter on a mode switches it (`set_mode`). A number key puts the use selected on that quick slot: the slots are preferences, kept with the player's other choices between runs, and the same number key in play uses it. The `core` mod's powers come from the template or trait `power_sampler`.",
+    "type": "screen",
+    "id": "abilities",
+    "title": "Abilities",
+    "context": "abilities",
+    "min_size": [
+      60,
+      16
+    ],
+    "vars": {
+      "use": 0,
+      "mode": 0
+    },
+    "layout": {
+      "frame": "Abilities",
+      "rows": [
+        {
+          "if": "is_null(view)",
+          "text": "<dim>Nobody is yours to play.</>"
+        },
+        {
+          "if": "not is_null(view)",
+          "fill": 3,
+          "table": {
+            "id": "uses",
+            "rows": "view.ability_uses ?? []",
+            "selected": "use",
+            "columns": [
+              {
+                "title": "Use",
+                "value": "{if it.available then it.label else ''}<dim>{if it.available then '' else it.label}</>",
+                "width": "fill"
+              },
+              {
+                "title": "Rank",
+                "value": "{it.rank}",
+                "width": 5
+              },
+              {
+                "title": "Cost",
+                "value": "{it.cost}",
+                "width": 12
+              },
+              {
+                "title": "State",
+                "value": "{it.state}{if it.cooldown > 0 then ' ' + str(ceil(it.cooldown)) + ' s' else ''}",
+                "width": 13
+              },
+              {
+                "title": "Key",
+                "value": "{(if app.pref('slot_1') == it.id then '1 ' else '') + (if app.pref('slot_2') == it.id then '2 ' else '') + (if app.pref('slot_3') == it.id then '3 ' else '') + (if app.pref('slot_4') == it.id then '4 ' else '') + (if app.pref('slot_5') == it.id then '5 ' else '') + (if app.pref('slot_6') == it.id then '6 ' else '') + (if app.pref('slot_7') == it.id then '7 ' else '') + (if app.pref('slot_8') == it.id then '8 ' else '') + (if app.pref('slot_9') == it.id then '9 ' else '')}",
+                "width": 4
+              }
+            ],
+            "empty": "No abilities.",
+            "tip": "Enter uses it; 1 to 9 put it on a quick slot.",
+            "on_activate": [
+              {
+                "close": {}
+              },
+              {
+                "act": {
+                  "action": {
+                    "first": "[it]"
+                  },
+                  "params": "needed",
+                  "with": {
+                    "target": "app.target"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": "not is_null(view) and len(view.ability_modes ?? []) > 0",
+          "text": "<header>Modes</>"
+        },
+        {
+          "if": "not is_null(view) and len(view.ability_modes ?? []) > 0",
+          "fill": 1,
+          "list": {
+            "id": "modes",
+            "rows": "view.ability_modes ?? []",
+            "selected": "mode",
+            "item": "{if it.on then '[on] ' else '[  ] '}{it.name}: {it.label}<dim>{if it.available then '' else '  ' + it.why}</>",
+            "tip": "Enter switches it on or off.",
+            "on_activate": [
+              {
+                "command": {
+                  "name": "set_mode",
+                  "args": {
+                    "ability": "it.ability",
+                    "mode": "it.mode",
+                    "on": "not it.on"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": "not is_null(view)",
+          "height": 1,
+          "text": {
+            "value": "<dim>{(view.ability_uses ?? [])[screen.use].why ?? ''}</>",
+            "wrap": false
+          }
+        },
+        {
+          "height": 1,
+          "tooltip": {
+            "value": "Tab moves between the lists, Enter uses, 1 to 9 put on a key, Esc goes back."
+          }
+        }
+      ]
+    },
+    "keys": {
+      "back": [
+        {
+          "close": {}
+        }
+      ],
+      "bind_1": [
+        {
+          "set": {
+            "pref.slot_1": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_2": [
+        {
+          "set": {
+            "pref.slot_2": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_3": [
+        {
+          "set": {
+            "pref.slot_3": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_4": [
+        {
+          "set": {
+            "pref.slot_4": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_5": [
+        {
+          "set": {
+            "pref.slot_5": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_6": [
+        {
+          "set": {
+            "pref.slot_6": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_7": [
+        {
+          "set": {
+            "pref.slot_7": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_8": [
+        {
+          "set": {
+            "pref.slot_8": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ],
+      "bind_9": [
+        {
+          "set": {
+            "pref.slot_9": "(view.ability_uses ?? [])[screen.use].id ?? ''"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "//": "Quick slots: the ability each number key uses in play, put there from the abilities screen. They are the player's choices, kept between runs with the other preferences (12 §10.4).",
+    "type": "preference",
+    "id": "slot_1",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 1",
+    "doc": "The ability the number key 1 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_2",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 2",
+    "doc": "The ability the number key 2 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_3",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 3",
+    "doc": "The ability the number key 3 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_4",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 4",
+    "doc": "The ability the number key 4 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_5",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 5",
+    "doc": "The ability the number key 5 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_6",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 6",
+    "doc": "The ability the number key 6 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_7",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 7",
+    "doc": "The ability the number key 7 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_8",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 8",
+    "doc": "The ability the number key 8 uses in play: its qualified id, or nothing."
+  },
+  {
+    "type": "preference",
+    "id": "slot_9",
+    "kind": "text",
+    "default": "",
+    "name": "Quick slot 9",
+    "doc": "The ability the number key 9 uses in play: its qualified id, or nothing."
+  },
+  {
+    "//": "The number keys in play: each uses the ability on its slot, its parameters asked for as the abilities screen asks, with the target given to one that takes a `target`.",
+    "type": "control",
+    "id": "slot_1",
+    "name": "Quick slot 1",
+    "doc": "Use the ability on quick slot 1.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_1'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_2",
+    "name": "Quick slot 2",
+    "doc": "Use the ability on quick slot 2.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_2'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_3",
+    "name": "Quick slot 3",
+    "doc": "Use the ability on quick slot 3.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_3'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_4",
+    "name": "Quick slot 4",
+    "doc": "Use the ability on quick slot 4.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_4'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_5",
+    "name": "Quick slot 5",
+    "doc": "Use the ability on quick slot 5.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_5'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_6",
+    "name": "Quick slot 6",
+    "doc": "Use the ability on quick slot 6.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_6'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_7",
+    "name": "Quick slot 7",
+    "doc": "Use the ability on quick slot 7.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_7'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_8",
+    "name": "Quick slot 8",
+    "doc": "Use the ability on quick slot 8.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_8'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  },
+  {
+    "type": "control",
+    "id": "slot_9",
+    "name": "Quick slot 9",
+    "doc": "Use the ability on quick slot 9.",
+    "do": {
+      "act": {
+        "action": {
+          "first": "view.ability_uses(app.pref('slot_9'))"
+        },
+        "params": "needed",
+        "with": {
+          "target": "app.target"
+        }
+      }
+    }
+  }
+]

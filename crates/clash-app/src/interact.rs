@@ -21,6 +21,23 @@
 //! refusal is told in place of the step's: walking into a locked door
 //! says why it does not open.
 //!
+//! **Walking into someone** (decision D-790). A step toward a creature
+//! the party sees standing that way is not submitted: the frame loop
+//! offers to attack it instead, by the preference named
+//! [`PREF_BUMP_ATTACK`]:
+//!
+//! | Value | Walking into someone |
+//! |-------|----------------------|
+//! | [`BUMP_HOSTILE`] (or no such preference) | One the character holds hostile or fears (`hostile`, `fears`, 09 §3.4) is attacked at once: the control named [`CONTROL_ATTACK_BUMP`] runs with them as `it`; anyone else is asked about first, with the control named [`CONTROL_ATTACK_BUMP_ASK`] |
+//! | [`BUMP_ALWAYS`] | Anyone is attacked at once |
+//! | [`BUMP_ASK`] | Anyone is asked about first |
+//! | [`BUMP_NEVER`] | The step is submitted as any other: the simulation refuses it when it is taken |
+//!
+//! `it` is a map: `target`, the creature as the simulation's value for
+//! it; `where`, the direction walked; and `hostile`, whether the
+//! character holds it hostile or fears it. The `ui` mod's controls
+//! start the first attack that can be made (`view.actions_with`).
+//!
 //! **An offer as a value** ([`offer_value`]) is a map with the fields
 //! the simulation's property `offers_near` gives each row: `target`,
 //! `interaction`, `id`, `name`, `default`, `available`, `why` and
@@ -51,6 +68,37 @@ pub const CONTROL_BUMP: &str = "bump";
 /// The bare name of the control run, with the offer as `it`, to ask
 /// first.
 pub const CONTROL_BUMP_ASK: &str = "bump_ask";
+
+/// The bare name of the preference that says what walking into someone
+/// the character sees does.
+pub const PREF_BUMP_ATTACK: &str = "bump_attack";
+/// Those the character holds hostile or fears are attacked at once,
+/// anyone else after asking.
+pub const BUMP_HOSTILE: &str = "hostile";
+/// Anyone is attacked at once.
+pub const BUMP_ALWAYS: &str = "always";
+/// The bare name of the control run, with the creature as `it`, to
+/// attack someone walked into.
+pub const CONTROL_ATTACK_BUMP: &str = "attack_bump";
+/// The bare name of the control run, with the creature as `it`, to ask
+/// before attacking someone walked into.
+pub const CONTROL_ATTACK_BUMP_ASK: &str = "attack_bump_ask";
+
+/// What walking into a creature offers: the map a control is given as
+/// `it` (see the [module](self) documentation).
+pub fn creature_value(sim: &Sim, user: EntityId, target: EntityId, dir: &str) -> Value {
+    let who = sim.subject_value(clash_sim::Subject::Entity(target));
+    let me = clash_sim::Subject::Entity(user);
+    let holds = |property: &str| {
+        sim.property_named(me, property, std::slice::from_ref(&who)) == Value::Bool(true)
+    };
+    let hostile = holds("hostile") || holds("fears");
+    Value::map([
+        ("target", who.clone()),
+        ("where", Value::from(dir.replace('_', "-").as_str())),
+        ("hostile", Value::Bool(hostile)),
+    ])
+}
 
 /// An offer as a screen or a control reads it: see the
 /// [module](self) documentation. `place` is where the target is from

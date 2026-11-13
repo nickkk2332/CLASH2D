@@ -31,12 +31,27 @@
 //! | `command choose { entity, choice, option }` | `Choose`: the answer to a choice prompt (12 §9.5) |
 //! | `command react { entity, window, action, params }` | `React`: the reaction chosen at the reaction prompt (03 §7.3) |
 //! | `command pass { entity, window }` | `Pass`: the prompt declined, the blow let happen |
+//! | `command use_ability { ability, action?, params? }` | `UseAbility`: the ability by its id or qualified id, the grant's action by its id or name, the parameters the player gave (08 §5) |
+//! | `command set_mode { ability, mode, on }` | `SetMode`: a mode of an ability switched on or off (08 §5.4) |
+//! | `command cancel {}` | With no `action`: `Cancel` of the character's newest action, which lets a held phase go |
 //! | a `run` of a rule | Refused, with the reason: the `Ui` command is not built |
 //!
 //! A refusal is the simulation's reason, which the frame loop writes in
 //! the log. A step refused because the way is closed is noted
 //! ([`crate::session::Session::bumped`]), and the frame loop offers what
-//! is there instead ([`crate::interact`]).
+//! is there instead ([`crate::interact`]). A step toward a creature the
+//! party sees standing that way is not submitted while
+//! [`crate::session::Session::bump_creatures`] holds: it is noted
+//! ([`crate::session::Session::bumped_into`]) and the frame loop offers
+//! to attack it ([`crate::interact`]).
+//!
+//! # What a picker is offered
+//!
+//! `candidates` answers for a parameter of the kind `part` (07 §4.2):
+//! the parts on the outside of the creature settled before it (the
+//! `target`), while the character perceives it: the parts that are there
+//! and sit inside no other, in the body's order. Anything else is left
+//! to the scene: an entity picker offers what the view model holds.
 //!
 //! # The name of the player's character
 //!
@@ -82,6 +97,19 @@ pub const COMMAND_CHOOSE: &str = clash_scene::control::COMMAND_CHOOSE;
 pub const COMMAND_REACT: &str = clash_scene::control::COMMAND_REACT;
 /// The command that declines to react to a window.
 pub const COMMAND_PASS: &str = clash_scene::control::COMMAND_PASS;
+/// The command that uses an ability.
+pub const COMMAND_USE_ABILITY: &str = clash_scene::control::COMMAND_USE_ABILITY;
+/// The command that switches a mode of an ability.
+pub const COMMAND_SET_MODE: &str = "set_mode";
+
+/// How the first entry of a part picker, no part at all, is shown: the
+/// blow lands where the body offers (07 §4.2).
+pub const PART_ANYWHERE: &str = "wherever it lands";
+
+/// The kind of subject a part of a body is.
+const KIND_PART: &str = "part";
+/// The kind of subject an entity is.
+const KIND_ENTITY: &str = "entity";
 
 /// The part of a qualified id after its namespace.
 fn bare(name: &str) -> &str {
@@ -117,6 +145,49 @@ fn seconds(dur: Dur) -> f64 {
 /// An argument of a command as a whole number, if it is one.
 fn int_arg(command: &UiCommand, name: &str) -> Option<i64> {
     command.args.get(name).and_then(Value::as_int)
+}
+
+/// The ability a value names: its id, or its qualified id as text.
+fn ability_named(sim: &clash_sim::Sim, value: &Value) -> Option<clash_sim::ability::AbilityId> {
+    use clash_data::Def;
+    match value {
+        Value::Id(id)
+            if Some(id.ty)
+                == sim
+                    .exprs()
+                    .registry()
+                    .def_type_id(clash_sim::ability::AbilityDef::TYPE) =>
+        {
+            clash_sim::ability::AbilityId::from_index(id.index as usize)
+        }
+        Value::Str(text) => clash_sim::ability::lookup(sim.defs(), text),
+        _ => None,
+    }
+}
+
+/// An action a value names: its id, or its qualified id or bare name as
+/// text.
+fn action_value_named(sim: &clash_sim::Sim, value: &Value) -> Option<ActionDefId> {
+    use clash_data::Def;
+    match value {
+        Value::Id(id) if Some(id.ty) == sim.exprs().registry().def_type_id(ActionDef::TYPE) => {
+            ActionDefId::from_index(id.index as usize)
+        }
+        Value::Str(text) => action_named(sim.defs(), text),
+        _ => None,
+    }
+}
+
+/// Parameters by name, from a map value.
+fn params_of(value: Option<&Value>) -> clash_sim::action::Params {
+    value
+        .and_then(Value::as_map)
+        .map(|map| {
+            map.iter()
+                .map(|(name, value)| (name.to_string(), value.to_stored()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The command of the simulation a command of the interface asks for,
@@ -156,9 +227,20 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
                 })
             }
             COMMAND_CANCEL => {
-                let action = int_arg(command, "action")
-                    .and_then(|number| u32::try_from(number).ok())
-                    .ok_or("`cancel` needs the number of the `action` to end.")?;
+                // With no number: the character's newest action, which
+                // lets a held phase go.
+                let newest = || {
+                    session
+                        .sim
+                        .actions_of(player)
+                        .last()
+                        .map(|action| action.raw())
+                };
+                let action = match command.args.get("action") {
+                    Some(_) => int_arg(command, "action").and_then(|n| u32::try_from(n).ok()),
+                    None => newest(),
+                }
+                .ok_or("There is nothing being done to stop.")?;
                 let abandon = command
                     .args
                     .get("abandon")
@@ -170,6 +252,52 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
                 })
             }
             COMMAND_CLEAR_PLAN => Ok(Command::ClearPlan { entity: player }),
+            COMMAND_USE_ABILITY => {
+                let sim = &session.sim;
+                let ability = command
+                    .args
+                    .get("ability")
+                    .and_then(|value| ability_named(sim, value))
+                    .ok_or("`use_ability` needs the `ability` to use: no loaded mod defines it.")?;
+                let action = match command.args.get("action") {
+                    Some(value) if !value.is_null() => Some(
+                        action_value_named(sim, value)
+                            .ok_or("`use_ability` names an `action` no loaded mod defines.")?,
+                    ),
+                    _ => None,
+                };
+                Ok(Command::UseAbility {
+                    entity: player,
+                    ability,
+                    action,
+                    params: params_of(command.args.get("params")),
+                })
+            }
+            COMMAND_SET_MODE => {
+                let sim = &session.sim;
+                let ability = command
+                    .args
+                    .get("ability")
+                    .and_then(|value| ability_named(sim, value))
+                    .ok_or("`set_mode` needs the `ability` whose mode it is.")?;
+                let mode = command
+                    .args
+                    .get("mode")
+                    .and_then(Value::as_str)
+                    .ok_or("`set_mode` needs the `mode` to switch.")?
+                    .to_owned();
+                let on = command
+                    .args
+                    .get("on")
+                    .and_then(Value::as_bool)
+                    .ok_or("`set_mode` needs `on`, true or false.")?;
+                Ok(Command::SetMode {
+                    entity: player,
+                    ability,
+                    mode,
+                    on,
+                })
+            }
             COMMAND_REACT | COMMAND_PASS => {
                 let entity = match command.args.get("entity") {
                     Some(value) => match session.sim.subject_of(value) {
@@ -250,6 +378,17 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
 /// why not: the simulation's own reason, worded for the player. See the
 /// [module](self) documentation.
 pub fn command_for(session: &mut Session, command: &UiCommand) -> Result<(), String> {
+    session.bumped_into = None;
+    // A step toward someone the character sees there: the frame loop
+    // offers to attack them (12 §3.7).
+    if command.kind == CommandKind::Act
+        && session.bump_creatures
+        && let Some(dir) = command.args.get(ARG_DIR).and_then(Value::as_str)
+        && let Some(who) = creature_that_way(session, dir)
+    {
+        session.bumped_into = Some((dir.to_owned(), who));
+        return Err("Someone is in the way.".to_owned());
+    }
     let built = build(session, command)?;
     session.bumped = None;
     if let Err(refusal) = session.sim.submit(built) {
@@ -265,6 +404,94 @@ pub fn command_for(session: &mut Session, command: &UiCommand) -> Result<(), Str
     }
     session.stale_view = true;
     Ok(())
+}
+
+/// The creature the party sees standing one step away in a direction,
+/// as the view of the last batch holds it: never what it does not
+/// perceive.
+fn creature_that_way(session: &Session, dir: &str) -> Option<EntityId> {
+    let kind = clash_sim::movement::parse_dir(dir)?;
+    let from = session.player_loc()?;
+    let delta = kind.delta();
+    let cell = clash_world::CellPos::new(
+        from.cell.x + delta.x,
+        from.cell.y + delta.y,
+        from.cell.z + delta.z,
+    );
+    let there = session
+        .sim
+        .truth()
+        .cosmos()
+        .normalize(Location::new(from.grid, cell))
+        .ok()?;
+    session
+        .percepts
+        .sight
+        .sprites
+        .iter()
+        .find(|(id, sprite)| {
+            sprite.loc == there
+                && sprite.kind == clash_scene::view::SpriteKind::Creature
+                && !sprite.suspected
+                && id.raw() != session.player.to_bits()
+        })
+        .map(|(id, _)| EntityId::from_bits(id.raw()))
+}
+
+/// The parts on the outside of a creature the character perceives: the
+/// parts that are there and sit inside no other, in the body's order.
+fn outer_parts(sim: &clash_sim::Sim, viewer: EntityId, target: &Value) -> Option<Vec<Value>> {
+    let Some(Subject::Entity(entity)) = sim.subject_of(target) else {
+        return None;
+    };
+    if !clash_sim::perception::perceives(sim, viewer, entity) {
+        return Some(Vec::new());
+    }
+    let registry = sim.exprs().registry();
+    let Value::Subject(handle) = sim.subject_value(Subject::Entity(entity)) else {
+        return None;
+    };
+    let parts = registry
+        .kind_id(KIND_ENTITY)
+        .and_then(|kind| registry.property_id(kind, "parts"))
+        .map(|parts| sim.property(parts, handle, &[]))?;
+    let parts = parts.as_list()?.to_vec();
+    let inside = registry
+        .kind_id(KIND_PART)
+        .and_then(|kind| registry.property_id(kind, "inside"));
+    let mut hidden: Vec<Value> = Vec::new();
+    if let Some(inside) = inside {
+        for part in &parts {
+            if let Value::Subject(handle) = part
+                && let Some(within) = sim.property(inside, *handle, &[]).as_list()
+            {
+                hidden.extend(within.iter().cloned());
+            }
+        }
+    }
+    // Each with its name in the body, as a row a picker shows.
+    let name = registry
+        .kind_id(KIND_PART)
+        .and_then(|kind| registry.property_id(kind, "name"));
+    Some(
+        parts
+            .into_iter()
+            .filter(|part| !hidden.contains(part))
+            .map(|part| {
+                let label = match (&part, name) {
+                    (Value::Subject(handle), Some(name)) => sim
+                        .property(name, *handle, &[])
+                        .as_str()
+                        .map(|name| name.replace('_', " ")),
+                    _ => None,
+                };
+                match label {
+                    Some(label) => Value::map([("value", part), ("label", Value::text(label))]),
+                    None => part,
+                }
+            })
+            .collect(),
+    )
 }
 
 /// Whether a step a way is one the mover believes is closed: what
@@ -379,7 +606,36 @@ impl SceneHost for GameHost {
                         }
                         _ => time_left,
                     };
+                    // What is happening, as the character perceives it:
+                    // who does what. It noticed the window, so it
+                    // perceives its source (15 §6).
+                    let what = sim.windows().get(window).map_or_else(String::new, |open| {
+                        let who = open.source.map(|source| {
+                            let value = sim.subject_value(Subject::Entity(source));
+                            sim.exprs()
+                                .registry()
+                                .function_id("the")
+                                .map(|the| {
+                                    sim.call_function_for(the, &[value], Some(request.entity))
+                                })
+                                .and_then(|name| name.as_str().map(clash_sim::reader::capitalised))
+                                .unwrap_or_else(|| "Someone".to_owned())
+                        });
+                        let doing =
+                            open.action
+                                .and_then(|action| sim.actions.get(action))
+                                .map(|running| {
+                                    clash_sim::offer::action_label(sim, request.entity, running.def)
+                                });
+                        match (who, doing) {
+                            (Some(who), Some(doing)) => format!("{who}: {doing}"),
+                            (Some(who), None) => who,
+                            (None, Some(doing)) => doing,
+                            (None, None) => String::new(),
+                        }
+                    });
                     DecisionAsk::Reaction {
+                        what,
                         window: sim.window_value(window),
                         options: options
                             .into_iter()
@@ -435,10 +691,39 @@ impl SceneHost for GameHost {
         .flatten()
     }
 
-    fn candidates(&mut self, _ask: &ParamAsk<'_>) -> Option<Vec<Value>> {
-        // Nothing to say yet: an entity picker offers what the view
-        // model holds, which is what the character perceives.
-        None
+    fn candidates(&mut self, ask: &ParamAsk<'_>) -> Option<Vec<Value>> {
+        // A part: those on the outside of the creature chosen before it.
+        // Anything else: an entity picker offers what the view model
+        // holds, which is what the character perceives.
+        let registry = self.defs.exprs().registry();
+        let is_kind = |name: &str| match ask.ty.non_null() {
+            clash_expr::Type::Subject(kind) => registry.kind_id(name) == Some(*kind),
+            _ => false,
+        };
+        if !is_kind(KIND_PART) {
+            return None;
+        }
+        let entity_kind = registry.kind_id(KIND_ENTITY);
+        let target = ask
+            .settled
+            .iter()
+            .rev()
+            .map(|(_, value)| value)
+            .find(|value| {
+                value
+                    .as_subject()
+                    .is_some_and(|handle| Some(handle.kind) == entity_kind)
+            })?
+            .clone();
+        let parts = self
+            .read(|session| outer_parts(&session.sim, session.player, &target))
+            .flatten()?;
+        // First, no part at all: the blow lands where the body offers.
+        let anywhere = Value::map([
+            ("value", Value::Null),
+            ("label", Value::text(PART_ANYWHERE)),
+        ]);
+        Some(std::iter::once(anywhere).chain(parts).collect())
     }
 
     fn perceived(&mut self, event: &SimEvent, _picture: &ViewModel) -> Perceived {
