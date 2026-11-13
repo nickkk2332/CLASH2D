@@ -83,9 +83,9 @@ use super::defs::StepKind;
 use super::state::{Door, Outcome};
 use super::think;
 use crate::Sim;
-use crate::entity::Control;
 use crate::action::ActEvent;
 use crate::bus::EventPayload;
+use crate::entity::Control;
 use crate::event::{EventBody, EventInfo, SimEvent, Subject, Where};
 
 /// How often the warm stepper wakes, in universal time (03 §10).
@@ -441,13 +441,7 @@ fn attend(sim: &mut Sim) {
     let mut up = Vec::new();
     let mut down = Vec::new();
     for (group, _, _, _, entity) in ranked {
-        let hot = if group == 0 {
-            true
-        } else if group == 3 || slots == 0 {
-            false
-        } else {
-            true
-        };
+        let hot = group == 0 || (group != 3 && slots > 0);
         if hot {
             slots = slots.saturating_sub(1);
         }
@@ -472,7 +466,9 @@ fn attend(sim: &mut Sim) {
     levels
         .walking
         .retain(|entity, _| levels.warm.contains_key(entity) || known.contains(entity));
-    levels.ending.retain(|entity| levels.warm.contains_key(entity));
+    levels
+        .ending
+        .retain(|entity| levels.warm.contains_key(entity));
     levels.due.retain(|entity| levels.warm.contains_key(entity));
 }
 
@@ -521,7 +517,12 @@ fn cast_of(sim: &Sim, actor: EntityId, locals: &[clash_core::Value]) -> Vec<Enti
 /// An action is starting (03 §10): every warm character it names (its
 /// actor, an entity among its parameters, a participant) is promoted
 /// before it starts.
-pub(crate) fn involve(sim: &mut Sim, actor: EntityId, locals: &[clash_expr::Value], joined: &[EntityId]) {
+pub(crate) fn involve(
+    sim: &mut Sim,
+    actor: EntityId,
+    locals: &[clash_expr::Value],
+    joined: &[EntityId],
+) {
     if sim.ai.levels.warm.is_empty() {
         return;
     }

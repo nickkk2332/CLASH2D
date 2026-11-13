@@ -70,7 +70,9 @@ impl Town {
     }
 
     fn sim(&self) -> Result<&Sim, String> {
-        self.host.sim().ok_or_else(|| "no game is running".to_owned())
+        self.host
+            .sim()
+            .ok_or_else(|| "no game is running".to_owned())
     }
 
     /// What the town holds: its residents, those in the world, and how

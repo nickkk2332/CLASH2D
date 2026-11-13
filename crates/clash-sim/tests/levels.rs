@@ -109,7 +109,9 @@ fn defs() -> Arc<Defs> {
         .memory_mod("core", r#"{ "id": "core" }"#, &files)
         .load_mods(&["core"])
         .into_result()
-        .unwrap_or_else(|diagnostics| panic!("the definitions do not load:\n{}", diagnostics.render()))
+        .unwrap_or_else(|diagnostics| {
+            panic!("the definitions do not load:\n{}", diagnostics.render())
+        })
 }
 
 /// A cell of the street that runs east along the north edge of the
@@ -264,7 +266,10 @@ fn with_more_minds_than_the_cap_exactly_the_cap_are_hot_and_they_rank_highest() 
     let (mut sim, anchor) = city(31, 3);
     let mut people = Vec::new();
     for x in [30, 2, 22, 6, 26, 10, 18, 14] {
-        people.push((x, spawn(&mut sim, &["core:person", "core:idler"], street(x, 0))));
+        people.push((
+            x,
+            spawn(&mut sim, &["core:person", "core:idler"], street(x, 0)),
+        ));
     }
     advance_by(&mut sim, 8.0);
     let census = warm::census(&sim);
@@ -327,7 +332,10 @@ fn a_warm_character_promoted_to_hot_thinks_at_once_and_continues_its_purpose() {
     let (mut sim, _) = city(41, 0);
     let walker = spawn(&mut sim, &["core:person", "core:idler"], street(2, 0));
     advance_by(&mut sim, 3.0);
-    assert!(warm::is_warm(&sim, walker), "with no room under the cap it is warm");
+    assert!(
+        warm::is_warm(&sim, walker),
+        "with no room under the cap it is warm"
+    );
     // An errand to the far end of the street.
     let goal = street(34, 0);
     let who = sim.subject_value(Subject::Entity(walker));
@@ -404,7 +412,10 @@ fn a_warm_character_named_by_an_action_is_promoted_before_it_starts() {
     sim.submit(Command::Act {
         entity: actor,
         action: poke,
-        params: vec![("who".to_owned(), sim.subject_value(Subject::Entity(target)).to_stored())],
+        params: vec![(
+            "who".to_owned(),
+            sim.subject_value(Subject::Entity(target)).to_stored(),
+        )],
         how: clash_sim::action::How::Start,
     })
     .unwrap();
@@ -412,9 +423,7 @@ fn a_warm_character_named_by_an_action_is_promoted_before_it_starts() {
     let events = sim.drain_events();
     let names: Vec<&str> = events
         .iter()
-        .filter(|event| {
-            matches!(event.name(), warm::ENTITY_PROMOTED | "action_started")
-        })
+        .filter(|event| matches!(event.name(), warm::ENTITY_PROMOTED | "action_started"))
         .map(SimEvent::name)
         .collect();
     assert_eq!(names, [warm::ENTITY_PROMOTED, "action_started"]);
@@ -491,7 +500,10 @@ fn the_party_sees_only_hot_characters_and_sees_them_as_it_would_were_all_hot() {
         seen_capped.extend(frames_of(&mut capped));
         seen_free.extend(frames_of(&mut free));
     }
-    assert!(warm::census(&capped).warm >= far.len(), "the far ones are warm");
+    assert!(
+        warm::census(&capped).warm >= far.len(),
+        "the far ones are warm"
+    );
     assert_eq!(warm::census(&free).warm, 0);
     assert!(seen_capped.iter().any(|(_, seen)| seen.len() > 3));
     assert_eq!(seen_capped, seen_free);
@@ -571,4 +583,3 @@ fn nobody_is_warm_and_nothing_is_kept_while_the_minds_fit_under_the_cap() {
     assert!(sim.ai().levels().is_empty());
     assert_eq!(warm::census(&sim).warm, 0);
 }
-
