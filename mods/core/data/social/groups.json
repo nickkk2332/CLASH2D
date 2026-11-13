@@ -1,0 +1,17 @@
+[
+  { "//": "Bodies of people (15 §9.2). A member with no relation of its own toward someone uses its group's, toward that persona or toward a group the persona claims: an open member's true persona claims its groups, as colours or a uniform would. Every person the `person` template makes is one of the townsfolk.",
+    "type": "group", "id": "townsfolk", "name": "the townsfolk",
+    "roles": { "resident": {}, "visitor": {} },
+    "relations": { "townsfolk": { "friendly": 0.3 }, "watch": { "friendly": 0.4 },
+                   "gang": { "fearful": 0.4 } },
+    "doc": "The ordinary people of a town: friendly enough to each other, glad of the watch and afraid of the gang." },
+  { "type": "group", "id": "watch", "name": "the Watch",
+    "roles": { "sergeant": { "orders": ["guard"], "spends": true }, "guard": {} },
+    "relations": { "watch": { "friendly": 1 }, "townsfolk": { "friendly": 0.5 },
+                   "gang": { "hostile": 1 } },
+    "doc": "The town's watch: they stand together, look after the townsfolk and take the gang for enemies. A sergeant may order guards and spend from what the watch holds." },
+  { "type": "group", "id": "gang", "name": "the gang",
+    "roles": { "boss": { "orders": ["thug"], "spends": true }, "thug": {} },
+    "relations": { "gang": { "friendly": 1 }, "watch": { "hostile": 1 } },
+    "doc": "A street gang: they stand together and take the watch for enemies." }
+]

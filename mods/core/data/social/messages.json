@@ -1,0 +1,16 @@
+[
+  { "//": "Kinds of message (15 §11), said with sound unless they name another signal. Strengths are in the units of the core sound kind, which an ordinary ear hears down to 0.001: a word said at 1 carries about thirty metres in the open, a shout at 8 to the edge of hearing.",
+    "type": "message_kind", "id": "report", "name": "report", "carries": "report",
+    "belief": 0.5, "strength": 1,
+    "doc": "Telling someone what one saw: whom it is said to gains the memories and the track as told, believed at half the teller's confidence." },
+  { "type": "message_kind", "id": "order", "name": "order", "carries": "order", "strength": 1,
+    "doc": "An order (15 §10): obeyed by whoever holds a relation flagged `orders` toward whom it takes the giver for." },
+  { "type": "message_kind", "id": "greet", "name": "greeting", "strength": 0.5,
+    "doc": "A greeting, said in passing." },
+  { "type": "message_kind", "id": "warn", "name": "warning", "strength": 3,
+    "doc": "A warning, said loudly: stop, stay back." },
+  { "type": "message_kind", "id": "help", "name": "call for help", "strength": 8,
+    "doc": "A shout for help: the watch answers it (`core:heed_help`)." },
+  { "type": "message_kind", "id": "threaten", "name": "threat", "strength": 2,
+    "doc": "A threat." }
+]

@@ -548,9 +548,15 @@ built. What stands in for them in the beta (D-693, D-694):
 - **Stances** stand in for relations (15 §9): a mind holds someone
   `hostile` or `feared` by a tag they present (`hostile_to`, `fear_of`,
   once perceived), by what it saw them do (`hostile_after`, `fear_after`)
-  or by a `stance` step or the `set_stance` verb. Relations (S7) will
-  replace stances: a stance becomes a relation whose kind is flagged
-  `opposes`, and `self.hostile(x)` reads `threats`.
+  or by a `stance` step or the `set_stance` verb. Relations (15 §9) are
+  read as well (decision D-762): once it has perceived someone, a mind
+  holds them hostile if its relations oppose them (`stance_to` is
+  `opposes`, through its groups and what the persona claims), and
+  feared if it holds a kind flagged `avoids` toward them, besides the
+  tags of its definition; the tags read are those of the persona it
+  takes them for (15 §8). A stance it took itself comes first. The
+  stance step and `set_stance` stay the mind's own until `threats`
+  replaces them.
 - **Fleeing** is a `keep_from` step; **fighting back** a `choose` step
   whose purpose is a tag carried by the attacks content defines (the
   bundled `punch`, `kick` and the rest carry `strike`), with a method

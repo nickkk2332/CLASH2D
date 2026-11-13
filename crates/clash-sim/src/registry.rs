@@ -366,6 +366,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::scenario::journal::properties());
     properties.extend(crate::combat::grip::properties());
     properties.extend(crate::combat::takedown::properties());
+    properties.extend(crate::social::props::properties());
     properties
 }
 
@@ -378,6 +379,7 @@ pub fn engine_functions() -> Vec<FunctionDef> {
     table.extend(crate::combat::functions());
     table.extend(crate::action::windows::functions());
     table.extend(crate::scenario::journal::functions());
+    table.extend(crate::social::props::functions());
     table
 }
 
@@ -447,6 +449,7 @@ pub fn register_engine(registry: &mut Registry) {
     crate::combat::register_types(registry);
     crate::action::windows::register_types(registry);
     crate::scenario::register_types(registry);
+    crate::social::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)

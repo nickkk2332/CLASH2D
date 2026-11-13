@@ -572,6 +572,11 @@ giving! {
         /// what each needs.
         #[serde(default)]
         pub know_how: Vec<String>,
+        /// The groups a thing made from it joins (15 §9.2), by id, each
+        /// with its role there, `""` for none: joined openly, with
+        /// `group_joined`, when `entity_spawned` is delivered.
+        #[serde(default)]
+        pub groups: BTreeMap<String, String>,
     }
 }
 

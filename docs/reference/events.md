@@ -580,6 +580,19 @@ Fields:
 
 - `layer` (string): Which of the cell's elements the device was bound to: `floor`, `block` or `fixture`.
 
+<a id="disguise-seen-through"></a>
+## `disguise_seen_through`
+
+An observer saw through what an entity presents (15 §8.2): it takes it for its true persona, and where the persona shown is one the entity made, it has linked the two in its own beliefs, and in nobody else's.
+
+Subjects, in delivery order: `self` (entity), `about` (entity).
+
+Fields:
+
+- `shown` (string): The persona `about` presents, as text (`7v1/2`).
+- `seen` (string): The persona the observer now takes it for: its true one.
+- `how` (string): `checked`, by `identity_check`, or `revealed`, by `reveal_persona`.
+
 <a id="dosed"></a>
 ## `dosed`
 
@@ -901,6 +914,53 @@ Fields:
 - `part` (part?): The part that was held.
 - `how` (string): `ended`: its action ended; `released`: the holder let go; `broken`: the held broke free; `thrown`: the held was thrown; `lost`: they came apart.
 
+<a id="group-created"></a>
+## `group_created`
+
+A group was made in play by `create_group` (15 §9.2).
+
+Subjects: none of its own.
+
+Fields:
+
+- `group` (string): The group's key (15 §9.2).
+- `def` (string): The group definition's qualified id.
+
+<a id="group-dissolved"></a>
+## `group_dissolved`
+
+A group was dissolved by `dissolve_group` (15 §9.2): its members have left it.
+
+Subjects: none of its own.
+
+Fields:
+
+- `group` (string): The group's key (15 §9.2).
+
+<a id="group-joined"></a>
+## `group_joined`
+
+An entity joined a group (15 §9.2), and was told what the group knows.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `group` (string): The group's key (15 §9.2).
+- `role` (any): Its role, or null.
+
+<a id="group-left"></a>
+## `group_left`
+
+An entity left a group, or the group was dissolved (15 §9.2).
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `group` (string): The group's key (15 §9.2).
+- `role` (any): The role it had, or null.
+
 <a id="hit-exited"></a>
 ## `hit_exited`
 
@@ -1140,6 +1200,22 @@ Fields:
 - `text` (string): The line, rendered for `self` as its reader.
 - `style` (string): How it is to be shown: a style name of the interface, or empty.
 
+<a id="message-heard"></a>
+## `message_heard`
+
+A message was heard and understood (15 §11). `speaker` is bound if the hearer made out who spoke; `about` and `to` if the message named them. A report's beliefs have been gained, and an order received, before this is delivered.
+
+Subjects, in delivery order: `self` (entity), `speaker` (entity), `about` (entity), `to` (entity).
+
+Fields:
+
+- `kind` (string): The message kind's qualified id.
+- `text` (any): The line it was said with, written for the hearer as reader, or null.
+- `addressed` (bool): Whether it was said to the hearer: to it, to a group it belongs to, or to nobody in particular.
+- `report` (bool): Whether the hearer gained beliefs from it: a report said to it that carried something.
+- `clarity` (real): How far over its sense's threshold it was heard.
+- `where` (loc): Where it seemed to come from: the speaker's cell when it was said.
+
 <a id="method-chosen"></a>
 ## `method_chosen`
 
@@ -1322,6 +1398,45 @@ Fields:
 
 - `purpose` (string): The purpose the `choose` step named.
 - `action` (string): The qualified id of the action started.
+
+<a id="order-cancelled"></a>
+## `order_cancelled`
+
+An order an entity kept no longer stands (15 §10).
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `order` (int): The order's number.
+- `how` (string): `cancelled` by `cancel_order`, `expired` past its `until`, or `relation_lost` when the relation that made it one to obey fell to its default.
+
+<a id="order-given"></a>
+## `order_given`
+
+An order was heard and kept by the one it was given to (15 §10): it stands until cancelled, until its time is up, or until the relation that made it one to obey is lost. What is done about it is a goal's, or a rule's (the bundled `core:do_as_ordered`).
+
+Subjects, in delivery order: `self` (entity), `giver` (entity).
+
+Fields:
+
+- `order` (int): The order's number, for `cancel_order`.
+- `action` (any): The action the order says to do: an id of an `action`.
+- `with` (any): The action's parameters, by name.
+- `until` (any): When it stops standing, in seconds of universal time from now, or null for good.
+
+<a id="order-refused"></a>
+## `order_refused`
+
+An order heard by the one it was given to was not obeyed (15 §10): it holds no relation flagged `orders` toward the giver, did not make the giver out, or a handler of `order_received` refused.
+
+Subjects, in delivery order: `self` (entity), `giver` (entity).
+
+Fields:
+
+- `action` (any): The action the order says to do: an id of an `action`.
+- `reason` (string): The code of why: `social.not_obeyed`, `social.giver_unknown`, or a handler's.
+- `message` (string): Why, in words.
 
 <a id="part-destroyed"></a>
 ## `part_destroyed`
@@ -1601,6 +1716,21 @@ Fields:
 - `resumed` (bool): Whether it goes on with work already done.
 - `work` (real): How much work it takes in all, in seconds at a rate of 1.
 
+<a id="relation-changed"></a>
+## `relation_changed`
+
+A relation a mind holds of its own changed (15 §9.1): set, added to or cleared. Fading is not a change: it is worked out when the relation is read.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `kind` (string): The relation kind's qualified id.
+- `toward` (string): Whom it is held toward: a persona as text, or a group's key.
+- `group` (bool): Whether `toward` is a group.
+- `value` (real): The value now.
+- `was` (real): The value before: the kind's default if it was not held.
+
 <a id="release-started"></a>
 ## `release_started`
 
@@ -1613,6 +1743,19 @@ Fields:
 - `release` (int): The release's id.
 - `energy` (real): How much was let go, in joules.
 - `reach` (real): How far it will reach with nothing in its way, in metres.
+
+<a id="role-changed"></a>
+## `role_changed`
+
+A member's role in a group changed by `set_role` (15 §9.2).
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `group` (string): The group's key (15 §9.2).
+- `role` (any): Its role now, or null.
+- `was` (any): Its role before, or null.
 
 <a id="route-blocked"></a>
 ## `route_blocked`

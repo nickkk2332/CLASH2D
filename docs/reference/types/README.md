@@ -33,12 +33,15 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`function`](function.md) | A named, parameterised value that expressions call (05 §12). |
 | [`goal`](goal.md) | A goal: how much a character wants it, what it is about, how it is pursued, and when it is over (09 §3.2). |
 | [`ground`](ground.md) | What the ground of a tract is made of: strata, a surface, liquid, veins, pockets, caves and scattered things, as steps run in order for each tract (10 §5). |
+| [`group`](group.md) | A body of people: its roles, who in it may order whom, and what it holds toward other groups from the start (15 §9.2). |
 | [`interaction`](interaction.md) | Something a character can do to a thing: its reach, time, conditions and effects (16 §3.1). |
 | [`item`](item.md) | A kind of item: what it is made of, how it is held and worn, what it holds and what it confers (06 §9.1). |
 | [`keymap`](keymap.md) | For each context, the name each key has in it (12 §9.2). |
 | [`know_how`](know_how.md) | Something someone may know how to do, held by a mind and asked for by recipes; what must be known first (16 §8.5). |
+| [`lines`](lines.md) | A table of things to say, each a text with a condition and a weight; one that fits is picked when something is said (15 §11). |
 | [`map`](map.md) | A place written as rows of characters, one layer for each storey, with a palette saying what each character stands for (10 §3). |
 | [`material`](material.md) | What elements are made of: density, toughness and resistances (02 §5.4). |
+| [`message_kind`](message_kind.md) | A kind of message said aloud: what it carries for the engine (a report, an order, or nothing), and how it is said (15 §11). |
 | [`method`](method.md) | A method written on its own: a condition and the steps that pursue a goal, which become the character's actions one at a time (09 §4). |
 | [`mind`](mind.md) | A mind: the goals a character may have, the weights that colour its choices, how often it thinks, and how it stands toward others (09 §3.1). |
 | [`mission`](mission.md) | A template for objectives, started with parameters by `start_mission`: a bounty, a delivery, a job (13 §5.2). |
@@ -55,6 +58,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`reason`](reason.md) | A reason a mod gives for a refusal of its own: a sentence and the values it carries (14 §15). |
 | [`recipe`](recipe.md) | What is used up, what is needed, how much work it takes and what it gives: crafting by hand, processing at a station, cooking, brewing and growing (16 §8). |
 | [`region_kind`](region_kind.md) | The recipe for surveying a region: its tract definitions in patches, the sites it holds, the settlements it may hold and the paths that cross its edges (10 §8.1). |
+| [`relation_kind`](relation_kind.md) | A kind of relation a mind holds toward a persona or a group: its range, default, fade, and the flags `opposes`, `sides_with`, `avoids`, `orders` and `intervenes` the engine reads (15 §9.1). |
 | [`rule_group`](rule_group.md) | A set of rules that is switched on and off together (05 §9.6). |
 | [`scenario`](scenario.md) | A game the player can start: its worlds, who the player is and where they begin, the rules in force, its objectives, how it ends and how it is saved (13 §3). |
 | [`screen`](screen.md) | A screen of the interface: its variables, its layout tree and its keys (12 §10.1). |

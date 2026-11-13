@@ -1,0 +1,33 @@
+# minion_orders (plans/first-playable.md, S7; scene S16): a servant made
+# loyal to its master obeys the orders it hears, does not hear one given
+# out of earshot, and once the relation is taken away is a servant no
+# more: what it kept is withdrawn and the next order is refused (15 §10).
+use default seed=7
+gen core:testland size=2
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 2, 0, 0)" } }
+remove @spot
+set_relation who=@e:2 toward=@e:1 kind=loyal value=1
+assert "@e:2.rel('loyal', @e:1) == 1"
+order from=@e:1 to=@e:2 action=core:step with="{'dir': 'east'}"
+advance 2s
+expect event order_given
+assert "@e:2.standing_orders == 1"
+assert "@e:2.loc.x == 13"
+# Out of earshot, fifty metres off: the order is not heard.
+move @e:1 @c:55,50,0
+order from=@e:1 to=@e:2 action=core:step with="{'dir': 'east'}"
+advance 2s
+assert "@e:2.standing_orders == 1"
+assert "@e:2.loc.x == 13"
+# The relation is taken away: it is no longer a servant.
+clear_relation who=@e:2 toward=@e:1
+expect event order_cancelled how=relation_lost
+assert "@e:2.standing_orders == 0"
+move @e:1 @c:11,10,0
+order from=@e:1 to=@e:2 action=core:step with="{'dir': 'east'}"
+advance 2s
+expect event order_refused reason="'social.not_obeyed'"
+assert "@e:2.loc.x == 13"
+expect hash 031d7fa1b3773d9fe8417e4bebe44cf6

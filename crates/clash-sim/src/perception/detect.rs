@@ -260,6 +260,11 @@ fn update(
     if raise_suspicion {
         events::suspicion_raised(sim, observer, target, sense_name(), level);
     }
+    if raise_detected {
+        // Who the observer takes it for is settled before anything is
+        // believed of it (15 §8.2).
+        crate::social::identify(sim, observer, target, sense);
+    }
     if detected_now
         && received
         && let (Some(reading), Some(kind)) = (reading, kind)
@@ -290,6 +295,11 @@ fn update(
     if raise_lost {
         let last = belief::believed_loc(sim, observer, target);
         events::lost_track(sim, observer, target, sense_name(), last);
+        // Out of every sense, it is taken for whatever it presents when
+        // next it is detected (15 §8.2).
+        if !perceives(sim, observer, target) {
+            crate::social::lost_sight(sim, observer, target);
+        }
     }
 }
 

@@ -807,6 +807,10 @@ impl Bus {
         for ty in crate::scenario::event_types() {
             bus.types.entry(ty.name.clone()).or_insert(ty);
         }
+        // The events and hooks of the social layer (15 §15).
+        for ty in crate::social::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         bus
     }
 

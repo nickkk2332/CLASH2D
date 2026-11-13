@@ -444,7 +444,10 @@ fn verb_remember(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Result<Va
         .get(3)
         .and_then(Value::as_number)
         .unwrap_or(Real::of(0.5));
-    let actor = entity_of(sim, call.args.get(4)).map(PersonaId::presented_by);
+    // Whom the mind takes the actor for: the persona it perceives them
+    // as (15 §8.2).
+    let actor: Option<PersonaId> =
+        entity_of(sim, call.args.get(4)).map(|actor| belief::persona_of(sim, who, actor));
     let memory = Memory {
         event,
         loc: at,
@@ -453,14 +456,42 @@ fn verb_remember(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Result<Va
         how: Knowing::Inferred,
         confidence: Real::ONE,
         salience,
+        source: None,
     };
     belief::remember(sim, who, memory)?;
+    Ok(Value::Null)
+}
+
+fn sense_arg(sim: &Sim, call: &VerbCall<'_>, at: usize) -> Result<super::SenseId, Reason> {
+    let name = call.args.get(at).and_then(Value::as_str).unwrap_or("");
+    sim.perception_defs.sense_named(name).ok_or_else(|| {
+        Reason::new(why::UNKNOWN_SENSE, format!("there is no sense `{name}`")).with("sense", name)
+    })
+}
+
+fn verb_detach_sense(sim: &mut Sim, call: &VerbCall<'_>, _cause: Cause) -> Result<Value, Reason> {
+    let who = arg_entity(sim, call, 0, "who")?;
+    let sense = sense_arg(sim, call, 1)?;
+    senses::detach_sense(sim, who, sense)?;
     Ok(Value::Null)
 }
 
 /// The verbs of perception (15 §15).
 pub(crate) fn verbs() -> Vec<VerbDef> {
     vec![
+        VerbDef {
+            name: "detach_sense",
+            build: |registry: &Registry| {
+                let entity = registry.kind_id("entity")?;
+                Some(
+                    VerbSpec::new("detach_sense")
+                        .arg("who", Type::Subject(entity), "Who loses the sense.")
+                        .arg("sense", Type::Str, "The sense's id, qualified or bare.")
+                        .doc("Takes a sense from an entity (15 §4), with what it was aware of through it. Refused with `perception.unknown_sense` and `perception.no_sense`."),
+                )
+            },
+            run: verb_detach_sense,
+        },
         VerbDef {
             name: "emit_signal",
             build: |registry: &Registry| {
