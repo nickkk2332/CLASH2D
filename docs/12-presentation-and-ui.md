@@ -2219,7 +2219,7 @@ grasp (`view.held('grasp')`, written out by `list`); the slot
 context is `play`, and it binds no key itself: every key in play is a
 control. The `ui` mod's controls are the ten directions (`north` to
 `north_west`, `up`, `down`), which start the action `step` with a
-`dir`; `wait`, the command of that name for one second, and `wait_minute` (`w`) and `wait_hour` (`shift+w`), the same for a minute and an hour, which the loaded rules may break off when something happens (decision D-871); `look`, which
+`dir`; `wait`, the command of that name for one second, and `wait_minute` (`p`, pass a minute) and `wait_hour` (`shift+p`), the same for a minute and an hour, which the loaded rules may break off when something happens (decision D-871); `look`, which
 opens look mode (`ui:look`); `inventory` and `condition`, which open
 `ui:inventory` and `ui:condition`; `abilities` and `map`, which open
 `ui:abilities` and `ui:map`; `journal`, which opens `ui:journal`;

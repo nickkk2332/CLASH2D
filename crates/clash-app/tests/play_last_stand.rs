@@ -114,7 +114,7 @@ fn inside_with_the_door_shut_the_night_goes_by() {
     // Time goes by behind the shut door.
     let before = now_s(&run);
     for _ in 0..3 {
-        press(&mut run, "w");
+        press(&mut run, "p");
         answer(&mut run);
     }
     assert!(now_s(&run) - before > 60.0, "time goes by");
@@ -136,7 +136,7 @@ fn inside_with_the_door_shut_the_night_is_waited_out_until_dawn() {
         if answer(&mut run) == "ui:summary" {
             break;
         }
-        press(&mut run, "shift+w");
+        press(&mut run, "shift+p");
     }
     until_top(&mut run, "ui:summary", 60);
     let summary = run.text();

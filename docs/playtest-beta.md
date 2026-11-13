@@ -9,8 +9,9 @@ meets it, and how long the game takes to answer a key.
 The sessions are headless tests of the application,
 `crates/clash-app/tests/play_*.rs`, driven by keys from the title screen
 through the real application on the bundled profile (the powers on the
-`armoury` fixture, whose game gives someone every power of the sampler,
-because no bundled game does yet). Nothing in them moves the world by a
+`armoury` fixture, whose game gives someone every power of the sampler:
+when the sessions were written no bundled game let a player have
+powers). Nothing in them moves the world by a
 debug command: they read the game's state only to check it, and to find
 the way across town the character believes leads somewhere, which is
 the search its own `go_to` makes, turned into the direction keys a
@@ -43,7 +44,8 @@ the moments that matter: `play_errand_delivered`, `play_stand_lane`,
 Not played: the fight in the market with the watch answering (there is
 no watch until town life lands), residents keeping their routines
 through a day (town life; and a day of waiting costs too much real time,
-below), making a character from the title (essentials), the errand
+below), making a character from the title (essentials' own tests play
+it), the errand
 failed (below), a bandage made and a wound dressed, and a blade coated
 with poison (below).
 
@@ -54,7 +56,7 @@ All in commit `ced8d26`, with decisions D-870 to D-878.
 | Found | How a player met it | Fixed |
 |-------|---------------------|-------|
 | The log filled with `Fault: \`follow_path\` declined` and `Fault: \`plan_path\` declined`, dozens a minute in the town | Walking anywhere in the market town | The movement verbs give null for what moving comes to, a refused step or no way, and say why with `step_refused` and `path_failed`; a refused step of the player's own is a line in the log (D-870) |
-| Time could only be waited a second at a time | The last stand is eight hours long: 28,800 presses of `.`; the errand's deadline five | `w` waits a minute, shift+w an hour; a rule of `core` breaks the wait off when a foe comes into sight or the character is wounded, and `interrupt_plan` now ends a wait (D-871) |
+| Time could only be waited a second at a time | The last stand is eight hours long: 28,800 presses of `.`; the errand's deadline five | `p` passes a minute, shift+p an hour; a rule of `core` breaks the wait off when a foe comes into sight or the character is wounded, and `interrupt_plan` now ends a wait (D-871) |
 | No screen said what time it was | The errand is due by nightfall, the last stand ends at dawn | `Time 14:05` in the status column (D-872) |
 | What powers are paid from was not shown | Abilities cost `25 stamina`, `30 reserve` | Bars for stamina and reserve, and for toxin and sedation while they are above nothing; the condition screen lists nourishment and toxin (D-872) |
 | The last stand's marker stood on a wall | The journal said `north, 2 m`; walking there said `Something is in the way.` | The refuge is the nearest door (D-873) |
@@ -68,6 +70,7 @@ All in commit `ced8d26`, with decisions D-870 to D-878.
 | The abilities screen hid its fifth mode | Shadow was below the edge | The modes list has room (D-877) |
 | Take out faulted once the hands were full | `Fault: \`take\` declined (item.no_free_grasp)` after emptying a cupboard | It takes while a hand is free and leaves the rest (D-877) |
 | Talking to the target was refused | Tab chose Cora across the market, shift+t said `You cannot see or hear them now.` | Someone seen in view can be talked to (D-878) |
+| Every creature's sense sweeps sorted all the occupancy entries in sight range, twice a second | A minute's wait in the market town took 7.9 s | Candidates gathered by id without the sort, the same results (D-875) |
 | A refusal named the character by its number | Pressing keys while knocked out: `0v0 is unconscious` | `unconscious, and cannot act until they come to` (D-878) |
 
 ## Known issues
@@ -142,10 +145,10 @@ repetitions less the time to reach the town.
 |-----|-------|
 | A step (`j`, `k`) | 77 ms (98 ms before D-875) |
 | Wait a second (`.`) | 93 ms (120 ms before) |
-| Wait a minute (`w`) | 6.0 s (7.9 s before) |
+| Wait a minute (`p`) | 6.0 s (7.9 s before) |
 | An attack (`f` on the target) | about 100 ms (Cora at the market, out of reach: the quick attack chose Smash and asked for a place, known issue 6) |
 | Opening a screen (`i`, then Esc) | under 5 ms, too little to tell from the noise |
-| An hour inside the last stand's house (shift+w) | about 4 s |
+| An hour inside the last stand's house (shift+p) | about 4 s |
 
 A step is at the edge of instant; the minute's wait is not, and is the
 first known issue.
