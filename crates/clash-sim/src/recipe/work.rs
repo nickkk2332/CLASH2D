@@ -116,7 +116,7 @@ pub(crate) fn held_action(sim: &Sim, worker: EntityId) -> Option<ActionId> {
 /// What starting a recipe would do: resume one under way, or use what a
 /// plan says.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Starting {
+pub enum Starting {
     /// It is under way where it would be kept: go on with it.
     Resume,
     /// Begin it, using what the plan says.
@@ -126,7 +126,7 @@ pub(crate) enum Starting {
 /// Whether a recipe can be started, or resumed, now: by a worker (or a
 /// machine alone, with none), at a station or by hand. Against what the
 /// worker believes is at hand ([`supply::belief`]). Changes nothing.
-pub(crate) fn check(
+pub fn check(
     sim: &Sim,
     worker: Option<EntityId>,
     id: RecipeId,

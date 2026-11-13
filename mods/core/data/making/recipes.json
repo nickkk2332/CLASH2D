@@ -50,7 +50,7 @@
     "tools": [ { "quality": "hammering", "level": 1 } ],
     "know_how": ["herbalism"],
     "work": "30 s",
-    "outputs": [ { "item": "salve_pot" }, { "substance": "healing_salve", "amount": "50 ml" } ] },
+    "outputs": [ { "item": "pot_of_salve" } ] },
 
   { "type": "recipe", "id": "nightshade_extract", "name": "Nightshade extract",
     "description": "Press the berries of nightshade into a vial.",

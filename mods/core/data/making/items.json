@@ -129,6 +129,9 @@
     "tags": ["vessel", "medical", "small"],
     "glyph": { "ch": "o", "fg": "green" } },
 
+  { "type": "item", "id": "pot_of_salve", "copy_from": "salve_pot", "name": "pot of healing salve",
+    "filled": { "healing_salve": "50 ml" } },
+
   { "type": "item", "id": "sleeping_draught", "copy_from": "vial", "name": "vial of sleeping draught",
     "filled": { "sleeping_draught": "50 ml" } },
 
