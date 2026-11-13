@@ -272,7 +272,12 @@ fn only_what_is_marked_is_safe_for_belief() {
         "loc.x",
         "loc.y",
         "loc.z",
+        "realm.day",
+        "realm.day_length",
+        "realm.day_part",
         "realm.kind",
+        "realm.season",
+        "realm.time_of_day",
         "site.kind",
         "tract.kind",
         "tract.loc",
@@ -495,8 +500,8 @@ fn an_entity_answers_for_itself() {
     // ranged combat in `tests/ranged.rs`, those of scenarios in
     // `tests/scenario.rs`, those of grips and takedowns in
     // `tests/grips.rs`, those of recipes and substances in
-    // `tests/making.rs`, and those of the social layer in
-    // `tests/social.rs`.
+    // `tests/making.rs`, those of the social layer in
+    // `tests/social.rs`, and those of residents in `tests/agents.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::recipe::properties().iter())
@@ -512,6 +517,7 @@ fn an_entity_answers_for_itself() {
         .chain(clash_sim::combat::grip::properties().iter())
         .chain(clash_sim::combat::takedown::properties().iter())
         .chain(clash_sim::social::properties().iter())
+        .chain(clash_sim::agent::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {
@@ -861,13 +867,15 @@ fn the_world_answers_for_cells_elements_areas_sites_tracts_and_realms() {
     }
 
     // Every property that is not an entity's was read, but those of
-    // devices, which `tests/devices.rs` reads, and furnishing's, which
-    // `tests/furnish.rs` reads.
+    // devices, which `tests/devices.rs` reads, furnishing's, which
+    // `tests/furnish.rs` reads, and a realm's calendar, which
+    // `tests/agents.rs` reads.
     let read = probe.read.into_inner();
     let elsewhere: Vec<(&str, &str)> = clash_sim::device::properties()
         .iter()
         .chain(clash_sim::interaction::properties().iter())
         .chain(clash_sim::furnish::properties().iter())
+        .chain(clash_sim::agent::properties().iter())
         .map(|property| (property.kind, property.name))
         .collect();
     for property in engine_properties() {

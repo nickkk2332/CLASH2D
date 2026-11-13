@@ -566,6 +566,8 @@ As registered (decision D-466), nothing is safe for belief unless it is
 marked, and what is marked is arithmetic on a reference: a subject's
 `kind`; a cell's `x`, `y`, `z`, `grid`, `tract` and `realm`; a tract's
 `x`, `y`, `realm` and `loc`; an element's `layer` and `loc`; `global.now`;
+a realm's `time_of_day`, `day`, `day_length`, `day_part` and `season`
+(decision D-782: the hour is anyone's to know, as `global.now` is);
 and the functions `dist`, `dir`, `offset`, `now`, `setting` and
 `has_def`. `dist` and `dir` are safe because in a mind context they are
 their belief forms (decision D-780): a function's registration may name

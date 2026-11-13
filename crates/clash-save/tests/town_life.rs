@@ -652,11 +652,18 @@ fn routine_day_people_are_where_their_routines_put_them_at_every_hour() {
             .is_some_and(|(at, away)| at + away > 0),
         "{noon:?}"
     );
-    let centre = square(town.sim());
+    // Those there are at the market the routine names, the market of
+    // stalls (`site_tag: market`) or else the square.
     for (id, loc) in doing(town.sim(), "at_market") {
         let away = of_each(town.sim(), "self.routine_away", &[id])[0] == Value::Bool(true);
         if !away {
-            assert!(metres(loc, centre) < 16.0, "{id} at the market: {loc:?}");
+            let there = of_each(town.sim(), "dist(self, self.routine_place)", &[id])[0]
+                .as_number()
+                .map(|metres| metres.get());
+            assert!(
+                there.is_some_and(|metres| metres < 16.0),
+                "{id} at the market: {loc:?}, {there:?} m from where its routine puts it"
+            );
         }
     }
 
@@ -671,7 +678,7 @@ fn routine_day_people_are_where_their_routines_put_them_at_every_hour() {
     assert!(home.0 > total / 2 && home.1 == 0, "{dusk:?}");
 
     // Midnight: asleep, but for the drinkers at the tavern (the square,
-    // in a town with no tavern).
+    // in a town with no tavern), each where its routine puts it.
     town.go_away();
     town.until("00:00");
     town.come_back();
@@ -682,9 +689,12 @@ fn routine_day_people_are_where_their_routines_put_them_at_every_hour() {
         "{night:?}"
     );
     for (id, loc) in doing(town.sim(), "drinking") {
+        let there = of_each(town.sim(), "dist(self, self.routine_place)", &[id])[0]
+            .as_number()
+            .map(|metres| metres.get());
         assert!(
-            metres(loc, centre) < 20.0,
-            "{id} drinks at the square: {loc:?}"
+            there.is_some_and(|metres| metres < 16.0),
+            "{id} drinks where its routine puts it: {loc:?}, {there:?} m from there"
         );
     }
 }

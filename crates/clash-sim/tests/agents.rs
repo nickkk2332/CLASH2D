@@ -178,3 +178,55 @@ fn ten_thousand_idle_agents_schedule_nothing_beyond_their_next_wake_up() {
         assert!(state.wake.is_some_and(|wake| wake > sim.now()));
     }
 }
+
+fn entity_value(sim: &Sim, entity: clash_core::EntityId, source: &str) -> Value {
+    let registry = sim.exprs().registry();
+    let kind = Type::Subject(registry.kind_id("entity").unwrap());
+    let context = Context::new().subject("self", kind);
+    let compiled = clash_expr::compile(source, registry, &context, &Type::Any)
+        .value
+        .unwrap_or_else(|| panic!("`{source}` compiles"));
+    sim.eval(
+        &compiled,
+        Bound::new().subject(sim.subject_value(Subject::Entity(entity))),
+    )
+}
+
+#[test]
+fn a_resident_in_view_says_whose_home_it_has_and_where_its_routine_puts_it() {
+    // 09 §10.6: the properties of a resident in the world.
+    let mut sim = sim(3);
+    let realm = common::realm(&sim);
+    let home = CellPos::new(10, 10, 0);
+    let key = agent::add_resident(&mut sim, realm, home, "keeper").expect("a resident");
+    let entity = sim
+        .agents()
+        .resident(&key)
+        .and_then(|resident| resident.entity)
+        .expect("a home in a loaded tract is in view");
+    let at_home = |source: &str| entity_value(&sim, entity, source);
+    assert_eq!(at_home("self.resident"), Value::Bool(true));
+    assert_eq!(
+        at_home("self.resident_home.x == 10 and self.resident_home.y == 10"),
+        Value::Bool(true)
+    );
+    assert_eq!(at_home("self.routine"), Value::from("core:three_parts"));
+    // Every part of its day is at home: it is there, doing one of them.
+    let doing = at_home("self.routine_doing");
+    assert!(
+        ["up", "busy", "asleep"].contains(&doing.as_str().unwrap_or_default()),
+        "{doing:?}"
+    );
+    assert_eq!(at_home("len(self.routine_places)"), Value::Int(1));
+    assert_eq!(
+        at_home("self.routine_places[0] == self.routine_place"),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        at_home("dist(self.routine_place, self.resident_home) < 4"),
+        Value::Bool(true)
+    );
+    assert_eq!(at_home("self.routine_away"), Value::Bool(false));
+    // In the world it is no agent: what it does is its mind's.
+    assert_eq!(at_home("self.agent_doing"), Value::Null);
+}
