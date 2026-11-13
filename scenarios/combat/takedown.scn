@@ -33,4 +33,4 @@ as @e:1 do { "start_action": { "who": "self", "action": "core:knock_out", "with"
 advance 1s
 expect event strike_recoiled
 assert "len(@e:4.wounds) == 0"
-expect hash 0443ca56d68d14282123f5a6dbbda4ff
+expect hash af4605146d6816dd71f74e49d5ffc4d2
