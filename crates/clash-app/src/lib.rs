@@ -24,6 +24,7 @@
 //! | Saving and loading | [`saves`]: [`saves::SaveBackend`], [`saves::FileSaves`] over `clash-save` |
 //! | What the party perceives, for the view model and playback | [`perception`] |
 //! | Running from a script, without a terminal | [`headless`] |
+//! | A window or the terminal: chosen by `--window` and `--terminal`, or by whether a display is available; the window's font is the theme's | [`run`] |
 //!
 //! # Seams
 //!
@@ -66,14 +67,20 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use clash_core::Value;
 use clash_front_term::{TermError, TermFrontend};
+use clash_front_window::{WindowFrontend, WindowOptions};
+use clash_scene::PREF_THEME;
 
-use crate::cli::Options;
+use crate::cli::{FrontendChoice, Options};
 use crate::game::{BootOptions, Game};
 use crate::headless::Headless;
 
 /// The exit code of a command line that could not be read.
 const EXIT_USAGE: u8 = 2;
+
+/// The window's title when the profile has no name.
+const WINDOW_TITLE: &str = "CLASH2D";
 
 /// Loads the profile the options name and boots the application on it.
 /// A problem is returned as text to print: located diagnostics, or a
@@ -141,10 +148,76 @@ fn run_terminal(mut game: Game) -> Result<(), String> {
     })
 }
 
+/// The qualified id of the theme in force: the one the preference of
+/// that name holds.
+fn theme_in_force(game: &Game) -> Option<String> {
+    let preference = game.with_loaded(|loaded| {
+        loaded
+            .ui
+            .pref_defaults()
+            .iter()
+            .map(|(id, _)| id.as_str().to_owned())
+            .find(|id| id.rsplit(':').next() == Some(PREF_THEME))
+    })?;
+    match game.scene().pref(&preference)? {
+        Value::Str(theme) => Some(theme.clone()),
+        _ => None,
+    }
+}
+
+/// Opens a window for the game, with the font of the theme in force,
+/// titled with the profile's name. Why it cannot is returned as a
+/// sentence.
+fn start_window(game: &Game) -> Result<WindowFrontend, String> {
+    let theme = theme_in_force(game).ok_or("no theme is in force, so no font is named")?;
+    let font = game
+        .with_loaded(|loaded| clash_front_window::theme_font(&loaded.defs, &theme))?
+        .ok_or_else(|| format!("the theme `{theme}` names no font"))?;
+    let title = game
+        .with_loaded(|loaded| loaded.defs.profile().map(|profile| profile.name.clone()))
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| WINDOW_TITLE.to_owned());
+    WindowFrontend::start(WindowOptions {
+        title,
+        font: font.path,
+        size: font.size,
+        backdrop: game.scene().theme().base().bg.rgb,
+        grid: clash_front_window::DEFAULT_GRID,
+    })
+    .map_err(|error| error.to_string())
+}
+
+/// Runs the game in a window or in the terminal, as asked: with no
+/// choice, in a window when a display is available. A window that
+/// cannot be opened is said on standard error, and the game is run in
+/// the terminal instead.
+fn run_shown(mut game: Game, choice: FrontendChoice) -> Result<(), String> {
+    let window = match choice {
+        FrontendChoice::Window => true,
+        FrontendChoice::Terminal => false,
+        FrontendChoice::Either => clash_front_window::display_available(),
+    };
+    if window {
+        match start_window(&game) {
+            Ok(front) => {
+                return game::run_frontend(&mut game, front, |front| {
+                    front
+                        .take_error()
+                        .map(|error| format!("the window failed: {error}"))
+                });
+            }
+            Err(problem) => eprintln!(
+                "clash: the game is shown in the terminal, because it cannot be shown in a window: {problem}"
+            ),
+        }
+    }
+    run_terminal(game)
+}
+
 /// The program: reads the arguments that follow its name, starts the
-/// profile and runs it, in a terminal or from a script. Returns the
-/// process's exit code: success, or failure with what went wrong
-/// printed on standard error.
+/// profile and runs it, in a window, in a terminal or from a script.
+/// Returns the process's exit code: success, or failure with what went
+/// wrong printed on standard error.
 pub fn run(args: impl IntoIterator<Item = String>) -> ExitCode {
     let options = match cli::parse(args) {
         Ok(options) => options,
@@ -163,7 +236,7 @@ pub fn run(args: impl IntoIterator<Item = String>) -> ExitCode {
             let mut out = std::io::stdout().lock();
             Headless::new(game).run_script(&script, &mut out)
         }
-        None => run_terminal(game),
+        None => run_shown(game, options.frontend),
     });
     match result {
         Ok(()) => ExitCode::SUCCESS,

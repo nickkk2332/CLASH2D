@@ -1,5 +1,6 @@
 //! The binary `clash` as a person or a script starts it (package U11):
-//! without a terminal it says so and leaves with success; a script on
+//! without a terminal it says so and leaves with success; without a
+//! display it is shown in the terminal (package U3); a script on
 //! standard input drives it headless and prints its frames; a mistake in
 //! a script names its line; a profile with a broken mod shows the
 //! located error and leaves with failure; a command line it cannot read
@@ -19,10 +20,23 @@ fn data_dir(name: &str) -> PathBuf {
     dir
 }
 
+/// The environment variables that name a display a window could open
+/// on (Linux and the BSDs).
+const DISPLAY_VARS: [&str; 3] = ["DISPLAY", "WAYLAND_DISPLAY", "WAYLAND_SOCKET"];
+
 /// Runs `clash` with arguments and standard input, in the repository,
 /// with a data directory of the test's own.
 fn clash(name: &str, args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_clash"))
+    clash_without(name, args, input, &[])
+}
+
+/// [`clash`] with some environment variables taken away.
+fn clash_without(name: &str, args: &[&str], input: &str, unset: &[&str]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_clash"));
+    for var in unset {
+        command.env_remove(var);
+    }
+    let mut child = command
         .args(args)
         .current_dir(manifest().join("../.."))
         .env("CLASH_DATA_DIR", data_dir(name))
@@ -47,7 +61,9 @@ fn text(bytes: &[u8]) -> String {
 
 #[test]
 fn without_a_terminal_it_says_so_and_succeeds() {
-    let out = clash("no-terminal", &[], "");
+    // `--terminal`: on a machine with a display, the game would
+    // otherwise open a window.
+    let out = clash("no-terminal", &["--terminal"], "");
     assert!(out.status.success(), "{}", text(&out.stderr));
     let said = text(&out.stdout);
     assert!(said.contains("not started"), "{said}");
@@ -56,6 +72,36 @@ fn without_a_terminal_it_says_so_and_succeeds() {
         "the boot screen is named: {said}"
     );
     assert!(said.contains("--headless"), "{said}");
+    assert!(text(&out.stderr).is_empty(), "{}", text(&out.stderr));
+}
+
+/// Without a display the game is shown in the terminal: chosen so
+/// when nothing is asked, and fallen back to, with the reason, when a
+/// window is asked for. Where a window can always be opened (macOS,
+/// Windows) there is nothing to check.
+#[test]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+fn without_a_display_the_game_is_shown_in_the_terminal() {
+    let out = clash_without("no-display", &[], "", &DISPLAY_VARS);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("not started"));
+    assert!(text(&out.stderr).is_empty(), "{}", text(&out.stderr));
+
+    let out = clash_without("no-display-window", &["--window"], "", &DISPLAY_VARS);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("not started"));
+    let said = text(&out.stderr);
+    assert!(
+        said.contains("shown in the terminal, because it cannot be shown in a window"),
+        "{said}"
+    );
+    assert!(said.contains("no display"), "{said}");
 }
 
 #[test]

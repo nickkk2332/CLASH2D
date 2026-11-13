@@ -85,7 +85,8 @@ The application is the crate `clash-app`: a library, and the binary
 `clash`, which calls it and nothing more.
 
 ```text
-clash [--profile name] [--mods dir] [--seed n] [--data dir] [--headless script]
+clash [--profile name] [--mods dir] [--seed n] [--data dir]
+      [--window | --terminal] [--headless script]
 ```
 
 | Option | Means |
@@ -94,6 +95,8 @@ clash [--profile name] [--mods dir] [--seed n] [--data dir] [--headless script]
 | `--mods dir` | The directory mods are read from. Left out, the first that exists of `mods` in the working directory, `mods` beside the executable, and `mods` in each of the three directories above it (where a build run from the repository finds the repository's). |
 | `--seed n` | The seed the new-game screen offers. Left out, 1. |
 | `--data dir` | The user's data directory, in place of the one below. |
+| `--window` | Shows the game in a window of its own (section 11). |
+| `--terminal` | Shows the game in the terminal. With neither this nor `--window`, the game is shown in a window when a display is available, and in the terminal otherwise. Giving both is a mistake. |
 | `--headless script` | Runs without a terminal, from a script (section 3.3); `-` reads the script from standard input. |
 | `--help` | Prints the usage and leaves. |
 
@@ -145,9 +148,19 @@ preferences named `theme` and `keymap` hold; a profile that defines
 neither is drawn in the plain built-in theme and moved through with the
 keyboard's own navigation keys.
 
-**The terminal.** Without `--headless` the application runs in the
-terminal. If standard input or output is not a terminal it says so,
-names the boot screen that was ready, and leaves with success. The
+**A window or the terminal.** Without `--headless` the application
+runs in a window or in the terminal, as `--window` and `--terminal`
+say; with neither, in a window when a display is available (on Linux
+and the BSDs, when `WAYLAND_DISPLAY`, `WAYLAND_SOCKET` or `DISPLAY` is
+set; on macOS and Windows, always). The window is drawn with the font
+of the theme in force (section 4.3) and titled with the profile's
+name. A window that cannot be opened (no display, a theme with no font,
+a font file missing or unreadable, which is named with its path, or a
+window system that refuses) is said on standard error, and the
+application runs in the terminal instead (decision D-843).
+
+In the terminal, if standard input or output is not a terminal it says
+so, names the boot screen that was ready, and leaves with success. The
 terminal is given back however the application leaves: the frontend is
 dropped when the loop ends, for whatever reason, and a panic restores
 the terminal before its message is printed.
