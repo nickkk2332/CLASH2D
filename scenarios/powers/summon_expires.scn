@@ -1,0 +1,23 @@
+# Summon hound (mods/core/data/powers): a dog summoned bound to its
+# summoner's ability (08 §7.3) takes its summoner's quarrel and goes
+# for the one held hostile (09 §3.4), and otherwise keeps at its
+# summoner's heel; when its summoner stops, the
+# binding ends and the hound is gone.
+use default seed=32
+gen core:test_city size=1
+look @c:17,20,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+look @c:17,27,0
+do { "spawn": { "template": "core:person", "at": "here" } }
+set_stance who=@e:0 of=@e:1 stance=hostile
+as @e:0 do { "use_ability": { "who": "self", "ability": "core:summon_hound", "params": { "expr": "{'to': offset(self.loc, 1, 0)}" } } }
+expect event ability_used ability=core:summon_hound
+advance 1500ms
+assert "@e:2.bound_by == @e:0 and @e:0.ability('core:summon_hound').bound('hound') == @e:2"
+advance 4s
+assert "@e:2.hostile(@e:1) and not @e:2.hostile(@e:0)"
+assert "@e:2.goal == 'core:heel' or @e:2.goal == 'core:confront'"
+die who=@e:0
+expect event binding_ended ability=core:summon_hound why=owner_stops how=remove
+assert "@e:0.ability('core:summon_hound').bound('hound') == null"
+expect hash 2401649ccbe136b691288d429a4ac1af

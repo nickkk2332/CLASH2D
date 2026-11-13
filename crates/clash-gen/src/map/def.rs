@@ -215,16 +215,26 @@ pub struct ParamDef {
     pub site: Site,
 }
 
+/// A parameter rule written as an object: a choice among values, a
+/// range, a default, an expression, or a type the placement must give.
 #[derive(Deserialize)]
 struct ParamObject {
+    /// A list of values, one of them chosen by the placement's stream for each
+    /// placement.
     #[serde(default)]
     pick: Option<Vec<Lit>>,
+    /// For a number: `[low, high]`, a value from that range chosen for each
+    /// placement.
     #[serde(default)]
     range: Option<Vec<Lit>>,
+    /// The value when the placement does not give one.
     #[serde(default)]
     default: Option<Lit>,
+    /// An expression over the parameters declared before this one.
     #[serde(default)]
     expr: Option<Expr<Any>>,
+    /// The type: `bool`, `int`, `real` or `string`. Alone, `{ "type": "int" }`,
+    /// it is a parameter the placement must give.
     #[serde(default, rename = "type")]
     ty: Option<Located<String>>,
 }
@@ -503,54 +513,92 @@ pub struct EntryDef {
     pub site: Site,
 }
 
+/// A cell spec written as an object (10 §3.2): what is put in the
+/// cell, layer by layer, or weighted alternatives.
 #[derive(Deserialize, Default)]
 struct SpecObject {
+    /// The floor's element state (02 §5.1).
     #[serde(default)]
     floor: Option<Located<String>>,
+    /// The block's element state.
     #[serde(default)]
     block: Option<Located<String>>,
+    /// The fixture's element state.
     #[serde(default)]
     fixture: Option<Located<String>>,
+    /// Layers emptied: `floor`, `block`, `fixture`, and of what else a cell
+    /// holds `conduits`, `fields`, `items`, `decals`, `vars`.
     #[serde(default)]
     clear: Vec<Located<String>>,
+    /// Element layers (`floor`, `block`, `fixture`) left as the world has them.
     #[serde(default)]
     keep: Vec<Located<String>>,
+    /// Conduits laid in the cell (16 §6).
     #[serde(default)]
     conduits: Vec<String>,
+    /// Field amounts (02 §16), by field id.
     #[serde(default)]
     field: BTreeMap<String, Real>,
+    /// Items, or a content table: an item id, or `{ "item": id }` or `{
+    /// "table": id }` with `count` and `chance`. In a container fixture they
+    /// are latent contents (06 §9.3).
     #[serde(default)]
     items: Option<ItemsField>,
+    /// A creature or population member in this cell: a creature id, or `{
+    /// "creature": id }` or `{ "population": id }` with `count` and `chance`.
     #[serde(default)]
     spawn: Option<SpawnField>,
+    /// Configuration for the element's device (16 §4.2), and a name for
+    /// linking: a name, or `{ "name": text, "config": { … } }`.
     #[serde(default)]
     device: Option<DeviceField>,
+    /// A named mark the cell is added to, or a list of them.
     #[serde(default)]
     mark: Option<Names>,
+    /// A named berth of a kind the cell is added to: a parking bay, a mooring,
+    /// a landing pad (10 §3.2).
     #[serde(default)]
     berth: Option<BerthField>,
+    /// The berth whose approach line the cell is on: the line an AI driver
+    /// follows into it (09 §5.6).
     #[serde(default)]
     approach: Option<String>,
+    /// Whether what is placed in the cell is something the site's people keep
+    /// an eye on (15 §6). Default false.
     #[serde(default)]
     watched: bool,
+    /// The kind of area, an `area_kind` id, the cell is added to; touching
+    /// cells with the same entry are one area.
     #[serde(default)]
     area: Option<Located<String>>,
+    /// Cell variables (02 §5.1), by name.
     #[serde(default)]
     var: BTreeMap<String, Lit>,
+    /// Decals put on the cell: a name, or a list of them.
     #[serde(default)]
     decal: Option<Names>,
+    /// For a map used as a pattern (16 §4.5): any floor carrying this tag.
     #[serde(default)]
     floor_tag: Option<String>,
+    /// For a pattern: any block carrying this tag.
     #[serde(default)]
     block_tag: Option<String>,
+    /// For a pattern: any fixture carrying this tag.
     #[serde(default)]
     fixture_tag: Option<String>,
+    /// For a pattern: anything at all. Default false.
     #[serde(default)]
     any: bool,
+    /// As one of weighted alternatives: its weight among them, an expression.
+    /// One if left out.
     #[serde(default)]
     weight: Option<Expr<Number>>,
+    /// Weighted alternatives, chosen for each cell, or once for the whole
+    /// placement with `once`.
     #[serde(default)]
     one_of: Option<Vec<AltItem>>,
+    /// With `one_of`: whether one alternative is chosen for the whole placement
+    /// rather than for each cell. Default false.
     #[serde(default)]
     once: bool,
 }
@@ -771,8 +819,12 @@ pub struct MarkDef {
     pub site: Site,
 }
 
+/// One entry of a mark written as a list: a coordinate, when the list
+/// is one cell `[x, y, level]`, or a cell, when it is a list of them.
 enum MarkItem {
+    /// One coordinate of a cell.
     Number(i64),
+    /// A cell: `[x, y, level]`.
     Cell(Vec<i64>),
 }
 
@@ -842,8 +894,10 @@ impl MapPickDef {
     }
 }
 
+/// A map chosen by a tag rather than by id.
 #[derive(Deserialize)]
 struct TagObject {
+    /// A tag: any map carrying it may be chosen.
     tag: String,
 }
 
@@ -861,10 +915,15 @@ pub enum TurnDef {
     Any,
 }
 
+/// A turn written as an object: quarter-turns clockwise and whether
+/// the map is mirrored first.
 #[derive(Deserialize)]
 struct TurnObject {
+    /// Degrees clockwise: 0, 90, 180 or 270. Default 0.
     #[serde(default)]
     rot: i32,
+    /// Whether the map is mirrored, east and west swapped, before it is
+    /// rotated. Default false.
     #[serde(default)]
     mirror: bool,
 }

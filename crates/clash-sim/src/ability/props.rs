@@ -157,6 +157,18 @@ pub fn properties() -> Vec<PropertyDef> {
         )
         .arg("ability", "id<ability>", ARG_DOC)
         .optional_arg("action", "id<action>", "The action of the grant; left out, the ability's only one."),
+        p(
+            "entity",
+            "bound_by",
+            "entity?",
+            "Whose ability the entity is bound to (08 §7.3), as a summoned servant is to its summoner: the owner of the ability whose `summon` made it, while the binding lasts; null otherwise. A character may read its own: whom it serves.",
+            |sim, subject, _| {
+                subject
+                    .entity()
+                    .and_then(|entity| super::bind::bound_by(sim, entity))
+                    .map_or(Value::Null, |owner| sim.subject_value(Subject::Entity(owner)))
+            },
+        ),
     ]
 }
 
@@ -209,7 +221,7 @@ pub fn property(sim: &Sim, property: PropertyId, subject: Handle, args: &[Value]
     Some(match prop {
         Prop::Rank => Value::Int(i64::from(super::rank(sim, owner, inst))),
         Prop::Owner => sim.subject_value(Subject::Entity(owner)),
-        Prop::State => Value::from(inst.state().name()),
+        Prop::State => Value::from(inst.state_name()),
         Prop::Def => sim
             .exprs
             .registry()
@@ -252,6 +264,10 @@ pub fn property(sim: &Sim, property: PropertyId, subject: Handle, args: &[Value]
                 });
             Value::Real(left)
         }
+        Prop::Bound => match args.first() {
+            Some(Value::Str(name)) => super::bind::bound_value(sim, number, name),
+            _ => Value::Null,
+        },
         Prop::Param(name) => super::ops::param_value(sim, owner, number, name),
     })
 }

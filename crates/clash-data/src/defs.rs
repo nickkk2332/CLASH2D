@@ -315,6 +315,8 @@ pub(crate) trait AnyType: Send + Sync {
     fn info(&self) -> TypeInfo;
     fn defaults(&self) -> &'static str;
     fn builtin_names(&self) -> Vec<&'static str>;
+    /// What the type's fields are (04 §13).
+    fn shapes(&self) -> crate::shape::Shapes;
     /// Reads a tree only to find the inline definitions and tags in it.
     fn discover(&self, node: &Node, cx: &DeCx<'_>);
     /// Reads every definition of the type.
@@ -440,6 +442,10 @@ impl<T: Def> AnyType for TypeEntry<T> {
 
     fn builtin_names(&self) -> Vec<&'static str> {
         T::builtins().into_iter().map(|(name, _)| name).collect()
+    }
+
+    fn shapes(&self) -> crate::shape::Shapes {
+        crate::shape::describe::<T>()
     }
 
     fn discover(&self, node: &Node, cx: &DeCx<'_>) {
@@ -741,6 +747,29 @@ impl DefTypes {
     /// The registered JSON names, sorted.
     pub fn names(&self) -> Vec<&'static str> {
         self.types.keys().copied().collect()
+    }
+
+    /// What a registered type's fields are: their shapes, which are
+    /// required, what they refer to, read from the type's own
+    /// `Deserialize` (04 §13; [`crate::shape`]). For the generated
+    /// reference and the schemas. `None` for a type that is not
+    /// registered.
+    pub fn shapes(&self, type_name: &str) -> Option<crate::shape::Shapes> {
+        self.get(type_name).map(AnyType::shapes)
+    }
+
+    /// The defaults a type declares for `scale` and `add`
+    /// ([`Def::DEFAULTS`]), as the text of a JSON object; empty for
+    /// none. `None` for a type that is not registered.
+    pub fn defaults(&self, type_name: &str) -> Option<&'static str> {
+        self.get(type_name).map(AnyType::defaults)
+    }
+
+    /// The names of the definitions the engine supplies of a type, in
+    /// the reserved namespace `engine` ([`Def::builtins`]). `None` for a
+    /// type that is not registered.
+    pub fn builtins(&self, type_name: &str) -> Option<Vec<&'static str>> {
+        self.get(type_name).map(AnyType::builtin_names)
     }
 
     pub(crate) fn get(&self, type_name: &str) -> Option<&dyn AnyType> {

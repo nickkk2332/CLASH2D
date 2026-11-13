@@ -43,6 +43,8 @@ pub const TARGET_PARAM: &str = "target";
 
 /// The word of an ability's use that can be made now.
 pub const STATE_READY: &str = "ready";
+/// The word of an ability's use whose instance is suppressed (08 §6.2).
+pub const STATE_SUPPRESSED: &str = "suppressed";
 /// The word of an ability's use whose cooldown is running.
 pub const STATE_COOLING: &str = "cooling";
 /// The word of an ability's use whose instance is dormant.
@@ -425,6 +427,8 @@ pub fn ability_uses(sim: &Sim, owner: EntityId, only: &Value) -> Vec<Value> {
             .join(", ");
         let state = if inst.state() == crate::ability::State::Dormant {
             STATE_DORMANT
+        } else if inst.is_suppressed() {
+            STATE_SUPPRESSED
         } else if option.unavailable.is_none() {
             STATE_READY
         } else if option.cooldown_left > clash_core::Dur::ZERO {
@@ -507,6 +511,8 @@ pub fn ability_modes(sim: &Sim, owner: EntityId) -> Vec<Value> {
                 .unwrap_or_else(|| mode.id.value.clone());
             let why = if dormant {
                 format!("{} is dormant.", capitalised(&name))
+            } else if inst.is_suppressed() {
+                format!("{} is suppressed.", capitalised(&name))
             } else if mode.at_rank.is_some_and(|needed| rank < needed) {
                 format!(
                     "{} needs rank {} for this, and is at {rank}.",
@@ -630,13 +636,17 @@ pub fn properties() -> Vec<PropertyDef> {
                 _ => Value::list([]),
             },
         )
-        .arg("tag", "string", "The tag the actions carry: `strike`, `shot`.")
+        .arg(
+            "tag",
+            "string",
+            "The tag the actions carry: the `ui` mod asks for `strike`, `shot`, `grip`, `takedown`.",
+        )
         .optional_arg("target", "any", "Who the actions are aimed at, if anyone."),
         PropertyDef::new(
             "entity",
             "ability_uses",
             "list<map<any>>",
-            "Every use of every ability the entity holds (08 §5.1, `ability::options`), or of the one named, for an abilities screen: one row for each grant, with `value` (the action's id), `ability` (the ability's id), `label`, `id` (the ability's qualified id), `name`, `action_name`, `rank`, `state` (`ready`, `cooling`, `dormant` or `unavailable`), `cost` (a text: `25 stamina`), `cooldown` (seconds of its own time left), `given` (the names of the parameters the grant supplies), `available` and `why`. Read of the character itself in a mind context.",
+            "Every use of every ability the entity holds (08 §5.1, `ability::options`), or of the one named, for an abilities screen: one row for each grant, with `value` (the action's id), `ability` (the ability's id), `label`, `id` (the ability's qualified id), `name`, `action_name`, `rank`, `state` (`ready`, `cooling`, `dormant`, `suppressed` or `unavailable`), `cost` (a text: `25 stamina`), `cooldown` (seconds of its own time left), `given` (the names of the parameters the grant supplies), `available` and `why`. Read of the character itself in a mind context.",
             |sim, subject, args| match subject {
                 Subject::Entity(id) => Value::list(ability_uses(
                     sim,

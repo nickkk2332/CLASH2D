@@ -89,6 +89,7 @@ pub mod json;
 pub mod load;
 mod merge;
 pub mod mods;
+pub mod shape;
 pub mod source;
 pub mod units;
 
@@ -111,7 +112,7 @@ pub use fields::{
 };
 pub use json::{COMMENT_KEY, Limits, Member, Node, NodeKind, Num, parse_json};
 pub use load::{LoadOutcome, Loader};
-pub use merge::DIRECTIVE_KEYS;
+pub use merge::{DIRECTIVE_DOCS, DIRECTIVE_KEYS};
 pub use mods::{
     ENGINE_NAMESPACE, ENGINE_VERSION, ModManifest, Profile, Requirement, Version, VersionReq,
     is_id_part, resolve_in_mod,

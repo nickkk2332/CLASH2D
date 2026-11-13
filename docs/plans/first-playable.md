@@ -1175,7 +1175,9 @@ frames `target_selected`, `struck`, `attack_choose`, `attack_part`,
 `wall`, `door_opened`, `through_door`, `door_locked`, `carried_on`,
 `errand_intro` and `errand_summary` changed for the status column's new
 line of keys. Stubbed: talking, until the simulation offers
-`talk_options` (D-799); previews of a blow (07 §13); the region map.
+`talk_options` (D-799); previews of a blow (07 §13), since
+`strike_preview` reads the target as it is and a screen may not call
+it; the region map.
 
 ### Z1 — Benchmarks and budget gate
 

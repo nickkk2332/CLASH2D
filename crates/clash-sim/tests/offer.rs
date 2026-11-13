@@ -1,13 +1,16 @@
 //! What a character could do, as screens read it (`clash_sim::offer`,
 //! 12 §9.3): the actions carrying a tag, each with whether it could
-//! start and why not, judged without changing anything; and the lists of
-//! abilities and known sites, empty for a creature with none.
+//! start and why not, judged without changing anything; the lists of
+//! abilities and known sites, empty for a creature with none; and an
+//! ability's state, `suppressed` while it is.
 
 mod common;
 
 use clash_expr::Value;
+use clash_sim::ability::{self, AbilityDef, AbilitySource};
 use clash_sim::action::ActionDef;
 use clash_sim::{Sim, Subject};
+use clash_world::Cause;
 
 const EXTRA: &str = r#"[
   { "type": "action", "id": "jab", "name": "Jab", "tags": ["strike"],
@@ -15,7 +18,10 @@ const EXTRA: &str = r#"[
     "requires": "dist(self, $target) < 3", "fail_text": "That is out of reach.",
     "phases": [ { "id": "go", "time": "100 ms" } ] },
   { "type": "action", "id": "wave", "name": "Wave", "tags": ["greeting"],
-    "phases": [ { "id": "go", "time": "100 ms" } ] }
+    "phases": [ { "id": "go", "time": "100 ms" } ] },
+  { "type": "ability", "id": "knack", "name": "Knack", "tags": ["test"],
+    "grants": [ { "action": "wave" } ],
+    "modes": [ { "id": "glow", "name": "Glow" } ] }
 ]"#;
 
 /// A field of a row as text or a flag.
@@ -94,4 +100,30 @@ fn a_creature_with_no_abilities_or_memory_lists_none() {
     assert!(rows(&sim, me, "ability_uses", &[Value::from("core:nothing")]).is_empty());
     assert!(rows(&sim, me, "ability_modes", &[]).is_empty());
     assert!(rows(&sim, me, "known_sites", &[]).is_empty());
+}
+
+#[test]
+fn a_suppressed_ability_says_so_in_its_uses_and_its_modes() {
+    let mut sim = common::sim_over(common::life_defs(EXTRA), 1);
+    let me = common::spawn(&mut sim, common::creature(), common::on(5, 5));
+    let knack = sim.defs().lookup::<AbilityDef>("core:knack").unwrap();
+    ability::grant(&mut sim, me, knack, AbilitySource::Rule, None, Cause::DEBUG).unwrap();
+    sim.pump();
+    let uses = rows(&sim, me, "ability_uses", &[]);
+    assert_eq!(uses.len(), 1);
+    assert_eq!(field(&uses[0], "state"), Value::from("ready"));
+    assert_eq!(field(&uses[0], "available"), Value::Bool(true));
+    let modes = rows(&sim, me, "ability_modes", &[]);
+    assert_eq!(field(&modes[0], "label"), Value::from("Glow"));
+    assert_eq!(field(&modes[0], "available"), Value::Bool(true));
+
+    ability::suppress_abilities(&mut sim, me, None, None, Cause::DEBUG).unwrap();
+    sim.pump();
+    let uses = rows(&sim, me, "ability_uses", &[]);
+    assert_eq!(field(&uses[0], "state"), Value::from("suppressed"));
+    assert_eq!(field(&uses[0], "available"), Value::Bool(false));
+    assert_ne!(field(&uses[0], "why"), Value::from(""));
+    let modes = rows(&sim, me, "ability_modes", &[]);
+    assert_eq!(field(&modes[0], "available"), Value::Bool(false));
+    assert_eq!(field(&modes[0], "why"), Value::from("Knack is suppressed."));
 }

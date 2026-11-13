@@ -11,19 +11,19 @@ chars
 |  │Attack who is in the way   -            Strike someone walked into with t█│ │|
 |  │Attack, choosing how       shift+f      Choose the blow, the target, the █│ │|
 |  │Condition                  c                                             █│ │|
-|  │Go down                    >                                             █│ │|
+|  │Go down                    >                                             ││ │|
 |  │Go there                   -                                             ││ │|
 |  │Go up                      <                                             ││ │|
 |  │Grab or take down          v            Choose a hold, a throw or a taked││ │|
 |  │Inventory                  i                                             ││ │|
 |  │Journal                    shift+j                                       ││ │|
 |  │Keys                       ?, f1        Show every control and its keys i││ │|
-|┌ │Look around                x                                             ││ │|
-|│ │Map                        m                                             ││ │|
-|│ │Next target                tab          Select the nearest creature in si││ │|
-|│ │Options                    o                                             ││t│|
-|│ │Pause                      escape       Open the pause menu.             ││y│|
-|│ │Previous target            shift+tab    Select the previous creature in s││ │|
+|┌ │Know-how                   shift+k      List what the character knows how││ │|
+|│ │Look around                x                                             ││ │|
+|│ │Make something             shift+m      List what can be made here, by ha││ │|
+|│ │Map                        m                                             ││t│|
+|│ │Next target                tab          Select the nearest creature in si││y│|
+|│ │Options                    o                                             ││ │|
 |└─└──────────────────────────────────────────────────────────────────────────┘─┘|
 fg
 |00222222222222222222222222222222222222222222222222222222222222222222222222222244|
@@ -36,7 +36,7 @@ fg
 |00266666666666666666666666666666666666666666666666666666666666666666666666662204|
 |00266666666666666666666666666666666666666666666666666666666666666666666666662204|
 |00266666666666666666666666666666666666666666666666666666666666666666666666662204|
-|00266666666666666666666666666666666666666666666666666666666666666666666666662204|
+|00266666666666666666666666666666666666666666666666666666666666666666666666668204|
 |00266666666666666666666666666666666666666666666666666666666666666666666666668204|
 |00266666666666666666666666666666666666666666666666666666666666666666666666668204|
 |00266666666666666666666666666666666666666666666666666666666666666666666666668204|

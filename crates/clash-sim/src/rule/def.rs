@@ -174,14 +174,25 @@ impl Default for Plan {
 /// reads truth and may draw at random.
 #[derive(Debug, Deserialize)]
 pub struct EocDef {
+    /// The event that triggers the rule (05 §9.1). Left out for a rule that is
+    /// only called, or that recurs with `every`.
     #[serde(default)]
     on: Option<Located<String>>,
+    /// For an attached rule: which of the event's subjects the owner must be.
+    /// Defaults to the event's first subject.
     #[serde(default, rename = "as")]
     role: Option<Located<String>>,
+    /// Whether the rule runs only for what it is attached to, which it binds as
+    /// `self` (05 §9.3). Default false for a rule written at the top level of a
+    /// file and true for one written in place inside another definition.
     #[serde(default)]
     attached: Option<bool>,
+    /// Fields of the event, each with the constant it must equal, tested before
+    /// the condition and used to index handlers (05 §8.4).
     #[serde(default)]
     filter: OrderedMap<Expr<Any>>,
+    /// Run repeatedly at this interval instead of on an event (05 §9.4). Not
+    /// beside `on`.
     #[serde(default)]
     every: Option<Located<Time>>,
     /// What a recurring rule does for an owner that left the
@@ -198,10 +209,16 @@ pub struct EocDef {
     /// The effects when it does not.
     #[serde(default, rename = "else")]
     pub otherwise: Effects,
+    /// Typed parameters, for a rule that is called (05 §9.5): each a type, or
+    /// an object with `type`, `default` and `doc`. A rule with at least one is
+    /// a verb under its qualified id.
     #[serde(default)]
     params: Params,
+    /// The subjects a called rule is given by its caller, by name with their
+    /// kinds: `{ "self": "entity" }` (05 §9.5).
     #[serde(default)]
     subjects: OrderedMap<Located<String>>,
+    /// The type of what `return` gives. Default `any`.
     #[serde(default)]
     returns: Option<Located<String>>,
     /// Order among the rules that answer one event: higher first, then
@@ -211,6 +228,8 @@ pub struct EocDef {
     /// Whether the rule runs at most once for each owner.
     #[serde(default)]
     pub once: bool,
+    /// The least local time between runs for each owner. Only runs in which the
+    /// condition held count.
     #[serde(default)]
     cooldown: Option<Located<Time>>,
     /// Whether the rule is skipped for an event an earlier rule
@@ -221,6 +240,8 @@ pub struct EocDef {
     /// (12 §10.5).
     #[serde(default)]
     pub ui_callable: bool,
+    /// The rule group the rule belongs to (05 §9.6): while the group is off,
+    /// the rule does not run.
     #[serde(default)]
     group: Option<Ref<RuleGroupDef>>,
     /// What the rule is for.
@@ -848,6 +869,8 @@ impl Def for RuleGroupDef {
 pub struct ReasonDef {
     /// The sentence, as a text template.
     pub text: Text,
+    /// The values the reason carries, by name, each with its type as the
+    /// language writes types (`entity`, `real`, `id<channel>`). Default none.
     #[serde(default)]
     values: OrderedMap<Located<String>>,
     /// When the reason is given.

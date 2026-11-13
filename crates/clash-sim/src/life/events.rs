@@ -309,12 +309,12 @@ pub const LIFE_EVENTS: &[LifeEvent] = &[
             (
                 "route",
                 "string",
-                "The route it takes: `breath`, `skin` or `any`.",
+                "The route it takes: `breath`, `skin` or `any` from a field; `ingest`, `inject`, `skin` or `breath` for a substance (16 §9.5).",
             ),
             (
                 "field",
                 "string",
-                "The field it comes from: the qualified id of a `field`.",
+                "What it comes from: the qualified id of a `field`, or of the `substance` dosed (16 §9.5).",
             ),
         ],
         hook: Some(&["amount"]),

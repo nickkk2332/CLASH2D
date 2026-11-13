@@ -762,6 +762,14 @@ impl Bus {
         for ty in crate::interaction::event_types() {
             bus.types.entry(ty.name.clone()).or_insert(ty);
         }
+        // The events and hooks of recipes, know-how and substances
+        // (16 §14), unless a mod has taken a name.
+        for ty in crate::recipe::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
+        for ty in crate::substance::event_types() {
+            bus.types.entry(ty.name.clone()).or_insert(ty);
+        }
         for info in crate::traits::TRAIT_EVENTS {
             bus.types
                 .entry(info.name.to_owned())

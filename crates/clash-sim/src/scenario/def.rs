@@ -464,14 +464,28 @@ pub struct PartyGone {
     pub effects: Effects,
 }
 
+/// `on_party_gone` written in full (13 §9.3): what follows, the ways of
+/// carrying on, the outcome of an ending and effects run first. Written
+/// as a string alone, it is `then` with the rest at their defaults.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PartyGoneObject {
+    /// What follows: `end` (an ending), `continue` (the player takes
+    /// another character in the same world) or `restore` (the last
+    /// checkpoint is restored; with none, the game ends with the reason).
     then: String,
+    /// For `continue`: the ways of carrying on tried, in order, the first
+    /// that finds a character taken. `own` is another of the party still
+    /// alive, `create` a new character from the scenario's character
+    /// template at the place the party began. Default both, in that
+    /// order.
     #[serde(default)]
     by: Vec<String>,
+    /// The outcome an ending names, as `ends` names one. Default `lost`.
     #[serde(default, rename = "as")]
     outcome: Option<String>,
+    /// Effects run once when the party is gone, before what follows, with
+    /// the last of the party as `taker`.
     #[serde(default, rename = "do")]
     effects: Effects,
 }

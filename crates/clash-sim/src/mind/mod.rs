@@ -434,6 +434,8 @@ impl Sim {
         }
         self.give_seated(to, leaving, cause)?;
         self.give_seated(from, returning, cause)?;
+        // What the mind knows how to do goes with it (16 §8.5).
+        crate::recipe::know_how::follow_mind(self, from, to);
 
         // Control goes with the mind.
         let (was_from, was_to) = (self.known(from)?.control(), self.known(to)?.control());

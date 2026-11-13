@@ -1,0 +1,43 @@
+[
+  { "//": "Making (12 §10.7; 16 §8): what the character could make here, by hand and at each station within a step, with what each takes and what of it is at hand, what it gives, and why one cannot be started. Recipes are content of other mods, and so is the action that works one: this mod names `make` bare, which means whichever loaded mod's action of that name comes first in order of id (the `core` mod's takes `recipe` and `station`). What is listed is the simulation's: `view.recipe_options`, worked out from what the character believes is at hand. Choosing one starts the work; the work goes on until it is done or the character does something else, and what was done is kept where it was made.",
+    "type": "screen", "id": "make",
+    "title": "Make",
+    "popup": { "width": 72, "height": "fill", "place": "centre", "dim": true },
+    "layout": { "frame": "Make", "rows": [
+      { "fill": 1,
+        "list": { "id": "recipes", "rows": "view.recipe_options",
+                  "item": "{if it.available then it.name else ''}<dim>{if it.available then '' else it.name}</>  {it.where}{if it.resumes then ', under way' else ''}: {it.takes} gives {it.gives}<dim>{if it.available then '' else ': '}{if it.available then '' else it.why}</>",
+                  "empty": "There is nothing you know how to make here.",
+                  "tip": "Enter starts the work; a greyed one says why it cannot.",
+                  "on_activate": [
+                    { "close": {} },
+                    { "act": { "action": "make",
+                               "params": { "recipe": "it.recipe", "station": "it.station" } } } ] } },
+      { "height": 1, "tooltip": { "value": "Up and Down choose, Enter makes it, Esc goes back." } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "//": "Know-how (12 §10.7; 16 §8.5): what the character knows, what each thing lets it make, and what it could learn next. Every piece of know-how a mod defines is listed with no screen written for it: `view.know_how_list`.",
+    "type": "screen", "id": "know_how",
+    "title": "Know-how",
+    "popup": { "width": 72, "height": "fill", "place": "centre", "dim": true },
+    "layout": { "frame": "Know-how", "rows": [
+      { "fill": 1,
+        "table": { "id": "known", "rows": "view.know_how_list",
+                   "columns": [
+                     { "title": "Know-how", "value": "{if it.known then it.name else ''}<dim>{if it.known then '' else it.name}</>", "width": 22 },
+                     { "title": "", "value": "{if it.known then 'known' else if it.ready then 'could learn' else 'needs ' + str(it.needs)}", "width": 16 },
+                     { "title": "Lets you make", "value": "{str(it.makes)}", "width": "fill" } ],
+                   "empty": "There is no know-how in this world.",
+                   "tip": "What you know is bright; what you could learn next says so." } },
+      { "height": 1, "tooltip": { "value": "Up and Down scroll, Esc goes back." } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "//": "The keys in play that open the two screens above. The default keymap (theme.json) binds them to shift+m and shift+k; a profile's keymap, or the player through Options, may give each another key.",
+    "type": "control", "id": "make", "name": "Make something",
+    "doc": "List what can be made here, by hand and at the stations within a step, and start one.",
+    "do": { "open": "make" } },
+
+  { "type": "control", "id": "know_how", "name": "Know-how",
+    "doc": "List what the character knows how to do and what it could learn next.",
+    "do": { "open": "know_how" } }
+]

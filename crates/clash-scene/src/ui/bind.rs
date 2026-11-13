@@ -227,6 +227,7 @@ impl Binding {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct ExprObject {
+    /// The expression, as a string.
     pub(super) expr: Binding,
 }
 

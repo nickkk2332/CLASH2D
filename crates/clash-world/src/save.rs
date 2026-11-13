@@ -311,7 +311,9 @@ pub(crate) const WORLD_SECTIONS: &[WorldSection] = &[
     WorldSection {
         name: "world.areas",
         kind: *b"WARE",
-        version: 1,
+        // 2: an area carries a light, and the table lists the areas
+        // that do (08 §7.2).
+        version: 2,
         required: true,
         write: write_areas,
         read: read_areas,

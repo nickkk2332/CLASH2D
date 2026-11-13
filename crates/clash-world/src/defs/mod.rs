@@ -34,9 +34,9 @@ pub use quantity::{Density, Energy, EnergyDensity, Length, Pressure, Speed, Temp
 pub use raw::{
     AreaKindDef, AtmosphereDef, BlockDef, BoundaryLinkSpec, ContactSpec, ContactSurfaceSpec,
     DamageTypeDef, DefRef, DerivedGeneratorSpec, EdgeKind, EdgeSpec, EdgesSpec, ExitKind, FillSpec,
-    FixtureDef, FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, LeakSpec, LinkMapSpec,
-    MaterialDef, OrderedMap, PlaneDef, RawWorldDefs, RealmDef, ResistSpec, SignalSpec, StateSpec,
-    StratumSpec, WrapAxis,
+    FixtureDef, FloorDef, FloorStateSpec, GeneratorSpec, GlyphSpec, GravitySpec, LeakSpec,
+    LinkMapSpec, MaterialDef, OrderedMap, PlaneDef, RawWorldDefs, RealmDef, ResistSpec, SignalSpec,
+    StateSpec, StratumSpec, WrapAxis,
 };
 pub use state::{
     AreaKindId, AtmosphereId, BlockId, BlockState, DamageTypeId, ElementState, FixtureId,
@@ -497,6 +497,15 @@ pub struct AreaKind {
     /// The rules attached to every area of this kind, as written
     /// (05 §9.3). The world carries them; the rule runtime reads them.
     pub rules: Vec<serde_json::Value>,
+    /// Gravity inside every area of this kind, unless the area sets
+    /// its own (02 §8.3).
+    pub gravity: Option<crate::area::GravityOverride>,
+    /// The light every area of this kind carries at the middle of its
+    /// shape, unless the area sets its own (15 §3.3).
+    pub light: Option<crate::light::LightSource>,
+    /// Tags of abilities suppressed in everyone inside (08 §6.2), as
+    /// written. Carried for the simulation.
+    pub suppresses: Vec<String>,
 }
 
 /// Every definition of the world model, resolved and immutable.

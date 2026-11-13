@@ -457,6 +457,10 @@ pub struct Area {
     pub priority: i32,
     /// How it was made, if it was made by enclosing a space.
     pub enclosure: Option<Enclosure>,
+    /// A source of light it carries at the middle of its shape, moving
+    /// with it (15 §3.3). A negative intensity darkens.
+    #[serde(default)]
+    pub light: Option<crate::light::LightSource>,
 }
 
 impl Area {
@@ -487,7 +491,8 @@ clash_core::impl_state_hash!(Area {
     clock,
     site,
     priority,
-    enclosure
+    enclosure,
+    light
 });
 
 /// What to make an area from.
@@ -529,6 +534,9 @@ pub struct AreaSpec {
     pub priority: Option<i32>,
     /// The site it belongs to.
     pub site: Option<SiteId>,
+    /// A source of light it carries at the middle of its shape. `None`
+    /// takes its kind's, if any.
+    pub light: Option<crate::light::LightSource>,
 }
 
 impl AreaSpec {
@@ -546,6 +554,7 @@ impl AreaSpec {
             clock_rate: None,
             priority: None,
             site: None,
+            light: None,
         }
     }
 }
@@ -565,6 +574,9 @@ pub struct AreaTable {
     /// How many areas were made by enclosing a space.
     enclosures: u32,
     next: u32,
+    /// The areas that carry a light, in id order.
+    #[serde(default)]
+    lit: Vec<AreaId>,
 }
 
 impl AreaTable {
@@ -617,6 +629,11 @@ impl AreaTable {
     /// The areas anchored to an entity, in id order.
     pub fn anchored_to(&self, entity: EntityId) -> &[AreaId] {
         self.anchored.get(&entity).map_or(&[], Vec::as_slice)
+    }
+
+    /// The areas that carry a source of light, in id order.
+    pub fn lit(&self) -> &[AreaId] {
+        &self.lit
     }
 
     /// Replaces the kind of every area by what `turn` makes of it: how
@@ -1118,13 +1135,26 @@ impl WorldCtx<'_> {
             vars.set(key.clone(), value.clone());
         }
         let id = AreaId::new(self.cosmos.areas.next);
+        // The kind's gravity, unless the area sets its own.
+        let ambient = match (spec.ambient, kind.and_then(|kind| kind.gravity)) {
+            (Some(mut own), Some(gravity)) => {
+                own.gravity = own.gravity.or(Some(gravity));
+                Some(own)
+            }
+            (None, Some(gravity)) => Some(AmbientOverride {
+                gravity: Some(gravity),
+                drift: None,
+            }),
+            (own, None) => own,
+        };
+        let light = spec.light.or(kind.and_then(|kind| kind.light));
         let area = Area {
             id,
             kind: spec.kind,
             grid: spec.grid,
             shape,
             anchor: spec.anchor,
-            ambient: spec.ambient,
+            ambient,
             journal: spec.journal,
             tags,
             vars,
@@ -1135,12 +1165,16 @@ impl WorldCtx<'_> {
                 .or(kind.map(|kind| kind.priority))
                 .unwrap_or(0),
             enclosure,
+            light,
         };
 
         let table = &mut self.cosmos.areas;
         table.next = next;
         table.list(id, area.grid, &tracts);
         table.set_anchor_list(id, None, area.anchor);
+        if area.light.is_some() {
+            sorted::insert(&mut table.lit, id);
+        }
         if enclosure.is_some() {
             table.enclosures += 1;
         }
@@ -1179,6 +1213,7 @@ impl WorldCtx<'_> {
         };
         table.unlist(id, grid, &tracts);
         table.set_anchor_list(id, area.anchor, None);
+        sorted::remove(&mut table.lit, &id);
         if area.enclosure.is_some() {
             table.enclosures = table.enclosures.saturating_sub(1);
         }

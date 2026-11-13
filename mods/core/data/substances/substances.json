@@ -1,0 +1,82 @@
+[
+  { "//": "Food, drink, medicine and poison (16 §9.5): substances, what they do in a body, and the pools and traits they act on. The engine knows none of these words: a substance adds to pools and gives traits by the route it takes, and what a pool then does is its own rates, thresholds and stops (06 §4.2). Values are illustrative. Amounts in a body are per millilitre that gets in: its volume times the route's factor.",
+    "type": "pool", "id": "nourishment", "name": "Nourishment",
+    "max": 100, "start": 70, "regen": "-0.00058",
+    "thresholds": [0.0, 0.25] },
+
+  { "//": "What poisons build up. The body clears it slowly; too much knocks one out, and more kills.",
+    "type": "pool", "id": "toxin", "name": "Toxin",
+    "max": 100, "regen": -0.02,
+    "thresholds": [0.5, 0.95],
+    "stops": [
+      { "at": 0.5, "when": "above", "state": "unconscious" },
+      { "at": 0.95, "when": "above", "state": "dead" } ] },
+
+  { "//": "What a sleeping draught builds up. It wears off; while it is high the body sleeps.",
+    "type": "pool", "id": "sedation", "name": "Sedation",
+    "max": 100, "regen": -0.05,
+    "thresholds": [0.6],
+    "stops": [ { "at": 0.6, "when": "above", "state": "unconscious" } ] },
+
+  { "//": "Someone made of these things eats, drinks and can be poisoned: the person of `life/templates.json` is given the three pools above.",
+    "type": "template", "id": "person", "patch": true,
+    "extend": { "pools": ["nourishment", "toxin", "sedation"] } },
+
+  { "//": "Ale warms and loosens: a little less pain for a while.",
+    "type": "trait", "id": "tipsy", "name": "Tipsy",
+    "description": "Warm, loose and a little slow.",
+    "duration": "10 min", "stacking": "refresh",
+    "rates": [ { "pool": "pain", "rate": -0.2 } ],
+    "tags": ["tipsy"] },
+
+  { "//": "A salve on the skin dulls pain while it lasts.",
+    "type": "trait", "id": "soothed", "name": "Soothed",
+    "description": "The sting has gone out of it.",
+    "duration": "5 min", "stacking": "refresh",
+    "rates": [ { "pool": "pain", "rate": -1.0 } ],
+    "tags": ["soothed"] },
+
+  { "//": "Water spilt is the world's water field.",
+    "type": "substance", "id": "water", "name": "water",
+    "color": "gray", "taste": 0.0,
+    "forms": { "loose": "water" },
+    "levels_per_litre": 20,
+    "in_body": { "routes": { "ingest": 1.0 },
+                 "adds": [ { "pool": "nourishment", "per_ml": 0.005 } ] } },
+
+  { "type": "substance", "id": "ale", "name": "ale",
+    "color": "brown", "taste": 0.4,
+    "forms": { "loose": "water" },
+    "levels_per_litre": 20,
+    "in_body": { "routes": { "ingest": 1.0 },
+                 "adds": [ { "pool": "nourishment", "per_ml": 0.02 } ],
+                 "traits": [ { "trait": "tipsy", "at_least_ml": 200, "for": "10 min" } ] } },
+
+  { "//": "What a loaf is made of: eaten, a 400 ml loaf feeds by 40.",
+    "type": "substance", "id": "bread", "name": "bread",
+    "color": "brown", "taste": 0.2,
+    "in_body": { "routes": { "ingest": 1.0 },
+                 "adds": [ { "pool": "nourishment", "per_ml": 0.1 } ] } },
+
+  { "//": "Rubbed on, it soothes; swallowed, it does a little harm.",
+    "type": "substance", "id": "healing_salve", "name": "healing salve",
+    "unknown_name": "a green paste", "color": "gray", "taste": 0.7,
+    "in_body": { "routes": { "skin": 1.0, "ingest": 1.0 },
+                 "traits": [ { "trait": "soothed", "at_least_ml": 5, "for": "5 min" } ],
+                 "adds": [ { "pool": "toxin", "per_ml": 0.05 } ] } },
+
+  { "//": "Fifty millilitres swallowed puts a person to sleep for a while.",
+    "type": "substance", "id": "sleeping_draught", "name": "sleeping draught",
+    "unknown_name": "a cloudy liquid", "color": "gray", "taste": 0.5,
+    "in_body": { "routes": { "ingest": 1.0, "inject": 2.0 },
+                 "adds": [ { "pool": "sedation", "per_ml": 1.5 } ] } },
+
+  { "//": "Nightshade: a few millilitres in the blood are enough to drop someone; more kills. On the skin it does almost nothing. On a blade, half of what is on it goes in with a cut that breaks the skin, and every blow wipes a quarter of the rest away.",
+    "type": "substance", "id": "nightshade", "name": "nightshade extract",
+    "unknown_name": "a dark liquid", "color": "dark_gray", "taste": 0.6,
+    "forms": { "loose": "water" },
+    "levels_per_litre": 20,
+    "in_body": { "routes": { "ingest": 1.0, "inject": 3.0, "skin": 0.05 },
+                 "adds": [ { "pool": "toxin", "per_ml": 4.0 } ] },
+    "share": 0.5, "wipes": 0.25 }
+]

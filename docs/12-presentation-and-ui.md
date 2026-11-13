@@ -2147,6 +2147,16 @@ control `interact`, on `e` in play, opens `ui:interact`, the list of
 into something closed runs, by the preference `bump` (`at_once`, `ask`
 or `never`).
 
+**Making** is in `mods/ui/data/making.json` (16 §8.6; decision D-828):
+the control `make` opens `ui:make`, the list of `view.recipe_options`:
+each recipe by hand and at each station within a step, greyed with its
+reason where it cannot be started, with where it is made, what it takes
+and what it gives; Enter starts the action `make` with the row's
+`recipe` and `station`. The control `know_how` opens `ui:know_how`, a
+table of `view.know_how_list`: each piece of know-how, whether it is
+known or could be learnt next, and what it lets one make. The default
+keymap binds `make` to `shift+m` and `know_how` to `shift+k`.
+
 **The play screen** (`ui:play`) is a `map_view`, the `log` beneath it
 and a status column: who the active character is, by `name(view)`; the
 slot `ui:play.bars` for a character's reserves; what it holds in a
@@ -2196,7 +2206,7 @@ what walking into someone runs, by the preference `bump_attack`
 decision D-795) list `view.ability_uses`, one row for each use of each
 ability the character holds (`clash_sim::ability::options`), with its
 rank, cost, state (`ready`, `cooling` with the seconds left, `dormant`,
-`unavailable`) and the quick slot it is on, greyed with its reason where
+`suppressed`, `unavailable`) and the quick slot it is on, greyed with its reason where
 it cannot be used; and `view.ability_modes`, each mode on or off. Enter
 on a use closes the screen and uses it with `act` (`{ "first": "[it]" }`):
 its parameters are asked for, but for those its grant supplies, and the
@@ -2530,8 +2540,10 @@ the engine's (decision D-791): a mod cannot rank its own attacks.
 Whether an action could start is judged without its footing, the slots
 other actions hold and its hooks. The parts offered for a blow are
 those on the outside of the target's body as it is, while the character
-perceives it: no previews of odds or harm (07 §13) are shown, and a
-part's appearance (15 §8.4) is not consulted. Quick slots hold
+perceives it: no previews of odds or harm (07 §13) are shown, since
+the function `strike_preview` reads the target as it is and a screen,
+compiled in the mind context, may not call it; and a part's appearance
+(15 §8.4) is not consulted. Quick slots hold
 abilities only, and the keys `1` to `9` only those; an action is put on
 a key by rebinding. The map is a map view zoomed out by a fixed three:
 the region map and the chart (section 6.2) are not built, and a pin is

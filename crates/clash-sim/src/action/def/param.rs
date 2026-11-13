@@ -107,16 +107,30 @@ impl Param {
 /// The object form of a parameter.
 #[derive(Deserialize)]
 struct ParamObject {
+    /// The type of the value, as 05 §3 writes types: `entity`, `part`, `real`,
+    /// `id<material>`, `entity?`. `cell` is a location; `list` is a list of
+    /// what `of` says. Required.
     #[serde(rename = "type")]
     ty: Located<String>,
+    /// For a `list`: the type of its elements.
     #[serde(default)]
     of: Option<Located<String>>,
+    /// For a list: the least number of values. Default 0.
     #[serde(default)]
     min: Option<Located<u32>>,
+    /// For a list: the greatest number of values. Left out, as many as a value
+    /// may hold (`rules.max_value_size`).
     #[serde(default)]
     max: Option<Located<u32>>,
+    /// An expression of the parameter's type in the mind context of the actor,
+    /// which may read the parameters written before it: the value when the
+    /// command leaves the parameter out. A parameter with none must be given.
     #[serde(default)]
     default: Option<Expr<Any>>,
+    /// An expression in the mind context of the actor, pure, that may read this
+    /// parameter and those before it: null when the value is sound, and
+    /// otherwise the reason shown, a text or a `reason` id. Advice only: it
+    /// refuses nothing by itself.
     #[serde(default)]
     check: Option<Expr<Any>>,
 }
@@ -249,8 +263,11 @@ impl Var {
 /// The object form of a variable.
 #[derive(Deserialize)]
 struct VarObject {
+    /// The type of the variable's value, as 05 §3 writes types. Required.
     #[serde(rename = "type")]
     ty: Located<String>,
+    /// A constant of the variable's type, which it starts as when the action
+    /// starts. Left out, it starts as null.
     #[serde(default)]
     default: Option<Expr<Any>>,
 }

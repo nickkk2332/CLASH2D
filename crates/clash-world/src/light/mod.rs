@@ -34,8 +34,10 @@
 //!   `intensity / (1 + d²)` to every cell it sees within its radius. It
 //!   sees what an eye in its cell would at [`LIGHT_EYE_MM`]
 //!   ([`Cosmos::field_of_view`]). An intensity may be negative.
-//! - **Moving sources**, handed in with the question, add in the same
-//!   way.
+//! - **Sources areas carry** (02 §8.3), at the middle of their shapes,
+//!   and **moving sources**, handed in with the question, add in the
+//!   same way. They are read at the moment light is asked for: an area
+//!   that moves takes its light with it. A negative intensity darkens.
 //!
 //! The first two never go below zero together, and nor does the whole.
 //!
@@ -303,13 +305,20 @@ impl Cosmos {
     }
 
     /// The light at a cell (15 §3.3): what the sky gives it at this
-    /// moment and what the fixed sources give it, never below zero. See
-    /// the [module](crate::light) for the scale and the rules.
+    /// moment, what the fixed sources give it and what the sources areas
+    /// carry give it, never below zero. See the [module](crate::light)
+    /// for the scale and the rules.
     ///
     /// An error if the cell lies beyond an edge of its grid or its tract
     /// is not loaded. For many cells use [`fill_light`](Cosmos::fill_light),
     /// which costs far less for each.
     pub fn light(&self, loc: Location, time: SkyTime) -> Result<Real, WorldError> {
+        self.light_with(loc, time, &[])
+    }
+
+    /// The sky's and the fixed sources' part of a cell's light, never
+    /// below zero.
+    fn base_light(&self, loc: Location, time: SkyTime) -> Result<Real, WorldError> {
         let view = self.grid(loc.grid)?;
         let cell = loaded_cell(&view, loc.cell)?;
         let fixed = {
@@ -321,17 +330,45 @@ impl Cosmos {
         Ok(combine(sky, sky_level(sky, time), fixed.0, fixed.1))
     }
 
-    /// The light at a cell with moving sources counted:
-    /// [`light`](Cosmos::light), then
-    /// [`add_moving_light`](Cosmos::add_moving_light).
+    /// The sources of light the areas of a grid carry (02 §8.3), each
+    /// at the middle of its area's shape, in the order of the areas'
+    /// ids. They move with their areas, so they are counted as moving
+    /// sources are, at the moment light is read.
+    pub fn area_lights(&self, grid: GridId) -> Vec<MovingLight> {
+        let lit = self.areas.lit();
+        if lit.is_empty() {
+            return Vec::new();
+        }
+        lit.iter()
+            .filter_map(|id| self.areas.get(*id))
+            .filter(|area| area.grid == grid)
+            .filter_map(|area| {
+                Some(MovingLight {
+                    at: Location::new(grid, area.shape.centre()?),
+                    source: area.light?,
+                })
+            })
+            .collect()
+    }
+
+    /// The light at a cell with moving sources counted: the sky's and
+    /// the fixed sources' part, then what the areas' sources and the
+    /// moving ones add, as
+    /// [`add_moving_light`](Cosmos::add_moving_light) adds them, never
+    /// below zero.
     pub fn light_with(
         &self,
         loc: Location,
         time: SkyTime,
         moving: &[MovingLight],
     ) -> Result<Real, WorldError> {
-        let level = self.light(loc, time)?;
-        self.add_moving_light(loc, level, moving)
+        let level = self.base_light(loc, time)?;
+        let mut areas = self.area_lights(loc.grid);
+        if areas.is_empty() {
+            return self.add_moving_light(loc, level, moving);
+        }
+        areas.extend_from_slice(moving);
+        self.add_moving_light(loc, level, &areas)
     }
 
     /// Adds what moving sources give a cell to a level already read for
@@ -475,10 +512,12 @@ impl Cosmos {
             }
         }
 
-        // Moving sources, each over the part of the box it reaches.
+        // Moving sources, each over the part of the box it reaches: the
+        // areas' first, then those handed in.
+        let areas = self.area_lights(grid);
         let mut fov = FovSet::new();
         let mut touched = false;
-        for light in moving {
+        for light in areas.iter().chain(moving) {
             if light.at.grid != grid || light.source.intensity == Real::ZERO {
                 continue;
             }
