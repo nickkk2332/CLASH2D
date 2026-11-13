@@ -539,7 +539,8 @@ impl Sim {
                 locals: locals.clone(),
                 fields: Vec::new(),
             };
-            let mut host = self.host(bound);
+            // Previewed in the actor's mind, held to truth now (03 §6.6).
+            let mut host = self.host_in_truth(bound);
             def.requires.holds_on(&defs, &mut host)
         };
         if !holds {

@@ -253,6 +253,14 @@ pub struct FunctionDef {
     /// character believes. `None` for a function that is the same
     /// everywhere.
     pub belief_form: Option<&'static str>,
+    /// For a belief form, what computes it where an expression compiled
+    /// in a mind context is checked against truth instead
+    /// ([`Sim::host_in_truth`](crate::Sim::host_in_truth)): the function
+    /// it is the form of, given the arguments after the character. An
+    /// action's `requires` is previewed in its actor's mind and held to
+    /// truth when the action starts (03 §6.6). `None` for a function
+    /// that is the same everywhere.
+    pub truth_form: Option<Callee>,
 }
 
 impl FunctionDef {
@@ -276,7 +284,16 @@ impl FunctionDef {
             call,
             draws: None,
             belief_form: None,
+            truth_form: None,
         }
+    }
+
+    /// This function, a belief form, computed by `truth` where it is
+    /// checked against truth (see the field `truth_form`).
+    #[must_use]
+    pub fn in_truth(mut self, truth: Callee) -> FunctionDef {
+        self.truth_form = Some(truth);
+        self
     }
 
     /// This function, compiled in a mind context as `form` with the

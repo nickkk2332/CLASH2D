@@ -193,6 +193,27 @@ fn in_mind_and_in_truth(sim: &Sim, source: &str, me: EntityId, x: EntityId) -> (
     (run(&mind), run(&truth))
 }
 
+/// `source` compiled in `me`'s mind context and held to truth, as an
+/// action's `requires` is when it starts (03 §6.6).
+fn in_mind_held_to_truth(sim: &Sim, source: &str, me: EntityId, x: EntityId) -> Value {
+    let registry = sim.exprs().registry();
+    let entity = Type::Subject(registry.kind_id("entity").expect("entities are a kind"));
+    let mind = Context::new()
+        .own_subject("self", entity.clone())
+        .subject("x", entity)
+        .belief();
+    let bound = Bound::new()
+        .subject(sim.subject_value(Subject::Entity(me)))
+        .subject(sim.subject_value(Subject::Entity(x)));
+    let compiled = clash_expr::compile(source, registry, &mind, &Type::Any)
+        .value
+        .unwrap_or_else(|| panic!("`{source}` compiles"));
+    let mut host = sim.host_in_truth(bound);
+    clash_data::Runner::new()
+        .on(sim.defs(), &mut host)
+        .value(&compiled)
+}
+
 #[test]
 fn dist_and_dir_read_where_a_mind_believes_things_are() {
     // Gap 1 of the town-life brief: `dist` is safe for belief only
@@ -232,6 +253,14 @@ fn dist_and_dir_read_where_a_mind_believes_things_are() {
     // Of itself, a mind knows where it is.
     let (own, _) = in_mind_and_in_truth(sim, "dist(self, self)", me, other);
     assert_eq!(own, Value::Real(clash_core::Real::ZERO));
+    // Held to truth, as an action's `requires` is when it starts, the
+    // same compiled expression measures to where `other` is.
+    let held = in_mind_held_to_truth(sim, "dist(self, x)", me, other);
+    assert!((held.as_number().unwrap().get() - true_dist).abs() < 1e-9);
+    assert_eq!(
+        in_mind_held_to_truth(sim, "dir(self, x)", me, other),
+        in_mind_and_in_truth(sim, "dir(self, x)", me, other).1
+    );
     // Someone it has no idea of is nowhere it knows.
     let (stranger, _) = in_mind_and_in_truth(sim, "dist(x, self)", other, me);
     assert!(

@@ -152,6 +152,34 @@ fn position(sim: &Sim, value: &Value) -> Option<(Location, u16)> {
 /// itself, and anything it holds or is inside, where it is; another
 /// entity where the character believes it to be, `None` if it has no
 /// idea or the viewer is not an entity; any other place where it is.
+/// `dist(a, b)` as it is.
+fn dist_now(sim: &Sim, args: &[Value]) -> Value {
+    let ends = args
+        .first()
+        .and_then(|a| position(sim, a))
+        .zip(args.get(1).and_then(|b| position(sim, b)));
+    opt(ends
+        .and_then(|((a, _), (b, _))| sim.cosmos.delta(a, b))
+        .map(distance_m))
+}
+
+/// `dir(from, to)` as it is.
+fn dir_now(sim: &Sim, args: &[Value]) -> Value {
+    let ends = args
+        .first()
+        .and_then(|a| position(sim, a))
+        .zip(args.get(1).and_then(|b| position(sim, b)));
+    opt(ends
+        .and_then(|((a, _), (b, _))| sim.cosmos.delta(a, b))
+        .map(|by| {
+            Value::list(
+                [by.x, by.y, by.z]
+                    .into_iter()
+                    .map(|part| Value::Int(i64::from(part.signum()))),
+            )
+        }))
+}
+
 fn believed_position(sim: &Sim, viewer: Option<&Value>, value: &Value) -> Option<Location> {
     match sim.subject_of(value)? {
         Subject::Entity(id) => {
@@ -1502,15 +1530,7 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
             "real?",
             GROUP_SPACE,
             "The distance between two things in metres, a storey counting three, the shorter way round on wrapped axes (02 §3.3). Each is a cell, an element, or something that is somewhere: an entity, an area (its middle), a site (its anchor). Null if either is nowhere or they are in different grids. In a mind context it is `believed_dist` with the character first: an entity is where the character believes it is.",
-            |sim, args| {
-                let ends = args
-                    .first()
-                    .and_then(|a| position(sim, a))
-                    .zip(args.get(1).and_then(|b| position(sim, b)));
-                opt(ends
-                    .and_then(|((a, _), (b, _))| sim.cosmos.delta(a, b))
-                    .map(distance_m))
-            },
+            dist_now,
         )
         .arg("a", "any", "One end.")
         .arg("b", "any", "The other end.")
@@ -1521,7 +1541,7 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
             "believed_dist",
             "real?",
             GROUP_SPACE,
-            "`dist` as a character believes it: what `dist(a, b)` is compiled as in that character's mind context (05 §7.3). The character itself, and whatever it holds or is inside, is where it is; anyone else is where it believes them to be (`believed_loc`), null if it has no idea; cells, elements, areas and sites are where they are. Reads that character's beliefs, so it is not safe for belief itself.",
+            "`dist` as a character believes it: what `dist(a, b)` is compiled as in that character's mind context (05 §7.3). The character itself, and whatever it holds or is inside, is where it is; anyone else is where it believes them to be (`believed_loc`), null if it has no idea; cells, elements, areas and sites are where they are. Reads that character's beliefs, so it is not safe for belief itself. Where an expression compiled in a mind context is held to truth, as an action's `requires` is when it starts (03 §6.6), it is `dist(a, b)`.",
             |sim, args| {
                 let viewer = args.first();
                 let ends = args
@@ -1536,12 +1556,13 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
         .arg("viewer", "any", "The character whose belief is read.")
         .arg("a", "any", "One end.")
         .arg("b", "any", "The other end.")
+        .in_truth(|sim, args| dist_now(sim, args.get(1..).unwrap_or_default()))
         .changed_by(&["entity_relocated"]),
         f(
             "believed_dir",
             "list<int>?",
             GROUP_SPACE,
-            "`dir` as a character believes it, as `believed_dist` is `dist`: what `dir(from, to)` is compiled as in that character's mind context.",
+            "`dir` as a character believes it, as `believed_dist` is `dist`: what `dir(from, to)` is compiled as in that character's mind context. Where that is held to truth, as an action's `requires` is when it starts, it is `dir(from, to)`.",
             |sim, args| {
                 let viewer = args.first();
                 let ends = args
@@ -1560,27 +1581,14 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
         .arg("viewer", "any", "The character whose belief is read.")
         .arg("from", "any", "Where the step starts.")
         .arg("to", "any", "What it is toward.")
+        .in_truth(|sim, args| dir_now(sim, args.get(1..).unwrap_or_default()))
         .changed_by(&["entity_relocated"]),
         f(
             "dir",
             "list<int>?",
             GROUP_SPACE,
             "The step from one thing toward another: the signs of the shortest offset east, south and up, each -1, 0 or 1. Null where `dist` is null. In a mind context it is `believed_dir` with the character first.",
-            |sim, args| {
-                let ends = args
-                    .first()
-                    .and_then(|a| position(sim, a))
-                    .zip(args.get(1).and_then(|b| position(sim, b)));
-                opt(ends
-                    .and_then(|((a, _), (b, _))| sim.cosmos.delta(a, b))
-                    .map(|by| {
-                        Value::list(
-                            [by.x, by.y, by.z]
-                                .into_iter()
-                                .map(|part| Value::Int(i64::from(part.signum()))),
-                        )
-                    }))
-            },
+            dir_now,
         )
         .arg("from", "any", "Where the step starts.")
         .arg("to", "any", "What it is toward.")

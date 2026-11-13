@@ -751,7 +751,10 @@ character believes it is (decision D-780). Reading
 another entity's state is not; neither are queries over entities, contents
 or other minds. In a mind context an unsafe read is a load error. An
 action's `requires` is tested against truth only when the action is
-actually started; a failure then is a refusal, with its reason.
+actually started; a failure then is a refusal, with its reason. There a
+belief form reads truth: each registers what it is the form of
+(`FunctionDef::in_truth`), and the start evaluates through a host held
+to truth (`Sim::host_in_truth`).
 
 How the compiler knows "the character's own state": a mind context binds
 the character as its **own** subject, usually `self`. Any property or

@@ -1416,6 +1416,17 @@ Targets, unmeasured but where a figure is given: those rows are in
 | One warm step for 2,000 characters | under 3 ms |
 | A simulated day for 20,000 agents, 500 sites and their incidents | under 60 ms |
 | An idle agent | no cost between wake-ups |
+| The bundled town (`core:town`, seed 7), every resident hot, for one simulated hour from 09:00 | no target yet (measured, release build on four shared cores beside a script run: 953 s of real time for 565 residents and 37.9 million wake-ups, about 0.26 s a simulated second and 25 µs a wake-up) |
+| The same hour with the town unloaded, its residents agents (section 10.6) | no target yet (measured: 7 ms of real time) |
+
+The town's two rows are the ignored test
+`timing_the_whole_town_for_one_simulated_hour` in
+`crates/clash-save/tests/town_life.rs`, run with `cargo test --release
+-p clash-save --test town_life timing -- --ignored --nocapture`; there is
+no bench for them yet. A hot town runs nearly four times faster than its
+own clock with the whole of it loaded, which a player never has: what it
+costs is perception and thought of everyone in it, and an agent that is
+not loaded costs only its next wake-up.
 
 ## 20. Open questions
 

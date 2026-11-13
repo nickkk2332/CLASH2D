@@ -516,7 +516,7 @@ Whether `a` holds toward `b`, as the persona it takes `b` for, a relation of a k
 
 `believed_dir(viewer: any, from: any, to: any) -> list<int>?` · not in a mind context · reactive
 
-`dir` as a character believes it, as `believed_dist` is `dist`: what `dir(from, to)` is compiled as in that character's mind context.
+`dir` as a character believes it, as `believed_dist` is `dist`: what `dir(from, to)` is compiled as in that character's mind context. Where that is held to truth, as an action's `requires` is when it starts, it is `dir(from, to)`.
 
 - `viewer` (any): The character whose belief is read.
 - `from` (any): Where the step starts.
@@ -529,7 +529,7 @@ Its result changes on `entity_relocated`.
 
 `believed_dist(viewer: any, a: any, b: any) -> real?` · not in a mind context · reactive
 
-`dist` as a character believes it: what `dist(a, b)` is compiled as in that character's mind context (05 §7.3). The character itself, and whatever it holds or is inside, is where it is; anyone else is where it believes them to be (`believed_loc`), null if it has no idea; cells, elements, areas and sites are where they are. Reads that character's beliefs, so it is not safe for belief itself.
+`dist` as a character believes it: what `dist(a, b)` is compiled as in that character's mind context (05 §7.3). The character itself, and whatever it holds or is inside, is where it is; anyone else is where it believes them to be (`believed_loc`), null if it has no idea; cells, elements, areas and sites are where they are. Reads that character's beliefs, so it is not safe for belief itself. Where an expression compiled in a mind context is held to truth, as an action's `requires` is when it starts (03 §6.6), it is `dist(a, b)`.
 
 - `viewer` (any): The character whose belief is read.
 - `a` (any): One end.

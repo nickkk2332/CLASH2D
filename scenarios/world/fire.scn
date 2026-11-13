@@ -17,4 +17,4 @@ expect event element_destroyed layer=floor
 assert "@c:10,10,0.floor == null"
 advance 60s
 assert "@c:16,10,0.floor == null"
-expect hash 27e00a20f7431948589d500d79dbf427
+expect hash e56b3020692921106d952d9c89541717
