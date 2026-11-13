@@ -2081,9 +2081,7 @@ and what it gives; Enter starts the action `make` with the row's
 `recipe` and `station`. The control `know_how` opens `ui:know_how`, a
 table of `view.know_how_list`: each piece of know-how, whether it is
 known or could be learnt next, and what it lets one make. The default
-keymap binds neither control (the keymap is `theme.json`'s, which a
-file of the same mod that sorts before it cannot patch): a profile's
-keymap, or the player through Options, gives each a key.
+keymap binds `make` to `shift+m` and `know_how` to `shift+k`.
 
 **The play screen** (`ui:play`) is a `map_view`, the `log` beneath it
 and a status column: who the active character is, by `name(view)`; the
