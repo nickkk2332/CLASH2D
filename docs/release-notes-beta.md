@@ -128,24 +128,37 @@ play, and what trying the game headless on the build branch showed.
 
 **The world**
 
-- **The new sites have no staff,** and the market town has no watch:
-  the bakery, tavern, guardhouse, workshop, market and healer's house
-  are furnished, but nobody works in them yet. Guards appear only as
-  the strangers of Last stand.
-- **No lamps and no lockers in the bundled maps.** They exist as
-  definitions; wardrobes are the places to hide.
-- **Last stand begins in the dark.** At ten at night almost nothing is
-  in sight; the house's door is two steps north, and the journal (`J`)
-  says so.
+- **No lockers in the bundled maps,** and lamps only in Last stand.
+  Lockers exist as definitions; wardrobes are the places to hide.
+- **Last stand is dark,** but for a lamp by the door and one in the
+  room: what is not lit is heard (`!`), not seen. The strangers come
+  one by one; whoever stays on the lane dies quickly, and whoever hides
+  in the dark house with the lamp out lives to see dawn.
+- **Residents do not eat.** Going hungry, weak and starving is for the
+  character you play.
+
+**Fighting**
+
+- **Blocking a blade with your forearm stops the blow and cuts the
+  arm,** and Block comes first among the reactions offered. The log
+  says `… is wounded.`, not where; `c` shows your wounds.
+- **Binding wounds takes a free hand:** put down what you hold first
+  (the inventory's Drop).
+- **With no arrow left, `s` gives the pistol's reason** ("There is no
+  loaded weapon in hand"), not the bow's.
+- **Tab can select someone who has died;** the log says who died.
 
 **Saving and running**
 
 - **A single save is written only when the game is left.** Last stand
   keeps one save; it is not written at intervals, so a crash loses the
   night.
-- **Crowds are slow.** Fifty people in a street cost 15 to 23 ms of
-  real time for each simulated second, so waiting near a crowd is slower
-  than it should be.
+- **The market town is slow to wait in.** With every resident about, a
+  minute waited takes some six seconds of real time (release build),
+  an hour some six minutes: the errand's five hours are long to wait
+  out. Elsewhere an hour takes seconds.
+- **The log fills with `Footsteps, somewhere close.`** in the town:
+  every step heard and not seen writes it.
 - **The window was not seen on a real screen** before the beta: it is
   tested headless, image by image. If it misbehaves, `--terminal` plays
   the same game. Changing the theme in play does not change the
@@ -156,5 +169,12 @@ play, and what trying the game headless on the build branch showed.
 
 ## Play-testing
 
-*To be added: what scripted and hand play sessions found, and what was
-fixed.*
+Two rounds of play from the title, recorded in
+[Play-testing the beta](playtest-beta.md): every game played to an
+ending, as a player plays it, with what each round found and fixed.
+Among the fixes: the last stand can be won and lost, by hiding in the
+dark house or by fighting at its door; the errand can be lost (the
+parcel given away, left behind or destroyed, or night falling);
+hunger matters; an unconscious character no longer freezes the game;
+the log says who is wounded, falls senseless or dies; the quick attack
+says when its target is out of reach.

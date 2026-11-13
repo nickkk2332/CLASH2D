@@ -314,6 +314,80 @@ pub fn walk_up_to_target(run: &mut Headless, max_keys: usize) -> bool {
     false
 }
 
+/// Where a thing of a definition (`core:club`) lies loose within some
+/// cells of a place, if one does: what a player sees lying about.
+pub fn lying_near(run: &Headless, at: Location, def: &str, radius: i32) -> Option<Location> {
+    run.game()
+        .with_session(|session| {
+            let sim = &session.sim;
+            let items = sim.defs().try_registry::<clash_sim::item::ItemDef>()?;
+            sim.truth()
+                .entities()
+                .iter()
+                .filter(|entity| matches!(entity.place(), clash_sim::Place::At { .. }))
+                .filter(|entity| {
+                    sim.components()
+                        .get::<clash_sim::item::Item>(entity.id())
+                        .and_then(|item| item.def())
+                        .is_some_and(|id| items.name(id) == def)
+                })
+                .filter_map(|entity| sim.truth().location(entity.id()))
+                .find(|loc| {
+                    loc.grid == at.grid
+                        && loc.cell.z == at.cell.z
+                        && (loc.cell.x - at.cell.x).abs() <= radius
+                        && (loc.cell.y - at.cell.y).abs() <= radius
+                })
+        })
+        .flatten()
+}
+
+/// Whether the target the character has selected is dead, as the log
+/// told the player when it died.
+pub fn target_dead(run: &Headless) -> bool {
+    let Some(sprite) = run.game().scene().target() else {
+        return false;
+    };
+    let entity = EntityId::from_bits(sprite.raw());
+    run.game()
+        .with_session(|session| session.sim.vital(entity))
+        .flatten()
+        == Some(clash_sim::mind::VitalState::Dead)
+}
+
+/// On the reaction prompt: the first of the reactions named, in the
+/// order of preference given, that is offered and not too late; with
+/// none, the blow is let happen. Returns what was chosen.
+pub fn react(run: &mut Headless, preferred: &[&str]) -> String {
+    let text = run.text();
+    let rows: Vec<String> = text
+        .lines()
+        .skip_while(|line| !line.contains("Time  "))
+        .skip(1)
+        .take_while(|line| !line.contains("[ Let it happen ]"))
+        .filter_map(|line| {
+            let start = line.find('│')?;
+            let rest = &line[start + '│'.len_utf8()..];
+            let end = rest.find('│')?;
+            Some(rest[..end].trim().trim_end_matches('█').trim().to_owned())
+        })
+        .collect();
+    for want in preferred {
+        if let Some(index) = rows
+            .iter()
+            .position(|row| row.starts_with(want) && !row.contains("too late"))
+        {
+            for _ in 0..index {
+                press(run, "down");
+            }
+            press(run, "enter");
+            return (*want).to_owned();
+        }
+    }
+    press(run, "escape");
+    "nothing".to_owned()
+}
+
 /// The key of the default keymap that steps one way.
 pub fn key_of(kind: StepKind) -> &'static str {
     match kind {
@@ -572,6 +646,41 @@ pub fn do_with_carried(run: &mut Headless, row: usize, button: &str) {
     if top(run) == "ui:inventory" {
         press(run, "escape");
     }
+}
+
+/// From play: the inventory, and the button of that id in the popup of
+/// the first thing carried whose row begins with `name` (`club`). Back
+/// in play once the action is chosen. Returns whether there was one.
+pub fn do_with_named(run: &mut Headless, name: &str, button: &str) -> bool {
+    press(run, "i");
+    assert_eq!(top(run), "ui:inventory", "{}", run.text());
+    let rows: Vec<String> = run
+        .text()
+        .lines()
+        .skip_while(|line| !line.contains("Carried"))
+        .skip(1)
+        .take_while(|line| !line.contains('└'))
+        .filter_map(|line| {
+            let inner = line.split('│').nth(2)?;
+            Some(inner.trim().to_owned())
+        })
+        .filter(|row| !row.is_empty())
+        .collect();
+    let Some(row) = rows.iter().position(|row| row.starts_with(name)) else {
+        press(run, "escape");
+        return false;
+    };
+    for _ in 0..row {
+        press(run, "down");
+    }
+    press(run, "enter");
+    assert_eq!(top(run), "ui:item", "{}", run.text());
+    down_to(run, button);
+    press(run, "enter");
+    if top(run) == "ui:inventory" {
+        press(run, "escape");
+    }
+    true
 }
 
 /// From play: saves the game under a name through the pause menu,

@@ -518,12 +518,11 @@ fn not_now(sim: &Sim, id: InteractionId, def: &InteractionDef, values: &[Value])
 
 fn out_of_reach(sim: &Sim, id: InteractionId, reach: Reach) -> Reason {
     let name = name_of(sim, id);
-    Reason::new(
-        codes::OUT_OF_REACH,
-        format!("that is out of reach for `{name}`"),
-    )
-    .with("interaction", name)
-    .with("reach", reach.name())
+    // Said to a player as an action's fail text: no internal name in it
+    // (D-864); the interaction is among the values.
+    Reason::new(codes::OUT_OF_REACH, "that is out of reach")
+        .with("interaction", name)
+        .with("reach", reach.name())
 }
 
 fn not_offered(sim: &Sim, id: InteractionId) -> Reason {

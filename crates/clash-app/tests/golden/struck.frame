@@ -19,9 +19,9 @@ chars
 |                                                      │                        │|
 |                                                      │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
+|│The person is wounded.                              ││                        │|
 |│The person staggers.                                ││                        │|
-|│Ada strikes the person.                             ││                        │|
-|│                                                    ││Tab target f hit s shoot│|
+|│Ada strikes the person.                             ││Tab target f hit s shoot│|
 |│                                                    ││x look  i things  c body│|
 |│                                                    ││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|

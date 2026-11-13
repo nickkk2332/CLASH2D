@@ -173,3 +173,127 @@ repetitions less the time to reach the town.
 
 A step is at the edge of instant; the minute's wait is not, and is the
 first known issue.
+
+## The second round
+
+Played from `08f2178` on the build branch (stream "play-testing 2"):
+the first round's known issues that are not performance were fixed, at
+their causes, what was not played was played, and the last stand was
+played to dawn and tuned. The performance stream ("performance 2",
+making the populated town fast) had not landed on the build branch when
+this round was played: sessions in the market town were kept short, and
+their timings are as slow as the first round's.
+
+### Sessions
+
+| Session | Test | Plays | Takes (debug) |
+|---------|------|-------|---------------|
+| The errand, failed | `play_errand.rs` | The parcel dropped from the inventory on the north street, and the minutes waited with `p`: ten minutes on, `You left the parcel behind. The errand has failed.`, the ending `failed` and `[-]` in the summary | ~20 min (the populated town) |
+| An adept, made | `play_powers.rs` | The town from the title, F2, the adept, the powers choice: the three given at first put back, Force push and Stone wall taken; Begin; the abilities screen lists those two and no others; a stone wall raised across the street | ~1 s |
+| The quick attack | `fighting.rs` | `f` at someone six cells away: `That is out of reach.`, nothing struck, Smash greyed and last in the precise list; `f` with nobody in sight: `Nobody is in sight to choose.` | seconds |
+| A marksman, inside | `play_last_stand.rs` | Chosen ready-made (the bow); `r` with a bow (`There is nothing in hand to load.`: each shot nocks from the quiver); inside, the door opened onto the lit porch; the long wait broken off by a stranger in sight, Tab and `s`, a dodge or a step back at each blow: twelve arrows into the first stranger, who dies at the door | ~1 min |
+| The night at the door | `play_last_stand.rs` | An ordinary person and a brawler, each inside with what lies on the table taken up (by the lamp in the room), holding the door with `f`, the long wait between strangers | ~1 min each |
+| The night in the dark | `play_last_stand.rs` | Inside, the lamp in the room switched off, waiting with Shift+P: never found, and at five `The game has ended: survived.`, `[x] Hold out until dawn.` | ~4 min |
+| A quarrel in the square | `play_market.rs` | [MARKET] | [MARKET-TIME] |
+
+The first round's sessions were run again on this round's fixes; the
+golden frames that moved are named with the fixes below.
+
+### What was found and fixed
+
+In commits `8dd05c9` (the known issues, D-900 to D-908) and [COMMIT2]
+(the last stand, the log's lines for fights, D-909, D-910).
+
+| Found | How a player met it | Fixed |
+|-------|---------------------|-------|
+| The errand could not be lost in practice | Dropping the parcel lost nothing, nothing destroyed it, nightfall was five hours of slow waiting | Content of the scenario: the parcel destroyed, in other hands away from the hall, or left lying (or put away) ten minutes fails it, each with a line that says why; nightfall says so too; the introduction says to keep it close (D-900) |
+| A mind given a stance before its first thought got no senses | The last stand's strangers were blind unless the scenario attached senses itself | One function makes a mind's state and gives its senses, whatever makes it first (D-901); the last stand's workaround is gone |
+| A resident's fault reached the player's log | `Fault: complete_interaction declined (interaction.not_now) in action core:interact` in the market town | A rule's fault names whose doing it was; the log takes only the party's own and nobody's (D-902) |
+| The quick attack out of reach picked Smash and asked for a place; with nobody in sight it targeted the character itself | `f` at a resident across the market | With a target, an action not aimed at someone is not available (`Smash is not aimed at someone.`); `f` out of reach says `That is out of reach.`; an entity picker with nobody to offer is not opened (D-904). The specification gives no closing in, so none is offered |
+| A local made by `let` from a query had no type | `$porch.x` faulted | The local has the type of what the query gives (D-905); bundled content and the armoury fixture now take nullable results through `for_each` or `??` |
+| Hunger did nothing | The `Fed` bar fell to nothing | Content of `core`: hungry below a quarter, weak below a tenth, starving at nothing (blood drained: the body falls a day later and dies half a day after), for characters someone plays, in the status column (D-906) |
+| An unconscious player was asked to react, could answer nothing, and the game stood still for good | The marksman knocked out at the door: `Unconscious, and cannot act until they come to` at every key, the clock stopped | A stopped mind is asked nothing (D-907) |
+| The ending's line came before the blows that brought it | `The game has ended: lost.` above `The person strikes Ada.` | Playback catches up before the line (D-908) |
+| Nobody's death, nobody's knock-out and no wound was told | A stranger died at the door and the character went on striking the body; blows "stopped" on the forearm cut it, and the character bled to death without a word | Lines for falling senseless, coming to, dying and being wounded, and for what is done with something held: eating, drinking, binding wounds (D-910) |
+| An interaction out of reach named itself by id | `Bandage your wounds  east: that is out of reach for \`core:apply_bandage\`` | `that is out of reach` (D-864's rule) |
+| The last stand was decided by darkness and numbers | See below | Tuned as content (D-909) |
+
+### The last stand's balance
+
+Played to its end from the title at seed 4, before and after tuning.
+
+Before: three strangers with knives came at once. On the lane, hitting
+back with bare hands, the character was dead in 36 seconds. Inside, a
+fight at the door went on for hours with the strangers hindering one
+another in the doorway (`The person strikes the person.`). Nothing in
+the house could be found in the dark (`e` offered nothing on the
+table), the marksman could see nobody to shoot until they were on her,
+and a character hidden in the dark lived until the sky began to
+lighten at five, when the strangers found her, and died in the last
+hour before a dawn set at six.
+
+After (D-909): the strangers come one by one (at ten, half past eleven
+and one); a club and two bandages lie on the table, a lamp lights the
+room and can be put out; dawn comes at five.
+
+| Played as | Comes to |
+|-----------|----------|
+| An ordinary person on the lane, hitting back | Lost in 47 seconds |
+| An ordinary person at the door, club and bandages taken up | The first stranger knocked out and beaten to death; the character falls to the wounds of the fight minutes later: lost |
+| A brawler at the door | All three strangers killed, the last at one; the wounds were never bound (a hand is needed for it, and both held something) and the character falls after the third: lost |
+| A marksman inside, shooting through the open door | The first stranger killed with the quiver's twelve arrows; then nothing to shoot with |
+| An ordinary person hidden in the dark house, the lamp out | Never found; alive at five: won |
+
+So the night can be won and lost by an ordinary person, and the
+choice that decides it is a player's: stay on the lane and die, fight
+at the door and bleed unless the wounds are bound, or hide in the dark.
+It feels fair in that the danger comes one at a time, is heard before
+it is seen, and the house holds what is needed; it is still brutal, and
+two things make it less fair than it should be, below (known issues 3
+and 4).
+
+### Known issues that remain
+
+Worst first.
+
+1. **Waiting and walking in the market town are slow** (the first
+   round's first issue, performance 2's to fix): a game minute costs
+   one to two seconds of real time in a debug build, several in the
+   sessions' worst moments; the errand's failure session takes some
+   twenty minutes in a debug build.
+2. **Part of what this round set out to play was not played**, for the
+   cost of the town: a bandage *made* (the recipe; one was bound on in
+   the last stand), a blade coated with poison and someone cut with it,
+   the guardhouse armoury opened with its key and a weapon taken (the
+   essentials stream's test does it on a fixture), a pistol's shot and
+   reload in a fight (the marksman ready-made has the bow), and a day of
+   routines from a bench. [MARKET-NOT]
+3. **Blocking a blade with the forearm stops the blow and cuts the
+   arm**, and Block is first in the reaction prompt: a player who
+   blocks every blow bleeds to death from blows the log says were
+   stopped. The log now says `Ada is wounded.`, but not where or how
+   badly (another's body is not the reader's to read; one's own could
+   be, and is not yet).
+4. **Binding wounds needs a free hand**, and an ordinary person with a
+   club and bandages has none: the club must be put down (inventory,
+   Drop), the bandage put on, the club picked up again, in the middle
+   of a fight.
+5. **The quick shot says the pistol's reason when the bow cannot
+   shoot**: with no arrow left, `s` says `There is no loaded weapon in
+   hand, or nowhere to aim.`, the first refusal of the list, not the
+   bow's.
+6. **The target cycle includes the dead**, so Tab can select a body;
+   the log now says who died.
+7. **Hiding may win the last stand too surely.** Inside with the lamp
+   out, the ordinary person was never found by the strangers who walk
+   the lane; whether one who saw her go in comes for her in the dark,
+   and how often, was not played beyond this one seed.
+8. **Residents do not eat**: hunger is only for characters someone
+   plays (D-906).
+9. **`Footsteps, somewhere close.`** is the commonest line in a town's
+   log: every step heard and not seen writes it (folded when it
+   repeats).
+
+### Responsiveness, measured again
+
+[TIMINGS]

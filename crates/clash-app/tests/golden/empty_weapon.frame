@@ -19,11 +19,11 @@ chars
 |                                                      │                        │|
 |                                                      │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
-|│Something strikes the person. (x2)                  ││                        │|
-|│There is no loaded weapon in hand, or nowhere to    ││                        │|
-|│aim.                                                ││Tab target f hit s shoot│|
-|│                                                    ││x look  i things  c body│|
-|│                                                    ││? keys  Esc menu        │|
+|│The person is wounded. (x2)                        │││                        │|
+|│Something strikes the person.                      █││                        │|
+|│The person is wounded.                             █││Tab target f hit s shoot│|
+|│There is no loaded weapon in hand, or nowhere to   █││x look  i things  c body│|
+|│aim.                                               █││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|
 fg
 |000000000000000000200035079abd300020000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeee|
@@ -44,7 +44,7 @@ fg
 |000000000000000000000000000000000000000000000000000000e000000000000000000000000e|
 |000000000000000000000000000000000000000000000000000000e000000000000000000000000e|
 |eejjjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000e|
-|e00000000000000000000000000000eeeee000000000000000000ee000000000000000000000000e|
+|e0000000000000000000000eeeee000000000000000000000000eee000000000000000000000000e|
 |e0000000000000000000000000000000000000000000000000000ee000000000000000000000000e|
 |e0000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeee|
 |e0000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeee|
