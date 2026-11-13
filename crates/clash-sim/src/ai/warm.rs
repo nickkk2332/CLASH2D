@@ -88,6 +88,11 @@ use crate::bus::EventPayload;
 use crate::entity::Control;
 use crate::event::{EventBody, EventInfo, SimEvent, Subject, Where};
 
+/// A change of level is the simulation's own doing, not something that
+/// happens where anyone could perceive it: its events are raised
+/// nowhere in the world, so the party never sees or hears them (15 §13).
+const LEVEL_CAUSE: clash_world::Cause = clash_world::Cause::new(clash_world::CauseKind::Coarse);
+
 /// How often the warm stepper wakes, in universal time (03 §10).
 pub const WARM_STEP: Dur = Dur::from_secs(1);
 
@@ -569,11 +574,7 @@ pub(crate) fn promote(sim: &mut Sim, entity: EntityId, why: Why) {
     let payload = EventPayload::new(ENTITY_PROMOTED)
         .subject("self", Subject::Entity(entity))
         .with("why", why.name());
-    sim.emit(
-        Where::Entity(entity),
-        think::cause_of(entity),
-        EventBody::Custom(payload),
-    );
+    sim.emit(Where::Global, LEVEL_CAUSE, EventBody::Custom(payload));
 }
 
 /// A hot character becomes warm (09 §9.2): what it does runs on, but an
@@ -606,11 +607,7 @@ fn demote(sim: &mut Sim, entity: EntityId) {
         sim.ai.levels.ending.insert(entity);
     }
     let payload = EventPayload::new(ENTITY_DEMOTED).subject("self", Subject::Entity(entity));
-    sim.emit(
-        Where::Entity(entity),
-        think::cause_of(entity),
-        EventBody::Custom(payload),
-    );
+    sim.emit(Where::Global, LEVEL_CAUSE, EventBody::Custom(payload));
 }
 
 /// What the kernel calls for every event, through the minds': a stepped
