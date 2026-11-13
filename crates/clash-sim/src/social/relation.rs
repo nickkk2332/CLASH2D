@@ -191,6 +191,22 @@ fn found_in(
     (value != def.default_value()).then_some(value)
 }
 
+/// [`found_in`] with the time worked out only if the list holds a
+/// relation of the kind toward that one.
+fn found_in_with(
+    relations: &[Relation],
+    def: &RelationKindDef,
+    kind: RelationKindId,
+    toward: &Toward,
+    now: impl FnOnce() -> Dur,
+) -> Option<Real> {
+    let at = relations
+        .binary_search_by(|relation| (&relation.toward, relation.kind).cmp(&(toward, kind)))
+        .ok()?;
+    let value = faded(&relations[at], def, now());
+    (value != def.default_value()).then_some(value)
+}
+
 /// Of several values of a kind, the strongest: the one furthest from
 /// the kind's default, the first of equals.
 fn strongest(values: impl IntoIterator<Item = Real>, default: Real) -> Option<Real> {
@@ -269,28 +285,71 @@ pub fn rel_toward(
     kind: RelationKindId,
     toward: &Toward,
 ) -> Option<Real> {
+    let asking = Asking::new(sim, mind_id, toward);
+    rel_toward_with(sim, mind_id, kind, toward, &asking)
+}
+
+/// What looking up a mind's relations toward a persona or a group reads
+/// whatever the kind: the groups it is in, whom it asks about, the
+/// groups they claim, and the mind's own time, worked out when a
+/// relation it holds is found. Worked out once for all the kinds a
+/// question reads (D-926); the answers are those of each kind asked
+/// alone.
+struct Asking {
+    persona: Option<PersonaId>,
+    claims: Vec<String>,
+    groups: Vec<String>,
+    now: std::cell::OnceCell<Dur>,
+}
+
+impl Asking {
+    fn new(sim: &Sim, mind_id: EntityId, toward: &Toward) -> Asking {
+        let (persona, claims) = match toward {
+            Toward::Persona(persona) => (Some(*persona), claims_of(sim, *persona)),
+            Toward::Group(key) => (None, vec![key.clone()]),
+        };
+        Asking {
+            persona,
+            claims,
+            groups: group::groups_of(sim, mind_id),
+            now: std::cell::OnceCell::new(),
+        }
+    }
+
+    /// The mind's own time now.
+    fn now(&self, sim: &Sim, mind_id: EntityId) -> Dur {
+        *self.now.get_or_init(|| local_now(sim, mind_id))
+    }
+}
+
+/// [`rel_toward`] with what does not depend on the kind given.
+fn rel_toward_with(
+    sim: &Sim,
+    mind_id: EntityId,
+    kind: RelationKindId,
+    toward: &Toward,
+    asking: &Asking,
+) -> Option<Real> {
     let defs = Arc::clone(&sim.defs);
     let def = defs.try_registry::<RelationKindDef>()?.try_get(kind)?;
-    let now = local_now(sim, mind_id);
+    let now = || asking.now(sim, mind_id);
     let own: &[Relation] = mind(sim, mind_id).map_or(&[], |held| &held.relations);
-    if let Some(value) = found_in(own, def, kind, toward, now) {
+    if let Some(value) = found_in_with(own, def, kind, toward, now) {
         return Some(value);
     }
-    let (persona, claims) = match toward {
-        Toward::Persona(persona) => (Some(*persona), claims_of(sim, *persona)),
-        Toward::Group(key) => (None, vec![key.clone()]),
-    };
+    let (persona, claims) = (asking.persona, &asking.claims);
     if persona.is_some() {
         let toward_claims = claims
             .iter()
-            .filter_map(|claim| found_in(own, def, kind, &Toward::Group(claim.clone()), now));
+            .filter_map(|claim| found_in_with(own, def, kind, &Toward::Group(claim.clone()), now));
         if let Some(value) = strongest(toward_claims, def.default_value()) {
             return Some(value);
         }
     }
-    let of_groups = group::groups_of(sim, mind_id)
-        .into_iter()
-        .filter_map(|key| group_toward(sim, &key, def, kind, persona, &claims));
+    let of_groups = asking
+        .groups
+        .iter()
+        .filter_map(|key| group_toward(sim, key, def, kind, persona, claims));
     if let Some(value) = strongest(of_groups, def.default_value()) {
         return Some(value);
     }
@@ -311,12 +370,14 @@ pub fn stance_toward(sim: &Sim, mind_id: EntityId, toward: &Toward) -> Stance {
         return Stance::Neutral;
     };
     let (mut against, mut with) = (Real::ZERO, Real::ZERO);
+    let mut asking: Option<Asking> = None;
     for (kind, def) in registry.iter() {
         if !def.opposes && !def.sides_with {
             continue;
         }
-        let excess =
-            rel_toward(sim, mind_id, kind, toward).unwrap_or(Real::ZERO) - def.default_value();
+        let asking = asking.get_or_insert_with(|| Asking::new(sim, mind_id, toward));
+        let excess = rel_toward_with(sim, mind_id, kind, toward, asking).unwrap_or(Real::ZERO)
+            - def.default_value();
         if def.opposes {
             against = against.max(excess);
         } else {
@@ -376,10 +437,13 @@ pub(crate) fn holds_flagged_toward(
     let Some(registry) = sim.defs.try_registry::<RelationKindDef>() else {
         return false;
     };
+    let mut asking: Option<Asking> = None;
     registry.iter().any(|(kind, def)| {
-        flagged(def)
-            && rel_toward(sim, holder, kind, toward)
+        flagged(def) && {
+            let asking = asking.get_or_insert_with(|| Asking::new(sim, holder, toward));
+            rel_toward_with(sim, holder, kind, toward, asking)
                 .is_some_and(|value| value > def.default_value())
+        }
     })
 }
 

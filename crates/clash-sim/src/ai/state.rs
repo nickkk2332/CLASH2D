@@ -494,6 +494,112 @@ pub struct AiState {
     /// [`warm`](super::warm)).
     #[serde(default)]
     pub(super) levels: super::warm::Levels,
+    /// What a mind's thought reads again and again, kept while it weighs
+    /// its goals (D-922). Derived: not saved, hashed or compared.
+    #[serde(skip)]
+    pub(crate) stances: StanceMemo,
+}
+
+/// What a mind's goals and steps read again and again, kept while its
+/// goals are weighed and its steps' conditions read (D-922): how minds
+/// stand toward others ([`stance_toward`](super::stance_toward)), and
+/// which part of its day a routine has a character in. While it is kept
+/// the simulation is only read, so an answer once worked out is the
+/// answer again. Empty and kept by no one otherwise. Derived data: a
+/// copy starts empty, it is neither saved nor hashed, and two are
+/// always equal.
+#[derive(Default)]
+pub(crate) struct StanceMemo(std::sync::Mutex<Option<Kept>>);
+
+/// A routine's part of the day as a [`StanceMemo`] keeps it: by the
+/// routine's definition (its address, for as long as the definitions are
+/// read), the realm, the character's seed and the reckoned time.
+pub(crate) type PartKey = (usize, clash_world::RealmId, u64, Dur);
+
+/// The answers a [`StanceMemo`] keeps.
+#[derive(Default)]
+struct Kept {
+    /// A mind, whom it stands toward, how.
+    stances: Vec<(EntityId, EntityId, Option<Stance>)>,
+    /// A routine's part of the day, and when it began.
+    parts: Vec<(PartKey, Option<(usize, Dur)>)>,
+}
+
+impl StanceMemo {
+    /// Begins keeping answers, from none.
+    pub(super) fn begin(&self) {
+        *self.lock() = Some(Kept::default());
+    }
+
+    /// Stops keeping answers and forgets them.
+    pub(super) fn end(&self) {
+        *self.lock() = None;
+    }
+
+    /// The answer kept for a mind toward another, if answers are being
+    /// kept and this one has been worked out.
+    pub(super) fn get(&self, mind: EntityId, other: EntityId) -> Option<Option<Stance>> {
+        self.lock().as_ref().and_then(|kept| {
+            kept.stances
+                .iter()
+                .find(|(have, toward, _)| *have == mind && *toward == other)
+                .map(|(_, _, stance)| *stance)
+        })
+    }
+
+    /// Keeps an answer, if answers are being kept.
+    pub(super) fn put(&self, mind: EntityId, other: EntityId, stance: Option<Stance>) {
+        if let Some(kept) = self.lock().as_mut() {
+            kept.stances.push((mind, other, stance));
+        }
+    }
+
+    /// The part of the day kept for a routine, a seed and a reckoned
+    /// time, if answers are being kept and this one has been worked out.
+    pub(crate) fn part(&self, key: PartKey) -> Option<Option<(usize, Dur)>> {
+        self.lock().as_ref().and_then(|kept| {
+            kept.parts
+                .iter()
+                .find(|(have, _)| *have == key)
+                .map(|(_, part)| *part)
+        })
+    }
+
+    /// Keeps a part of the day, if answers are being kept.
+    pub(crate) fn put_part(&self, key: PartKey, part: Option<(usize, Dur)>) {
+        if let Some(kept) = self.lock().as_mut() {
+            kept.parts.push((key, part));
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Kept>> {
+        // A lock left poisoned is taken as it is: what it holds is only
+        // ever whole answers.
+        match self.0.lock() {
+            Ok(kept) => kept,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+}
+
+impl Clone for StanceMemo {
+    fn clone(&self) -> StanceMemo {
+        StanceMemo::default()
+    }
+}
+
+impl PartialEq for StanceMemo {
+    fn eq(&self, _: &StanceMemo) -> bool {
+        true
+    }
+}
+
+impl Eq for StanceMemo {}
+
+impl core::fmt::Debug for StanceMemo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("StanceMemo")
+    }
 }
 
 impl StateHash for AiState {
