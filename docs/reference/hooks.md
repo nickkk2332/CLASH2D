@@ -174,6 +174,23 @@ Fields:
 
 A handler may change `energy`, `intensity`, `part`, `dir`, or cancel.
 
+<a id="identity-check"></a>
+## `identity_check`
+
+Runs when an observer (`self`) detects an entity (`about`) that presents a persona other than its true one and that the observer has not linked to it (15 §8.2). A handler sets `holds`; with none, the disguise holds. Seen through, the observer takes `about` for its true persona, and `disguise_seen_through` follows.
+
+Subjects, in delivery order: `self` (entity), `about` (entity).
+
+Fields:
+
+- `sense` (string): The qualified id of the sense it was detected by.
+- `quality` (real): How well what `about` presents holds as a disguise, 0 to 1: the persona's `quality`, or a copy's.
+- `scrutiny` (real): The sense's `scrutiny`.
+- `familiarity` (real): How well the observer knows `about`'s true persona: the confidence its track of it had when last brought up to date, 0 for none.
+- `holds` (bool): Whether the disguise holds: true unless a handler sets it false. Mutable.
+
+A handler may change `holds`, or cancel.
+
 <a id="interaction-reach"></a>
 ## `interaction_reach`
 
@@ -254,6 +271,21 @@ Fields:
 - `swap` (bool): Whether the two minds are to change places.
 
 A handler may change no field; it may cancel.
+
+<a id="order-received"></a>
+## `order_received`
+
+Runs when an order is heard by the one it was given to, who made out the giver (15 §10). A handler may set `obeys`, or cancel with a reason; not obeyed, `order_refused` follows, else the order is kept and `order_given` follows.
+
+Subjects, in delivery order: `self` (entity), `giver` (entity).
+
+Fields:
+
+- `action` (any): The action the order says to do: an id of an `action`.
+- `with` (any): The action's parameters, by name.
+- `obeys` (bool): Whether it is obeyed: true if `self` holds toward whom it takes `giver` for a relation of a kind flagged `orders` above its default. Mutable.
+
+A handler may change `obeys`, or cancel.
 
 <a id="passage-requested"></a>
 ## `passage_requested`
@@ -384,6 +416,19 @@ Fields:
 
 A handler may change `target`, `part`, `energy`, `effort`, or cancel.
 
+<a id="talk-options"></a>
+## `talk_options`
+
+Runs when the application asks what one can say to another (15 §11): rules add options by what each believes; the application offers them through `ask`.
+
+Subjects, in delivery order: `self` (entity), `to` (entity).
+
+Fields:
+
+- `options` (any): What `self` can say to `to`: a list of maps, each with `id`, `text` and, if it says something, `kind` (a message kind) and `lines`. Starts empty; handlers add to it. Mutable.
+
+A handler may change `options`, or cancel.
+
 <a id="trait-adding"></a>
 ## `trait_adding`
 
@@ -413,4 +458,19 @@ Fields:
 - `stacks` (int): How many stacks would go, over every giver.
 
 A handler may change no field; it may cancel.
+
+<a id="understands"></a>
+## `understands`
+
+Runs when a message is heard (15 §11): a handler that sets `understood` false, or cancels, keeps it from the hearer, who then neither hears it nor gains what it carries. `speaker` is bound if the hearer made out who spoke.
+
+Subjects, in delivery order: `self` (entity), `speaker` (entity).
+
+Fields:
+
+- `kind` (string): The message kind's qualified id.
+- `language` (any): The language it was said in, as written, or null.
+- `understood` (bool): Whether the hearer understands it: true unless a handler sets it false. Mutable.
+
+A handler may change `understood`, or cancel.
 

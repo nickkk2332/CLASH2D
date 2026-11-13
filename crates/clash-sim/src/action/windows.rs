@@ -16,9 +16,10 @@
 //! 1. those it names (its `for`), in the order named;
 //! 2. anyone within the kind's `reach` of the source or of someone it
 //!    names who holds toward one of those a relation flagged
-//!    `intervenes` (15 §9.1). Until relations exist (first-playable
-//!    package S7) the relation is answered by
-//!    [`Sim::set_intervenes`], which a test supplies;
+//!    `intervenes` (15 §9.1), as the persona it takes them for: answered
+//!    by [`social::intervenes`](crate::social::intervenes), bound with
+//!    every simulation, or by what a test supplies with
+//!    [`Sim::set_intervenes`];
 //! 3. any directly controlled character within that `reach`.
 //!
 //! The second and third are found among the entities within `reach`
@@ -92,8 +93,8 @@ define_id! {
 }
 
 /// Answers whether one entity holds toward another a relation whose
-/// kind is flagged `intervenes` (15 §9.1). Relations are first-playable
-/// package S7's; until it lands a test supplies this
+/// kind is flagged `intervenes` (15 §9.1): [`social::intervenes`](crate::social::intervenes)
+/// by default, bound with every simulation; a test may supply another
 /// ([`Sim::set_intervenes`]).
 pub type IntervenesFn = fn(&Sim, EntityId, EntityId) -> bool;
 
@@ -369,8 +370,8 @@ impl Sim {
     }
 
     /// Supplies the answer to whether one entity holds an `intervenes`
-    /// relation toward another (15 §9.1), until relations exist. Not
-    /// state: set it again after a load. `None` answers no for everyone.
+    /// relation toward another (15 §9.1), in place of the social layer's. Not
+    /// state: a load binds the social layer's again. `None` answers no for everyone.
     pub fn set_intervenes(&mut self, answer: Option<IntervenesFn>) {
         self.intervenes = answer;
     }

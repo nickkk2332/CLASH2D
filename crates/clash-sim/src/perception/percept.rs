@@ -142,6 +142,10 @@ pub(super) fn receive(sim: &mut Sim, signal: &Signal, observer: EntityId, sense:
         );
     }
     party::heard(sim, observer, signal, clarity);
+    if let Some(message) = &signal.message {
+        // Speech (15 §11): what was said reaches whoever perceived it.
+        crate::social::speech::heard(sim, observer, sense, message, about, signal.at, clarity);
+    }
     true
 }
 

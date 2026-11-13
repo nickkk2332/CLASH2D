@@ -31,7 +31,8 @@
       "warn": { "fg": "blood", "bold": true },
       "sfx": { "fg": "accent", "italic": true }
     },
-    "borders": { "h": "─", "v": "│", "tl": "┌", "tr": "┐", "bl": "└", "br": "┘" }
+    "borders": { "h": "─", "v": "│", "tl": "┌", "tr": "┐", "bl": "└", "br": "┘" },
+    "font": { "file": "assets/font.ttf", "size": 16 }
   },
 
   { "//": "A second theme, for the dark hours: the same names in cooler colours, with double borders. The player chooses between themes with the `theme` preference.",
@@ -61,7 +62,8 @@
       "warn": { "fg": "blood", "bold": true },
       "sfx": { "fg": "accent", "italic": true }
     },
-    "borders": { "h": "═", "v": "║", "tl": "╔", "tr": "╗", "bl": "╚", "br": "╝" }
+    "borders": { "h": "═", "v": "║", "tl": "╔", "tr": "╗", "bl": "╚", "br": "╝" },
+    "font": { "file": "assets/font.ttf", "size": 16 }
   },
 
   { "//": "What each key means, by context. A screen names its context; a key its context does not name is looked up in `menu`. `menu` holds the names the toolkit navigates by. `play` is the play screen's: its names are controls (controls.json, fighting.json, abilities.json, talk.json). `targeting` is that of look mode, the map and the pickers that move a cursor or take a direction: there the direction keys keep their names and the screens say what they do. `abilities` is the abilities screen's: the number keys put the ability selected on a quick slot.",
