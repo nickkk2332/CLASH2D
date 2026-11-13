@@ -17,6 +17,9 @@ clash-sim.workspace = true
 clash-save.workspace = true
 clash-scene.workspace = true
 clash-front-term.workspace = true
+# The window frontend's renderer alone, for its benchmark: without the
+# `window` feature no window system is built (decision D-841).
+clash-front-window = { path = "../clash-front-window", default-features = false }
 
 [dev-dependencies]
 serde.workspace = true

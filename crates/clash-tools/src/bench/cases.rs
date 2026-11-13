@@ -7,6 +7,7 @@
 //! | Six wooden storeys alight in a dozen places on each | the field step |
 //! | The simulation over the test city, with a crowd in a street | perception, expressions |
 //! | The console's host over a generated city | the frame |
+//! | A full screen of glyphs and sprites in the default theme's font | the window frontend's drawing |
 
 use std::sync::Arc;
 
@@ -14,8 +15,9 @@ use clash_core::{Dur, EntityId, Real};
 use clash_data::Defs;
 use clash_data::expr::Runner;
 use clash_expr::{Context, Type, compile};
+use clash_front_window::{GlyphAtlas, PixelBuffer, Renderer};
 use clash_save::host::{GameHost, HostEnv};
-use clash_scene::{Canvas, Frame};
+use clash_scene::{Attrs, Canvas, Color, Frame, Rgb, Sprite, Wash};
 use clash_sim::console::{HostKind, Session};
 use clash_sim::perception::{self, Signal, signal::Spot};
 use clash_sim::{
@@ -112,6 +114,11 @@ pub const BENCHES: &[Bench] = &[
         name: "scene.map_frame",
         what: "a 200 x 60 frame of the map of a generated city, from the view model",
         run: map_frame,
+    },
+    Bench {
+        name: "window.draw_frame",
+        what: "a frame of 20,000 glyphs and sprites drawn by the window frontend into a 1920 x 1080 pixel buffer",
+        run: window_frame,
     },
 ];
 
@@ -837,5 +844,99 @@ fn map_frame(_kit: &mut Kit) -> Result<Measured, String> {
     Ok(Measured::new(
         ns,
         "the map of the play screen; the widgets round it are not drawn",
+    ))
+}
+
+/// The picture the window frontend's benchmark draws into: a screen of
+/// full HD.
+const WINDOW_PICTURE: (u32, u32) = (1920, 1080);
+
+/// How many glyphs and sprites the window frontend's frame holds in all.
+const WINDOW_GLYPHS: usize = 20_000;
+
+/// A frame for the window frontend's benchmark: every cell of the grid a
+/// window of [`WINDOW_PICTURE`] shows in the default theme's font,
+/// holding characters of every kind in several colours and attributes,
+/// and sprites to make [`WINDOW_GLYPHS`] in all, some between cells,
+/// larger or partly clear.
+fn window_frame_scene(atlas: &GlyphAtlas) -> Frame {
+    let (cols, rows) = clash_front_window::grid_size(WINDOW_PICTURE.0, WINDOW_PICTURE.1, atlas);
+    let mut frame = Frame::new(cols, rows);
+    let chars: Vec<char> = ('!'..='~').chain("  ─│┌┐└┘█░▒▓·•é".chars()).collect();
+    let colors = [
+        Rgb::new(0xc8, 0xc8, 0xc8),
+        Rgb::new(0x10, 0x10, 0x10),
+        Rgb::new(0xe0, 0xb0, 0x40),
+        Rgb::new(0x50, 0x90, 0xd0),
+        Rgb::new(0xa0, 0x18, 0x28),
+        Rgb::new(0x60, 0x90, 0x40),
+        Rgb::new(0x70, 0x70, 0x70),
+    ];
+    for (n, cell) in frame.cells.iter_mut().enumerate() {
+        cell.ch = chars[(n * 7) % chars.len()];
+        cell.fg = Color::from_rgb(colors[n % colors.len()]);
+        cell.bg = Color::from_rgb(colors[(n / 3 + 1) % colors.len()]);
+        cell.attrs = match n % 13 {
+            0 => Attrs::BOLD,
+            1 => Attrs::UNDERLINE,
+            2 => Attrs::ITALIC,
+            3 => Attrs::REVERSE,
+            4 => Attrs::DIM,
+            _ => Attrs::empty(),
+        };
+    }
+    let sprites = WINDOW_GLYPHS.saturating_sub(frame.cells.len());
+    for n in 0..sprites {
+        let x = (n * 37 % usize::from(cols)) as f32 + 0.25 * (n % 4) as f32;
+        let y = (n * 13 % usize::from(rows)) as f32 + 0.5 * (n % 2) as f32;
+        frame.sprites.push(Sprite {
+            scale: if n % 10 == 0 { 1.5 } else { 1.0 },
+            alpha: if n % 3 == 0 { 0.5 } else { 1.0 },
+            layer: (n % 3) as u8,
+            ..Sprite::new(
+                chars[n % chars.len()],
+                Color::from_rgb(colors[n % colors.len()]),
+                x,
+                y,
+            )
+        });
+    }
+    frame
+}
+
+fn window_frame(kit: &mut Kit) -> Result<Measured, String> {
+    let defs = kit.defs()?;
+    let font = clash_front_window::theme_font(&defs, "ui:default")?
+        .ok_or("the default theme names no font")?;
+    let mut atlas =
+        GlyphAtlas::open(&font.path, u32::from(font.size)).map_err(|error| error.to_string())?;
+    let mut frame = window_frame_scene(&atlas);
+    let mut renderer = Renderer::new(Rgb::BLACK);
+    let mut target = PixelBuffer::new(WINDOW_PICTURE.0, WINDOW_PICTURE.1);
+    let mut time = |frame: &Frame| {
+        renderer.draw(frame, &mut atlas, &mut target);
+        best_ns(9, 4, || {
+            renderer.draw(frame, &mut atlas, &mut target);
+            target.pixels()[0]
+        })
+    };
+    let ns = time(&frame);
+    frame.fx.zoom = 1.5;
+    frame.fx.flash = Some(Wash {
+        color: Rgb::WHITE,
+        strength: 0.4,
+    });
+    frame.fx.shake = 0.5;
+    let with_effects = time(&frame);
+    let (cell_width, cell_height) = (atlas.cell_width(), atlas.cell_height());
+    Ok(Measured::new(
+        ns,
+        format!(
+            "{} by {} cells of {cell_width} by {cell_height} pixels and {} sprites; with zoom, flash and shake {}",
+            frame.cols,
+            frame.rows,
+            frame.sprites.len(),
+            super::show_ns(with_effects)
+        ),
     ))
 }

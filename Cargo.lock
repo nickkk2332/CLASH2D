@@ -365,6 +365,7 @@ dependencies = [
  "clash-data",
  "clash-expr",
  "clash-front-term",
+ "clash-front-window",
  "clash-gen",
  "clash-save",
  "clash-scene",
