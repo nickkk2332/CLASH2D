@@ -22,12 +22,12 @@ With packages C1 to C8, C11 and C12 the first playable build of
 | C4 | Defences | L | C3, T5 | beta |
 | C5 | Push | M | C2, E10 | beta |
 | C6 | Clashes | L | C4, C5, W15 | todo |
-| C7 | Grips and throws | L | C4, C5, T6 | todo |
-| C8 | Takedowns | M | C2, T6 | todo |
+| C7 | Grips and throws | L | C4, C5, T6 | beta |
+| C8 | Takedowns | M | C2, T6 | done |
 | C9 | Projectiles | L | C4, W14, S2 | beta |
 | C10 | Ranged weapons | M | C9, G9 | beta |
-| C11 | Stances, combinations, effort, previews | M | C4, C5, E3 | todo |
-| C12 | Bundled combat content | M | C6, C7, C8, C11 | todo |
+| C11 | Stances, combinations, effort, previews | M | C4, C5, E3 | beta |
+| C12 | Bundled combat content | M | C6, C7, C8, C11 | beta |
 | C13 | Benchmarks and budget gate | S | C2, then recurring | todo |
 
 ## Order and parallelism
@@ -214,6 +214,21 @@ Done when
 - Scenario `human_shield`: a hit lands on the gripped creature.
 - A pinned arm's actions are unavailable until release.
 
+Beta (decisions D-812 to D-814): `seize` and `release_grip`, the
+`GripTable` tied to the maintaining action (invariant C7: a grip ends
+with its action, and one ended otherwise interrupts it), pinning,
+dragging, `combat.gripped` and `combat.too_heavy` on steps, `throw` of a
+creature held, gripped creatures as striking surfaces and as interposed
+defences, `seize_resolving`, `seized`, `grip_broken`, `entity.gripping`
+and `entity.gripped_by`; the bundled `grab`, `throw_person`, `drag`,
+`human_shield` and `break_free`. Tested in
+`crates/clash-sim/tests/grips.rs` (C7, a pinned arm, dragging, a throw
+through a window, a human shield, save and load mid-grip);
+`thrown_through` and `human_shield` are also test scripts under
+`scenarios/combat/`. Stubbed: carrying (a creature taken into a grasp),
+holding the world and `wrench` (review row "Holding the world",
+`off_its_hinges`), the query `grips`.
+
 ### C8 — Takedowns
 
 **Spec** 07 §10 · **Size** M
@@ -226,6 +241,13 @@ Done when
 - Scenario `takedown`: an unaware victim is locked in and struck;
   an aware one cannot be targeted.
 - The same takedown against a protected neck is stopped by the layer.
+
+Done (decision D-816): joint actions with forced roles (T6 beta), `sure`
+strikes, `requires_at_start` on perception and `entity.helpless`, the
+`cutscene` field raising `cutscene_cued`; the bundled `knock_out`,
+`choke` and `gorget`. Tested in `crates/clash-sim/tests/grips.rs`, and
+the test script `takedown`. The bundled humanoid has no neck: the gorget
+is worn over the head, which the takedown's blow strikes.
 
 ### C9 — Projectiles
 
@@ -255,9 +277,11 @@ continuing with what exits, lodging, `projectile_passed`, instant shots
 by ray, `ballistic_dir` and `band_point`, all tested in
 `crates/clash-sim/tests/ranged.rs`; `through_cover` is also a test script
 under `scenarios/combat/`; `volley` is an ignored timing test there.
-Stubbed: the `shot` window is offered to nobody until T5 (`bullet_time`,
-and the review row "Stopping a shot", `caught_arrow`, wait for it);
-defences against shots wait for C4; `guidance`, `fuse` and
+The `shot` window, defences against shots and catching followed with
+combat 2 (decisions D-810, D-811, D-818): `bullet_time` and `caught_arrow`
+are Rust tests in `crates/clash-sim/tests/grips.rs` and test scripts.
+Stubbed: `intercept` (the third way of the review row "Stopping a
+shot"); `guidance`, `fuse` and
 `projectile_lost_lock` are read and carried (review row "Driven and
 guided projectiles", `heat_seeker`); `lead_point` waits for believed
 velocities.
@@ -305,6 +329,16 @@ Done when
 - Scenario `hold_back`: a default effort function chooses an effort that
   staggers and does not maim.
 
+Beta (decisions D-815, D-817): exclusive trait groups (already E3's),
+the stance traits and `take_stance`, `auto_part` and `auto_effort` as the
+bundled blows' defaults, `strike_preview` (`in_reach`, `odds`,
+`odds_near`, `energy`, `intensity`, `push_speed`, `staggers`,
+`launches`), pure and drawing nothing (invariant C5, tested). Stubbed:
+the preview's `depth`, `disables`, `severs`, `passes` and `recoil` (a dry
+run of the body model), previews from appearances and handlers run dry,
+so `strike_preview` is not safe for belief; `hold_back`; the review row
+"Fighting at lower detail".
+
 ### C12 — Bundled combat content
 
 **Spec** 07 §12 · **Size** M
@@ -320,6 +354,15 @@ Done when
   without any content outside `core`.
 - Removing `core` leaves the engine able to load a mod that defines all of
   this differently.
+
+Beta (decisions D-817 to D-819): contests, blows, shove, grab, throw,
+block, parry (now unavailable, saying why, with nothing with a flat in
+hand), dodge, step aside, catch, a shield raised against shots, two
+stances, reaction rules, stagger and exertion rules, `auto_part` and
+`auto_effort`, the guard's `apprehend` goal, in `mods/core`. Two bundled
+guards fight to a conclusion under the bundled minds, and a guard grabs a
+thief who runs (`crates/clash-sim/tests/grips.rs`). Stubbed: a test that
+loads a mod defining all of it with `core` removed.
 
 ### C13 — Benchmarks and budget gate
 

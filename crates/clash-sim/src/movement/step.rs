@@ -339,6 +339,9 @@ fn try_step(
         Err(fault) => return Err(fault_reason(fault, entity, &step)),
     };
     let to = Location::new(from.grid, step.to.cell);
+    // A creature held goes nowhere its holder is not beside, and one
+    // gripping drags no more than it can (07 §9.1).
+    crate::combat::grip::may_step(sim, entity, to)?;
     if !fits(sim, presence.footprint, to) {
         return Err(Reason::new(
             codes::NO_ROOM,

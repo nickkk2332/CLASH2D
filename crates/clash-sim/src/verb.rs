@@ -94,6 +94,7 @@ pub fn engine_verbs() -> Vec<VerbDef> {
     verbs.extend(crate::recipe::verbs());
     verbs.extend(crate::substance::verbs());
     verbs.extend(crate::scenario::verbs());
+    verbs.extend(crate::combat::grip::verbs());
     verbs
 }
 
