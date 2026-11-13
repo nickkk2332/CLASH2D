@@ -207,6 +207,8 @@ pub fn create_seeded(
         let _ = sim.remove_entity(id, cause);
         return Err(reason);
     }
+    // What it is filled with when it is made (16 §9.5).
+    crate::substance::on_made(sim, id);
     Ok(id)
 }
 

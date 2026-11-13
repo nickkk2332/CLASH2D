@@ -1,0 +1,23 @@
+# half_supply (plans/devices.md, G6): a still distils by itself while it
+# is lit, from what is put in it. Its recipe wants fuel at 0.02 a second
+# and its store gives at most 0.01, so it works at half its speed and
+# takes four minutes over two minutes of work (16 §8.2, §5.4).
+use default seed=32
+gen core:test_city size=1
+set @c:18,22,0 fixture core:still
+look @c:18,22,0
+do { "create_item": { "def": "core:mug_of_ale", "at": "here" } }
+do { "put_inside": { "what": "here.occupants[0]", "into": "here.fixture" } }
+do { "add_resource": { "to": "here.fixture", "resource": "fuel", "amount": 10 } }
+assert "@c:18,22,0.fixture.device.making == null"
+do { "set_mode": { "of": "here.fixture", "mode": "lit" } }
+expect event recipe_started recipe=core:distil
+assert "@c:18,22,0.fixture.device.making.rate == 0.5"
+advance 239s
+assert "@c:18,22,0.fixture.device.making.progress > 0.99"
+advance 2s
+expect event recipe_completed recipe=core:distil
+assert "@c:18,22,0.fixture.device.making == null"
+assert "@c:18,22,0.fixture.device.held('stowed')[0].holds_substance('core:ale') > 0.0000999"
+assert "@c:18,22,0.fixture.device.store('fuel') > 7.59 and @c:18,22,0.fixture.device.store('fuel') < 7.61"
+expect hash 6dfc06c7ccdde92074e01b2418998eb2
