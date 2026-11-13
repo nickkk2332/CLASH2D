@@ -485,8 +485,13 @@ As built (decision D-364):
 - **The safe point** reconciles tickets with what is loaded
   (`Sim::reconcile_activity`, 02 §10.2) and then delivers whatever that
   reported. It follows every wake-up, and every accepted command, so that
-  a ticket follows what a command moved. Requested saves are returned to
-  the application as `Advance::Request`.
+  a ticket follows what a command moved. The game being played is then
+  brought up to date with what was delivered (13 §5.1: its objectives,
+  missions and endings), as it is at the start of every call of
+  `advance` (decision D-755). What a rule asks of the application is
+  returned as `Advance::Request` (`AppRequest`: `Checkpoint { name }`,
+  `RestoreCheckpoint { name }`, `EndScenario { outcome }`, `TakeControl
+  { entity }`; 13 §9.1, decision D-757).
 - **The world's wake-ups.** The handler of the `World` domain hands the
   wake-up to `WorldCtx::handle_wake` inside `Sim::world`. A stability
   check and every step of a collapse run under `advance` like anything
@@ -544,6 +549,13 @@ pub enum Command {
 
 As built (decision D-365):
 
+- `Setting { key, value }` (decision D-753) changes a setting: refused
+  with `setting.locked` for one the scenario being played locks and with
+  `setting.bad_value` for a value its `setting` definition does not
+  take (04 §10); it raises `setting_changed`.
+  `BeginScenario(BeginScenario { scenario, party, place, options })`
+  (decision D-751) begins a game from a scenario in a simulation whose
+  world `scenario::make_world` made (13 §4.5).
 - `Command` and `DebugCommand` are open sets. The kernel honours the debug
   commands: `CreateEntity { spec, place }`, `MoveEntity { entity, to }`,
   `RemoveEntity { entity }`, `SetElement { loc, layer, state }`,

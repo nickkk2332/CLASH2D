@@ -17,7 +17,8 @@ use std::sync::Arc;
 
 use clash_data::{Defs, Diagnostics};
 use clash_gen::GenDefs;
-use clash_scene::{StartDef, UiDefs};
+use clash_scene::UiDefs;
+use clash_sim::scenario::ScenarioDef;
 use clash_world::WorldDefs;
 
 /// The tables a game's world is made from: the world's and the
@@ -83,10 +84,10 @@ pub fn load(search: &[PathBuf], profile: &str) -> Result<Loaded, String> {
             GenDefs::from_defs(&defs, &world).map(|generation| WorldTables { world, generation })
         })
         .map_err(|diagnostics| render(&diagnostics));
-    let has_starts = defs
-        .try_registry::<StartDef>()
-        .is_some_and(|starts| !starts.is_empty());
-    if has_starts && let Err(problems) = &tables {
+    let has_scenarios = defs
+        .try_registry::<ScenarioDef>()
+        .is_some_and(|scenarios| !scenarios.is_empty());
+    if has_scenarios && let Err(problems) = &tables {
         // A game could be started and its world cannot be made.
         return Err(problems.clone());
     }

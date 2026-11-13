@@ -135,8 +135,9 @@ fn title_to_town_through_a_door_to_a_wall() {
     press(&mut run, &["tab", "tab"]);
     assert_golden(golden("new_game"), run.frame());
 
-    // The town, as the character sees it from where it begins.
-    press(&mut run, &["enter"]);
+    // The town, as the character sees it from where it begins: the
+    // third of the scenarios.
+    press(&mut run, &["down", "down", "enter"]);
     assert!(run.game().playing(), "the first start began a game");
     assert_eq!(
         run.game().scene().top().map(|screen| screen.id()),
@@ -216,7 +217,7 @@ fn title_to_town_through_a_door_to_a_wall() {
 #[test]
 fn a_game_is_left_from_the_pause_menu() {
     let mut run = start("pause");
-    press(&mut run, &["enter", "tab", "tab", "enter"]);
+    press(&mut run, &["enter", "tab", "tab", "down", "down", "enter"]);
     assert!(run.game().playing());
     // Esc pauses: Resume, Save (no save is there yet, so no Load),
     // Options, and the last button leaves, after asking.
@@ -256,7 +257,12 @@ fn a_shut_door_stops_the_character_who_will_not_open_doors() {
     let mut run =
         Headless::new(clash_app::boot(&options).unwrap_or_else(|problem| panic!("{problem}")));
     // The second start: the lane, whose doors are shut.
-    press(&mut run, &["enter", "tab", "tab", "down", "enter"]);
+    press(
+        &mut run,
+        &[
+            "enter", "tab", "tab", "down", "down", "down", "down", "enter",
+        ],
+    );
     assert!(run.game().playing());
     let (begin, _) = player(&run);
     // Across the lane to the door of the house south of it.

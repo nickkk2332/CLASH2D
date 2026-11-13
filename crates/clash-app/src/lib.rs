@@ -28,18 +28,16 @@
 //!
 //! # Seams
 //!
-//! Nothing stands in for a package any more but two small seams, each
-//! named where it is: a game begins from a `start` until game
-//! scenarios exist ([`session`]), and the player's character is given
-//! its senses by the application until templates carry them
-//! ([`perception::give_senses`]).
+//! Nothing stands in for a package any more. A game begins from a game
+//! scenario (13 §3, [`session`]); the simulation gives the party senses
+//! as the game begins, where templates give none (15 §15).
 //!
 //! # Rules this crate keeps
 //!
 //! - The simulation is advanced only by [`game::Game::pass`], through
 //!   `Sim::advance`, and changed only through `Sim::submit`, but for
-//!   the senses a new character is given, the debugging switch
-//!   `perception.omniscient` and saving, which changes nothing hashed.
+//!   the debugging switch `perception.omniscient` and saving, which
+//!   changes nothing hashed.
 //! - Nothing an ordinary screen shows reads truth: the view model is
 //!   changed by playback and by what the simulation's perception says
 //!   the party sees and remembers ([`perception`]), and bindings read
