@@ -603,6 +603,10 @@ uses (13 §9.5). Local undoing is separate (08 §7.4).
 4. Look at the result. Open the inspector on it. Trace the rule.
 5. Write a test script for it.
 
+[The modding guide](modding-guide.md) follows this loop from `init-mod`
+to a blessed test script, and is run by a test of `clash-tools` (D-807).
+Hot reload and errors over the game (step 3) wait for P8.
+
 ### 9.2 Knowing what exists
 
 | Tool | Answers |

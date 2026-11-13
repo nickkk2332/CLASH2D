@@ -209,6 +209,15 @@ Done when
 - A test fails if a registered item has no documentation.
 - A scaffolded mod lints clean.
 
+Done (D-800 to D-807), in `crates/clash-tools`: `docs` writes the
+reference from the registries, committed in `docs/reference/`, with a
+test that fails on anything registered without documentation and one that
+fails while a committed page is out of date; `schema` (the tests validate
+the bundled mods and reject the loader's broken fixtures with a validator
+of the subset of JSON Schema the schemas use, D-803); `init-mod` and
+`new`. Beside them, `docs/modding-guide.md`, run by a test that makes its
+mod, writes its files and runs its commands (D-807).
+
 ### P6 — Settings
 
 **Spec** 04 §10 · **Size** S

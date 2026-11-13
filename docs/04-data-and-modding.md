@@ -836,16 +836,27 @@ All in `clash-tools`.
 | Command | Does |
 |---------|------|
 | `lint <profile or dir>` | Runs the pipeline, then each crate's build check (section 8.1), and prints every diagnostic. Non-zero exit on errors. `--json` for machines. The directory is a directory of mods, all of which are loaded, or one mod's directory, which is loaded with what it requires. A profile is a file or a name. `--mods <dir>` names where mods are searched for, and `--lenient` is section 8.3. |
-| `schema --out <dir>` | Writes a JSON Schema per definition type and one for data files as a whole. `--profile <p> --with-ids` also lists every existing id per type, so editors can complete references. |
-| `docs --out <dir>` | Generates the modding reference: every definition type and field, unit, diagnostic code, event, effect, property and function, with their documentation. |
-| `init-mod <id>` | Creates a mod skeleton with editor settings that attach the schemas. |
+| `schema [--type <type>] [--out <dir>]` | Writes a JSON Schema per definition type and one for data files as a whole (D-803). `--profile <p> --with-ids` also lists every existing id per type, so editors can complete references. |
+| `docs [--out <dir>] [--format md\|json]` | Generates the modding reference: every definition type and field, unit, diagnostic code, event, hook, verb, effect, property, function, query, setting and reason, with their documentation, and reports whatever has none. The Markdown is committed in `docs/reference/` (D-802). |
+| `init-mod <id> [--dir <mods dir>]` | Creates a mod that lints clean as made: `mod.json`, a commented example of each common kind of definition, a profile, and editor settings that attach the schemas (D-805). |
+| `new <type> <id>` | Prints a definition of a type with every field it requires. |
 | `explain <code>` | Prints the long explanation of a diagnostic. |
 | `show <type> <id>` | Prints a finished definition with the origin of each value: the file and line that last set it and the mod that file belongs to. The type may be left out. Abstract definitions can be shown. |
-| `scenario run` | Runs golden scenarios, including those shipped by mods (plans/world-model W11). |
+| `refs [<type>] <id>`, `find <type> [where=<condition>]... [<text>]...` | What refers to a definition and what it refers to, with file and line; which definitions meet conditions (14 §9.2, D-806). |
+| `scenario run <dir>` | Runs test scripts, including those shipped by mods (plans/world-model W11). |
 
 Schemas and the reference are generated from the same registries the loader
 uses. They cannot be out of date. A feature that is not in the generated
-reference does not exist.
+reference does not exist. Two tests of `clash-tools` hold the committed
+reference to this: one fails while any registered item has no
+documentation, the other while the pages in `docs/reference/` differ from
+what `cargo run -p clash-tools -- docs --out docs/reference` writes, so a
+change that registers something runs that command and commits the pages.
+
+[The modding guide](modding-guide.md) walks a creator through making a mod
+with these tools: an item, a creature, a power, a rule, a screen change, a
+patch, a game scenario and a test script. A test runs it: it writes each
+file the guide shows and runs each of its commands (D-807).
 
 The full set of tools, including the console, inspector, traces, test
 scripts and the map editor, is specified in

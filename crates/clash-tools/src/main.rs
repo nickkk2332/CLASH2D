@@ -1,20 +1,23 @@
-//! The CLASH2D command-line tools: the mod linter, the schema dump, the
-//! headless runner for test scripts with golden hashes, the world viewer
-//! and the benchmarks. This crate is outside the simulation and may read
-//! the wall clock. Specified in `docs/14-tooling.md`.
+//! The CLASH2D command-line tools: the mod linter, the modding reference,
+//! schemas and scaffolding, the headless runner for test scripts with
+//! golden hashes, the world viewer and the benchmarks. This crate is
+//! outside the simulation and may read the wall clock. Specified in
+//! `docs/14-tooling.md`.
 //!
 //! Built so far: the data commands of `docs/04-data-and-modding.md`
-//! section 13 (`lint`, `explain`, `show`), in [`data`], with the
-//! definition types of the world and of the interface registered;
-//! `scenario run`, which runs test scripts against the simulation in
-//! the four modes ([`scenario`]); `save inspect`, `save verify` and
-//! `save list` ([`save`]); `replay` between two saves ([`replay`]); and
-//! the terminal world viewer, `worldview` ([`worldview`]); and the
-//! benchmarks against the budgets of the specifications, `bench`
-//! ([`bench`](mod@bench)). `save`, `replay` and `worldview` drive the console's
-//! host of `clash-save`. `schema` answers that
-//! it is not built yet. The rest is filled in by
-//! `docs/plans/tooling.md`.
+//! section 13, in [`data`]: `lint`, `explain` and `show`, with the
+//! definition types of the world and of the interface registered; `docs`,
+//! the reference generated from the engine's registries ([`reference`]);
+//! `schema` ([`schema`]); `init-mod` and `new` ([`scaffold`]); `refs` and
+//! `find` ([`refs`](mod@refs)). Beside them: `scenario run`, which runs
+//! test scripts against the simulation in the four modes ([`scenario`]);
+//! `save inspect`, `save verify` and `save list` ([`save`]); `replay`
+//! between two saves ([`replay`]); the terminal world viewer,
+//! `worldview` ([`worldview`]); and the benchmarks against the budgets
+//! of the specifications, `bench` ([`bench`](mod@bench)). `save`,
+//! `replay` and `worldview` drive the console's host of `clash-save`.
+//! The modding guide, `docs/modding-guide.md`, is run by the tests of
+//! [`guide`]. The rest is filled in by `docs/plans/tooling.md`.
 
 use std::process::ExitCode;
 
@@ -22,6 +25,8 @@ use clash_data::DefTypes;
 
 mod bench;
 mod data;
+#[cfg(test)]
+mod guide;
 mod reference;
 mod refs;
 mod replay;
@@ -64,37 +69,37 @@ fn usage() -> String {
     )
 }
 
-fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let Some((command, rest)) = args.split_first() else {
-        eprint!("{}", usage());
-        return ExitCode::from(data::EXIT_USAGE);
-    };
-    if matches!(command.as_str(), "help" | "--help" | "-h") {
-        print!("{}", usage());
-        return ExitCode::SUCCESS;
-    }
-    let own = match command.as_str() {
+/// Runs a command with the arguments after it: what it prints and its
+/// exit code. `None` for a command that does not exist.
+pub(crate) fn command(command: &str, rest: &[String]) -> Option<data::Output> {
+    match command {
         "scenario" => Some(scenario::run(rest)),
         "save" => Some(save::run(rest)),
         "worldview" => Some(worldview::run(rest)),
         "replay" => Some(replay::run(rest)),
         "bench" => Some(bench::run(rest)),
-        _ => None,
-    };
-    if let Some(output) = own {
-        print!("{}", output.out);
-        eprint!("{}", output.err);
-        return ExitCode::from(output.code);
+        _ => data::run(&engine_types(), ENGINE_CHECKS, command, rest),
     }
-    match data::run(&engine_types(), ENGINE_CHECKS, command, rest) {
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let Some((name, rest)) = args.split_first() else {
+        eprint!("{}", usage());
+        return ExitCode::from(data::EXIT_USAGE);
+    };
+    if matches!(name.as_str(), "help" | "--help" | "-h") {
+        print!("{}", usage());
+        return ExitCode::SUCCESS;
+    }
+    match command(name, rest) {
         Some(output) => {
             print!("{}", output.out);
             eprint!("{}", output.err);
             ExitCode::from(output.code)
         }
         None => {
-            eprintln!("clash-tools: unknown command `{command}`\n\n{}", usage());
+            eprintln!("clash-tools: unknown command `{name}`\n\n{}", usage());
             ExitCode::from(data::EXIT_USAGE)
         }
     }
