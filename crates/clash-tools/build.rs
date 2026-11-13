@@ -136,7 +136,7 @@ fn main() {
          /// The documentation of every struct and enum read from JSON, by its\n\
          /// path: the type's own and that of each field or value, by the name\n\
          /// JSON gives it.\n\
-         pub static TYPE_DOCS: &[(&str, &str, &[(&str, &str)])] = &[\n",
+         pub static TYPE_DOCS: &[TypeDocEntry] = &[\n",
     );
     for (path, doc) in &docs {
         let _ = write!(out, "    ({path:?}, {:?}, &[", doc.doc);
@@ -595,7 +595,7 @@ impl Parser<'_> {
     }
 
     /// Skips generic parameters and a where clause, up to the body.
-    fn to_body(&mut self) -> Option<char> {
+    fn skip_to_body(&mut self) -> Option<char> {
         let mut angle = 0;
         while let Some(token) = self.peek().cloned() {
             match token {
@@ -621,7 +621,7 @@ impl Parser<'_> {
         docs: &[String],
         attrs: &[String],
     ) -> Option<Item> {
-        let body = self.to_body()?;
+        let body = self.skip_to_body()?;
         let rename_all = rename_all(attrs);
         let mut item = Item {
             module: module.to_vec(),
@@ -714,7 +714,7 @@ impl Parser<'_> {
         docs: &[String],
         attrs: &[String],
     ) -> Option<Item> {
-        let body = self.to_body()?;
+        let body = self.skip_to_body()?;
         let rename_all = rename_all(attrs);
         let mut item = Item {
             module: module.to_vec(),

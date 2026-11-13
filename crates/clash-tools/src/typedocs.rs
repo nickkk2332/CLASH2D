@@ -8,6 +8,14 @@
 //! the shapes come from the types, the words from the comments beside
 //! them.
 
+/// One entry of [`TYPE_DOCS`]: a type's path, its documentation, and
+/// each field or value with its documentation, by its JSON name.
+pub type TypeDocEntry = (
+    &'static str,
+    &'static str,
+    &'static [(&'static str, &'static str)],
+);
+
 include!(concat!(env!("OUT_DIR"), "/type_docs.rs"));
 
 /// The documentation of a Rust type: its own, and that of each field or

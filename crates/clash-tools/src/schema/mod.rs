@@ -9,7 +9,7 @@
 //! `minimum`, `pattern`, `propertyNames`, `anyOf`, `allOf`,
 //! `if`/`then`/`else`, `not` and `$ref` into `$defs`. The tests check
 //! the bundled mods against them with a validator of that part
-//! ([`validate`]).
+//! (the test-only module `validate`).
 //!
 //! What a schema cannot know is left to the loader: whole-set checks
 //! (duplicate ids, inheritance cycles), expressions, and the world's and
