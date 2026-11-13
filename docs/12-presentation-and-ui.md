@@ -546,7 +546,7 @@ ignores `font`.
 | `colors` | Colours by name. Each value is `#rrggbb` or the name of another colour. |
 | `styles` | Styles by name. A style may set `fg`, `bg`, and turn `bold`, `dim`, `italic`, `underline` and `reverse` on or off. Whatever it leaves out stays as it was beneath. |
 | `borders` | The six characters frames are drawn with. Any left out keeps the engine's line-drawing character. |
-| `font` | The font file and glyph size for the window frontend. |
+| `font` | The font of the window frontend: `file`, a font file inside the mod that writes it (decision D-844), and `size`, the height of a cell in pixels at the screen's ordinary scale (section 11). |
 | `marks` | Glyphs the engine draws for itself, by name: those of the world view (section 6.5) and the parts of widgets (section 10.3). |
 
 A colour name is looked up among the theme's `colors`, then the `color`
@@ -1177,7 +1177,9 @@ A key press is always delivered as a key, including one that types a
 character. Text is delivered only for what did not arrive as key presses:
 a paste, or the result of an input method. The terminal frontend
 delivers Control-C as close, because in a terminal it would otherwise
-interrupt the program and a player must always be able to leave.
+interrupt the program and a player must always be able to leave. The
+window frontend delivers Control-C as a key like any other, and
+closing the window as close (decision D-842).
 
 In data a key is written as its character (`"h"`, `"?"`) or one of
 `enter`, `escape`, `backspace`, `tab`, `space`, `up`, `down`, `left`,
@@ -2187,10 +2189,11 @@ it for, the parameters it is opened with, and its slots:
 | Crates | `winit`, `softbuffer`, `fontdue` | `crossterm` |
 | Grid | Yes | Yes |
 | Sprites at sub-cell positions, scale, alpha | Yes | Snapped to cells |
-| Shake, flash, zoom, bars | Yes | Ignored |
+| Shake, flash, zoom, bars, tint | Yes | Ignored |
 | Colour | 24-bit | Whatever the terminal offers |
-| Mouse | Yes | Optional |
+| Mouse | Yes, with the cell under the pointer | Optional |
 | Fonts | From the theme | The terminal's |
+| Leaving | Closing the window | Control-C, or what the screens offer |
 
 The window frontend draws on the processor, not the graphics card
 (decision D-830): each frame is drawn into a buffer of pixels by copying
@@ -2202,6 +2205,75 @@ window's frames are tested headless, and compared cell by cell with the
 terminal's.
 
 A third, **null** frontend records frames for tests.
+
+**The window as built** (crate `clash-front-window`, package U3,
+decisions D-840 to D-844):
+
+- **The cell.** A cell is the theme font's `size` in logical pixels
+  high (section 4.3), times the screen's scale, and as wide as the
+  font's advance at that height, rounded down: 8 by 16 pixels for the
+  bundled DejaVu Sans Mono at 16. The font is scaled so that the line
+  fills the cell from its top edge, and the line-drawing characters of
+  borders meet from cell to cell. The window holds as many whole cells
+  as fit, with the grid centred and the theme's background round it;
+  resizing it changes the grid, which the frontend reports as a
+  `Resize` and in its `caps`.
+- **Glyphs.** Each character is rasterised once per style and height
+  and kept. Bold, italic and underline are made from the one font file;
+  dim moves the character's colour nearly halfway to its background;
+  reverse exchanges the two. The line-drawing characters of one weight
+  (light, heavy and double lines, corners, tees and crosses) and the
+  half and full blocks are drawn by the frontend in whole pixels, so
+  that borders are crisp and unbroken at any size; the rest of that
+  range comes from the font. A character the font lacks is drawn as a
+  hollow box, never as nothing, and a control character as nothing, as
+  in the terminal. Every character the bundled mods write is in the
+  bundled font.
+- **Sprites** are centred where a cell at their position would be
+  centred, at their scale (glyphs rasterised at that size, not
+  magnified) and opacity, lowest layer first.
+- **Effects.** The tint and then the flash wash every colour toward
+  theirs by their strength. A shake of 1 moves the whole picture by
+  half a cell, in a pattern of eight directions taken in turn with
+  each frame. The zoom magnifies the picture about the grid's centre,
+  where the views put the camera (section 6.3), pixel by pixel, from a
+  quarter to eight times. The letterbox bars are black, half of their
+  share of the height at the top and half at the bottom.
+- **Input.** Keys get the names and modifiers the terminal gives them
+  (section 9.1); Control-C is an ordinary key, and closing the window
+  is `Close`. The mouse is reported with the cell under the pointer as
+  the picture on screen laid it out, zoom included: a move when the
+  pointer reaches another cell, presses and releases of the three
+  buttons, the wheel in notches. Losing the focus forgets the
+  modifiers held; it is no event of its own. Text comes only from an
+  input method; there is no paste.
+- **The loop stays the application's.** The frontend's `poll` pumps
+  the window system's events without waiting, and `present` draws and
+  shows a frame at once.
+
+Each frame is drawn in full, with no allocation once the glyphs it uses
+are made; section 15 gives its cost. A frame the same as the one on
+screen, in a window of the same size, is not drawn again unless it
+shakes.
+
+**Running the game in a window.** `cargo run -p clash-app --release`
+opens a window when a display is available, and `--window` asks for
+one (section 3.1); `--terminal` keeps the game in the terminal. If the
+window cannot be opened the reason is printed and the game runs in the
+terminal. `cargo run -p clash-front-window --example effects` opens a
+window that shows sprites gliding and each frame effect in turn, which
+is the quickest check that a machine can show the window at all.
+
+| System | Needs |
+|--------|-------|
+| Linux and the BSDs, X11 | `DISPLAY` set; at run time `libX11`, `libxcb`, `libXcursor`, `libXrandr`, `libXi` and `libxkbcommon-x11` (Debian and Ubuntu: `libxkbcommon-x11-0`). Nothing is needed to build: every library is loaded when the program runs. |
+| Linux and the BSDs, Wayland | `WAYLAND_DISPLAY` set, with `libwayland-client` and `libxkbcommon` at run time. Wayland is tried before X11 when both are named. |
+| macOS | Nothing beyond the system. Run it from the main thread, as the binary does. |
+| Windows | Nothing beyond the system. |
+
+A theme names its font as a file inside the mod that writes it
+(decision D-844); the bundled themes name `mods/ui/assets/font.ttf`,
+DejaVu Sans Mono, whose licence is beside it in `font-LICENSE.txt`.
 
 ## 12. Testing
 
@@ -2335,6 +2407,15 @@ one the player must read about, so the linter's warning of invariant V5
 is not given. The words of a line come from the reader helpers the host
 answers, and the bundled shows name a destroyed block a wall, since an
 event says nothing of what was destroyed that the reader may know.
+How the window frontend draws is the engine's (section 11): a theme
+names one font file, and bold, italic and underline are made from it;
+which line-drawing characters and blocks the frontend draws itself, and
+how; the box drawn for a missing character, how far dim fades, how far and
+in what pattern a shake moves the picture, the range of the zoom and
+the colour of the letterbox bars are fixed. The window keeps the font
+of the theme in force when it opened: a theme chosen during play
+changes the colours and not the font. The window's title is the
+profile's name, and the grid it opens with is the frontend's.
 
 ## 14. Invariants
 
@@ -2361,7 +2442,7 @@ Targets, unmeasured but where a figure is given: those rows are in
 | Build a 200 × 60 frame | under 1.5 ms (measured by `cargo xtask bench`: 1.7 to 2.1 ms for the map of a generated city alone, from the view model, without the widgets round it) |
 | Ingest 10,000 events | under 5 ms |
 | Re-evaluate bindings of a busy screen | under 0.5 ms |
-| Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080 | under 16 ms: 60 frames per second |
+| Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080 | under 16 ms: 60 frames per second (measured by `cargo xtask bench`: 4.2 to 9.5 ms on a shared, loaded machine for 240 × 67 cells of 8 × 16 pixels and 3,920 sprites, a third of them half clear and a tenth half as large again; 5.1 to 9.3 ms with zoom, flash and shake) |
 | Input to visible response | within one frame |
 
 ## 16. Open questions

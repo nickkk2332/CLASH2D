@@ -43,7 +43,7 @@ actions that call `hit`.
 | S10 | Coloured light (experimental) | S | S1, U4, P4 | todo |
 | U1 | Scene skeleton, frames, themes | M | K2 | beta |
 | U2 | Terminal frontend | S | U1 | done |
-| U3 | Window frontend | L | U1 | in progress |
+| U3 | Window frontend | L | U1 | done |
 | U4 | View model and world drawing | L | U1, S9 | beta |
 | U5 | Playback | L | U4 | beta |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |
@@ -785,6 +785,20 @@ Done when
   same cells.
 - A frame drawn headless to an image matches its golden image.
 - The drawing budget of 12 §15 is benchmarked.
+
+Done, with one caution: the window itself has not been seen on a
+screen. The renderer, the atlas, the input mapping and the choice of
+frontend are tested without one (decisions D-840 to D-844): golden
+images for a plain frame, sprites and each effect; the widget gallery
+drawn by the window compared cell by cell with the terminal's golden
+frame; the benchmark at 4.2 to 9.5 ms against 16 ms. Where it was
+built there is no display, and under a virtual X server the window
+system's library `libxkbcommon-x11` was missing, so `winit` refused (the
+application then fell back to the terminal, as it should). On a machine
+with a display, `cargo run -p clash-front-window --example effects` is
+the thing to try first, then `cargo run -p clash-app --release`. Left
+as gaps: a theme chosen during play does not change the window's font;
+no paste; a font for bold or italic of its own.
 
 ### U4 — View model and world drawing
 
