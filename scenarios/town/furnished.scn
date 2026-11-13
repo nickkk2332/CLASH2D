@@ -1,0 +1,28 @@
+# furnished (plans/worldgen.md, WG2; 10 §3.2, §4.1; 06 §9.3): the
+# bundled town at the seed the new-game screen offers is furnished from
+# its maps when its tracts first load. The character stands in the
+# street before the bakery's door, opens it, walks in to the counter,
+# takes a loaf lying there and eats it. The oven is a plain element
+# until somebody uses it, and the rack of bread behind the counter
+# holds latent loaves that are made when it is first searched.
+use default seed=1
+begin core:town_life place=1
+move @self @c:2069,1026,0
+assert "@c:2069,1027,0.block.state_name == 'closed'"
+assert "@c:2072,1033,0.fixture.device == null"
+assert "@c:2068,1033,0.fixture.latent"
+assert "len(@c:2069,1029,0.occupants) > 0"
+as @self do { "interact": { "who": "self", "target": "offset(self.loc, 0, 1, 0).block", "interaction": "core:open" } }
+expect event interacted
+assert "@c:2069,1027,0.block.state_name == 'open'"
+as @self do { "start_action": { "who": "self", "action": "core:go_to", "with": "{ 'to': offset(self.loc, 0, 2, 0) }" } }
+advance 4s
+assert "@self.loc.x == 2069 and @self.loc.y == 1028"
+as @self do { "take": { "who": "self", "what": "offset(self.loc, 0, 1, 0).occupants[0]" } }
+assert "len(@self.held('grasp')) == 1 and @self.held('grasp')[0].has_tag('food')"
+as @self do { "start_action": { "who": "self", "action": "core:eat", "with": "{ 'what': self.held('grasp')[0] }" } }
+advance 4s
+expect event tasted
+expect event dosed
+assert "@c:2068,1033,0.fixture.latent"
+expect hash 6f59428c8f832528f1867a693bf3a06f

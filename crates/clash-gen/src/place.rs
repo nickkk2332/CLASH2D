@@ -74,6 +74,29 @@ pub const SPAWN_PARAM_MAP: &str = "map";
 pub const SPAWN_KIND_CREATURE: &str = "creature";
 /// A spawn request for one member of a population.
 pub const SPAWN_KIND_POPULATION: &str = "population";
+/// A spawn request for items of one definition: `what` names an item,
+/// `count` says how many and `seed` what they are drawn from (10 §4.1).
+pub const SPAWN_KIND_ITEM: &str = "item";
+/// A spawn request for draws from a content table: `what` names the
+/// table, `count` says how many draws and `seed` what they are drawn
+/// from (10 §4.1; 06 §9.3).
+pub const SPAWN_KIND_TABLE: &str = "table";
+/// A spawn request for the device of the element in a cell: `what` is
+/// the name a map gave it (empty for none), and `config` its settings
+/// (10 §3.2; 16 §4.3).
+pub const SPAWN_KIND_DEVICE: &str = "device";
+/// The parameter of an item or table request that says how many items,
+/// or how many draws: an `int`.
+pub const SPAWN_PARAM_COUNT: &str = "count";
+/// The parameter of an item or table request that says what its items
+/// are drawn from: an `int`, the bits of a positional seed (10 §3.4).
+pub const SPAWN_PARAM_SEED: &str = "seed";
+/// The parameter of a device request that holds the settings a map
+/// gives the device, by key: a `map`.
+pub const SPAWN_PARAM_CONFIG: &str = "config";
+
+/// The domain of the seed each lot of items of a map is drawn from.
+const ITEMS_DOMAIN: HashDomain = HashDomain::new("gen.place.items");
 
 /// The world's id of a map: the same number as the loader's.
 pub fn world_map_id(map: MapId) -> clash_world::MapId {
@@ -317,6 +340,75 @@ impl PlacedMap {
                     params,
                 });
             }
+        }
+        requests
+    }
+
+    /// What the map furnishes its cells with (10 §3.2, §4.1): one spawn
+    /// request for each `items` a cell spec gave, and one for each
+    /// device a cell spec gave settings, each at its cell.
+    ///
+    /// An item request's `what` is the item or the content table as
+    /// written, its `kind` [`SPAWN_KIND_ITEM`] or [`SPAWN_KIND_TABLE`],
+    /// its `count` how many items or draws the map drew (its `chance`
+    /// and `count` are decided when it is resolved), and its `seed`
+    /// a positional hash of the placement's seed, the domain
+    /// `gen.place.items`, the cell and the request's place among those
+    /// of its cell. What the items are, and how a table draws, follow
+    /// from that seed alone, so the same placement gives the same things
+    /// however its tracts are realised. A device request's `what` is
+    /// the name the map gave it, or empty, and its `config` the
+    /// settings. Every request carries `map`, the map's qualified id.
+    /// A device that is only named is not handed on: its name is for
+    /// links, which networks read (16 §6).
+    pub fn furnishings(&self) -> Vec<SpawnRequest> {
+        let mut requests = Vec::new();
+        let mut last: Option<(IVec3, i32)> = None;
+        for items in &self.map.items {
+            let index = match last {
+                Some((cell, index)) if cell == items.at => index + 1,
+                _ => 0,
+            };
+            last = Some((items.at, index));
+            let at = items.at;
+            let seed = pos_hash(
+                self.placement.seed,
+                ITEMS_DOMAIN,
+                at.x,
+                at.y,
+                at.z,
+                index as u64,
+            );
+            let (what, kind) = match &items.source {
+                crate::map::ItemSource::Item(id) => (id, SPAWN_KIND_ITEM),
+                crate::map::ItemSource::Table(id) => (id, SPAWN_KIND_TABLE),
+            };
+            let mut params = VarMap::new();
+            params.set(SPAWN_PARAM_KIND, kind);
+            params.set(SPAWN_PARAM_MAP, self.name.as_str());
+            params.set(SPAWN_PARAM_COUNT, i64::from(items.count));
+            params.set(SPAWN_PARAM_SEED, seed as i64);
+            requests.push(SpawnRequest {
+                what: what.clone(),
+                at: self.world(at),
+                params,
+            });
+        }
+        for (at, device) in &self.map.devices {
+            if device.config.is_empty() {
+                continue;
+            }
+            let config: BTreeMap<String, clash_core::Value> =
+                device.config.iter().cloned().collect();
+            let mut params = VarMap::new();
+            params.set(SPAWN_PARAM_KIND, SPAWN_KIND_DEVICE);
+            params.set(SPAWN_PARAM_MAP, self.name.as_str());
+            params.set(SPAWN_PARAM_CONFIG, clash_core::Value::Map(config));
+            requests.push(SpawnRequest {
+                what: device.name.clone().unwrap_or_default(),
+                at: self.world(*at),
+                params,
+            });
         }
         requests
     }
@@ -697,8 +789,9 @@ pub struct MapApplied {
     /// How many changes the world refused: cells beyond an edge, or too
     /// far from the rest of their tract to store.
     pub refused: u32,
-    /// What the simulation is to put there (06 §12): the map's spawns
-    /// whose cells are in the tracts written.
+    /// What the simulation is to put there (06 §12): the map's spawns,
+    /// then its furnishings ([`PlacedMap::furnishings`]), whose cells
+    /// are in the tracts written.
     pub spawns: Vec<SpawnRequest>,
     /// The areas made: those of the map whose home is in the tracts
     /// written.
@@ -740,6 +833,7 @@ fn apply_window(
     let spawns = placed
         .spawns()
         .into_iter()
+        .chain(placed.furnishings())
         .filter(|spawn| written(&canvas, spawn.at))
         .collect();
     let (changed, refused) = (canvas.changed, canvas.refused);
