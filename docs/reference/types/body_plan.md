@@ -24,6 +24,7 @@ One part of a plan (06 §6.2).
 - `in` (string, or `null`; optional): The part it sits inside: it is reached only through that part's layers.
 - `socket` (string, or `null`; optional): The socket of the part it is `on` that it takes.
 - `side` (string, or `null`; optional): A label telling this part from its twin: `"left"`. Free text.
+- `name` (string, or `null`; optional): What a reader calls this part of a body of the plan: `left arm`. Left out, its side and its definition's name, or the definition's name alone (decision D-863).
 - `scale` (number; optional): Its size relative to the rest of the body. Default 1.
 
 <a id="stop"></a>

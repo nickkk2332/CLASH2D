@@ -108,6 +108,7 @@ pub(super) enum Prop {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum PartProp {
     Name,
+    Label,
     Def,
     Owner,
     Parent,
@@ -137,6 +138,7 @@ pub(super) enum WoundProp {
     Part,
     Owner,
     Kind,
+    KindName,
     Depth,
     Area,
     Energy,
@@ -149,6 +151,7 @@ pub(super) enum WoundProp {
 /// The names of the properties of a part, with which each is.
 const PART_PROPS: &[(&str, PartProp)] = &[
     ("name", PartProp::Name),
+    ("label", PartProp::Label),
     ("def", PartProp::Def),
     ("owner", PartProp::Owner),
     ("parent", PartProp::Parent),
@@ -177,6 +180,7 @@ const WOUND_PROPS: &[(&str, WoundProp)] = &[
     ("part", WoundProp::Part),
     ("owner", WoundProp::Owner),
     ("kind", WoundProp::Kind),
+    ("kind_name", WoundProp::KindName),
     ("depth", WoundProp::Depth),
     ("area", WoundProp::Area),
     ("energy", WoundProp::Energy),
@@ -530,6 +534,11 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     };
     let part_props = [
         of("name", Type::Str, "The part's name in its body."),
+        of(
+            "label",
+            Type::Str,
+            "What a reader calls the part: the `name` its body's plan gives it, or else its side and its definition's name (`left arm`).",
+        ),
         of("def", Type::Id(body_part), "What kind of part it is."),
         of(
             "owner",
@@ -638,6 +647,11 @@ pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
         of("owner", Type::Subject(entity), "Whose wound it is.").yields_own(true),
         of("kind", kind_ty, "The kind of damage that made it."),
         of(
+            "kind_name",
+            Type::Str,
+            "The kind of damage that made it in plain words, for a reader: its damage type's bare id with spaces for underscores (`cut`).",
+        ),
+        of(
             "depth",
             Type::Int,
             "How many of the part's layers it goes through, from the outside.",
@@ -727,6 +741,7 @@ fn answer_part(
     };
     match prop {
         PartProp::Name => Value::text(part.name()),
+        PartProp::Label => Value::text(super::label_of(defs, body, part)),
         PartProp::Def => id(Some(defs.def_types().body_part), part.def().index()),
         PartProp::Owner => Value::Subject(Handle::new(kinds.entity, entity.to_bits())),
         PartProp::Parent => part.parent().map_or(Value::Null, |parent| {
@@ -784,6 +799,7 @@ fn answer_wound(
         WoundProp::Part => Value::Subject(part_handle(kinds, entity, wound.part())),
         WoundProp::Owner => Value::Subject(Handle::new(kinds.entity, entity.to_bits())),
         WoundProp::Kind => id(defs.def_types().damage_type, wound.kind().index()),
+        WoundProp::KindName => Value::text(defs.damage_type_words(wound.kind())),
         WoundProp::Depth => Value::Int(i64::from(wound.depth())),
         WoundProp::Area => Value::Real(wound.area()),
         WoundProp::Energy => Value::Real(wound.energy()),

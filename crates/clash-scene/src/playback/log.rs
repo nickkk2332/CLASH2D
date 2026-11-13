@@ -158,6 +158,8 @@ impl MessageLog {
         importance: Importance,
     ) -> bool {
         self.revision = self.revision.wrapping_add(1);
+        // Every line begins with a capital, whoever wrote it.
+        let text = text.capitalised();
         if let Some(last) = self.lines.last_mut()
             && last.category == category
             && last.importance == importance
@@ -264,10 +266,11 @@ mod tests {
             log.push("n", plain(&format!("line {n}")));
         }
         assert!(log.len() <= 10, "{}", log.len());
-        assert_eq!(log.lines().last().unwrap().text.plain(), "line 99");
+        // Every line begins with a capital, whoever wrote it.
+        assert_eq!(log.lines().last().unwrap().text.plain(), "Line 99");
         log.set_limit(3);
         let kept: Vec<String> = log.lines().iter().map(|line| line.text.plain()).collect();
-        assert_eq!(kept, ["line 97", "line 98", "line 99"]);
+        assert_eq!(kept, ["Line 97", "Line 98", "Line 99"]);
         let before = log.revision();
         log.clear();
         assert!(log.is_empty());

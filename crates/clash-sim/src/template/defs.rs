@@ -564,6 +564,16 @@ giving! {
         /// (06 §11). Default true for one with a body.
         #[serde(default)]
         pub blocks: Option<bool>,
+        /// Whether a player's character may be made from it (13 §4.2):
+        /// a game scenario that lets the player make or choose their
+        /// character offers every playable template, unless it names
+        /// its own. Default false.
+        #[serde(default)]
+        pub playable: bool,
+        /// A line or two about it, for the screens that offer it: what
+        /// sort of person it makes.
+        #[serde(default)]
+        pub description: Option<Text>,
         /// The choices made within it.
         #[serde(default)]
         pub choices: Vec<ChoiceDef>,
@@ -605,6 +615,7 @@ impl Def for TemplateDef {
 
     fn compile(&mut self, cx: &mut CompileCx<'_>) {
         cx.compile(&mut self.name, &Scope::new().pure());
+        cx.compile(&mut self.description, &Scope::new().pure());
         self.compile_gives(cx);
         for choice in &mut self.choices {
             choice.compile(cx);

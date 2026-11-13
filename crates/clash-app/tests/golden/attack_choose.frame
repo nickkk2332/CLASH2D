@@ -3,7 +3,7 @@ size 80x24
 chars
 |                  .   .n #.....   .                   ┌────────────────────────┐|
 |                   .   . #n...   .      .             │Ada                     │|
-|                    ,# . #.... #,     ..              │Target Brute            │|
+|                    ,# . #.... #,     ..              │Target The person       │|
 |                     =  . ...  =    ,'.               │Blood  █████████████████│|
 |                 ..  #. .#..n .#  ..,#                │Pain   ░░░░░░░░░░░░░░░░░│|
 |                 ...,##=#='=#=##,...,## # # # ##    ,#│                        │|
@@ -11,9 +11,9 @@ chars
 |          │Kick                                                      │         │|
 |          │Punch                                                     │         │|
 |          │Smash                                                     │         │|
-|          │Slash: Slash needs something in hand that is `blade`.     │         │|
-|          │Stab: Stab needs something in hand that is `blade`.       │         │|
-|          │Whirl: Whirl needs something in hand that is `blade`.     │         │|
+|          │Slash: Slash needs a blade in hand.                       │         │|
+|          │Stab: Stab needs a blade in hand.                         │         │|
+|          │Whirl: Whirl needs a blade in hand.                       │         │|
 |          │Shove: That is out of reach.                              │         │|
 |          │                                                          │         │|
 |          │                                                          │         │|
@@ -36,9 +36,9 @@ fg
 |0000000000tuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuut000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
-|0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvt000000000c|
-|0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvt000000000c|
-|0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvt000000000c|
+|0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
+|0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
+|0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|

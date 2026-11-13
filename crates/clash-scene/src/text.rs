@@ -134,6 +134,24 @@ pub fn tag_names(source: &str) -> Result<Vec<String>, TextError> {
 }
 
 impl RichText {
+    /// The same text with its first letter a capital, where the first
+    /// character that is not a space is a lower-case letter that has a
+    /// capital of its own: how every line of the log begins (decision
+    /// D-866). Its style is kept.
+    #[must_use]
+    pub fn capitalised(mut self) -> RichText {
+        if let Some(at) = self.chars.iter().position(|ch| !ch.is_whitespace())
+            && let Some(first) = self.chars.get(at).copied()
+            && first.is_lowercase()
+        {
+            let mut upper = first.to_uppercase();
+            if let (Some(capital), None) = (upper.next(), upper.next()) {
+                self.chars[at] = capital;
+            }
+        }
+        self
+    }
+
     /// Text with no styles at all. Angle brackets are taken literally.
     pub fn plain_text(text: &str) -> RichText {
         let chars: Vec<char> = text.chars().collect();
@@ -322,6 +340,22 @@ impl RichText {
     ) -> i32 {
         let end = self.chars.len().min(usize::try_from(max).unwrap_or(0));
         self.draw(canvas, x, y, (0, end), base)
+    }
+}
+
+#[cfg(test)]
+mod capitals {
+    use super::RichText;
+
+    #[test]
+    fn a_line_begins_with_a_capital_and_keeps_the_rest() {
+        let shown = |text: &str| RichText::plain_text(text).capitalised().plain();
+        assert_eq!(shown("nobody is in sight."), "Nobody is in sight.");
+        assert_eq!(shown("  the door opens."), "  The door opens.");
+        assert_eq!(shown("Already so."), "Already so.");
+        assert_eq!(shown("“quoted” stays."), "“quoted” stays.");
+        assert_eq!(shown("12 arrows."), "12 arrows.");
+        assert_eq!(shown(""), "");
     }
 }
 

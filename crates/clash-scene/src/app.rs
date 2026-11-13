@@ -19,6 +19,7 @@
 //! | `creation` | `any` | The character being made (06 §10.3) |
 //! | `setup` | `any` | The game being set up: the scenario chosen, its places, options and seed (13 §12) |
 //! | `templates` | `list<app_entry>` | The templates a character may be made from |
+//! | `defines(type)` | `bool` | Whether the loaded mods define anything of a definition type: the options screen offers a setting only for a system that has something loaded |
 //! | `talk` | `any` | What the character could say to someone, as the service `talk` last gathered it |
 //! | `keys(context)` | `list<map>` | What each name of a keymap context is bound to |
 //! | `size` | `list<int>` | The grid, as `[columns, rows]` |
@@ -180,6 +181,13 @@ pub trait AppState {
         Vec::new()
     }
 
+    /// Whether the loaded mods define anything of a definition type, by
+    /// its JSON name: `app.defines('cutscene')` (decision D-867). An
+    /// application with no definitions defines nothing.
+    fn defines(&self, _def_type: &str) -> bool {
+        false
+    }
+
     /// What the character played could say to someone, as the service
     /// `talk` last gathered it (15 §11), as a value bindings can read:
     /// `app.talk`. The bundled application gives a map with `to`, the one
@@ -233,6 +241,7 @@ enum AppProp {
     Creation,
     Setup,
     Templates,
+    Defines,
     Talk,
     Keys,
     Controls,
@@ -293,14 +302,17 @@ pub fn register_expr(registry: &mut Registry) {
             .doc("The game being set up on the new-game screens (13 §12): the scenario chosen, its places, the options it asks about and how its seed is chosen; null when none is."),
         PropertySpec::new(app, "templates", Type::list(Type::Subject(entry)))
             .doc("The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3)."),
+        PropertySpec::new(app, "defines", Type::Bool)
+            .param("type", Type::Str, "A definition type, by the name data writes it with: `cutscene`, `recipe`.")
+            .doc("Whether the loaded mods define anything of a definition type: so that a screen offers a setting only for a system that has something to work on (decision D-867). False for a type no loaded definition has, and for one the engine does not know."),
         PropertySpec::new(app, "talk", Type::Any)
             .doc("What the character played could say to someone, as the service `talk` last gathered it (15 §11): a map with `to`, the one talked to; `options`, each a map with `id`, `text`, `kind` and `lines` (the message kind and the table of lines it is said with, null where it says nothing) and `says`, whether it says something; and `why`, the reason nothing can be said, or empty. Null when nothing was gathered."),
         PropertySpec::new(app, "keys", Type::list(Type::map(Type::Str)))
             .param("context", Type::Str, "A context of the keymap: `play`, `menu`, `targeting`.")
-            .doc("What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2)."),
+            .doc("What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; `keys`, every key given that name, as a keymap writes them, joined by commas; and `shown`, the same keys as a person reads them (`Shift+J`, `Tab`, `F1`, `Esc`) (12 §9.2)."),
         PropertySpec::new(app, "controls", Type::list(Type::map(Type::Str)))
             .optional_param("context", Type::Str, "A context of the keymap whose keys are listed: left out, `play`.")
-            .doc("Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; and `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty."),
+            .doc("Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty; and `shown`, the same keys as a person reads them (`Shift+J`, `Tab`, `F1`, `Esc`)."),
         PropertySpec::new(app, "target", Type::Any)
             .doc("The creature selected as the target in play (the `camera` effect's `target`), while the party perceives it; null when none is or it is no longer perceived. Read of it only what may be read of anyone the party perceives."),
         PropertySpec::new(app, "size", Type::list(Type::Int))
@@ -352,6 +364,7 @@ impl AppIds {
         add(app, "creation", AppProp::Creation);
         add(app, "setup", AppProp::Setup);
         add(app, "templates", AppProp::Templates);
+        add(app, "defines", AppProp::Defines);
         add(app, "talk", AppProp::Talk);
         add(app, "keys", AppProp::Keys);
         add(app, "controls", AppProp::Controls);
@@ -429,31 +442,33 @@ impl AppReader<'_> {
         let Some(bound) = self.keymap.contexts.get(context) else {
             return ExprValue::list([]);
         };
-        let mut by_name: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+        let mut by_name: BTreeMap<&str, Vec<(String, String)>> = BTreeMap::new();
         for (key, name) in bound {
             by_name
                 .entry(name.as_str())
                 .or_default()
-                .push(key.to_string());
+                .push((key.to_string(), key.label()));
         }
-        let mut rows: Vec<(String, &str, String, String)> = by_name
+        let mut rows: Vec<(String, &str, String, String, String)> = by_name
             .into_iter()
             .map(|(name, keys)| {
                 let (label, doc) = self
                     .ui
                     .control_words(name, self.keymap_ns)
                     .unwrap_or_else(|| (name.to_owned(), String::new()));
-                (label, name, doc, keys.join(", "))
+                let (written, shown): (Vec<String>, Vec<String>) = keys.into_iter().unzip();
+                (label, name, doc, written.join(", "), shown.join(", "))
             })
             .collect();
         // In the order a reader looks them up: by what they are called.
         rows.sort();
-        ExprValue::list(rows.into_iter().map(|(label, name, doc, keys)| {
+        ExprValue::list(rows.into_iter().map(|(label, name, doc, keys, shown)| {
             ExprValue::map([
                 ("name", ExprValue::text(name)),
                 ("label", ExprValue::text(label)),
                 ("doc", ExprValue::text(doc)),
                 ("keys", ExprValue::text(keys)),
+                ("shown", ExprValue::text(shown)),
             ])
         }))
     }
@@ -462,13 +477,13 @@ impl AppReader<'_> {
     /// in force gives it in a context.
     fn controls(&self, context: &str) -> ExprValue {
         let bound = self.keymap.contexts.get(context);
-        let mut rows: Vec<(String, String, String, String)> = Vec::new();
+        let mut rows: Vec<(String, String, String, String, String)> = Vec::new();
         for id in self.ui.ids::<ControlDef>() {
             let Some(control) = self.ui.get::<ControlDef>(id) else {
                 continue;
             };
             let bare = id.rsplit(':').next().unwrap_or(id);
-            let keys: Vec<String> = bound
+            let keys: Vec<(String, String)> = bound
                 .map(|bound| {
                     bound
                         .iter()
@@ -477,20 +492,28 @@ impl AppReader<'_> {
                                 .resolve::<ControlDef>(name, self.keymap_ns)
                                 .is_some_and(|found| found == *id)
                         })
-                        .map(|(key, _)| key.to_string())
+                        .map(|(key, _)| (key.to_string(), key.label()))
                         .collect()
                 })
                 .unwrap_or_default();
+            let (written, shown): (Vec<String>, Vec<String>) = keys.into_iter().unzip();
             let label = control.name.clone().unwrap_or_else(|| bare.to_owned());
-            rows.push((label, id.clone(), control.doc.clone(), keys.join(", ")));
+            rows.push((
+                label,
+                id.clone(),
+                control.doc.clone(),
+                written.join(", "),
+                shown.join(", "),
+            ));
         }
         rows.sort();
-        ExprValue::list(rows.into_iter().map(|(label, id, doc, keys)| {
+        ExprValue::list(rows.into_iter().map(|(label, id, doc, keys, shown)| {
             ExprValue::map([
                 ("id", ExprValue::text(id)),
                 ("label", ExprValue::text(label)),
                 ("doc", ExprValue::text(doc)),
                 ("keys", ExprValue::text(keys)),
+                ("shown", ExprValue::text(shown)),
             ])
         }))
     }
@@ -535,6 +558,11 @@ impl AppReader<'_> {
             AppProp::Templates => ExprValue::list(
                 (0..self.state.templates().len())
                     .map(|index| self.entry_handle(TEMPLATES_CODE, index)),
+            ),
+            AppProp::Defines => ExprValue::Bool(
+                args.first()
+                    .and_then(ExprValue::as_str)
+                    .is_some_and(|ty| self.state.defines(ty)),
             ),
             AppProp::Keys => args
                 .first()
@@ -603,6 +631,7 @@ mod tests {
                 "can_save",
                 "controls",
                 "creation",
+                "defines",
                 "keys",
                 "mods",
                 "pref",

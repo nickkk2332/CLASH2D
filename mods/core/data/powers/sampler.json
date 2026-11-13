@@ -1,0 +1,6 @@
+[
+  { "//": "The sampler of `powers.json`, every power there is, offered to players as well (13 §4.2; `playable.json` has the others). A patch, so it comes after the file that defines it.",
+    "type": "template", "id": "power_sampler", "patch": true,
+    "playable": true,
+    "description": "Every power there is, and the reserves to pay for them." }
+]

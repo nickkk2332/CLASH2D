@@ -9,7 +9,7 @@
       { "fill": 1, "cols": [
         { "fill": 3, "frame": "Carried",
           "list": { "id": "things", "rows": "view.carried", "selected": "row",
-                    "item": "{if it.holder == view then '' else '  '}{name(it)}{if (it.count ?? 1) > 1 then ' x' + str(it.count) else ''}  <dim>{if it.hold == 'grasp' then 'in hand' else if it.hold == 'worn' then 'worn' else if it.hold == 'stowed' then 'in ' + name(it.holder) else (it.hold ?? '')}{if is_null(it.capacity_mass) then '' else ', ' + str(round((it.carried_mass ?? 0) * 10) / 10) + ' of ' + str(it.capacity_mass) + ' kg'}</>",
+                    "item": "{if it.holder == view then '' else '  '}{name(it)}{if (it.count ?? 1) > 1 then ' x' + str(it.count) else ''}  <dim>{if it.hold == 'grasp' then 'in hand' else if it.hold == 'worn' then 'worn' else if it.hold == 'stowed' or it.hold == 'inside' then 'in ' + name(it.holder) else if it.hold == 'fixed' then 'fitted to ' + name(it.holder) else ''}{if is_null(it.capacity_mass) then '' else ', ' + str(round((it.carried_mass ?? 0) * 10) / 10) + ' of ' + str(it.capacity_mass) + ' kg'}</>",
                     "empty": "Nothing.",
                     "tip": "Enter: what to do with it.",
                     "on_activate": [
@@ -19,7 +19,7 @@
           "tree": { "id": "body", "open": true,
                     "rows": "if len(view.parts ?? []) == 0 or not is_null(view.parts[0].parent) then view.parts else [view.parts[0]]",
                     "children": "it.attached",
-                    "item": "{it.name}  <dim>{list(view.worn_on(it.name) ?? [])}</>",
+                    "item": "{it.label}  <dim>{list(view.worn_on(it.name) ?? [])}</>",
                     "empty": "No body.",
                     "tip": "Right opens a part, Left closes it." } } ] },
       { "slot": "inventory.extra" },
@@ -28,7 +28,7 @@
       { "height": 1, "tooltip": { "value": "Enter on a thing: what to do with it. Tab: the other side. Esc: back." } } ] },
     "keys": { "back": [ { "close": {} } ] } },
 
-  { "//": "What can be done with one thing the character has: the verbs of the items package that apply to how it is held, each the action of that name, named bare as the walking controls name `step`, with the thing as `what`. `put_in` asks which container first and gives it as `container`; `take_out` gives the character as `to`; `give` asks for whatever the action needs. An action no loaded mod defines is refused by the simulation with its reason, which the log shows. Opened by the inventory with the thing (`item`), how it is held (`hold`) and what it is called (`name`).",
+  { "//": "What can be done with one thing the character has: the item actions, each named bare as the walking controls name `step`, with the thing as `what`: `drop`, `wear`, `take_off`, `stow`, `put_in` (which asks which container first and gives it as `container`), `take_out` and `give` (which asks to whom). The `core` mod defines them (`holding.json`); an action no loaded mod defines is refused by the simulation with its reason, which the log shows, and so is one that cannot be done, with the action's own reason. Opened by the inventory with the thing (`item`), how it is held (`hold`) and what it is called (`name`).",
     "type": "screen", "id": "item",
     "title": "What to do",
     "params": { "item": "any", "hold": "string?", "name": "string?" },
@@ -41,7 +41,7 @@
                     "on_activate": [ { "act": { "action": "wear", "params": { "what": "$item" } } }, { "close": {} } ] } },
       { "if": "$hold == 'worn'",
         "button": { "id": "remove", "label": "Take off",
-                    "on_activate": [ { "act": { "action": "remove", "params": { "what": "$item" } } }, { "close": {} } ] } },
+                    "on_activate": [ { "act": { "action": "take_off", "params": { "what": "$item" } } }, { "close": {} } ] } },
       { "if": "$hold != 'stowed'",
         "button": { "id": "stow", "label": "Stow",
                     "on_activate": [ { "act": { "action": "stow", "params": { "what": "$item" } } }, { "close": {} } ] } },
@@ -51,13 +51,13 @@
                                      { "close": {} } ] } },
       { "if": "$hold == 'stowed'",
         "button": { "id": "take_out", "label": "Take out",
-                    "on_activate": [ { "act": { "action": "take_out", "params": { "what": "$item", "to": "view" } } }, { "close": {} } ] } },
+                    "on_activate": [ { "act": { "action": "take_out", "params": { "what": "$item" } } }, { "close": {} } ] } },
       { "button": { "id": "throw", "label": "Throw...",
                     "on_activate": [ { "act": { "action": "throw", "params": "needed",
                                                 "with": { "what": "$item", "target": "app.target" } } },
                                      { "close": {} } ] } },
       { "button": { "id": "give", "label": "Give...",
-                    "on_activate": [ { "act": { "action": "give", "params": "needed", "from": { "what": "[$item]" } } }, { "close": {} } ] } },
+                    "on_activate": [ { "act": { "action": "give", "params": "needed", "with": { "what": "$item" } } }, { "close": {} } ] } },
       { "text": "<dim>Up and Down choose, Enter does it, Esc goes back.</>" } ] },
     "keys": { "back": [ { "close": {} } ] } }
 ]

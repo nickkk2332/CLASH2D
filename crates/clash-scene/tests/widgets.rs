@@ -1084,15 +1084,15 @@ fn log_shows_the_latest_lines_and_scrolls_back() {
     assert_golden(golden("widget_log"), &frame);
     assert_eq!(
         frame.row_text(1),
-        "│speech line 6    │││speech line 3     │"
+        "│Speech line 6    │││Speech line 3     │"
     );
     assert_eq!(
         frame.row_text(3),
-        "│combat line 8    │││speech line 9     │"
+        "│Combat line 8    │││Speech line 9     │"
     );
     assert_eq!(
         frame.row_text(4),
-        "│speech line 9    █││                  │"
+        "│Speech line 9    █││                  │"
     );
     assert_eq!(
         frame.get(1, 1).unwrap().fg,
@@ -1102,24 +1102,24 @@ fn log_shows_the_latest_lines_and_scrolls_back() {
     fix.press(&mut screen, &["up", "up"]);
     let frame = draw_with(&mut screen, 40, 6, &data);
     assert!(
-        frame.row_text(1).starts_with("│combat line 4"),
+        frame.row_text(1).starts_with("│Combat line 4"),
         "scrolled back two lines"
     );
     fix.press(&mut screen, &["home"]);
     let frame = draw_with(&mut screen, 40, 6, &data);
     assert_golden(golden("widget_log_oldest"), &frame);
-    assert!(frame.row_text(1).starts_with("│combat line 1"));
+    assert!(frame.row_text(1).starts_with("│Combat line 1"));
     fix.press(&mut screen, &["down"]);
     assert!(
         draw_with(&mut screen, 40, 6, &data)
             .row_text(1)
-            .starts_with("│combat line 2")
+            .starts_with("│Combat line 2")
     );
     fix.press(&mut screen, &["end"]);
     assert!(
         draw_with(&mut screen, 40, 6, &data)
             .row_text(4)
-            .starts_with("│speech line 9")
+            .starts_with("│Speech line 9")
     );
 
     // With no log at hand the widget is empty, not an error.

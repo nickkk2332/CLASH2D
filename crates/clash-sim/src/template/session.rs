@@ -324,6 +324,7 @@ impl CreationSession {
                     ("options", Value::List(options.into())),
                     ("parts", Value::List(parts.into())),
                     ("value", view.selection.to_value()),
+                    ("shown", Value::from(shown(&view).as_str())),
                     ("by_default", Value::Bool(view.by_default)),
                 ])
             })
@@ -348,6 +349,41 @@ impl CreationSession {
                 problem.map_or(Value::Null, |problem| Value::from(problem.to_string())),
             ),
         ])
+    }
+}
+
+/// What is selected for a choice as a reader reads it: the names of the
+/// options chosen, joined by commas; the number; the text; or how many
+/// parts. Empty for nothing.
+fn shown(view: &ChoiceView) -> String {
+    match view.kind {
+        ChoiceKind::Pick | ChoiceKind::Points => view
+            .options
+            .iter()
+            .filter(|option| option.chosen)
+            .map(|option| option.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
+        ChoiceKind::Range => match &view.selection {
+            Selection::Number(value) => {
+                let value = value.get();
+                if (value - value.round()).abs() < 1e-9 {
+                    format!("{}", value.round() as i64)
+                } else {
+                    format!("{value:.2}")
+                }
+            }
+            _ => String::new(),
+        },
+        ChoiceKind::Text => match &view.selection {
+            Selection::Text(text) => text.clone(),
+            _ => String::new(),
+        },
+        ChoiceKind::Assemble => match &view.selection {
+            Selection::Options(parts) if parts.len() == 1 => "1 part".to_owned(),
+            Selection::Options(parts) => format!("{} parts", parts.len()),
+            _ => String::new(),
+        },
     }
 }
 

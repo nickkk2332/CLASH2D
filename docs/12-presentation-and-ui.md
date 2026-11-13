@@ -203,7 +203,8 @@ D-652):
    perception (section 3.5), so that the host answers what the party
    perceived as of the end of the batch (section 7.5). A fault and a
    `message` for the player also get a line in the log at once
-   (categories `fault` and `message`). The scene is advanced by the
+   (categories `fault` and `message`). Every line of the log begins
+   with a capital letter, made so as it is added (decision D-866). The scene is advanced by the
    real time elapsed and plays what falls due.
 5. **The present.** Once playback has caught up, the view model is
    given what the party perceives that no event said (section 3.5):
@@ -345,7 +346,10 @@ and each objective and mission as the character knows them (`[x]` done,
 `[-]` failed or expired, `[ ]` not). An ended game is not advanced,
 cannot be saved, and saves nothing as it is left.
 
-The bundled `core` mod has five, all of the template `core:person`:
+The bundled `core` mod has five, all of the template `core:person`
+(the sandbox and the town let the player make the character, the
+errand and the last stand choose one ready-made, the lane gives it;
+13 §4.2):
 `core:town`, the test city with its doors open; `core:wayside`, the
 countryside; `core:town_life`, the generated market town to live in,
 begun on its north street or in its square, carrying on as a newcomer
@@ -366,9 +370,22 @@ the service `creation`:
 | `name` | `value` | The character's name, a text: kept, and selected for the choice that sets the name. |
 | `seed` | `value` | The seed the next game's world is made with and random selections are drawn from, a whole number. |
 | `finish` | | Checks the character: refused with the reason if it cannot be made, otherwise kept for `new_game`. |
+| `scenario` | `value` | The game the character is made for, by its scenario's qualified id, or null: `app.templates` then offers what that game allows (13 §4.2). A change drops the session and the finished character. |
 
 A refusal is the service's, so the application shows it on the screen
-of the role `error` (section 3.2). Every op but `name` and `seed` needs
+of the role `error` (section 3.2). What may be made is the game's
+(decision D-860): `app.templates` lists the templates the game named
+with `scenario` offers (what its character entry's `pick` lists, or
+every playable template), each with its `name` and `description`, or
+with no game named every playable template; `begin` takes only one of
+them; in a game whose character is chosen ready-made (`create` false)
+`select` and `clear` are refused but for the choice that sets the name,
+and `app.creation.editable` is false. `app.creation` also has
+`made_from`, what the session's template is called, and each choice a
+`shown`, what is selected as a reader reads it (the options' names, the
+number, the text). `new_game` makes the finished character only for the
+game it was made for (or for none named, if that game offers its
+template), and otherwise the scenario's template. Every op but `name` and `seed` needs
 a session in progress; those two are kept without one. Any change to a
 session drops a finished character, which must be finished again. Once
 a game has begun the session and the finished character are dropped,
@@ -403,6 +420,14 @@ records them); the party's own members, always, where they are; and
 whatever stands in a cell in view and gives off something a sense of
 light could see. A creature is drawn with its templates' glyph, an item
 with its definition's, anything else as the theme's `suspected` mark.
+
+**Names on screens** (decision D-862). The text helpers a screen or a
+show calls (`name`, `the`, `a`, `list`, ...) read through the reader
+lens with the player's character as the reader, so that everyone else
+is named as the character knows them (`the person`, a name it has
+learnt) and a thing by what it was made from (`a parcel`); the
+character itself is named by its own name, or the one the player gave
+it, not "you".
 
 **Playback is answered** from it: `perceived` is the simulation's tag
 (`Sim::party_perceived`): seen, heard from a place, or neither;
@@ -1828,10 +1853,11 @@ properties, all safe for belief:
 | `setup` | `any` | The game being set up (section 3.4): null until a scenario with a choice is asked for |
 | `profile`, `scenario` | `app_entry?` | The ones in use |
 | `pref(id)` | `any` | A preference's value (below). `id` is the id of a `preference`, checked when mods load. |
-| `creation` | `any` | The character being made (06 §10.3, section 3.4): null while no creation session is in progress, else the map `CreationSession::to_value` gives (`templates`; `choices`, each a map of `key`, `name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`, `max`, `max_length`, `options` with `id`, `name`, `cost` and `chosen`, `parts`, `value` and `by_default`; `complete`; `problem`) with `template`, the first template's qualified id, `name`, `seed`, and `finished`, whether `new_game` will make this character. |
-| `templates` | `list<app_entry>` | The templates a character may be made from: each by its qualified `id`, its `name` and, as its `description`, its `kind` |
-| `keys(context)` | `list<map>` | What the keymap in force binds in a context (section 9.2): one map for each name a key there is given, in order of what it is called, with `name`; `label`, the `name` of the control of that name, or else the name; `doc`, the control's `doc`, or empty; and `keys`, every key given that name as a keymap writes it, joined by commas |
-| `controls(context?)` | `list<map>` | Every control the loaded mods define, bound or not, in order of what it is called (decision D-797): one map for each with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, or empty; and `keys`, every key the keymap in force gives it in the context (left out, `play`), joined by commas, or empty |
+| `creation` | `any` | The character being made (06 §10.3, section 3.4): null while no creation session is in progress, else the map `CreationSession::to_value` gives (`templates`; `choices`, each a map of `key`, `name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`, `max`, `max_length`, `options` with `id`, `name`, `cost` and `chosen`, `parts`, `value`, `shown` and `by_default`; `complete`; `problem`) with `template`, the first template's qualified id, `made_from`, what it is called, `name`, `seed`, `finished`, whether `new_game` will make this character, and `editable`, whether the game lets the player make its choices (13 §4.2). |
+| `templates` | `list<app_entry>` | The templates the game the character is made for offers (section 3.4, 13 §4.2): each by its qualified `id`, its `name` and its `description` |
+| `defines(type)` | `bool` | Whether the loaded mods define anything of a definition type, by its JSON name (decision D-867) |
+| `keys(context)` | `list<map>` | What the keymap in force binds in a context (section 9.2): one map for each name a key there is given, in order of what it is called, with `name`; `label`, the `name` of the control of that name, or else the name; `doc`, the control's `doc`, or empty; `keys`, every key given that name as a keymap writes it, joined by commas; and `shown`, the same as a person reads them (`Shift+J`, `Tab`; decision D-866) |
+| `controls(context?)` | `list<map>` | Every control the loaded mods define, bound or not, in order of what it is called (decision D-797): one map for each with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, or empty; `keys`, every key the keymap in force gives it in the context (left out, `play`), joined by commas, or empty; and `shown`, the same as a person reads them |
 | `target` | `any` | The creature selected as the target in play (the `camera` effect's `target`), while the party perceives it; null otherwise. Read of it only what may be read of anyone the party perceives (decision D-793). |
 | `talk` | `any` | What the character played could say to someone, as the service `talk` last gathered it (15 §11; decision D-799): a map with `to`, the one talked to; `options`, in the order the rules on the hook `talk_options` left them, each a map with `id`, `text`, `kind` and `lines` (the message kind and the table of lines it is said with, null where it says nothing) and `says`, whether it says something; and `why`, the reason nothing can be said, or empty. Null when nothing was gathered. |
 | `size` | `list<int>` | The grid, as `[columns, rows]` |
@@ -2128,9 +2154,12 @@ and `ui:context_menu`; its `boot_screen` is `ui:title`.
 newest save) and Load (`ui:load`) when there is a save, Options and
 Quit; Esc quits. `ui:new_game`
 takes a name and a seed into `app.creation` and lists `app.scenarios`;
+F2 gives both to the creation session, names the game selected to it
+(`creation` with `scenario`) and opens `ui:create`;
 activating one starts that game, or opens `ui:setup` for a scenario
 with a choice of place or options (section 3.4). `ui:options` sets the preferences
-`theme`, `playback_speed` and `cutscenes`, has the slot
+`theme`, `playback_speed` and, while the loaded mods define a cutscene
+(`app.defines('cutscene')`, decision D-867), `cutscenes`, has the slot
 `ui:options.prefs` for a mod's own (the `ui` mod puts `bump` there),
 and gives a key a meaning: the
 context, the key and the name, through the `rebind` service.
@@ -2149,8 +2178,9 @@ name for the role `notice`, shows its `title` and `text` and a button
 to carry on.
 
 **Game scenarios** are in `mods/ui/data/scenario.json` (section 3.4,
-13 §12): `ui:setup` shows `app.setup`, its options as a list in which
-Enter takes the next value, and its places, Enter on one beginning the
+13 §12): `ui:setup` shows `app.setup`, how the world's seed is chosen in
+words (the seed given, a new one each game, or always the same), its
+options as a list in which Enter takes the next value, and its places, Enter on one beginning the
 game there; `ui:intro` and `ui:summary` are popups over the play screen,
 the summary's button and Esc returning to the title, which ends the
 game; and `ui:journal`, opened by the control `journal` (`shift+j`),
@@ -2160,7 +2190,12 @@ indented under its mission, with which way and how far its marker is.
 
 **Using things** is in `mods/ui/data/interact.json` (section 3.7): the
 control `interact`, on `e` in play, opens `ui:interact`, the list of
-`view.offers_near`; the controls `bump` and `bump_ask` are what walking
+`view.offers_near`, with above it what lies loose within reach that the
+character sees (`view.loose_near`, 06 §9.2), each picked up with the
+action `pick_up` (decision D-861); the control `pick_up`, on `g` and `,`
+in play, picks up the one thing within reach, asks which with the list
+picker where there are more, and with nothing there is refused saying
+so; the controls `bump` and `bump_ask` are what walking
 into something closed runs, by the preference `bump` (`at_once`, `ask`
 or `never`).
 
@@ -2172,7 +2207,7 @@ and what it gives; Enter starts the action `make` with the row's
 `recipe` and `station`. The control `know_how` opens `ui:know_how`, a
 table of `view.know_how_list`: each piece of know-how, whether it is
 known or could be learnt next, and what it lets one make. The default
-keymap binds `make` to `shift+m` and `know_how` to `shift+k`.
+keymap binds `make` to Shift+M and `know_how` to Shift+K.
 
 **The play screen** (`ui:play`) is a `map_view`, the `log` beneath it
 and a status column: who the active character is, by `name(view)`; the
@@ -2276,23 +2311,24 @@ wears and carries (`view.carried`): each container before what is in
 it, what is in a container indented under it, each with how it is held
 (`in hand`, `worn`, `in` its container) and, for a container, how much
 it holds of what it can (`carried_mass` of `capacity_mass`). Beside it
-is the body as a tree of the parts on the outside, each with what is
-worn over it (`view.worn_on`), and beneath, the mass carried. Enter on
+is the body as a tree of the parts on the outside, each by what a reader
+calls it (`part.label`, 06 §6.2), with what is worn over it
+(`view.worn_on`), and beneath, the mass carried. Enter on
 a thing opens `ui:item` with the thing, how it is held and what it is
-called: a button for each verb of the items package that applies to
-how it is held, each the action of that name, named bare as the
-walking controls name `step`, with the thing as `what`: `drop`; `wear`
-unless worn; `remove` (Take off) if worn; `stow` unless stowed;
-`put_in` (Put in), which asks which of what the character carries with
-the `pick` effect and gives it as `container`; `take_out` if stowed,
-with the character as `to`; and `give`, whose other parameters are
-asked for (`"needed"`). The `core` mod defines none of these actions
-yet: until a mod does, the simulation refuses each with its reason,
-which the log shows. The popup closes once the action is taken. The
+called: a button for each item action that applies to how it is held, each
+named bare as the walking controls name `step`, with the thing as
+`what`: `drop`; `wear` unless worn; `take_off` (Take off) if worn;
+`stow` unless stowed; `put_in` (Put in), which asks which of what the
+character carries with the `pick` effect and gives it as `container`;
+`take_out` if stowed; and `give`, given the thing and asked to whom
+(`"needed"`). The `core` mod defines them (`holding.json`, decision
+D-861); one that cannot be done is refused with its reason, which the
+log shows, and an action no loaded mod defines is refused by the
+simulation with its reason. The popup closes once the action is taken. The
 slot `ui:inventory.extra` is beneath the list.
 
 **Condition** (`ui:condition`) shows the active character's body as a
-tree of parts (`view.parts`, opened from the root by `attached` and
+tree of parts by their labels (`view.parts`, opened from the root by `attached` and
 `inside`), each with its condition as a share, its state and how many
 wounds it has; every wound (`view.wounds`) with its part, its kind, its
 state and how many layers deep it goes or that it is a stump; and the
@@ -2303,7 +2339,9 @@ Everything it reads is the character's own.
 
 **Keys** (`ui:help`) lists every control the loaded mods define, bound
 or not, in order of what it is called, with every key the keymap in
-force gives it in play and what it does (`app.controls('play')`), so
+force gives it in play, written as a person reads it (`Shift+J`, `Tab`,
+`F1`, `Esc`: the rows' `shown`, decision D-866), and what it does
+(`app.controls('play')`), so
 that a key the player binds shows as it is and a mod's controls appear
 with no screen written (decision D-797). `app.keys(context)` still lists
 the names a context binds, for a screen that wants them.
@@ -2330,11 +2368,14 @@ new screen.
 As built, `ui:create` is the screen of the role `creation`, opened from
 the new-game screen with F2 (the name `more`) for the scenario selected
 there, which it is given as `scenario`. With no session in progress it
-lists `app.templates`, and Enter begins one (`creation` with `begin`).
+lists `app.templates`, each with its description, and Enter begins one
+(`creation` with `begin`); where the game offers none it says the
+player is given who they are.
 Then it has the name and the seed, which `Roll` draws afresh from the
 one before, each passed to the session as it changes; what it is made
-from; every choice open, indented by depth, with what is chosen; the
-result, `app.creation.attributes` where the application gives them,
+from; every choice open, indented by depth, with what is chosen (`shown`),
+which for a ready-made character (`app.creation.editable` false) is a
+list that cannot be changed; the result, `app.creation.attributes` where the application gives them,
 and the slot `ui:create.result`; whether the character is complete or
 the session's `problem`; `Begin`, shown only while it is complete,
 which finishes it and asks for `new_game` for the scenario; and `Start

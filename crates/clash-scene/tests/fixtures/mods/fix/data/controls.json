@@ -23,7 +23,7 @@
 
   { "//": "A control that rebinds a key through the `app` service: `g` comes to mean `strike` in play.",
     "type": "control", "id": "rebind_strike", "name": "Strike with G",
-    "do": { "app": { "rebind": { "context": "'play'", "key": "'g'", "name": "'strike'" } } } },
+    "do": { "app": { "rebind": { "context": "'play'", "key": "'w'", "name": "'strike'" } } } },
 
   { "//": "The keys for them, added to the bundled keymap's play context. `throw` and `attack` are named qualified: the bundled mod has controls of those names, which a bare name in its keymap means first.",
     "type": "keymap", "id": "ui:default", "patch": true,

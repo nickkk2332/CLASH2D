@@ -1,17 +1,17 @@
 [
-  { "//": "Two places to walk about in, with nothing to do there: the test town with its doors open and the lane in the country with its doors shut. Each is a game scenario (13 §3) with one world, one place and a ready-made character; the player may make their own on the creation screen. `cell` is `[x, y]`, the highest cell of that column a walker can stand in, or `[x, y, z]`, exactly that cell.",
+  { "//": "Two places to walk about in, with nothing to do there: the test town with its doors open and the lane in the country with its doors shut. Each is a game scenario (13 §3) with one world and one place. In the town the player may make their own character on the creation screen; on the lane they are given an ordinary person (13 §4.2). `cell` is `[x, y]`, the highest cell of that column a walker can stand in, or `[x, y, z]`, exactly that cell.",
     "type": "scenario", "id": "town", "name": "The town",
     "doc": "A grid of streets. Every door stands open.",
     "tags": ["sandbox"],
     "worlds": [ { "realm": "open_town", "seed": "ask" } ],
-    "start": { "characters": [ { "template": "person" } ],
+    "start": { "characters": [ { "template": "person", "create": true } ],
                "at": [ { "name": "A street corner", "cell": [9, 17] } ] } },
 
   { "type": "scenario", "id": "wayside", "name": "The lane",
     "doc": "Houses between fields. Their doors are shut.",
     "tags": ["sandbox"],
     "worlds": [ { "realm": "countryside", "seed": "ask" } ],
-    "start": { "characters": [ { "template": "person" } ],
+    "start": { "characters": [ { "template": "person", "create": false } ],
                "at": [ { "name": "The lane", "cell": [39, 45] } ] } },
 
   { "//": "The test town with its doors open, so that it can be walked through before anything can open a door.",

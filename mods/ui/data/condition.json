@@ -11,7 +11,7 @@
           "tree": { "id": "body", "open": true,
                     "rows": "if len(view.parts ?? []) == 0 or not is_null(view.parts[0].parent) then view.parts else [view.parts[0]]",
                     "children": "it.attached + it.inside",
-                    "item": "{it.name}  {round(it.condition * 100)}%  <dim>{it.state}{if len(it.wounds) == 0 then '' else if len(it.wounds) == 1 then ', 1 wound' else ', ' + str(len(it.wounds)) + ' wounds'}</>",
+                    "item": "{it.label}  {round(it.condition * 100)}%  <dim>{it.state}{if len(it.wounds) == 0 then '' else if len(it.wounds) == 1 then ', 1 wound' else ', ' + str(len(it.wounds)) + ' wounds'}</>",
                     "empty": "No body.",
                     "tip": "Right opens a part, Left closes it." } },
         { "fill": 1, "rows": [
@@ -19,7 +19,7 @@
           { "frame": "Attributes", "fit": true, "rows": [ { "slot": "condition.attributes" } ] },
           { "frame": "Wounds", "fill": 1,
             "list": { "id": "wounds", "rows": "view.wounds",
-                      "item": "{it.part.name}: {it.kind}, {it.state}{if it.stump then ', a stump' else ', ' + str(it.depth) + ' deep'}",
+                      "item": "{it.part.label}: {it.kind_name}, {it.state}{if it.stump then ', a stump' else ', ' + str(it.depth) + ' deep'}",
                       "empty": "Unhurt." } },
           { "slot": "condition.extra" } ] } ] },
       { "height": 1, "tooltip": { "value": "Tab moves between the body and the wounds. Esc: back." } } ] },

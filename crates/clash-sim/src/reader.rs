@@ -55,6 +55,51 @@ pub fn plain_lens(sim: &Sim, _reader: EntityId, of: EntityId) -> Option<Known> {
         .get::<Identity>(of)
         .and_then(Identity::name)
         .map(|name| Known::Proper(name.to_owned()))
+        .or_else(|| kind_name(sim, of))
+}
+
+/// What a thing with no name of its own is called by the name of what
+/// it was made from (05 §4.6; decision D-862): an item by its
+/// definition's `name`, a stack of more than one by how many and the
+/// plural, `12 arrows`; a device by its definition's; anything else
+/// made from templates by the name of the first, `person`. `None` for
+/// what has none of them, which reads "something".
+pub fn kind_name(sim: &Sim, of: EntityId) -> Option<Known> {
+    let render = |text: &clash_data::Text| {
+        let mut host = sim.host(crate::host::Bound::new());
+        text.render_on(sim.defs(), &mut host)
+    };
+    if let Some(item) = sim.components().get::<crate::item::Item>(of) {
+        let name = crate::item::def_of(sim.defs(), item)
+            .and_then(|def| def.name.as_ref())
+            .map(render)
+            .filter(|name| !name.trim().is_empty())?;
+        let count = item.count();
+        return Some(if count > 1 {
+            Known::Proper(format!("{count} {}", plural(&name)))
+        } else {
+            Known::Common(name)
+        });
+    }
+    if let Some(def) = crate::device::def_of(sim, of) {
+        return def
+            .name
+            .as_ref()
+            .map(render)
+            .filter(|name| !name.trim().is_empty())
+            .map(Known::Common);
+    }
+    let first = sim.components().get::<Identity>(of)?.templates().first()?;
+    let template = sim
+        .defs()
+        .try_registry::<crate::template::TemplateDef>()?
+        .try_get(*first)?;
+    template
+        .name
+        .as_ref()
+        .map(render)
+        .filter(|name| !name.trim().is_empty())
+        .map(|name| Known::Common(name.to_lowercase()))
 }
 
 /// What is said of something nobody has a word for.

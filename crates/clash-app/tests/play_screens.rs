@@ -58,7 +58,8 @@ fn the_keys_list_every_control() {
     let listed = run.text();
     // A control with no key is listed too.
     assert!(listed.contains("Attack who is in the way"), "{listed}");
-    assert!(listed.contains("shift+f"), "{listed}");
+    assert!(listed.contains("Shift+F"), "{listed}");
+    assert!(!listed.contains("shift+f"), "{listed}");
     assert_golden(golden("help_controls"), run.frame());
     script(&mut run, "escape\n");
     assert_eq!(top(&run), "ui:play");

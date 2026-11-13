@@ -335,9 +335,18 @@ pub struct CharacterEntry {
     #[serde(default)]
     pub template: Option<Located<String>>,
     /// Whether the player may make the character on the creation screen
-    /// (`create`). Default true.
+    /// (`create`): begin from a template offered and make every choice
+    /// it has. Default true.
     #[serde(default = "yes")]
     pub create: bool,
+    /// The templates offered to make or choose the character from
+    /// (`pick`): `true` for every playable template, a list of templates
+    /// for those alone. With `create` false the player chooses one,
+    /// ready-made, and gives it no more than a name. Left out, every
+    /// playable template where `create` holds, and none where it does
+    /// not: the player is given the character of `template`.
+    #[serde(default)]
+    pub pick: PickEntry,
     /// The senses it perceives with when its templates give it none:
     /// `sense` definitions. Left out, every sense the loaded mods define.
     #[serde(default)]
@@ -346,6 +355,84 @@ pub struct CharacterEntry {
 
 fn yes() -> bool {
     true
+}
+
+/// The templates a scenario offers the player its character from
+/// (13 §4.2 `pick`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum PickEntry {
+    /// Nothing said: every playable template where the character may
+    /// be made, none where it may not.
+    #[default]
+    Unsaid,
+    /// `false`: none.
+    Nothing,
+    /// `true`: every playable template.
+    Playable,
+    /// These templates, as written: qualified ids or bare names in the
+    /// scenario's namespace.
+    Templates(Vec<Located<String>>),
+}
+
+impl<'de> FromKind<'de> for PickEntry {
+    fn from_kind<A: MapAccess<'de>>(kind: Kind, value: KindValue<'_, A>) -> Result<Self, A::Error> {
+        match kind {
+            Kind::Bool => value.read::<bool>().map(|all| {
+                if all {
+                    PickEntry::Playable
+                } else {
+                    PickEntry::Nothing
+                }
+            }),
+            Kind::List => value
+                .read::<Vec<Located<String>>>()
+                .map(PickEntry::Templates),
+            other => Err(other.unexpected("`true`, `false` or a list of templates")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for PickEntry {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<PickEntry, D::Error> {
+        by_kind(deserializer)
+    }
+}
+
+impl CharacterEntry {
+    /// Whether the player makes the character's choices (`create`), or
+    /// at most chooses a ready-made one and names it.
+    pub const fn editable(&self) -> bool {
+        self.create
+    }
+
+    /// The qualified ids of the templates offered to make or choose the
+    /// character from, for a scenario defined in `namespace`: those
+    /// `pick` lists, or every template marked `playable` in order of
+    /// qualified id (13 §4.2). Empty when the player is given the
+    /// character of `template`.
+    pub fn offered(&self, defs: &clash_data::Defs, namespace: &str) -> Vec<String> {
+        let all = || {
+            let Some(templates) = defs.try_registry::<TemplateDef>() else {
+                return Vec::new();
+            };
+            let mut ids: Vec<String> = templates
+                .iter()
+                .filter(|(_, def)| def.playable)
+                .map(|(id, _)| templates.name(id).to_owned())
+                .collect();
+            ids.sort();
+            ids
+        };
+        match &self.pick {
+            PickEntry::Nothing => Vec::new(),
+            PickEntry::Unsaid if !self.create => Vec::new(),
+            PickEntry::Unsaid | PickEntry::Playable => all(),
+            PickEntry::Templates(listed) => listed
+                .iter()
+                .map(|template| qualified(&template.value, namespace))
+                .collect(),
+        }
+    }
 }
 
 /// How a site is chosen for a place to begin (13 §4.3).
@@ -1057,6 +1144,20 @@ pub(crate) fn check_scenarios(cx: &mut CrossCx<'_>) {
                         &format!("start.characters.{index}.template"),
                         template.span,
                     );
+                }
+            }
+            if let (true, PickEntry::Templates(listed)) = (templates, &character.pick) {
+                for template in listed {
+                    let id = qualified(&template.value, namespace);
+                    if defs.lookup::<TemplateDef>(&id).is_none() {
+                        missing(
+                            format!(
+                                "there is no template `{id}` to offer as this scenario's character"
+                            ),
+                            &format!("start.characters.{index}.pick"),
+                            template.span,
+                        );
+                    }
                 }
             }
             for sense in character.senses.iter().filter(|_| senses) {

@@ -213,6 +213,7 @@ What an attack strikes with (07 §3.1, §3.2): a surface of an item held in a gr
 - `area` (number, or `null`; optional): An inline surface: its contact area, in square metres.
 - `give` ([length](../units.md#length) in `m`, or `null`; optional): An inline surface: the distance over which it is stopped.
 - `span` ([length](../units.md#length) in `m`, or `null`; optional): An inline surface: its length of contact across the target.
+- `needs` (string, or `null`; optional): What a reader is told the blow needs when nothing answers, as words: `a blade`, read as "Slash needs a blade in hand." Left out, the tag or the part is named in plain words (decision D-864).
 
 <a id="aimdef"></a>
 ### `AimDef`

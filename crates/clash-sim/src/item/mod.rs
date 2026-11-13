@@ -96,6 +96,7 @@
 
 mod confer;
 mod defs;
+pub mod fault;
 pub mod hold;
 mod latent;
 mod make;

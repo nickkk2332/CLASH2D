@@ -91,7 +91,11 @@ Two places to walk about in are listed beside them: **The town**, a grid
 of streets with every door open, and **The lane**, houses between fields.
 
 On the new-game screen, type a name, choose a seed (the same seed makes
-the same world), and press Enter on a game.
+the same world), and press Enter on a game. F2 first makes your
+character (in the market town and the town: an ordinary person, a
+brawler, a marksman, an adept with two or three powers of your choosing,
+or someone with every power) or, in the errand and the last stand,
+chooses one of them ready-made; without it you are an ordinary person.
 
 ## Keys
 
@@ -104,7 +108,8 @@ Options rebinds them. [How to play](docs/how-to-play.md) has them all.
 | `<` `>` | Go up or down stairs |
 | `.` | Wait a second |
 | `x` | Look around |
-| `e` | Use something within a step: doors, windows, wardrobes, chests, what you hold (eat, drink, bandage) |
+| `e` | Use something within a step: doors, windows, wardrobes, chests, what you hold (eat, drink, bandage); pick up what lies there |
+| `g` or `,` | Pick up what lies at your feet or within a step (it asks which if there is more than one) |
 | Tab, Shift+Tab | Choose a target among those in sight |
 | `f`; `F` | Strike the target; choose the blow, the part and how hard |
 | `s`; `S` | Shoot or throw at the target; aim |
@@ -112,7 +117,7 @@ Options rebinds them. [How to play](docs/how-to-play.md) has them all.
 | `v` | Grab, throw or take down the target |
 | `T` | Talk to the target |
 | `a`; `1` to `9` | Abilities; use the one on that quick slot |
-| `i`, `c` | Inventory; your body and wounds |
+| `i`, `c` | Inventory (Enter on a thing: drop, wear, take off, stow, put in, take out, give); your body and wounds |
 | `m`, `J` | Map; journal, with what you are trying to do |
 | `M`, `K` | Make something; know-how |
 | `?` or F1 | Every key |
