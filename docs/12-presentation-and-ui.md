@@ -2073,6 +2073,16 @@ control `interact`, on `e` in play, opens `ui:interact`, the list of
 into something closed runs, by the preference `bump` (`at_once`, `ask`
 or `never`).
 
+**Making** is in `mods/ui/data/making.json` (16 §8.6; decision D-828):
+the control `make` opens `ui:make`, the list of `view.recipe_options`:
+each recipe by hand and at each station within a step, greyed with its
+reason where it cannot be started, with where it is made, what it takes
+and what it gives; Enter starts the action `make` with the row's
+`recipe` and `station`. The control `know_how` opens `ui:know_how`, a
+table of `view.know_how_list`: each piece of know-how, whether it is
+known or could be learnt next, and what it lets one make. The default
+keymap binds `make` to `shift+m` and `know_how` to `shift+k`.
+
 **The play screen** (`ui:play`) is a `map_view`, the `log` beneath it
 and a status column: who the active character is, by `name(view)`; the
 slot `ui:play.bars` for a character's reserves; what it holds in a

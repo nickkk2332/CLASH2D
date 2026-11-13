@@ -1,0 +1,20 @@
+# Stone wall (mods/core/data/powers): a wall of three cells conjured
+# across the street, square to its user's way, through `WorldEdit`
+# and bound to the ability (08 §7.3). When its time runs out each cell
+# that is still the wall is put back as it was; the one changed since
+# is left alone.
+use default seed=33
+gen core:test_city size=1
+look @c:17,20,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+as @e:0 do { "use_ability": { "who": "self", "ability": "core:stone_wall", "params": { "expr": "{'to': offset(self.loc, 0, 3)}" } } }
+expect event ability_used ability=core:stone_wall
+advance 1s
+expect event binding_created ability=core:stone_wall what=edit
+assert "@c:16,23,0.block.def_id == 'core:wall' and @c:17,23,0.block.def_id == 'core:wall' and @c:18,23,0.block.def_id == 'core:wall'"
+set @c:18,23,0 block core:window
+advance 30s
+expect event binding_ended ability=core:stone_wall why=duration how=restore
+assert "@c:16,23,0.block == null and @c:17,23,0.block == null"
+assert "@c:18,23,0.block.def_id == 'core:window'"
+expect hash bcba1253518c3feab5af5d11054fcaf4

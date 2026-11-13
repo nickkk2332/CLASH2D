@@ -393,12 +393,15 @@ fn bundle(seed: u32) -> ComponentBundle {
         traits: Some(crate::traits::Traits::sample(seed)),
         abilities: Some(crate::ability::Abilities::sample(seed)),
         mind_state: Some(crate::ai::MindState::sample(seed)),
+        process: Some(crate::recipe::Process::sample(seed)),
+        know_how: Some(crate::recipe::KnowHow::default()),
+        substances: Some(crate::substance::Substances::default()),
     }
 }
 
 #[test]
 fn kinds_have_distinct_names_in_order() {
-    assert_eq!(ComponentKind::ALL.len(), 18);
+    assert_eq!(ComponentKind::ALL.len(), 21);
     for (index, &kind) in ComponentKind::ALL.iter().enumerate() {
         assert_eq!(kind.index(), index);
         assert_eq!(ComponentKind::from_name(kind.name()), Some(kind));
@@ -414,11 +417,11 @@ fn kinds_have_distinct_names_in_order() {
     assert_eq!(<Physical as Component>::KIND, ComponentKind::Physical);
 
     let all = ComponentKinds::of(ComponentKind::ALL);
-    assert_eq!(all.len(), 18);
+    assert_eq!(all.len(), 21);
     assert_eq!(all.iter().collect::<Vec<_>>(), ComponentKind::ALL);
     assert_eq!(
         format!("{all:?}"),
-        r#"{"identity", "physical", "stats", "body", "item", "holds", "mover", "mind", "driver", "senses", "signature", "awareness", "beliefs", "map_memory", "device", "traits", "abilities", "mind_state"}"#
+        r#"{"identity", "physical", "stats", "body", "item", "holds", "mover", "mind", "driver", "senses", "signature", "awareness", "beliefs", "map_memory", "device", "traits", "abilities", "mind_state", "process", "know_how", "substances"}"#
     );
     assert!(ComponentKinds::NONE.is_empty());
 }
@@ -566,7 +569,10 @@ fn orphans_are_components_without_a_living_owner() {
             (ComponentKind::Device, dead),
             (ComponentKind::Traits, dead),
             (ComponentKind::Abilities, dead),
-            (ComponentKind::MindState, dead)
+            (ComponentKind::MindState, dead),
+            (ComponentKind::Process, dead),
+            (ComponentKind::KnowHow, dead),
+            (ComponentKind::Substances, dead)
         ]
     );
 }

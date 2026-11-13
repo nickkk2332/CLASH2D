@@ -83,6 +83,7 @@
       "<": "up", ">": "down",
       ".": "wait", "x": "look", "e": "interact",
       "i": "inventory", "c": "condition", "a": "abilities", "m": "map", "shift+j": "journal",
+      "shift+m": "make", "shift+k": "know_how",
       "o": "options", "?": "help", "f1": "help",
       "escape": "pause", "f12": "omniscient"
     },

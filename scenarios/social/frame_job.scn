@@ -30,4 +30,4 @@ assert "@e:3.persona_of(@e:1) == @e:1.persona"
 assert "not @e:3.remembers_actor(@e:1, 'element_destroyed')"
 assert "@e:3.remembers_actor(@e:2, 'element_destroyed')"
 advance 1s
-expect hash 439e8d429775a8b477d8cd7ed08891c7
+expect hash 61387c868ff77b7755595208e12d1de9

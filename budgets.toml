@@ -113,3 +113,12 @@ spec = "12 §15"
 row = "Build a 200 × 60 frame"
 limit = "1.5 ms"
 margin = 0.25
+
+# ---- 16 §16, devices and machines ------------------------------------------
+
+[[budget]]
+bench = "recipe.start_and_complete"
+spec = "16 §16"
+row = "Recipe start or completion"
+limit = "3 µs"
+margin = 0.5

@@ -401,10 +401,26 @@ pub struct ItemDef {
     /// (02 §16). Carried until exposure reads it.
     #[serde(default)]
     pub guards: BTreeMap<String, Real>,
-    /// A volume of substances it can hold as a mixture (16 §9.5).
-    /// Carried until substances are built.
+    /// A volume of substances it can hold as a mixture (16 §9.5): a
+    /// cup, a flask, a pot.
     #[serde(default)]
     pub contains: Option<Volume>,
+    /// What each one holds when it is made, by substance (16 §9.5
+    /// `filled`): `{ "water": "290 ml" }`. Needs no `contains` of its
+    /// own: a loaf is made of what it is filled with.
+    #[serde(default)]
+    pub filled: BTreeMap<Ref<crate::substance::SubstanceDef>, Volume>,
+    /// The tool qualities it has, by name, each at a level (16 §8.3):
+    /// `{ "cutting": 2, "hammering": 1 }`.
+    #[serde(default)]
+    pub qualities: BTreeMap<String, Real>,
+    /// Know-how it provides at a station it is in (16 §8.5): a manual on
+    /// a bench, a pattern loaded into a machine.
+    #[serde(default)]
+    pub provides: Vec<Ref<crate::recipe::KnowHowDef>>,
+    /// Know-how reading it teaches (16 §8.5): `learn_from`.
+    #[serde(default)]
+    pub teaches: Vec<Ref<crate::recipe::KnowHowDef>>,
     /// The colour an item of this kind carries.
     #[serde(default)]
     pub color: ColorChoice,

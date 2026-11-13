@@ -494,10 +494,13 @@ fn an_entity_answers_for_itself() {
     // `tests/abilities.rs`, those of minds in `tests/ai.rs`, those of
     // ranged combat in `tests/ranged.rs`, those of scenarios in
     // `tests/scenario.rs`, those of grips and takedowns in
-    // `tests/grips.rs`, and those of the social layer in
+    // `tests/grips.rs`, those of recipes and substances in
+    // `tests/making.rs`, and those of the social layer in
     // `tests/social.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
+        .chain(clash_sim::recipe::properties().iter())
+        .chain(clash_sim::substance::properties().iter())
         .chain(clash_sim::device::properties().iter())
         .chain(clash_sim::interaction::properties().iter())
         .chain(clash_sim::traits::properties().iter())

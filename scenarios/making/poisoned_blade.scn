@@ -1,0 +1,24 @@
+# poisoned_blade (plans/devices.md, G19): a knife coated with nightshade
+# cuts an arm through the skin. Half of what is on the blade goes in by
+# `inject`, three times as strong as swallowed, and a quarter of the rest
+# is wiped off (16 §9.5).
+use default seed=34
+gen core:test_city size=1
+look @c:17,22,0
+do { "spawn": { "template": "core:person", "at": "here" } }
+look @c:18,22,0
+do { "spawn": { "template": "core:person", "at": "here" } }
+as @e:0 do { "create_item": { "def": "core:knife", "at": "self.loc" } }
+as @e:0 do { "take": { "who": "self", "what": "self.loc.occupants[1]" } }
+as @e:0 do { "create_item": { "def": "core:poison_vial", "at": "self.loc" } }
+as @e:0 do { "coat": { "surface": "self.held('grasp')[0]", "from": "self.loc.occupants[1]", "amount": "4 ml" } }
+assert "@e:0.held('grasp')[0].coating['core:nightshade'] > 0.00000399"
+assert "@e:1.pool.toxin == 0"
+control @e:0 delegated
+as @e:0 do { "start_action": { "who": "self", "action": "core:slash", "with": "{ 'target': offset(self.loc, 1, 0, 0).occupants[0], 'part': offset(self.loc, 1, 0, 0).occupants[0].part('r_arm') }" } }
+advance 2s
+expect event strike_landed
+expect event dosed substance=core:nightshade route=inject
+assert "@e:1.pool.toxin > 23"
+assert "@e:0.held('grasp')[0].coating['core:nightshade'] < 0.00000151"
+expect hash 743105bc379b3d70efce8e60f9f4e4bb

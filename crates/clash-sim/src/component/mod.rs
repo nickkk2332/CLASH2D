@@ -149,7 +149,9 @@ use crate::item::{Holds, Item};
 use crate::mind::{Driver, Mind};
 use crate::movement::Mover;
 use crate::perception::{Awareness, Beliefs, MapMemory, Senses, Signature};
+use crate::recipe::{KnowHow, Process};
 use crate::stats::Stats;
+use crate::substance::Substances;
 use crate::traits::Traits;
 
 /// A type of component: one of the fixed set the engine defines (06 §3).
@@ -534,6 +536,15 @@ components! {
     /// The goal a mind holds, how far it has got, its own stream and its
     /// stances (09 §3, §4). On characters whose mind has thought.
     mind_state: MindState = "mind_state";
+    /// A recipe under way (16 §8.2). On a station's device, or on a
+    /// worker for work by hand.
+    process: Process = "process";
+    /// What a mind knows how to do (16 §8.5). On whatever has a mind
+    /// that knows something.
+    know_how: KnowHow = "know_how";
+    /// What an item holds of substances and what is coated on it
+    /// (16 §9.5). On items that hold or carry any.
+    substances: Substances = "substances";
 }
 
 // A `ComponentKinds` has one bit for each kind.
