@@ -166,11 +166,16 @@ cargo xtask check
 
 runs the gate every change must pass: formatting, clippy with warnings
 denied, every test, the documentation, and the check that world sizes
-are written in one place. `cargo xtask bench` builds
-the tools in release and runs the benchmarks against the budgets in
-`budgets.toml`; `cargo xtask bench --check` fails when one is over. The
-test scripts under `scenarios/` run with
-`cargo run -p clash-tools -- scenario run scenarios`.
+are written in one place. `cargo xtask bench` builds the tools in
+release and runs the benchmarks against the budgets in `budgets.toml`;
+`cargo xtask bench --check` fails when one is over. The test scripts
+under `scenarios/` run, each four ways, with
+
+```bash
+cargo run -p clash-tools -- scenario run scenarios
+```
+
+(41 scripts, about ten minutes in a debug build).
 
 ## Documents
 
