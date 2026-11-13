@@ -779,7 +779,7 @@ fn a_brawl_in_the_market_draws_the_watch_which_arrives_and_acts() {
         .collect();
     for dx in [0, 1] {
         town.ok(&format!(
-            "as {} do {{ \"spawn\": {{ \"template\": \"core:brawler\", \"at\": \"self\" }} }}",
+            "as {} do {{ \"spawn\": {{ \"template\": \"core:rowdy\", \"at\": \"self\" }} }}",
             at(spot(dx))
         ));
     }

@@ -904,7 +904,7 @@ mind's; left out, its mind's again; refused with
 | `person` | `townsperson` | `townsfolk_day` | Up at half past six, working at home from nine, to the market at noon on about one day in four, home in the afternoon, asleep from half past nine. Calls for help and runs from danger |
 | `shopkeeper` | `shopkeeper` | `shopkeeping` | Lives over the shop; keeps it from eight to six, a turn round the market at noon now and then |
 | `watch_guard` | `watchman` | `watch_shift` | From six a beat between the civic places, five minutes at each; the evening at the watch's post; asleep after midnight. Answers a call for help, goes for whoever it sees strike |
-| `brawler` | `brawler` | `carousing` | Asleep till late, at the tavern from seven in the evening until two; fights back, joins fights it sees, and while drinking now and then picks one |
+| `rowdy` | `brawler` | `carousing` | Asleep till late, at the tavern from seven in the evening until two; fights back, joins fights it sees, and while drinking now and then picks one |
 | `house_dog` | `house_dog` | none | Keeps near the person it is loyal to (the nearest person when it was made), barks at anyone else close by at most once in half a minute, cannot open doors |
 | `baker` | `baker` | `baking` | At the bakery's oven from four, keeping its shop from nine to three, asleep from eight |
 | `tavern_keeper` | `tavern_keeper` | `tavern_keeping` | Keeps the tavern from eleven until half past midnight |

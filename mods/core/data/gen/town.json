@@ -95,7 +95,7 @@
       { "zone": "town", "to": 0.7, "lots": ["terrace", "shop", "house"],
         "people": [ { "creature": "person", "count": [1, 3], "in": "home", "role": "resident" },
                     { "creature": "stall_keeper", "chance": 0.12, "in": "home", "role": "resident" },
-                    { "creature": "brawler", "chance": 0.06, "in": "home", "role": "resident" } ] },
+                    { "creature": "rowdy", "chance": 0.06, "in": "home", "role": "resident" } ] },
       { "zone": "edge", "to": 1.0, "lots": ["yard", "house"],
         "people": [ { "creature": "person", "count": [1, 3], "in": "home", "role": "resident" },
                     { "creature": "house_dog", "chance": 0.3, "in": "home" } ] } ],

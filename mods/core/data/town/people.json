@@ -9,8 +9,8 @@
     "groups": { "watch": "guard" },
     "glyph": { "ch": "@", "fg": "blue" } },
 
-  { "type": "template", "id": "brawler", "copy_from": "person",
-    "name": "Brawler", "mind": "brawler" },
+  { "type": "template", "id": "rowdy", "copy_from": "person",
+    "name": "Rowdy", "mind": "brawler" },
 
   { "type": "template", "id": "house_dog", "copy_from": "dog",
     "name": "Dog", "mind": "house_dog",
