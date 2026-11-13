@@ -18,7 +18,7 @@
 //! | Part | Does |
 //! |------|------|
 //! | [`GlyphAtlas`] | The theme's font, rasterised glyph by glyph as asked for and kept, per character, style and height. |
-//! | [`Renderer`], [`draw`] | A [`Frame`](clash_scene::Frame) drawn into a [`PixelBuffer`]: cells, sprites, effects. |
+//! | [`Renderer`], [`draw()`] | A [`Frame`](clash_scene::Frame) drawn into a [`PixelBuffer`]: cells, sprites, effects. |
 //! | [`Layout`], [`grid_size`] | Where each cell is in the picture, which cell is under a point, and how many cells a window holds. |
 //! | [`PixelBuffer`] | Pixels, written to and read from PPM images. |
 //! | [`golden`] | Pictures compared with stored images, rewritten with `BLESS=1`. |
@@ -29,8 +29,8 @@
 //! Without the `window` feature the crate is the renderer alone, with no
 //! window system linked: what the benchmarks build (decision D-841).
 
-mod atlas;
-mod draw;
+pub mod atlas;
+pub mod draw;
 mod font;
 pub mod golden;
 #[cfg(feature = "window")]
@@ -38,7 +38,7 @@ pub mod input;
 mod lines;
 mod pixels;
 #[cfg(feature = "window")]
-mod window;
+pub mod window;
 
 pub use atlas::{
     FontError, GlyphAtlas, GlyphId, GlyphMask, GlyphStyle, MAX_CELL_HEIGHT, MIN_CELL_HEIGHT,
