@@ -23,7 +23,8 @@
 //! | [`PixelBuffer`] | Pixels, written to and read from PPM images. |
 //! | [`golden`] | Pictures compared with stored images, rewritten with `BLESS=1`. |
 //! | [`theme_font`] | The font file a theme names, found inside its mod. |
-//! | `WindowFrontend` | The [`Frontend`](clash_scene::Frontend): a `winit` window, its input mapped to the scene's events. With the `window` feature, on by default. |
+//! | `WindowFrontend` | The [`Frontend`](clash_scene::Frontend): a `winit` window shown through `softbuffer`. With the `window` feature, on by default. |
+//! | `input` | The window's keys, text and mouse turned into the scene's input events, tested without a window. With the `window` feature. |
 //!
 //! Without the `window` feature the crate is the renderer alone, with no
 //! window system linked: what the benchmarks build (decision D-841).
@@ -32,7 +33,11 @@ mod atlas;
 mod draw;
 mod font;
 pub mod golden;
+#[cfg(feature = "window")]
+pub mod input;
 mod pixels;
+#[cfg(feature = "window")]
+mod window;
 
 pub use atlas::{
     FontError, GlyphAtlas, GlyphId, GlyphMask, GlyphStyle, MAX_CELL_HEIGHT, MIN_CELL_HEIGHT,
@@ -40,3 +45,5 @@ pub use atlas::{
 pub use draw::{Layout, Renderer, draw, grid_size};
 pub use font::{FontSource, theme_font};
 pub use pixels::{PixelBuffer, pixel, rgb_of};
+#[cfg(feature = "window")]
+pub use window::{DEFAULT_GRID, WindowError, WindowFrontend, WindowOptions, display_available};
