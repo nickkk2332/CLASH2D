@@ -723,6 +723,14 @@ impl<'a> Checker<'a> {
             );
         }
         let spec = &function.spec;
+        // In a mind context, a function that reads where things are is
+        // its belief form, read through the context's own character.
+        if self.context.reads() == Reads::Belief
+            && let Some(form) = spec.belief_form.clone()
+        {
+            let name = spec.name.clone();
+            return self.belief_form(&name, &form, name_span, args, span);
+        }
         if spec.random && self.context.purity() == Purity::Pure {
             let message = format!(
                 "`{}` draws random numbers, which is not allowed where the value must be pure",
@@ -758,6 +766,83 @@ impl<'a> Checker<'a> {
         }
         let ty = builtins::result_type(builtin, &types, &spec.returns);
         Node::new(NodeKind::Builtin { f: builtin, args }, ty, span)
+    }
+
+    /// A call in a mind context of a function that has a belief form
+    /// (05 §7.3): the form, called with the context's own character
+    /// before the arguments written. A context with no own character
+    /// cannot read where anything is, and the call is refused.
+    fn belief_form(
+        &mut self,
+        name: &str,
+        form: &str,
+        name_span: Span,
+        args: &[Expr],
+        span: Span,
+    ) -> Box<Node> {
+        let registry = self.registry;
+        let own = self.own_node(span);
+        let found = registry
+            .resolve_function(form, self.context.scope())
+            .and_then(|resolved| registry.function(resolved.found));
+        let (Some(own), Some(function)) = (own, found) else {
+            let message = format!(
+                "`{name}` reads where things are, which a character knows only as it believes \
+                 them, and nobody here is the character whose belief it would read"
+            );
+            self.error(codes::NOT_BELIEF_SAFE, name_span, message);
+            for arg in args {
+                self.expr(arg);
+            }
+            return Self::broken(span);
+        };
+        let spec = &function.spec;
+        let params = spec.params.get(1..).unwrap_or(&[]);
+        let what = format!("function `{name}`");
+        let signature = registry.signature(function);
+        let mut all = vec![*own];
+        all.extend(self.arguments(&what, &signature, params, spec.variadic, args, span));
+        Node::new(
+            NodeKind::Call {
+                id: function.id,
+                args: all,
+            },
+            spec.returns.clone(),
+            span,
+        )
+    }
+
+    /// The context's own character as a node: its first own subject,
+    /// else its first own local.
+    fn own_node(&self, span: Span) -> Option<Box<Node>> {
+        if let Some((slot, binding)) = self
+            .context
+            .subjects()
+            .iter()
+            .enumerate()
+            .find(|(_, binding)| binding.own)
+        {
+            let mut node = Node::new(
+                NodeKind::Subject(u16::try_from(slot).ok()?),
+                binding.ty.clone(),
+                span,
+            );
+            node.own = true;
+            return Some(node);
+        }
+        let (slot, binding) = self
+            .context
+            .locals()
+            .iter()
+            .enumerate()
+            .find(|(_, binding)| binding.own)?;
+        let mut node = Node::new(
+            NodeKind::Local(u16::try_from(slot).ok()?),
+            binding.ty.clone(),
+            span,
+        );
+        node.own = true;
+        Some(node)
     }
 
     /// Checks the arguments of a call against its parameters.

@@ -35,8 +35,11 @@ Every refusal carries a reason: a stable code and the values involved (14 §5). 
 - <a id="action-unknown"></a>`action.unknown`: No action definition has the id that was given. Values: `action`.
 - <a id="advance-tick-limit"></a>`advance.tick_limit`: More wake-ups ran at one tick than the limit allows; the advance yielded. Values: `tick`, `limit`.
 - <a id="advance-unhandled-wake"></a>`advance.unhandled_wake`: A wake-up was due and nothing handles its domain. It was dropped. Values: `domain`, `id`, `arg`.
+- <a id="agent-not-an-individual"></a>`agent.not_an_individual`: `make_anonymous` was given something that is not an individual made from templates (it has no identity to make anonymous). Values: `entity`.
+- <a id="agent-unknown-routine"></a>`agent.unknown_routine`: `set_routine` named no `routine` that is loaded. Values: `routine`.
 - <a id="ai-bad-value"></a>`ai.bad_value`: A verb of minds was given an argument it cannot use. Values: `argument`.
 - <a id="ai-cancelled"></a>`ai.cancelled`: A step's action was cancelled by something other than the mind that started it. Values: `action`.
+- <a id="ai-door-shut"></a>`ai.door_shut`: A step that moves met a closed way (a step refused with `move.closed`) that it cannot open: nothing there can be done by default now (a locked door and no key), its mind names no `interact_action`, or it has opened four on the one step. Values: `entity`, `dir` (the step's direction), `why` (what the default interaction there says, if there is one).
 - <a id="ai-goal-failed"></a>`ai.goal_failed`: A goal's `fail` held. Values: `goal`.
 - <a id="ai-no-go-action"></a>`ai.no_go_action`: A step that moves, for a mind that names no `go_action`. Values: `entity`.
 - <a id="ai-no-method"></a>`ai.no_method`: No method of a goal could be used: none's `if` held, or each failed in this pursuit. The goal fails. Values: `goal`.

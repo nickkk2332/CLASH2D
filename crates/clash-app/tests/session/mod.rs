@@ -330,8 +330,14 @@ pub fn walk_to(run: &mut Headless, to: Location, near: i32, max_keys: usize) -> 
         };
         press(run, key);
         pressed += 1;
-        // Anything on top of the play screen (a reaction prompt, a
-        // question) stops the walk for the session to answer.
+        // Walking into someone in the way asks whether to strike them:
+        // no, and a second goes by for them to move on.
+        if top(run) == "ui:confirm" {
+            press(run, "escape");
+            press(run, ".");
+        }
+        // Anything else on top of the play screen (a reaction prompt)
+        // stops the walk for the session to answer.
         if top(run) != "ui:play" {
             return pressed;
         }

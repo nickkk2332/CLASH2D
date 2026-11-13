@@ -61,9 +61,20 @@ pub fn believed_path(
     avoid: &[CellPos],
     limits: PathLimits,
 ) -> Result<Path, PathFail> {
-    let rules = believed_rules(sim, entity)
-        .through_openable()
-        .avoiding(avoid);
+    // Through what it expects to be able to open, if it can open things
+    // at all, and round what it found it could not (09 §5.3; D-781).
+    let mut rules = believed_rules(sim, entity);
+    if crate::ai::doors::opens_doors(sim, entity) {
+        rules = rules.through_openable();
+    }
+    let shut = crate::ai::doors::shut_cells(sim, entity, from.grid);
+    let rules = if shut.is_empty() {
+        rules.avoiding(avoid)
+    } else {
+        let mut all = avoid.to_vec();
+        all.extend(shut);
+        rules.avoiding(&all)
+    };
     // Static geometry is common knowledge (15 §7.3): the search walks the
     // world's layout, judged by what the mover knows of it: something
     // hidden it has not noted does not open, and a mover with map memory

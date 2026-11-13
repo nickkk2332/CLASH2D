@@ -252,6 +252,20 @@ pub struct MindDef {
     /// `keep_from` step.
     #[serde(default)]
     pub go_action: Option<Ref<ActionDef>>,
+    /// The action it does an interaction with (16 §3.5.1), by id as
+    /// written: one with the parameters `target` and `interaction`, as
+    /// `core:interact` has. Checked where interactions are loaded.
+    /// With one, a closed door on its way is opened by the door's default
+    /// interaction, as walking into it opens it for the player, and its
+    /// paths count a closed door as passable at the cost of opening it;
+    /// without, a closed door is a wall to it (decision D-781).
+    #[serde(default)]
+    pub interact_action: Option<String>,
+    /// The routine it keeps (09 §10.2), by id as written: where it is
+    /// and what it does at each time of day. Read by the agents' layer
+    /// ([`agent`](crate::agent)); checked where routines are loaded.
+    #[serde(default)]
+    pub routine: Option<String>,
     /// Entity tags whose bearers it holds hostile, as it perceives them.
     #[serde(default)]
     pub hostile_to: Vec<String>,
@@ -390,6 +404,50 @@ impl Def for MindDef {
                 .get::<GoalDef>(goal.id())
                 .is_some_and(|goal| goal.moves(cx.defs()))
         });
+        if let Some(action) = &self.interact_action {
+            // Checked where interactions are loaded at all: content
+            // loaded without them still loads (decision D-781).
+            let interactions = cx
+                .defs()
+                .iter::<crate::interaction::InteractionDef>()
+                .next()
+                .is_some();
+            let found = cx
+                .defs()
+                .iter::<ActionDef>()
+                .find(|(id, _)| {
+                    cx.defs().name::<ActionDef>(*id).is_some_and(|name| {
+                        name == action || name.rsplit(':').next() == Some(action.as_str())
+                    })
+                })
+                .map(|(_, def)| def);
+            match found {
+                None if interactions => {
+                    cx.error(format!("`interact_action`: there is no action `{action}`"));
+                }
+                Some(def)
+                    if def.param("target").is_none() || def.param("interaction").is_none() =>
+                {
+                    cx.error(format!(
+                        "`interact_action`: the action `{action}` has no parameters `target` and `interaction`, which an interaction's action has (16 §3.5.1)"
+                    ));
+                }
+                _ => {}
+            }
+        }
+        if let Some(routine) = &self.routine {
+            let known: Vec<&str> = cx
+                .defs()
+                .iter::<crate::agent::RoutineDef>()
+                .filter_map(|(id, _)| cx.defs().name::<crate::agent::RoutineDef>(id))
+                .collect();
+            let found = known
+                .iter()
+                .any(|name| *name == routine || name.rsplit(':').next() == Some(routine.as_str()));
+            if !known.is_empty() && !found {
+                cx.error(format!("there is no routine `{routine}`"));
+            }
+        }
         if moves && self.go_action.is_none() {
             cx.error(
                 "a goal of this mind has a `go`, `keep_near` or `keep_from` step, and the mind names no `go_action`",
@@ -809,6 +867,13 @@ pub struct SayStep {
     /// signal. 1 if left out.
     #[serde(default)]
     pub volume: Option<Expr<Number>>,
+    /// A kind of message (15 §11), by id as written: what is said is
+    /// also said as a message of that kind, to everyone who hears it,
+    /// with the kind's own signal and strength (`say`), so that rules
+    /// listening for `message_heard` of that kind answer it: a call for
+    /// help the watch answers. Checked where message kinds are loaded.
+    #[serde(default)]
+    pub kind: Option<String>,
 }
 
 /// A `set` step.
@@ -1024,6 +1089,19 @@ impl Step {
             && !(keep.distance.is_finite() && keep.distance > Real::ZERO)
         {
             cx.error(format!("step {at}: `distance` is a distance above zero"));
+        }
+        if let Some(kind) = self.say.as_ref().and_then(|say| say.kind.as_ref()) {
+            let known: Vec<&str> = cx
+                .defs()
+                .iter::<crate::social::MessageKindDef>()
+                .filter_map(|(id, _)| cx.defs().name::<crate::social::MessageKindDef>(id))
+                .collect();
+            let found = known
+                .iter()
+                .any(|name| *name == kind || name.rsplit(':').next() == Some(kind.as_str()));
+            if !known.is_empty() && !found {
+                cx.error(format!("step {at}: there is no message kind `{kind}`"));
+            }
         }
         if let Some(choose) = &self.choose
             && choose.purpose.is_empty()

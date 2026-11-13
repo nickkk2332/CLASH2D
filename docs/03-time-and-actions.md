@@ -809,7 +809,10 @@ a load error where it is read.
 
 `name` sees no locals: it is shown before any are chosen. `requires` is
 compiled in the mind context so that it can be previewed, and is tested
-against truth only when the action is started (05 §7.3).
+against truth only when the action is started (05 §7.3): there a
+function compiled in its belief form reads truth, `dist(self, $target)`
+measuring to where the target is rather than where the actor believes
+it is (decision D-780).
 
 An effect list (05 §10) is compiled with the action's locals in their
 slots, so `set` and `add` change the running action's own values. What a

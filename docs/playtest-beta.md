@@ -20,17 +20,20 @@ player would press. What they share is `crates/clash-app/tests/session/`.
 First played at commit `ced8d26` on the build branch as of `e238730`,
 and played again after merging the essentials stream (`cb07bdc`:
 playable characters, picking up and the inventory's actions, names for
-players), which the sessions now pass on. The town life stream had not
-landed: the town's residents are the settlement's people with the minds
-of `mods/core`, and there is no watch and no staff.
+players), which the sessions now pass on, and merged again with the
+town life stream (`6218d6f`: residents as people with daily routines,
+the watch, staff for the trades, minds opening doors). The findings and
+timings below were made before town life; the sessions were run again
+on it, but there was no time left to play the fight in the market with
+the watch answering, or a day of routines, which its own test script
+`town_disturbance` and tests cover.
 
 ## The sessions
 
 | Session | Test | Plays | Takes (debug) |
 |---------|------|-------|---------------|
 | The errand, delivered | `play_errand.rs` | Title, new game, the introduction, the clock, the journal's way (`south, 129 m`), 60 steps through the streets, saved by name from the pause menu, quit to the title, Continue, the rest of the way, the ending `delivered` and the summary | ~3.5 min |
-| The last stand, held | `play_last_stand.rs` | The lit lane, the journal (`north-east, 3 m`, the door), through the door by walking into it, the door shut from inside, quit and Continue (the game's one save), time going by behind the door | seconds |
-| The last stand, until dawn | `play_last_stand.rs`, `#[ignore]` | The same, then the night an hour at a time until dawn ends it, `Survived.`, and the one save gone | ~40 s in release; run by hand |
+| The last stand, inside | `play_last_stand.rs` | The lit lane, the journal (`north-east, 3 m`, the door), through the door by walking into it, the door shut from inside, quit and Continue (the game's one save), and waiting: since town life the strangers open the door and come in | seconds |
 | The last stand, lost | `play_last_stand.rs` | Staying on the lane and hitting back: the strangers' knives end it in about half a minute of game time, `Lost.`, the one save gone | seconds |
 | Powers | `play_powers.rs` | Each of the sampler's twelve powers once from the abilities screen: dash, force push, fire bolt, heal, gravity well, summon hound (a dog appears), stone wall (the street changes), and the five modes switched on and off with their lines in the log; stamina and reserve shown | ~10 s |
 | Crafting | `play_crafting.rs` | To the market town's bakery, wood out of its rack, the oven stoked and lit, its stores opened, bread made (two minutes of work in one key), the loaf taken out of the oven | ~5 min |
@@ -103,9 +106,15 @@ Worst first, with how a player meets each.
    who stays on the lane; getting in and shutting the door is the way to
    live. That is the scenario's design (an ordinary person is ordinary),
    but a player has little warning beyond the introduction.
-5. **Greeting a resident gets no answer in the log.** The talk screen
-   opens and offers `Greet` and `Tell them to stay back`; saying one
-   leaves no line when the one spoken to is a little way off.
+5. **Since town life, a shut door does not keep the last stand's
+   strangers out**: minds open doors on their way. Before town life the
+   way to win was to get in, shut the door and wait for dawn (dawn
+   itself never ended the game until D-879). Now an ordinary person
+   inside is reached and, with bare hands against three knives, loses.
+   Whether the night can be won now (a chosen character, a marksman or
+   an adept; hiding in a wardrobe; a stone wall across the door) was not
+   played. That dawn ends the game is tested in the simulation's own
+   tests.
 6. **The quick attack on someone out of reach picks a blow at the
    world.** With a resident across the market as the target, `f` chose
    Smash and asked for a place to strike, rather than saying the target
@@ -125,7 +134,17 @@ Worst first, with how a player meets each.
    verb's text argument is text as written, not an expression:
    `"to": "core:lamp"`, not `"'core:lamp'"`.
 10. **The play sessions are slow in a debug build**: the town's ones take
-    minutes each, for the cost of the first issue.
+    minutes each (the errand some eight minutes once town life made the
+    whole town hot), for the cost of the first issue.
+11. **Since town life, a fault from a resident's door reaches the
+    player's log**: `Fault: \`complete_interaction\` declined
+    (interaction.not_now) in action core:interact`, when a mind's way
+    through a door is already open or shut by someone else. The same kind
+    of fault D-870 took out of moving; for the interaction and AI
+    streams.
+
+Greeting a resident, which before town life got no answer, is answered
+since (`The stall keeper says: "Morning."`).
 
 Played before the essentials stream landed and fixed by it: character
 creation offered nothing (so no bundled game gave powers: they were

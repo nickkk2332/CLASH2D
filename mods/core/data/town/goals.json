@@ -1,0 +1,61 @@
+[
+  { "//": "Goals of the town's people (09 §3.2) beside those of `ai/goals.json` and `ai/routine_goals.json`. Everything is read from what the character believes: its tracks and memories, its relations, its own routine.",
+    "type": "goal", "id": "answer_call",
+    "doc": "Answering a call for help one heard: a member of the watch remembers it as `core:help_called` (the rule `core:heed_help`), and goes to where it came from, looks round and lets it be. Whoever it finds fighting there, `confront` deals with.",
+    "about": { "memory": { "events": ["core:help_called"],
+                           "where": "it.age < 120 and it.loc != null",
+                           "best": "it.salience" } },
+    "score": "self.weight('duty') * 1.5 * $about.salience",
+    "commit": 0.3,
+    "interrupts": true,
+    "retry_after": "15 s",
+    "methods": [
+      { "steps": [
+          { "go": { "to": "$about.loc", "within": 3 } },
+          { "look": { "at": "$about.loc", "time": "4 s" } },
+          { "settle": true } ] },
+      { "steps": [
+          { "look": { "at": "$about.loc", "time": "2 s" } },
+          { "settle": true } ] }
+    ] },
+
+  { "type": "variable", "id": "picked_fight_at", "scope": "entity", "value": "real", "default": -100000,
+    "doc": "When a brawler last picked a fight, in seconds of universal time." },
+
+  { "type": "goal", "id": "pick_fight",
+    "doc": "Picking a fight while drinking: once in a while, and never twice in ten minutes, someone standing close by is told off and taken for an enemy; `confront` does the rest.",
+    "about": { "track": {
+      "where": "(self.last_seen(it) ?? 99) < 2 and (dist(self, self.believed_loc(it)) ?? 99) < 3 and not self.hostile(it) and not self.fears(it)",
+      "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
+    "score": "if self.routine_doing == 'drinking' and not (self.routine_away ?? true) and now() - self.var.picked_fight_at > 600 and chance(0.02) then self.weight('temper') * 2 else 0",
+    "methods": [ { "steps": [
+      { "say": { "text": "What are you looking at?", "volume": 1.5, "kind": "threaten" } },
+      { "set": { "var": "core:picked_fight_at", "value": "now()" } },
+      { "stance": { "of": "$about", "toward": "hostile" } } ] } ] },
+
+  { "type": "goal", "id": "follow_owner",
+    "doc": "Keeping near the one it is loyal to (the relation `core:loyal`), while it is fairly sure where they are.",
+    "about": { "track": {
+      "where": "(self.rel('core:loyal', it) ?? 0) > 0 and (self.confidence(it) ?? 0) > 0.3",
+      "best": "self.confidence(it) ?? 0" } },
+    "score": "0.25",
+    "commit": 0.2,
+    "methods": [ { "steps": [ { "keep_near": { "who": "$about", "within": 3 } } ] } ] },
+
+  { "type": "variable", "id": "barked_at", "scope": "entity", "value": "real", "default": -100000,
+    "doc": "When a dog last barked, in seconds of universal time." },
+
+  { "type": "goal", "id": "bark_at_stranger",
+    "doc": "Barking at someone close by that it is not loyal to: a stranger. At most once in half a minute: barks, watches them a few seconds, and lets them be until it next sees them come.",
+    "about": { "track": {
+      "where": "(self.rel('core:loyal', it) ?? 0) <= 0 and (self.last_seen(it) ?? 99) < 2 and (dist(self, self.believed_loc(it)) ?? 99) < 5 and not self.fears(it)",
+      "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
+    "score": "if now() - self.var.barked_at > 30 then 0.4 * self.weight('curiosity') else 0",
+    "noise": 0.05,
+    "commit": 0.2,
+    "methods": [ { "steps": [
+      { "say": { "text": "Woof!", "volume": 1.5 } },
+      { "set": { "var": "core:barked_at", "value": "now()" } },
+      { "look": { "at": "$about", "time": "3 s" } },
+      { "settle": true } ] } ] }
+]

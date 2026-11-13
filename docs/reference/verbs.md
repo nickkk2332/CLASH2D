@@ -781,6 +781,15 @@ Loads rounds into a store (07 §11.5), one at a time and in that order: from `fr
 - `from` (entity?, optional): A container to take rounds from, or a stack of rounds.
 - `count` (int?, optional): The most to load. Default as many as fit.
 
+<a id="make-anonymous"></a>
+## `make_anonymous`
+
+Makes a notable individual anonymous again (06 §12.2): it is forgotten when its tract unloads, and a resident is then made afresh from its seed when it next comes into view; an agent made anonymous is forgotten at once. Raises `became_anonymous`; gives null. Refused with `agent.not_an_individual` for something not made from templates.
+
+`who` may be given directly.
+
+- `who` (entity): The individual.
+
 <a id="make-notable"></a>
 ## `make_notable`
 
@@ -1347,6 +1356,16 @@ Gives a member of a group another role (15 §9.2). Raises `role_changed`.
 - `who` (entity): The member.
 - `group` (string): The group's key or id.
 - `role` (string, optional): Its new role; left out, none.
+
+<a id="set-routine"></a>
+## `set_routine`
+
+Gives a character a routine in place of the one its mind names (09 §17), and makes its mind think. Gives null. Refused with `agent.unknown_routine` for a routine no definition answers to.
+
+`who` may be given directly.
+
+- `who` (entity): The character.
+- `routine` (string, optional): The routine's id, qualified or bare. Left out, the routine `set_routine` gave is taken away and its mind's applies again.
 
 <a id="set-stance"></a>
 ## `set_stance`

@@ -145,14 +145,17 @@ pub fn properties() -> Vec<PropertyDef> {
             "entity",
             "home",
             "loc",
-            "Where this character's mind belongs: where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.",
+            "Where this character's mind belongs: for a resident of a settlement, its home (06 §12.2); else where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.",
             |sim, subject, _| {
                 opt(mind_of(sim, subject)
                     .and_then(|mind| {
-                        sim.components
-                            .mind_state
-                            .get(mind)
-                            .and_then(|state| state.home())
+                        crate::agent::resident_home(sim, mind)
+                            .or_else(|| {
+                                sim.components
+                                    .mind_state
+                                    .get(mind)
+                                    .and_then(|state| state.home())
+                            })
                             .or_else(|| sim.entities.location(mind))
                     })
                     .map(|loc| sim.subject_value(Subject::Loc(loc))))

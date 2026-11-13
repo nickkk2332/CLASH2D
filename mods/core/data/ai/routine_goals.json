@@ -1,0 +1,47 @@
+[
+  { "//": "Goals of a day kept by a routine (09 §10.2). `keep_routine` takes a character to where its routine says it should be when it is away from there; the others are what a routine names for a part of the day, pursued once there. Each reads the character's own routine (`self.routine_place`, `self.routine_away`) and nothing about anyone else, and none is wanted by a character that keeps no routine.",
+    "type": "goal", "id": "keep_routine",
+    "doc": "Going where one's routine says one should be now, when one is not there: to work in the morning, to market at noon, home for the night. A disturbance any other goal scores higher (a fight, a fire, a call for help) outweighs it, and it is taken up again after.",
+    "about": { "place": "self.routine_place" },
+    "score": "if self.routine_away ?? false then 0.35 else 0",
+    "commit": 0.2,
+    "interrupts": true,
+    "retry_after": "20 s",
+    "methods": [
+      { "steps": [ { "go": { "to": "$about", "within": 1 } } ] },
+      { "//": "Someone stood in the way: wait a moment, and go again.",
+        "steps": [ { "wait": { "time": "rand(1, 3)" } }, { "go": { "to": "$about", "within": 2 } } ] },
+      { "steps": [ { "wait": { "time": "rand(3, 6)" } }, { "go": { "to": "$about", "within": 3 } } ] } ],
+    "done": "not (self.routine_away ?? false)" },
+
+  { "type": "goal", "id": "linger",
+    "doc": "Spending time at the place one's routine has one at, once there: standing a while, then a few steps about it. What a routine names for the market or the tavern.",
+    "about": { "place": "self.routine_place" },
+    "score": "if self.routine_away ?? true then 0 else 0.25",
+    "noise": 0.02,
+    "methods": [ { "steps": [
+      { "wait": { "time": "rand(6, 20)" } },
+      { "if": "chance(0.6)", "go": { "to": "offset($about, rand_int(-4, 4), rand_int(-4, 4)) ?? $about" } } ] } ] },
+
+  { "type": "goal", "id": "keep_shop",
+    "doc": "Keeping shop: about the shop one keeps, a step this way and that, looking round for custom.",
+    "about": { "place": "self.routine_place" },
+    "score": "if self.routine_away ?? true then 0 else 0.25",
+    "methods": [ { "steps": [
+      { "wait": { "time": "rand(8, 20)" } },
+      { "look": { "time": "2 s" } },
+      { "if": "chance(0.4)", "go": { "to": "offset($about, rand_int(-2, 2), rand_int(-2, 2)) ?? $about" } } ] } ] },
+
+  { "type": "goal", "id": "sleep",
+    "doc": "Asleep where one's routine has one sleep: still, for as long as the part of the day lasts. Anything that wakes a mind (a noise close by, someone come into the room) is weighed against it as ever.",
+    "score": "if self.routine_away ?? true then 0 else 0.3",
+    "methods": [ { "steps": [ { "wait": { "time": "60 s" } } ] } ] },
+
+  { "type": "goal", "id": "stand_post",
+    "doc": "Standing at a post the routine names: still, looking round now and then. On a beat between several places, a while at each.",
+    "about": { "place": "self.routine_place" },
+    "score": "if self.routine_away ?? true then 0 else 0.3",
+    "methods": [ { "steps": [
+      { "look": { "time": "rand(3, 6)" } },
+      { "wait": { "time": "rand(4, 10)" } } ] } ] }
+]

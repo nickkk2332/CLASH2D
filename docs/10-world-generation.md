@@ -1440,8 +1440,15 @@ drawn from the placement's seed. The realiser adds them to the placed
 map's own spawns (section 4.1), so each becomes a spawn request at a
 cell of open floor, handed over by the tract the cell is in, `what`
 being the id as written. The simulation answers a request that names a
-template with an anonymous individual (06 §10.4). `role` is carried in
-the definition; homes, presence and agents wait for WG9.
+template with an anonymous individual (06 §10.4): a **resident** (06
+§12.2, 09 §10.6), whose home is the cell it was asked for at and whose
+routine, by its template's mind, says where it is at each hour. Which
+template a zone or a site asks for is how a settlement gives its people
+their roles: the bundled town asks for shopkeepers in its shops, stall
+keepers and brawlers among its townsfolk, and a baker, a tavern keeper,
+artisans, a healer and the watch in its trades' sites. `role` is carried
+in the definition; presence tables and a site's `home: nearby` wait for
+WG9.
 
 ### 11.3 Groups
 

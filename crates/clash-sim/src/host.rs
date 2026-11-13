@@ -121,6 +121,9 @@ pub struct SimHost<'a> {
     dropped: usize,
     /// Who a text is being written for (05 §4.6), if anyone.
     reader: Option<EntityId>,
+    /// Whether a function compiled in its belief form reads truth
+    /// instead ([`Sim::host_in_truth`]).
+    truth: bool,
 }
 
 impl<'a> SimHost<'a> {
@@ -175,6 +178,16 @@ impl Host for SimHost<'_> {
     }
 
     fn call(&mut self, function: FunctionId, args: &[Value]) -> Value {
+        // A belief form held to truth reads what it is the form of.
+        if self.truth
+            && let Some(truth) = self
+                .sim
+                .exprs
+                .function(function)
+                .and_then(|def| def.truth_form)
+        {
+            return truth(self.sim, args);
+        }
         // A function that draws at random draws from the host's stream,
         // and gives null where there is none (05 §7.3).
         if let Some(draws) = self.sim.exprs.function(function).and_then(|def| def.draws) {
@@ -334,6 +347,20 @@ impl Sim {
             warnings: Vec::new(),
             dropped: 0,
             reader: None,
+            truth: false,
+        }
+    }
+
+    /// A host as [`host`](Sim::host) makes it, for checking against
+    /// truth an expression compiled in a mind context: a function
+    /// compiled there in its belief form (05 §7.3) reads truth instead,
+    /// `believed_dist(c, a, b)` as `dist(a, b)`. What an action's
+    /// `requires`, previewed in its actor's mind, is held to when the
+    /// action starts (03 §6.6).
+    pub fn host_in_truth(&self, bound: Bound) -> SimHost<'_> {
+        SimHost {
+            truth: true,
+            ..self.host(bound)
         }
     }
 
@@ -360,6 +387,7 @@ impl Sim {
             warnings: Vec::new(),
             dropped: 0,
             reader: None,
+            truth: false,
         };
         let result = run(&mut host);
         if let Some(rng) = host.rng.take() {

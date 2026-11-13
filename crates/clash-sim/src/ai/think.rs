@@ -594,7 +594,7 @@ enum HeldStatus {
 
 /// The goals a mind may have now: its own, then those of each `adjust`
 /// whose condition holds, each once.
-fn goal_list(ev: &mut Eval<'_>, def: &MindDef) -> Vec<GoalId> {
+fn goal_list(ev: &mut Eval<'_>, def: &MindDef, mind: EntityId) -> Vec<GoalId> {
     let mut out: Vec<GoalId> = def.goals.iter().map(|goal| goal.id()).collect();
     for adjust in &def.adjust {
         let bound = ev.only_self();
@@ -606,6 +606,12 @@ fn goal_list(ev: &mut Eval<'_>, def: &MindDef) -> Vec<GoalId> {
                 out.push(goal.id());
             }
         }
+    }
+    // The goal its routine names for this part of the day (09 §10.2).
+    if let Some(goal) = crate::agent::routine_goal(ev.sim, mind)
+        && !out.contains(&goal)
+    {
+        out.push(goal);
     }
     out
 }
@@ -622,7 +628,7 @@ fn choose(
     let held = state.held.as_ref();
     let mut best: Option<(Real, GoalId, AboutHeld)> = None;
     let mut status: Option<HeldStatus> = held.map(|_| HeldStatus::Gone);
-    for goal_id in goal_list(ev, def) {
+    for goal_id in goal_list(ev, def, mind) {
         let Some(goal) = goal_def(sim, goal_id) else {
             continue;
         };
@@ -753,7 +759,7 @@ pub fn think_in_order(sim: &mut Sim, minds: &[EntityId]) {
 }
 
 /// The cause of what a mind does.
-fn cause_of(mind: EntityId) -> Cause {
+pub(super) fn cause_of(mind: EntityId) -> Cause {
     Cause {
         actor: Some(mind),
         instigator: Some(mind),
@@ -1121,6 +1127,12 @@ fn settle_step(sim: &mut Sim, mind: EntityId) {
         return;
     }
     let outcome = match pending.kind() {
+        // A closed way met on the step: opening it comes first.
+        StepKind::Go | StepKind::KeepNear | StepKind::KeepFrom
+            if let Some(door) = super::doors::settle(sim, mind) =>
+        {
+            door
+        }
         StepKind::Go | StepKind::KeepNear | StepKind::KeepFrom => {
             let arrived = pending.target.is_some_and(|target| {
                 nav::distance_to(sim, mind, target)
@@ -1205,6 +1217,11 @@ fn pursue(sim: &mut Sim, mind: EntityId) -> bool {
         if let Some(pending) = &held.pending {
             match &pending.outcome {
                 Outcome::Running => {
+                    if let Some(tries) = super::doors::opened(sim, mind) {
+                        restart(sim, mind, goal, &held, &about, tries);
+                        changed = true;
+                        continue;
+                    }
                     if retarget(sim, mind, goal, &held, pending, &about) {
                         changed = true;
                         continue;
@@ -1487,6 +1504,40 @@ fn retarget(
     true
 }
 
+/// Begins the step in hand again, once the door it met is open, keeping
+/// count of the doors it has opened.
+fn restart(sim: &mut Sim, mind: EntityId, goal: &GoalDef, held: &Held, about: &Value, tries: u8) {
+    let defs = Arc::clone(&sim.defs);
+    let Some(step) = current_step(&defs, goal, held) else {
+        next_step(sim, mind);
+        return;
+    };
+    match begin(sim, mind, step, held, about) {
+        Begun::Under(mut pending) => {
+            pending.door = super::state::Door::Walking { tries };
+            if let Some(held) = sim
+                .components
+                .mind_state
+                .get_mut(mind)
+                .and_then(|state| state.held.as_mut())
+            {
+                held.pending = Some(pending);
+            }
+        }
+        Begun::Done => next_step(sim, mind),
+        Begun::Failed(reason) => {
+            if let Some(held) = sim
+                .components
+                .mind_state
+                .get(mind)
+                .and_then(|state| state.held.clone())
+            {
+                step_failed(sim, mind, &held, reason);
+            }
+        }
+    }
+}
+
 // ---- the steps ----------------------------------------------------------------------
 
 /// What a value names as a place: a cell, an element's cell, or where
@@ -1678,6 +1729,14 @@ fn begin(sim: &mut Sim, mind: EntityId, step: &Step, held: &Held, about: &Value)
                 (text, volume)
             });
             events::said(sim, mind, &text, volume);
+            // Said as a message of a kind too (15 §11), where one is
+            // named and the social layer knows it.
+            if let Some(kind) = say.kind.as_deref().and_then(|kind| message_kind(sim, kind))
+                && let Err(reason) =
+                    crate::social::say(sim, mind, crate::social::SayArgs::new(kind), cause_of(mind))
+            {
+                sim.fault(reason);
+            }
             Begun::Done
         }
         StepKind::Set => {
@@ -1711,6 +1770,22 @@ fn begin(sim: &mut Sim, mind: EntityId, step: &Step, held: &Held, about: &Value)
             Begun::Done
         }
     }
+}
+
+/// A message kind by id as written, qualified or bare.
+fn message_kind(sim: &Sim, name: &str) -> Option<crate::social::MessageKindId> {
+    let registry = sim.defs.try_registry::<crate::social::MessageKindDef>()?;
+    registry.lookup(name).or_else(|| {
+        if name.contains(':') {
+            return None;
+        }
+        registry
+            .names()
+            .iter()
+            .filter(|qualified| qualified.rsplit(':').next() == Some(name))
+            .min()
+            .and_then(|qualified| registry.lookup(qualified))
+    })
 }
 
 /// Starts the mind's `go_action` toward a cell, or finds it is there.
@@ -1901,6 +1976,10 @@ pub(super) fn action_ended(
     id: crate::later::ActionId,
     outcome: Outcome,
 ) {
+    // The opening of a door met on the way: the step goes on.
+    if super::doors::action_ended(sim, actor, id) {
+        return;
+    }
     let Some(pending) = sim
         .components
         .mind_state

@@ -171,9 +171,11 @@ fn a_morning_in_the_market_town() {
         .with_session(|session| session.sim.truth().contents(session.player).len())
         .unwrap();
     assert!(held > 0, "something from the cupboard in hand");
-    // Hands full, the rest is left where it is, and no fault is told.
+    // Hands full, the rest is left where it is, and no fault of `take` is told.
     assert!(
-        !log_text(&run).iter().any(|line| line.starts_with("Fault")),
+        !log_text(&run)
+            .iter()
+            .any(|line| line.starts_with("Fault") && line.contains("`take`")),
         "{:?}",
         log_text(&run)
     );

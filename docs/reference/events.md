@@ -177,6 +177,29 @@ Fields:
 - `action` (string): The qualified id of the action's definition.
 - `id` (int): The number of the running action, which no other action of this simulation ever has.
 
+<a id="agent-loaded"></a>
+## `agent_loaded`
+
+An agent came back into the world (09 §10.4): where its routine puts it, or on its way between two places.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `doing` (string): What its routine has it doing as it comes back.
+
+<a id="agent-stored"></a>
+## `agent_stored`
+
+A notable resident's individual left the world with its tract and is now an agent (09 §10.4): stored, placed by its routine, costing nothing between wake-ups.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `doing` (string): What it is doing as an agent: its routine's `doing` now, or `waiting`.
+- `aim` (string?): The qualified id of the goal it was pursuing, if not its routine's (09 §10.4).
+
 <a id="area-breached"></a>
 ## `area_breached`
 
@@ -225,6 +248,15 @@ Fields:
 - `attr` (id<attribute>): The attribute whose value changed.
 - `old` (real): Its value before.
 - `new` (real): Its value now.
+
+<a id="became-anonymous"></a>
+## `became_anonymous`
+
+A notable individual was made anonymous again by `make_anonymous` (06 §12.2): it will be forgotten when its tract unloads.
+
+Subjects, in delivery order: `self` (entity).
+
+No fields.
 
 <a id="became-notable"></a>
 ## `became_notable`

@@ -1,73 +1,73 @@
 clash-frame 1
 size 80x24
 chars
-|                  #"",...,#   ##.                     ┌────────────────────────┐|
-|                  #"",...,#  ..                       │Ada                     │|
-|                  #"",...,#  .                        │Blood  █████████████████│|
-| # + # ## # # + # #"",...,# =#=+ # ## # # + # #  .....│Pain   ░░░░░░░░░░░░░░░░░│|
-|,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,.....│Holding a parcel        │|
-|......................................................│Time 14:01              │|
-|......................................................│                        │|
-|......................................................│                        │|
+|                  #"",...,#                           ┌────────────────────────┐|
+|                  #"",...,#                           │Ada                     │|
+|                  #"",...,#                           │Blood  █████████████████│|
+|                  #"",...,#                           │Pain   ░░░░░░░░░░░░░░░░░│|
+|                  #"",...,#                           │Holding a parcel        │|
+|           ,,,,,,,,,,,...,,,                          │Time 14:01              │|
+|..............................                        │                        │|
+|................................                      │                        │|
 |..........┌ The errand ──────────────────────────────────────────────┐         │|
 |..........│Delivered.                                                │         │|
-|,,,,,,,,,,│Played for 0:01:35.                                       │         │|
-|# + #=#"##│[x] Take the parcel to the town hall before nightfall.    │         │|
-|      # #.│                                                          │         │|
-|        # │[ Back to the title ]                                     │         │|
+|..........│Played for 0:01:35.                                       │         │|
+|,,,,,,,,,,│[x] Take the parcel to the town hall before nightfall.    │         │|
+|# + #=#"##│                                                          │         │|
+|      # #.│[ Back to the title ]                                     │         │|
 |        # └──────────────────────────────────────────────────────────┘         │|
-|        #         #"",...,#  ..               #       │                        │|
-|        #         #"",...,#                           │                        │|
+|        #         #"",...,#  h ####                   │                        │|
+|        #         #"",...,#                   #       │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
 |│You have the parcel. The town hall is in the middle ││                        │|
 |│of the town.                                        ││                        │|
 |│Saved as “half way” (half-way).                     ││Tab target f hit s shoot│|
-|│The game has ended: delivered.                      ││x look  i things  c body│|
-|│                                                    ││? keys  Esc menu        │|
+|│Footsteps, somewhere close. (x18)                   ││x look  i things  c body│|
+|│The game has ended: delivered.                      ││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|
 fg
-|0000000000000000002445666570008a8000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbb|
-|000000000000000000244566657008d00000000000000000000000beee000000000000000000000b|
-|00000000000000000024456665700d000000000000000000000000b0000000fffffffffffffffffb|
-|0g0i0202202020j0202445666570k7kj0707702020j020200lllllb0000000bbbbbbbbbbbbbbbbbb|
-|mmmmmmmmm55555555555556665555555555555555555mmmmmlllllbbbbbbbb00000000000000000b|
-|lllllllllllllll66666666666666666666666llllllllllllllllbbbbb00000000000000000000b|
-|lllllllllllllllllllll66666666666llllllllllllllllllllllb000000000000000000000000b|
-|llllllllllllllllllllllllllllllllllllllllllllllllllllllb000000000000000000000000b|
-|llllllllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn000000000b|
-|llllllllllnppppppppppqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn000000000b|
-|mmmmmmmmmmnqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn000000000b|
-|r0i0rkr4ggnqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn000000000b|
-|000000702dnqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn000000000b|
-|0000000020noooooooooooooooooooooqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqn000000000b|
-|0000000020nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn000000000b|
-|000000002000000000gssmlllm700tu00000000000000070000000b000000000000000000000000b|
-|000000002000000000gssmlll57000000000000000000000000000b000000000000000000000000b|
-|bbeeebbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb000000000000000000000000b|
-|b0000000000000000000000000000000000000000000000000000bb000000000000000000000000b|
-|b0000000000000000000000000000000000000000000000000000bb000000000000000000000000b|
-|b0000000000000000000000000000000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbb|
-|b0000000000000000000000000000000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbb|
-|b0000000000000000000000000000000000000000000000000000bbbbbbbbbbbbbbbbbb00000000b|
-|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+|00000000000000000024456665700000000000000000000000000088888888888888888888888888|
+|00000000000000000024456665700000000000000000000000000089990000000000000000000008|
+|00000000000000000024456665700000000000000000000000000080000000aaaaaaaaaaaaaaaaa8|
+|000000000000000000bd456665700000000000000000000000000080000000888888888888888888|
+|000000000000000000bddefffeg00000000000000000000000000088888888000000000000000008|
+|00000000000eeeeeeeeeeefffeee0000000000000000000000000088888000000000000000000008|
+|ffffffffffffffffffffffffffffff00000000000000000000000080000000000000000000000008|
+|ffffffffffffffffffffffffffffffff000000000000000000000080000000000000000000000008|
+|ffffffffffhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh0000000008|
+|ffffffffffhjjjjjjjjjjkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkh0000000008|
+|ffffffffffhkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkh0000000008|
+|eeeeeeeeeehkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkh0000000008|
+|g0l0gmg4bbhkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkh0000000008|
+|00000070bnhiiiiiiiiiiiiiiiiiiiiikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkh0000000008|
+|00000000b0hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh0000000008|
+|00000000b000000000bddefffeg00p0qq7q000000000000000000080000000000000000000000008|
+|00000000b000000000bddefffeg0000000000000000000g000000080000000000000000000000008|
+|88999888888888888888888888888888888888888888888888888880000000000000000000000008|
+|80000000000000000000000000000000000000000000000000000880000000000000000000000008|
+|80000000000000000000000000000000000000000000000000000880000000000000000000000008|
+|80000000000000000000000000000000000000000000000000000888888888888888888888888888|
+|80000000000000000000000000008888880000000000000000000888888888888888888888888888|
+|80000000000000000000000000000000000000000000000000000888888888888888888000000008|
+|88888888888888888888888888888888888888888888888888888888888888888888888888888888|
 bg
-|11111111111111111133333333311199911111111111111111111111111111111111111111111111|
-|11111111111111111133333333311cc1111111111111111111111111111111111111111111111111|
-|11111111111111111133333333311c11111111111111111111111111111111111111111111111111|
-|1h1h1313313131313133333333313333131331313131313111111111111111111111111111111111|
-|11111111133333333333333333333333333333333333111111111111111111111111111111111111|
-|11111111111111133333333333333333333333111111111111111111111111111111111111111111|
-|11111111111111111111133333333333111111111111111111111111111111111111111111111111|
+|11111111111111111133333333311111111111111111111111111111111111111111111111111111|
+|11111111111111111133333333311111111111111111111111111111111111111111111111111111|
+|11111111111111111133333333311111111111111111111111111111111111111111111111111111|
+|111111111111111111c1333333311111111111111111111111111111111111111111111111111111|
+|111111111111111111c1111111c11111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
-|1111111111oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo1111111111|
-|1111111111oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo1111111111|
-|1111111111oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo1111111111|
-|h1h1h3h3hhoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo1111111111|
-|111111313coooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo1111111111|
-|1111111131onnnnnnnnnnnnnnnnnnnnnoooooooooooooooooooooooooooooooooooooo1111111111|
-|1111111131oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo1111111111|
-|111111113111111111h1111111311c31111111111111113111111111111111111111111111111111|
-|111111113111111111h1111113311111111111111111111111111111111111111111111111111111|
+|11111111111111111111111111111111111111111111111111111111111111111111111111111111|
+|11111111111111111111111111111111111111111111111111111111111111111111111111111111|
+|1111111111iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1111111111|
+|1111111111iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1111111111|
+|1111111111iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1111111111|
+|1111111111iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1111111111|
+|c1c1c3c3cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1111111111|
+|11111131coihhhhhhhhhhhhhhhhhhhhhiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1111111111|
+|11111111c1iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii1111111111|
+|11111111c111111111c1111111c11313333111111111111111111111111111111111111111111111|
+|11111111c111111111c1111111c1111111111111111111c111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
@@ -109,30 +109,24 @@ palette
 5 #222222 bright_black
 6 #151515 bright_black
 7 #1c1c1c bright_black
-8 #111111 bright_black
-9 #010101 black
-a #0f0f0f bright_black
-b #313131 bright_black
-c #020202 black
-d #131313 bright_black
-e #624d1c bright_black
-f #460a11 bright_black
-g #480000 bright_black
-h #050505 black
-i #311f0f bright_black
-j #151210 bright_black
-k #151f1f bright_black
-l #262626 bright_black
-m #3f3f3f bright_black
-n #e0b040 yellow
-o #101010 black
-p #5090d0 bright_blue
-q #c8c8c8 white
-r #333333 bright_black
-s #005900 bright_black
-t #191919 bright_black
-u #1b1b1b bright_black
-v #e5e5e5 white
-sprites 1
-@ x=26.000 y=7.000 scale=1.000 alpha=1.000 layer=2 fg=v
+8 #313131 bright_black
+9 #624d1c bright_black
+a #460a11 bright_black
+b #480000 bright_black
+c #050505 black
+d #005900 bright_black
+e #3f3f3f bright_black
+f #262626 bright_black
+g #333333 bright_black
+h #e0b040 yellow
+i #101010 black
+j #5090d0 bright_blue
+k #c8c8c8 white
+l #311f0f bright_black
+m #151f1f bright_black
+n #131313 bright_black
+o #020202 black
+p #1b1108 bright_black
+q #1e1e1e bright_black
+sprites 0
 fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none

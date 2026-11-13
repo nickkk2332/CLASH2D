@@ -2,9 +2,10 @@
 //! plays it. Three strangers come down a dark lane for the character;
 //! one lamp burns by the door of a house. In the first session the
 //! character gets inside, shuts the door, leaves and carries on from the
-//! title (the game's one save), and waits out the night with the long
-//! wait until dawn ends it. In the second the character stays on the
-//! lane and fights, and the night ends the other way.
+//! title (the game's one save), and waits: the strangers open the door
+//! and come in. In the second the character stays on the lane and
+//! fights, and the night ends the other way. That dawn ends the game is
+//! tested in `clash-sim`'s `tests/scenario.rs` (decision D-879).
 //!
 //! The golden frames are written with `BLESS=1 cargo test -p clash-app`.
 
@@ -78,7 +79,7 @@ fn get_inside(run: &mut Headless) {
 }
 
 #[test]
-fn inside_with_the_door_shut_the_night_goes_by() {
+fn inside_with_the_door_shut_they_come_in() {
     let data = DataDir::new("stand-held");
     let mut run = boot_default(data.path(), 4);
     begin(&mut run);
@@ -111,42 +112,20 @@ fn inside_with_the_door_shut_the_night_goes_by() {
     assert!(run.game().playing());
     assert_eq!(state_hash(&run), hash, "a load changes nothing");
 
-    // Time goes by behind the shut door.
-    let before = now_s(&run);
-    for _ in 0..3 {
-        press(&mut run, "p");
-        answer(&mut run);
-    }
-    assert!(now_s(&run) - before > 60.0, "time goes by");
-    assert_eq!(top(&run), "ui:play");
-    assert!(run.game().playing());
-}
-
-/// The whole night: many minutes in a debug build, under a minute in
-/// release (`docs/playtest-beta.md`), so it is run by hand:
-/// `cargo test -p clash-app --release --test play_last_stand -- --ignored`.
-#[test]
-#[ignore = "eight hours of play: too slow for the check in a debug build"]
-fn inside_with_the_door_shut_the_night_is_waited_out_until_dawn() {
-    let data = DataDir::new("stand-dawn");
-    let mut run = boot_default(data.path(), 4);
-    begin(&mut run);
-    get_inside(&mut run);
-    for _ in 0..40 {
+    // A shut door does not keep them out: minds open doors on their way
+    // (town life), and waiting is broken off when they reach her.
+    for _ in 0..6 {
         if answer(&mut run) == "ui:summary" {
             break;
         }
-        press(&mut run, "shift+p");
+        press(&mut run, "p");
     }
-    until_top(&mut run, "ui:summary", 60);
-    let summary = run.text();
+    let lines = log_text(&run);
     assert!(
-        summary.contains("Survived.") && summary.contains("[x] Hold out until dawn."),
-        "{summary}"
+        lines.iter().any(|line| line.starts_with("The person")),
+        "they came in: {}\n{lines:?}",
+        run.text()
     );
-    press(&mut run, "enter");
-    assert_eq!(top(&run), "ui:title");
-    assert!(saves(&run).is_empty(), "an ending takes the one save");
 }
 
 #[test]

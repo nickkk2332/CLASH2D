@@ -435,6 +435,11 @@ impl Sim {
         if template_by_name(&self.defs, &request.what).is_none() {
             return;
         }
+        // A person a settlement asks for is a resident (06 §12.2): the
+        // agents' layer makes it, the same each time (invariant B7).
+        if crate::agent::take_spawn_request(self, loc, request) {
+            return;
+        }
         let seed = clash_core::pos_hash(
             self.rng.seed(),
             clash_core::HashDomain::new("spawn_request"),

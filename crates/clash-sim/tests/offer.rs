@@ -45,6 +45,19 @@ fn the_actions_of_a_tag_say_whether_they_could_start_and_why_not() {
     let me = common::spawn(&mut sim, common::creature(), common::on(5, 5));
     let near = common::spawn(&mut sim, common::creature(), common::on(6, 5));
     let far = common::spawn(&mut sim, common::creature(), common::on(15, 5));
+    // A menu judges `requires` as the character believes (05 §7.3):
+    // `dist` measures to where it knows the others are (D-780).
+    for (other, at) in [(near, common::at(6, 5)), (far, common::at(15, 5))] {
+        clash_sim::perception::add_track(
+            &mut sim,
+            me,
+            other,
+            Some(at),
+            clash_sim::perception::Knowing::Told,
+            clash_core::Real::ONE,
+        )
+        .unwrap();
+    }
     let (near, far) = (
         sim.subject_value(Subject::Entity(near)),
         sim.subject_value(Subject::Entity(far)),
