@@ -121,6 +121,11 @@ pub const BENCHES: &[Bench] = &[
         run: super::town::minute_wait,
     },
     Bench {
+        name: "town.minute_wait_night",
+        what: "the market town with its residents, a minute's wait in the square at eleven at night, in one call",
+        run: super::town::minute_wait_night,
+    },
+    Bench {
         name: "expr.condition",
         what: "a condition of about ten operations over a person and locals, through the runner",
         run: condition,
