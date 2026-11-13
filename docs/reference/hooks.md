@@ -292,6 +292,20 @@ Fields:
 
 A handler may change `as`, or cancel.
 
+<a id="seize-resolving"></a>
+## `seize_resolving`
+
+Runs before `self` takes hold of `target` (07 §9.1). A handler may change the part held and whether it is pinned, or cancel: the grip fails (`combat.seize_failed`) and nothing is held.
+
+Subjects, in delivery order: `self` (entity), `target` (entity).
+
+Fields:
+
+- `part` (part?): The part to be held; null for none in particular.
+- `pins` (bool): Whether it pins that part.
+
+A handler may change `part`, `pins`, or cancel.
+
 <a id="strike-resolving"></a>
 ## `strike_resolving`
 

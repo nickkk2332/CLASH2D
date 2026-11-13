@@ -124,6 +124,15 @@ Cancels an entity's running actions that match, each in a phase whose `cancel` i
 - `channel` (id<channel>, optional): Only actions holding slots of this channel.
 - `tag` (string, optional): Only actions whose definition carries this tag.
 
+<a id="catch-shot"></a>
+## `catch_shot`
+
+Catches what a `shot` window was opened for (07 §11.6): the first of its projectiles still in flight, in the order they were fired, then an item thrown, whose body is within `reach` of the middle of `who`'s body, is taken out of the air where it is (`arrest`, 02 §15) and its window closes once nothing of it flies. An item thrown is taken into `who`'s hand; a projectile becomes the item its definition's `item` names, in `who`'s hand, or nothing; with no hand free it falls where `who` stands. Returns whether anything was caught: nothing within reach is not a refusal. Refused with `ranged.not_in_world` and `ranged.bad_number`.
+
+- `who` (entity?, optional): Who catches. Default `self`.
+- `window` (window?, optional): The window a shot or a throw opened: a reaction's `$window`.
+- `reach` (real?, optional): How far from the middle of `who`'s body, in metres, it may be caught. Default 1.5.
+
 <a id="check-stability"></a>
 ## `check_stability`
 
@@ -635,6 +644,14 @@ Lets energy go at a place (02 §13): an explosion, a shockwave, a cone of fire, 
 - `speed` (real?, optional): The speed of the front in m/s. Default the speed of sound where it starts.
 - `height` (real?, optional): Metres above the base of the cell. Default the middle of the storey, or where an entity stands.
 
+<a id="release-grip"></a>
+## `release_grip`
+
+Ends the grips `who` holds or is held by (07 §9.1), only those with `other` if it is given, giving back what they pinned; raises `grip_broken` for each. A grip ended other than by its maintaining action's own lists interrupts that action: `combat.grip_broken` when the held broke free, `combat.grip_released` when the holder let go. What a break-free action ends in. Returns how many ended.
+
+- `who` (entity?, optional): The holder or the held. Default `self`.
+- `other` (entity?, optional): Only the grips with this one.
+
 <a id="remember"></a>
 ## `remember`
 
@@ -782,6 +799,17 @@ Gives a part a new size relative to its body (06 §6.5): its length, girth and l
 
 - `part` (part?): The part.
 - `scale` (real): Its size relative to the body, above zero.
+
+<a id="seize"></a>
+## `seize`
+
+Takes hold of a creature or a thing (07 §9.1), for as long as the holder's action whose list runs this goes on: usually an attack's `on_land`, so that the grab is resolved like a strike (reach, aim, defences) first. With `pins`, the channel slots of the part held and the parts on it are disabled until the grip ends. While it lasts the held goes nowhere its holder is not beside, and is dragged into the cell the holder leaves when the holder steps. Raises the hook `seize_resolving`, then `seized`. Returns true. Refused with `combat.no_action`, `combat.no_target`, `combat.not_its_part`, `combat.out_of_reach` and `combat.seize_failed`, having changed nothing.
+
+- `who` (entity?, optional): Who takes hold. Default `self`.
+- `target` (entity): What is held.
+- `part` (part?, optional): The part held, if a particular one.
+- `pins` (bool?, optional): Whether the part held is pinned: its channel slots are disabled while the grip lasts. Default false.
+- `drags` (real?, optional): The most mass, in kilograms, the holder drags with it when it steps; a step with more is refused. Default: any.
 
 <a id="set-attr-base"></a>
 ## `set_attr_base`
@@ -989,7 +1017,7 @@ Fires a shot (07 §11.1): from where `from` stands, at a height, toward `at` or 
 - `flash` (real?, optional): How bright, for `projectile_fired`. Default the weapon's, else 0.
 - `lob` (bool?, optional): Whether it is sent along the lower arc that comes down on the aim point under gravity, not straight at it. Default false.
 - `range` (real?, optional): For an instant shot: how far the ray goes, in metres. Default `shoot.instant_range`.
-- `window` (any, optional): The kind of reaction window it opens for whoever it is aimed at (07 §11.2). Offered to nobody until reaction windows are built.
+- `window` (id<window_kind>?, optional): The kind of reaction window it opens for the entity it is aimed at (07 §11.2): the id of a `window_kind`. It opens as the shot is fired and closes when the shot is expected to arrive, at its speed over the distance to the aim point; those who notice it in time may answer it (03 §7). None for an instant shot, or one aimed at no entity.
 
 <a id="spawn"></a>
 ## `spawn`
@@ -1106,6 +1134,7 @@ Throws an item `who` holds (07 §11.1): it leaves the hand and flies as a body t
 - `spread` (real?, optional): Radians of dispersion, as for `shoot`. Default none.
 - `surface` (string?, optional): The id of the item's surface it strikes with. Default none: a blunt blow.
 - `lob` (bool?, optional): Whether it is sent along the arc that comes down on the aim point. Default false.
+- `window` (id<window_kind>?, optional): The kind of reaction window it opens for the entity it is aimed at, as `shoot`'s does (07 §11.2).
 
 <a id="transfer-mind"></a>
 ## `transfer_mind`

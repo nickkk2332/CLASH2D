@@ -5,6 +5,17 @@ Functions are called from expressions (05 §4.7, §12). A random one draws from 
 
 ## Combat
 
+<a id="aside-from"></a>
+### `aside_from`
+
+`aside_from(who: any, from: any, right?: bool) -> string?` · safe for belief
+
+The step that takes `who` across the line from `from`, out of the way of what comes along it (07 §5.2, §11.6): `north`, `north_east`, … to the left of someone facing straight away from `from`, or with `right` true to the right. Null for two in one column, or either nowhere. Safe for belief, as `away_from` is.
+
+- `who` (any): Who steps: an entity or a cell.
+- `from` (any): What it steps out of the line of: an entity or a cell.
+- `right` (bool, optional): Whether to step to the right rather than the left. Default false.
+
 <a id="contest"></a>
 ### `contest`
 
@@ -26,6 +37,20 @@ The chance that a margin of a contest is at or above zero (07 §4.1), from 0 to 
 - `contest` (id<contest>): The contest.
 - `a` (real): The value of the side the margin favours.
 - `b` (real): The value of the other side.
+
+<a id="strike-preview"></a>
+### `strike_preview`
+
+`strike_preview(who: entity, action: any, target: entity, part?: any, effort?: real, attack?: string) -> map<any>?` · not in a mind context
+
+What a strike of an attack of an action would likely do, worked out without drawing anything or changing anything (07 §13, invariant C5): `in_reach` (bool), `odds` (real, the chance it lands on the part aimed at), `odds_near` (real, on it or a part beside it), `energy` (real, joules of harm at the effort, less the push), `intensity` (real, pascals), `push_speed` (real, metres a second), `staggers` and `launches` (bool). Reads the target as it is: not safe for belief. Null for an action with no such attack, or with nothing to strike with.
+
+- `who` (entity): Who would strike.
+- `action` (any): The action: its id.
+- `target` (entity): Whom it would strike.
+- `part` (any, optional): The part aimed at, of the kind `part`; null for none.
+- `effort` (real, optional): The effort, 0 to 1. Default 1.
+- `attack` (string, optional): The attack's id; left out for an action with one.
 
 ## Data
 

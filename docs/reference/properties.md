@@ -11,7 +11,7 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 15 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 110 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 114 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
@@ -219,6 +219,10 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `goal_adopted`, `goal_done`, `goal_failed`.
 - `entity.goal_about -> any`: What the goal this character's mind holds is about: an entity, a memory as a map, a cell, or null (09 §3.2).
   Changed by `goal_adopted`.
+- `entity.gripped_by -> entity?` · same owner: Who grips it, the first to have taken hold (07 §9.1); null for no one. Readable of oneself in a mind context.
+  Changed by `seized`, `grip_broken`.
+- `entity.gripping -> entity?` · same owner: The first creature or thing it grips, in the order taken (07 §9.1); null for none. Readable of oneself in a mind context.
+  Changed by `seized`, `grip_broken`.
 - `entity.has_ability(ability: id<ability>) -> bool`: Whether the entity holds an ability (08 §3.3), from any source, dormant or not.
   Changed by `ability_granted`, `ability_revoked`.
   - `ability` (id<ability>): The ability: its id, or its qualified id as text.
@@ -235,6 +239,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.held(hold: string) -> list<entity>` · same owner: What the entity holds in one kind of hold, in order of id: `self.held('grasp')`, `self.held('worn')`, a container's `held('stowed')`.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
   - `hold` (string): The kind of hold: `grasp`, `worn`, `stowed`, `seat`, `inside` or `fixed`.
+- `entity.helpless -> bool`: Whether it cannot resist (07 §10): its mind is not awake (unconscious, or dead), or someone grips it with a pin. What a takedown's `requires_at_start` reads, beside whether the victim perceives the attacker. Reads truth.
+  Changed by `entity_unconscious`, `entity_woke`, `entity_died`, `entity_revived`, `seized`, `grip_broken`.
 - `entity.hold -> string?`: How the entity is held by what it is inside: `grasp`, `worn`, `stowed`, `seat`, `inside` or `fixed`. Null for one that is inside nothing.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.holder -> entity?`: What holds the entity: what it is directly inside. Null for one that is inside nothing.
@@ -351,6 +357,9 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.wielding(tag: string) -> entity?` · same owner: The first thing the entity holds in a grasp, in order of id, that carries a tag; any thing, for an empty tag. Null for none.
   Changed by `item_taken`, `item_dropped`, `entity_relocated`.
   - `tag` (string): The tag; empty for any.
+- `entity.wielding_surface(surface: string) -> entity?` · same owner: The first thing it holds in a grasp, in order of id, whose definition has a striking surface of this id (07 §3.2): the knife or the club whose `flat` a parry puts in a blow's way. Null for none. Readable of oneself in a mind context, so that a reaction's `requires` can say it cannot be done with nothing to do it with.
+  Changed by `item_taken`, `item_dropped`, `entity_relocated`.
+  - `surface` (string): The id of the surface: `flat`, `edge`, `face`.
 - `entity.worn_on(part: string) -> list<entity>` · same owner: What the entity wears over one part of its body, outermost first. A broken item is not listed: it is no longer a layer.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
   - `part` (string): The part's name in the body.

@@ -18,6 +18,7 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `thrust` (object [`ThrustDef`](#thrustdef), or `null`; optional): A drive along its path.
 - `guidance` (object [`GuidanceDef`](#guidancedef), or `null`; optional): How it steers. Read and carried.
 - `fuse` ([time](../units.md#time) in `s`, or `null`; optional): When it bursts on its own. Read and carried: a timed charge is thrown and timed by a rule's `after` (07 §11.5).
+- `item` (id of a [`item`](item.md), or `null`; optional): What it is as an item once it is caught in flight (07 §11.6, `catch_shot`): an arrow caught is an arrow in the hand. Left out, a projectile caught is stopped and becomes nothing.
 
 <a id="projectilesurface"></a>
 ### `ProjectileSurface`

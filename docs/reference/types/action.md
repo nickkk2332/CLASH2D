@@ -33,6 +33,7 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `low_attention` (`true` or `false`; optional): Whether the neighbourhood's detail may be lowered while every directly controlled entity is in such an action (03 §11).
 - `attacks` (object, name → object [`AttackObject`](#attackobject); optional): What the action strikes with (07 §3.1): its attacks, which the `strike` effect of one of its lists resolves. An action with attacks is given the locals `strike` leaves (`$landed`, `$absorbed`, `$passed`) as variables, unless it declares them.
 - `defence` (object [`DefenceDef`](#defencedef), or `null`; optional): How the action defends (07 §5.1): in force during one of its phases, avoiding a strike or putting something in its way.
+- `cutscene` (string, or `null`; optional): The cutscene the action names (07 §10, 12 §8.1): when it begins, `cutscene_cued` is raised with every participant, a cue for the application. It decides nothing.
 
 <a id="slots"></a>
 ### `Slots`

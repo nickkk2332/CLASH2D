@@ -25,6 +25,8 @@ Every refusal carries a reason: a stable code and the values involved (14 §5). 
 - <a id="action-bad-time"></a>`action.bad_time`: An action's tempo came out at zero or below, or null; a phase's `time` or `max` below zero or null; or a tick's `every` at zero or below, or null. A fault: the tempo counts as 1, the duration as none, and the tick does not repeat. Values: `action`, `phase`.
 - <a id="action-interrupted"></a>`action.interrupted`: The `interrupt` effect ended the action. The reason `action_interrupted` carries. Values: `action`.
 - <a id="action-not-running"></a>`action.not_running`: `Cancel` named an action that is not running, or is not the entity's. Values: `entity`, `action`.
+- <a id="action-role-not-offered"></a>`action.role_not_offered`: A joint action has a role that is not `forced`: its participant would have to accept it, and offering a role is not built yet (03 §8). Values: `action`, `role`.
+- <a id="action-taken-over"></a>`action.taken_over`: An action of a participant forced into a joint action held slots the joint action's role claims, and was interrupted to make room (03 §8). The reason `action_interrupted` carries. Values: `action`, the joint action.
 - <a id="action-unknown"></a>`action.unknown`: No action definition has the id that was given. Values: `action`.
 - <a id="advance-tick-limit"></a>`advance.tick_limit`: More wake-ups ran at one tick than the limit allows; the advance yielded. Values: `tick`, `limit`.
 - <a id="advance-unhandled-wake"></a>`advance.unhandled_wake`: A wake-up was due and nothing handles its domain. It was dropped. Values: `domain`, `id`, `arg`.

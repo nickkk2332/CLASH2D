@@ -404,6 +404,20 @@ Fields:
 - `old` (string): The mode before: `none`, `direct` or `delegated`.
 - `new` (string): The mode after.
 
+<a id="cutscene-cued"></a>
+## `cutscene_cued`
+
+An action that names a cutscene began (07 §10, 12 §8.1), once its `requires_at_start` held: a cue for the application to show it. `self` started it; `other` is the participant of its second role, for a joint action. What happens is the simulation's to decide, as for any action.
+
+Subjects, in delivery order: `self` (entity), `other` (entity).
+
+Fields:
+
+- `cutscene` (string): The cutscene the action names (12 §8.1), as written.
+- `action` (string): The qualified id of the action that began.
+- `id` (int): The number of the running action.
+- `participants` (list<entity>): Everyone taking part, in the order of the roles: whoever started it first.
+
 <a id="decal-added"></a>
 ## `decal_added`
 
@@ -783,6 +797,18 @@ Fields:
 - `goal` (string): The qualified id of the goal.
 - `code` (string): The stable code of the reason.
 - `message` (string): Why, in words.
+
+<a id="grip-broken"></a>
+## `grip_broken`
+
+A grip of `self` on `target` ended (07 §9.1), and what it pinned works again.
+
+Subjects, in delivery order: `self` (entity), `target` (entity).
+
+Fields:
+
+- `part` (part?): The part that was held.
+- `how` (string): `ended`: its action ended; `released`: the holder let go; `broken`: the held broke free; `thrown`: the held was thrown; `lost`: they came apart.
 
 <a id="hit-exited"></a>
 ## `hit_exited`
@@ -1468,6 +1494,19 @@ Fields:
 
 - `scenario` (string): The scenario's qualified id.
 - `place` (int): Which of its places the party began at, from 0.
+
+<a id="seized"></a>
+## `seized`
+
+`self` took hold of `target` (07 §9.1). The grip lasts as long as the action that took it.
+
+Subjects, in delivery order: `self` (entity), `target` (entity).
+
+Fields:
+
+- `part` (part?): The part held; null for none in particular.
+- `pins` (bool): Whether it pins that part.
+- `action` (int): The number of the holder's action that maintains it.
 
 <a id="setting-changed"></a>
 ## `setting_changed`
