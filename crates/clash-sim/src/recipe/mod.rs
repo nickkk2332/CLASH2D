@@ -167,6 +167,26 @@ impl Process {
     pub fn stalled(&self) -> Option<&str> {
         self.stalled.as_deref()
     }
+    /// A process of no particular recipe: for the tests of the component
+    /// store.
+    #[cfg(test)]
+    pub(crate) fn sample(seed: u32) -> Process {
+        Process {
+            recipe: RecipeId::new(u16::try_from(seed % 7).unwrap_or(0)),
+            worker: None,
+            action: None,
+            station: None,
+            done: Real::from_i64(i64::from(seed)),
+            needed: Real::from_i64(i64::from(seed) + 1),
+            rate: Real::ONE,
+            supply: Real::ONE,
+            mark: Dur::ZERO,
+            clock: EntityId::new(seed, 0),
+            wake: None,
+            stalled: None,
+            mends: None,
+        }
+    }
 }
 
 /// The share of a process's work done now, from 0 to 1: what was

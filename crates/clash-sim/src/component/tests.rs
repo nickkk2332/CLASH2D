@@ -393,6 +393,9 @@ fn bundle(seed: u32) -> ComponentBundle {
         traits: Some(crate::traits::Traits::sample(seed)),
         abilities: Some(crate::ability::Abilities::sample(seed)),
         mind_state: Some(crate::ai::MindState::sample(seed)),
+        process: Some(crate::recipe::Process::sample(seed)),
+        know_how: Some(crate::recipe::KnowHow::default()),
+        substances: Some(crate::substance::Substances::default()),
     }
 }
 
