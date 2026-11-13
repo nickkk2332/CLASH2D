@@ -442,6 +442,16 @@ impl Cosmos {
         self.epoch
     }
 
+    /// The count of the times the cells of any grid could have changed
+    /// (D-731), for caches outside the world (D-921): while it reads the
+    /// same, no cell of any grid has changed, and no tract has been
+    /// loaded or let go. It is not state, never saved or hashed: a cache
+    /// keeps it beside what it keeps and compares it only within one
+    /// cosmos, starting empty in any copy of it.
+    pub fn cell_epoch(&self) -> u64 {
+        self.epoch
+    }
+
     /// The parts of the cosmos that a change to one grid touches.
     pub(crate) fn grid_mut(&mut self, grid: GridId) -> Result<GridMut<'_>, WorldError> {
         self.epoch = self.epoch.wrapping_add(1);

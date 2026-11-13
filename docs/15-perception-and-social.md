@@ -374,6 +374,7 @@ alone, as before, and nothing in the simulation reads a light's colour.
 | `function` | A `body_function` the sense works by. An owner with a body whose capacity of it is zero receives nothing through the sense; an owner with no body is not asked. A creature without a working seeing function does not see: by data, never by naming eyes. |
 | `planes` | Whether the sense receives from every plane (02 §8.2), not only those its owner is on. Default false. |
 | `scrutiny` | How hard it looks through a disguise; given to `identity_check` (section 8.2). Default 0. |
+| `notices` | The kinds of thing a sweep considers in range, of `creature`, `item`, `device` and `other` (what the world calls an occupant's kind). Left out, every kind. A sense given only `creature` passes over the furniture and goods about it when it picks the nearest `perception.max_candidates` (section 5.1); what is inside something it notices is noticed by its own kind; what it already holds awareness of is brought up to date whatever its kind; a party member's sweep considers every kind (D-923). |
 | `name`, `doc` | What a reader calls it; what it is, for the reference. |
 
 Senses come from templates and traits (06). A creature may have any number.
@@ -442,7 +443,10 @@ As built (decision D-614):
   first, then the longest unchanged. A sweep considers at most
   `perception.max_candidates` of the entities in range (default 32), the
   nearest first and then by id, besides those already in the observer's
-  awareness through the sense.
+  awareness through the sense. They are found nearest first, a band of
+  cells at a time, and the search stops at the first band farther than
+  the farthest kept (D-920): the same candidates as gathering everyone
+  in range, without looking at the furniture of the rest of it.
 - The events bind the observer as `self` and the target as `about`:
   `suspicion_raised` (fields `sense`, the sense's qualified id, and
   `level`), `detected` (`sense`, `where`: the cell it was perceived in)
@@ -485,6 +489,28 @@ As built (decision D-614):
 Whatever the order observers sweep and signals arrive in, each pair's
 level depends only on that pair (invariant P4). Events of one sweep are
 raised in order of target.
+
+Who cannot perceive through a sense (performance 3, D-924): a sense
+whose `function` its owner's body cannot do, or whose `threshold` comes
+to null, receives nothing; its sweep looks at no candidates and only
+fades, interval by interval, what was already held through it, as an
+awake observer's awareness fades. Being asleep is no state of the
+engine's: a routine's `doing` is a word of data (09 §10.2), and the
+bundled `sleep` goal wakes for someone come into the room, so a sleeper
+sees. Neither 06 nor this document says that an unconscious or dead
+owner stops perceiving, so their senses sweep as anyone's. Content that
+wants a sleeper blind writes it into the sense's threshold (null while
+the owner's routine has it `asleep`), and its sweep then costs only the
+fading.
+
+A sweep is not skipped when nothing round the observer has changed
+(D-925): what it does depends on the time since the last sweep for every
+pair it holds, and the awareness it keeps records when each was last
+brought up to date, so a sweep left out would have to be worked out
+later exactly as it would have been. Sweeps whose readings could be kept
+are those of an observer that has not moved or turned, in whose range
+nobody moved and no cell or light changed; in the market town by day
+someone in range moves at nearly every sweep.
 
 ### 5.3 Concealment
 

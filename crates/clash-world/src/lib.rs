@@ -147,9 +147,9 @@ pub use light::{
 pub use load::{check_defs, register_defs};
 pub use loading::{LoadError, LoadedTract, TractIo};
 pub use occupancy::{
-    FOOTPRINT_MAX_SIDE, Footprint, Occupant, OccupantEntry, OccupantFilter, OccupantFlags,
-    OccupantKind, OccupantKinds, OccupantRecord, Occupied, PlaneMask, QUERY_MAX_LINE_CELLS,
-    QUERY_MAX_TRACTS, distinct_ids,
+    FOOTPRINT_MAX_SIDE, Footprint, NEAREST_BAND_ROWS, NEAREST_SPLIT_FROM, Occupant,
+    OccupantEntry, OccupantFilter, OccupantFlags, OccupantKind, OccupantKinds, OccupantRecord,
+    Occupied, PlaneMask, QUERY_MAX_LINE_CELLS, QUERY_MAX_TRACTS, distinct_ids,
 };
 pub use pos::{
     CellBox, CellIdx, CellPos, ChunkPos, GridId, Location, PointM, RegionPos, TractPos, distance_m,

@@ -26,6 +26,9 @@
 //! needs anything loaded: a cell that is not loaded, or lies outside the
 //! realm, holds no one.
 
+use core::cmp::Reverse;
+use std::collections::BinaryHeap;
+
 use clash_core::{EntityId, IVec3, Real, StateHash, StateHasher, sorted};
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +53,15 @@ pub const QUERY_MAX_TRACTS: u64 = 1 << 12;
 
 /// The most cells a query along a line may pass through.
 pub const QUERY_MAX_LINE_CELLS: i64 = 1 << 16;
+
+/// A chunk holding more `(cell, occupant)` pairs than this is looked at
+/// by [`Cosmos::occupant_ids_within_nearest_first`] a band of rows of
+/// one storey at a time (D-920).
+pub const NEAREST_SPLIT_FROM: usize = 48;
+
+/// How many rows of cells a band of a chunk holds, for
+/// [`Cosmos::occupant_ids_within_nearest_first`].
+pub const NEAREST_BAND_ROWS: i32 = 4;
 
 /// A set of planes: one bit for each (02 §8.2). Two occupants interact
 /// only if their masks share a bit. Terrain is on every plane.
@@ -879,6 +891,203 @@ impl Cosmos {
                 .into_iter()
                 .map(|occupied| occupied.id),
         );
+        Ok(())
+    }
+
+    /// Who [`occupants_within`](Cosmos::occupants_within) finds, a block
+    /// of cells at a time, the nearest blocks first (decision D-920):
+    /// `visit` is given the least [`distance_sq_cells`] any cell of the
+    /// block lies from the centre, the shorter way round, and for each of
+    /// the block's occupants in reach, once for each of its cells in
+    /// reach and in no order, that cell's distance and the occupant's id;
+    /// it returns whether to go on. Blocks come in order of their least
+    /// distance, so a caller keeping only the nearest few may stop at the
+    /// first block farther than the farthest it keeps. A block is the
+    /// part of a chunk the query covers, or for a chunk holding many, a
+    /// band of [`NEAREST_BAND_ROWS`] rows of one storey of it. Every
+    /// occupant `occupant_ids_within_unordered` finds is given to `visit`
+    /// unless it stops first.
+    pub fn occupant_ids_within_nearest_first(
+        &self,
+        centre: Location,
+        radius_m: Real,
+        filter: &OccupantFilter,
+        mut visit: impl FnMut(i64, &[(i64, EntityId)]) -> bool,
+    ) -> Result<(), WorldError> {
+        let view = self.grid(centre.grid)?;
+        if radius_m < Real::ZERO {
+            return Ok(());
+        }
+        let reach = radius_m.ceil().to_i32();
+        let storeys = (radius_m / crate::dims::STOREY_M).ceil().to_i32();
+        let cells = CellBox::around(centre.cell, IVec3::new(reach, reach, storeys));
+        let topology = view.topology();
+        let z_lo = cells.min.z.max(topology.z_min);
+        let z_hi = cells.max.z.min(topology.z_max);
+        if z_lo > z_hi {
+            return Ok(());
+        }
+        let (first, last) = (cells.min.tract(), cells.max.tract());
+        let across = (i64::from(last.x) - i64::from(first.x) + 1) as u64;
+        let down = (i64::from(last.y) - i64::from(first.y) + 1) as u64;
+        if across.saturating_mul(down) > QUERY_MAX_TRACTS {
+            return Err(WorldError::TooLarge {
+                what: "the tracts an occupant query covers",
+                limit: QUERY_MAX_TRACTS,
+            });
+        }
+        // The centre brought round on wrapped axes, as the blocks' cells
+        // are.
+        let wrap = |extent: crate::topology::Extent, value: i32| match extent {
+            crate::topology::Extent::Wrapped(size) if size > 0 => value.rem_euclid(size),
+            _ => value,
+        };
+        let at = CellPos::new(
+            wrap(topology.x, centre.cell.x),
+            wrap(topology.y, centre.cell.y),
+            centre.cell.z,
+        );
+        // The least distance from the centre to any cell of a box of
+        // cells of the grid, in its own (normalised) coordinates, the
+        // shorter way round: along each axis zero if the run holds the
+        // centre, else from the nearer end (on a wrapped axis, a run that
+        // does not hold a point is nearest it at one of its ends).
+        let least_of = |x: (i32, i32), y: (i32, i32), z: (i32, i32)| -> i64 {
+            let along = |lo: i32, hi: i32, at: i32, delta: &dyn Fn(i32) -> i32| -> i32 {
+                if lo <= at && at <= hi {
+                    0
+                } else {
+                    delta(lo).unsigned_abs().min(delta(hi).unsigned_abs()) as i32
+                }
+            };
+            let dx = along(x.0, x.1, at.x, &|x| {
+                topology.delta(at, CellPos::new(x, at.y, at.z)).x
+            });
+            let dy = along(y.0, y.1, at.y, &|y| {
+                topology.delta(at, CellPos::new(at.x, y, at.z)).y
+            });
+            let dz = along(z.0, z.1, at.z, &|z| z.wrapping_sub(at.z));
+            distance_sq_cells(IVec3::new(dx, dy, dz))
+        };
+        /// A block waiting to be looked at: cells of one chunk, its
+        /// tract's normalised origin and the part of the tract the query
+        /// covers, and the chunk's entries for those cells.
+        #[derive(Clone, Copy)]
+        struct Block<'a> {
+            base: CellPos,
+            chunk_z: i32,
+            local: (i32, i32, i32, i32),
+            entries: &'a [OccupantEntry],
+            whole: bool,
+        }
+        let mut blocks: Vec<Block<'_>> = Vec::new();
+        // Least distance first, then the order blocks were made in.
+        let mut waiting: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
+        for tract in cells.tracts() {
+            let origin = tract.origin(z_lo);
+            let Ok(base) = topology.normalize(origin) else {
+                continue;
+            };
+            let Some(column) = view.column(base.tract()) else {
+                continue;
+            };
+            if !column.has_occupants() {
+                continue;
+            }
+            let x_lo = cells.min.x.max(origin.x) - origin.x;
+            let x_hi = cells.max.x.min(origin.x.saturating_add(TRACT_XY - 1)) - origin.x;
+            let y_lo = cells.min.y.max(origin.y) - origin.y;
+            let y_hi = cells.max.y.min(origin.y.saturating_add(TRACT_XY - 1)) - origin.y;
+            for (chunk_z, index) in
+                column.occupant_indices(z_lo >> CHUNK_Z_BITS, z_hi >> CHUNK_Z_BITS)
+            {
+                let low = z_lo.max(chunk_z << CHUNK_Z_BITS);
+                let high = z_hi.min((chunk_z << CHUNK_Z_BITS) | crate::dims::CHUNK_Z_MASK);
+                let least = least_of(
+                    (base.x.wrapping_add(x_lo), base.x.wrapping_add(x_hi)),
+                    (base.y.wrapping_add(y_lo), base.y.wrapping_add(y_hi)),
+                    (low, high),
+                );
+                waiting.push(Reverse((least, blocks.len())));
+                blocks.push(Block {
+                    base,
+                    chunk_z,
+                    local: (x_lo, x_hi, y_lo, y_hi),
+                    entries: index.entries(),
+                    whole: true,
+                });
+            }
+        }
+        let reach_sq = radius_m * radius_m;
+        let mut found: Vec<(i64, EntityId)> = Vec::new();
+        while let Some(Reverse((least, at_block))) = waiting.pop() {
+            let Block {
+                base,
+                chunk_z,
+                local: (x_lo, x_hi, y_lo, y_hi),
+                entries,
+                whole,
+            } = blocks[at_block];
+            if whole && entries.len() > NEAREST_SPLIT_FROM {
+                // Many in one chunk: its bands of rows of each storey,
+                // each a run of its entries (in order of cell: storey,
+                // row, column), are looked at in their own turn.
+                let low = (z_lo - (chunk_z << CHUNK_Z_BITS)).max(0);
+                let high = (z_hi - (chunk_z << CHUNK_Z_BITS)).min(crate::dims::CHUNK_Z_MASK);
+                for lz in low..=high {
+                    let mut row = y_lo - y_lo % NEAREST_BAND_ROWS;
+                    while row <= y_hi {
+                        let (from, to) = (row.max(y_lo), (row + NEAREST_BAND_ROWS - 1).min(y_hi));
+                        let first = CellIdx::new(0, from as u32, lz as u32).raw();
+                        let after = u32::from(CellIdx::new(0, to as u32, lz as u32).raw())
+                            + crate::dims::CHUNK_XY as u32;
+                        let start = entries.partition_point(|entry| entry.cell.raw() < first);
+                        let end = entries
+                            .partition_point(|entry| u32::from(entry.cell.raw()) < after);
+                        if start < end {
+                            let z = (chunk_z << CHUNK_Z_BITS) | lz;
+                            let least = least_of(
+                                (base.x.wrapping_add(x_lo), base.x.wrapping_add(x_hi)),
+                                (base.y.wrapping_add(from), base.y.wrapping_add(to)),
+                                (z, z),
+                            );
+                            waiting.push(Reverse((least, blocks.len())));
+                            blocks.push(Block {
+                                base,
+                                chunk_z,
+                                local: (x_lo, x_hi, from, to),
+                                entries: &entries[start..end],
+                                whole: false,
+                            });
+                        }
+                        row += NEAREST_BAND_ROWS;
+                    }
+                }
+                continue;
+            }
+            found.clear();
+            for entry in entries {
+                let (x, y) = (entry.cell.lx(), entry.cell.ly());
+                let z = (chunk_z << CHUNK_Z_BITS) | entry.cell.lz();
+                if x >= x_lo
+                    && x <= x_hi
+                    && y >= y_lo
+                    && y <= y_hi
+                    && z >= z_lo
+                    && z <= z_hi
+                    && filter.admits_entry(entry)
+                {
+                    let cell = CellPos::new(base.x.wrapping_add(x), base.y.wrapping_add(y), z);
+                    let distance = distance_sq_cells(topology.delta(at, cell));
+                    if Real::from_i64(distance) <= reach_sq {
+                        found.push((distance, entry.id));
+                    }
+                }
+            }
+            if !visit(least, &found) {
+                break;
+            }
+        }
         Ok(())
     }
 
