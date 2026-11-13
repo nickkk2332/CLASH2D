@@ -1,0 +1,35 @@
+[
+  { "//": "The test town with a pistol in hand holding two rounds, six more rounds in a backpack worn, and someone standing down the street to shoot at.",
+    "type": "scenario", "id": "range", "name": "The range",
+    "doc": "A pistol, eight rounds and someone down the street.",
+    "worlds": [ { "realm": "core:open_town", "seed": "ask" } ],
+    "start": {
+      "characters": [ { "template": "core:person" } ],
+      "at": [ { "name": "A street corner", "cell": [9, 17] } ],
+      "do": [
+        { "create_item": { "def": "core:pistol", "at": "self.loc" } },
+        { "let": { "pistol": { "first": { "entities": { "at": "self.loc", "def": "core:pistol" } } } } },
+        { "take": { "who": "self", "what": "$pistol" } },
+        { "create_item": { "def": "core:pistol_magazine", "at": "self.loc" } },
+        { "let": { "magazine": { "first": { "entities": { "at": "self.loc", "def": "core:pistol_magazine" } } } } },
+        { "fit": { "what": "$magazine", "into": "$pistol" } },
+        { "create_item": { "def": "core:pistol_round", "count": 2, "at": "self.loc" } },
+        { "let": { "loaded": { "first": { "entities": { "at": "self.loc", "def": "core:pistol_round" } } } } },
+        { "load": { "into": "$pistol", "from": "$loaded" } },
+        { "create_item": { "def": "core:backpack", "at": "self.loc" } },
+        { "let": { "pack": { "first": { "entities": { "at": "self.loc", "def": "core:backpack" } } } } },
+        { "wear": { "who": "self", "what": "$pack" } },
+        { "create_item": { "def": "core:pistol_round", "count": 6, "at": "self.loc" } },
+        { "let": { "spare": { "first": { "entities": { "at": "self.loc", "def": "core:pistol_round" } } } } },
+        { "put_in": { "what": "$spare", "container": "$pack" } },
+        { "spawn": { "template": "core:person", "at": "offset(start_cell, 5, 0, 0) ?? start_cell" } } ] } },
+
+  { "//": "The test town, as someone with every power of the sampler, with someone beside them.",
+    "type": "scenario", "id": "gifted", "name": "The gifted",
+    "doc": "Every power of the sampler.",
+    "worlds": [ { "realm": "core:open_town", "seed": "ask" } ],
+    "start": {
+      "characters": [ { "template": "core:power_sampler" } ],
+      "at": [ { "name": "A street corner", "cell": [9, 17] } ],
+      "do": [ { "spawn": { "template": "core:person", "at": "offset(start_cell, 1, 0, 0) ?? start_cell" } } ] } }
+]

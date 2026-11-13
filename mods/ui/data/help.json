@@ -1,17 +1,18 @@
 [
-  { "//": "The keys of play, read from the keymap in force (`app.keys('play')`): what each control is called and every key bound to it, so that a key the player rebinds shows as it is. Opened in play by the control `help` (? or F1).",
+  { "//": "The keys: every control the loaded mods define (`app.controls('play')`), bound or not, in order of what it is called, with every key the keymap in force gives it in play and what it does, so that a key the player rebinds shows as it is and a mod's own controls are listed with no screen written. Opened in play by the control `help` (? or F1).",
     "type": "screen", "id": "help",
     "title": "Keys",
-    "popup": { "width": 64, "height": "fill", "place": "centre", "dim": true },
+    "popup": { "width": 76, "height": "fill", "place": "centre", "dim": true },
     "layout": { "frame": "Keys in play: Esc goes back",
-                "table": { "id": "keys", "rows": "app.keys('play')",
+                "table": { "id": "keys", "rows": "app.controls('play')",
                            "columns": [ { "title": "Does", "value": "{it.label}", "width": 26 },
-                                        { "title": "Keys", "value": "{it.keys}", "width": "fill" } ],
-                           "empty": "The keymap binds nothing in play.",
+                                        { "title": "Keys", "value": "{if it.keys == '' then '-' else it.keys}", "width": 12 },
+                                        { "title": "What it does", "value": "{it.doc}", "width": "fill" } ],
+                           "empty": "The loaded mods define no controls.",
                            "tip": "Up and Down scroll. Options gives a key another meaning." } },
     "keys": { "back": [ { "close": {} } ] } },
 
   { "type": "control", "id": "help", "name": "Keys",
-    "doc": "Show what each key does in play.",
+    "doc": "Show every control and its keys in play.",
     "do": { "open": "help" } }
 ]

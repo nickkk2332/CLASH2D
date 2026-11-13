@@ -3,7 +3,7 @@
   "name": "Core on screen",
   "version": "0.1.0",
   "engine": ">=0.1",
-  "description": "How the core mod's living things are shown on the interface mod's screens: their reserves as bars in the play screen's status column and on the condition screen, and their attributes. A mod of its own, loaded after core and ui, so that core loads without the interface and the interface without core; it reads core's pools and attributes, so a profile that loads it loads core too.",
+  "description": "How the core mod's living things are shown on the interface mod's screens: their reserves as bars in the play screen's status column and on the condition screen, their attributes, and the lines and marks with which blows and powers are played back. A mod of its own, loaded after core and ui, so that core loads without the interface and the interface without core; it reads core's pools and attributes, so a profile that loads it loads core too.",
   "authors": ["CLASH2D contributors"],
   "requires": [],
   "after": ["core", "ui"],

@@ -885,6 +885,7 @@ struct Shelf {
     refused: Vec<AppService>,
     templates: Vec<AppEntry>,
     maker: Option<Maker>,
+    talk: Value,
 }
 
 /// What the fake application makes characters with: the definitions,
@@ -1096,6 +1097,7 @@ impl FakeApp {
                 refused: Vec::new(),
                 templates: Vec::new(),
                 maker: None,
+                talk: Value::Null,
             })),
         }
     }
@@ -1142,6 +1144,12 @@ impl FakeApp {
             .and_then(|maker| maker.finished.clone())
     }
 
+    /// Gives what `app.talk` reads from now on, as an application's
+    /// service `talk` would have gathered it.
+    pub fn set_talk(&self, talk: Value) {
+        lock(&self.shelf).talk = talk;
+    }
+
     /// Every service the application carried out, in order.
     pub fn requests(&self) -> Vec<AppRequest> {
         lock(&self.shelf).requests.clone()
@@ -1185,6 +1193,10 @@ impl AppState for FakeApp {
 
     fn can_load(&self) -> bool {
         lock(&self.shelf).can_load
+    }
+
+    fn talk(&self) -> Value {
+        lock(&self.shelf).talk.clone()
     }
 
     fn creation(&self) -> Value {

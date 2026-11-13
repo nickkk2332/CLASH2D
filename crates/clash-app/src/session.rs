@@ -59,6 +59,16 @@ pub struct Session {
     /// The direction of the last step the simulation refused because the
     /// way is closed (`move.closed`): what the frame loop offers to open.
     pub bumped: Option<String>,
+    /// Whether a step toward a creature the party sees there is a bump
+    /// into it (12 §3.7): the preference `bump_attack` is not `never`.
+    pub bump_creatures: bool,
+    /// The direction and the creature of the last step that was not
+    /// submitted because the character saw someone standing that way:
+    /// what the frame loop offers to attack.
+    pub bumped_into: Option<(String, EntityId)>,
+    /// Where the journal's markers are, worked out as the last batch
+    /// ended, for the view to pin: `None` once the view has them.
+    pub pins: Option<Vec<Location>>,
     /// Whether the play screen has been on show for this game. Once it
     /// has, the game is over when it no longer is.
     pub shown: bool,
@@ -180,6 +190,9 @@ fn session_of(
         percepts: Percepts::afresh(),
         stale_view: true,
         bumped: None,
+        bump_creatures: true,
+        bumped_into: None,
+        pins: None,
         seed: 0,
         shown: false,
         omniscient: false,

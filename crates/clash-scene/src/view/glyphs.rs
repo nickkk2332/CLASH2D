@@ -47,8 +47,12 @@ pub const MARK_SECTION_FLOOR: &str = "section_floor";
 /// The theme mark drawn on the cells between the followed character and
 /// the cursor while something is being aimed.
 pub const MARK_LINE: &str = "line";
+/// The theme mark drawn where a marker of the journal is (a map's pin).
+pub const MARK_MARKER: &str = "marker";
 /// The theme style the cell under the cursor is drawn in.
 pub const STYLE_CURSOR: &str = "cursor";
+/// The theme style the cell of the selected target is drawn in.
+pub const STYLE_TARGET: &str = "target";
 /// The theme colour the built-in `light` overlay shades with.
 pub const COLOR_OVERLAY_LIGHT: &str = "overlay_light";
 
@@ -109,6 +113,8 @@ pub struct ViewMarks {
     pub section_floor: char,
     /// A cell on the line from the followed character to the cursor.
     pub line: GlyphPart,
+    /// A pin: where a marker of the journal is.
+    pub marker: GlyphPart,
 }
 
 /// The default character of the `pile` mark.
@@ -123,6 +129,8 @@ const DEFAULT_BACKDROP: char = ' ';
 const DEFAULT_SECTION_FLOOR: char = '_';
 /// The default character of the `line` mark.
 const DEFAULT_LINE: char = '*';
+/// The default character of the `marker` mark.
+const DEFAULT_MARKER: char = 'X';
 
 impl ViewMarks {
     fn new(theme: &Theme) -> ViewMarks {
@@ -146,6 +154,7 @@ impl ViewMarks {
                 .ch
                 .unwrap_or(DEFAULT_SECTION_FLOOR),
             line: mark(MARK_LINE, DEFAULT_LINE, false),
+            marker: mark(MARK_MARKER, DEFAULT_MARKER, true),
         }
     }
 }
@@ -178,6 +187,7 @@ pub struct WorldGlyphs {
     marks: ViewMarks,
     base: CellStyle,
     cursor: Style,
+    target: Style,
     overlay_light: Color,
 }
 
@@ -358,6 +368,9 @@ impl WorldGlyphs {
             cursor: theme
                 .style(STYLE_CURSOR)
                 .unwrap_or(Style::attrs(Attrs::REVERSE)),
+            target: theme
+                .style(STYLE_TARGET)
+                .unwrap_or(Style::attrs(Attrs::UNDERLINE | Attrs::BOLD)),
             overlay_light: theme
                 .color(COLOR_OVERLAY_LIGHT)
                 .unwrap_or(Color::ansi(Ansi16::Yellow)),
@@ -446,6 +459,12 @@ impl WorldGlyphs {
     /// The style of the cell under the cursor.
     pub fn cursor(&self) -> Style {
         self.cursor
+    }
+
+    /// The style the cell of the selected target is drawn in: the
+    /// theme's `target`, or else underlined and bold.
+    pub fn target(&self) -> Style {
+        self.target
     }
 
     /// The colour the built-in `light` overlay shades with.
