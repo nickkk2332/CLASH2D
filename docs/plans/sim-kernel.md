@@ -29,7 +29,7 @@ start while the world model is being built.
 | P2 | Complete merge semantics | M | F4 | done |
 | P3 | Profiles and running without mods | S | F4 | beta |
 | P4 | Typed loading and validation stages | M | P2 | beta |
-| P5 | Schemas, reference, scaffolding | M | P1, P4 | todo |
+| P5 | Schemas, reference, scaffolding | M | P1, P4 | done |
 | P6 | Settings | S | K5 | beta |
 | P7 | Migration and obsoletion | M | P4, W10 | todo |
 | P8 | Hot reload | M | K7, P7 | todo |
@@ -208,6 +208,15 @@ Done when
   fixture.
 - A test fails if a registered item has no documentation.
 - A scaffolded mod lints clean.
+
+Done (D-800 to D-807), in `crates/clash-tools`: `docs` writes the
+reference from the registries, committed in `docs/reference/`, with a
+test that fails on anything registered without documentation and one that
+fails while a committed page is out of date; `schema` (the tests validate
+the bundled mods and reject the loader's broken fixtures with a validator
+of the subset of JSON Schema the schemas use, D-803); `init-mod` and
+`new`. Beside them, `docs/modding-guide.md`, run by a test that makes its
+mod, writes its files and runs its commands (D-807).
 
 ### P6 — Settings
 

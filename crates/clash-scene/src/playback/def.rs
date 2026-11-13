@@ -79,7 +79,10 @@ pub struct SpriteChangeDef {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SpriteChangeObject {
+    /// The subject of the event that names the thing whose sprite changes.
     of: Located<String>,
+    /// The subject that names the cell it is in now. Left out, or not bound by
+    /// the event, it is where the party perceives it.
     #[serde(default)]
     to: Option<Located<String>>,
 }

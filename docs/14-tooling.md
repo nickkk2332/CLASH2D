@@ -603,6 +603,10 @@ uses (13 §9.5). Local undoing is separate (08 §7.4).
 4. Look at the result. Open the inspector on it. Trace the rule.
 5. Write a test script for it.
 
+[The modding guide](modding-guide.md) follows this loop from `init-mod`
+to a blessed test script, and is run by a test of `clash-tools` (D-807).
+Hot reload and errors over the game (step 3) wait for P8.
+
 ### 9.2 Knowing what exists
 
 | Tool | Answers |
@@ -610,8 +614,12 @@ uses (13 §9.5). Local undoing is separate (08 §7.4).
 | The reference (`docs`) | What definition types, fields, units, events and hooks (with their subjects, fields and which a handler may change), verbs (with their arguments), properties, functions, queries, settings, reasons, diagnostics, console commands, widgets, UI effects, binding names, screens and slots exist, with their documentation |
 | The reference browser | The same, searchable, in the game |
 | `show <type> <id>` | What a definition is after every patch, and where each value came from |
-| `refs <type> <id>` | What refers to it, and what it refers to |
-| `find <type> where=<condition>` | Which definitions match |
+| `refs <type> <id>` | What refers to it, and what it refers to: fields read as references, `copy_from`, patches, and strings read as plain text that name it (D-806) |
+| `find <type> where=<condition>` | Which definitions match. A condition is `path`, `!path` or `path<op>value` with `==`, `!=`, `<`, `<=`, `>`, `>=` or `~`; several must all hold; `*` is any type, and plain words are looked for in ids, names and documentation (D-806) |
+
+Built so far: the reference, `show`, `refs` and `find`. The reference
+browser is not built: it is a screen of the `tools` mod, which does not
+exist yet (plans/tooling TL9).
 
 ### 9.3 Knowing what a mod set does together
 

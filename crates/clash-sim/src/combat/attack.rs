@@ -294,36 +294,61 @@ pub struct AttackDef {
 /// An attack as written, before its id is attached.
 #[derive(Deserialize)]
 struct AttackObject {
+    /// What strikes (07 §3.1): an item held, a part of the actor's body, or a
+    /// surface given inline. Required.
     with: WithDef,
+    /// How far it reaches, in metres: an expression. Left out, the reach of the
+    /// part that strikes; for a held item, that of the part holding it plus the
+    /// item's `length`; for an inline surface, the actor's.
     #[serde(default)]
     reach: Option<Expr<Number>>,
+    /// Joules at full effort: an expression. Required.
     energy: Expr<Number>,
+    /// The share of the energy that moves the target, from 0 to 1: an
+    /// expression. Default 0.
     #[serde(default = "zero")]
     push: Expr<Number>,
+    /// Degrees above level the push is raised: an expression. Default 0.
     #[serde(default = "zero")]
     lift: Expr<Number>,
+    /// How it finds its mark (07 §4). Left out, the strike cannot miss its
+    /// mark.
     #[serde(default)]
     aim: Option<AimDef>,
+    /// Several targets: a sweep or a line (07 §3.3). Left out, one target.
     #[serde(default)]
     arc: Option<ArcDef>,
+    /// Degrees the surface travels through before it lands (07 §6.4). Read and
+    /// carried for the package that gives it meaning.
     #[serde(default)]
     swing: Option<Real>,
+    /// The band of heights it reaches, in metres above the attacker's footing,
+    /// lowest first (07 §4.3). Carried.
     #[serde(default)]
     height: Option<[Real; 2]>,
+    /// The id of the phase at whose start it lands (07 §3.1). Carried.
     #[serde(default)]
     lands: Option<Located<String>>,
+    /// Whether it can meet another strike in the air (07 §8). Default false.
+    /// Carried.
     #[serde(default)]
     clashes: bool,
+    /// What a locked clash releases, in joules (07 §8.2). Carried.
     #[serde(default)]
     spill: Option<Real>,
+    /// The kind of release a locked clash spills. Carried.
     #[serde(default)]
     spill_kind: Option<String>,
+    /// A posture a target the push launches is put in.
     #[serde(default)]
     knock_down: Option<Ref<PostureDef>>,
+    /// Effects run once for each target it lands on.
     #[serde(default)]
     on_land: Effects,
+    /// Effects run once for each target it misses.
     #[serde(default)]
     on_miss: Effects,
+    /// Effects run once for each target it reaches without delivering anything.
     #[serde(default)]
     on_stopped: Effects,
 }
