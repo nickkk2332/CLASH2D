@@ -22,4 +22,4 @@ expect event thrown
 expect event element_destroyed
 assert "(@c:12,10,0.block.def_id ?? 'none') != 'core:window'"
 assert "@e:2.loc.x > 12"
-expect hash 0c21b583f1f0859234b2d82558920431
+expect hash 56fff8333c945b8d0d6a7d35e10f3b03

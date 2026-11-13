@@ -49,4 +49,4 @@ attach_sense @self core:human_hearing
 assert "core:doing_near(@self.loc, 60, 'drinking') > 0"
 assert "core:doing_near(@self.loc, 60, 'asleep') > 40"
 assert "core:doing_near(@self.loc, 60, 'at_market') == 0"
-expect hash ad86afcb166319c24eb595d7fe8ab5ef
+expect hash 3b8f18d34b11e3f51156b3cdd8856cb6

@@ -1847,8 +1847,16 @@ fn go_toward(
     if within <= Real::ZERO {
         pending.target = Some(cell);
     }
+    // A way it cannot find within a mind's limits is none it sets out on
+    // (D-896).
+    let limits = nav::way_limits(sim, mind, cell);
     if super::warm::is_warm(sim, mind) {
-        return walk_toward(sim, mind, pending, cell, clash_world::PathLimits::DEFAULT);
+        return walk_toward(sim, mind, pending, cell, limits);
+    }
+    if !nav::way_within(sim, mind, cell, limits) {
+        return Begun::Failed(
+            Reason::new(why::NOT_ARRIVED, "it did not get there").with("entity", mind.to_string()),
+        );
     }
     let to = sim.subject_value(Subject::Loc(cell)).to_stored();
     match start(sim, mind, kind, action, &[("to".to_owned(), to)]) {

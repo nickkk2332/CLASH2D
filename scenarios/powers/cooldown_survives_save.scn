@@ -14,4 +14,4 @@ advance 3001ms
 assert "@e:0.cannot_use('core:dash') == null"
 use_ability who=@e:0 ability=core:dash
 expect event ability_used ability=core:dash
-expect hash 1c9493af47b742565dcf1f1bd9818396
+expect hash 6b4cbc55495bea81c28ba66299663fb8

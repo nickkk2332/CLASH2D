@@ -52,6 +52,20 @@ row = "A path across a loaded tract, typical"
 limit = "150 µs"
 margin = 0.25
 
+[[budget]]
+bench = "town.step_in_market"
+spec = "09 §19"
+row = "A player's step in the bundled town: one simulated second in the square from 09:00, its residents loaded round the player"
+limit = "100 ms"
+margin = 0.25
+
+[[budget]]
+bench = "town.minute_wait"
+spec = "09 §19"
+row = "A minute's wait in the bundled town, in the square from 09:00"
+limit = "1 s"
+margin = 0.25
+
 # ---- 15 §17, perception and light ---------------------------------------
 
 [[budget]]

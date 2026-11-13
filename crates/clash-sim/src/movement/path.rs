@@ -189,6 +189,14 @@ pub fn follow_path(sim: &mut Sim, entity: EntityId, cause: Cause) -> Result<Step
             Ok(stepped)
         }
         Err(reason) => {
+            // A closed way met by a mind that opens what it meets
+            // (D-781): the mind opens it and begins the step again, so the
+            // path ends here rather than being planned round the door, a
+            // search that finds no other way in (D-895).
+            if reason.code == codes::CLOSED && crate::ai::doors::opens_on_the_way(sim, entity) {
+                clear_path(sim, entity);
+                return Err(reason);
+            }
             mark_stale(sim, entity, Some(next));
             Err(reason)
         }

@@ -842,6 +842,73 @@ impl Cosmos {
         Ok(out)
     }
 
+    /// Who [`occupants_within`](Cosmos::occupants_within) finds, each
+    /// once, by id: the query a sweep of perception asks (15 §5.2), which
+    /// needs no cells and no order of cells.
+    pub fn occupant_ids_within(
+        &self,
+        centre: Location,
+        radius_m: Real,
+        filter: &OccupantFilter,
+    ) -> Result<Vec<EntityId>, WorldError> {
+        let view = self.grid(centre.grid)?;
+        if radius_m < Real::ZERO {
+            return Ok(Vec::new());
+        }
+        let reach = radius_m.ceil().to_i32();
+        let storeys = (radius_m / crate::dims::STOREY_M).ceil().to_i32();
+        let cells = CellBox::around(centre.cell, IVec3::new(reach, reach, storeys));
+        let mut found = Vec::new();
+        collect_box(&view, cells, filter, &mut found)?;
+        let topology = view.topology();
+        let reach_sq = radius_m * radius_m;
+        let mut ids: Vec<EntityId> = found
+            .iter()
+            .filter(|occupied| {
+                let offset = topology.delta(centre.cell, occupied.cell);
+                Real::from_i64(distance_sq_cells(offset)) <= reach_sq
+            })
+            .map(|occupied| occupied.id)
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        Ok(ids)
+    }
+
+    /// Who [`occupants_within`](Cosmos::occupants_within) finds, in no
+    /// order and once for each of their cells in reach, added to `out`:
+    /// for a caller that keeps only a few of them and puts those in order
+    /// itself.
+    pub fn occupant_ids_within_unordered(
+        &self,
+        centre: Location,
+        radius_m: Real,
+        filter: &OccupantFilter,
+        out: &mut Vec<EntityId>,
+    ) -> Result<(), WorldError> {
+        let view = self.grid(centre.grid)?;
+        if radius_m < Real::ZERO {
+            return Ok(());
+        }
+        let reach = radius_m.ceil().to_i32();
+        let storeys = (radius_m / crate::dims::STOREY_M).ceil().to_i32();
+        let cells = CellBox::around(centre.cell, IVec3::new(reach, reach, storeys));
+        let mut found = Vec::new();
+        collect_box(&view, cells, filter, &mut found)?;
+        let topology = view.topology();
+        let reach_sq = radius_m * radius_m;
+        out.extend(
+            found
+                .iter()
+                .filter(|occupied| {
+                    let offset = topology.delta(centre.cell, occupied.cell);
+                    Real::from_i64(distance_sq_cells(offset)) <= reach_sq
+                })
+                .map(|occupied| occupied.id),
+        );
+        Ok(())
+    }
+
     /// The occupants in the cells a straight line passes through, from a
     /// point to another point of the same grid, in the order the line
     /// reaches the cells and by id within a cell. The cells are those of

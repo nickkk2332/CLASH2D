@@ -58,6 +58,14 @@ pub fn opens_doors(sim: &Sim, entity: EntityId) -> bool {
     }
 }
 
+/// Whether a closed way a character's path meets is the business of its
+/// mind (09 §5.3): it thinks by a `mind` definition that names an
+/// `interact_action`, so it opens what it meets on a step that moves.
+/// The path ends at the door instead of being planned round it (D-895).
+pub fn opens_on_the_way(sim: &Sim, entity: EntityId) -> bool {
+    mind_def_of(sim, entity).is_some() && opens_doors(sim, entity)
+}
+
 /// The cells a mind found shut and could not open, on a grid.
 pub fn shut_cells(sim: &Sim, entity: EntityId, grid: clash_world::GridId) -> Vec<CellPos> {
     sim.components

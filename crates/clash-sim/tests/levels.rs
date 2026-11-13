@@ -8,7 +8,7 @@ mod common;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clash_core::{Dur, EntityId, Real, Tick, Value as Stored};
+use clash_core::{Dur, EntityId, Real, Tick};
 use clash_data::{Defs, Loader};
 use clash_sim::ai::warm;
 use clash_sim::template::CharacterSpec;

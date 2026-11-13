@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use clash_core::{Dur, EntityId, Real, StateHash, StateHasher, impl_state_hash};
-use clash_world::{Activity, Location};
+use clash_world::{Activity, Location, OccupantFilter};
 use serde::{Deserialize, Serialize};
 
 use super::defs::{SenseId, SignalModel};
@@ -535,11 +535,7 @@ pub(super) fn sweep(sim: &mut Sim, observer: EntityId, sense: SenseId, bonus: Re
         return;
     }
     let mut targets = match threshold {
-        Some(_) => nearest(
-            sim,
-            eye,
-            signal::candidates(sim, observer, eye.loc, def.range.get()),
-        ),
+        Some(_) => nearest_in_range(sim, observer, eye, def.range.get()),
         None => Vec::new(),
     };
     let tracked = sim
@@ -594,8 +590,78 @@ fn sweeper<'a>(
     })
 }
 
+/// The nearest `perception.max_candidates` of everyone within a sense's
+/// range (and what they hold), by distance and then id, in one
+/// pass and with nothing put in order but the few kept (D-897): who
+/// stands in reach is gathered once each, with what is inside them, the
+/// nearest `perception.max_candidates` are picked by distance and then
+/// id, and those are put in order of id. The same as gathering them all
+/// in order and keeping the nearest (performance 2).
+fn nearest_in_range(sim: &Sim, observer: EntityId, eye: Spot, range: Real) -> Vec<EntityId> {
+    let max = sim
+        .setting_int(MAX_CANDIDATES_SETTING, DEFAULT_MAX_CANDIDATES)
+        .max(1) as usize;
+    let mut found: Vec<EntityId> = Vec::new();
+    if sim
+        .cosmos
+        .occupant_ids_within_unordered(
+            eye.loc,
+            range,
+            &OccupantFilter::ANY.except(observer),
+            &mut found,
+        )
+        .is_err()
+    {
+        return Vec::new();
+    }
+    // Each once: an entity's slot is marked as it is first met.
+    let mut marked: Vec<u64> = Vec::new();
+    let mut mark = |id: EntityId| {
+        let slot = id.index();
+        let (word, bit) = (slot / 64, 1_u64 << (slot % 64));
+        if marked.len() <= word {
+            marked.resize(word + 1, 0);
+        }
+        let new = marked[word] & bit == 0;
+        marked[word] |= bit;
+        new
+    };
+    let mut ids: Vec<EntityId> = Vec::with_capacity(found.len());
+    for id in found {
+        if id != observer && mark(id) {
+            ids.push(id);
+        }
+    }
+    let mut at = 0;
+    while at < ids.len() {
+        for inside in sim.entities.contents_deep(ids[at]) {
+            if inside != observer && mark(inside) {
+                ids.push(inside);
+            }
+        }
+        at += 1;
+    }
+    if ids.len() > max {
+        let distance = |id: EntityId| {
+            sim.entities
+                .location(id)
+                .and_then(|loc| sim.cosmos.delta(eye.loc, loc))
+                .map_or(i64::MAX, clash_world::distance_sq_cells)
+        };
+        let mut keyed: Vec<(i64, EntityId)> = ids.iter().map(|id| (distance(*id), *id)).collect();
+        keyed.select_nth_unstable(max);
+        keyed.truncate(max);
+        ids.clear();
+        ids.extend(keyed.into_iter().map(|(_, id)| id));
+    }
+    ids.sort_unstable();
+    ids
+}
+
 /// At most `perception.max_candidates` of the candidates of a sweep: the
-/// nearest, then by id; in order of id.
+/// nearest, then by id; in order of id. What `nearest_in_range` is
+/// tested against.
+#[cfg(test)]
 fn nearest(sim: &Sim, eye: Spot, mut candidates: Vec<EntityId>) -> Vec<EntityId> {
     let max = sim
         .setting_int(MAX_CANDIDATES_SETTING, DEFAULT_MAX_CANDIDATES)
@@ -610,10 +676,10 @@ fn nearest(sim: &Sim, eye: Spot, mut candidates: Vec<EntityId>) -> Vec<EntityId>
             .map_or(i64::MAX, clash_world::distance_sq_cells)
     };
     // Each distance worked out once; no two keys are equal, so the
-    // order is the one a sort by them in any manner gives.
+    // nearest `max` are the same whichever way they are picked.
     let mut keyed: Vec<(i64, EntityId)> =
         candidates.iter().map(|id| (distance(*id), *id)).collect();
-    keyed.sort_unstable();
+    keyed.select_nth_unstable(max);
     keyed.truncate(max);
     candidates.clear();
     candidates.extend(keyed.into_iter().map(|(_, id)| id));
@@ -1072,5 +1138,54 @@ mod tests {
             compared > 1000 && seen > 50,
             "{compared} compared, {seen} seen"
         );
+    }
+
+    #[test]
+    fn candidates_and_the_nearest_are_what_the_first_ones_were() {
+        // Performance 2: the candidates of a sweep found by id alone, and
+        // the nearest of them picked without sorting them all.
+        let mut sim = city();
+        let mut draw = Draw(11);
+        let mut crowd = Vec::new();
+        for _ in 0..60 {
+            let at = street(draw.next(64) as i32 - 8, draw.next(5) as i32 - 2);
+            crowd.push(person(&mut sim, Place::at(at)));
+        }
+        // Some inside others, as things are carried.
+        for _ in 0..8 {
+            let one = person(&mut sim, Place::Stored);
+            let holder = crowd[draw.next(crowd.len() as u64) as usize];
+            let _ = sim.relocate(one, Place::In(holder), clash_world::Cause::DEBUG);
+        }
+        for (max, &observer) in [12_usize, 40].iter().cycle().zip(&crowd) {
+            sim.set_setting(MAX_CANDIDATES_SETTING, *max as i64);
+            let at = sim.entities.location(observer).unwrap();
+            for range in [4.0, 15.0, 40.0] {
+                let range = Real::of(range);
+                let fast = signal::candidates(&sim, observer, at, range);
+                let first = signal::candidates_reference(&sim, observer, at, range);
+                assert_eq!(fast, first, "{observer} at {range}");
+                let eye = signal::eye_of(&sim, observer).unwrap();
+                let mut all = fast.clone();
+                let near = nearest(&sim, eye, fast);
+                // The reference: every distance, all sorted.
+                let distance = |id: EntityId| {
+                    sim.entities
+                        .location(id)
+                        .and_then(|loc| sim.cosmos.delta(eye.loc, loc))
+                        .map_or(i64::MAX, clash_world::distance_sq_cells)
+                };
+                all.sort_by_key(|id| (distance(*id), *id));
+                all.truncate(*max);
+                all.sort_unstable();
+                assert_eq!(near, all, "{observer} at {range}");
+                // Looked for nearest first, the same.
+                assert_eq!(
+                    nearest_in_range(&sim, observer, eye, range),
+                    near,
+                    "{observer} at {range}"
+                );
+            }
+        }
     }
 }

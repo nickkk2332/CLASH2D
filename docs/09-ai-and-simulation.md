@@ -413,6 +413,17 @@ cost about 15 ms of real time for each simulated second, perception and
 movement included, about 37 µs a wake-up. No path is cached per mind:
 none was needed.
 
+Two rules came of the market town (performance 2). A mind searches for
+a way to a place over at most 1,500 cells and 150 more for each metre
+the place is off in a straight line (`nav::way_limits`, D-896): a way
+it cannot find within that is no way it sets out on, so a place a few
+steps off behind a wall with no way round is given up without
+searching the town. A hot mind looks before its `go_action` sets out;
+a warm one plans its bulk walk within the same limits. And a closed way
+met by a mind that opens what it meets ends the path there instead of
+being planned round (D-895): the mind opens it at its next thought and
+begins the step again, as section 4.1 says.
+
 ### 5.5 Flow fields
 
 When many characters are going to the same place, one **flow field** is
@@ -731,6 +742,77 @@ on every loaded tract, whoever is standing in them.
 In a quiet town of eighty everyone is hot. In a duel both are. In a battle
 the hundred and fifty nearest and most involved are, and that set moves
 with the player.
+
+### 9.4 As built (beta)
+
+Built in `clash_sim::ai::warm` (packages I8 and T7, beta; decisions
+D-890 to D-899): what a town of hundreds needs to be cheap around the
+player. Only characters with minds have levels; a directly controlled
+character has none and is never warm.
+
+**Who is warm.** Of the minds in the world, those ranked beyond
+`sim.max_hot_minds` (default 150). A mind's tract does not make it
+warm: one in a warm tract is ranked as any other, nearest first, and so
+is among the first stepped down, while its perception is a warm
+observer's there whatever its level (15 §14). One **stepper** (03 §10)
+on universal time works levels out every `WARM_STEP` (1 s) while
+anybody is warm or could be: it starts when a mind thinks while more
+minds have thought than the cap, and stops when nobody is warm. While it is
+not running nothing of levels is kept, so a simulation in which nobody
+was ever warm hashes and saves as before (D-890).
+
+**Ranking** (D-891). At each step every mind in the world is ranked:
+first those the cap never steps down (one holding a hot ticket of its
+own, one sharing an action, a window or a grip with a directly
+controlled character or such a holder, and one standing in a cell the
+party sees, 15 §13), then those that became hot less than `DWELL`
+(5 s) ago, then the rest, then those that became warm less than `DWELL`
+ago; within each by the classes of section 9.3 (holder, involved,
+notable, anonymous), then seen by the party first, then nearest to a
+directly controlled character (else to the anchor of a hot ticket),
+then by id. The first group is hot whatever the cap; the others fill what is
+left of it in that order. So the cap is exceeded
+only by characters the party sees or that are involved with it, and a
+character keeps its level for `DWELL` unless the cap or the first group
+makes otherwise.
+
+**Promotion between steps.** A warm character is promoted at once when
+a sweep of the party's sight finds it standing in view, when its bulk
+walk takes it into a cell the party sees, when an action that starts
+names it (its actor, a parameter or a participant: 03 §10, before the
+action claims anything), and when its own mind would start an action
+(a `do` or `choose` step, or a door to open: a warm character starts
+none). The next step steps the lowest-ranked down to keep the cap.
+Promotion and demotion raise `entity_promoted` (`why`: `attention`,
+`seen`, `involved`, `acting`) and `entity_demoted`.
+
+**Warm** (D-892). A warm character does not sweep and receives only
+signals at or over `perception.warm_factor` times its threshold
+(15 §14). Its mind thinks only at the stepper's steps, in order of
+entity, when it is due (prompted, or its interval passed), by the same
+goals and beliefs as a hot one. A step that moves is walked in bulk:
+its path is planned from belief as the `go_action` would plan it, and
+at each step it takes as many steps of the path, each checked against
+the world, as the time its own clock has run allows. Someone standing
+in its way is waited for three steps (`HELD_STEPS`); a step refused
+ends the walk and the mind judges the step at its next thought, as it
+judges a `go_action` that ended short (D-893). Waits, looks and steps
+that take no time are as for a hot mind.
+
+**Moving between levels** (section 9.2). Warm to hot: its sweeps begin
+again and it thinks at once; a step it was walking in bulk is begun
+again as its `go_action`, toward the same place. Hot to warm: what it is
+doing runs on, but an action walking a step that moves ends at its next
+phase and its path becomes the route it walks in bulk, toward the same
+place.
+
+**Not built**: bulk exchanges between opposed warm characters (a warm
+mind that would strike starts an action, so it is promoted and the fight
+is resolved in full: nothing is softened, only not made cheaper);
+`low_attention` actions (03 §11); a stepper for each realm on its own
+clock (one universal stepper advances each warm character by its own
+clock's time); folding a warm character's thoughts beyond its
+`think` interval. Measured: section 19.
 
 ## 10. Agents
 
@@ -1336,7 +1418,12 @@ Rates in this document are written with a unit of time (04 §7.1):
 minutes of a twenty-four hour day, scaled to the length of the realm's
 own; `realm.clock` gives the same as a fraction of the day.
 
-**As built in the beta** (section 3.5, 4.1, 5.4a, 6.6, 10.6, 14.2):
+**As built in the beta** (section 3.5, 4.1, 5.4a, 6.6, 9.4, 10.6, 14.2):
+
+- Detail levels (section 9.4): the setting `sim.max_hot_minds` (default
+  150); the events `entity_promoted` (`self`; `why`: `attention`,
+  `seen`, `involved` or `acting`) and `entity_demoted` (`self`), named
+  in 03 §13.
 
 - Definition types `routine` (section 10.6) and `calendar` (section
   14.2); the fields `interact_action` and `routine` on minds and `kind`
@@ -1416,17 +1503,34 @@ Targets, unmeasured but where a figure is given: those rows are in
 | One warm step for 2,000 characters | under 3 ms |
 | A simulated day for 20,000 agents, 500 sites and their incidents | under 60 ms |
 | An idle agent | no cost between wake-ups |
-| The bundled town (`core:town`, seed 7), every resident hot, for one simulated hour from 09:00 | no target yet (measured, release build on four shared cores beside a script run: 953 s of real time for 565 residents and 37.9 million wake-ups, about 0.26 s a simulated second and 25 µs a wake-up) |
+| The bundled town (`core:town`, seed 7), every resident hot, for one simulated hour from 09:00 | no target (measured before levels, release build on four shared cores beside a script run: 953 s of real time for 565 residents and 37.9 million wake-ups, about 0.26 s a simulated second and 25 µs a wake-up) |
 | The same hour with the town unloaded, its residents agents (section 10.6) | no target yet (measured: 7 ms of real time) |
+| A player's step in the bundled town: one simulated second in the square from 09:00, its residents loaded round the player | under 100 ms (measured: see below) |
+| A minute's wait in the bundled town, in the square from 09:00 | under 1 s (measured: see below) |
 
-The town's two rows are the ignored test
+The town's first two rows are the ignored test
 `timing_the_whole_town_for_one_simulated_hour` in
 `crates/clash-save/tests/town_life.rs`, run with `cargo test --release
--p clash-save --test town_life timing -- --ignored --nocapture`; there is
-no bench for them yet. A hot town runs nearly four times faster than its
-own clock with the whole of it loaded, which a player never has: what it
-costs is perception and thought of everyone in it, and an agent that is
-not loaded costs only its next wake-up.
+-p clash-save --test town_life timing -- --ignored --nocapture`. The
+other two are the benchmarks `town.step_in_market` (the mean of a
+simulated minute taken a second at a time) and `town.minute_wait` of
+`cargo xtask bench`; `town.step_walking` times the step with the player
+walking across the town, with no row. Measured on four shared cores:
+
+| | Before levels | With the cap and the rest of performance 2 |
+|---|---|---|
+| A step in the square | 226 ms (slowest 349 ms; 9,809 wake-ups a second) | 38 ms (slowest 90 ms; 1,044 wake-ups a second) |
+| A step walking across the town | — | 37 ms (slowest 63 ms) |
+| A minute's wait | 14.05 s | 2.2 to 2.6 s |
+
+With the cap (section 9.4) 150 of the 565 are hot and the rest warm.
+What a step still costs is, in order: the sweeps of the 150 hot
+characters and the party's own (a sweep looks at the nearest
+`perception.max_candidates` of everyone in a 60 m range, items and
+furniture included); minds thinking, chiefly paths for those going
+about near their homes; and the actions of the hot. A minute's wait is
+over its target by that much: it is the cost of 150 characters in full,
+which the cap sets.
 
 ## 20. Open questions
 

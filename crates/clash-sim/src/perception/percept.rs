@@ -69,6 +69,49 @@ pub fn reading_of(sim: &Sim, signal: &Signal, observer: EntityId, sense: SenseId
     (received > Real::ZERO).then(|| received / threshold.max(MIN_THRESHOLD))
 }
 
+/// Whether a signal of a kind and a strength from a source could reach
+/// one sense of an observer whose eye is at `eye` at or over its
+/// threshold (over the warm factor times it, for a warm observer), with
+/// nothing in its way: [`signal::bound_at`], the most of it that could
+/// arrive, against the threshold [`reading_of`] would use. Never false
+/// for a signal [`receive`] would take from there (D-894).
+pub(super) fn could_receive(
+    sim: &Sim,
+    kind: &super::defs::KindInfo,
+    strength: Real,
+    source: Spot,
+    observer: EntityId,
+    sense: SenseId,
+    eye: Spot,
+) -> bool {
+    let Some(slot) = sim
+        .components
+        .senses
+        .get(observer)
+        .and_then(|senses| senses.slot(sense))
+    else {
+        return false;
+    };
+    let Some(threshold) = slot
+        .threshold()
+        .or_else(|| senses::threshold_of(sim, observer, sense))
+    else {
+        return false;
+    };
+    let mut most = signal::bound_at(sim, kind, strength, source, eye);
+    if kind.contained > Real::ONE
+        && sim
+            .entities
+            .get(observer)
+            .is_some_and(|record| matches!(record.place(), Place::In(_)))
+    {
+        most *= kind.contained;
+    }
+    let clarity = most / threshold.max(MIN_THRESHOLD);
+    let warm = crate::ai::warm::is_warm(sim, observer) || detect::is_warm(sim, eye.loc);
+    clarity >= if warm { warm_factor(sim) } else { Real::ONE }
+}
+
 /// A signal reached an observer's sense (15 §6). If it is received at or
 /// over the threshold (over the warm factor times it, for a warm
 /// observer: one in a warm tract or stepped warm), the observer's awareness of what it is about builds, it

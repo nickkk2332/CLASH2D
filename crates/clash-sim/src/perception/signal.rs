@@ -696,6 +696,7 @@ pub fn emit_signal(sim: &mut Sim, signal: Signal) -> Result<Emitted, Reason> {
             return Ok(emitted);
         };
         let clock = sim.location_clock(at);
+        let source = Spot::point(at, signal.alt_mm);
         for (observer, sense) in listeners {
             if signal.about == Some(observer) {
                 continue;
@@ -706,6 +707,14 @@ pub fn emit_signal(sim: &mut Sim, signal: Signal) -> Result<Emitted, Reason> {
             let Some(distance) = cell_distance(&sim.cosmos, at, eye.loc) else {
                 continue;
             };
+            // Heard only if loud enough at its distance (D-894): the most
+            // of it that could arrive, with nothing in its way, is weighed
+            // against the listener's threshold once, as it is given off.
+            // One that could not hear it from where it stands is not
+            // waited for.
+            if !percept::could_receive(sim, kind, signal.strength, source, observer, sense, eye) {
+                continue;
+            }
             launch(sim, &signal, observer, sense, clock, speed, distance);
             emitted.delayed += 1;
         }
@@ -808,7 +817,40 @@ pub(super) fn arrive(sim: &mut Sim, id: u64) {
 /// the share of a standing signature of each it receives: the entities
 /// within the sense's range, those inside containers too where the kind
 /// passes containers, by id.
+#[cfg(test)]
 pub(super) fn candidates(
+    sim: &Sim,
+    observer: EntityId,
+    at: Location,
+    range: Real,
+) -> Vec<EntityId> {
+    // Who stands in reach, each once and by id: no cells are needed, and
+    // none are put in order (performance 2).
+    let Ok(mut ids) =
+        sim.cosmos
+            .occupant_ids_within(at, range, &OccupantFilter::ANY.except(observer))
+    else {
+        return Vec::new();
+    };
+    let inside: Vec<EntityId> = ids
+        .iter()
+        .flat_map(|id| sim.entities.contents_deep(*id))
+        .collect();
+    if !inside.is_empty() {
+        ids.extend(inside);
+        ids.sort_unstable();
+        ids.dedup();
+    }
+    if let Ok(at) = ids.binary_search(&observer) {
+        ids.remove(at);
+    }
+    ids
+}
+
+/// [`candidates`] as it was first written: what the faster one is
+/// tested against.
+#[cfg(test)]
+pub(super) fn candidates_reference(
     sim: &Sim,
     observer: EntityId,
     at: Location,

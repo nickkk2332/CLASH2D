@@ -1326,10 +1326,25 @@ As built (decision D-618):
 
 As built: an observer standing in a warm tract does not sweep, and
 receives a signal only at or over `perception.warm_factor` times its
-threshold (default 4). Promoting it (03 §10) waits for the attention
-of 09 §9.3. An entity that leaves the world with its tract keeps its
-components, beliefs included, unchanged; its sweeps begin again when it
-returns (invariant P6).
+threshold (default 4). An entity that leaves the world with its tract
+keeps its components, beliefs included, unchanged; its sweeps begin
+again when it returns (invariant P6).
+
+A character stepped warm by the attention cap (09 §9.4) is a warm
+observer too: it receives only signals over the warm factor times its
+threshold, and its sweeps stop until it is promoted, when they begin
+again. Receiving a loud signal makes its mind think, at the warm
+stepper's next step; promotion follows attention (09 §9.3). The party
+perceives only hot characters: a warm character standing in a cell a
+member sees, at the member's sweep or by its own bulk walk, is promoted
+at once (D-891).
+
+A delayed signal is sent only to the listeners it could reach at or over
+their thresholds (times the warm factor, for a warm listener) from where
+they stand when it is given off: the most of it that could arrive, with
+nothing in its way, is weighed once against each listener's threshold,
+and no front is sent to one that could not hear it (D-894). A listener
+that comes closer while the front is on its way is not reached by it.
 
 ## 15. Modding surface
 
@@ -1502,7 +1517,7 @@ build. Each row with a figure is in `budgets.toml`.
 | Light of an 80 × 50 view after one edit that light cares about | under 1 ms (measured: 0.5 ms in a street of the test city, a wall put up and taken down) |
 | One observer-target evaluation, including line of sight at 30 m | under 2 µs (measured: 0.6 µs, from 3 µs: the four heights of `exposed` walked together, D-732) |
 | Emitting a signal to 50 observers in range | under 100 µs (measured: 21 µs to send a delayed one, 0.5 ms for all fifty to receive it with their events, from 1.1 ms) |
-| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 15 to 23 ms in the best of each of several runs, for fifty walking in one street, all in range of each other, with sight and hearing and footsteps; 22 to 32 ms before D-731 to D-733) |
+| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 9.9 to 11.4 ms in the best of each of several runs, for fifty walking in one street, all in range of each other, with sight and hearing and footsteps; 15 to 23 ms before D-894, 22 to 32 ms before D-731 to D-733) |
 | Memory per mind, typical | under 4 KB |
 
 The ignored test `timing_of_perception_in_a_city_block` of
@@ -1517,7 +1532,17 @@ the model rather than in its arithmetic: every footstep is a delayed
 signal to each listener in reach, received with its `perceived` event,
 and each sight sweep brings up to `perception.max_candidates` pairs up to
 date. Fifty in one street is the worst case of that: in a town the
-listeners in reach are fewer. A party member's sweep, its view of 60 m,
+listeners in reach are fewer.
+
+Performance 2 (D-894, D-897): a footstep is now sent only to those who
+could hear it from where they stand, so most of a crowd's fronts and
+their arrivals are gone, with the same percepts in the crowd; a sweep
+finds its candidates by id alone, nearest first, out from 12 m and
+twice as far each time until `perception.max_candidates` are within
+reach, with the same candidates as before (tested against the first
+forms). In the market town a sweep looks at a range full of furniture
+and goods, and the 150 hot characters' sweeps are still the larger part
+of a step there (09 §19). A party member's sweep, its view of 60 m,
 map memory and frame, takes 0.9 ms again from where it stands, and
 8.5 ms the first time, with the light cache and map memory cold (9 ms
 and more before).
