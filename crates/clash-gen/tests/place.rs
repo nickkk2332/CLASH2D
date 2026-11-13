@@ -42,6 +42,20 @@ fn defs() -> String {
         }
     });
     let pad = rows(7, |_| ".".repeat(7));
+    // Items, tables and devices on every side of the corner four tracts
+    // share.
+    let stocked = rows(BIG, |y| {
+        (0..BIG)
+            .map(|x| match (x + 3 * y) % 11 {
+                0 => 'i',
+                3 => 't',
+                5 => 'c',
+                7 if y % 5 == 0 => 'd',
+                9 if y % 7 == 0 => 'n',
+                _ => '.',
+            })
+            .collect()
+    });
     let realm = |id: &str, params: &str| {
         format!(
             r#"{{ "type": "realm", "id": "{id}", "size_regions": [1, 1], "wrap": [],
@@ -113,6 +127,25 @@ fn defs() -> String {
                           { "map": "rug", "at": [5, 5, 0] } ]"#,
         ),
         realm("flat_crowded", r#""tracts": [ { "tract": "crowded" } ]"#),
+        format!(
+            r#"{{ "type": "map", "id": "stocked", "size": [{BIG}, {BIG}], "sit": "none",
+                 "palette": [ {{ ".": {{ "floor": "slab" }},
+                                "i": {{ "floor": "slab", "items": "loaf" }},
+                                "t": {{ "floor": "slab", "fixture": "table",
+                                       "items": {{ "table": "pantry", "count": [1, 3] }} }},
+                                "c": {{ "floor": "slab", "items": {{ "item": "coin", "count": 5, "chance": 0.5 }} }},
+                                "d": {{ "floor": "slab", "fixture": "table",
+                                       "device": {{ "name": "lamp", "config": {{ "brightness": 2 }} }} }},
+                                "n": {{ "floor": "slab", "fixture": "table", "device": "named_only" }} }} ],
+                 "levels": {{ "0": [ {stocked} ] }} }}"#
+        ),
+        realm(
+            "flat_stocked",
+            &format!(
+                r#""tracts": [ {{ "tract": "plain" }} ],
+                   "place": [ {{ "map": "stocked", "at": [{BIG_AT}, {BIG_AT}, 0], "seed": 91 }} ]"#
+            ),
+        ),
         realm("hill_bare", hill),
         realm(
             "hill_placed",
@@ -687,4 +720,130 @@ fn a_survey_drops_a_placement_that_meets_an_earlier_one_unless_its_map_may_overl
         }
     }
     let _ = Layer::Block;
+}
+
+#[test]
+fn a_maps_items_and_devices_are_handed_on_once_whichever_tract_realises_them() {
+    // 10 §4.1: the items, content tables and configured devices a map
+    // names become requests, each handed on by the tract its cell is
+    // in, with a seed drawn from the placement and the cell alone.
+    let built = built();
+    let def = built.realm("t:flat_stocked").unwrap();
+    let tracts = common::block(2);
+    let generators = {
+        let mut registry = clash_gen::registry_with(&built.generation);
+        registry.set_runner(Arc::new(SerialRunner));
+        registry.bind(&built.world)
+    };
+    let handed = |order: &[TractPos]| {
+        let realised = realize_tracts(&generators, def, SEED, order).unwrap();
+        let mut by_tract: Vec<(TractPos, Vec<clash_world::SpawnRequest>)> = order
+            .iter()
+            .copied()
+            .zip(realised.into_iter().map(|tract| tract.spawns))
+            .collect();
+        by_tract.sort_by_key(|(tract, _)| *tract);
+        by_tract
+    };
+    let straight = handed(&tracts);
+    for shuffle in 0..4 {
+        let mut order = tracts.clone();
+        Rng::from_seed(shuffle).shuffle(&mut order);
+        assert_eq!(handed(&order), straight, "shuffle {shuffle}");
+    }
+    let mut record = placement(map(&built, "t:stocked"), CellPos::new(BIG_AT, BIG_AT, 0));
+    record.seed = 91;
+    let placed = PlacedMap::resolve(built.generation.maps(), &record)
+        .unwrap()
+        .unwrap();
+    let mut all: Vec<clash_world::SpawnRequest> = straight
+        .iter()
+        .flat_map(|(tract, requests)| {
+            for request in requests {
+                assert_eq!(request.at.tract(), *tract, "handed on by its own tract");
+            }
+            requests.iter().cloned()
+        })
+        .collect();
+    let mut wanted = placed.furnishings();
+    let key = |request: &clash_world::SpawnRequest| (request.at, request.what.clone());
+    all.sort_by_key(key);
+    wanted.sort_by_key(key);
+    assert_eq!(all, wanted);
+    let kind = |request: &clash_world::SpawnRequest| {
+        request
+            .params
+            .get(place::SPAWN_PARAM_KIND)
+            .and_then(clash_core::Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let count = |name: &str| all.iter().filter(|request| kind(request) == name).count();
+    assert!(
+        count(place::SPAWN_KIND_ITEM) > 40,
+        "{}",
+        count(place::SPAWN_KIND_ITEM)
+    );
+    assert!(count(place::SPAWN_KIND_TABLE) > 20);
+    // Only a device given settings is handed on; one only named is not.
+    let devices: Vec<_> = all
+        .iter()
+        .filter(|request| kind(request) == place::SPAWN_KIND_DEVICE)
+        .collect();
+    assert!(!devices.is_empty());
+    for device in &devices {
+        assert_eq!(device.what, "lamp");
+        let Some(clash_core::Value::Map(config)) = device.params.get(place::SPAWN_PARAM_CONFIG)
+        else {
+            panic!("no settings: {device:?}");
+        };
+        assert_eq!(config.get("brightness"), Some(&clash_core::Value::Int(2)));
+    }
+    // Every request names the map; the seeds of two lots differ, and a
+    // table's draws are as many as its count drew.
+    let seeds: std::collections::BTreeSet<i64> = all
+        .iter()
+        .filter_map(|request| request.params.get(place::SPAWN_PARAM_SEED))
+        .filter_map(clash_core::Value::as_int)
+        .collect();
+    assert_eq!(
+        seeds.len(),
+        count(place::SPAWN_KIND_ITEM) + count(place::SPAWN_KIND_TABLE)
+    );
+    for request in &all {
+        assert_eq!(
+            request.params.get(place::SPAWN_PARAM_MAP),
+            Some(&clash_core::Value::Str("t:stocked".into()))
+        );
+        if kind(request) == place::SPAWN_KIND_TABLE {
+            let drawn = request
+                .params
+                .get(place::SPAWN_PARAM_COUNT)
+                .and_then(clash_core::Value::as_int)
+                .unwrap();
+            assert!((1..=3).contains(&drawn));
+        }
+    }
+    // A coin that is there at all is there five times; half of them
+    // are not there.
+    let coins: Vec<i64> = all
+        .iter()
+        .filter(|request| request.what == "coin")
+        .filter_map(|request| request.params.get(place::SPAWN_PARAM_COUNT))
+        .filter_map(clash_core::Value::as_int)
+        .collect();
+    assert!(coins.iter().all(|count| *count == 5));
+    let cells = placed
+        .map
+        .written_cells()
+        .filter(|(cell, _)| {
+            let (x, y) = (cell.x, cell.y);
+            (x + 3 * y) % 11 == 5
+        })
+        .count();
+    assert!(
+        coins.len() < cells && !coins.is_empty(),
+        "{} of {cells}",
+        coins.len()
+    );
 }

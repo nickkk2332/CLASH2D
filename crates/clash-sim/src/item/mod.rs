@@ -18,6 +18,7 @@
 //! | [`damage`], [`repair`], [`worn_layers`], [`apply_worn_hits`] | Item damage, and worn items as layers for hits | `wear` |
 //! | [`part_item`], [`on_body_changes`] | What a body's changes do to what it holds | `wear` |
 //! | [`materialise`] | Latent contents | `latent` |
+//! | [`ContentTableDef`], [`table::draw`] | The `content_table` type: what generation fills cells and containers with | [`table`] |
 //! | [`properties`], [`verbs()`], [`event_types`], [`ITEM_REASONS`] | What rules read, call, listen for and are refused with | `props`, [`verbs`](mod@verbs), here |
 //! | [`conferred`], [`reconfer`] | What held and worn things confer, from scratch | `confer` |
 //!
@@ -86,8 +87,9 @@
 //! - **`round`, `interactions`, `device`, `look`** are not fields yet:
 //!   they arrive with ammunition (07 §11.5), devices (16) and looks
 //!   (12 §4.4).
-//! - **`content_table`** definitions: a container's latent contents come
-//!   from the `contents` list of its own definition.
+//! - **`content_table`** definitions are built ([`table`]) and drawn from
+//!   when generation furnishes a cell ([`crate::furnish`]); an item's own
+//!   `contents` list still names items only.
 //! - **Seats and fixtures.** [`Hold::Seat`] and [`Hold::Fixed`] can be
 //!   recorded with [`hold::place_in`]; what they mean belongs to
 //!   vehicles and devices.
@@ -99,6 +101,7 @@ mod latent;
 mod make;
 mod props;
 mod stack;
+pub mod table;
 pub mod verbs;
 mod wear;
 
@@ -128,6 +131,7 @@ pub use latent::materialise;
 pub use make::{ITEM_STREAM, create, create_seeded, destroy, set_color, spend};
 pub use props::properties;
 pub use stack::{merge, rejoin, split};
+pub use table::{ContentTableDef, ContentTableId, Drawn, MAX_TABLE_DEPTH, TableEntryDef};
 pub use verbs::verbs;
 pub use wear::{
     DAMAGE_PARTS, ItemHit, apply_worn_hits, damage, on_body_changes, part_item, repair,
@@ -141,6 +145,10 @@ use crate::entity::Place;
 /// `register_defs`.
 pub fn register_defs(types: &mut DefTypes) {
     types.register::<ItemDef>();
+    types
+        .register::<ContentTableDef>()
+        .add_cross_check(table::check_table_loops)
+        .add_cross_check(crate::furnish::check_map_items);
 }
 
 /// Enters the definition types the properties and verbs of this module

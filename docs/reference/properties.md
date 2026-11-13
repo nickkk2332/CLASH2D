@@ -10,7 +10,7 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | [`app_entry`](#app-entry) | One entry of a list `app` offers: a save, a profile, a mod or a scenario. | 4 |
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
-| [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 17 |
+| [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 18 |
 | [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 130 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
@@ -137,6 +137,8 @@ The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here
 - `element.interactions -> list<string>`: The qualified ids of the interactions the element's definition lists (02 §5.5), in order. Those offered by `any` are not listed.
   Changed by `element_changed`.
 - `element.kind -> string` · safe for belief: The name of the kind of subject this is: `entity`, `loc`, `element`, `area`, `site`, `tract`, `realm` or `global`.
+- `element.latent -> bool`: Whether generation left contents in the element that have not been made yet (06 §9.3): they are made when it becomes a device (opened, searched, something put in it, damaged) or `materialise_contents` is called on it. False for an element whose contents were made, and for one that never had any.
+  Changed by `device_promoted`, `contents_materialised`.
 - `element.layer -> string` · safe for belief: Which of its cell's elements it is: `floor`, `block` or `fixture`.
 - `element.loc -> loc` · safe for belief: The cell it is in.
 - `element.material -> id<material>?`: What it is made of.

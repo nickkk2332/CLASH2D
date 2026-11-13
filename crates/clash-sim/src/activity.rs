@@ -20,7 +20,7 @@
 //! |----------------|----------------|
 //! | `tract_unloading` | Takes every entity with a cell in the tract out of the world: its place becomes `Stored`, and where it stood is remembered on the [`Shelf`] under that tract. `entity_relocated` is emitted for each. What an entity holds stays inside it |
 //! | `tract_loaded` | Puts back the entities shelved under the tract, each where it stood, with `entity_relocated`. One whose footprint reaches into a tract that is not loaded waits on the shelf under that tract |
-//! | A loaded tract's spawn requests | Emits `spawn_requested` for each, for the package that makes entities from definitions (first-playable E9, E11) |
+//! | A loaded tract's spawn requests | Emits `spawn_requested` for each, for the package that makes entities from definitions (first-playable E9, E11); a request for items, a content table or a device's settings is answered by [`furnish`](crate::furnish) instead |
 //! | A tract that could not be loaded or unloaded | Reports a `fault` with the reason `world.tract_failed` |
 //!
 //! A shelved entity keeps its id, its components and everything inside
@@ -270,6 +270,11 @@ impl Sim {
             };
             for request in loaded.spawns {
                 let loc = Location::new(grid, request.at);
+                // Items, tables and devices a map furnishes the tract
+                // with are made here, without `spawn_requested`.
+                if crate::furnish::honour(self, loc, &request) {
+                    continue;
+                }
                 // A request that names a template is answered here
                 // (06 §10.3), after the event that reports it.
                 let honour = request.clone();

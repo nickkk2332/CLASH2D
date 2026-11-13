@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 17;
+pub const SAVE_VERSION: u32 = 18;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -153,6 +153,9 @@ pub struct Sim {
     /// for verbs that belong to the action that runs them (`seize`).
     /// `None` between any two events.
     pub(crate) acting: Option<crate::later::ActionId>,
+    /// The latent contents generation left in elements (06 §9.3;
+    /// [`furnish`](crate::furnish)).
+    pub(crate) furnish: crate::furnish::FurnishState,
 }
 
 /// Why saved state could not be loaded.
@@ -243,6 +246,7 @@ struct SavedRef<'a> {
     ranged: &'a crate::combat::ranged::RangedState,
     scenario: &'a crate::scenario::ScenarioState,
     grips: &'a crate::combat::grip::GripTable,
+    furnish: &'a crate::furnish::FurnishState,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -272,6 +276,7 @@ struct Saved {
     ranged: crate::combat::ranged::RangedState,
     scenario: crate::scenario::ScenarioState,
     grips: crate::combat::grip::GripTable,
+    furnish: crate::furnish::FurnishState,
 }
 
 impl Sim {
@@ -348,6 +353,7 @@ impl Sim {
             scenario_rt,
             grips: crate::combat::grip::GripTable::default(),
             acting: None,
+            furnish: crate::furnish::FurnishState::default(),
         };
         sim.bind_runtime();
         sim
@@ -764,6 +770,10 @@ impl Sim {
         if !self.grips.is_empty() {
             self.grips.state_hash(&mut kernel);
         }
+        // Nor one that holds no latent contents.
+        if !self.furnish.is_empty() {
+            self.furnish.state_hash(&mut kernel);
+        }
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -824,6 +834,7 @@ impl Sim {
                 ranged: &self.ranged,
                 scenario: &self.scenario,
                 grips: &self.grips,
+                furnish: &self.furnish,
             },
         )
     }
@@ -918,6 +929,7 @@ impl Sim {
             scenario_rt,
             grips: saved.grips,
             acting: None,
+            furnish: saved.furnish,
         };
         sim.bind_runtime();
         Ok(sim)

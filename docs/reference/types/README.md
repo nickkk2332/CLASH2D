@@ -18,6 +18,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`body_plan`](body_plan.md) | The parts a body starts with and how they are joined (06 §6.2). |
 | [`channel`](channel.md) | Something an action needs exclusive use of: an arm, the voice, attention (03 §6.2). |
 | [`color`](color.md) | A colour: its `rgb`, the word text uses for it and the terminal colour shown in its place (12 §4.3). |
+| [`content_table`](content_table.md) | A content table (06 §9.3): what a cell, a shelf or a container is found to hold, as weighted entries of items, of other tables and of nothing, shared by every map and table that names it. |
 | [`contest`](contest.md) | A comparison of two numbers with chance: their difference or log-ratio, scaled, with logistic noise of a given spread (07 §4.1). |
 | [`control`](control.md) | Something the player can do, by a name a keymap gives to a key: interface effects to run (12 §9.2). |
 | [`damage_type`](damage_type.md) | A kind of harm, with the resistance of anything that states none of its own (02 §12.2). |
