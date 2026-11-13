@@ -22,7 +22,7 @@
         },
         {
           "if": "not is_null(view)",
-          "fill": 3,
+          "fill": 2,
           "table": {
             "id": "uses",
             "rows": "view.ability_uses ?? []",

@@ -57,6 +57,10 @@
                     { "app": { "new_game": { "scenario": "it.id" } } } ] } },
       { "height": 1, "tooltip": { "value": "Tab moves between the fields, Enter begins, F2 makes or chooses who you are, Esc goes back." } } ] },
     "keys": { "back": [ { "close": {} } ],
+              "accept": [
+                { "app": { "creation": { "op": "'name'", "value": "screen.creation_name" } } },
+                { "app": { "creation": { "op": "'seed'", "value": "screen.creation_seed" } } },
+                { "app": { "new_game": { "scenario": "app.scenarios[screen.start].id" } } } ],
               "more": [ { "app": { "creation": { "op": "'name'", "value": "screen.creation_name" } } },
                         { "app": { "creation": { "op": "'seed'", "value": "screen.creation_seed" } } },
                         { "app": { "creation": { "op": "'scenario'", "value": "app.scenarios[screen.start].id" } } },

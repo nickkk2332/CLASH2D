@@ -203,7 +203,9 @@ D-652):
    perception (section 3.5), so that the host answers what the party
    perceived as of the end of the batch (section 7.5). A fault and a
    `message` for the player also get a line in the log at once
-   (categories `fault` and `message`). Every line of the log begins
+   (categories `fault` and `message`); a fault's line names the code of
+   what refused and the definition and path of the effect, where the
+   fault's reason has them (decision D-874). Every line of the log begins
    with a capital letter, made so as it is added (decision D-866). The scene is advanced by the
    real time elapsed and plays what falls due.
 5. **The present.** Once playback has caught up, the view model is
@@ -2213,11 +2215,11 @@ keymap binds `make` to Shift+M and `know_how` to Shift+K.
 and a status column: who the active character is, by `name(view)`; the
 slot `ui:play.bars` for a character's reserves; what it holds in a
 grasp (`view.held('grasp')`, written out by `list`); the slot
-`ui:play.side` for anything else; and a line naming the keys. Its
+`ui:play.side` for anything else (the `core_ui` mod puts the hour there, `Time 14:05`, and its bars for stamina, reserve, toxin and sedation in `ui:play.bars`: decision D-872); and a line naming the keys. Its
 context is `play`, and it binds no key itself: every key in play is a
 control. The `ui` mod's controls are the ten directions (`north` to
 `north_west`, `up`, `down`), which start the action `step` with a
-`dir`; `wait`, the command of that name for one second; `look`, which
+`dir`; `wait`, the command of that name for one second, and `wait_minute` (`p`, pass a minute) and `wait_hour` (`shift+p`), the same for a minute and an hour, which the loaded rules may break off when something happens (decision D-871); `look`, which
 opens look mode (`ui:look`); `inventory` and `condition`, which open
 `ui:inventory` and `ui:condition`; `abilities` and `map`, which open
 `ui:abilities` and `ui:map`; `journal`, which opens `ui:journal`;
@@ -2284,7 +2286,8 @@ built.
 **Talking** (`ui:talk`, `mods/ui/data/talk.json`; decision D-799) is
 opened by the control `talk` (shift+t) about the target, or from the
 context menu about the creature clicked, each after asking for the
-service `talk` with whom. It lists `app.talk.options`, greying one that
+service `talk` with whom (someone the character sees in view or has
+detected: decision D-878). It lists `app.talk.options`, greying one that
 says nothing, or says why nothing can be said; Enter says the one
 chosen with the action `say` (named bare: the `core` mod's takes `to`,
 `kind` and `lines`), which anyone in earshot hears. What is said back

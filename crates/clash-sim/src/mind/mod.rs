@@ -320,12 +320,12 @@ impl Sim {
             Some(VitalState::Unconscious) => Err(refusal(
                 reason::ENTITY_UNCONSCIOUS,
                 entity,
-                format!("{entity} is unconscious"),
+                "unconscious, and cannot act until they come to".to_owned(),
             )),
             Some(VitalState::Dead) => Err(refusal(
                 reason::ENTITY_DEAD,
                 entity,
-                format!("{entity} is dead"),
+                "dead, and cannot act".to_owned(),
             )),
             None => Err(no_mind(entity)),
         }

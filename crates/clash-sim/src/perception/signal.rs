@@ -814,13 +814,12 @@ pub(super) fn candidates(
     at: Location,
     range: Real,
 ) -> Vec<EntityId> {
-    let Ok(found) = sim
-        .cosmos
-        .occupants_within(at, range, &OccupantFilter::ANY.except(observer))
+    let Ok(mut ids) =
+        sim.cosmos
+            .occupant_ids_within(at, range, &OccupantFilter::ANY.except(observer))
     else {
         return Vec::new();
     };
-    let mut ids = distinct_ids(&found);
     let inside: Vec<EntityId> = ids
         .iter()
         .flat_map(|id| sim.entities.contents_deep(*id))

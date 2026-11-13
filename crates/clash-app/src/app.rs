@@ -522,7 +522,15 @@ fn gather_talk(shared: &mut Shared, request: &AppRequest) -> Result<(), String> 
             return Ok(());
         }
     };
-    if !clash_sim::perception::perceives(&session.sim, session.player, entity) {
+    // Whoever the character sees standing in view may be talked to, as
+    // the target cycle offers them, whether or not its awareness of them
+    // has yet come to a detection (decision D-878).
+    let in_view = session
+        .percepts
+        .sight
+        .sprites
+        .contains_key(&clash_scene::SpriteId::new(entity.to_bits()));
+    if !in_view && !clash_sim::perception::perceives(&session.sim, session.player, entity) {
         shared.talk = gathered(Vec::new(), "You cannot see or hear them now.");
         return Ok(());
     }

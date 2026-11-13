@@ -636,7 +636,7 @@ Fits an item to another (07 §11.5): a magazine, a sight, a muzzle. It is held `
 <a id="follow-path"></a>
 ## `follow_path`
 
-Takes the next step of the path the mover is following, as `step` does (06 §11). A refused step marks the path stale: `plan_path` again.
+Takes the next step of the path the mover is following, as `step` does (06 §11). A refused step marks the path stale (`plan_path` again) and gives null, as does a path that is stale or none; neither is a fault of the rule.
 
 `who` may be given directly.
 
@@ -725,7 +725,7 @@ Interrupts an entity's running actions that match, except those in an `uninterru
 <a id="interrupt-plan"></a>
 ## `interrupt_plan`
 
-Empties a plan and asks what to do next: a `Free` decision for a directly controlled entity, `decision_needed` for anyone else, whatever is running.
+Empties a plan, ends a wait in progress, and asks what to do next: a `Free` decision for a directly controlled entity, `decision_needed` for anyone else, whatever is running. What rules use to break off a long wait when something happens (03 §5.3).
 
 - `who` (entity): Whose plan.
 
@@ -843,7 +843,7 @@ Gives an order aloud (15 §10). It must be heard; the one it is given to obeys i
 <a id="plan-path"></a>
 ## `plan_path`
 
-Plans a path from what the mover believes and keeps it as the path it is following (06 §11). A refusal raises `path_failed`.
+Plans a path from what the mover believes and keeps it as the path it is following (06 §11). Gives `steps` and `cost`; finding no way raises `path_failed` and gives null, and is not a fault of the rule.
 
 - `who` (entity): Who is to go.
 - `to` (loc): Where to.
@@ -1476,7 +1476,7 @@ Starts a recipe at a machine with nobody working it (16 §8.2), from what is in 
 <a id="step"></a>
 ## `step`
 
-Takes one step to the cell next to the mover, checked against the world as it is now (06 §11). Takes no time itself: the action waits `self.step_time(dir)`. A refusal raises `step_refused`.
+Takes one step to the cell next to the mover, checked against the world as it is now (06 §11). Takes no time itself: the action waits `self.step_time(dir)`. Gives `distance`, `cost` and `time`; a step the world refuses raises `step_refused` and gives null, and is not a fault of the rule.
 
 - `who` (entity): Who steps.
 - `dir` (string): Which way: `north`, `north_east`, `east`, `south_east`, `south`, `south_west`, `west`, `north_west`, `up` or `down`.

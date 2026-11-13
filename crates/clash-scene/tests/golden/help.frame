@@ -3,9 +3,7 @@ size 80x24
 chars
 |  ┌ Keys in play: Esc goes back ─────────────────────────────────────────────┐─┐|
 |  │Does                       Keys         What it does                      │ │|
-|  │Quick slot 7               7            Use the ability on quick slot 7. ││░│|
-|  │Quick slot 8               8            Use the ability on quick slot 8. ││ │|
-|  │Quick slot 9               9            Use the ability on quick slot 9. ││ │|
+|  │Quick slot 9               9            Use the ability on quick slot 9. ││░│|
 |  │Reload                     r            Load the weapon in hand from what││ │|
 |  │See everything             F12          Switch between what the character││ │|
 |  │Shoot                      s            Shoot or throw at the target with││ │|
@@ -15,6 +13,8 @@ chars
 |  │Use something near         e            List what can be done with the th││ │|
 |  │Use what is in the way     -            Do what the thing walked into off││ │|
 |  │Wait                       .            Let a second pass.               ││ │|
+|  │Wait a minute              p            Let a minute pass, unless somethi││ │|
+|  │Wait an hour               Shift+P      Let an hour pass, unless somethin││ │|
 |  │Walk east                  l, Right                                      ││ │|
 |  │Walk north                 k, Up                                         █│ │|
 |  │Walk north-east            u                                             █│ │|

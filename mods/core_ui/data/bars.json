@@ -7,6 +7,26 @@
     "if": "not is_null(view.pool.pain)",
     "widget": { "bar": { "label": "Pain  ", "value": "view.pool.frac('pain')", "style": "warn" } } },
 
+  { "//": "What powers are paid from, while the character has them, so that a cost in the abilities screen can be read against what is left.",
+    "type": "ui_part", "id": "stamina_bar", "into": "ui:play.bars", "order": 30, "required": false,
+    "if": "not is_null(view.pool.stamina)",
+    "widget": { "bar": { "label": "Stam  ", "value": "view.pool.frac('stamina')", "style": "info" } } },
+  { "type": "ui_part", "id": "reserve_bar", "into": "ui:play.bars", "order": 40, "required": false,
+    "if": "not is_null(view.pool.reserve)",
+    "widget": { "bar": { "label": "Rsrv  ", "value": "view.pool.frac('reserve')", "style": "info" } } },
+  { "//": "Poison and a draught show only while something is in the blood.",
+    "type": "ui_part", "id": "toxin_bar", "into": "ui:play.bars", "order": 50, "required": false,
+    "if": "(view.pool.frac('toxin') ?? 0) > 0",
+    "widget": { "bar": { "label": "Toxin ", "value": "view.pool.frac('toxin')", "style": "warn" } } },
+  { "type": "ui_part", "id": "sedation_bar", "into": "ui:play.bars", "order": 60, "required": false,
+    "if": "(view.pool.frac('sedation') ?? 0) > 0",
+    "widget": { "bar": { "label": "Drowsy", "value": "view.pool.frac('sedation')", "style": "warn" } } },
+
+  { "//": "The hour where the character stands, by the sky: a game with a deadline (the errand's nightfall, the last stand's dawn) is played against it. Nothing is shown where there is no sky.",
+    "type": "ui_part", "id": "clock", "into": "ui:play.side", "order": 10, "required": false,
+    "if": "not is_null(view.loc.time_of_day ?? null)",
+    "widget": { "text": { "value": "<dim>Time</> {floor((view.loc.time_of_day ?? 0) / 3600)}:{if 10 > floor(floor(view.loc.time_of_day ?? 0) % 3600 / 60) then '0' else ''}{floor(floor(view.loc.time_of_day ?? 0) % 3600 / 60)}", "wrap": false } } },
+
   { "type": "ui_part", "id": "blood_reserve", "into": "ui:condition.pools", "order": 10, "required": false,
     "if": "not is_null(view.pool.blood)",
     "widget": { "rows": [
@@ -17,6 +37,24 @@
     "widget": { "rows": [
       { "bar": { "label": "Pain  ", "value": "view.pool.frac('pain')", "style": "warn" } },
       { "text": "<dim>Above 90% one falls.</>" } ] } },
+  { "type": "ui_part", "id": "nourishment_reserve", "into": "ui:condition.pools", "order": 30, "required": false,
+    "if": "not is_null(view.pool.nourishment)",
+    "widget": { "rows": [
+      { "bar": { "label": "Fed   ", "value": "view.pool.frac('nourishment')", "style": "good" } },
+      { "text": "<dim>What was eaten and drunk; it falls by the hour.</>" } ] } },
+  { "type": "ui_part", "id": "toxin_reserve", "into": "ui:condition.pools", "order": 40, "required": false,
+    "if": "not is_null(view.pool.toxin)",
+    "widget": { "rows": [
+      { "bar": { "label": "Toxin ", "value": "view.pool.frac('toxin')", "style": "warn" } },
+      { "text": "<dim>Above 50% one falls; above 95% one dies.</>" } ] } },
+  { "type": "ui_part", "id": "power_reserves", "into": "ui:condition.pools", "order": 50, "required": false,
+    "if": "not is_null(view.pool.stamina) or not is_null(view.pool.reserve)",
+    "widget": { "rows": [
+      { "if": "not is_null(view.pool.stamina)",
+        "bar": { "label": "Stam  ", "value": "view.pool.frac('stamina')", "style": "info" } },
+      { "if": "not is_null(view.pool.reserve)",
+        "bar": { "label": "Rsrv  ", "value": "view.pool.frac('reserve')", "style": "info" } },
+      { "text": "<dim>What powers are paid from; both come back with rest.</>" } ] } },
 
   { "type": "ui_part", "id": "attributes", "into": "ui:condition.attributes", "order": 10, "required": false,
     "if": "not is_null(view.attr.strength)",
