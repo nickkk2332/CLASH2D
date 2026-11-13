@@ -27,9 +27,9 @@ What works now:
 - Fighting on one shared timeline: blows with a wind-up you can see
   coming and answer (parry, block, dodge, step back), weapons, guns and
   bows, grips, throws and takedowns, and powers.
-- Doors, locks and keys, lockers to hide in, containers, lamps, stoves,
-  workbenches; making things from recipes; eating, drinking and
-  bandaging.
+- Doors, windows, locks and keys, wardrobes to hide in, chests and
+  cupboards, ovens, hearths, stills and workbenches; making things from
+  recipes; eating, drinking and bandaging.
 - Three game scenarios, saving and loading, and death that each game
   handles its own way.
 - A modding kit: a linter with located errors, a generated reference of
@@ -61,9 +61,9 @@ The game is one program, `target/release/clash`, of about 60 MB (49 MB
 stripped, 16 MB compressed), and the `mods` directory beside it, under
 1 MB. The source is about 5 MB to download, compressed, without its
 history. A release build needs about 0.8 GB of disk and took about 15
-minutes with two build jobs. The game reaches its title screen in under a tenth of a
-second, and a new game in the market town is ready in about half a
-second.
+minutes with two build jobs. The game reaches its title screen in under
+a tenth of a second, and a new game in the market town is ready in
+about half a second.
 
 **Linux.** The window needs, when the game runs (not to build it), either
 Wayland (`libwayland-client` and `libxkbcommon`) or X11 (`libX11`,
@@ -103,7 +103,7 @@ Options rebinds them. [How to play](docs/how-to-play.md) has them all.
 | `<` `>` | Go up or down stairs |
 | `.` | Wait a second |
 | `x` | Look around |
-| `e` | Use something within a step: doors, lockers, containers, what you hold (eat, drink, bandage) |
+| `e` | Use something within a step: doors, windows, wardrobes, chests, what you hold (eat, drink, bandage) |
 | `i` | Inventory |
 | `c` | Your body and wounds |
 | `J` (Shift+J) | Journal: what you are trying to do |
@@ -165,7 +165,8 @@ cargo xtask check
 ```
 
 runs the gate every change must pass: formatting, clippy with warnings
-denied, every test, and the documentation. `cargo xtask bench` builds
+denied, every test, the documentation, and the check that world sizes
+are written in one place. `cargo xtask bench` builds
 the tools in release and runs the benchmarks against the budgets in
 `budgets.toml`; `cargo xtask bench --check` fails when one is over. The
 test scripts under `scenarios/` run with
