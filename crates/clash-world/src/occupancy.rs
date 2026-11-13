@@ -919,7 +919,7 @@ impl Cosmos {
     /// its record. Emits nothing.
     fn take_occupant(&mut self, id: EntityId) -> Option<OccupantRecord> {
         let record = self.occupants.remove(&id)?;
-        if let Ok(parts) = self.grid_mut(record.loc.grid) {
+        if let Ok(parts) = self.grid_mut_occupants(record.loc.grid) {
             for cell in placed_cells(&parts.topology, record.loc.cell, record.footprint) {
                 if let Some(column) = parts.grid.column_mut(cell.tract()) {
                     column.occupant_remove(cell, id);
@@ -931,7 +931,7 @@ impl Cosmos {
 
     /// Writes an occupant's entry into each of these cells of a grid.
     fn index_occupant(&mut self, grid: GridId, cells: &[CellPos], occupant: &Occupant) {
-        let Ok(parts) = self.grid_mut(grid) else {
+        let Ok(parts) = self.grid_mut_occupants(grid) else {
             return;
         };
         for cell in cells {

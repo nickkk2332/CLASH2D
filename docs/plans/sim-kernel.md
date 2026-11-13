@@ -54,7 +54,7 @@ start while the world model is being built.
 | T5 | Windows and reactions | M | T4, T1 | beta |
 | T6 | Joint actions | M | T5 | todo |
 | T7 | Unloading and lower detail | M | T3, K7 | todo |
-| T8 | Benchmarks and budget gate | S | X3, then recurring | todo |
+| T8 | Benchmarks and budget gate | S | X3, then recurring | beta |
 
 ## Order and parallelism
 
@@ -890,6 +890,13 @@ Build
 - A benchmark for each row of those tables as packages land; thresholds in
   the gate introduced by W23; measured figures written back into the
   documents.
+
+Status `beta` (D-730). Built: the benchmark of 05 §19's first row, a
+condition of about ten operations over a person and locals evaluated
+through the runner against the simulation, in `budgets.toml`. Stubbed:
+the other rows of 05 §19 (the ignored timing tests of
+`crates/clash-sim/tests/rules.rs` still print them) and every row of
+03 §15 and 04 §18.
 
 ## Scenario catalogue
 

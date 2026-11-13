@@ -502,6 +502,18 @@ impl Cosmos {
         level: u8,
         by: Option<EntityId>,
     ) -> Result<FieldWrite, WorldError> {
+        self.write_field_with(loc, field, |_| level, by)
+    }
+
+    /// [`write_field`](Cosmos::write_field) of a level worked out from the
+    /// one the cell holds, read once. `loc` is inside its grid.
+    pub(crate) fn write_field_with(
+        &mut self,
+        loc: Location,
+        field: FieldId,
+        level_of: impl FnOnce(u8) -> u8,
+        by: Option<EntityId>,
+    ) -> Result<FieldWrite, WorldError> {
         let (live, rests) = match self.defs().fields().get(field) {
             Some(def) => (def.live, def.rests),
             None => {
@@ -521,6 +533,7 @@ impl Cosmos {
             .ok_or(WorldError::NotLoaded(loc))?;
         let held = store_at(column, cell).and_then(|store| store.cell(field, idx).copied());
         let old = held.map_or(0, |held| held.level);
+        let level = level_of(old);
         let by = held.and_then(|held| held.by).or(by);
         if old == level {
             return Ok(FieldWrite {

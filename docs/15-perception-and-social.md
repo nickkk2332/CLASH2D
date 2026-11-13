@@ -1472,24 +1472,36 @@ the frames of §13 (`drain_frames`, `snapshot`).
 
 ## 17. Budgets
 
-Targets, unmeasured.
+Targets, with what `cargo xtask bench` measures (14 §6.3, D-730): the
+best of several runs on a shared and loaded build machine, in a release
+build. Each row with a figure is in `budgets.toml`.
 
 | Operation | Target |
 |-----------|--------|
-| Light at a cell, cached, in a fill | under 30 ns (measured: 1 to 3 ns) |
-| Light at one cell asked for alone, cached | under 1 µs (measured: 0.5 µs) |
-| Light of an 80 × 50 view after one edit that light cares about | under 1 ms (measured: 0.03 ms in the open, 0.2 ms in a building) |
-| One observer-target evaluation, including line of sight at 30 m | under 2 µs (measured: 5 to 8 µs: four lines of sight for `exposed`) |
-| Emitting a signal to 50 observers in range | under 100 µs (measured: 33 µs to send a delayed one, 2 ms for all fifty to receive it with their events) |
-| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 23 ms for fifty walking in one street, all in range of each other, with sight and hearing and footsteps) |
+| Light at a cell, cached, in a fill | under 30 ns (measured: 2 ns) |
+| Light at one cell asked for alone, cached | under 1 µs (measured: 0.06 to 0.09 µs; 0.6 µs before D-731) |
+| Light of an 80 × 50 view after one edit that light cares about | under 1 ms (measured: 0.5 ms in a street of the test city, a wall put up and taken down) |
+| One observer-target evaluation, including line of sight at 30 m | under 2 µs (measured: 0.6 µs, from 3 µs: the four heights of `exposed` walked together, D-732) |
+| Emitting a signal to 50 observers in range | under 100 µs (measured: 21 µs to send a delayed one, 0.5 ms for all fifty to receive it with their events, from 1.1 ms) |
+| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 15 to 23 ms in the best of each of several runs, for fifty walking in one street, all in range of each other, with sight and hearing and footsteps; 22 to 32 ms before D-731 to D-733) |
 | Memory per mind, typical | under 4 KB |
 
-Measured with the ignored test `timing_of_perception_in_a_city_block`
-of `crates/clash-sim/tests/perception.rs`, in a release build. A crowd
-is over its target: a sweep considers at most `perception.max_candidates`
-of those in range, the nearest first, and a target whose signal could
-not reach the threshold with nothing in the way costs no line of sight,
-but each evaluation in view still follows four.
+The ignored test `timing_of_perception_in_a_city_block` of
+`crates/clash-sim/tests/perception.rs` prints the same figures for its own
+scene. The performance pass (D-731 to D-733, D-737) left every result as it
+was and halved the instructions counted for the crowd: one evaluation of sight walks the
+cells of its four lines once, light at a cell is read from the cache
+without comparing what is round it while nothing has changed, a sweep
+reads each target's light once, and a delayed signal's arrival no longer
+moves the others. A crowd is still over its target, by work that is in
+the model rather than in its arithmetic: every footstep is a delayed
+signal to each listener in reach, received with its `perceived` event,
+and each sight sweep brings up to `perception.max_candidates` pairs up to
+date. Fifty in one street is the worst case of that: in a town the
+listeners in reach are fewer. A party member's sweep, its view of 60 m,
+map memory and frame, takes 0.9 ms again from where it stands, and
+8.5 ms the first time, with the light cache and map memory cold (9 ms
+and more before).
 
 ## 18. Open questions
 
