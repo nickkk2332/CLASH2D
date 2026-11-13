@@ -1,0 +1,27 @@
+# crop_condition (plans/devices.md, G6): herbs grow in a bed only while
+# there is water in its cell (16 §8.4). The bed is walled in so that the
+# water stays put. Its recipe looks at its condition every 30 s: dry, it
+# does not advance; watered, it does; dried again, it stops where it was.
+use default seed=33
+gen core:test_city size=1
+set @c:18,22,0 fixture core:herb_bed
+set @c:17,22,0 block core:wall
+set @c:19,22,0 block core:wall
+set @c:18,21,0 block core:wall
+set @c:18,23,0 block core:wall
+look @c:18,22,0
+do { "create_item": { "def": "core:herbs", "at": "here" } }
+do { "put_inside": { "what": "here.occupants[0]", "into": "here.fixture" } }
+expect event recipe_stalled recipe=core:grow_herbs why=condition
+advance 65s
+assert "@c:18,22,0.fixture.device.making.progress == 0"
+field @c:18,22,0 core:water 100
+advance 60s
+assert "@c:18,22,0.fixture.device.making.progress > 0.09"
+field @c:18,22,0 core:water -255
+advance 31s
+assert "@c:18,22,0.fixture.device.making.why == 'condition'"
+assert "@c:18,22,0.fixture.device.making.progress < 0.21"
+advance 120s
+assert "@c:18,22,0.fixture.device.making.progress < 0.21"
+expect hash 8f02527aa961283f7cf7cb66867f1edd

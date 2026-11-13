@@ -1,0 +1,30 @@
+# bench_shelf (plans/devices.md, G6): a bench recipe finds its inputs on
+# a rack within six cells of the bench, and not on one beyond (16 §8.3).
+use default seed=31
+gen core:test_city size=1
+look @c:17,22,0
+do { "spawn": { "template": "core:person", "at": "here" } }
+set @c:18,22,0 fixture core:workbench
+set @c:20,22,0 fixture core:rack
+set @c:30,22,0 fixture core:rack
+control @e:0 delegated
+as @e:0 do { "create_item": { "def": "core:knife", "at": "self.loc" } }
+as @e:0 do { "take": { "who": "self", "what": "self.loc.occupants[1]" } }
+as @e:0 do { "create_item": { "def": "core:stick", "count": 2, "at": "self.loc" } }
+as @e:0 do { "put_inside": { "what": "self.loc.occupants[1]", "into": "offset(self.loc, 13, 0, 0).fixture" } }
+as @e:0 do { "create_item": { "def": "core:feather", "count": 2, "at": "self.loc" } }
+as @e:0 do { "put_inside": { "what": "self.loc.occupants[1]", "into": "offset(self.loc, 13, 0, 0).fixture" } }
+assert "not @e:0.can_make('core:arrows', offset(@e:0.loc, 1, 0, 0).fixture)"
+assert "@e:0.make_fault('core:arrows', offset(@e:0.loc, 1, 0, 0).fixture) == '2 more of stick is wanted'"
+as @e:0 do { "create_item": { "def": "core:stick", "count": 2, "at": "self.loc" } }
+as @e:0 do { "put_inside": { "what": "self.loc.occupants[1]", "into": "offset(self.loc, 3, 0, 0).fixture" } }
+as @e:0 do { "create_item": { "def": "core:feather", "count": 2, "at": "self.loc" } }
+as @e:0 do { "put_inside": { "what": "self.loc.occupants[1]", "into": "offset(self.loc, 3, 0, 0).fixture" } }
+assert "@e:0.can_make('core:arrows', offset(@e:0.loc, 1, 0, 0).fixture)"
+as @e:0 do { "start_action": { "who": "self", "action": "core:make", "with": "{ 'recipe': 'core:arrows', 'station': offset(self.loc, 1, 0, 0).fixture }" } }
+expect event recipe_started recipe=core:arrows
+advance 41s
+expect event recipe_completed recipe=core:arrows
+assert "offset(@e:0.loc, 3, 0, 0).fixture.device == null and len(offset(@e:0.loc, 13, 0, 0).fixture.device.held('stowed')) == 2"
+assert "offset(@e:0.loc, 1, 0, 0).fixture.device.held('stowed')[0].count == 4"
+expect hash 5cded92a8a4b471b6a8c719361b21198

@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 14;
+pub const SAVE_VERSION: u32 = 15;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -912,6 +912,7 @@ impl Sim {
     fn bind_runtime(&mut self) {
         self.bind_rules();
         crate::interaction::bind(self);
+        crate::recipe::bind(self);
         crate::scenario::bind(self);
         // Recurring global rules have a timer from the start (05 §9.4).
         self.start_recurring_rules();

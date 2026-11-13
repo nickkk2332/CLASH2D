@@ -17,11 +17,11 @@ Vehicle package V5 depends on it.
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | G1 | Interactions | M | E12, T3 | beta |
-| G2 | Device model | M | E12 | todo |
+| G2 | Device model | M | E12 | in progress |
 | G3 | Resources and network balancing | L | G2, K7 | todo |
 | G4 | Conduits and ports | L | G3, W6 | todo |
 | G5 | Signals and control | M | G4, A1 | todo |
-| G6 | Recipes and work | L | G3, E8 | todo |
+| G6 | Recipes and work | L | G3, E8 | in progress |
 | G7 | Movers and item conduits | M | G6, G4 | todo |
 | G8 | Construction and jobs | L | G6, W13 | todo |
 | G9 | Assemblies and gadgets | M | G3, E3, E8 | todo |
@@ -32,9 +32,9 @@ Vehicle package V5 depends on it.
 | G14 | Trade and delivery | M | G13, G1, E8, L5, U9 | todo |
 | G15 | Assemblies that stand alone | M | G10, E6, E7, I3 | todo |
 | G16 | Structures | M | G2, G4, WG1 | todo |
-| G17 | Know-how | S | G6, E7 | todo |
+| G17 | Know-how | S | G6, E7 | in progress |
 | G18 | Screens for making, building and work | L | G6, G8, G5, U9, U4 | todo |
-| G19 | Substances | M | G6, G3, W16, E2, C2 | todo |
+| G19 | Substances | M | G6, G3, W16, E2, C2 | in progress |
 
 ## Order and parallelism
 

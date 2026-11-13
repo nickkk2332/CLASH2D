@@ -43,6 +43,7 @@
 //! E12 needs, and G2 adds to it.
 
 mod defs;
+mod state;
 
 use clash_core::{EntityId, impl_state_hash};
 use clash_data::{Def, DefTypes};
@@ -65,7 +66,16 @@ use crate::verb::VerbDef;
 use crate::world_verbs::{ArgRow, element_arg, spec};
 
 pub(crate) use defs::names as defs_names;
-pub use defs::{DeviceDef, DeviceId, check_element_devices};
+pub use defs::{
+    AutoDef, ConfigDef, ConfigKind, ConfigValue, DeviceDef, DeviceId, ProvidesDef, SpeedDef,
+    StoreDef, WhenModes, check_element_devices,
+};
+pub(crate) use state::record_store;
+pub use state::{
+    DEVICE_CONFIGURED, DEVICE_MODE_CHANGED, add_resource, auto_now, config_map, config_value,
+    def_for, device_for, device_now, mode_name, mode_of, provided_by_def, set_config, set_mode,
+    speed_now, speed_of, store_level, store_of, stored,
+};
 
 /// Registers the `device` definition type and the check that every
 /// element's `device` names one. Called from the crate's
@@ -98,21 +108,65 @@ pub struct Bound {
 impl_state_hash!(Bound { loc, layer });
 
 /// What makes an entity a device (16 §4.1): its definition and, for one
-/// bound to an element, which.
+/// bound to an element, which; its mode, what its user has set and what
+/// its stores hold (package G2).
 ///
-/// Package G2 adds the mode, ports, stores, process, config and slots.
+/// A recipe under way at it is the `Process` component of the same
+/// entity ([`crate::recipe`]). Ports and slots wait for packages G3 and
+/// G9.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Device {
     def: DeviceId,
     bound: Option<Bound>,
+    /// The position of its mode among its definition's `modes`.
+    mode: u16,
+    /// The settings its user has set, by id; one left out holds its
+    /// definition's default.
+    config: clash_core::VarMap,
+    /// The level of each store that has been filled or drawn on, by
+    /// resource, in order; one left out holds its definition's `start`.
+    stores: Vec<(String, clash_core::Real)>,
 }
 
-impl_state_hash!(Device { def, bound });
+impl_state_hash!(Device {
+    def,
+    bound,
+    mode,
+    config,
+    stores
+});
 
 impl Device {
     /// A device of a definition, bound to an element or standing alone.
     pub fn new(def: DeviceId, bound: Option<Bound>) -> Device {
-        Device { def, bound }
+        Device {
+            def,
+            bound,
+            mode: 0,
+            config: clash_core::VarMap::new(),
+            stores: Vec::new(),
+        }
+    }
+
+    /// The position of its mode among its definition's `modes`.
+    pub fn mode_index(&self) -> usize {
+        usize::from(self.mode)
+    }
+
+    /// What its user has set, by id.
+    pub fn config(&self) -> &clash_core::VarMap {
+        &self.config
+    }
+
+    /// The levels of the stores that have been filled or drawn on.
+    pub fn stores(&self) -> &[(String, clash_core::Real)] {
+        &self.stores
+    }
+
+    /// Whether it is as its definition makes it: first mode, nothing
+    /// set, every store at its start.
+    pub fn is_pristine(&self) -> bool {
+        self.mode == 0 && self.config.is_empty() && self.stores.is_empty()
     }
 
     /// Its definition.
@@ -129,10 +183,7 @@ impl Device {
     /// component store.
     #[cfg(test)]
     pub(crate) fn sample(seed: u32) -> Device {
-        Device {
-            def: DeviceId::new(u16::try_from(seed % 7).unwrap_or(0)),
-            bound: None,
-        }
+        Device::new(DeviceId::new(u16::try_from(seed % 7).unwrap_or(0)), None)
     }
 }
 
@@ -151,6 +202,21 @@ pub mod codes {
     /// The definitions were loaded without the `device` type. Values:
     /// none.
     pub const NOT_REGISTERED: &str = "device.not_registered";
+    /// What was named is not a device and has none. Values: `entity`.
+    pub const NOT_A_DEVICE: &str = "device.not_a_device";
+    /// The device's definition names no such mode. Values: `mode`.
+    pub const UNKNOWN_MODE: &str = "device.unknown_mode";
+    /// The device has no such setting. Values: `key`.
+    pub const UNKNOWN_CONFIG: &str = "device.unknown_config";
+    /// The value is not one the setting takes. Values: `key`.
+    pub const BAD_CONFIG_VALUE: &str = "device.bad_config_value";
+    /// The device stores no such resource. Values: `resource`.
+    pub const NO_STORE: &str = "device.no_store";
+    /// An amount is not finite. Values: `amount`.
+    pub const BAD_AMOUNT: &str = "device.bad_amount";
+    /// A verb's argument is missing or of the wrong kind. Values:
+    /// `verb`, `arg`.
+    pub const BAD_ARGUMENT: &str = "device.bad_argument";
 }
 
 /// The reasons devices refuse for, for the generated reference.
@@ -170,6 +236,34 @@ pub const DEVICE_REASONS: &[ReasonInfo] = &[
     ReasonInfo {
         code: codes::NOT_REGISTERED,
         doc: "The definitions were loaded without the `device` definition type. Values: none.",
+    },
+    ReasonInfo {
+        code: codes::NOT_A_DEVICE,
+        doc: "What a verb of devices was given is not a device, and is not an element whose definition names one. Values: `entity`.",
+    },
+    ReasonInfo {
+        code: codes::UNKNOWN_MODE,
+        doc: "`set_mode` named a mode the device's `modes` do not. Values: `mode`.",
+    },
+    ReasonInfo {
+        code: codes::UNKNOWN_CONFIG,
+        doc: "`set_config` named a setting the device's `config` does not. Values: `key`.",
+    },
+    ReasonInfo {
+        code: codes::BAD_CONFIG_VALUE,
+        doc: "`set_config` gave a value of the wrong kind for the setting, a number outside its `min` and `max`, or a choice it does not offer. Values: `key`.",
+    },
+    ReasonInfo {
+        code: codes::NO_STORE,
+        doc: "`add_resource` or `drain_resource` named a resource the device's `stores` do not hold. Values: `resource`.",
+    },
+    ReasonInfo {
+        code: codes::BAD_AMOUNT,
+        doc: "An amount for a store is not finite. Values: `amount`.",
+    },
+    ReasonInfo {
+        code: codes::BAD_ARGUMENT,
+        doc: "A verb of devices was given an argument that is missing or of the wrong kind. Values: `verb`, `arg`.",
     },
 ];
 
@@ -356,7 +450,11 @@ pub fn is_idle(sim: &Sim, device: EntityId) -> bool {
     let default_state =
         element_state(sim, bound.loc, bound.layer).is_some_and(|state| state.bits == 0);
     let own_tags = def_of(sim, device).map_or(0, |def| def.tags.len());
+    // What package G2 keeps: a mode, settings and stores as they were
+    // made, and no recipe under way.
+    let as_made = component.is_pristine() && !crate::recipe::has_process(sim, device);
     default_state
+        && as_made
         && sim.entities.contents(device).is_empty()
         && entity.vars.is_empty()
         && entity.attached.is_empty()
@@ -517,6 +615,25 @@ const EVENTS: &[EventRow] = &[
             "Which of the cell's elements the device was bound to: `floor`, `block` or `fixture`.",
         )],
     },
+    EventRow {
+        name: DEVICE_MODE_CHANGED,
+        doc: "A device's mode changed (16 §4.2): by `set_mode`, from a rule, an interaction or a machine's own rules. Recipes under way at it work at the speed the new mode gives from now on.",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("old", "string", "The mode it was in."),
+            ("new", "string", "The mode it is in now."),
+        ],
+    },
+    EventRow {
+        name: DEVICE_CONFIGURED,
+        doc: "A setting of a device was set (16 §4.2) by `set_config`. The value is kept with the device and saved with it.",
+        subjects: &[("self", "entity")],
+        fields: &[
+            ("key", "string", "The setting's id."),
+            ("old", "any", "What it held before."),
+            ("new", "any", "What it holds now."),
+        ],
+    },
 ];
 
 /// Raises a notification of this module.
@@ -612,6 +729,213 @@ pub fn properties() -> Vec<PropertyDef> {
                 Value::Bool(matches!(subject, Subject::Entity(id) if sim.components.get::<Device>(id).is_some()))
             },
         ),
+        PropertyDef::new(
+            "entity",
+            "mode",
+            "string?",
+            "The mode a device is in (16 §4.2), by name: one of its definition's `modes`. Null for anything that is not a device, or a device whose definition has no modes.",
+            |sim, subject, _| match subject {
+                Subject::Entity(id) => mode_name(sim, id).map_or(Value::Null, Value::text),
+                _ => Value::Null,
+            },
+        )
+        .changed_by(&[DEVICE_MODE_CHANGED]),
+        PropertyDef::new(
+            "entity",
+            "config",
+            "map<any>",
+            "A device's settings (16 §4.2 `config`), by id: what its user set, else each one's default. Read as `self.config.enabled`. Null for anything that is not a device.",
+            |sim, subject, _| match subject {
+                Subject::Entity(id) => config_map(sim, id),
+                _ => Value::Null,
+            },
+        )
+        .changed_by(&[DEVICE_CONFIGURED]),
+        PropertyDef::new(
+            "entity",
+            "store",
+            "real?",
+            "What a device's store of a resource holds now (16 §5.2), in the resource's unit, less what a recipe under way has drawn from it. Null for a store it does not have.",
+            |sim, subject, args| {
+                let (Subject::Entity(id), Some(resource)) = (subject, args.first().and_then(Value::as_str)) else {
+                    return Value::Null;
+                };
+                store_level(sim, id, resource).map_or(Value::Null, Value::Real)
+            },
+        )
+        .arg("resource", "string", "The resource, as the device's `stores` name it."),
+        PropertyDef::new(
+            "element",
+            "mode",
+            "string?",
+            "The mode of the device the element gives behaviour to (16 §4.2): its device's, or the first of its device definition's `modes` while it has not been promoted. Null for an element that names no device or one with no modes.",
+            |sim, subject, _| match subject {
+                Subject::Element(loc, layer) => {
+                    mode_of(sim, crate::interaction::Target::Element(loc, layer)).map_or(Value::Null, Value::text)
+                }
+                _ => Value::Null,
+            },
+        )
+        .changed_by(&[DEVICE_MODE_CHANGED, DEVICE_PROMOTED, DEVICE_DEMOTED]),
+        PropertyDef::new(
+            "element",
+            "store",
+            "real?",
+            "What the store of a resource of the device the element gives behaviour to holds now: its device's, or its definition's `start` while it has not been promoted. Null for a store it does not have.",
+            |sim, subject, args| {
+                let (Subject::Element(loc, layer), Some(resource)) = (subject, args.first().and_then(Value::as_str)) else {
+                    return Value::Null;
+                };
+                store_of(sim, crate::interaction::Target::Element(loc, layer), resource).map_or(Value::Null, Value::Real)
+            },
+        )
+        .arg("resource", "string", "The resource, as the device's `stores` name it."),
+    ]
+}
+
+/// The device an `any` argument names, promoting an element.
+fn device_arg(
+    sim: &mut Sim,
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+    name: &str,
+    cause: Cause,
+) -> Result<EntityId, Reason> {
+    let target = sim
+        .subject_of(crate::world_verbs::arg(call, index))
+        .and_then(crate::interaction::Target::of)
+        .ok_or_else(|| bad_argument(verb, name, "a device, or an element whose definition names one"))?;
+    device_for(sim, target, cause)
+}
+
+/// The refusal for an argument of a verb of devices that is missing or
+/// of the wrong kind.
+fn bad_argument(verb: &str, name: &str, wanted: &str) -> Reason {
+    Reason::new(
+        codes::BAD_ARGUMENT,
+        format!("`{verb}`: the argument `{name}` must be {wanted}"),
+    )
+    .with("verb", verb)
+    .with("arg", name)
+}
+
+/// A text argument of a verb of devices.
+fn text_arg(
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+    name: &str,
+) -> Result<String, Reason> {
+    crate::world_verbs::arg(call, index)
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| bad_argument(verb, name, "a text"))
+}
+
+/// A number argument of a verb of devices.
+fn number_arg(
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+    name: &str,
+) -> Result<clash_core::Real, Reason> {
+    crate::world_verbs::arg(call, index)
+        .as_number()
+        .filter(|number| number.is_finite())
+        .ok_or_else(|| bad_argument(verb, name, "a finite number"))
+}
+
+const OF_DEVICE: ArgRow = (
+    "of",
+    "any",
+    false,
+    "The device, or an element whose definition names one: it is promoted.",
+);
+
+/// The verbs of package G2: modes, settings and stores.
+fn state_verbs() -> Vec<VerbDef> {
+    vec![
+        VerbDef {
+            name: "set_mode",
+            build: |registry| {
+                spec(
+                    registry,
+                    "set_mode",
+                    "Puts a device in one of its definition's `modes` (16 §4.2) and raises `device_mode_changed`. Recipes under way at it work at the speed the new mode gives from now on, and a machine with `auto` may start one. Gives whether the mode changed. Refused with `device.not_a_device` and `device.unknown_mode`.",
+                    &[OF_DEVICE, ("mode", "string", false, "The mode, by name.")],
+                )
+            },
+            run: |sim, call, cause| {
+                let device = device_arg(sim, "set_mode", call, 0, "of", cause)?;
+                let mode = text_arg("set_mode", call, 1, "mode")?;
+                set_mode(sim, device, &mode, cause).map(Value::Bool)
+            },
+        },
+        VerbDef {
+            name: "set_config",
+            build: |registry| {
+                spec(
+                    registry,
+                    "set_config",
+                    "Sets one of a device's settings (16 §4.2 `config`) and raises `device_configured`. The value is kept with the device and saved. Refused with `device.not_a_device`, `device.unknown_config` and `device.bad_config_value`.",
+                    &[
+                        OF_DEVICE,
+                        ("key", "string", false, "The setting's id."),
+                        ("value", "any", false, "Its new value: a truth value for a flag, a number within its bounds, one of a choice's options, or a text."),
+                    ],
+                )
+            },
+            run: |sim, call, cause| {
+                let device = device_arg(sim, "set_config", call, 0, "of", cause)?;
+                let key = text_arg("set_config", call, 1, "key")?;
+                let value = crate::world_verbs::arg(call, 2).clone();
+                set_config(sim, device, &key, &value, cause)?;
+                Ok(Value::Null)
+            },
+        },
+        VerbDef {
+            name: "add_resource",
+            build: |registry| {
+                spec(
+                    registry,
+                    "add_resource",
+                    "Adds an amount to a device's store of a resource, within its capacity (16 §5.2): stoking a stove, filling a still's boiler. Gives what was added. Refused with `device.not_a_device`, `device.no_store` and `device.bad_amount`.",
+                    &[
+                        ("to", "any", false, "The device, or an element whose definition names one: it is promoted."),
+                        ("resource", "string", false, "The resource, as the device's `stores` name it."),
+                        ("amount", "real", false, "How much, in the resource's unit."),
+                    ],
+                )
+            },
+            run: |sim, call, cause| {
+                let device = device_arg(sim, "add_resource", call, 0, "to", cause)?;
+                let resource = text_arg("add_resource", call, 1, "resource")?;
+                let amount = number_arg("add_resource", call, 2, "amount")?;
+                add_resource(sim, device, &resource, amount, cause).map(Value::Real)
+            },
+        },
+        VerbDef {
+            name: "drain_resource",
+            build: |registry| {
+                spec(
+                    registry,
+                    "drain_resource",
+                    "Takes an amount from a device's store of a resource, down to nothing (16 §5.2). Gives what was taken. Refused as `add_resource` is.",
+                    &[
+                        ("from", "any", false, "The device, or an element whose definition names one: it is promoted."),
+                        ("resource", "string", false, "The resource, as the device's `stores` name it."),
+                        ("amount", "real", false, "How much, in the resource's unit."),
+                    ],
+                )
+            },
+            run: |sim, call, cause| {
+                let device = device_arg(sim, "drain_resource", call, 0, "from", cause)?;
+                let resource = text_arg("drain_resource", call, 1, "resource")?;
+                let amount = number_arg("drain_resource", call, 2, "amount")?;
+                add_resource(sim, device, &resource, -amount, cause).map(|moved| Value::Real(-moved))
+            },
+        },
     ]
 }
 
@@ -619,7 +943,8 @@ const OF_ELEMENT: ArgRow = ("of", "element", false, "The element.");
 
 /// The verbs of devices, for [`crate::verb::engine_verbs`].
 pub fn verbs() -> Vec<VerbDef> {
-    vec![
+    let mut verbs = state_verbs();
+    verbs.extend([
         VerbDef {
             name: "promote",
             build: |registry| {
@@ -662,7 +987,8 @@ pub fn verbs() -> Vec<VerbDef> {
                     .map(|id| sim.subject_value(Subject::Entity(id)))
             },
         },
-    ]
+    ]);
+    verbs
 }
 
 /// Puts a thing inside an element's device: promotes the element, then

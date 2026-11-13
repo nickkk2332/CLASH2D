@@ -361,6 +361,8 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::ability::properties());
     properties.extend(crate::ai::properties());
     properties.extend(crate::combat::ranged::properties());
+    properties.extend(crate::recipe::properties());
+    properties.extend(crate::substance::properties());
     properties.extend(crate::scenario::journal::properties());
     properties
 }
@@ -435,6 +437,8 @@ pub fn register_engine(registry: &mut Registry) {
     crate::world_verbs::register_types(registry);
     crate::device::register_types(registry);
     crate::interaction::register_types(registry);
+    crate::recipe::register_types(registry);
+    crate::substance::register_types(registry);
     crate::traits::register_types(registry);
     crate::reshape::register_types(registry);
     crate::ability::register_types(registry);
@@ -472,6 +476,8 @@ pub fn register_engine(registry: &mut Registry) {
     }
     crate::device::register_events(registry);
     crate::interaction::register_events(registry);
+    crate::recipe::register_events(registry);
+    crate::substance::register_events(registry);
     for info in crate::traits::TRAIT_EVENTS {
         mirror_event(registry, info);
     }

@@ -195,6 +195,8 @@ impl Default for Handlers {
         handlers.set(WakeDomain::Perception, crate::perception::on_wake);
         // Timers and recurring rules (05 §10.4, §9.4).
         handlers.set(WakeDomain::Rule, crate::rule::timer_wake);
+        // Recipes under way (16 §8.2).
+        handlers.set(WakeDomain::Stepper, crate::recipe::on_wake);
         handlers
     }
 }
@@ -416,6 +418,7 @@ impl Sim {
             crate::action::run::on_event(self, &event);
             crate::perception::observe_event(self, &event);
             crate::device::on_event(self, &event);
+            crate::recipe::on_event(self, &event);
             crate::ability::on_event(self, &event);
             crate::ai::on_event(self, &event);
             self.out.push(event);
