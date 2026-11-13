@@ -511,12 +511,38 @@ Whether `a` holds toward `b`, as the persona it takes `b` for, a relation of a k
 
 ## Space
 
+<a id="believed-dir"></a>
+### `believed_dir`
+
+`believed_dir(viewer: any, from: any, to: any) -> list<int>?` · not in a mind context · reactive
+
+`dir` as a character believes it, as `believed_dist` is `dist`: what `dir(from, to)` is compiled as in that character's mind context.
+
+- `viewer` (any): The character whose belief is read.
+- `from` (any): Where the step starts.
+- `to` (any): What it is toward.
+
+Its result changes on `entity_relocated`.
+
+<a id="believed-dist"></a>
+### `believed_dist`
+
+`believed_dist(viewer: any, a: any, b: any) -> real?` · not in a mind context · reactive
+
+`dist` as a character believes it: what `dist(a, b)` is compiled as in that character's mind context (05 §7.3). The character itself, and whatever it holds or is inside, is where it is; anyone else is where it believes them to be (`believed_loc`), null if it has no idea; cells, elements, areas and sites are where they are. Reads that character's beliefs, so it is not safe for belief itself.
+
+- `viewer` (any): The character whose belief is read.
+- `a` (any): One end.
+- `b` (any): The other end.
+
+Its result changes on `entity_relocated`.
+
 <a id="dir"></a>
 ### `dir`
 
 `dir(from: any, to: any) -> list<int>?` · safe for belief · reactive
 
-The step from one thing toward another: the signs of the shortest offset east, south and up, each -1, 0 or 1. Null where `dist` is null.
+The step from one thing toward another: the signs of the shortest offset east, south and up, each -1, 0 or 1. Null where `dist` is null. In a mind context it is `believed_dir` with the character first.
 
 - `from` (any): Where the step starts.
 - `to` (any): What it is toward.
@@ -528,7 +554,7 @@ Its result changes on `entity_relocated`.
 
 `dist(a: any, b: any) -> real?` · safe for belief · reactive
 
-The distance between two things in metres, a storey counting three, the shorter way round on wrapped axes (02 §3.3). Each is a cell, an element, or something that is somewhere: an entity, an area (its middle), a site (its anchor). Null if either is nowhere or they are in different grids.
+The distance between two things in metres, a storey counting three, the shorter way round on wrapped axes (02 §3.3). Each is a cell, an element, or something that is somewhere: an entity, an area (its middle), a site (its anchor). Null if either is nowhere or they are in different grids. In a mind context it is `believed_dist` with the character first: an entity is where the character believes it is.
 
 - `a` (any): One end.
 - `b` (any): The other end.

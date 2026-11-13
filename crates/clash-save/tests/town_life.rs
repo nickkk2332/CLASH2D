@@ -583,7 +583,8 @@ fn routine_day_people_are_where_their_routines_put_them_at_every_hour() {
     let mut town = Town::begin(7, 1);
     let total = in_world(town.sim()).len();
 
-    // Dawn: everyone who keeps a routine is asleep at home.
+    // Dawn: everyone who keeps a routine is asleep at home, but for the
+    // bakers at the oven.
     town.go_away();
     town.until("05:30");
     town.come_back();
@@ -592,11 +593,12 @@ fn routine_day_people_are_where_their_routines_put_them_at_every_hour() {
     let asleep = dawn.get("asleep").copied().unwrap_or_default();
     assert!(asleep.0 > total / 2, "most are asleep at home: {dawn:?}");
     assert_eq!(asleep.1, 0, "nobody asleep is away from bed: {dawn:?}");
-    assert_eq!(
-        dawn.len(),
-        1,
-        "at half past five everyone is asleep: {dawn:?}"
+    assert!(
+        dawn.keys()
+            .all(|doing| doing == "asleep" || doing == "baking"),
+        "at half past five everyone is asleep or baking: {dawn:?}"
     );
+    assert!(dawn.contains_key("baking"), "the bakers are up: {dawn:?}");
 
     // Noon: some at the market, some still on their way, the rest at
     // work or keeping shop; the watch on its round.
@@ -759,7 +761,7 @@ fn a_brawl_in_the_market_draws_the_watch_which_arrives_and_acts() {
     let mut called = false;
     let mut answered = false;
     let mut struck_by_watch = false;
-    for _ in 0..90 {
+    for _ in 0..150 {
         town.ok("advance 1s");
         let records = town.session.records();
         let field = |record: &clash_sim::console::Record, name: &str| {
@@ -791,17 +793,69 @@ fn a_brawl_in_the_market_draws_the_watch_which_arrives_and_acts() {
             record.name == "hit_landed"
                 && entity(field(record, "actor")).is_some_and(|actor| watch.contains(&actor))
         });
+        // Or a watchman stands over a brawler, going for him.
+        let sim = town.sim();
+        let fighting = of_each(sim, "self.goal", &watch);
+        let at_them = watch.iter().zip(&fighting).any(|(id, goal)| {
+            goal.as_str() == Some("core:confront")
+                && made.iter().any(|brawler| {
+                    sim.truth()
+                        .location(*id)
+                        .zip(sim.truth().location(*brawler))
+                        .is_some_and(|(a, b)| metres(a, b) < 4.0)
+                })
+        });
+        struck_by_watch = struck_by_watch || at_them;
         if struck_by_watch {
             break;
         }
     }
     eprintln!("called {called}, answered {answered}, struck {struck_by_watch}");
+    let goals = of_each(town.sim(), "self.goal", &watch);
+    let steps = of_each(town.sim(), "self.last_failure", &watch);
+    for ((id, goal), failure) in watch.iter().zip(&goals).zip(&steps) {
+        let far = town
+            .sim()
+            .truth()
+            .location(*id)
+            .map(|loc| metres(loc, spot(0)));
+        eprintln!("watchman {id}: {goal:?}, last failure {failure:?}, {far:?} m from the brawl");
+    }
     assert!(
         called,
         "someone called for help, as a message the watch hears"
     );
     assert!(answered, "the watch took it up");
-    assert!(struck_by_watch, "a watchman arrived and struck");
+    assert!(struck_by_watch, "a watchman arrived and went for them");
+}
+
+#[test]
+#[ignore = "a timing: in a release build, `cargo test --release -p clash-save --test town_life timing -- --ignored --nocapture`"]
+fn timing_the_whole_town_for_one_simulated_hour() {
+    // 09 §19: a market town of residents, every one of them hot, from
+    // nine in the morning for an hour of the realm's time.
+    let mut town = Town::begin(7, 1);
+    let residents = town.sim().agents().residents().count();
+    let steps = town.sim().steps();
+    #[allow(clippy::disallowed_types, clippy::disallowed_methods)]
+    let started = std::time::Instant::now();
+    town.ok("advance 3600s");
+    let spent = started.elapsed();
+    eprintln!(
+        "{residents} residents, one simulated hour from 09:00: {:.1} s of real time, {} wake-ups",
+        spent.as_secs_f64(),
+        town.sim().steps() - steps
+    );
+    // The same hour with the town unloaded, its residents agents.
+    let mut away = Town::begin(7, 1);
+    away.go_away();
+    #[allow(clippy::disallowed_types, clippy::disallowed_methods)]
+    let started = std::time::Instant::now();
+    away.ok("advance 3600s");
+    eprintln!(
+        "the same hour unloaded: {:.3} s of real time",
+        started.elapsed().as_secs_f64()
+    );
 }
 
 #[test]

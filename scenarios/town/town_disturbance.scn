@@ -1,0 +1,23 @@
+# town_disturbance (plans/ai.md, L2 and I10; scenes S7, S15): a brawl
+# breaks out by the town square on a market morning. Two brawlers come
+# to blows; a townsperson who sees it runs and calls for help, a
+# message of the kind `core:help` (09 §4.1); a watchman who hears it
+# remembers it (`core:heed_help`) and takes up `answer_call`; arriving,
+# he sees the blows and goes for the brawlers (`confront`). The
+# routine each was keeping is set aside while this goes on.
+use default seed=7
+begin core:town_life place=1
+as @c:2010,996,0 do { "spawn": { "template": "core:brawler", "at": "self" } }
+as @c:2011,996,0 do { "spawn": { "template": "core:brawler", "at": "self" } }
+as @c:2010,1000,0 do { "spawn": { "template": "core:person", "at": "self" } }
+as @c:1994,996,0 do { "spawn": { "template": "core:watch_guard", "at": "self" } }
+advance 2s
+assert "@c:2010,996,0.occupants[0].routine == 'core:carousing'"
+as @c:2010,996,0 do { "set_stance": { "who": "self.occupants[0]", "of": "offset(self, 1, 0).occupants[0]", "stance": "hostile" } }
+advance 10s
+expect event hit_landed within=10s
+expect event message_heard kind=core:help within=10s
+advance 10s
+expect event goal_adopted goal=core:answer_call within=20s
+assert "core:pursuing_near(@c:2010,996,0, 30, 'core:confront') >= 3"
+expect hash 64a1852c4cfff422df1e235e184d11a5

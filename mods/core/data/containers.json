@@ -1,0 +1,18 @@
+[
+  { "//": "The devices of the furniture of `world/stores.json` (16 §4.3): what each holds once it has been opened. Kept beside the interactions, out of `world/`, as the locker's is.",
+    "type": "device", "id": "chest", "name": "chest",
+    "holds": { "volume": 0.15, "mass": "80 kg" },
+    "tags": ["storage"] },
+
+  { "type": "device", "id": "cupboard", "name": "cupboard",
+    "holds": { "volume": 0.3, "mass": "100 kg" },
+    "tags": ["storage"] },
+
+  { "type": "device", "id": "wardrobe", "name": "wardrobe",
+    "holds": { "volume": 0.9, "mass": "300 kg" },
+    "tags": ["storage"] },
+
+  { "type": "device", "id": "stall", "name": "stall",
+    "holds": { "volume": 0.2, "mass": "80 kg" },
+    "tags": ["storage", "stall"] }
+]

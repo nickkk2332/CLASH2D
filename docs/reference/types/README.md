@@ -16,8 +16,10 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`body_function`](body_function.md) | Something a body as a whole can do to some degree, from what its working parts contribute (06 §6.3). |
 | [`body_part`](body_part.md) | A kind of body part: layers of material, what it supplies, where others attach (06 §6.1). |
 | [`body_plan`](body_plan.md) | The parts a body starts with and how they are joined (06 §6.2). |
+| [`calendar`](calendar.md) | A realm's calendar (09 §14.2): the names of the parts of its day, each from a time of day, and the length of its year with the names of its seasons. |
 | [`channel`](channel.md) | Something an action needs exclusive use of: an arm, the voice, attention (03 §6.2). |
 | [`color`](color.md) | A colour: its `rgb`, the word text uses for it and the terminal colour shown in its place (12 §4.3). |
+| [`content_table`](content_table.md) | A content table (06 §9.3): what a cell, a shelf or a container is found to hold, as weighted entries of items, of other tables and of nothing, shared by every map and table that names it. |
 | [`contest`](contest.md) | A comparison of two numbers with chance: their difference or log-ratio, scaled, with logistic noise of a given spread (07 §4.1). |
 | [`control`](control.md) | Something the player can do, by a name a keymap gives to a key: interface effects to run (12 §9.2). |
 | [`damage_type`](damage_type.md) | A kind of harm, with the resistance of anything that states none of its own (02 §12.2). |
@@ -59,6 +61,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`recipe`](recipe.md) | What is used up, what is needed, how much work it takes and what it gives: crafting by hand, processing at a station, cooking, brewing and growing (16 §8). |
 | [`region_kind`](region_kind.md) | The recipe for surveying a region: its tract definitions in patches, the sites it holds, the settlements it may hold and the paths that cross its edges (10 §8.1). |
 | [`relation_kind`](relation_kind.md) | A kind of relation a mind holds toward a persona or a group: its range, default, fade, and the flags `opposes`, `sides_with`, `avoids`, `orders` and `intervenes` the engine reads (15 §9.1). |
+| [`routine`](routine.md) | A routine (09 §10.2): the parts of a character's day, each beginning at a time of day, with the place it is meant to be by role (home, a site by definition or tag), what it is doing, and the goal it pursues there while loaded. |
 | [`rule_group`](rule_group.md) | A set of rules that is switched on and off together (05 §9.6). |
 | [`scenario`](scenario.md) | A game the player can start: its worlds, who the player is and where they begin, the rules in force, its objectives, how it ends and how it is saved (13 §3). |
 | [`screen`](screen.md) | A screen of the interface: its variables, its layout tree and its keys (12 §10.1). |

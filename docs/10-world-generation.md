@@ -402,7 +402,9 @@ What the world cannot yet take is carried in the resolved map as data,
 with ids as written, for the package that builds the thing it belongs to:
 spawns and items; conduits, fields, devices and links; berths and watched
 cells; cell variables and decals; pattern cells; joints, portals and
-vehicles.
+vehicles. Spawns, items and devices with settings are handed on to the
+simulation when the map is placed (section 4.1); the rest is still
+carried.
 With `clash-tools map check`: rooms unreachable by walking; marks a site
 definition requires but its map does not supply; and whether the map
 stands. The map is realised on flat ground and the support and load passes
@@ -451,6 +453,8 @@ does not depend on the order they were gathered in.
 | `spawns`, and `spawn` in a cell spec | One spawn request (02 §9.3) for each creature, at a cell: handed over by the tract the cell is in. `what` is the creature or population id as written; its parameters are `kind` (`creature` or `population`) and `map`, the qualified id of the map that asked. A spawn that names an area is given cells of open floor in it, chosen by the placement's seed. |
 | `areas`, and `area` in a cell spec | An area (02 §8.3), made once: by the tract that holds the lowest corner of its box, or its first cell |
 | `marks` | Named cells in world coordinates, known from the map and the placement alone, without realising anything |
+| `items` in a cell spec | One spawn request for each, at its cell, handed over by the tract the cell is in: `what` is the item or content table as written; its parameters are `kind` (`item` or `table`), `map`, `count` (how many items, or how many draws from the table, as the map drew them after its `chance`) and `seed`, a positional hash (01 §4) of the placement's seed, the domain `gen.place.items`, the cell and the request's place among those of its cell. The simulation makes them lying in the cell, or, in a cell whose element is a container, keeps them as the element's latent contents (06 §9.3). |
+| `device` in a cell spec, with `config` | One spawn request of the kind `device`, at its cell: `what` is the name the map gave it, or empty, and `config` its settings, a map by key. The simulation promotes the element to its device and sets them (16 §4.3). A device a map only names is not handed on: names are for links (section 3.6), which wait for networks. |
 | Everything else (section 3.8) | Carried in the placed map as the map format left it, with the function that turns a map cell into a world cell |
 
 **Where a realiser finds placements.** A realiser is shown tract records
@@ -549,8 +553,8 @@ check (02 §7.2): whoever applies a building asks for one.
 
 - `apply_map(ctx, maps, grid, placement, mode, cause)` writes the cells
   of the map that lie in loaded tracts and returns a `MapApplied`: how
-  many elements changed, the spawn requests and the areas it made, the
-  marks in world coordinates.
+  many elements changed, the spawn requests (its creatures, then its
+  furnishings) and the areas it made, the marks in world coordinates.
 - `place_map(ctx, maps, realm, placement, mode, cause)` does the same
   and, for each tract the map covers that is not loaded, leaves a
   pending edit (`PendingEdit::Map`). A tract that is neither loaded nor
@@ -1436,8 +1440,15 @@ drawn from the placement's seed. The realiser adds them to the placed
 map's own spawns (section 4.1), so each becomes a spawn request at a
 cell of open floor, handed over by the tract the cell is in, `what`
 being the id as written. The simulation answers a request that names a
-template with an anonymous individual (06 §10.4). `role` is carried in
-the definition; homes, presence and agents wait for WG9.
+template with an anonymous individual (06 §10.4): a **resident** (06
+§12.2, 09 §10.6), whose home is the cell it was asked for at and whose
+routine, by its template's mind, says where it is at each hour. Which
+template a zone or a site asks for is how a settlement gives its people
+their roles: the bundled town asks for shopkeepers in its shops, stall
+keepers and brawlers among its townsfolk, and a baker, a tavern keeper,
+artisans, a healer and the watch in its trades' sites. `role` is carried
+in the definition; presence tables and a site's `home: nearby` wait for
+WG9.
 
 ### 11.3 Groups
 
@@ -1578,6 +1589,13 @@ world gives a site its id after the survey. The street of a lot follows
 the ground while the lot is levelled, so on rolling ground a door can
 stand a storey off its street (the bundled town is flat). A lot is
 dropped when it meets a placement the realm makes by hand, never moved.
+
+Gaps of furnishing (decisions D-850 to D-854): a cell spec's `items` is
+one item or one table; several things in a cell are a table. A device a
+map only names is not handed on. Items are made when a tract first
+loads, so a map applied later (`apply_map`, a pending map) hands its
+furnishings on in its `MapApplied` and nothing in the simulation makes
+them yet. A transform's `strip` of items is not built (section 10).
 
 Gaps of the map format: a state has a facing by its name alone, and a
 definition cannot say that its numbered bits are a facing (section 3.3).

@@ -420,12 +420,27 @@ fn every_must_have_site_is_present_and_made_a_site_of_the_world() {
         .generation
         .resolve_site("town_hall", Some("core"))
         .unwrap();
+    // The trades every market town has, after the square and the hall
+    // (`gen/trades.json`).
+    let trades: Vec<_> = [
+        "market",
+        "bakery",
+        "tavern",
+        "guardhouse",
+        "workshop",
+        "healer",
+    ]
+    .into_iter()
+    .map(|name| built.generation.resolve_site(name, Some("core")).unwrap())
+    .collect();
+    let mut wanted = vec![square, hall];
+    wanted.extend(trades);
     for seed in 0..8 {
         let generator = generator(&built, TOWN_REALM);
         let plan = generator.settlement_plan(seed, 0).unwrap();
         assert!(plan.missing.is_empty(), "seed {seed}: {:?}", plan.missing);
         let defs: Vec<_> = plan.sites.iter().map(|site| site.def).collect();
-        assert_eq!(defs, vec![square, hall], "seed {seed}");
+        assert_eq!(defs, wanted, "seed {seed}");
         // A tract holds one site at most.
         let tracts: Vec<_> = plan
             .sites

@@ -23,7 +23,7 @@
 //! | `destroy_item` | `item: entity` | null | [`destroy`] |
 //! | `set_color` | `of: entity`, `color: string?` | null | [`set_color`] |
 //! | `repair_item` | `item: entity`, `share: real` | the item | [`repair`] |
-//! | `materialise_contents` | `container: entity` | `list<entity>` made | [`materialise`] |
+//! | `materialise_contents` | `container: any` (an item, a device or an element) | `list<entity>` made | [`materialise`], [`crate::furnish::open_element`] |
 
 use clash_data::Def;
 use clash_expr::{Registry, Value, VerbSpec};
@@ -433,14 +433,24 @@ pub fn verbs() -> Vec<VerbDef> {
                 spec(
                     registry,
                     "materialise_contents",
-                    "Opens a container whose contents have not been made (06 §9.3): makes them from its definition's `contents`, drawn from its own seed, and stows them. Raises `contents_materialised`. Returns what was made: nothing for a container opened before. Refused with `item.not_an_item`.",
-                    &[("container", "entity", false, "The container.")],
+                    "Opens a container whose contents have not been made (06 §9.3): makes them from its definition's `contents`, drawn from its own seed, and stows them; for an element whose contents generation left latent, promotes it to its device, which makes them inside it. Raises `contents_materialised`. Returns what was made, or for an element what its device holds: nothing for a container opened before. Refused with `item.not_an_item` for an entity that is not an item or a device, and as `promote` refuses for an element.",
+                    &[("container", "any", false, "The container: an item, a device, or an element.")],
                 )
                 .map(|spec| spec.direct("container"))
             },
             run: |sim, call, cause| {
-                let container = entity(sim, call, 0, "container")?;
-                let made = materialise(sim, container, cause)?;
+                let made = match sim.subject_of(arg(call, 0)) {
+                    Some(Subject::Element(loc, layer)) => {
+                        crate::furnish::open_element(sim, loc, layer, cause)?
+                    }
+                    Some(Subject::Entity(id)) if crate::device::def_of(sim, id).is_some() => {
+                        Vec::new()
+                    }
+                    _ => {
+                        let container = entity(sim, call, 0, "container")?;
+                        materialise(sim, container, cause)?
+                    }
+                };
                 Ok(Value::list(made.into_iter().map(|id| returned(sim, id))))
             },
         },

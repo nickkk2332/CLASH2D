@@ -1,0 +1,33 @@
+[
+  { "//": "Odds and ends a town is furnished with, besides what `items.json`, the weapons and the making already define: something to read, something to drink from and something to wipe with. Values are illustrative.",
+    "type": "item", "id": "book", "name": "book",
+    "description": "A bound book of somebody's accounts, sermons or verses.",
+    "material": "leather", "mass": "0.6 kg", "volume": 0.0009, "length": "0.22 m",
+    "grip": { "arm": 1 },
+    "tags": ["book"],
+    "glyph": { "ch": "=", "fg": "material" } },
+
+  { "type": "item", "id": "bottle", "name": "bottle",
+    "material": "glass", "mass": "0.4 kg", "volume": 0.0003, "length": "0.3 m",
+    "grip": { "arm": 1 },
+    "surfaces": [ { "id": "body", "kind": "impact", "area": 1.0e-3, "give": 0.002, "span": 0.08 } ],
+    "contains": "750 ml",
+    "interactions": ["drink"],
+    "tags": ["vessel", "small"],
+    "glyph": { "ch": "!", "fg": "material" } },
+
+  { "type": "item", "id": "rag", "name": "rag",
+    "material": "cloth", "mass": "0.04 kg", "volume": 0.0002, "length": "0.3 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["cloth", "small"],
+    "glyph": { "ch": "~", "fg": "material" } },
+
+  { "//": "A plain shirt, worn under a coat.",
+    "type": "item", "id": "shirt", "name": "shirt",
+    "material": "cloth", "mass": "0.25 kg", "volume": 0.001, "length": "0.7 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": ["torso", "arm"], "layer": 1, "thickness": "1 mm", "coverage": 0.95 },
+    "color": ["light_gray", "brown"],
+    "tags": ["clothing"],
+    "glyph": { "ch": "[", "fg": "own" } }
+]

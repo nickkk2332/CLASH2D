@@ -906,6 +906,18 @@ mind's; left out, its mind's again; refused with
 | `watch_guard` | `watchman` | `watch_shift` | From six a beat between the civic places, five minutes at each; the evening at the watch's post; asleep after midnight. Answers a call for help, goes for whoever it sees strike |
 | `brawler` | `brawler` | `carousing` | Asleep till late, at the tavern from seven in the evening until two; fights back, joins fights it sees, and while drinking now and then picks one |
 | `house_dog` | `house_dog` | none | Keeps near the person it is loyal to (the nearest person when it was made), barks at anyone else close by at most once in half a minute, cannot open doors |
+| `baker` | `baker` | `baking` | At the bakery's oven from four, keeping its shop from nine to three, asleep from eight |
+| `tavern_keeper` | `tavern_keeper` | `tavern_keeping` | Keeps the tavern from eleven until half past midnight |
+| `artisan`, `healer` | `tradesperson` | `trade_day` | At work where they live, at the workshop or the healer's house, from eight to six |
+| `stall_keeper` | `stall_keeper` | `stall_keeping` | Lives in a house of the town, keeps a stall of the market from half past seven to five |
+
+The town's settlement data says who lives where by role (10 §11.2): its
+zones' houses ask for townsfolk, stall keepers, brawlers and dogs, its
+shops and offices for shopkeepers, and the sites of its trades
+(`gen/trades.json`, patched in `town/trades.json`) for their bakers,
+keeper, artisans, healer and the watch, which is based at the
+guardhouse. A site's staff live where they work. The guards do not
+carry the armoury's key: a template cannot give items yet.
 
 `keep_routine` takes anyone who is away from its routine's place there;
 `linger`, `keep_shop`, `stand_post` and `sleep` are what the parts name.
@@ -913,6 +925,12 @@ The townsperson's calls for help are messages of the kind `core:help`,
 which `core:heed_help` makes every member of the watch who hears one
 remember as `core:help_called`, and the watchman's `answer_call` takes
 it there.
+
+The content functions `core:doing_near(at, radius, doing)`,
+`core:pursuing_near(at, radius, goal)` and `core:away_near(at, radius)`
+count those near a cell doing something by their routines, holding a
+goal, or on their way somewhere: what a rule asks to know how busy a
+place is.
 
 **Not built**: long goals and cold methods (section 10.3); folding agents
 into populations and the regional cap (section 10.5); walking out of view
@@ -1318,7 +1336,19 @@ Rates in this document are written with a unit of time (04 §7.1):
 minutes of a twenty-four hour day, scaled to the length of the realm's
 own; `realm.clock` gives the same as a fraction of the day.
 
-**As built in the beta** (section 3.5, 4.1, 5.4a, 6.6):
+**As built in the beta** (section 3.5, 4.1, 5.4a, 6.6, 10.6, 14.2):
+
+- Definition types `routine` (section 10.6) and `calendar` (section
+  14.2); the fields `interact_action` and `routine` on minds and `kind`
+  on a `say` step; `calendar` on realms.
+- Properties of an `entity`: `routine`, `routine_doing`, `routine_place`,
+  `routine_places`, `routine_away`, `resident`, `resident_home`,
+  `agent_doing` (section 10.6); of a `realm`: `time_of_day`, `day`,
+  `day_length`, `day_part`, `season` (section 14.2).
+- Verbs `set_routine { who, routine? }` and `make_anonymous { who }`;
+  events `agent_stored`, `agent_loaded`, `became_anonymous`; reasons
+  `ai.door_shut`, `agent.not_an_individual`, `agent.unknown_routine`
+  (section 10.6).
 
 - Definition types `mind`, `goal`, `method`, with the fields listed there.
 - Events, each with `self` the character: `goal_adopted` (`goal`,
@@ -1345,8 +1375,8 @@ own; `realm.clock` gives the same as a fraction of the day.
   `ai.cancelled`.
 - Settings: `ai.max_thoughts_per_tick`, `ai.max_minds_per_batch`,
   `ai.max_steps_per_thought`.
-- Not built: `tactics`, `collective`, `formation`, `routine` and the
-  cold layer; the hook `goal_scoring`; the effects `set_goal` and
+- Not built: `tactics`, `collective`, `formation`, the cold layer
+  beyond agents and routines (section 10.6); the hook `goal_scoring`; the effects `set_goal` and
   `clear_goal` as effects (they are verbs); the functions `weight`
   (a property), `threat`, `standing` and the rest of section 6; the
   queries `visible`, `heard`, `allies`, `threats`; `retry_after` is

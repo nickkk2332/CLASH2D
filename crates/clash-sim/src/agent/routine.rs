@@ -28,9 +28,10 @@
 //! chooses, and so is every tag.
 
 use clash_core::{Dur, HashDomain, Real, define_id, pos_hash};
-use clash_data::{Def, Ref, Time, ValidateCx};
+use clash_data::{Def, FromKind, Kind, KindValue, Ref, Time, ValidateCx, by_kind};
 use clash_world::{CellPos, GridId, Location, RealmId};
-use serde::Deserialize;
+use serde::de::MapAccess;
+use serde::{Deserialize, Deserializer};
 
 use super::calendar::{self, Day};
 use crate::Sim;
@@ -128,15 +129,30 @@ pub struct PlaceSel {
     pub pick: Pick,
 }
 
-/// The place of a routine entry: one selector, or several of which the
-/// first that names a place is used.
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
+/// The place of a routine entry: one selector, written as an object, or
+/// a list of them of which the first that names a place is used.
+#[derive(Debug)]
 pub enum PlaceSpec {
     /// One selector.
     One(PlaceSel),
     /// Selectors in order of preference.
     Any(Vec<PlaceSel>),
+}
+
+impl<'de> FromKind<'de> for PlaceSpec {
+    fn from_kind<A: MapAccess<'de>>(kind: Kind, value: KindValue<'_, A>) -> Result<Self, A::Error> {
+        match kind {
+            Kind::List => value.read::<Vec<PlaceSel>>().map(PlaceSpec::Any),
+            Kind::Object => value.read::<PlaceSel>().map(PlaceSpec::One),
+            other => Err(other.unexpected("a place, or a list of places")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for PlaceSpec {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<PlaceSpec, D::Error> {
+        by_kind(deserializer)
+    }
 }
 
 impl PlaceSpec {

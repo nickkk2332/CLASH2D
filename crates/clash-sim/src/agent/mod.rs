@@ -416,7 +416,7 @@ pub fn position_now(sim: &Sim, state: &AgentState) -> Location {
 
 /// The nearest cell to `near`, on its storey and within [`SPOT_RADIUS`]
 /// cells, that is loaded, can be stood in, holds nothing in the way and
-/// has nobody in it: `near` itself if it is such a cell. Ties go to the
+/// has nothing in it that blocks the way: `near` itself if it is such a cell. Ties go to the
 /// first in order of row, then column.
 pub fn free_spot(sim: &Sim, near: Location) -> Option<Location> {
     let fits = |loc: Location| {
@@ -434,7 +434,10 @@ pub fn free_spot(sim: &Sim, near: Location) -> Option<Location> {
         }
         let empty = sim
             .cosmos
-            .occupants_at(loc, &OccupantFilter::ANY)
+            .occupants_at(
+                loc,
+                &OccupantFilter::ANY.with_flags(clash_world::OccupantFlags::BLOCKS_MOVE),
+            )
             .is_ok_and(|found| found.is_empty());
         empty.then_some(loc)
     };

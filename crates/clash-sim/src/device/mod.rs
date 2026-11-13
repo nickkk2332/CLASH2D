@@ -430,6 +430,9 @@ pub fn promote(
             .subject("element", Subject::Element(loc, layer)),
         cause,
     );
+    // Whatever generation left latent in the element is made now that
+    // something has opened it (06 §9.3).
+    crate::furnish::on_promoted(sim, id, loc, layer, cause);
     Ok(id)
 }
 

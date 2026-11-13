@@ -781,6 +781,15 @@ Loads rounds into a store (07 §11.5), one at a time and in that order: from `fr
 - `from` (entity?, optional): A container to take rounds from, or a stack of rounds.
 - `count` (int?, optional): The most to load. Default as many as fit.
 
+<a id="make-anonymous"></a>
+## `make_anonymous`
+
+Makes a notable individual anonymous again (06 §12.2): it is forgotten when its tract unloads, and a resident is then made afresh from its seed when it next comes into view; an agent made anonymous is forgotten at once. Raises `became_anonymous`; gives null. Refused with `agent.not_an_individual` for something not made from templates.
+
+`who` may be given directly.
+
+- `who` (entity): The individual.
+
 <a id="make-notable"></a>
 ## `make_notable`
 
@@ -793,11 +802,11 @@ Makes an anonymous individual notable, so that it is kept when its tract unloads
 <a id="materialise-contents"></a>
 ## `materialise_contents`
 
-Opens a container whose contents have not been made (06 §9.3): makes them from its definition's `contents`, drawn from its own seed, and stows them. Raises `contents_materialised`. Returns what was made: nothing for a container opened before. Refused with `item.not_an_item`.
+Opens a container whose contents have not been made (06 §9.3): makes them from its definition's `contents`, drawn from its own seed, and stows them; for an element whose contents generation left latent, promotes it to its device, which makes them inside it. Raises `contents_materialised`. Returns what was made, or for an element what its device holds: nothing for a container opened before. Refused with `item.not_an_item` for an entity that is not an item or a device, and as `promote` refuses for an element.
 
 `container` may be given directly.
 
-- `container` (entity): The container.
+- `container` (any): The container: an item, a device, or an element.
 
 <a id="move-to"></a>
 ## `move_to`
@@ -1347,6 +1356,16 @@ Gives a member of a group another role (15 §9.2). Raises `role_changed`.
 - `who` (entity): The member.
 - `group` (string): The group's key or id.
 - `role` (string, optional): Its new role; left out, none.
+
+<a id="set-routine"></a>
+## `set_routine`
+
+Gives a character a routine in place of the one its mind names (09 §17), and makes its mind think. Gives null. Refused with `agent.unknown_routine` for a routine no definition answers to.
+
+`who` may be given directly.
+
+- `who` (entity): The character.
+- `routine` (string, optional): The routine's id, qualified or bare. Left out, the routine `set_routine` gave is taken away and its mind's applies again.
 
 <a id="set-stance"></a>
 ## `set_stance`

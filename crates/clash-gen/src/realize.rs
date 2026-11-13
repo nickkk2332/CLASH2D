@@ -34,7 +34,8 @@
 //! 4. Placements are written in `order`, each clipped to the tract.
 //! 5. Transforms would run here. They are a later package: see
 //!    [`StandardGenerator::transforms`].
-//! 6. What the maps ask for besides cells is handed on: spawns whose
+//! 6. What the maps ask for besides cells is handed on: spawns and
+//!    furnishings (items, content tables and configured devices) whose
 //!    cell is in the tract, and areas whose home is.
 //!
 //! # Where placements come from
@@ -1496,6 +1497,7 @@ impl TractRealizer for StandardGenerator {
             spawns.extend(
                 map.spawns()
                     .into_iter()
+                    .chain(map.furnishings())
                     .filter(|spawn| canvas.covers(spawn.at.x, spawn.at.y)),
             );
             areas.extend(

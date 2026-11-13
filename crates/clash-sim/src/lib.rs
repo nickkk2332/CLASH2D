@@ -72,6 +72,7 @@ pub mod decision;
 pub mod device;
 pub mod entity;
 pub mod event;
+pub mod furnish;
 pub mod host;
 pub mod interaction;
 pub mod item;

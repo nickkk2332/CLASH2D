@@ -112,9 +112,9 @@ palette
 8 #e0b040 yellow
 9 #101010 black
 a #c8c8c8 white
-b #480000 bright_black
+b #333333 bright_black
 c #050505 black
-d #333333 bright_black
+d #480000 bright_black
 e #311f0f bright_black
 sprites 0
 fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none

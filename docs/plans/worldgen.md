@@ -121,13 +121,35 @@ as it is, `apply_map` with its three modes, `place_map` and
 (`PendingEdit::Map` in the world, decision D-513). Every "Done when"
 above has a test in `crates/clash-gen/tests/place.rs`. Stubbed: portals
 and subgrids are not handed on (the world's types are placeholders);
-items, conduits, fields, devices and the rest stay carried in the
+conduits, fields, links, device names and the rest stay carried in the
 placed map for the packages that own them; the simulation raises
 `map_applied` and binds the `apply_map` verb (K5); `plan_from_map` is
 WG11's; `aftermath_edit` is an integration test, since test scripts
 have no world to run in yet; an overlapping placement is dropped,
 never moved; a placement does not go round a wrapped edge; levelling
 in the world as it is makes no ramps.
+
+Furnished (stream "furnishing", decisions D-850 to D-854): a map's
+`items` (an item or a `content_table`, with `count` and `chance`) and
+its devices with settings are handed on as spawn requests of the kinds
+`item`, `table` and `device` (`PlacedMap::furnishings`), once, by the
+tract their cell is in, with a seed from the placement and the cell;
+the simulation (`clash_sim::furnish`) makes items lying in their cell,
+keeps those in a container element as its latent contents until it is
+first opened (06 §9.3), and promotes a configured device with its
+settings (16 §4.3). The `content_table` type is built
+(`clash_sim::item::table`); a map's `items` naming nothing is a load
+error at the cell spec. The town is furnished: its houses, terraces,
+shops and offices have kitchens, pantries, wardrobes and chests, and
+every market town has a bakery, a tavern, a market, a guardhouse, a
+workshop and a healer's house (`gen/trades.json`, `maps/trades.json`),
+with the making's stations in them. Tests in
+`crates/clash-gen/tests/place.rs`, `crates/clash-sim/tests/furnish.rs`
+and, against the bundled town at seed 1, `crates/clash-save/tests/furnish.rs`;
+the test script `scenarios/town/furnished.scn`. Stubbed: a map applied
+in play (`apply_map`, a pending map) hands its furnishings on in its
+`MapApplied`, which nothing in the simulation answers yet; a cell takes
+one `items`; device names and links wait for networks (G3, WG11).
 
 ### WG3 — Ground
 
@@ -327,8 +349,13 @@ Begun with WG8 (decisions D-677, D-678): the `site` type's `map`,
 `roles` (invariant X7 is checked at load, and has a test), `staff`,
 `name`, `tags` and `founded`; a zone's `people` and a site's `staff`
 become spawn requests naming templates in the lots and sites a tract
-realises, which the simulation answers. Everything else of WG9 is to
-do.
+realises, which the simulation answers. The bundled market town has
+six more sites with roles and no staff (D-854): `bakery` (`oven`,
+`counter`, `stores`, `bread`), `tavern` (`bar`, `hearth`, `still`,
+`stores`), `guardhouse` (`post`, `desk`, `armoury`), `workshop`
+(`bench`, `tools`), `market` (`centre`, `stall`) and `healer`
+(`shelf`, `medicine`, `bench`, `herbs`), each with `entrance`, for
+the town's life to staff. Everything else of WG9 is to do.
 - Groups own the sites the definitions say they own.
 - After a settling time, routines are out of step and at least one
   incident is known about somewhere.
