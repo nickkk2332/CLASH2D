@@ -63,9 +63,14 @@ disallowed_methods = "deny"
 
 # Debug information is the larger part of a debug build's size, and many
 # copies of this workspace are built side by side on one disk. A panic
-# still names its file and line without it.
+# still names its file and line without it. Symbols are stripped too: they
+# are some forty per cent of each test binary, and a backtrace without
+# names is the only loss. For a backtrace with names, build with
+# `CARGO_PROFILE_DEV_STRIP=none CARGO_PROFILE_TEST_STRIP=none`.
 [profile.dev]
 debug = false
+strip = "symbols"
 
 [profile.test]
 debug = false
+strip = "symbols"
