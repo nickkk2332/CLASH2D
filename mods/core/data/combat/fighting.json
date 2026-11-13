@@ -23,8 +23,8 @@
     "uses": { "arm": 1 },
     "params": {
       "target": "entity",
-      "part":   { "type": "part?", "default": "null" },
-      "effort": { "type": "real", "default": "1" } },
+      "part":   { "type": "part?", "default": "auto_part()" },
+      "effort": { "type": "real", "default": "auto_effort(self.has_tag('defensive'))" } },
     "requires": "dist(self, $target) < 3",
     "fail_text": "That is out of reach.",
     "tags": ["strike"],
@@ -46,8 +46,8 @@
     "uses": { "leg": 1 },
     "params": {
       "target": "entity",
-      "part":   { "type": "part?", "default": "null" },
-      "effort": { "type": "real", "default": "1" } },
+      "part":   { "type": "part?", "default": "auto_part()" },
+      "effort": { "type": "real", "default": "auto_effort(self.has_tag('defensive'))" } },
     "requires": "dist(self, $target) < 3",
     "fail_text": "That is out of reach.",
     "tags": ["strike"],
@@ -69,8 +69,8 @@
     "uses": { "arm": 1 },
     "params": {
       "target": "entity",
-      "part":   { "type": "part?", "default": "null" },
-      "effort": { "type": "real", "default": "1" } },
+      "part":   { "type": "part?", "default": "auto_part()" },
+      "effort": { "type": "real", "default": "auto_effort(self.has_tag('defensive'))" } },
     "requires": "dist(self, $target) < 3",
     "fail_text": "That is out of reach.",
     "tags": ["strike"],
@@ -92,8 +92,8 @@
     "uses": { "arm": 1 },
     "params": {
       "target": "entity",
-      "part":   { "type": "part?", "default": "null" },
-      "effort": { "type": "real", "default": "1" } },
+      "part":   { "type": "part?", "default": "auto_part()" },
+      "effort": { "type": "real", "default": "auto_effort(self.has_tag('defensive'))" } },
     "requires": "dist(self, $target) < 3",
     "fail_text": "That is out of reach.",
     "tags": ["strike"],
@@ -115,7 +115,7 @@
     "uses": { "arm": 2 },
     "params": {
       "target": "entity",
-      "effort": { "type": "real", "default": "1" } },
+      "effort": { "type": "real", "default": "auto_effort(self.has_tag('defensive'))" } },
     "requires": "dist(self, $target) < 2",
     "fail_text": "That is out of reach.",
     "tags": ["strike"],
@@ -156,8 +156,8 @@
     "uses": { "arm": 1 },
     "params": {
       "target": "entity",
-      "part":   { "type": "part?", "default": "null" },
-      "effort": { "type": "real", "default": "1" } },
+      "part":   { "type": "part?", "default": "auto_part()" },
+      "effort": { "type": "real", "default": "auto_effort(self.has_tag('defensive'))" } },
     "requires": "dist(self, $target) < 3",
     "fail_text": "That is out of reach.",
     "tags": ["strike"],

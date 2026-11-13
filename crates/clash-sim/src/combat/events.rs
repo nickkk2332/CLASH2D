@@ -340,6 +340,8 @@ pub fn event_types() -> Vec<EventType> {
     COMBAT_EVENTS
         .iter()
         .chain(super::ranged::RANGED_EVENTS)
+        .chain(super::grip::GRIP_EVENTS)
+        .chain(super::takedown::TAKEDOWN_EVENTS)
         .map(|info| {
             let mut ty = EventType::new(info.name).doc(info.doc);
             for (name, kind) in info.subjects {
@@ -362,7 +364,12 @@ pub fn event_types() -> Vec<EventType> {
 /// Enters in the expression registry the events of [`COMBAT_EVENTS`],
 /// leaving alone whatever is there already.
 pub fn register(registry: &mut Registry) {
-    for info in COMBAT_EVENTS.iter().chain(super::ranged::RANGED_EVENTS) {
+    for info in COMBAT_EVENTS
+        .iter()
+        .chain(super::ranged::RANGED_EVENTS)
+        .chain(super::grip::GRIP_EVENTS)
+        .chain(super::takedown::TAKEDOWN_EVENTS)
+    {
         if registry.event_id(info.name).is_some() {
             continue;
         }
@@ -418,7 +425,10 @@ mod tests {
         }
         assert_eq!(
             event_types().len(),
-            COMBAT_EVENTS.len() + super::super::ranged::RANGED_EVENTS.len()
+            COMBAT_EVENTS.len()
+                + super::super::ranged::RANGED_EVENTS.len()
+                + super::super::grip::GRIP_EVENTS.len()
+                + super::super::takedown::TAKEDOWN_EVENTS.len()
         );
     }
 }

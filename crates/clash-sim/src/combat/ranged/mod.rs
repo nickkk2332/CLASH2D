@@ -35,6 +35,7 @@
 //! - **`lead_point`** (07 §11.4) waits for believed velocities.
 
 pub mod aim;
+pub mod catch;
 pub mod defs;
 pub mod events;
 pub(crate) mod flight;
@@ -216,6 +217,29 @@ fn aim_of(
     }
 }
 
+/// The kind of window a verb's `window` argument names: the id of a
+/// `window_kind`, or its name. Null names none.
+fn window_kind(
+    sim: &Sim,
+    verb: &str,
+    call: &VerbCall<'_>,
+    index: usize,
+) -> Result<Option<crate::action::WindowKindId>, Reason> {
+    match arg(call, index) {
+        Value::Null => Ok(None),
+        value => {
+            let name = crate::world_verbs::def_name_of(sim, value)
+                .ok_or_else(|| bad_argument(verb, "window", "the id of a window kind"))?;
+            sim.defs()
+                .lookup::<crate::action::WindowKindDef>(&name)
+                .map(Some)
+                .ok_or_else(|| {
+                    bad_argument(verb, "window", "the id of a window kind that is loaded")
+                })
+        }
+    }
+}
+
 // ---- The verbs -----------------------------------------------------------------
 
 fn shoot_verb(
@@ -282,6 +306,7 @@ fn shoot_verb(
         lob: arg(call, 14).as_bool().unwrap_or(false),
         height,
         range: number(VERB, call, 15, "range")?,
+        window: window_kind(sim, VERB, call, 16)?,
     };
     let fired = shoot::shoot(sim, &spec, cause)?;
     Ok(Value::Int(i64::from(fired.projectiles)))
@@ -317,7 +342,8 @@ fn throw_verb(
             .map(str::to_owned),
         lob: arg(call, 10).as_bool().unwrap_or(false),
     };
-    shoot::throw(sim, &spec, cause)?;
+    let window = window_kind(sim, VERB, call, 11)?;
+    shoot::throw_opening(sim, &spec, window, cause)?;
     Ok(Value::Null)
 }
 
@@ -342,6 +368,21 @@ fn load_verb(
     };
     let loaded = store::load(sim, who, into, from, count, cause)?;
     Ok(Value::Int(i64::from(loaded)))
+}
+
+fn catch_verb(
+    sim: &mut Sim,
+    call: &VerbCall<'_>,
+    cause: clash_world::Cause,
+) -> Result<Value, Reason> {
+    const VERB: &str = "catch_shot";
+    let who = entity_or_self(sim, VERB, call, 0, "who")?;
+    let window = sim
+        .window_of(arg(call, 1))
+        .ok_or_else(|| bad_argument(VERB, "window", "a window"))?;
+    let reach = number(VERB, call, 2, "reach")?;
+    let caught = catch::catch_shot(sim, who, window, reach, cause)?;
+    Ok(Value::Bool(caught != catch::Caught::Nothing))
 }
 
 fn fit_verb(
@@ -462,9 +503,9 @@ pub fn verbs() -> Vec<VerbDef> {
                         ),
                         (
                             "window",
-                            "any",
+                            "id<window_kind>",
                             true,
-                            "The kind of reaction window it opens for whoever it is aimed at (07 §11.2). Offered to nobody until reaction windows are built.",
+                            "The kind of reaction window it opens for the entity it is aimed at (07 §11.2): the id of a `window_kind`. It opens as the shot is fired and closes when the shot is expected to arrive, at its speed over the distance to the aim point; those who notice it in time may answer it (03 §7). None for an instant shot, or one aimed at no entity.",
                         ),
                     ],
                 )
@@ -520,6 +561,12 @@ pub fn verbs() -> Vec<VerbDef> {
                             true,
                             "Whether it is sent along the arc that comes down on the aim point. Default false.",
                         ),
+                        (
+                            "window",
+                            "id<window_kind>",
+                            true,
+                            "The kind of reaction window it opens for the entity it is aimed at, as `shoot`'s does (07 §11.2).",
+                        ),
                     ],
                 )
             },
@@ -561,6 +608,32 @@ pub fn verbs() -> Vec<VerbDef> {
                 )
             },
             run: load_verb,
+        },
+        VerbDef {
+            name: "catch_shot",
+            build: |registry| {
+                spec(
+                    registry,
+                    "catch_shot",
+                    "Catches what a `shot` window was opened for (07 §11.6): the first of its projectiles still in flight, in the order they were fired, then an item thrown, whose body is within `reach` of the middle of `who`'s body, is taken out of the air where it is (`arrest`, 02 §15) and its window closes once nothing of it flies. An item thrown is taken into `who`'s hand; a projectile becomes the item its definition's `item` names, in `who`'s hand, or nothing; with no hand free it falls where `who` stands. Returns whether anything was caught: nothing within reach is not a refusal. Refused with `ranged.not_in_world` and `ranged.bad_number`.",
+                    &[
+                        ("who", "entity", true, "Who catches. Default `self`."),
+                        (
+                            "window",
+                            "window",
+                            true,
+                            "The window a shot or a throw opened: a reaction's `$window`.",
+                        ),
+                        (
+                            "reach",
+                            "real",
+                            true,
+                            "How far from the middle of `who`'s body, in metres, it may be caught. Default 1.5.",
+                        ),
+                    ],
+                )
+            },
+            run: catch_verb,
         },
         VerbDef {
             name: "fit",
