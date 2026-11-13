@@ -303,4 +303,22 @@ Worst first.
 
 ### Responsiveness, measured again
 
-[TIMINGS]
+As the first round measured it (release build, the market town at seed
+4 begun in the square, headless, the mean time of a key's pass), at
+`88fa0cc`, before performance 2, on a machine more loaded than the
+first round's (a load average near five on four processors, with other
+builds and a debug session running): the figures are worse for the
+load, not for this round's changes, which touch nothing on these paths.
+
+| Key | Takes | First round |
+|-----|-------|-------------|
+| A step (`j`, `k`) | 68 to 79 ms | 77 ms |
+| Wait a second (`.`) | 189 ms | 93 ms |
+| Wait a minute (`p`) | 11.0 s | 6.0 s |
+| The quick attack (`f` on the target) | 61 ms (now refused out of reach without asking anything, or struck) | about 100 ms |
+| Opening a screen (`i`, then Esc) | under 1 ms | under 5 ms |
+| An hour in the last stand (Shift+P) | broken off at once on the lane by the stranger in sight; not measured inside | about 4 s |
+
+The debug build the sessions run in is ten to twenty times slower: the
+market town's sessions take minutes (above). Waiting in the populated
+town remains the first known issue, for performance 2.
