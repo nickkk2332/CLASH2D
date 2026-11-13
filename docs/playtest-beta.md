@@ -212,6 +212,7 @@ golden frames that moved are named with the fixes below.
 | The watch, by script | (probes, not kept) | A watchman struck in the square by a rowdy; and by the player's character made delegated, with the same punches | Both answer: the watchman takes up `confront`. Only the player's own blows go unanswered |
 | A day of routines, its morning | `play_market.rs` (`a_morning_and_a_noon_in_the_square`, ignored as slow) | Begun at nine in the square with the stalls kept; Shift+P three times, to noon | Too slow for the suite in a debug build: three hours among 150 hot minds had not finished after 33 minutes of real time on a loaded machine (stopped there). The quarrel and the armoury sessions pass on the merge. The routines themselves are checked by the test script `scenarios/town/routine_day.scn`, which watches from outside the town |
 | The last stand, again | `play_last_stand.rs` | All six sessions on the merged build | Pass unchanged: 320 s in a debug build |
+| The errand, delivered, again | `play_errand.rs` | The first round's session on the merged build | Passes in about three minutes in a debug build. Its golden frame `play_errand_delivered`, blessed for performance 2's route, was blessed again: a resident caught mid-step under the summary is now played out before the ending (D-908), so the frame holds no moving sprite; nothing else in it changed |
 
 ### What was found and fixed
 
