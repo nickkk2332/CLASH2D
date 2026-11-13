@@ -17,6 +17,7 @@
 //! | `saves` | What the save backend lists, newest first ([`crate::saves`]) |
 //! | `profile`, `scenario` | The profile in use; the scenario of the game being played. |
 //! | `creation` | The character being made for the next game: null while none is, else the creation session as [`crate::creation`] says. |
+//! | `templates` | The templates the game the character is made for offers to make or choose it from (13 §4.2; the `creation` op `scenario` names the game), each with its `id`, `name` and `description` ([`crate::creation`]). |
 //! | `setup` | The game being set up (13 §12): null until a scenario is asked for, then the map [`Setup::value`] gives: its `id`, `name`, `doc`, `seed` (`ask`, `random` or the number), `places` (each `name` and `index`) and `options` (each `id`, `name`, `kind`, `value`, `next` and `choices`). |
 //!
 //! # The services
@@ -24,7 +25,7 @@
 //! | Service | Does |
 //! |---------|------|
 //! | `new_game` | Starts a game from the scenario with the id `scenario` (left out, the first) at its place `place`, with the character the player finished, or else the scenario's template with its defaults, the name and seed given and the options chosen ([`crate::session::new_game`]). Without `place`, a scenario that offers more than one place or asks about options is set up instead: `app.setup` holds it and the screen of the role `setup` is opened with `scenario` |
-//! | `creation` | The creation session: `begin`, `select`, `clear`, `name`, `seed`, `finish` ([`crate::creation`]); and `option` with `key` and `value`, an answer to an option of the scenario being set up |
+//! | `creation` | The creation session: `begin`, `select`, `clear`, `name`, `seed`, `finish`, `scenario` ([`crate::creation`]); and `option` with `key` and `value`, an answer to an option of the scenario being set up |
 //! | `edit_creation` | The older form of `creation`'s `name` and `seed`: sets the `field` `name` or `seed` to a `value` |
 //! | `set_pref`, `rebind` | Keeps what the scene has already changed ([`crate::prefs`]) |
 //! | `save` | Saves the game under the `name` given (left out or empty, the character's name, or else the scenario's), through the save backend ([`crate::saves`]); refused unless the game's saving policy is `free` (13 §9.2), and once it has ended |
@@ -611,7 +612,9 @@ fn start_game(shared: &mut Shared, request: &AppRequest) -> Result<(), String> {
         .unwrap_or_default();
     let template = session::scenario_template(&shared.loaded, &scenario)?;
     let defs = &shared.loaded.defs;
-    let spec = shared.creation.spec_for(defs, template.as_deref())?;
+    let spec = shared
+        .creation
+        .spec_for(defs, &scenario, template.as_deref())?;
     let answers = session::Answers {
         seed: shared.creation.seed(),
         drawn: drawn_seed(),
@@ -706,6 +709,20 @@ impl AppState for App {
 
     fn talk(&self) -> ExprValue {
         self.shared.borrow().talk.clone()
+    }
+
+    fn templates(&self) -> Vec<AppEntry> {
+        let shared = self.shared.borrow();
+        shared.creation.templates(&shared.loaded.defs)
+    }
+
+    fn defines(&self, def_type: &str) -> bool {
+        self.shared
+            .borrow()
+            .loaded
+            .defs
+            .ids_of(def_type)
+            .is_some_and(|ids| !ids.is_empty())
     }
 
     fn setup(&self) -> ExprValue {

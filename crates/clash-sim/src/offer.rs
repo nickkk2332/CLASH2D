@@ -207,15 +207,27 @@ pub fn could_start(
         if let Err(reason) =
             crate::combat::surface::find(sim, actor, &attack.with, &name, &attack.id.value)
         {
-            // Said as a reader is told it: what the blow needs.
+            // Said as a reader is told it: what the blow needs, in the
+            // words the attack gives, or else the tag or the part in
+            // plain words; never an id (decision D-864).
             let label = action_label(sim, actor, id);
-            let needs = match attack.with.source() {
-                Some(WithSource::Held(tag)) if !tag.is_empty() => {
-                    format!("{label} needs something in hand that is `{tag}`.")
+            let said = attack.with.needs.as_deref().map(str::trim);
+            let needs = match (attack.with.source(), said) {
+                (Some(WithSource::Held(_)), Some(words)) if !words.is_empty() => {
+                    format!("{label} needs {words} in hand.")
                 }
-                Some(WithSource::Held(_)) => format!("{label} needs something in hand."),
-                Some(WithSource::Part(part)) => format!("{label} needs a working `{part}`."),
-                Some(WithSource::Gripped) => format!("{label} needs something gripped."),
+                (Some(WithSource::Held(tag)), _) if !tag.is_empty() => format!(
+                    "{label} needs {} in hand.",
+                    crate::reader::with_indefinite(&plain_words(tag))
+                ),
+                (Some(WithSource::Held(_)), _) => format!("{label} needs something in hand."),
+                (Some(WithSource::Part(_)), Some(words)) if !words.is_empty() => {
+                    format!("{label} needs {words}.")
+                }
+                (Some(WithSource::Part(part)), _) => {
+                    format!("{label} needs a working {}.", part_words(sim, part))
+                }
+                (Some(WithSource::Gripped), _) => format!("{label} needs something gripped."),
                 _ => capitalised(&reason.message),
             };
             return Err(Reason::new(reason.code, needs));
@@ -241,6 +253,37 @@ pub fn could_start(
         }
     }
     Ok(())
+}
+
+/// A word written as an id (`flat_edge`, `core:blade`) as plain words:
+/// its namespace dropped and its underscores spaces.
+fn plain_words(id: &str) -> String {
+    bare(id).replace('_', " ")
+}
+
+/// What a reader calls a part a blow is made with: the name of the body
+/// part definition it names, or else the words it is written in.
+fn part_words(sim: &Sim, part: &str) -> String {
+    let named = sim
+        .defs()
+        .try_registry::<crate::body::BodyPartDef>()
+        .and_then(|parts| {
+            let id = parts.lookup(part).or_else(|| {
+                parts
+                    .names()
+                    .iter()
+                    .filter(|qualified| bare(qualified) == part)
+                    .min()
+                    .and_then(|qualified| parts.lookup(qualified))
+            })?;
+            parts
+                .try_get(id)?
+                .name
+                .as_ref()
+                .map(|name| name.raw().trim().to_owned())
+        })
+        .filter(|name| !name.is_empty());
+    named.unwrap_or_else(|| plain_words(part))
 }
 
 /// The qualified id of a definition by its dense number.

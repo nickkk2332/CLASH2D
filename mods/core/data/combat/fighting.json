@@ -76,7 +76,7 @@
     "tags": ["strike"],
     "attacks": {
       "cut": {
-        "with":   { "held": "blade", "surface": "edge" },
+        "with":   { "held": "blade", "surface": "edge", "needs": "a blade" },
         "energy": "(self.attr.strength ?? 10) * 5",
         "push":   0.02,
         "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" } } },
@@ -99,7 +99,7 @@
     "tags": ["strike"],
     "attacks": {
       "point": {
-        "with":   { "held": "blade", "surface": "point" },
+        "with":   { "held": "blade", "surface": "point", "needs": "a blade" },
         "energy": "(self.attr.strength ?? 10) * 4",
         "push":   0.05,
         "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" } } },
@@ -163,7 +163,7 @@
     "tags": ["strike"],
     "attacks": {
       "round": {
-        "with":   { "held": "blade", "surface": "edge" },
+        "with":   { "held": "blade", "surface": "edge", "needs": "a blade" },
         "energy": "(self.attr.strength ?? 10) * 5",
         "push":   0.02,
         "aim":    { "contest": "melee", "by": "fighting(self)", "against": "evasion(target, self)" },

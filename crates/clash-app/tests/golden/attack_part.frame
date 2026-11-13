@@ -3,7 +3,7 @@ size 80x24
 chars
 |                  .   .n #.....   .                   ┌────────────────────────┐|
 |                   .   . #n...   .      .             │Ada                     │|
-|                    ,# . #.... #,     ..              │Target Brute            │|
+|                    ,# . #.... #,     ..              │Target The person       │|
 |                     =  . ...  =    ,'.               │Blood  █████████████████│|
 |                 ..  #. .#..n .#  ..,#                │Pain   ░░░░░░░░░░░░░░░░░│|
 |                 ...,##=#='=#=##,...,## # # # ##    ,#│Time 8:00               │|
@@ -11,15 +11,15 @@ chars
 |          │wherever it lands                                        █│         │|
 |          │torso                                                    █│         │|
 |          │head                                                     █│         │|
-|          │l eye                                                    █│         │|
-|          │r eye                                                    █│         │|
-|          │l arm                                                    █│         │|
-|          │r arm                                                    █│         │|
-|          │l hand                                                   ││         │|
-|          │r hand                                                   ││         │|
-|          │l leg                                                    ││         │|
+|          │left eye                                                 █│         │|
+|          │right eye                                                █│         │|
+|          │left arm                                                 █│         │|
+|          │right arm                                                █│         │|
+|          │left hand                                                ││         │|
+|          │right hand                                               ││         │|
+|          │left leg                                                 ││         │|
 |┌ Log ────└──────────────────────────────────────────────────────────┘         │|
-|│Slash needs something in hand that is `blade`.      ││                        │|
+|│Slash needs a blade in hand.                        ││                        │|
 |│                                                    ││                        │|
 |│                                                    ││Tab target f hit s shoot│|
 |│                                                    ││x look  i things  c body│|

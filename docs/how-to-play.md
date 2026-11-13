@@ -39,8 +39,24 @@ offered), and choose what to play from the list:
 Tab moves between the name, the seed and the list; Enter on a game
 begins it. The market town first asks where to begin.
 
-You play an ordinary person: no powers, no training, nothing in your
-hands but what the game gives you.
+**Who you are.** F2 on the new-game screen, with a game selected, shows
+who that game lets you be:
+
+| Who | What they are |
+|-----|---------------|
+| **Adept** | Born with two or three powers of your choosing (the lesser cost a point each, the greater two, from three points), and the reserves to pay for them |
+| **Brawler** | Strong, and quick in a fight with fists or a club. Starts with a club in hand |
+| **Marksman** | A steady eye and hand. Starts with a bow and a quiver of a dozen arrows, or a loaded pistol and spare rounds in a backpack |
+| **Ordinary person** | No powers and no weapon: a build and a little learning of your choosing |
+| **Gifted person** | Every power there is |
+
+In the market town and the town you make the character: Enter on one,
+then each of its choices (Enter on a choice changes it: the build, the
+training, the powers, the weapon), and Begin. In the errand and the last
+stand you choose one ready-made: you may name them, and nothing more.
+On the lane you are an ordinary person. Without F2, every game gives you
+an ordinary person with nothing in your hands but what the game gives
+you.
 
 A game with a story opens with a few lines of introduction; Begin, or
 Esc, closes them.
@@ -52,7 +68,7 @@ Esc, closes them.
 """"""""""Y"Y"""""Y"""Y"""""""...Y""""""Y"""""""""""│Ada                   │
 *""""""""""""""Y"""""""""Y""""..."""""Y"*"""""""""Y"│Blood  ███████████████│
 ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,│Pain   ░░░░░░░░░░░░░░░│
-....................................................│Holding something     │
+....................................................│Holding a parcel      │
 ........................@...........................│                      │
 ...................           ......................│                      │
 ,,,,,,,,,,,,,                       ,,,,,,,.....,,,,│                      │
@@ -94,7 +110,8 @@ what is in your hands.
 
 ## Keys
 
-`?` or F1 in play lists every key of the keymap in force. Options (`o`,
+`?` or F1 in play lists every key of the keymap in force, written as
+on the keyboard (`Shift+J`, `Tab`). Options (`o`,
 or from the title or pause menu) gives a key another meaning: choose the
 context (Play, Looking and aiming, Menus), type the key as the keymap
 writes it (`w`, `shift+a`, `f5`) and the name of what it should do
@@ -120,6 +137,7 @@ controls, read from the data.
 | `.` | Wait | Let a second pass. |
 | `x` | Look around | Opens Look. |
 | `e` | Use something near | List what can be done with the things within a step, and do one. |
+| `g`, `,` | Pick up | Pick up what lies at your feet or within reach; with more than one thing there, choose which. |
 | `i` | Inventory | Opens Inventory. |
 | `c` | Condition | Opens Condition. |
 | `a` | Abilities | Opens Abilities. |
@@ -250,7 +268,8 @@ key in your hands or a pocket, `e` offers Unlock. Options has "Into a
 door": open it, ask first, or stop.
 
 **`e` uses what is near**: everything within a step, and everything you
-hold. What cannot be done now is greyed with the reason. What the
+hold; above the list, what lies loose within a step that you can see,
+each to pick up. What cannot be done now is greyed with the reason. What the
 bundled world offers:
 
 | Thing | What you can do |
@@ -262,16 +281,27 @@ bundled world offers:
 | Wardrobes | Hide inside, and Get out |
 | Ovens, hearths, stills | Stoke (put the wood you hold in), Light, Put out |
 | What you hold | Eat, Drink, Bandage your wounds, Rub on salve, Coat a blade, Read |
+| What lies loose (on a table, a desk, the street) | Pick up |
 
 What a container holds is decided the first time anyone opens it:
 pantry cupboards hold flour and herbs, wardrobes clothes, chests
 valuables, the healer's house salves and bandages, the workshop's chest
 knives and clubs, the racks of the guardhouse's armoury clubs,
-bucklers, bows and arrows (the armoury door is locked). What lies loose
-on a table, a desk or the street cannot be picked up yet.
+bucklers, bows and arrows (the armoury door is locked: its key lies on
+the sergeant's desk). **`g` or `,` picks up** what lies at your feet or
+within a step, on a table, a desk or the street; with more than one
+thing there it asks which. A thing too big for your hands goes into
+something you carry that takes it, if anything does.
 
 **`i` is your inventory**: what you carry, how, and what you wear on
-each part of your body. Enter on a thing lists what to do with it.
+each part of your body. Enter on a thing lists what to do with it:
+**Drop** it where you stand, **Wear** it, **Take off** what you wear
+(into a hand), **Stow** it in something you wear or hold, **Put in**
+something you carry or that stands within a step, **Take out** what is
+stowed (into a hand), **Throw** it, or **Give** it to someone within a
+step, who takes it unless they hold you an enemy or are afraid of you.
+Each takes a moment, and what cannot be done says why in the log: your
+hands are full, it does not fit, it is not something to wear.
 
 **`m` is the map**: the place as your character knows it, zoomed out,
 with the journal's markers (`X`) where they last knew the thing to be,
@@ -348,9 +378,10 @@ if it takes one.
 |------|------|
 | `1` to `9` | `bind_1` to `bind_9` |
 
-The person the bundled games give you has no powers, so the list is
-empty; a character a mod gives powers to (the `core` mod's "Gifted
-person" has twelve) uses them so.
+An ordinary person has no powers, so the list is empty. Make an adept
+(two or three powers of your choosing) or a gifted person (all twelve)
+with F2 on the new-game screen, in the market town or the town, or
+choose one in the errand or the last stand.
 
 ## Talking
 

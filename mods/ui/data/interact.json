@@ -1,9 +1,16 @@
 [
-  { "//": "Using what is near (16 §3, 12 §9.4): a list of every interaction within a step, and what walking into something closed does. Interactions are content of other mods; this mod defines no action, so its controls name `interact` bare, which means whichever loaded mod's action of that name comes first in order of id (the `core` mod's takes `target` and `interaction`). What is offered is the simulation's: `view.offers_near` lists each interaction the things round the character offer, with whether it can be done now and, where it cannot, why.",
+  { "//": "Using what is near (16 §3, 12 §9.4): a list of every interaction within a step, and what walking into something closed does. Interactions are content of other mods; this mod defines no action, so its controls name `interact` bare, which means whichever loaded mod's action of that name comes first in order of id (the `core` mod's takes `target` and `interaction`). What is offered is the simulation's: `view.offers_near` lists each interaction the things round the character offer, with whether it can be done now and, where it cannot, why. Above it, `view.loose_near` lists what lies loose within reach that the character sees, each picked up with the action `pick_up` (named bare: the `core` mod's takes `what`), which says why if it cannot be.",
     "type": "screen", "id": "interact",
     "title": "Use",
     "popup": { "width": 56, "height": 14, "place": "centre", "dim": true },
     "layout": { "frame": "Use what is near", "rows": [
+      { "if": "len(view.loose_near ?? []) > 0", "fit": true,
+        "list": { "id": "loose", "rows": "view.loose_near ?? []",
+                  "item": "Pick up {it.label}  <dim>{it.where}</>",
+                  "tip": "Enter picks it up.",
+                  "on_activate": [
+                    { "close": {} },
+                    { "act": { "action": "pick_up", "params": { "what": "it.value" } } } ] } },
       { "fill": 1,
         "list": { "id": "offers", "rows": "view.offers_near",
                   "item": "{if it.available then it.name else ''}<dim>{if it.available then '' else it.name}  {it.where}{if it.available then '' else ': '}{if it.available then '' else it.why}</>",
@@ -13,8 +20,16 @@
                     { "close": {} },
                     { "act": { "action": "interact",
                                "params": { "target": "it.target", "interaction": "it.interaction" } } } ] } },
-      { "height": 1, "tooltip": { "value": "Up and Down choose, Enter does it, Esc goes back." } } ] },
+      { "height": 1, "tooltip": { "value": "Up and Down choose, Enter does it, Tab moves between the lists, Esc goes back." } } ] },
     "keys": { "back": [ { "close": {} } ] } },
+
+  { "//": "Picking up (`g` and `,` in play): what lies loose within reach, as the character sees it (`view.loose_near`). One thing is picked up at once; with more, the list picker asks which; with nothing there, the action is given the character itself, which it refuses saying there is nothing within reach to pick up. The action is `pick_up`, named bare.",
+    "type": "control", "id": "pick_up", "name": "Pick up",
+    "doc": "Pick up what lies at your feet or within reach; with more than one thing there, choose which.",
+    "do": { "act": { "action": "pick_up", "params": "needed",
+                     "pick": { "what": "list" },
+                     "from": { "what": "view.loose_near ?? []" },
+                     "with": { "what": "if len(view.loose_near ?? []) == 1 then view.loose_near[0].value else if len(view.loose_near ?? []) == 0 then view else null" } } } },
 
   { "//": "The key in play that opens the list above.",
     "type": "control", "id": "interact", "name": "Use something near",

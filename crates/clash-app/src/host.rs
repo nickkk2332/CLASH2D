@@ -469,10 +469,11 @@ fn outer_parts(sim: &clash_sim::Sim, viewer: EntityId, target: &Value) -> Option
             }
         }
     }
-    // Each with its name in the body, as a row a picker shows.
+    // Each with what a reader calls it (`left arm`), as a row a picker
+    // shows.
     let name = registry
         .kind_id(KIND_PART)
-        .and_then(|kind| registry.property_id(kind, "name"));
+        .and_then(|kind| registry.property_id(kind, "label"));
     Some(
         parts
             .into_iter()
@@ -797,7 +798,17 @@ impl Host for GameHost {
                     own
                 };
             }
-            session.sim.call_function(function, args)
+            // Anyone and anything else is named as the player's
+            // character knows it (05 §4.6): the person it takes them
+            // for, the thing by its kind. The character itself is named
+            // by its own name, not "you", on a screen about it.
+            if args.first() == Some(&player_value(session)) {
+                session.sim.call_function(function, args)
+            } else {
+                session
+                    .sim
+                    .call_function_for(function, args, Some(session.player))
+            }
         })
         .unwrap_or_default()
     }

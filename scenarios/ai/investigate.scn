@@ -16,4 +16,4 @@ advance 1s
 assert "@e:1v0.goal == 'core:investigate_noise'"
 advance 20s
 assert "@e:1v0.goal == 'core:go_about'"
-expect hash db6249173ec2601e449dc91d0f6d3f6b
+expect hash 74a455bb65e43d5bb5a1746e20a3d338

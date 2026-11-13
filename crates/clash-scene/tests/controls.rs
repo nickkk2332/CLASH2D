@@ -391,11 +391,11 @@ fn rebinding_a_key_changes_what_it_does_and_leaves_controls_alone() {
             .collect()
     };
     let before = controls(&run);
-    // `g` means nothing in play; `f` strikes.
-    assert_eq!(run.press(&["g"]), []);
+    // `w` means nothing in play; `f` strikes.
+    assert_eq!(run.press(&["w"]), []);
     assert_eq!(submitted(&run.press(&["f"])).name, "fix:strike");
 
-    // The fixture's F5 asks the `app` service to give `g` the meaning
+    // The fixture's F5 asks the `app` service to give `w` the meaning
     // `strike`. It takes effect at once, and the application is told, so
     // that it can keep the binding.
     let outcomes = run.press(&["f5"]);
@@ -412,9 +412,9 @@ fn rebinding_a_key_changes_what_it_does_and_leaves_controls_alone() {
             kept[0].text("key"),
             kept[0].text("name")
         ),
-        (AppService::Rebind, Some("play"), Some("g"), Some("strike"))
+        (AppService::Rebind, Some("play"), Some("w"), Some("strike"))
     );
-    assert_eq!(submitted(&run.press(&["g"])).name, "fix:strike");
+    assert_eq!(submitted(&run.press(&["w"])).name, "fix:strike");
 
     // The application gives stored bindings back through the scene: `f`
     // now walks west, and an empty name takes a key's meaning away.

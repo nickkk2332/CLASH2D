@@ -94,7 +94,8 @@ Takes:
 A character of the party at the start (13 §4.2).
 
 - `template` (string, or `null`; optional): The template the character is made from with every choice at its default, when the player has made none of their own: a qualified id, or a bare name in the scenario's namespace.
-- `create` (`true` or `false`; optional): Whether the player may make the character on the creation screen (`create`). Default true.
+- `create` (`true` or `false`; optional): Whether the player may make the character on the creation screen (`create`): begin from a template offered and make every choice it has. Default true.
+- `pick` ([`PickEntry`](#pickentry); optional): The templates offered to make or choose the character from (`pick`): `true` for every playable template, a list of templates for those alone. With `create` false the player chooses one, ready-made, and gives it no more than a name. Left out, every playable template where `create` holds, and none where it does not: the player is given the character of `template`.
 - `senses` (list of string; optional): The senses it perceives with when its templates give it none: `sense` definitions. Left out, every sense the loaded mods define.
 
 <a id="placeentry"></a>
@@ -135,6 +136,18 @@ Takes:
 
 - a string
 - an object: object [`PartyGoneObject`](#partygoneobject)
+
+<a id="pickentry"></a>
+### `PickEntry`
+
+The templates a scenario offers the player its character from (13 §4.2 `pick`).
+
+Written as `true`, `false` or a list of templates.
+
+Takes:
+
+- a boolean
+- a list: list of string
 
 <a id="sitequery"></a>
 ### `SiteQuery`

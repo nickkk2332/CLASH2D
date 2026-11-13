@@ -371,7 +371,7 @@ fn no_body(entity: EntityId) -> Reason {
 
 /// Finds free slots for a grip among the working parts of a holder's
 /// body, a preferred part first and then in order of part.
-fn allocate(
+pub(super) fn allocate(
     sim: &Sim,
     who: EntityId,
     grip: &[(ChannelId, u16)],
@@ -427,7 +427,7 @@ fn allocate(
 }
 
 /// The grip of a thing: what its definition says, in order of channel.
-fn grip_of(sim: &Sim, what: EntityId) -> Vec<(ChannelId, u16)> {
+pub(super) fn grip_of(sim: &Sim, what: EntityId) -> Vec<(ChannelId, u16)> {
     sim.components
         .get::<Item>(what)
         .and_then(|item| def_of(&sim.defs, item))
@@ -473,7 +473,7 @@ fn selects(
 
 /// The parts of a wearer's body an item's `wear` covers, in order of
 /// part and then layer.
-fn wear_targets(sim: &Sim, who: EntityId, def: &ItemDef) -> Result<Vec<WornOn>, Reason> {
+pub(super) fn wear_targets(sim: &Sim, who: EntityId, def: &ItemDef) -> Result<Vec<WornOn>, Reason> {
     let body = sim
         .components
         .get::<Body>(who)
@@ -703,7 +703,7 @@ fn announce_taken(
 }
 
 /// Whether a thing could be put inside another, by the kernel's rules.
-fn check_inside(sim: &Sim, what: EntityId, container: EntityId) -> Result<(), Reason> {
+pub(super) fn check_inside(sim: &Sim, what: EntityId, container: EntityId) -> Result<(), Reason> {
     let footprint = sim.known(what)?.presence().footprint;
     sim.check_place(Some(what), footprint, Place::In(container))
         .map(|_| ())

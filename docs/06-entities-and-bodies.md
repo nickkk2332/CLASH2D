@@ -598,7 +598,7 @@ it inside: it can be reached only through the parent's layers.
 | `name` | What a reader calls the plan. |
 | `height` | How tall a body of this plan stands at scale 1. |
 | `footprint` | The cells it fills, `[x, y, storeys]`. Default one cell. |
-| `parts` | The parts, each with: `id`, its name in the body; `part`, its definition; `on` or `in`, the name of the part it is joined to; `socket`, the socket of that part it takes, for a part that is `on`; `side`, a free-form label that tells it from its twin; `scale`, its size relative to the rest of the body (default 1). |
+| `parts` | The parts, each with: `id`, its name in the body; `part`, its definition; `on` or `in`, the name of the part it is joined to; `socket`, the socket of that part it takes, for a part that is `on`; `side`, a free-form label that tells it from its twin; `name`, what a reader calls it (`left arm`; decision D-863); `scale`, its size relative to the rest of the body (default 1). |
 
 Exactly one part is joined to nothing: the **root**. Names are not
 repeated. A socket must exist on the parent's definition, accept the
@@ -613,6 +613,12 @@ bring. A key is never given to another part of the same body, so it means
 the same part after others have come and gone.
 
 A plan is only a starting point. The instance owns its own tree.
+
+**What a reader calls a part** (decision D-863) is the property
+`part.label`: the `name` its body's plan gives it, or else its side and
+its definition's name (`left arm`), or the definition's name alone.
+`part.name` stays the part's name in the body, which properties such as
+`worn_on` take. Screens show the label.
 
 ### 6.3 Functions
 
@@ -1552,6 +1558,27 @@ These are refused with a reason (14 §5) and change nothing:
 What relocation refuses (an unknown entity, a thing put inside itself,
 nesting too deep, a cell not loaded) is refused as relocation refuses it.
 
+**Item actions** (decisions D-861, D-865). The verbs refuse in the
+engine's words, for rules and the console. A character's own handling of
+things is content: actions with a time and a hand, which content writes
+round the verbs. Two properties of the entity, read of the character
+itself in a mind context, let their `requires` and `fail_text` say why
+in words for it to read:
+
+| Property | Gives |
+|----------|-------|
+| `hold_fault(verb, what, other?)` | `string?`: why the entity, as it believes, could not do a holding verb to a thing now, as a sentence ("Your hands are full: put something down or away first."); null if it could. `take`: pick up a thing lying loose within reach, or take one it carries into a hand (a thing with no grip goes into something carried that takes it); `grasp`: hold it in a hand; `drop`; `wear`; `remove`, into a hand; `stow`; `put_in`, into `other`, carried or within reach; `take_out`, out of a container carried or within reach, into a hand; `give`, to `other`, within reach, with a hand free for it. `take` of the entity itself says there is nothing within reach to pick up |
+| `loose_near` | `list<map<any>>`: what the entity perceives lying loose in its cell or the eight round it on its storey, its own cell first: each `value` (the thing), `label` (what the entity calls it, with its article) and `where` (`here`, `north`, ...) |
+
+What lies in a cell counts as perceived where the cell was in a party
+member's last view, or is its own cell; for one not of the party,
+whatever lies within reach. The bundled actions are `core:pick_up`,
+`drop`, `wear`, `take_off`, `stow`, `put_in`, `take_out` and `give`
+(`mods/core/data/holding.json`): each asks `hold_fault` again against
+the truth as it ends, says what is wrong if the world moved meanwhile,
+and otherwise runs the verb; `give` is turned down, in words, by one
+who opposes or fears the giver (09 §3.4).
+
 ### 9.3 Latent contents
 
 A container that generation filled does not create its items until
@@ -1757,6 +1784,8 @@ optional:
 | `choices` | Section 10.2 |
 | `know_how` | Know-how its mind knows (16 §8.5), by id as written: given when `entity_spawned` is raised, without asking what each needs (decision D-825). Not on options |
 | `groups` | The groups a thing made from it joins, by id, each with its role there (`""` for none), openly, when `entity_spawned` is delivered (15 §9.2). A group no definition answers to is a load warning and is skipped (decision D-767) |
+| `playable` | Whether a player's character may be made from it: a game scenario that lets the player make or choose its character offers every playable template unless it names its own (13 §4.2, decision D-860). Default false. Inherited by a `copy_from` |
+| `description` | A line about it for the screens that offer it: what sort of person it makes |
 
 A choice has an `id` (no `.`), a `name`, a `kind` and a `default`; a
 `pick` has `options` and `count` (default 1); `points` has `options`,
@@ -1823,8 +1852,16 @@ as `app.creation`: a map of `templates`, `choices` (each a map of `key`,
 `creation` (12 §3.4, decision D-653), and a new game's player is
 spawned from the finished spec, or from its start's template.
 
+The bundled playable templates (`mods/core/data/playable.json`,
+`powers/sampler.json`) are an ordinary person, a brawler, a marksman (a
+bow and arrows or a loaded pistol, a choice), an adept (two or three
+powers from a points choice) and the sampler of every power. What each
+starts with in hand is given by a rule attached to it that runs once,
+when it is first in the world (`entity_relocated`), since a template's
+`items` are not made yet.
+
 Not built: the `creature` type; `apply_template` on an entity that
-exists; adding the parts an `assemble` choice chose, which waits for
+exists; making a template's `items`; adding the parts an `assemble` choice chose, which waits for
 `add_part`; conditions on options; a range's `apply` effects and
 `body_edits`, which wait for the rule runtime and body editing.
 

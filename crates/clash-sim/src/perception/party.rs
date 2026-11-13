@@ -801,6 +801,17 @@ pub fn map_memory(sim: &Sim, member: EntityId) -> Option<&MapMemory> {
     sim.components.map_memory.get(member)
 }
 
+/// Whether a member of the party had a cell in view at its last
+/// observation: `None` for one that is not of the party, whose view is
+/// not kept.
+pub fn member_sees(sim: &Sim, member: EntityId, loc: Location) -> Option<bool> {
+    sim.perception
+        .party
+        .views
+        .get(&member)
+        .map(|view| view.contains(&loc))
+}
+
 /// The cells in view of the whole party at the members' last
 /// observations, sorted.
 pub fn party_view(sim: &Sim) -> Vec<Location> {
