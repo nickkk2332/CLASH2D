@@ -728,7 +728,9 @@ As built (decision D-544), in `clash_sim::action::plan`:
   the plan (`plan_cleared` with the reason) and the entity is asked with
   `plan_empty`. A step is checked when it starts, with its defaults
   worked out then. `ClearPlan`, `clear_plan` and `interrupt_plan` empty a
-  plan; `interrupt_plan` also asks, whatever is running.
+  plan; `interrupt_plan` also ends a wait in progress and asks,
+  whatever is running, so that a rule can break off a long wait when
+  something happens (decision D-871).
 - An entity that leaves the world keeps its plan, and takes it up again
   when it comes back; one that is removed loses it.
 

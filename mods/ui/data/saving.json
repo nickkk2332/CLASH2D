@@ -1,5 +1,5 @@
 [
-  { "//": "Saving and loading (13 §9, 12 §10.7). `ui:pause` opens the first to save the game under a name; the title's Load and the pause menu's Load open the second, the list of `app.saves`, newest first, each with its name, its summary and when it was written, and greyed where it was made with other mods (`state` is `changed`: it loads, and what differs is told) or cannot be read (`broken`). A profile names the third for the role `notice`: the application opens it over the play screen with what a load had to say.",
+  { "//": "Saving and loading (13 §9, 12 §10.7). `ui:pause` opens the first to save the game under a name (Enter in the name saves, as the Save button does); the title's Load and the pause menu's Load open the second, the list of `app.saves`, newest first, each with its name, its summary and when it was written, and greyed where it was made with other mods (`state` is `changed`: it loads, and what differs is told) or cannot be read (`broken`). A profile names the third for the role `notice`: the application opens it over the play screen with what a load had to say.",
     "type": "screen", "id": "save_game",
     "title": "Save",
     "popup": { "width": 50, "place": "centre", "dim": true },
@@ -12,7 +12,9 @@
                     "on_activate": [ { "app": { "save": { "name": "screen.save_name" } } },
                                      { "close": {} }, { "close": {} } ] } },
       { "button": { "id": "cancel", "label": "Back", "on_activate": [ { "close": {} } ] } } ] },
-    "keys": { "back": [ { "close": {} } ] } },
+    "keys": { "back": [ { "close": {} } ],
+              "accept": [ { "app": { "save": { "name": "screen.save_name" } } },
+                          { "close": {} }, { "close": {} } ] } },
 
   { "type": "screen", "id": "load",
     "title": "Load",

@@ -1944,11 +1944,11 @@ straight away.
 
 | Verb | Arguments | Does |
 |------|-----------|------|
-| `step` | `who: entity`, `dir: string`, `drop: bool?` | One step to the cell next to the mover in `dir`: `north`, `north_east`, `east`, `south_east`, `south`, `south_west`, `west`, `north_west`, `up` or `down`. Gives `distance` and `cost` in metres and `time` in seconds of the mover's own time |
+| `step` | `who: entity`, `dir: string`, `drop: bool?` | One step to the cell next to the mover in `dir`: `north`, `north_east`, `east`, `south_east`, `south`, `south_west`, `west`, `north_west`, `up` or `down`. Gives `distance` and `cost` in metres and `time` in seconds of the mover's own time; a step the world refuses raises `step_refused` and gives null, which is an outcome of moving and not a fault of the rule (decision D-870) |
 | `move_to` | `who: entity`, `to: loc` | Puts an entity in a cell, from anywhere and without time, where nothing it does not step over stands, it fits and nobody who blocks it is. Nobody is asked to yield. If nothing holds it up there it falls. For rules that place someone |
 | `set_posture` | `who: entity`, `posture: id<posture>?` | Section 11.1 |
-| `plan_path` | `who: entity`, `to: loc`, `max_cost: number?` | Plans a path from what the mover believes and keeps it as the path it follows. Gives `steps` and `cost` |
-| `follow_path` | `who: entity` | Takes the next step of the path the mover follows, as `step` does. Entering the last cell ends the journey |
+| `plan_path` | `who: entity`, `to: loc`, `max_cost: number?` | Plans a path from what the mover believes and keeps it as the path it follows. Gives `steps` and `cost`; no way there raises `path_failed` and gives null, not a fault (D-870) |
+| `follow_path` | `who: entity` | Takes the next step of the path the mover follows, as `step` does. Entering the last cell ends the journey. A refused step marks the path stale and gives null, as does a stale path or none, not a fault (D-870) |
 | `clear_path` | `who: entity` | Forgets the path the mover follows |
 | `set_movement` | `who: entity`, `modes: list<id<movement>>` | Says which ways of moving an entity has, in the order they are tried. Empty: the definitions flagged `default`, for a creature |
 | `sweep` | | Many cells in one go along a line. Stops at the first obstruction and strikes it as a body impact (02 §15.2) with the mover's mass and speed. A speedster's dash. **Not built** |

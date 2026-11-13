@@ -57,6 +57,10 @@
                     { "app": { "new_game": { "scenario": "it.id" } } } ] } },
       { "height": 1, "tooltip": { "value": "Tab moves between the fields, Enter begins, Esc goes back." } } ] },
     "keys": { "back": [ { "close": {} } ],
+              "accept": [
+                { "app": { "creation": { "op": "'name'", "value": "screen.creation_name" } } },
+                { "app": { "creation": { "op": "'seed'", "value": "screen.creation_seed" } } },
+                { "app": { "new_game": { "scenario": "app.scenarios[screen.start].id" } } } ],
               "more": [ { "open": { "screen": "create", "with": { "scenario": "app.scenarios[screen.start].id" } } } ] } },
 
   { "//": "Options: the preferences there are, and a form that gives a key a meaning. A preference is changed the moment its widget is, and kept between runs. `rebind` changes the keymap in force at once: the context is one of the keymap's, the key is written as a keymap writes it (`w`, `shift+a`, `f5`), and the name is a control's or one the toolkit navigates by; an empty name takes the key's meaning away.",

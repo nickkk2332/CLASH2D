@@ -1062,12 +1062,35 @@ fn the_verbs_do_what_the_functions_do() {
     assert_eq!(loc_of(&sim, walker), cell(17, 18, 0));
     run(&mut sim, "clear_path", std::slice::from_ref(&who)).unwrap();
     assert_eq!(property(&sim, walker, "path_left", &[]), Value::Null);
+    // No way within the cost asked is an outcome, not a fault of the
+    // rule: null, and `path_failed` with the reason (decision D-870).
+    heard(&mut sim);
     let too_far = run(
         &mut sim,
         "plan_path",
         &[who.clone(), to.clone(), Value::Real(Real::ONE)],
     );
-    assert_eq!(too_far.unwrap_err().code, codes::TOO_FAR);
+    assert_eq!(too_far.unwrap(), Value::Null);
+    let events = heard(&mut sim);
+    let failed = of_name(&events, "path_failed");
+    assert_eq!(failed.len(), 1);
+    assert_eq!(text_field(failed[0], "code"), codes::TOO_FAR);
+    // A step the world refuses is the same: null, and `step_refused`.
+    // Beside the building's wall, west is into it.
+    let beside = sim.subject_value(Subject::Loc(cell(15, 9, 0)));
+    run(&mut sim, "move_to", &[who.clone(), beside]).unwrap();
+    heard(&mut sim);
+    let wall = run(
+        &mut sim,
+        "step",
+        &[who.clone(), Value::text("west"), Value::Null],
+    );
+    assert_eq!(wall.unwrap(), Value::Null);
+    assert_eq!(loc_of(&sim, walker), cell(15, 9, 0));
+    let events = heard(&mut sim);
+    let refused = of_name(&events, "step_refused");
+    assert_eq!(refused.len(), 1);
+    assert_eq!(text_field(refused[0], "code"), codes::BLOCKED);
 
     run(&mut sim, "move_to", &[who.clone(), to]).unwrap();
     assert_eq!(loc_of(&sim, walker), cell(17, 20, 0));

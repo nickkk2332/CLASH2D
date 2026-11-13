@@ -25,6 +25,13 @@
     "type": "control", "id": "wait", "name": "Wait",
     "doc": "Let a second pass.",
     "do": { "command": { "name": "wait", "args": { "dur": 1 } } } },
+  { "//": "Longer waits, for a game played against the clock: a minute, and an hour. The loaded rules may break one off when something happens (the `core` mod's do when the character comes to see someone it holds a foe, or is hurt), and the character is asked again then.",
+    "type": "control", "id": "wait_minute", "name": "Wait a minute",
+    "doc": "Let a minute pass, unless something breaks it off.",
+    "do": { "command": { "name": "wait", "args": { "dur": 60 } } } },
+  { "type": "control", "id": "wait_hour", "name": "Wait an hour",
+    "doc": "Let an hour pass, unless something breaks it off.",
+    "do": { "command": { "name": "wait", "args": { "dur": 3600 } } } },
 
   { "//": "Look mode: a free cursor over the map. Moving it by nothing starts it where the character stands.",
     "type": "control", "id": "look", "name": "Look around",

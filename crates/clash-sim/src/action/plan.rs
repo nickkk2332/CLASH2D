@@ -225,6 +225,20 @@ impl Sim {
         }
     }
 
+    /// Ends the wait an entity is in, if it is waiting: what was due at
+    /// its end is not. Returns whether it was waiting. `interrupt_plan`
+    /// calls it, so that a rule can break off a long wait (decision
+    /// D-871).
+    pub fn end_wait(&mut self, entity: EntityId) -> bool {
+        let Some(old) = self.actions.take_wait(entity) else {
+            return false;
+        };
+        if let Some(wake) = old.wake {
+            self.cancel_wake(wake);
+        }
+        true
+    }
+
     /// Occupies an entity doing nothing for a length of its own time
     /// (`Wait`, the `wait` effect). When it is over the entity is free
     /// and is asked again. A wait of no length answers without asking

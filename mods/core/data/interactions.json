@@ -53,14 +53,15 @@
     "do": [ { "for_each": "self.held('grasp')", "as": "thing",
               "do": [ { "put_inside": { "what": "$thing", "into": "target" } } ] } ] },
 
-  { "//": "Takes into one's hands what an open thing holds, as much as one's hands take. What generation left in it is made first, if nobody has looked in it yet (06 §9.3).",
+  { "//": "Takes into one's hands what an open thing holds, as much as one's hands take: once they are full the rest is left where it is. What generation left in it is made first, if nobody has looked in it yet (06 §9.3).",
     "type": "interaction", "id": "retrieve", "name": "Take out",
     "reach": "adjacent", "time": "800 ms", "noise": 0.2,
     "if": "(target.state_name ?? 'open') == 'open' and (target.latent or (target.device != null and len(target.device.held('stowed')) > 0))",
     "fail_text": "There is nothing to take, or it is shut.",
     "do": [ { "materialise_contents": { "container": "target" } },
             { "for_each": "target.device.held('stowed') ?? []", "as": "thing",
-              "do": [ { "take": { "who": "self", "what": "$thing" } } ] } ] },
+              "do": [ { "if": "self.free_grasp('core:arm') > 0",
+                        "then": [ { "take": { "who": "self", "what": "$thing" } } ] } ] } ] },
 
   { "//": "A steel locker: a cell of the grid until someone opens it, puts something in it or hides in it, when it becomes a device that holds them.",
     "type": "device", "id": "locker", "name": "locker",

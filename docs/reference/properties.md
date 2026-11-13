@@ -513,7 +513,7 @@ A cell of a grid (02 §3.2). It need not be loaded: what cannot be read of it is
 - `loc.standable -> bool?`: Whether the cell can be stood in: it has a floor, or the cell below has a block with a solid top (02 §5.2). Null for a cell that is not loaded.
   Changed by `element_changed`.
 - `loc.tags -> list<string>?`: The tags of the definitions of the cell's floor, block and fixture, in order. Null for a cell that is not loaded.
-- `loc.time_of_day -> real?`: The time of day at the cell, in seconds since midnight, by the sky its stratum names. Null where there is no sky.
+- `loc.time_of_day -> real?` · safe for belief: The time of day at the cell, in seconds since midnight, by the sky its stratum names. Null where there is no sky. Safe for belief: anyone may know the hour, as a screen's clock shows it (decision D-872).
 - `loc.timer(name: string) -> real?`: The local time, in seconds, that the timer of this name belonging to it has left (05 §10.4); null if it has none of that name. A timer away with its owner keeps what it had left.
   - `name` (string): The timer's name.
 - `loc.tract -> tract?` · safe for belief: The tract the cell is in. Null for a cell outside its realm, or of a grid that is not a realm's base grid.

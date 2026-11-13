@@ -203,6 +203,9 @@ fn clear_plan(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value,
 fn interrupt_plan(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value, Reason> {
     let who = entity_arg(sim, call, 0, "interrupt_plan", "who")?;
     sim.clear_plan(who, None, cause);
+    // A wait is broken off too: what interrupts a plan interrupts
+    // waiting for an hour (decision D-871).
+    sim.end_wait(who);
     let control = sim
         .truth()
         .entity(who)
@@ -370,7 +373,7 @@ pub fn verbs() -> Vec<VerbDef> {
                 Some(
                     VerbSpec::new("interrupt_plan")
                         .arg("who", Type::Subject(entity), "Whose plan.")
-                        .doc("Empties a plan and asks what to do next: a `Free` decision for a directly controlled entity, `decision_needed` for anyone else, whatever is running."),
+                        .doc("Empties a plan, ends a wait in progress, and asks what to do next: a `Free` decision for a directly controlled entity, `decision_needed` for anyone else, whatever is running. What rules use to break off a long wait when something happens (03 §5.3)."),
                 )
             },
             run: interrupt_plan,

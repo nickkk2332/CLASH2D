@@ -83,7 +83,7 @@
       "y": "north_west", "u": "north_east", "b": "south_west", "n": "south_east",
       "left": "west", "down": "south", "up": "north", "right": "east",
       "<": "up", ">": "down",
-      ".": "wait", "x": "look", "e": "interact",
+      ".": "wait", "w": "wait_minute", "shift+w": "wait_hour", "x": "look", "e": "interact",
       "i": "inventory", "c": "condition", "a": "abilities", "m": "map", "shift+j": "journal",
       "shift+m": "make", "shift+k": "know_how",
       "o": "options", "?": "help", "f1": "help",
