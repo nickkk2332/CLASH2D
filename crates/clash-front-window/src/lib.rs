@@ -35,6 +35,7 @@ mod font;
 pub mod golden;
 #[cfg(feature = "window")]
 pub mod input;
+mod lines;
 mod pixels;
 #[cfg(feature = "window")]
 mod window;

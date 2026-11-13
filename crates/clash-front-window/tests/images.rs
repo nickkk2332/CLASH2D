@@ -119,6 +119,45 @@ fn the_bundled_theme_draws_with_the_bundled_font_at_its_size() {
     assert_eq!((atlas.cell_width(), atlas.cell_height()), (8, 16));
 }
 
+/// Every character written anywhere in the repository's mods, glyphs,
+/// screens, art and words alike, is in the bundled font, so that none
+/// is drawn as the box of a missing character.
+#[test]
+fn the_bundled_font_has_every_character_the_bundled_mods_write() {
+    let atlas = atlas();
+    let mods = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+    let mut files = Vec::new();
+    let mut dirs = vec![mods];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path
+                .extension()
+                .is_some_and(|ext| ext == "json" || ext == "txt")
+            {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    let mut missing = std::collections::BTreeMap::new();
+    for file in &files {
+        let text = std::fs::read_to_string(file).unwrap();
+        for ch in text
+            .chars()
+            .filter(|ch| !ch.is_control() && !atlas.has_char(*ch))
+        {
+            missing
+                .entry(ch)
+                .or_insert_with(|| file.display().to_string());
+        }
+    }
+    assert!(!files.is_empty());
+    assert!(missing.is_empty(), "not in the font: {missing:?}");
+}
+
 #[test]
 fn a_plain_frame_matches_its_image() {
     let image = picture(&sample());

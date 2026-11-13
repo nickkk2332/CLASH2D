@@ -24,7 +24,10 @@
 //!
 //! The styles are made from the one font file: bold by thickening each
 //! stroke sideways, italic by slanting the rows, underline as a line
-//! under the baseline. A character the font does not have is drawn as
+//! under the baseline. The line-drawing characters of one weight (light,
+//! heavy, double) and the half and full blocks are drawn in whole pixels
+//! instead of taken from the font, so that borders are crisp and meet
+//! from cell to cell at any size. A character the font does not have is drawn as
 //! a hollow box, so that it shows and is not mistaken for a space; a
 //! control character is drawn as nothing, as the terminal draws it.
 
@@ -434,7 +437,9 @@ fn geometry(proportions: Proportions, height: u32) -> Geometry {
 /// Draws a character's coverage into a mask one cell in size.
 fn draw_glyph(font: &Font, ch: char, style: GlyphStyle, cell: Geometry, mask: &mut [u8]) {
     let (width, height) = (cell.width as usize, cell.height as usize);
-    if !ch.is_control() {
+    if crate::lines::draw_drawn(ch, cell.width, cell.height, mask) {
+        // A line-drawing character or a block, drawn in whole pixels.
+    } else if !ch.is_control() {
         let index = font.lookup_glyph_index(ch);
         if index != 0 {
             let (metrics, bitmap) = font.rasterize_indexed(index, cell.px);

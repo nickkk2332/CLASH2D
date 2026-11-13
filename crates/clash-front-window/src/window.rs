@@ -10,7 +10,9 @@
 //!
 //! [`Frontend::poll`] pumps the window system's events without waiting
 //! (`winit`'s `EventLoopExtPumpEvents`), so the application's own frame
-//! loop decides when to draw and when to sleep. The window is made on
+//! loop decides when to draw and when to sleep. A frame the same as the
+//! one on screen, in a window of the same size, is not drawn again
+//! unless it shakes, so an idle screen costs little. The window is made on
 //! the first pump, and an event loop can be made only once in a
 //! program, from its main thread.
 //!
@@ -161,6 +163,8 @@ struct Shown {
     atlas: GlyphAtlas,
     renderer: Renderer,
     picture: PixelBuffer,
+    /// The frame `picture` was drawn from.
+    last: Frame,
     input: InputMapper,
     events: Vec<InputEvent>,
     /// The window's inside in pixels.
@@ -223,6 +227,7 @@ impl WindowFrontend {
             atlas,
             renderer: Renderer::new(options.backdrop),
             picture: PixelBuffer::default(),
+            last: Frame::new(0, 0),
             input: InputMapper::new(),
             events: Vec::new(),
             pixels: (0, 0),
@@ -371,6 +376,16 @@ impl Shown {
         if self.surface.is_none() || width == 0 || height == 0 {
             return;
         }
+        // A frame like the one on screen, in a window of the same size
+        // and scale, is not drawn again, unless it shakes.
+        let unchanged = *frame == self.last
+            && (width, height) == (self.picture.width(), self.picture.height())
+            && self.atlas.cell_height() == self.layout.cell_height
+            && !(frame.fx.shake.is_finite() && frame.fx.shake > 0.0);
+        if unchanged {
+            return;
+        }
+        self.last.clone_from(frame);
         self.picture.resize(width, height);
         self.renderer
             .draw(frame, &mut self.atlas, &mut self.picture);
