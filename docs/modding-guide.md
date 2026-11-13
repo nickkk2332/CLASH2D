@@ -325,8 +325,11 @@ profile, which is what a game loads. Then play it:
 cargo run -p clash-app -- --profile hearth
 ```
 
-The new-game screen lists every game scenario the loaded mods define,
-`Morning at the hearth` among them.
+It opens in a window of its own when a display is available, and in
+the terminal otherwise; `--terminal` keeps it in the terminal and
+`--window` asks for a window (12 §3.1). The new-game screen lists every
+game scenario the loaded mods define, `Morning at the hearth` among
+them.
 
 ## 11. Test it with a test script
 

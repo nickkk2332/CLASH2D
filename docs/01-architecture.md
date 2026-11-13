@@ -71,10 +71,10 @@ crates/
   clash-sim       → world, gen, expr     entities, actions, combat, powers, AI, EOC runtime, cold sim
   clash-save      → sim, scene           save container, versioning, migration; the console's host
   clash-scene     → sim                  presentation model, camera, UI state, cutscene director
-  clash-front-window → scene             window + GPU glyph renderer
+  clash-front-window → scene             window + glyph renderer on the processor
   clash-front-term   → scene             terminal renderer
   clash-app       → front-*, save        the game binary
-  clash-tools     → save, front-term     mod linter, schema dump, headless runner, world viewer, benches
+  clash-tools     → save, front-term, front-window   mod linter, schema dump, headless runner, world viewer, benches
 mods/
   core/                                  minimal definitions the tests and tools need
 docs/
@@ -89,7 +89,8 @@ a dependency upward or sideways, on a crate the arrows do not lead to.
 below both the application and the tools, and loads profiles with every
 definition type and draws frames through the scene's view model (D-581).
 `clash-tools` reaches `clash-front-term` for the terminal world viewer
-(D-582).
+(D-582), and `clash-front-window`, without its window, for the benchmark
+of drawing a window's frame (D-841).
 
 `clash-tools` reaches `clash-scene` because the linter must load mods with
 every definition type the game has, and the interface's are the scene's.
