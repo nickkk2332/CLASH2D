@@ -20,4 +20,4 @@ assert "@e:2.goal == 'core:heel' or @e:2.goal == 'core:confront'"
 die who=@e:0
 expect event binding_ended ability=core:summon_hound why=owner_stops how=remove
 assert "@e:0.ability('core:summon_hound').bound('hound') == null"
-expect hash 9cb909ab6bb2a192547d18f19172cba1
+expect hash 3989aaec153c9c92d966bf7ddb4ac6ce

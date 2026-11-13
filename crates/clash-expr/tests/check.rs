@@ -1163,6 +1163,63 @@ fn a_mind_context_reads_only_belief() {
 }
 
 #[test]
+fn a_function_with_a_belief_form_reads_through_the_minds_own_character() {
+    use clash_expr::testing::slot;
+    use clash_expr::{Limits, Machine, Value};
+
+    let mut host = TestHost::new();
+    let entity = Type::Subject(host.registry().kind_id("entity").expect("the test kinds"));
+    host.registry_mut()
+        .add_function(
+            FunctionSpec::new("near", Type::Bool)
+                .param("a", Type::Any, "Something.")
+                .belief_form("believed_near")
+                .doc("Whether something is near, as truth has it."),
+        )
+        .unwrap();
+    host.registry_mut()
+        .add_function(
+            FunctionSpec::new("believed_near", Type::Bool)
+                .param("viewer", Type::Any, "Whose belief.")
+                .param("a", Type::Any, "Something.")
+                .belief_safe(false)
+                .doc("Whether something is near, as a viewer believes."),
+        )
+        .unwrap();
+    host.set_subject(slot::SELF, host.entity(1));
+    host.set_subject(slot::TARGET, host.entity(2));
+    let mut calls = |context: &Context| {
+        let checked = check("near(target)", host.registry(), context, &Type::Any);
+        assert!(!checked.has_errors(), "{:#?}", checked.diagnostics);
+        let checked = checked.value.expect("no errors");
+        let compiled = checked.compile().value.expect("it compiles");
+        let mut walked = host.clone();
+        walked.log.clear();
+        let _ = checked.interpret(&mut walked, &Limits::default());
+        host.log.clear();
+        let _: Value = Machine::new().eval(&compiled, &mut host);
+        assert_eq!(host.log, walked.log);
+        host.log.clone()
+    };
+    // Where truth is read, the function is itself.
+    let truth = TestHost::new().context();
+    assert_eq!(calls(&truth), ["near(subject#0:2)"]);
+    // In a mind context it is its belief form, the own character first.
+    let mind = TestHost::new().context().belief();
+    assert_eq!(calls(&mind), ["believed_near(subject#0:1,subject#0:2)"]);
+    // A mind context with nobody of its own cannot read where anything is.
+    let nobody = Context::new().subject("target", entity.clone()).belief();
+    let found = diagnostics_in("near(target)", &nobody, &host);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].code, codes::NOT_BELIEF_SAFE);
+    assert_eq!(found[0].span.slice("near(target)"), "near");
+    // The belief form itself is not safe to call by name.
+    let found = diagnostics_in("believed_near(target, target)", &mind, &host);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].code, codes::NOT_BELIEF_SAFE);
+}
+
+#[test]
 fn templates_are_checked_part_by_part() {
     let host = TestHost::new();
     let context = host.context();

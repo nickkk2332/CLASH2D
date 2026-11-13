@@ -1,0 +1,46 @@
+[
+  { "//": "Routines of the town's trades (`town/trades.json`). Those who work where they live keep to `home` all day, with what they are doing changing by the hour; a stall keeper goes to the market.",
+    "type": "routine", "id": "baking",
+    "doc": "A baker: at the oven from four, keeping the shop from nine until three, at home in the afternoon and evening, asleep from eight at night.",
+    "day": [
+      { "from": "04:00", "at": { "home": true }, "doing": "baking", "goal": "keep_shop", "within": 6,
+        "jitter": "20 min" },
+      { "from": "09:00", "at": { "home": true }, "doing": "keeping_shop", "goal": "keep_shop", "within": 6,
+        "jitter": "15 min" },
+      { "from": "15:00", "at": { "home": true }, "doing": "at_home", "within": 8, "jitter": "30 min" },
+      { "from": "20:00", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "30 min" }
+    ] },
+
+  { "type": "routine", "id": "tavern_keeping",
+    "doc": "A tavern keeper: up at nine, keeping the tavern from eleven until half past midnight, asleep after.",
+    "day": [
+      { "from": "00:30", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "30 min" },
+      { "from": "09:00", "at": { "home": true }, "doing": "at_home", "within": 8, "jitter": "30 min" },
+      { "from": "11:00", "at": { "home": true }, "doing": "keeping_shop", "goal": "keep_shop", "within": 6,
+        "jitter": "15 min" }
+    ] },
+
+  { "type": "routine", "id": "trade_day",
+    "doc": "Someone who works where they live: at work from eight until six, at home in the evening, asleep from ten.",
+    "day": [
+      { "from": "06:30", "at": { "home": true }, "doing": "at_home", "within": 8, "jitter": "30 min" },
+      { "from": "08:00", "at": { "home": true }, "doing": "working", "goal": "keep_shop", "within": 6,
+        "jitter": "20 min" },
+      { "from": "18:00", "at": { "home": true }, "doing": "at_home", "within": 8, "jitter": "30 min" },
+      { "from": "22:00", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "45 min" }
+    ] },
+
+  { "type": "routine", "id": "stall_keeping",
+    "doc": "A market trader: at home until half past seven, then at a stall of the market (the town square where a town has no market) until five, home for the evening, asleep from half past nine.",
+    "day": [
+      { "from": "06:00", "at": { "home": true }, "doing": "at_home", "within": 16, "jitter": "30 min" },
+      { "from": "07:30", "at": [ { "site_tag": "market" }, { "site": "town_square" } ],
+        "doing": "keeping_stall", "goal": "keep_shop", "within": 6, "spread": 5, "jitter": "30 min" },
+      { "from": "17:00", "at": { "home": true }, "doing": "at_home", "within": 16, "jitter": "30 min" },
+      { "from": "21:30", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "45 min" }
+    ] }
+]

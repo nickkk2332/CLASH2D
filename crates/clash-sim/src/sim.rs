@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 19;
+pub const SAVE_VERSION: u32 = 20;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -132,6 +132,9 @@ pub struct Sim {
     pub(crate) ability_rt: crate::ability::Runtime,
     /// What minds keep that belongs to no one mind (09 §3.3).
     pub(crate) ai: crate::ai::AiState,
+    /// The residents of settlements, the agents among them and their
+    /// wake-ups (09 §10; [`agent`](crate::agent)).
+    pub(crate) agents: crate::agent::AgentLayer,
     /// Not state: the tables of minds, from the definitions.
     pub(crate) ai_defs: Arc<crate::ai::AiDefs>,
     /// Not state: how many strikes are being resolved inside one another
@@ -250,6 +253,7 @@ struct SavedRef<'a> {
     grips: &'a crate::combat::grip::GripTable,
     social: &'a crate::social::SocialState,
     furnish: &'a crate::furnish::FurnishState,
+    agents: &'a crate::agent::AgentLayer,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -281,6 +285,7 @@ struct Saved {
     grips: crate::combat::grip::GripTable,
     social: crate::social::SocialState,
     furnish: crate::furnish::FurnishState,
+    agents: crate::agent::AgentLayer,
 }
 
 impl Sim {
@@ -350,6 +355,7 @@ impl Sim {
             social: crate::social::SocialState::default(),
             ability_rt,
             ai: crate::ai::AiState::default(),
+            agents: crate::agent::AgentLayer::default(),
             ai_defs,
             strike_depth: 0,
             intervenes: None,
@@ -704,8 +710,16 @@ impl Sim {
             }
             match then {
                 Follow::Nothing => {}
-                Follow::Shelve(realm, tract) => self.shelve_tract(realm, tract),
-                Follow::Unshelve(realm, tract) => self.unshelve_tract(realm, tract),
+                Follow::Shelve(realm, tract) => {
+                    // Residents become agents before the rest is shelved
+                    // (09 §10.4).
+                    crate::agent::tract_unloading(self, realm, tract);
+                    self.shelve_tract(realm, tract);
+                }
+                Follow::Unshelve(realm, tract) => {
+                    self.unshelve_tract(realm, tract);
+                    crate::agent::tract_loaded(self, realm, tract);
+                }
                 Follow::Emit(entity, cause, body) => {
                     let event = self.stamped(Where::Entity(entity), cause, body);
                     self.events.push_back(event);
@@ -781,6 +795,10 @@ impl Sim {
         if !self.furnish.is_empty() {
             self.furnish.state_hash(&mut kernel);
         }
+        // Nor does one with no residents and no routine given.
+        if !self.agents.is_empty() {
+            self.agents.state_hash(&mut kernel);
+        }
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -843,6 +861,7 @@ impl Sim {
                 grips: &self.grips,
                 social: &self.social,
                 furnish: &self.furnish,
+                agents: &self.agents,
             },
         )
     }
@@ -930,6 +949,7 @@ impl Sim {
             social: saved.social,
             ability_rt,
             ai: saved.ai,
+            agents: saved.agents,
             ai_defs,
             strike_depth: 0,
             intervenes: None,

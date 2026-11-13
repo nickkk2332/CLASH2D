@@ -1825,11 +1825,13 @@ stands.
 |------|-----------|------|
 | `spawn` | `template`, `at?`, `in?`, `also?` (more templates), `random?`, `seed?`, `anonymous?` | Gives the entity made; with neither `at` nor `in` it is made out of the world |
 | `make_notable` | `who` | Section 12.2; gives null |
+| `make_anonymous` | `who` | Section 12.2: a notable individual is anonymous again, and forgotten when its tract unloads; an agent made anonymous is forgotten at once. Gives null. Refused with `agent.not_an_individual` for something with no identity |
 
 | Event | Subject | Fields |
 |-------|---------|--------|
 | `entity_spawned` | `self`, `here?` | `templates`, `items`, `traits` (`list<string>`): the qualified ids applied, and what it is to start with, as written |
 | `became_notable` | `self` | None |
+| `became_anonymous` | `self` | None: `make_anonymous` made it anonymous again |
 
 | Reason | When | Values |
 |--------|------|--------|
@@ -2131,13 +2133,46 @@ When a tract unloads:
 Named characters created by scenarios or generation are notable from the
 start. `make_anonymous` makes an individual anonymous again.
 
-As built: an `Identity` says whether its entity is anonymous; anything
-without one is notable. A spawn is notable unless it asks to be
-anonymous, and a template's answer to `spawn_requested` is anonymous. A
-wound and a variable set on it make an anonymous individual notable,
-and so does `make_notable`, each raising `became_notable`. Not built:
-populations, trait, item and relation changes as triggers, and
-`make_anonymous`.
+As built (package E11; decisions D-558, D-780, D-783), in
+`clash_sim::agent`: an `Identity` says whether its entity is anonymous;
+anything without one is notable. A spawn is notable unless it asks to be
+anonymous.
+
+**Residents.** A loaded tract's `spawn_requested` that names a template
+(10 §11.2) makes a **resident**: a record keyed on the realm, the cell
+it was asked for at (its **home**) and which of those asked for at that
+cell it is (`ResidentKey { realm, home, index }`), holding the template
+as written, the map that asked, and a seed drawn from the named stream
+`agent.resident` keyed on the realm, the home and the index. Its
+individual is made anonymous from the template with that seed, so it has
+the same name, build and looks every time it is made (invariant B7), and
+is put where its routine (09 §10.2) has it now, at the nearest free cell
+it can stand in within six cells (`SPOT_RADIUS`); if that is not loaded,
+it is an agent from the start. A settlement's residents are its
+population: one record each, a few dozen bytes, and no separate count.
+
+**What makes one notable**, each raising `became_notable` once: a wound;
+a variable set on it; a trait gained or lost (`trait_added`,
+`trait_removed`); an item taken into or dropped from its holds
+(`item_taken`, `item_dropped` with it as `holder`); a relation it holds
+changing (`relation_changed`); an action begun that it shares (as actor
+or as an entity among the parameters) with an entity under control
+(direct or delegated) or a notable one (`action_started`); and
+`make_notable`. `make_anonymous` makes a notable individual anonymous
+again, raising `became_anonymous`.
+
+**When its tract unloads**, before the kernel shelves what stands there:
+a resident's anonymous individual is removed, its record kept cold; a
+notable one is stored, out of the world, and becomes an agent
+(`agent_stored`; 09 §10.4). Neither is on the shelf: a resident comes
+back where its routine puts it, not where it stood. An individual with
+no record (made by a rule or a scenario) is shelved as before and waits
+where it was. A resident's individual that dies or is removed leaves its
+record `gone`: it is never made again. An agent made anonymous is
+removed at once.
+
+Not built: populations as counts with presence tables (09 §13.1), and a
+population's count adjusted by deaths (a resident is gone instead).
 
 ### 12.3 Stored entities
 

@@ -14,6 +14,8 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `stretch` (whole number; optional): How many times `think` its interval may stretch to while nothing changes. At least 1.
 - `wake_clarity` (number; optional): How clear a percept must be (received over threshold, 15 §6) to make it think at once.
 - `go_action` (id of a [`action`](action.md), or `null`; optional): The action a `go` step starts, given the cell as its parameter `to`. A mind without one cannot pursue a `go`, `keep_near` or `keep_from` step.
+- `interact_action` (string, or `null`; optional): The action it does an interaction with (16 §3.5.1), by id as written: one with the parameters `target` and `interaction`, as `core:interact` has. Checked where interactions are loaded. With one, a closed door on its way is opened by the door's default interaction, as walking into it opens it for the player, and its paths count a closed door as passable at the cost of opening it; without, a closed door is a wall to it (decision D-781).
+- `routine` (string, or `null`; optional): The routine it keeps (09 §10.2), by id as written: where it is and what it does at each time of day. Read by the agents' layer (`agent`); checked where routines are loaded.
 - `hostile_to` (list of string; optional): Entity tags whose bearers it holds hostile, as it perceives them.
 - `fear_of` (list of string; optional): Entity tags whose bearers it fears, as it perceives them.
 - `hostile_after` (list of string; optional): Events whose actor, when it perceives who that was, it holds hostile from then on.

@@ -247,6 +247,20 @@ pub struct FunctionDef {
     /// does. Such a function is refused in a pure context (05 §7.3);
     /// where nothing may be drawn, `call` answers instead.
     pub draws: Option<DrawingCallee>,
+    /// The function it is compiled as in a mind context, with the
+    /// context's own character before the arguments written (05 §7.3):
+    /// how a function that reads where things are reads them as that
+    /// character believes. `None` for a function that is the same
+    /// everywhere.
+    pub belief_form: Option<&'static str>,
+    /// For a belief form, what computes it where an expression compiled
+    /// in a mind context is checked against truth instead
+    /// ([`Sim::host_in_truth`](crate::Sim::host_in_truth)): the function
+    /// it is the form of, given the arguments after the character. An
+    /// action's `requires` is previewed in its actor's mind and held to
+    /// truth when the action starts (03 §6.6). `None` for a function
+    /// that is the same everywhere.
+    pub truth_form: Option<Callee>,
 }
 
 impl FunctionDef {
@@ -269,7 +283,25 @@ impl FunctionDef {
             changed_by: None,
             call,
             draws: None,
+            belief_form: None,
+            truth_form: None,
         }
+    }
+
+    /// This function, a belief form, computed by `truth` where it is
+    /// checked against truth (see the field `truth_form`).
+    #[must_use]
+    pub fn in_truth(mut self, truth: Callee) -> FunctionDef {
+        self.truth_form = Some(truth);
+        self
+    }
+
+    /// This function, compiled in a mind context as `form` with the
+    /// context's own character first (see the field of that name).
+    #[must_use]
+    pub fn believed_as(mut self, form: &'static str) -> FunctionDef {
+        self.belief_form = Some(form);
+        self
     }
 
     /// This function, drawing at random through `draws` where a random
@@ -329,6 +361,9 @@ impl FunctionDef {
             .doc(self.doc)
             .group(self.group)
             .belief_safe(self.belief_safe);
+        if let Some(form) = self.belief_form {
+            spec = spec.belief_form(form);
+        }
         spec.random = self.draws.is_some();
         if let Some(events) = self.changed_by {
             spec = spec.changed_by(events.iter().copied());
@@ -370,6 +405,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::social::props::properties());
     // Last, so that adding them moved no other property's id.
     properties.extend(crate::offer::properties());
+    properties.extend(crate::agent::properties());
     properties
 }
 
@@ -496,6 +532,9 @@ pub fn register_engine(registry: &mut Registry) {
         mirror_event(registry, info);
     }
     for info in crate::scenario::SCENARIO_EVENTS {
+        mirror_event(registry, info);
+    }
+    for info in crate::agent::AGENT_EVENTS {
         mirror_event(registry, info);
     }
 }
@@ -984,6 +1023,7 @@ pub fn engine_reasons() -> Vec<ReasonDoc> {
         crate::ability::ABILITY_REASONS,
         crate::combat::COMBAT_REASONS,
         crate::ai::REASONS,
+        crate::agent::REASONS,
     ];
     let mut reasons: Vec<ReasonDoc> = tables
         .iter()

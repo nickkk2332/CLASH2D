@@ -47,6 +47,7 @@
 //! built.
 
 pub mod defs;
+pub mod doors;
 pub mod events;
 pub mod nav;
 mod props;
@@ -115,6 +116,10 @@ pub mod reason {
     /// A step's action was cancelled by something other than its mind.
     /// Values: `action`.
     pub const CANCELLED: &str = "ai.cancelled";
+    /// A step that moves met a closed way it cannot open: nothing there
+    /// can be done by default, or it has opened too many on the way.
+    /// Values: `entity`, `dir`, `why` (what the default there says).
+    pub const DOOR_SHUT: &str = "ai.door_shut";
 }
 
 /// Every reason minds give, for the generated reference.
@@ -166,6 +171,10 @@ pub const REASONS: &[ReasonInfo] = &[
     ReasonInfo {
         code: reason::CANCELLED,
         doc: "A step's action was cancelled by something other than the mind that started it. Values: `action`.",
+    },
+    ReasonInfo {
+        code: reason::DOOR_SHUT,
+        doc: "A step that moves met a closed way (a step refused with `move.closed`) that it cannot open: nothing there can be done by default now (a locked door and no key), its mind names no `interact_action`, or it has opened four on the one step. Values: `entity`, `dir` (the step's direction), `why` (what the default interaction there says, if there is one).",
     },
 ];
 
@@ -454,6 +463,7 @@ fn on_custom(sim: &mut Sim, event: &SimEvent, name: &str) {
             }
         }
         crate::action::WINDOW_NOTICED => react_to_window(sim, event),
+        crate::movement::STEP_REFUSED => doors::step_refused(sim, event),
         _ => {}
     }
 }

@@ -811,6 +811,12 @@ impl Bus {
         for ty in crate::social::event_types() {
             bus.types.entry(ty.name.clone()).or_insert(ty);
         }
+        // The events of agents and residents (09 §17; 06 §13).
+        for info in crate::agent::AGENT_EVENTS {
+            bus.types
+                .entry(info.name.to_owned())
+                .or_insert_with(|| EventType::of_engine(info));
+        }
         bus
     }
 

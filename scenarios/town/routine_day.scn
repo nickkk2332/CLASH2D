@@ -1,0 +1,52 @@
+# routine_day (plans/ai.md, L2; scene S7): the market town keeps its
+# day while nobody is there to see it. The player leaves for the fields
+# and the town unloads: its residents become agents placed by their
+# routines (09 §10.6). Each time the player comes back to the square,
+# the people near it are where their routines put them at that hour, or
+# on the street between: asleep before dawn, at the market and on their
+# way to it at noon, stall keepers at their stalls and the watch on its
+# round, the drinkers at the tavern at midnight. The player sees and
+# hears nothing while away: open country is the dearest thing to
+# perceive, and nothing there matters here.
+use default seed=7
+begin core:town_life place=1
+assert "@self.loc.realm.time_of_day == 32400 and @self.loc.realm.day == 1"
+assert "core:doing_near(@self.loc, 60, 'keeping_stall') > 0"
+session @self @c:600,600,0
+detach_sense @self core:human_sight
+detach_sense @self core:human_hearing
+expect event agent_stored
+advance 73800s
+assert "@self.loc.realm.time_of_day == 19800 and @self.loc.realm.day_part == 'dawn'"
+session @self @c:2007,994,0
+attach_sense @self core:human_sight
+attach_sense @self core:human_hearing
+expect event agent_loaded
+assert "core:doing_near(@self.loc, 60, 'asleep') > 40"
+assert "core:away_near(@self.loc, 60) == 0"
+assert "core:doing_near(@self.loc, 60, 'keeping_stall') == 0"
+session @self @c:600,600,0
+detach_sense @self core:human_sight
+detach_sense @self core:human_hearing
+advance 23700s
+assert "@self.loc.realm.time_of_day == 43500 and @self.loc.realm.day_part == 'noon'"
+session @self @c:2007,994,0
+attach_sense @self core:human_sight
+attach_sense @self core:human_hearing
+assert "core:doing_near(@self.loc, 60, 'at_market') > 0"
+assert "core:away_near(@self.loc, 60) > 0"
+assert "core:doing_near(@self.loc, 60, 'keeping_stall') > 0"
+assert "core:doing_near(@self.loc, 60, 'asleep') == 0"
+advance 5s
+session @self @c:600,600,0
+detach_sense @self core:human_sight
+detach_sense @self core:human_hearing
+advance 42895s
+assert "@self.loc.realm.time_of_day == 0 and @self.loc.realm.day == 3"
+session @self @c:2007,994,0
+attach_sense @self core:human_sight
+attach_sense @self core:human_hearing
+assert "core:doing_near(@self.loc, 60, 'drinking') > 0"
+assert "core:doing_near(@self.loc, 60, 'asleep') > 40"
+assert "core:doing_near(@self.loc, 60, 'at_market') == 0"
+expect hash 65bc4b2315bd86d27dd2ee8ae09b5340

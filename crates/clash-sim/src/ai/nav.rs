@@ -233,7 +233,11 @@ pub fn mind_rules(
     entity: EntityId,
     grid: clash_world::GridId,
 ) -> MindCosts<'_, impl MoveRules + '_> {
-    let rules = believed_rules(sim, entity).through_openable();
+    let mut rules = believed_rules(sim, entity);
+    if super::doors::opens_doors(sim, entity) {
+        rules = rules.through_openable();
+    }
+    let rules = rules.avoiding(&super::doors::shut_cells(sim, entity, grid));
     let rules = crate::perception::believed_move_rules_with(sim, entity, rules).on_grid(grid);
     with_mind_costs(sim, entity, rules)
 }

@@ -172,11 +172,17 @@ pub fn sim(seed: u64) -> Sim {
 
 /// [`sim`] over definitions a test loaded itself.
 pub fn sim_over(defs: Arc<Defs>, seed: u64) -> Sim {
+    sim_over_realm(defs, "core:testland", seed)
+}
+
+/// [`sim_over`] with a realm definition of the test's own in place of
+/// `testland`: one that copies it, with something changed.
+pub fn sim_over_realm(defs: Arc<Defs>, realm: &str, seed: u64) -> Sim {
     let world = WorldDefs::from_defs(&defs)
         .unwrap_or_else(|diagnostics| panic!("{}", diagnostics.render()));
     let mut timeline = Timeline::new();
     let mut cosmos = Cosmos::new(Arc::clone(&world));
-    let realm_def = world.realms().lookup("core:testland").unwrap();
+    let realm_def = world.realms().lookup(realm).unwrap();
     let realm = cosmos.create_realm(&mut timeline, realm_def, 7).unwrap();
     assert_eq!(cosmos.realm(realm).unwrap().base_grid, GRID);
     let rock = world.block_state("solid", None).unwrap();

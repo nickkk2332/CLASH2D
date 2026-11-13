@@ -18,4 +18,4 @@ expect event body_impact layer=block
 assert "len(@e:1.wounds) > 0"
 assert "@e:0.loc.x == 11 and @e:0.loc.y == 13"
 assert "@e:0.ability('core:force_push').cooldown('core:force_push') > 0"
-expect hash a9b79e1d474dad670ca1e4a241a6a0a1
+expect hash 560216ed7a04ab30a27fb139b87aa93a

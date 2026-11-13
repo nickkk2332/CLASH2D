@@ -125,6 +125,7 @@ A `say` step.
 
 - `text` ([text](../values.md#texts); **required**): What is said, as a text template in the mind context.
 - `volume` ([expression of number](../values.md#expressions), or `null`; optional): How loud, as a factor that content gives the `said` event's signal. 1 if left out.
+- `kind` (string, or `null`; optional): A kind of message (15 §11), by id as written: what is said is also said as a message of that kind, to everyone who hears it, with the kind's own signal and strength (`say`), so that rules listening for `message_heard` of that kind answer it: a call for help the watch answers. Checked where message kinds are loaded.
 
 <a id="setstep"></a>
 ### `SetStep`

@@ -1,0 +1,53 @@
+[
+  { "//": "Routines (09 §10.2) of the people of the bundled town, by role. A place is named by role, never by coordinates: `home` is where the settlement put someone, a site is found by tag or definition. Each `at` lists places in order of preference, the first that the realm has being used, so a routine can name a market, a workplace or a tavern that a town may not have and fall back on what it does. `chance` and `jitter` keep a town from moving as one: not everyone goes to market every day, and nobody leaves at the stroke of the hour.",
+    "type": "routine", "id": "townsfolk_day",
+    "doc": "An ordinary townsperson: up at half past six, working at home from nine (the town's trades have their own people), to the market at noon on about one day in four, home again in the afternoon, asleep from half past nine at night.",
+    "day": [
+      { "from": "06:30", "at": { "home": true }, "doing": "at_home", "within": 16, "jitter": "40 min" },
+      { "from": "09:00", "at": { "home": true }, "doing": "working", "within": 16, "jitter": "30 min" },
+      { "from": "12:00", "at": [ { "site_tag": "market" }, { "site": "town_square" } ],
+        "doing": "at_market", "goal": "linger", "within": 8, "spread": 5,
+        "chance": 0.25, "jitter": "50 min" },
+      { "from": "14:00", "at": { "home": true }, "doing": "at_home", "within": 16, "jitter": "40 min" },
+      { "from": "21:30", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "60 min" }
+    ] },
+
+  { "type": "routine", "id": "shopkeeping",
+    "doc": "A shopkeeper, who lives over the shop: opens up at eight and keeps the shop all day, a turn round the market at noon on one day in five, shuts at six, asleep from ten.",
+    "day": [
+      { "from": "06:30", "at": { "home": true }, "doing": "at_home", "within": 8, "jitter": "30 min" },
+      { "from": "08:00", "at": { "home": true }, "doing": "keeping_shop", "goal": "keep_shop", "within": 4,
+        "jitter": "20 min" },
+      { "from": "12:30", "at": [ { "site_tag": "market" }, { "site": "town_square" } ],
+        "doing": "at_market", "goal": "linger", "within": 8, "spread": 5, "chance": 0.2,
+        "jitter": "20 min" },
+      { "from": "13:15", "at": { "home": true }, "doing": "keeping_shop", "goal": "keep_shop", "within": 4,
+        "jitter": "15 min" },
+      { "from": "18:00", "at": { "home": true }, "doing": "at_home", "within": 8, "jitter": "30 min" },
+      { "from": "22:00", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "45 min" }
+    ] },
+
+  { "type": "routine", "id": "watch_shift",
+    "doc": "A watchman of the town, based at the guardhouse: from six in the morning walks a beat between the town's civic places (the guardhouse, the town hall, the square), five minutes at each; in the evening stands at the watch's post (the town hall where the town has no guardhouse); asleep from midnight to six.",
+    "day": [
+      { "from": "06:00", "at": [ { "site_tag": "civic", "pick": "all" }, { "home": true } ],
+        "doing": "on_patrol", "goal": "stand_post", "within": 4, "spread": 4, "beat": "5 min",
+        "jitter": "20 min" },
+      { "from": "20:00", "at": [ { "site_tag": "watch" }, { "site": "town_hall" }, { "home": true } ],
+        "doing": "on_watch", "goal": "stand_post", "within": 4, "spread": 2, "jitter": "20 min" },
+      { "from": "23:30", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "30 min" }
+    ] },
+
+  { "type": "routine", "id": "carousing",
+    "doc": "A drinker and brawler: asleep till late, about the house in the afternoon, at the tavern from seven in the evening (the market square where the town has no tavern) until two in the morning.",
+    "day": [
+      { "from": "02:00", "at": { "home": true }, "doing": "asleep", "goal": "sleep", "within": 3,
+        "jitter": "40 min" },
+      { "from": "11:00", "at": { "home": true }, "doing": "at_home", "within": 16, "jitter": "60 min" },
+      { "from": "19:00", "at": [ { "site_tag": "tavern" }, { "site_tag": "market" }, { "site": "town_square" } ],
+        "doing": "drinking", "goal": "linger", "within": 8, "spread": 4, "jitter": "60 min" }
+    ] }
+]
