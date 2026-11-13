@@ -1038,7 +1038,7 @@ fn every_property_of_making_reads_what_it_says() {
     assert!(get(&sim, me, "recipe_options", &[]).as_list().is_some());
     let herbalism = Value::from("core:herbalism");
     assert_eq!(
-        get(&sim, me, "knows_how", &[herbalism.clone()]),
+        get(&sim, me, "knows_how", std::slice::from_ref(&herbalism)),
         Value::Bool(false)
     );
     recipe::know_how::teach(&mut sim, ada, know_how("herbalism"), "taught", Cause::DEBUG).unwrap();
