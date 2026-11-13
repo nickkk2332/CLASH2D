@@ -817,6 +817,12 @@ impl Bus {
                 .entry(info.name.to_owned())
                 .or_insert_with(|| EventType::of_engine(info));
         }
+        // The events of detail levels (03 §13; 09 §9).
+        for info in crate::ai::warm::LEVEL_EVENTS {
+            bus.types
+                .entry(info.name.to_owned())
+                .or_insert_with(|| EventType::of_engine(info));
+        }
         bus
     }
 

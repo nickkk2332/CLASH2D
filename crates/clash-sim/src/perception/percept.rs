@@ -71,7 +71,7 @@ pub fn reading_of(sim: &Sim, signal: &Signal, observer: EntityId, sense: SenseId
 
 /// A signal reached an observer's sense (15 §6). If it is received at or
 /// over the threshold (over the warm factor times it, for a warm
-/// observer), the observer's awareness of what it is about builds, it
+/// observer: one in a warm tract or stepped warm), the observer's awareness of what it is about builds, it
 /// perceives it, remembers the event it carries if that is salient, and
 /// a controlled character's frame notes it as heard. Returns whether it
 /// was perceived.
@@ -82,10 +82,9 @@ pub(super) fn receive(sim: &mut Sim, signal: &Signal, observer: EntityId, sense:
     if clarity < Real::ONE {
         return false;
     }
-    if let Some(eye) = signal::eye_of(sim, observer)
-        && detect::is_warm(sim, eye.loc)
-        && clarity < warm_factor(sim)
-    {
+    let warm = crate::ai::warm::is_warm(sim, observer)
+        || signal::eye_of(sim, observer).is_some_and(|eye| detect::is_warm(sim, eye.loc));
+    if warm && clarity < warm_factor(sim) {
         return false;
     }
     let defs = Arc::clone(&sim.perception_defs);

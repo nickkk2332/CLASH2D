@@ -94,6 +94,7 @@ pub use defs::{MovementDef, MovementId, PostureDef, PostureId, Surface};
 pub use fall::{Fall, Landing, fall, launched, lose_footing, take_back};
 pub use mover::{Flight, Journey, Mover};
 pub use path::{Planned, clear_path, follow_path, mark_journey_stale, path_cost, plan_path};
+pub(crate) use path::{journey_of, keep_journey};
 pub use posture::{posture_occupies, posture_of, set_posture, signature_factor};
 pub use props::properties;
 pub use rules::{ModeRule, MoverRules, StepFault, StepPrice, mover_rules};

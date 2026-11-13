@@ -741,6 +741,10 @@ pub fn think_due(sim: &mut Sim) -> bool {
         let Some(entity) = sim.ai.due.pop_first() else {
             break;
         };
+        // A warm mind thinks at the warm stepper's next step (09 §9.1).
+        if super::warm::defer(sim, entity) {
+            continue;
+        }
         batch.push(entity);
     }
     for entity in batch {
@@ -811,6 +815,17 @@ pub(super) fn think(sim: &mut Sim, mind: EntityId) {
     };
     if !may_decide(sim, mind) {
         return;
+    }
+    // Levels (09 §9): the stepper starts when it may be needed; a warm
+    // mind that must open a door is promoted, a warm one starting no
+    // action; one hot again goes on with the step it walked in bulk.
+    super::warm::notice(sim);
+    if super::warm::is_warm(sim, mind) && door_met(sim, mind) {
+        super::warm::promote(sim, mind, super::warm::Why::Acting);
+        sim.ai.due.remove(&mind);
+    }
+    if !super::warm::is_warm(sim, mind) && super::warm::is_walking(sim, mind) {
+        resume_moving(sim, mind);
     }
     let defs = Arc::clone(&sim.defs);
     let Some(def) = defs
@@ -1138,13 +1153,16 @@ fn settle_step(sim: &mut Sim, mind: EntityId) {
                 nav::distance_to(sim, mind, target)
                     .is_some_and(|d| d <= pending.within + Real::of(ARRIVED_SLACK_M))
             });
-            let running = pending
+            let acting = pending
                 .action
                 .is_some_and(|id| sim.actions.get(id).is_some());
+            // A warm mind walking the step in bulk is under way too.
+            let running = acting || super::warm::is_walking(sim, mind);
             if arrived {
-                if running && let Some(id) = pending.action {
+                if acting && let Some(id) = pending.action {
                     let _ = sim.cancel_action(mind, id, true, cause_of(mind));
                 }
+                super::warm::stop_walk(sim, mind);
                 Some(Outcome::Done)
             } else if running {
                 None
@@ -1656,6 +1674,10 @@ fn begin(sim: &mut Sim, mind: EntityId, step: &Step, held: &Held, about: &Value)
             let Some(act) = &step.act else {
                 return Begun::Done;
             };
+            // A warm character starts no action (03 §10): it is promoted
+            // to act.
+            super::warm::promote(sim, mind, super::warm::Why::Acting);
+            sim.ai.due.remove(&mind);
             let params = with_eval(sim, mind, |ev| {
                 act.params
                     .iter()
@@ -1673,6 +1695,8 @@ fn begin(sim: &mut Sim, mind: EntityId, step: &Step, held: &Held, about: &Value)
             let Some(choose) = &step.choose else {
                 return Begun::Done;
             };
+            super::warm::promote(sim, mind, super::warm::Why::Acting);
+            sim.ai.due.remove(&mind);
             let target = choose
                 .target
                 .as_ref()
@@ -1823,6 +1847,9 @@ fn go_toward(
     if within <= Real::ZERO {
         pending.target = Some(cell);
     }
+    if super::warm::is_warm(sim, mind) {
+        return walk_toward(sim, mind, pending, cell, clash_world::PathLimits::DEFAULT);
+    }
     let to = sim.subject_value(Subject::Loc(cell)).to_stored();
     match start(sim, mind, kind, action, &[("to".to_owned(), to)]) {
         Begun::Under(started) => {
@@ -1830,6 +1857,132 @@ fn go_toward(
             Begun::Under(pending)
         }
         other => other,
+    }
+}
+
+/// A warm mind's step that moves (09 §9.1): its path is planned from
+/// what it believes, as its `go_action` would plan it, and walked in
+/// bulk by the warm stepper ([`warm`](super::warm)). A path that cannot
+/// be planned is a step that did not get there, as for a hot mind.
+fn walk_toward(
+    sim: &mut Sim,
+    mind: EntityId,
+    pending: Pending,
+    cell: Location,
+    limits: clash_world::PathLimits,
+) -> Begun {
+    // Whatever wait it was idling in ends, as starting an action ends it.
+    if sim.actions.wait_of(mind).is_some() {
+        let _ = sim.wait(mind, Dur::ZERO, cause_of(mind));
+    }
+    let not_arrived = || {
+        Begun::Failed(
+            Reason::new(why::NOT_ARRIVED, "it did not get there").with("entity", mind.to_string()),
+        )
+    };
+    let planned = crate::movement::plan_path(sim, mind, cell, limits, cause_of(mind));
+    match planned {
+        Ok(planned) if planned.steps > 0 => {
+            let step = sim
+                .components
+                .mind_state
+                .get(mind)
+                .and_then(MindState::held)
+                .map_or(0, |held| held.step);
+            if let Some(target) = pending.target {
+                super::warm::start_walk(sim, mind, target, step);
+            }
+            Begun::Under(pending)
+        }
+        _ => not_arrived(),
+    }
+}
+
+/// Whether a mind's step under way met a closed way it is to open.
+fn door_met(sim: &Sim, mind: EntityId) -> bool {
+    sim.components
+        .mind_state
+        .get(mind)
+        .and_then(MindState::held)
+        .and_then(|held| held.pending.as_ref())
+        .is_some_and(|pending| matches!(pending.door, super::state::Door::Met { .. }))
+}
+
+/// A mind hot again that walked a step in bulk (09 §9.2): the step is
+/// begun again as its `go_action`, toward the same place. One that met
+/// a door is begun again once the door is open ([`doors`](super::doors)).
+fn resume_moving(sim: &mut Sim, mind: EntityId) {
+    super::warm::stop_walk(sim, mind);
+    let Some(pending) = sim
+        .components
+        .mind_state
+        .get(mind)
+        .and_then(MindState::held)
+        .and_then(|held| held.pending.clone())
+        .filter(|pending| pending.outcome == Outcome::Running && pending.action.is_none())
+        .filter(|pending| pending.door == super::state::Door::None)
+    else {
+        return;
+    };
+    let Some(target) = pending.target else {
+        return;
+    };
+    let begun = go_toward(
+        sim,
+        mind,
+        pending.kind(),
+        target,
+        pending.whom,
+        pending.within,
+    );
+    let Some(held) = sim
+        .components
+        .mind_state
+        .get_mut(mind)
+        .and_then(|state| state.held.as_mut())
+    else {
+        return;
+    };
+    match begun {
+        Begun::Under(begun) => held.pending = Some(begun),
+        Begun::Done => {
+            if let Some(pending) = held.pending.as_mut() {
+                pending.outcome = Outcome::Done;
+            }
+        }
+        Begun::Failed(reason) => {
+            if let Some(pending) = held.pending.as_mut() {
+                pending.outcome = Outcome::Failed(reason);
+            }
+        }
+    }
+}
+
+/// A mind lets go of the action of its step under way, so that the
+/// action's ending is not the step's: what a warm mind does before it
+/// ends the action it walked with ([`warm`](super::warm)).
+pub(super) fn let_go(sim: &mut Sim, mind: EntityId) {
+    if let Some(pending) = sim
+        .components
+        .mind_state
+        .get_mut(mind)
+        .and_then(|state| state.held.as_mut())
+        .and_then(|held| held.pending.as_mut())
+    {
+        pending.action = None;
+    }
+}
+
+/// Undoes [`let_go`]: the action is the step's again.
+pub(super) fn take_back(sim: &mut Sim, mind: EntityId, id: crate::later::ActionId) {
+    if let Some(pending) = sim
+        .components
+        .mind_state
+        .get_mut(mind)
+        .and_then(|state| state.held.as_mut())
+        .and_then(|held| held.pending.as_mut())
+    {
+        pending.action = Some(id);
     }
 }
 

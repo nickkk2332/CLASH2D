@@ -195,8 +195,9 @@ impl Default for Handlers {
         handlers.set(WakeDomain::Perception, crate::perception::on_wake);
         // Timers and recurring rules (05 §10.4, §9.4).
         handlers.set(WakeDomain::Rule, crate::rule::timer_wake);
-        // Recipes under way (16 §8.2), and the agents' one wake-up
-        // (09 §10.1), told apart by `arg`.
+        // Recipes under way (16 §8.2), the agents' one wake-up
+        // (09 §10.1) and the warm stepper (03 §10, 09 §9.1), told apart
+        // by `arg`.
         handlers.set(WakeDomain::Stepper, crate::agent::on_stepper);
         handlers
     }

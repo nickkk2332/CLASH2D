@@ -471,13 +471,27 @@ fn read_reference(
 /// One sweep of one sense (15 §5.2): the next is scheduled, then every
 /// target within range, and every target already in the observer's
 /// awareness through this sense, is brought up to date. A warm observer
-/// does not sweep (15 §14); a sense its body cannot work receives
-/// nothing.
+/// does not sweep (15 §14): one in a warm tract keeps its sweeps
+/// waiting, a character stepped warm has none until it is promoted. A
+/// sense its body cannot work receives nothing.
 pub(super) fn sweep(sim: &mut Sim, observer: EntityId, sense: SenseId, bonus: Real) {
     let defs = Arc::clone(&sim.perception_defs);
     let Some(def) = defs.sense(sense) else {
         return;
     };
+    // A character stepped warm (09 §9.3) does not sweep, and its sweeps
+    // are not kept waiting: they begin again when it is promoted.
+    if crate::ai::warm::is_warm(sim, observer) {
+        if let Some(slot) = sim
+            .components
+            .senses
+            .get_mut(observer)
+            .and_then(|senses| senses.slot_mut(sense))
+        {
+            slot.wake = None;
+        }
+        return;
+    }
     let interval = def.interval.dur();
     senses::schedule_sweep(sim, observer, sense, interval);
     let Some(eye) = signal::eye_of(sim, observer) else {
@@ -688,6 +702,10 @@ fn field_sweep(
 /// not swept for a quarter of its interval sweeps at once, at the next
 /// wake-up.
 pub(super) fn observer_moved(sim: &mut Sim, observer: EntityId) {
+    // A warm character does not sweep (15 §14).
+    if crate::ai::warm::is_warm(sim, observer) {
+        return;
+    }
     let Some(senses) = sim.components.senses.get(observer) else {
         return;
     };

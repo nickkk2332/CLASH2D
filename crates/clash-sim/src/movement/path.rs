@@ -226,6 +226,28 @@ fn mark_stale(sim: &mut Sim, entity: EntityId, avoid: Option<clash_world::CellPo
     }
 }
 
+/// The path an entity is following, if it follows one: for a warm
+/// mind that walks it in bulk (09 §9.1).
+pub(crate) fn journey_of(sim: &Sim, entity: EntityId) -> Option<Journey> {
+    sim.components()
+        .get::<Mover>(entity)
+        .and_then(Mover::journey)
+        .cloned()
+}
+
+/// Puts back a path an entity was following, as [`journey_of`] gave
+/// it: what a mind stepped down to warm keeps of the action it walked
+/// with, which forgot the path as it ended (09 §9.2).
+pub(crate) fn keep_journey(sim: &mut Sim, entity: EntityId, journey: Option<Journey>) {
+    let Some(journey) = journey else {
+        return;
+    };
+    sim.components_mut()
+        .store_mut::<Mover>()
+        .get_or_insert_with(entity, Mover::default)
+        .journey = Some(journey);
+}
+
 /// Forgets the path an entity is following, with what it learned on
 /// the way. Returns whether it was following one.
 pub fn clear_path(sim: &mut Sim, entity: EntityId) -> bool {

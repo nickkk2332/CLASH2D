@@ -73,7 +73,8 @@ impl Town {
         self.host.sim().ok_or_else(|| "no game is running".to_owned())
     }
 
-    /// What the town holds: its residents, and those in the world.
+    /// What the town holds: its residents, those in the world, and how
+    /// many of those are hot.
     fn census(&self) -> Result<String, String> {
         let sim = self.sim()?;
         let residents = sim.agents().residents().count();
@@ -86,7 +87,11 @@ impl Town {
                     .is_some_and(|entity| sim.truth().location(entity).is_some())
             })
             .count();
-        Ok(format!("{residents} residents, {loaded} in the world"))
+        let levels = clash_sim::ai::warm::census(sim);
+        Ok(format!(
+            "{residents} residents, {loaded} in the world, {} hot and {} warm",
+            levels.hot, levels.warm
+        ))
     }
 
     /// Times `STEPS` simulated seconds one by one, doing `before` ahead

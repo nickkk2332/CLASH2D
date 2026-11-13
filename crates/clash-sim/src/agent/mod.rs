@@ -795,9 +795,14 @@ pub(crate) fn tract_loaded(sim: &mut Sim, realm: RealmId, tract: TractPos) {
     }
 }
 
-/// Handles a wake-up of the `Stepper` domain: the agents' own, or a
-/// recipe's (16 §8.2).
+/// Handles a wake-up of the `Stepper` domain: the agents' own, the warm
+/// stepper's (09 §9.1), or a recipe's (16 §8.2).
 pub(crate) fn on_stepper(sim: &mut Sim, id: WakeId, wake: Wake) {
+    // The warm stepper's (03 §10; `ai::warm`).
+    if wake.arg == crate::ai::warm::WAKE_WARM {
+        crate::ai::warm::on_wake(sim, id);
+        return;
+    }
     if wake.arg != WAKE_AGENTS {
         crate::recipe::on_wake(sim, id, wake);
         return;
