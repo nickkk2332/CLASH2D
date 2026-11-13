@@ -3,7 +3,7 @@
 //! `loose_near`, which content's item actions read in their `requires`,
 //! `fail_text` and parameter lists.
 //!
-//! The verbs of [`hold`](super::hold) refuse in the engine's words, for
+//! The verbs of [`super::hold`] refuse in the engine's words, for
 //! rules and the console. A player is told why in the reader's: these
 //! checks make the verbs' own, changing nothing, on what the character
 //! knows of itself and on what it perceives within reach, and say what

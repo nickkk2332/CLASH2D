@@ -421,6 +421,14 @@ whatever stands in a cell in view and gives off something a sense of
 light could see. A creature is drawn with its templates' glyph, an item
 with its definition's, anything else as the theme's `suspected` mark.
 
+**Names on screens** (decision D-862). The text helpers a screen or a
+show calls (`name`, `the`, `a`, `list`, ...) read through the reader
+lens with the player's character as the reader, so that everyone else
+is named as the character knows them (`the person`, a name it has
+learnt) and a thing by what it was made from (`a parcel`); the
+character itself is named by its own name, or the one the player gave
+it, not "you".
+
 **Playback is answered** from it: `perceived` is the simulation's tag
 (`Sim::party_perceived`): seen, heard from a place, or neither;
 `seen_cell` is what is in a cell of the view now, or nothing out of

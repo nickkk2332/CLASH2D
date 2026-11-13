@@ -271,7 +271,9 @@ impl KeyChord {
         }
         let key = match self.code {
             KeyCode::Char(' ') => "Space".to_owned(),
-            KeyCode::Char(ch) if self.mods.contains(Mods::SHIFT) => {
+            // A letter held with a modifier is written as its capital, as
+            // on the key: Shift+J, Ctrl+D.
+            KeyCode::Char(ch) if !self.mods.is_empty() && ch.is_alphabetic() => {
                 ch.to_uppercase().collect::<String>()
             }
             KeyCode::Char(ch) => ch.to_string(),
