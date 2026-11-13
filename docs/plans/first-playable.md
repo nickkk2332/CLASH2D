@@ -43,7 +43,7 @@ actions that call `hit`.
 | S10 | Coloured light (experimental) | S | S1, U4, P4 | todo |
 | U1 | Scene skeleton, frames, themes | M | K2 | beta |
 | U2 | Terminal frontend | S | U1 | done |
-| U3 | Window frontend | L | U1 | todo |
+| U3 | Window frontend | L | U1 | in progress |
 | U4 | View model and world drawing | L | U1, S9 | beta |
 | U5 | Playback | L | U4 | beta |
 | U6a | Toolkit: layout and widgets | L | U1 | beta |

@@ -6,8 +6,20 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+# The window itself. Without it the crate is the renderer alone, which is
+# what the benchmarks of `clash-tools` build (decision D-841).
+default = ["window"]
+window = ["dep:winit", "dep:softbuffer"]
+
 [dependencies]
+clash-data.workspace = true
 clash-scene.workspace = true
+fontdue.workspace = true
+softbuffer = { workspace = true, optional = true }
+winit = { workspace = true, optional = true }
+
+[dev-dependencies]
 
 [lints]
 workspace = true
