@@ -169,22 +169,28 @@ pub struct TypeEntry {
 /// Every registered definition type with what it reads, in order of
 /// name.
 pub fn type_entries(types: &DefTypes) -> Vec<TypeEntry> {
-    let mut entries = Vec::new();
-    for info in types.infos() {
-        let Some(shapes) = types.shapes(info.name) else {
-            continue;
-        };
-        entries.push(TypeEntry {
-            name: info.name,
-            doc: info.doc,
-            experimental: info.experimental,
-            defaults: types.defaults(info.name).unwrap_or(""),
-            builtins: types.builtins(info.name).unwrap_or_default(),
-            shapes,
-        });
-    }
+    let mut entries: Vec<TypeEntry> = types
+        .infos()
+        .iter()
+        .filter_map(|info| type_entry(types, info.name))
+        .collect();
     entries.sort_by(|a, b| a.name.cmp(b.name));
     entries
+}
+
+/// One registered definition type with what it reads, if there is one
+/// of that name.
+pub fn type_entry(types: &DefTypes, name: &str) -> Option<TypeEntry> {
+    let infos = types.infos();
+    let info = infos.iter().find(|info| info.name == name)?;
+    Some(TypeEntry {
+        name: info.name,
+        doc: info.doc,
+        experimental: info.experimental,
+        defaults: types.defaults(info.name).unwrap_or(""),
+        builtins: types.builtins(info.name).unwrap_or_default(),
+        shapes: types.shapes(info.name)?,
+    })
 }
 
 /// One effect of the rule system, and where it may stand.

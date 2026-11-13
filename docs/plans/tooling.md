@@ -32,7 +32,7 @@ says which.
 | TL6 | Test scripts | M | TL1, U1 | beta |
 | TL7 | Invariant checkers | M | TL6 | todo |
 | TL8 | Replay, divergence, diff, rewind | M | K7, TL6 | todo |
-| TL9 | Mod authoring suite | M | P5, P8, U6b | in progress |
+| TL9 | Mod authoring suite | M | P5, P8, U6b | beta |
 | TL10 | Map editor and capture | L | WG2, U7 | todo |
 | TL11 | Comparing incident forms | M | L3, I10 | todo |
 | TL12 | Player aids | M | SC3, SC6, A9 | todo |
@@ -257,6 +257,12 @@ Done when
 - A broken edit leaves the game running on the old definitions with the
   diagnostic displayed.
 - `refs` finds every reference to a definition in the bundled mods.
+
+Beta: `refs` and `find` are built (D-806); references the loader reads
+as plain strings, the world's among them, are listed as named in plain
+text. Stubbed: errors over the game on a failed reload, which needs hot
+reload (P8), and the reference browser screen, which belongs to the
+`tools` mod, not yet made.
 
 ### TL10 — Map editor and capture
 

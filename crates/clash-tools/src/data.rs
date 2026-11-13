@@ -79,9 +79,15 @@ data commands:
         Print a skeleton definition of a type with its required fields.
   refs [<type>] <id> [--mods <dir>]... [--profile <p>]
         Every reference to a definition in the loaded mods, with file and
-        line, and what the definition refers to.
-  find <text> [--type <type>] [--mods <dir>]... [--profile <p>]
-        The definitions whose id, name or documentation holds the text.
+        line: fields, copies, patches and mentions in plain text; and
+        what the definition refers to. The id may be a bare name.
+  find <type> [where=<condition>]... [<text>]... [--mods <dir>]... [--profile <p>]
+        The definitions of a type (`*` for any) that meet every
+        condition: `path`, `!path`, or `path<op>value` with `==`, `!=`,
+        `<`, `<=`, `>`, `>=` or `~` (holds the text). A path is the keys
+        of a field, lists looked through; a quantity compares in SI
+        units, a reference by its id. Plain words are looked for in the
+        id, `name`, `description` and `doc`.
 ";
 
 /// The options the data commands share.

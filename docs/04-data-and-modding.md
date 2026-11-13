@@ -910,9 +910,9 @@ sections 3.1, 3.2, 3.4, 4, 5 (without inline definitions and `if_mod`), 6.1
 7.2, 8 (without codes and the compile stage), 9, and the `lint` and `schema`
 commands. The rest is built by the packages in plans/sim-kernel.
 
-For the beta, F4 and packages P1 to P4 were built together. Not built
-yet: the `schema` and `docs` commands and `init-mod` (P5); the `setting`
-and `migration` types, the warning for a reference to an obsolete
+For the beta, F4 and packages P1 to P5 were built together; the
+schemas, the reference and `init-mod` are D-800 to D-803 and D-805. Not built yet:
+the `setting` and `migration` types, the warning for a reference to an obsolete
 definition and placeholders for ids a save names (P6, P7); hot reload
 (P8); `Expr`, `Cond`, `Effects` and the compiling of `Text` templates,
 which the expression packages add (a `Text` holds its string and where it
