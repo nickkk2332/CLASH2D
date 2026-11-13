@@ -399,6 +399,21 @@ file, `budgets.toml`, each row with its benchmark and its limit.
 more than its margin. When a target is replaced by a measured figure, the
 specification's table and this file change together.
 
+| Command | Does |
+|---------|------|
+| `cargo xtask bench` | Builds the tools in release and runs every benchmark, printing each against its row |
+| `cargo xtask bench <filter>...` | Only the benchmarks whose names hold a filter, as `perception` or `light` |
+| `cargo xtask bench --check` | The same, exiting 1 when one is over its limit by more than its margin |
+| `cargo run --release -p clash-tools -- bench --list` | Names the benchmarks and the rows they measure |
+
+The benchmarks are `clash-tools bench` (D-730): each builds its scene from
+the repository's mods and keeps the best of several rounds, since noise
+only adds time. They take minutes and their figures belong to the machine,
+so they are not a step of `cargo xtask check`. A benchmark with no row is
+printed as a figure with no budget; a row that names no benchmark is an
+error, and a test checks every row of the file against the table of its
+specification. Rows without a benchmark are not in the file yet.
+
 ### 6.4 Stepping through a rule
 
 A later addition. Nothing else depends on it.

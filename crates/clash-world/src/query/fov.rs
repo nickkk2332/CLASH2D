@@ -312,6 +312,25 @@ impl FovSet {
         FovOffsets {
             set: self,
             word: 0,
+            end: self.used.len() * self.layer_words(),
+            pending: 0,
+            started: false,
+        }
+    }
+
+    /// The seen cells as offsets from the viewer's cell on the storeys
+    /// from `low` to `high` (as offsets from the viewer's storey) alone:
+    /// [`offsets`](FovSet::offsets) without the others, and without
+    /// passing over them.
+    pub fn offsets_between(&self, low: i32, high: i32) -> FovOffsets<'_> {
+        let layers = self.used.len() as i64;
+        let first = (i64::from(low) + i64::from(self.storeys)).clamp(0, layers) as usize;
+        let last = (i64::from(high) + i64::from(self.storeys) + 1).clamp(0, layers) as usize;
+        let words = self.layer_words();
+        FovOffsets {
+            set: self,
+            word: first * words,
+            end: (last * words).max(first * words),
             pending: 0,
             started: false,
         }
@@ -603,6 +622,8 @@ pub struct FovOffsets<'a> {
     set: &'a FovSet,
     /// The word after the one `pending` came from.
     word: usize,
+    /// The word the walk stops at.
+    end: usize,
     /// Bits of the current word not yet given out.
     pending: u64,
     started: bool,
@@ -614,13 +635,12 @@ impl Iterator for FovOffsets<'_> {
     fn next(&mut self) -> Option<IVec3> {
         let set = self.set;
         let layer_words = set.layer_words();
-        let total = set.used.len() * layer_words;
         while self.pending == 0 {
             if self.started {
                 self.word += 1;
             }
             self.started = true;
-            if self.word >= total {
+            if self.word >= self.end {
                 return None;
             }
             if !set.used[self.word / layer_words] {

@@ -13,6 +13,12 @@
 //! Every step runs even when an earlier one fails, so one run shows
 //! everything that is wrong. `cargo xtask <step>` runs a single step by name
 //! (`fmt`, `clippy`, `test`, `doc`, `dims`).
+//!
+//! `cargo xtask bench [--check] [<filter>...]` is not a step of `check`:
+//! it builds the tools in release and runs the benchmarks of the
+//! specifications' budget tables against `budgets.toml` (14 §6.3), which
+//! takes minutes and gives figures that depend on the machine. With
+//! `--check` it fails when one is over its limit by more than its margin.
 
 mod dims;
 
@@ -74,11 +80,28 @@ const STEPS: &[Step] = &[
     },
 ];
 
+/// The command `cargo xtask bench` runs, before the arguments given to
+/// it: the tools' benchmarks, built in release, against the budgets file
+/// at the root of the workspace.
+const BENCH_ARGS: &[&str] = &[
+    "run",
+    "--release",
+    "--quiet",
+    "--package",
+    "clash-tools",
+    "--",
+    "bench",
+    "--budgets",
+    "budgets.toml",
+];
+
 /// What the command line asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Request {
     /// Run these steps and summarise.
     Run(Vec<&'static Step>),
+    /// Run the benchmarks with these arguments.
+    Bench(Vec<String>),
     /// Print the usage text.
     Help,
     /// The arguments were not understood.
@@ -89,6 +112,7 @@ enum Request {
 fn parse(args: &[String]) -> Request {
     match args {
         [] => Request::Help,
+        [first, rest @ ..] if first == "bench" => Request::Bench(rest.to_vec()),
         [only] => match only.as_str() {
             "check" => Request::Run(STEPS.iter().collect()),
             "help" | "--help" | "-h" => Request::Help,
@@ -109,6 +133,10 @@ fn usage() -> String {
     for step in STEPS {
         text.push_str(&format!("  {:<8} {}\n", step.name, command_line(step)));
     }
+    text.push_str(&format!(
+        "  bench    cargo {} [--check] [<filter>...]\n           (not part of check: the benchmarks against budgets.toml, in release)\n",
+        BENCH_ARGS.join(" ")
+    ));
     text
 }
 
@@ -162,6 +190,24 @@ fn run(step: &Step, root: &Path) -> (bool, Duration) {
     (passed, started.elapsed())
 }
 
+/// Runs the benchmarks, passing on their exit code.
+fn bench(root: &Path, rest: &[String]) -> ExitCode {
+    let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+    let status = Command::new(cargo)
+        .args(BENCH_ARGS)
+        .args(rest)
+        .current_dir(root)
+        .status();
+    match status {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::FAILURE,
+        Err(error) => {
+            eprintln!("xtask: could not run cargo: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     let steps = match parse(&args) {
@@ -174,6 +220,7 @@ fn main() -> ExitCode {
             eprintln!("xtask: unknown command `{word}`\n\n{}", usage());
             return ExitCode::from(2);
         }
+        Request::Bench(rest) => return bench(&workspace_root(), &rest),
     };
 
     let root = workspace_root();
@@ -263,6 +310,18 @@ mod tests {
             parse(&args(&["check", "now"])),
             Request::Unknown("now".to_owned())
         );
+    }
+
+    #[test]
+    fn bench_is_not_a_step_of_check_and_passes_its_arguments_on() {
+        assert!(STEPS.iter().all(|step| step.name != "bench"));
+        assert_eq!(
+            parse(&args(&["bench", "--check", "light"])),
+            Request::Bench(vec!["--check".to_owned(), "light".to_owned()])
+        );
+        assert_eq!(parse(&args(&["bench"])), Request::Bench(Vec::new()));
+        assert!(BENCH_ARGS.contains(&"--release"));
+        assert!(usage().contains("bench"));
     }
 
     #[test]

@@ -3468,6 +3468,8 @@ impl Cosmos {
     pub fn raycast_into(&self, from: PointM, dir: [Real; 3], max_m: Real, filter: RayFilter,
                         obstacles: &mut dyn RayObstacles, out: &mut RayHits);
     pub fn line_of_sight(&self, a: PointM, b: PointM) -> Result<bool, WorldError>;
+    pub fn sight_to_heights(&self, eye: Location, eye_alt_mm: u16, target: Location,
+                            alts_mm: &[u16]) -> u32;                      // D-732
     pub fn field_of_view(&self, origin: Location, eye_alt_mm: u16, radius_m: Real,
                          out: &mut FovSet) -> Result<Freshness, WorldError>;
     pub fn neighbours(&self, loc: Location) -> Result<NeighbourGeometry, WorldError>;   // raw data for movement rules
@@ -3531,6 +3533,10 @@ points does not block: one sees out of one's own cell, and one sees the
 thing one looks at, a wall included. The answer is the same whichever
 point is given first. Through space that is not loaded it is an error,
 not a guess; between grids, and beyond the length of a ray, it is false.
+`sight_to_heights` asks it of up to 32 heights over one cell at once,
+each answered exactly as alone, an error counting as not seen: where the
+eye and the heights share a storey the lines pass the same cells and
+the cells are walked once (D-732).
 
 **Field of view** fills a `FovSet`, a buffer the caller keeps: the cells
 seen from a cell by an eye at a height, out to a radius, held as offsets
@@ -3559,6 +3565,9 @@ from the viewer.
   seen and hide what is behind them. The radius is cut to 255 cells.
 - A view counts a cell by its middle and a line of sight by every cell
   it passes through, so the two can differ by a cell at a corner.
+- `FovSet::offsets` lists the cells seen storey by storey, row by row;
+  `offsets_between` lists those of some storeys alone, in the same
+  order, without walking the others (D-737).
 
 **Neighbours** is raw geometry for movement rules: the cell, the eight
 round it, the one above and the one below, each with its derived flags,
@@ -3982,24 +3991,25 @@ to the field itself.
 
 ## 25. Budgets
 
-Targets on one simulation thread of an ordinary desktop CPU. They are
-unmeasured. The benchmark work package establishes real numbers, after which
-this table is revised and enforced.
+Targets on one simulation thread of an ordinary desktop CPU. Rows with a
+benchmark are in `budgets.toml` and measured by `cargo xtask bench`
+(14 §6.3, D-730), the best of several runs on a shared build machine; the
+figures follow the targets. The others are unmeasured.
 
 | Operation | Target |
 |-----------|--------|
-| Cell flag read | under 10 ns |
-| Cell state read | under 30 ns |
+| Cell flag read | under 10 ns (measured: 14 to 18 ns through the cosmos, at cells scattered over nine tracts of the test city) |
+| Cell state read | under 30 ns (measured: 35 to 44 ns) |
 | Single element edit, including bookkeeping | under 300 ns |
 | Chunk memory, typical city | under 12 KB |
 | Chunk memory, uniform | under 200 bytes |
-| Realize a `test_city` tract | under 2 ms |
+| Realize a `test_city` tract | under 2 ms (measured: 0.5 to 0.9 ms, sixteen realised together on one thread) |
 | Load a stored tract | under 1 ms |
 | Default loaded set (289 tracts, city) | under 100 MB |
 | Stability check, 30 × 30 footprint, 20 storeys | under 3 ms |
 | Detailed release reaching 100,000 non-empty cells | under 30 ms in total |
 | Body step | under 500 ns |
-| Field step, 50,000 active cells | under 5 ms |
+| Field step, 50,000 active cells | under 5 ms (measured: 16 ms, 310 to 335 ns for each active cell of a building fire of up to 24,000, from 820 ns: D-734, D-735) |
 | Front reaching 100,000 non-empty cells | under 30 ms in total |
 | One step of a state-change sweep or a tremor over the default loaded set | under 2 ms |
 | Save with 50 dirty tracts | under 50 ms |

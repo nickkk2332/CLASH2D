@@ -51,7 +51,7 @@ Section references such as "02 §14" point into those documents.
 | W20b | Subgrids: detach, merge, free flight | M | W20a | todo |
 | W21 | Travelers, carriers, charts | M | W19, W20b, W17 | todo |
 | W22 | Derived realms and realm lifecycle | S | W19, W10 | todo |
-| W23 | Benchmarks and budget gate | S | W4, then recurring | todo |
+| W23 | Benchmarks and budget gate | S | W4, then recurring | beta |
 | W24 | Fronts, tremors and kinds of devastation | M | W15, W17 | todo |
 | W25 | Change of state | M | W16, W13, V1 | todo |
 
@@ -1077,6 +1077,18 @@ Build
 
 Done when
 - Every row of the table has a benchmark and a recorded figure.
+
+Status `beta` (D-730 to D-736). Built: `cargo xtask bench` and
+`--check` over `budgets.toml` (TL5's file); benchmarks for the cell
+flag and state reads, realising a `test_city` tract and the field step
+(a building fire, scaled to 50,000 active cells), with their figures in
+02 §25; and, beside them, a field of view and a line of sight with no
+row of their own. The performance pass made the field step about twice
+as fast (D-734, D-735) and the light cache and lines of sight faster
+(D-731, D-732), every result unchanged. Stubbed: benchmarks for the
+other rows of 02 §25 (an element edit, chunk memory, loading a stored
+tract, the loaded set, a stability check, releases, a body step, fronts,
+sweeps, saving); the field step is still over its target.
 
 ### W24 — Fronts, tremors and kinds of devastation
 

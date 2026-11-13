@@ -53,7 +53,7 @@ actions that call `hit`.
 | U9 | Bundled screens | L | U7, U8, U4, U5, E9 | beta |
 | U10 | Cutscenes | M | U5, T6 | todo |
 | U11 | Application | M | U3, U9, P3 | beta |
-| Z1 | Benchmarks and budget gate | S | E1, then recurring | todo |
+| Z1 | Benchmarks and budget gate | S | E1, then recurring | beta |
 
 ## Order and parallelism
 
@@ -775,13 +775,16 @@ to try first.
 **Spec** 12 §11 · **Size** L
 
 Build
-- Window, glyph atlas from the theme font, grid and sprite quads, frame
-  effects, keyboard and mouse with cell coordinates.
+- Window, glyph atlas from the theme font, the grid and sprites drawn on
+  the processor into a pixel buffer shown with `softbuffer` (D-830), frame
+  effects, keyboard and mouse with cell coordinates; drawing to an image
+  file for tests.
 
 Done when
 - The same frame renders in both frontends with the same characters in the
   same cells.
-- The quad budget of 12 §15 is benchmarked.
+- A frame drawn headless to an image matches its golden image.
+- The drawing budget of 12 §15 is benchmarked.
 
 ### U4 — View model and world drawing
 
@@ -1125,6 +1128,15 @@ switching profiles or reloading mods while running, reaction windows
 ### Z1 — Benchmarks and budget gate
 
 **Spec** 06 §15, 15 §17, 12 §15 · **Size** S, recurring
+
+Status `beta` (D-730 to D-733). Built: benchmarks in `budgets.toml` for
+the light rows of 15 §17, one evaluation of sight at 30 m, a signal to
+fifty and a simulated second of fifty people walking in a street, and a
+200 × 60 frame of the map (12 §15), with their figures in the documents;
+a party member's sweep is printed with no row. The performance pass
+brought sight under its target and the rest of perception down by about
+a third, every result unchanged. Stubbed: 06 §15, memory per mind, the
+other rows of 12 §15; the crowd is still over its target (15 §17).
 
 ## Scenario catalogue
 
