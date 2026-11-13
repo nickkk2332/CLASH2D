@@ -205,7 +205,7 @@ say their keys on their last line.
 The game waits for you. Each thing you do takes time on your
 character's own clock, and while it runs everyone else acts on the same
 clock: a step at walking pace takes about two thirds of a second (more
-with a heavy load), `.` waits one second, a door takes half a
+with a heavy load), `.` waits one second, a door takes about half a
 second to open, eating takes three. When it is done the game waits for
 you again.
 
@@ -217,7 +217,10 @@ notices it in time (an ordinary person needs about a fifth of a second),
 the game stops and asks how to answer, with a bar of the time left:
 **Parry** (needs something in hand with a flat, such as a blade or a
 club), **Block** (on a shield, or the forearm), **Dodge** (duck out of
-the line), **Step back** (out of reach). A choice marked "too late" will
+the line), **Step back** (out of reach), **Step aside** (across its
+line), **Raise shield**. An arrow or a thrown thing seen coming asks the
+same, and can be stepped aside from, stopped on a shield or caught; a
+bullet arrives before anyone can begin. A choice marked "too late" will
 not be ready in time. **Let it happen**, or Esc, takes the blow. A blow
 you did not see coming, from behind or in the dark, simply lands.
 
