@@ -165,7 +165,7 @@ pub struct InputStanding {
     pub have: Real,
 }
 
-fn item_def<'a>(sim: &'a Sim, id: EntityId) -> Option<&'a ItemDef> {
+fn item_def(sim: &Sim, id: EntityId) -> Option<&ItemDef> {
     sim.components
         .get::<Item>(id)
         .and_then(|item| crate::item::def_of(&sim.defs, item))
