@@ -56,7 +56,7 @@
                 "else": [ { "run": "core:errand_parcel_left" } ] } ] } ] } ] },
 
   { "type": "eoc", "id": "errand_parcel_dropped", "on": "item_dropped",
-    "if": "not is_null(global.var.parcel) and self == global.var.parcel and self.site != global.var.errand_to",
+    "if": "not is_null(global.var.parcel) and self == global.var.parcel and (is_null(self.site) or self.site != global.var.errand_to)",
     "doc": "The errand's parcel was dropped away from the town hall (`core:the_errand`): it is left behind.",
     "do": [ { "run": "core:errand_parcel_left" } ] },
 
@@ -64,7 +64,7 @@
     "doc": "The errand's parcel was left behind (`core:the_errand`): if, ten minutes on, the courier has not taken it back and it is not at the town hall, the errand has failed. A later leaving starts the ten minutes again.",
     "do": [
       { "after": "10 min", "name": "errand_left", "owner": "global",
-        "do": [ { "if": "global.var.parcel.outermost != global.var.courier and global.var.parcel.site != global.var.errand_to",
+        "do": [ { "if": "global.var.parcel.outermost != global.var.courier and (is_null(global.var.parcel.site) or global.var.parcel.site != global.var.errand_to)",
                   "then": [ { "set": { "global.var.errand_lost": "'left'" } },
                             { "fail_objective": "deliver" } ] } ] } ] },
 
