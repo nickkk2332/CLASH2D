@@ -1,12 +1,12 @@
 [
-  { "//": "Free play in the generated market town: no objectives and no ending, the sandbox (13 §11). The player chooses where to begin: the street along the north edge of the town, which lies across the edge between the realm's two regions, or the town square. When the character dies the player carries on as a newcomer, made from the same template, where the first one began.",
+  { "//": "Free play in the generated market town: no objectives and no ending, the sandbox (13 §11). The player chooses where to begin: the street along the north edge of the town, which lies across the edge between the realm's two regions, or the town square. The player makes their character from any playable template, with all its choices (13 §4.2), or is an ordinary person. When the character dies the player carries on as a newcomer, made from the same template, where the first one began.",
     "type": "scenario", "id": "town_life", "name": "The market town",
     "doc": "A generated town and its people. Its doors are shut. Live there.",
     "intro": "Morning in the market town. Nobody is waiting for you and nothing needs doing: walk the streets, try the doors, meet the people who live here.",
     "tags": ["sandbox"],
     "worlds": [ { "realm": "town", "seed": "ask" } ],
     "start": {
-      "characters": [ { "template": "person" } ],
+      "characters": [ { "template": "person", "create": true } ],
       "at": [ { "name": "The north street", "cell": [2040, 898] },
               { "name": "The town square", "site": { "def": "town_square" }, "role": "centre" } ],
       "time": { "day": 1, "at": "09:00" } },

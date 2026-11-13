@@ -13,6 +13,8 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `glyph` (object [`GlyphDef`](#glyphdef), or `null`; optional): How it is drawn. A later template's replaces an earlier one's.
 - `remains` (string, or `null`; optional): What is left of a body destroyed entirely (06 §7.5), by id, as written: for whoever makes remains.
 - `blocks` (`true` or `false`, or `null`; optional): Whether a thing made from it blocks movement through its cell (06 §11). Default true for one with a body.
+- `playable` (`true` or `false`; optional): Whether a player's character may be made from it (13 §4.2): a game scenario that lets the player make or choose their character offers every playable template, unless it names its own. Default false.
+- `description` ([text](../values.md#texts), or `null`; optional): A line or two about it, for the screens that offer it: what sort of person it makes.
 - `choices` (list of object [`ChoiceDef`](#choicedef); optional): The choices made within it.
 - `know_how` (list of string; optional): Know-how a thing made from it knows (16 §8.5), by id as written: given to its mind when it is made, without asking what each needs.
 - `groups` (object, name → string; optional): The groups a thing made from it joins (15 §9.2), by id, each with its role there, `""` for none: joined openly, with `group_joined`, when `entity_spawned` is delivered.

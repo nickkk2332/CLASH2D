@@ -1,12 +1,12 @@
 [
-  { "//": "A parcel to take across the market town to its town hall before nightfall (13 §5). `start.do` makes the parcel in the character's hands and chooses the town hall among the town's sites, keeping both in variables that the objective reads. The objective is done when the parcel is at the town hall's site, fails if the parcel is lost (destroyed, or out of the world), and fails when five hours have passed: the errand begins at two in the afternoon and night falls at seven. Its marker is the town hall's door, which the character was told of.",
+  { "//": "A parcel to take across the market town to its town hall before nightfall (13 §5). `start.do` makes the parcel in the character's hands and chooses the town hall among the town's sites, keeping both in variables that the objective reads. The objective is done when the parcel is at the town hall's site, fails if the parcel is lost (destroyed, or out of the world), and fails when five hours have passed: the errand begins at two in the afternoon and night falls at seven. Its marker is the town hall's door, which the character was told of. The player chooses who they are among the playable templates, ready-made (13 §4.2), or is an ordinary person.",
     "type": "scenario", "id": "the_errand", "name": "The errand",
     "doc": "Take a parcel across the market town to its town hall before nightfall.",
     "intro": "A clerk at the town hall is waiting for this parcel, and the hall shuts at nightfall. It is two in the afternoon. The journal (J) shows the way.",
     "tags": ["errand"],
     "worlds": [ { "realm": "town", "seed": "ask" } ],
     "start": {
-      "characters": [ { "template": "person" } ],
+      "characters": [ { "template": "person", "create": false, "pick": true } ],
       "at": [ { "name": "The north street", "cell": [2040, 898] } ],
       "time": { "day": 1, "at": "14:00" },
       "do": [

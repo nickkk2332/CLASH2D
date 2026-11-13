@@ -166,10 +166,11 @@ fn preferences_and_bindings_are_kept_between_runs() {
     assert_eq!(top(&run).as_deref(), Some("ui:options"));
     press(&mut run, &["right"]);
     assert_eq!(theme(&run), Some(Value::Str("ui:night".to_owned())));
-    // Past the playback speed, the cutscenes, the `ui` mod's own preference
-    // of walking into doors, the one of walking into someone and the
-    // context.
-    press(&mut run, &["tab", "tab", "tab", "tab", "tab", "tab"]);
+    // Past the playback speed, the `ui` mod's own preference of walking
+    // into doors, the one of walking into someone and the context (no
+    // cutscenes are loaded, so Options offers no choice of them).
+    assert!(!run.text().contains("Cutscenes"), "{}", run.text());
+    press(&mut run, &["tab", "tab", "tab", "tab", "tab"]);
     assert!(run.type_text("w"));
     press(&mut run, &["tab"]);
     assert!(run.type_text("north"));

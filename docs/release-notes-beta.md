@@ -65,6 +65,11 @@ is quick (`f` strikes the target with the first blow that can be made)
 or chosen in detail (`F` lists every blow, greyed with why it cannot be
 made, and asks for the part aimed at and how hard).
 
+**Who you are.** Make your character, or choose one ready-made, as
+each game allows: an ordinary person, a brawler with a club, a marksman
+with a bow or a pistol, an adept with two or three powers of your
+choosing, or someone with every power.
+
 **Powers.** Twelve powers built from the same parts as everything else:
 dash, force push, fire bolt, shield, heal, time stop, null field,
 gravity well, float, summon hound, stone wall, shadow. Costs, cooldowns,
@@ -72,7 +77,9 @@ modes that drain a reserve, areas where time or gravity changes, and
 summons and conjured walls that last as long as their power.
 
 **Using the world.** Doors open when walked into; locks need their key;
-lockers can be hidden in; containers, racks and stalls hold things.
+lockers can be hidden in; containers, racks and stalls hold things;
+what lies about is picked up (`g`), and what you carry is worn, stowed,
+put in, taken out, given or dropped from the inventory.
 Recipes at workbenches, ovens, hearths and stills, by hand or left to
 run; know-how learnt from books; bread, ale, salves, bandages and
 poisons, whose substances do what they do in the body.
@@ -104,44 +111,20 @@ play, and what trying the game headless on the build branch showed.
 
 **Missing in play**
 
-- **No bundled game gives you powers.** The abilities screen (`a`) and
-  the quick slots work, but the person every bundled game gives you
-  has none, and the "Gifted person" with twelve cannot be chosen (see
-  making a character, below).
-- **Nothing lying loose can be picked up.** Items on a kitchen table, a
-  desk or the street have no "take" in the use list (`e`); only what is
-  inside a container, rack, stall or workbench is taken, with "Take
-  out". The key of the guardhouse's armoury lies loose on the
-  sergeant's desk, so the armoury cannot be opened.
-- **The inventory's item verbs are refused.** Drop, Wear, Take off,
-  Stow, Put in, Take out and Give name actions the bundled mods do not
-  define, and each says so in the log ("Nothing can do `drop`: no loaded
-  mod defines that action."). Putting what you hold into a container
-  works through `e`.
 - **No crouching or lying down, and no stances,** though posture
   changes how loud and how visible a character is.
 - **A bow's draw runs to its end in one go,** so there is no moment to
   hold it or let it go with `z`.
-- **The log names people by their own names,** even strangers your
-  character does not know; what is said to you names them as you know
-  them.
+- **The log names your own character by name** ("Ada strikes the
+  person."), not as "you"; everyone else is named as your character
+  knows them.
 
 **Screens**
 
-- **Making a character does not work.** F2 on the new-game screen opens
-  Make a character, which says "The loaded mods offer nothing to make a
-  character from." Every character is a person of average build with no
-  training.
-- **Things carried show as "something".** The errand's parcel is
-  "something" in the status column and the inventory, and the body's
-  parts show by their ids (`l_arm`, `r_eye`).
-- **The setup screen says "Seed: ask"** for a game whose seed was taken
-  from the new-game screen.
-- **Some words are the engine's.** The keys screen (`?`) writes keys
-  as a keymap does (`shift+j`, `tab`); a blow that cannot be made says
-  it "needs something in hand that is `blade`"; Tab with nobody in sight
-  logs "nobody is in sight to choose", in lower case. Options offers
-  Cutscenes though there are none.
+- **Making a character is offered, not asked.** F2 on the new-game
+  screen makes or chooses who you are; a game begun with Enter alone
+  gives you an ordinary person. A template's starting `items` are not
+  made: the bundled characters' weapons are given by a rule.
 
 **The world**
 

@@ -112,6 +112,21 @@ fn set_entity_color(
 
 /// The properties this module registers, all of the kind `entity`.
 pub fn properties() -> Vec<PropertyDef> {
+    let mut all = listed();
+    for property in &mut all {
+        if property.name == "hold_fault" {
+            property.args.push(crate::registry::ArgDef {
+                name: "other",
+                ty: "any",
+                doc: "For `put_in` the container, for `give` whom it is given to.",
+                optional: true,
+            });
+        }
+    }
+    all
+}
+
+fn listed() -> Vec<PropertyDef> {
     let p = PropertyDef::new;
     vec![
         p(
@@ -316,6 +331,48 @@ pub fn properties() -> Vec<PropertyDef> {
             |sim, subject, _| Value::Bool(item(sim, subject).is_some_and(Item::is_latent)),
         )
         .changed_by(&["contents_materialised"]),
+        p(
+            "entity",
+            "hold_fault",
+            "string?",
+            "Why the entity, as it believes, could not do one of the holding verbs to a thing now, as a sentence for it to read: null if it could (06 §9.2, decision D-865). For an item action's `requires` and `fail_text`; read of the character itself in a mind context. `take`: pick up a thing lying loose within reach, or take one it carries into a hand (what no hand holds goes into something carried that takes it); `grasp`: hold it in a hand; `drop`; `wear`; `remove`, into a hand; `stow`, into something it wears or holds; `put_in`, into `other`, which it carries or perceives within reach; `take_out`, out of a container it carries or perceives within reach, into a hand; `give`, to `other`, someone it perceives within reach with a hand free for it. Doing it to the entity itself is refused; `take` of the entity itself says there is nothing within reach to pick up.",
+            |sim, subject, args| {
+                let who = entity_id(sim, subject);
+                let verb = args.first().and_then(Value::as_str).unwrap_or("");
+                let thing = |value: Option<&Value>| match value.and_then(|value| sim.subject_of(value)) {
+                    Some(Subject::Entity(id)) => Some(id),
+                    _ => None,
+                };
+                match who {
+                    Some(who) => opt(super::fault::hold_fault(
+                        sim,
+                        who,
+                        verb,
+                        thing(args.get(1)),
+                        thing(args.get(2)),
+                    )),
+                    None => Value::from("There is nobody to do it."),
+                }
+            },
+        )
+        .arg(
+            "verb",
+            "string",
+            "`take`, `grasp`, `drop`, `wear`, `remove`, `stow`, `put_in`, `take_out` or `give`.",
+        )
+        .arg("what", "any", "The thing.")
+        .changed_by(HOLD_EVENTS),
+        p(
+            "entity",
+            "loose_near",
+            "list<map<any>>",
+            "The things the entity perceives lying loose within reach (in its cell, or one of the eight round it on its storey), its own cell first, then the nearest: what it could pick up. Each a map of `value` (the thing), `label` (what the entity calls it, with its article) and `where` (`here`, `north`, `north-east`, ...), as a list picker takes them (decision D-865). Read of the character itself in a mind context.",
+            |sim, subject, _| match entity_id(sim, subject) {
+                Some(id) => super::fault::loose_near_value(sim, id),
+                None => Value::list([]),
+            },
+        )
+        .changed_by(HOLD_EVENTS),
         p(
             "entity",
             "conferred_tags",

@@ -8,9 +8,9 @@ chars
 |│┌ Choices ────────────────────────────────────┐┌ The result ─────────────────┐│|
 |││Name  Ada    ┌ Build ─────────────────────────────────────────┐             ││|
 |││Stature  1.08│Pick 1.                                         │             ││|
-|││Build  averag│[ ] Slight                                      │             ││|
-|││Training  0 o│[x] Average                                     │             ││|
-|││Extras  0 of │[ ] Heavy                                       │             ││|
+|││Build  Averag│[ ] Slight                                      │             ││|
+|││Training  non│[x] Average                                     │             ││|
+|││Extras  0 par│[ ] Heavy                                       │             ││|
 |││             │                                                │             ││|
 |││             │                                                │             ││|
 |││             │                                                │             ││|

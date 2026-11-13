@@ -392,6 +392,11 @@ pub struct PlanPartDef {
     /// A label telling this part from its twin: `"left"`. Free text.
     #[serde(default)]
     pub side: Option<String>,
+    /// What a reader calls this part of a body of the plan: `left arm`.
+    /// Left out, its side and its definition's name, or the definition's
+    /// name alone (decision D-863).
+    #[serde(default)]
+    pub name: Option<String>,
     /// Its size relative to the rest of the body. Default 1.
     #[serde(default = "one")]
     pub scale: Real,
@@ -957,6 +962,21 @@ pub struct BodyDefs {
 }
 
 impl BodyDefs {
+    /// A damage type in plain words, for a reader (decision D-863): its
+    /// bare id with spaces for underscores.
+    pub fn damage_type_words(&self, id: DamageTypeId) -> String {
+        let types = self.world.damage_types();
+        if id.index() >= types.len() {
+            return String::new();
+        }
+        let qualified = types.name(id);
+        qualified
+            .rsplit(':')
+            .next()
+            .unwrap_or(qualified)
+            .replace('_', " ")
+    }
+
     /// The tables for a set of loaded definitions and the world's tables
     /// built from the same definitions.
     ///

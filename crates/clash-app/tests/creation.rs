@@ -76,7 +76,7 @@ fn a_screen_makes_a_character_through_the_creation_session() {
     press(&mut run, &["enter"]);
     assert_eq!(
         reads(&run),
-        "Template core:person; name ; seed 3; complete true; finished false."
+        "Template core:ordinary_person; name ; seed 3; complete true; finished false."
     );
     let creation = run.game().scene().app().creation();
     let choices = creation
@@ -91,10 +91,10 @@ fn a_screen_makes_a_character_through_the_creation_session() {
     assert_eq!(
         keys,
         [
-            "core:person.name",
-            "core:person.stature",
-            "core:person.build",
-            "core:person.training"
+            "core:ordinary_person.name",
+            "core:ordinary_person.stature",
+            "core:ordinary_person.build",
+            "core:ordinary_person.training"
         ]
     );
 
@@ -121,7 +121,7 @@ fn a_screen_makes_a_character_through_the_creation_session() {
                             .as_map()
                             .and_then(|map| map.get("key"))
                             .and_then(Value::as_str)
-                            == Some("core:person.build")
+                            == Some("core:ordinary_person.build")
                     })
                     .and_then(|choice| choice.as_map()?.get("value").cloned())
             })
@@ -135,7 +135,7 @@ fn a_screen_makes_a_character_through_the_creation_session() {
     );
     assert_eq!(
         reads(&run),
-        "Template core:person; name Bea; seed 7; complete true; finished true."
+        "Template core:ordinary_person; name Bea; seed 7; complete true; finished true."
     );
 
     // The game makes the character finished, and the session is over.

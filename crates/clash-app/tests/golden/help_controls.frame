@@ -4,25 +4,25 @@ chars
 |  ┌ Keys in play: Esc goes back ─────────────────────────────────────────────┐─┐|
 |  │Does                       Keys         What it does                      │ │|
 |  │Abilities                  a                                             █│█│|
-|  │Aim                        shift+s      Choose the shot, the target, the █│░│|
+|  │Aim                        Shift+S      Choose the shot, the target, the █│░│|
 |  │Ask before attacking who i -            Ask, then strike someone walked i█│ │|
 |  │Ask before using what is i -            Ask, then do what the thing walke█│ │|
 |  │Attack                     f            Strike the target with the first █│ │|
 |  │Attack who is in the way   -            Strike someone walked into with t█│ │|
-|  │Attack, choosing how       shift+f      Choose the blow, the target, the █│ │|
+|  │Attack, choosing how       Shift+F      Choose the blow, the target, the █│ │|
 |  │Condition                  c                                             █│ │|
 |  │Go down                    >                                             ││ │|
 |  │Go there                   -                                             ││ │|
 |  │Go up                      <                                             ││ │|
 |  │Grab or take down          v            Choose a hold, a throw or a taked││ │|
 |  │Inventory                  i                                             ││ │|
-|  │Journal                    shift+j                                       ││ │|
-|  │Keys                       ?, f1        Show every control and its keys i││ │|
-|┌ │Know-how                   shift+k      List what the character knows how││ │|
+|  │Journal                    Shift+J                                       ││ │|
+|  │Keys                       ?, F1        Show every control and its keys i││ │|
+|┌ │Know-how                   Shift+K      List what the character knows how││ │|
 |│ │Look around                x                                             ││ │|
-|│ │Make something             shift+m      List what can be made here, by ha││ │|
+|│ │Make something             Shift+M      List what can be made here, by ha││ │|
 |│ │Map                        m                                             ││t│|
-|│ │Next target                tab          Select the nearest creature in si││y│|
+|│ │Next target                Tab          Select the nearest creature in si││y│|
 |│ │Options                    o                                             ││ │|
 |└─└──────────────────────────────────────────────────────────────────────────┘─┘|
 fg

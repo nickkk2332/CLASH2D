@@ -7,22 +7,22 @@ chars
 |  │Quick slot 8               8            Use the ability on quick slot 8. ││ │|
 |  │Quick slot 9               9            Use the ability on quick slot 9. ││ │|
 |  │Reload                     r            Load the weapon in hand from what││ │|
-|  │See everything             f12          Switch between what the character││ │|
+|  │See everything             F12          Switch between what the character││ │|
 |  │Shoot                      s            Shoot or throw at the target with││ │|
 |  │Stop                       z            Stop what the character is doing:││ │|
-|  │Talk                       shift+t      Talk to the target: list what the││ │|
+|  │Talk                       Shift+T      Talk to the target: list what the││ │|
 |  │Throw                      t            Throw what is in hand at the targ││ │|
 |  │Use something near         e            List what can be done with the th││ │|
 |  │Use what is in the way     -            Do what the thing walked into off││ │|
 |  │Wait                       .            Let a second pass.               ││ │|
-|  │Walk east                  l, right                                      ││ │|
-|  │Walk north                 k, up                                         █│ │|
+|  │Walk east                  l, Right                                      ││ │|
+|  │Walk north                 k, Up                                         █│ │|
 |  │Walk north-east            u                                             █│ │|
 |┌ │Walk north-west            y                                             █│ │|
-|│ │Walk south                 j, down                                       █│ │|
+|│ │Walk south                 j, Down                                       █│ │|
 |│ │Walk south-east            n                                             █│ │|
 |│ │Walk south-west            b                                             █│t│|
-|│ │Walk west                  h, left                                       █│y│|
+|│ │Walk west                  h, Left                                       █│y│|
 |│ │What can be done here      -                                             █│ │|
 |└─└──────────────────────────────────────────────────────────────────────────┘─┘|
 fg

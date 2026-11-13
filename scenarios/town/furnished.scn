@@ -25,4 +25,4 @@ advance 4s
 expect event tasted
 expect event dosed
 assert "@c:2068,1033,0.fixture.latent"
-expect hash 1ddd45580b3e42e7bb3af8e2fd11aeb9
+expect hash 31cc5e51e72b93db727e2decd63fce18

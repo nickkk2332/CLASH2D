@@ -254,6 +254,50 @@ impl fmt::Display for KeyChord {
     }
 }
 
+impl KeyChord {
+    /// The key as a person reads it (decision D-866): `Shift+J`, `Tab`,
+    /// `F1`, `Esc`, `Page Up`, `Ctrl+D`, `Space`, `,`. A keymap writes the
+    /// same key `shift+j`, `tab`, `f1`, `escape`.
+    pub fn label(&self) -> String {
+        let mut out = String::new();
+        for (flag, name) in [
+            (Mods::CTRL, "Ctrl+"),
+            (Mods::ALT, "Alt+"),
+            (Mods::SHIFT, "Shift+"),
+        ] {
+            if self.mods.contains(flag) {
+                out.push_str(name);
+            }
+        }
+        let key = match self.code {
+            KeyCode::Char(' ') => "Space".to_owned(),
+            // A letter held with a modifier is written as its capital, as
+            // on the key: Shift+J, Ctrl+D.
+            KeyCode::Char(ch) if !self.mods.is_empty() && ch.is_alphabetic() => {
+                ch.to_uppercase().collect::<String>()
+            }
+            KeyCode::Char(ch) => ch.to_string(),
+            KeyCode::Enter => "Enter".to_owned(),
+            KeyCode::Escape => "Esc".to_owned(),
+            KeyCode::Backspace => "Backspace".to_owned(),
+            KeyCode::Tab => "Tab".to_owned(),
+            KeyCode::Up => "Up".to_owned(),
+            KeyCode::Down => "Down".to_owned(),
+            KeyCode::Left => "Left".to_owned(),
+            KeyCode::Right => "Right".to_owned(),
+            KeyCode::Home => "Home".to_owned(),
+            KeyCode::End => "End".to_owned(),
+            KeyCode::PageUp => "Page Up".to_owned(),
+            KeyCode::PageDown => "Page Down".to_owned(),
+            KeyCode::Insert => "Insert".to_owned(),
+            KeyCode::Delete => "Delete".to_owned(),
+            KeyCode::F(n) => format!("F{n}"),
+        };
+        out.push_str(&key);
+        out
+    }
+}
+
 impl<'de> Deserialize<'de> for KeyChord {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<KeyChord, D::Error> {
         struct ChordVisitor;
@@ -467,6 +511,25 @@ mod tests {
             "é",
         ] {
             assert_eq!(KeyChord::parse(text).unwrap().to_string(), text);
+        }
+    }
+
+    #[test]
+    fn a_key_is_written_for_a_person_as_on_the_keyboard() {
+        for (text, shown) in [
+            ("h", "h"),
+            ("shift+j", "Shift+J"),
+            ("tab", "Tab"),
+            ("shift+tab", "Shift+Tab"),
+            ("f1", "F1"),
+            ("escape", "Esc"),
+            ("page_up", "Page Up"),
+            ("ctrl+d", "Ctrl+D"),
+            ("space", "Space"),
+            (",", ","),
+            ("?", "?"),
+        ] {
+            assert_eq!(KeyChord::parse(text).unwrap().label(), shown, "{text}");
         }
     }
 

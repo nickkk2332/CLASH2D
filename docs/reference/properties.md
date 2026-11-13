@@ -6,23 +6,23 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | Kind | What it refers to | Properties |
 |------|-------------------|-----------:|
 | [`ability`](#ability) | An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself. | 9 |
-| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 17 |
+| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 18 |
 | [`app_entry`](#app-entry) | One entry of a list `app` offers: a save, a profile, a mod or a scenario. | 4 |
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 18 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 155 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 149 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
-| [`part`](#part) | A part of a body (06 §6). | 22 |
+| [`part`](#part) | A part of a body (06 §6). | 23 |
 | [`pools`](#pools) | The pools of one entity, reached as `entity.pool` (06 §4.2). | 4 |
-| [`realm`](#realm) | One contiguous space with its own rules (02 §4). | 11 |
+| [`realm`](#realm) | One contiguous space with its own rules (02 §4). | 6 |
 | [`site`](#site) | A named place with identity, spanning one or more tracts (02 §8.4). | 8 |
 | [`tracks`](#tracks) | The tracks of one entity, reached as `entity.track` (06 §4.3). | 2 |
 | [`tract`](#tract) | A tract of a realm, loaded or not: what the engine knows of it is its record (02 §9.1). | 10 |
 | [`window`](#window) | A reaction window (03 §7.1): an opportunity with a deadline that those who notice it may answer. | 0 |
-| [`wound`](#wound) | A wound on a part of a body (06 §7.3). | 10 |
+| [`wound`](#wound) | A wound on a part of a body (06 §7.3). | 11 |
 
 <a id="ability"></a>
 ## `ability`
@@ -54,10 +54,12 @@ Things outside the simulation: saves, profiles, mods, scenarios, preferences and
 
 - `app.can_load -> bool` · safe for belief: Whether the scenario's saving policy allows loading now.
 - `app.can_save -> bool` · safe for belief: Whether the scenario's saving policy allows saving now (13 §9.2).
-- `app.controls(context?: string) -> list<map<string>>` · safe for belief: Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; and `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty.
+- `app.controls(context?: string) -> list<map<string>>` · safe for belief: Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty; and `shown`, the same keys as a person reads them (`Shift+J`, `Tab`, `F1`, `Esc`).
   - `context` (string, optional): A context of the keymap whose keys are listed: left out, `play`.
 - `app.creation -> any` · safe for belief: The character being made (06 §10.3); null when none is.
-- `app.keys(context: string) -> list<map<string>>` · safe for belief: What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2).
+- `app.defines(type: string) -> bool` · safe for belief: Whether the loaded mods define anything of a definition type: so that a screen offers a setting only for a system that has something to work on (decision D-867). False for a type no loaded definition has, and for one the engine does not know.
+  - `type` (string): A definition type, by the name data writes it with: `cutscene`, `recipe`.
+- `app.keys(context: string) -> list<map<string>>` · safe for belief: What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; `keys`, every key given that name, as a keymap writes them, joined by commas; and `shown`, the same keys as a person reads them (`Shift+J`, `Tab`, `F1`, `Esc`) (12 §9.2).
   - `context` (string): A context of the keymap: `play`, `menu`, `targeting`.
 - `app.mods -> list<app_entry>` · safe for belief: The mods that were found, each with whether it is enabled.
 - `app.pref(id: id<preference>) -> any` · safe for belief: The value of a preference (12 §10.4).
@@ -176,7 +178,6 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.actions_with(tag: string, target?: any) -> list<map<any>>`: What the entity could start of the actions that carry a tag, as it believes (12 §10.7): one row for each, those that could start first, then those that strike with something held, then those that take fewer slots, then by qualified id, with `value` (the action's id), `label` and `name` (what a reader calls it), `id` (its qualified id as a text), `available` (whether it could start now) and `why` (the refusal's sentence where it could not, else empty). With `target`, that is given to an action that has a parameter or role named `target`; its `requires` is judged once every parameter without a default is given. Read of the character itself in a mind context.
   - `tag` (string): The tag the actions carry: the `ui` mod asks for `strike`, `shot`, `grip`, `takedown`.
   - `target` (any, optional): Who the actions are aimed at, if anyone.
-- `entity.agent_doing -> string?`: For an agent out of the world (09 §10.1): what it is doing. Null for anyone in the world, and for anyone who is no resident.
 - `entity.altitude -> real?`: How high the entity stands above the base of its cell, in metres. Null if it is not at a cell itself.
   Changed by `entity_relocated`.
 - `entity.attr -> attrs` · same owner: The entity's attributes: follow with a definition's id, as in `self.attr.<id>`.
@@ -271,11 +272,16 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `entity_unconscious`, `entity_woke`, `entity_died`, `entity_revived`, `seized`, `grip_broken`.
 - `entity.hold -> string?`: How the entity is held by what it is inside: `grasp`, `worn`, `stowed`, `seat`, `inside` or `fixed`. Null for one that is inside nothing.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
+- `entity.hold_fault(verb: string, what: any, other?: any) -> string?`: Why the entity, as it believes, could not do one of the holding verbs to a thing now, as a sentence for it to read: null if it could (06 §9.2, decision D-865). For an item action's `requires` and `fail_text`; read of the character itself in a mind context. `take`: pick up a thing lying loose within reach, or take one it carries into a hand (what no hand holds goes into something carried that takes it); `grasp`: hold it in a hand; `drop`; `wear`; `remove`, into a hand; `stow`, into something it wears or holds; `put_in`, into `other`, which it carries or perceives within reach; `take_out`, out of a container it carries or perceives within reach, into a hand; `give`, to `other`, someone it perceives within reach with a hand free for it. Doing it to the entity itself is refused; `take` of the entity itself says there is nothing within reach to pick up.
+  Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
+  - `verb` (string): `take`, `grasp`, `drop`, `wear`, `remove`, `stow`, `put_in`, `take_out` or `give`.
+  - `what` (any): The thing.
+  - `other` (any, optional): For `put_in` the container, for `give` whom it is given to.
 - `entity.holder -> entity?`: What holds the entity: what it is directly inside. Null for one that is inside nothing.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.holds_substance(substance: id<substance>) -> real`: How much of a substance one member of an item holds, in cubic metres.
   - `substance` (id<substance>): The substance.
-- `entity.home -> loc`: Where this character's mind belongs: for a resident of a settlement, its home (06 §12.2); else where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.
+- `entity.home -> loc`: Where this character's mind belongs: where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.
 - `entity.hostile(x: entity) -> bool`: Whether this character's mind holds `x` hostile (09 §3.4): by a stance it took, or, once it has perceived `x`, by a tag `x` presents that its mind's `hostile_to` names. Relations (15 §9) will take its place.
   Changed by `detected`, `perceived`.
   - `x` (entity): Whom it is asked about.
@@ -321,6 +327,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.loc -> loc?` · settable: The cell the entity is in: its own, or that of whatever it is inside. Null if it is not in the world. Setting it relocates the entity to stand in that cell (`entity_relocated`); setting null takes it out of the world.
   Changed by `entity_relocated`.
 - `entity.local_time -> real?`: The local time of the clock the entity is on, in seconds. Null if it is on none.
+- `entity.loose_near -> list<map<any>>`: The things the entity perceives lying loose within reach (in its cell, or one of the eight round it on its storey), its own cell first, then the nearest: what it could pick up. Each a map of `value` (the thing), `label` (what the entity calls it, with its article) and `where` (`here`, `north`, `north-east`, ...), as a list picker takes them (decision D-865). Read of the character itself in a mind context.
+  Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.make_fault(recipe: any, station: any) -> string?`: Why the entity, as it believes, could not start a recipe now: null if it could. A refusal's sentence, for a work action's `fail_text`.
   - `recipe` (any): The recipe: its id, or its qualified id as a text.
   - `station` (any): The station: an element or a device; null by hand.
@@ -382,19 +390,12 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `memory_added`, `memory_forgotten`.
   - `x` (entity): Whom it is asked about.
   - `event` (string): The event type, or `''` for any.
-- `entity.resident -> bool`: Whether it stands for a resident of a settlement (06 §12.2): made from a request generation handed over, the same person each time it is made.
-- `entity.resident_home -> loc?`: Its home as a resident: the cell generation asked for it at. Null if it is no resident.
 - `entity.role_in(group: string) -> string?`: Its role in a group (15 §9.2), or null if it has none or is not a member.
   Changed by `group_joined`, `group_left`, `role_changed`.
   - `group` (string): The group's key or id.
 - `entity.room -> real?`: The room left in one member of an item for substances, in cubic metres. Null for what holds none.
 - `entity.rounds -> int`: How many rounds an item can fire before it is empty (07 §11.5): the members of the rounds in its feed. Zero for one with none.
   Changed by `item_taken`, `item_dropped`, `item_merged`, `item_split`, `entity_relocated`, `entity_removed`.
-- `entity.routine -> string?`: The qualified id of the routine it keeps (09 §10.2): the one `set_routine` gave it, else the one its mind names. Null if none.
-- `entity.routine_away -> bool?`: Whether it is further from `routine_place` than the part of the day's `within` allows: not yet where its routine has it be. Null where `routine_place` is.
-- `entity.routine_doing -> string?`: What its routine has it doing now: the `doing` of the part of the day it is at (09 §10.2). Null if it keeps no routine.
-- `entity.routine_place -> loc?`: Where its routine has it be now (09 §10.2): its own spot at the first place the part of the day names (on a `beat`, the one it has come to), or its home if none answers. Null if it keeps no routine, or if that place is in a tract that is not loaded, where it cannot walk.
-- `entity.routine_places -> list<loc>`: Every place the part of the day its routine is at names, each its own spot, in order (for `pick: all`, every site it answers, nearest its home first): a beat between them. Only those in loaded tracts.
 - `entity.scale -> real?`: The body's overall size factor. Null for something with no body.
 - `entity.seen_how(x: entity) -> string?`: How this mind last knew of `x`: the qualified id of the kind of signal it perceived it by, or `told`, `inferred` or `carried` (15 §7.1). Null if it never has.
   - `x` (entity): Whom or what it is asked about.
@@ -545,6 +546,7 @@ A part of a body (06 §6).
 - `part.has_tag(tag: string) -> bool`: Whether the part's definition carries a tag.
   - `tag` (string): The tag.
 - `part.inside -> list<part>` · same owner: The parts that are there and sit inside it.
+- `part.label -> string`: What a reader calls the part: the `name` its body's plan gives it, or else its side and its definition's name (`left arm`).
 - `part.layer_damage(layer: int) -> real?`: How damaged a layer is, from 0 to 1. Null if the part has no such layer.
   - `layer` (int): Which layer, from 0 for the outermost.
 - `part.layer_material(layer: int) -> id<material>?`: What a layer is made of. Null if the part has no such layer.
@@ -588,15 +590,10 @@ One contiguous space with its own rules (02 §4).
 
 - `realm.clock_rate -> real?` · settable: The rate of the realm's clock against universal time (03 §3.4). Setting it changes the rate and emits `clock_rate_changed`; a realm always has a clock, so null is refused.
   Changed by `clock_rate_changed`.
-- `realm.day -> int?` · safe for belief: The day it is in the realm, counted from 1 on the day its clock began (09 §14.2).
-- `realm.day_length -> real?` · safe for belief: How long a day of the realm is, in seconds of its clock: its sky's day (09 §14.2).
-- `realm.day_part -> string?` · safe for belief: The name of the part of the day it is in the realm, by the calendar the realm names (09 §14.2). Null for a realm with no calendar, or a calendar with no parts.
 - `realm.def -> id<realm>?`: The realm's definition.
 - `realm.grid -> int?`: The id of the realm's base grid.
 - `realm.kind -> string` · safe for belief: The name of the kind of subject this is: `entity`, `loc`, `element`, `area`, `site`, `tract`, `realm` or `global`.
 - `realm.local_time -> real?`: The local time of the realm's clock, in seconds.
-- `realm.season -> string?` · safe for belief: The name of the season it is in the realm, by its calendar's year and seasons (09 §14.2). Null for a realm with no calendar, no year or no seasons.
-- `realm.time_of_day -> real?` · safe for belief: The time of day in the realm, in seconds since midnight by its day (09 §14.2): its sky's length of day and the time its clock starts at, its clock running at the realm's rate.
 - `realm.timer(name: string) -> real?`: The local time, in seconds, that the timer of this name belonging to it has left (05 §10.4); null if it has none of that name. A timer away with its owner keeps what it had left.
   - `name` (string): The timer's name.
 
@@ -661,6 +658,7 @@ A wound on a part of a body (06 §7.3).
 - `wound.depth -> int`: How many of the part's layers it goes through, from the outside.
 - `wound.energy -> real`: The joules the part absorbed in making it.
 - `wound.kind -> id<damage_type>`: The kind of damage that made it.
+- `wound.kind_name -> string`: The kind of damage that made it in plain words, for a reader: its damage type's bare id with spaces for underscores (`cut`).
 - `wound.owner -> entity` · same owner: Whose wound it is.
 - `wound.part -> part` · same owner: The part it is on.
 - `wound.rate -> real`: What it drains from pools each second, every pool summed. 0 once it is closed.

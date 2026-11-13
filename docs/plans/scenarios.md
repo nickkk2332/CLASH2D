@@ -18,7 +18,7 @@ regression tests each package adds are called test scripts here.
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | SC1 | Scenario definitions and starting a game | M | WG6, K5, P6 | beta |
-| SC2 | Characters at the start | M | SC1, E9, U9, L2 | todo |
+| SC2 | Characters at the start | M | SC1, E9, U9, L2 | beta |
 | SC3 | Objectives and missions | M | SC1, A1, L4 | beta |
 | SC4 | Plots | S | SC3 | todo |
 | SC5 | The director | M | SC1, L3 | todo |
@@ -98,6 +98,20 @@ Done when
   inhabitant, with that character's body, beliefs, routine and relations
   intact.
 - A party of three starts with each member's control mode as stated.
+
+Beta (decision D-860): `playable` on templates; a scenario's character
+entry has `create` and `pick` (`true` for every playable template, or a
+list), so that each game says whether the player makes the character,
+chooses one ready-made or is given it; the application offers
+`app.templates` for the game the creation session is for and refuses
+what the game does not allow. The bundled games say: the sandbox and the
+town offer creation, the errand and the last stand a choice, the lane
+gives an ordinary person. Covered by `crates/clash-app/tests/essentials.rs`
+(`characters_are_made_chosen_or_given_as_each_game_says`, which checks
+that the creation screen offers exactly what each scenario allows, and
+the tests of a brawler chosen, an adept made and a marksman saved).
+Stubbed: `spec`, `roster`, `become` (test script `become_anyone`),
+limits by kind and tag, parties of several and their control modes.
 
 ### SC3 — Objectives and missions
 

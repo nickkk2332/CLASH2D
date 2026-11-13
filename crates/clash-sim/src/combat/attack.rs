@@ -83,6 +83,12 @@ pub struct WithDef {
     /// An inline surface: its length of contact across the target.
     #[serde(default)]
     pub span: Option<Length>,
+    /// What a reader is told the blow needs when nothing answers, as
+    /// words: `a blade`, read as "Slash needs a blade in hand." Left
+    /// out, the tag or the part is named in plain words (decision
+    /// D-864).
+    #[serde(default)]
+    pub needs: Option<String>,
 }
 
 /// Where a [`WithDef`] finds its surface.
