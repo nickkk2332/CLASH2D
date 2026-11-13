@@ -931,6 +931,18 @@ impl Maker {
             .unwrap_or_default();
         entries.insert("name".to_owned(), Value::text(&self.name));
         entries.insert("seed".to_owned(), Value::Int(self.seed));
+        // The fake makes every character's choices, and calls it by its
+        // template's name, as the game does for a game that lets the
+        // player make one.
+        entries.insert("editable".to_owned(), Value::Bool(true));
+        let made_from = session.spec().templates.first().and_then(|first| {
+            let templates = self
+                .defs
+                .try_registry::<clash_sim::template::TemplateDef>()?;
+            let def = templates.get(templates.lookup(first)?);
+            def.name.as_ref().map(|name| Value::text(name.raw()))
+        });
+        entries.insert("made_from".to_owned(), made_from.unwrap_or_default());
         let attributes = clash_sim::template::resolve(&self.defs, session.spec())
             .map(|resolved| {
                 resolved
@@ -986,6 +998,9 @@ impl Maker {
                 };
                 return Ok(());
             }
+            // The game the character is made for: the fake offers the
+            // same templates for every game.
+            "scenario" => return Ok(()),
             _ => {}
         }
         let defs = Arc::clone(&self.defs);

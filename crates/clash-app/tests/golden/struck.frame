@@ -3,7 +3,7 @@ size 80x24
 chars
 |                  .   .n #.....   .                   ┌────────────────────────┐|
 |                   .   . #n...   .      .             │Ada                     │|
-|                    ,# . #.... #,     ..              │Target Brute            │|
+|                    ,# . #.... #,     ..              │Target The person       │|
 |                     =  . ...  =    ,'.               │Blood  █████████████████│|
 |                 ..  #. .#..n .#  ..,#                │Pain   ░░░░░░░░░░░░░░░░░│|
 |                 ...,##=#='=#=##,...,## # # # ##    ,#│                        │|
@@ -19,8 +19,8 @@ chars
 |                                                      │                        │|
 |                                                      │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
-|│Brute staggers.                                     ││                        │|
-|│Ada strikes Brute.                                  ││                        │|
+|│The person staggers.                                ││                        │|
+|│Ada strikes the person.                             ││                        │|
 |│                                                    ││Tab target f hit s shoot│|
 |│                                                    ││x look  i things  c body│|
 |│                                                    ││? keys  Esc menu        │|

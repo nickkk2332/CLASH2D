@@ -6,16 +6,16 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | Kind | What it refers to | Properties |
 |------|-------------------|-----------:|
 | [`ability`](#ability) | An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself. | 9 |
-| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 17 |
+| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 18 |
 | [`app_entry`](#app-entry) | One entry of a list `app` offers: a save, a profile, a mod or a scenario. | 4 |
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 18 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 147 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 149 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
-| [`part`](#part) | A part of a body (06 §6). | 22 |
+| [`part`](#part) | A part of a body (06 §6). | 23 |
 | [`pools`](#pools) | The pools of one entity, reached as `entity.pool` (06 §4.2). | 4 |
 | [`realm`](#realm) | One contiguous space with its own rules (02 §4). | 6 |
 | [`site`](#site) | A named place with identity, spanning one or more tracts (02 §8.4). | 8 |
@@ -54,10 +54,12 @@ Things outside the simulation: saves, profiles, mods, scenarios, preferences and
 
 - `app.can_load -> bool` · safe for belief: Whether the scenario's saving policy allows loading now.
 - `app.can_save -> bool` · safe for belief: Whether the scenario's saving policy allows saving now (13 §9.2).
-- `app.controls(context?: string) -> list<map<string>>` · safe for belief: Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; and `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty.
+- `app.controls(context?: string) -> list<map<string>>` · safe for belief: Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty; and `shown`, the same keys as a person reads them (`Shift+J`, `Tab`, `F1`, `Esc`).
   - `context` (string, optional): A context of the keymap whose keys are listed: left out, `play`.
 - `app.creation -> any` · safe for belief: The character being made (06 §10.3); null when none is.
-- `app.keys(context: string) -> list<map<string>>` · safe for belief: What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2).
+- `app.defines(type: string) -> bool` · safe for belief: Whether the loaded mods define anything of a definition type: so that a screen offers a setting only for a system that has something to work on (decision D-867). False for a type no loaded definition has, and for one the engine does not know.
+  - `type` (string): A definition type, by the name data writes it with: `cutscene`, `recipe`.
+- `app.keys(context: string) -> list<map<string>>` · safe for belief: What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; `keys`, every key given that name, as a keymap writes them, joined by commas; and `shown`, the same keys as a person reads them (`Shift+J`, `Tab`, `F1`, `Esc`) (12 §9.2).
   - `context` (string): A context of the keymap: `play`, `menu`, `targeting`.
 - `app.mods -> list<app_entry>` · safe for belief: The mods that were found, each with whether it is enabled.
 - `app.pref(id: id<preference>) -> any` · safe for belief: The value of a preference (12 §10.4).
@@ -270,6 +272,11 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `entity_unconscious`, `entity_woke`, `entity_died`, `entity_revived`, `seized`, `grip_broken`.
 - `entity.hold -> string?`: How the entity is held by what it is inside: `grasp`, `worn`, `stowed`, `seat`, `inside` or `fixed`. Null for one that is inside nothing.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
+- `entity.hold_fault(verb: string, what: any, other?: any) -> string?`: Why the entity, as it believes, could not do one of the holding verbs to a thing now, as a sentence for it to read: null if it could (06 §9.2, decision D-865). For an item action's `requires` and `fail_text`; read of the character itself in a mind context. `take`: pick up a thing lying loose within reach, or take one it carries into a hand (what no hand holds goes into something carried that takes it); `grasp`: hold it in a hand; `drop`; `wear`; `remove`, into a hand; `stow`, into something it wears or holds; `put_in`, into `other`, which it carries or perceives within reach; `take_out`, out of a container it carries or perceives within reach, into a hand; `give`, to `other`, someone it perceives within reach with a hand free for it. Doing it to the entity itself is refused; `take` of the entity itself says there is nothing within reach to pick up.
+  Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
+  - `verb` (string): `take`, `grasp`, `drop`, `wear`, `remove`, `stow`, `put_in`, `take_out` or `give`.
+  - `what` (any): The thing.
+  - `other` (any, optional): For `put_in` the container, for `give` whom it is given to.
 - `entity.holder -> entity?`: What holds the entity: what it is directly inside. Null for one that is inside nothing.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.holds_substance(substance: id<substance>) -> real`: How much of a substance one member of an item holds, in cubic metres.
@@ -320,6 +327,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.loc -> loc?` · settable: The cell the entity is in: its own, or that of whatever it is inside. Null if it is not in the world. Setting it relocates the entity to stand in that cell (`entity_relocated`); setting null takes it out of the world.
   Changed by `entity_relocated`.
 - `entity.local_time -> real?`: The local time of the clock the entity is on, in seconds. Null if it is on none.
+- `entity.loose_near -> list<map<any>>`: The things the entity perceives lying loose within reach (in its cell, or one of the eight round it on its storey), its own cell first, then the nearest: what it could pick up. Each a map of `value` (the thing), `label` (what the entity calls it, with its article) and `where` (`here`, `north`, `north-east`, ...), as a list picker takes them (decision D-865). Read of the character itself in a mind context.
+  Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.make_fault(recipe: any, station: any) -> string?`: Why the entity, as it believes, could not start a recipe now: null if it could. A refusal's sentence, for a work action's `fail_text`.
   - `recipe` (any): The recipe: its id, or its qualified id as a text.
   - `station` (any): The station: an element or a device; null by hand.
@@ -537,6 +546,7 @@ A part of a body (06 §6).
 - `part.has_tag(tag: string) -> bool`: Whether the part's definition carries a tag.
   - `tag` (string): The tag.
 - `part.inside -> list<part>` · same owner: The parts that are there and sit inside it.
+- `part.label -> string`: What a reader calls the part: the `name` its body's plan gives it, or else its side and its definition's name (`left arm`).
 - `part.layer_damage(layer: int) -> real?`: How damaged a layer is, from 0 to 1. Null if the part has no such layer.
   - `layer` (int): Which layer, from 0 for the outermost.
 - `part.layer_material(layer: int) -> id<material>?`: What a layer is made of. Null if the part has no such layer.

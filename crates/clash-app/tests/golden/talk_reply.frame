@@ -3,7 +3,7 @@ size 80x24
 chars
 |                  .   .n #.....   .                   ┌────────────────────────┐|
 |                   .   . #n...   .      .             │Ada                     │|
-|                    ,# . #.... #,     ..              │Target Bram             │|
+|                    ,# . #.... #,     ..              │Target The person       │|
 |                     =  . ...  =    ,'.               │Blood  █████████████████│|
 |                 ..  #. .#..n .#  ..,#                │Pain   ░░░░░░░░░░░░░░░░░│|
 |                 ...,##=#='=#=##,...,## # # # ##    ,#│                        │|
@@ -19,7 +19,7 @@ chars
 |                                                      │                        │|
 |                                                      │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
-|│Ada speaks to Bram.                                 ││                        │|
+|│Ada speaks to the person.                           ││                        │|
 |│The person says: "Morning."                         ││                        │|
 |│                                                    ││Tab target f hit s shoot│|
 |│                                                    ││x look  i things  c body│|

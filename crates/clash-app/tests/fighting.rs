@@ -68,7 +68,9 @@ fn tab_selects_the_target_and_f_strikes_it() {
     assert_eq!(target_of(&run), None, "nothing is selected at first");
     script(&mut run, "tab\n");
     assert_eq!(target_of(&run), Some(brute), "Tab selects who is in sight");
-    assert!(run.text().contains("Target Brute"), "{}", run.text());
+    // Named as the character knows them: a stranger, by what they look
+    // like (05 §4.6; decision D-862).
+    assert!(run.text().contains("Target The person"), "{}", run.text());
     assert_golden(golden("target_selected"), run.frame());
 
     // The quick blow: the first that can be made, at the target, with
@@ -89,7 +91,9 @@ fn tab_selects_the_target_and_f_strikes_it() {
     script(&mut run, "wait 60\n");
     settle(&mut run);
     assert!(
-        log(&run).iter().any(|(_, line)| line.contains("Brute")),
+        log(&run)
+            .iter()
+            .any(|(_, line)| line.contains("strikes the person")),
         "the blow is told: {:?}",
         log(&run)
     );
@@ -106,7 +110,7 @@ fn the_precise_blow_asks_for_the_blow_the_part_and_the_effort() {
     assert!(listed.contains("Punch"), "{listed}");
     // A blade's blows cannot be made with empty hands, and say why.
     assert!(
-        listed.contains("Slash: Slash needs something in hand that is `blade`."),
+        listed.contains("Slash: Slash needs a blade in hand."),
         "{listed}"
     );
     assert_golden(golden("attack_choose"), run.frame());
@@ -116,7 +120,7 @@ fn the_precise_blow_asks_for_the_blow_the_part_and_the_effort() {
     assert_eq!(top(&run), "ui:play");
     assert_eq!(
         log(&run).last().map(|(_, line)| line.as_str()),
-        Some("Slash needs something in hand that is `blade`.")
+        Some("Slash needs a blade in hand.")
     );
 
     // Punch: the target, filled in with the one selected; the part,
@@ -178,7 +182,7 @@ fn the_second_button_offers_what_can_be_done_with_someone() {
     assert_eq!(top(&run), "ui:context_menu");
     let menu = run.text();
     for offer in [
-        "Brute",
+        "The person",
         "Attack",
         "Shoot",
         "Talk",

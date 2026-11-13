@@ -254,6 +254,48 @@ impl fmt::Display for KeyChord {
     }
 }
 
+impl KeyChord {
+    /// The key as a person reads it (decision D-866): `Shift+J`, `Tab`,
+    /// `F1`, `Esc`, `Page Up`, `Ctrl+D`, `Space`, `,`. A keymap writes the
+    /// same key `shift+j`, `tab`, `f1`, `escape`.
+    pub fn label(&self) -> String {
+        let mut out = String::new();
+        for (flag, name) in [
+            (Mods::CTRL, "Ctrl+"),
+            (Mods::ALT, "Alt+"),
+            (Mods::SHIFT, "Shift+"),
+        ] {
+            if self.mods.contains(flag) {
+                out.push_str(name);
+            }
+        }
+        let key = match self.code {
+            KeyCode::Char(' ') => "Space".to_owned(),
+            KeyCode::Char(ch) if self.mods.contains(Mods::SHIFT) => {
+                ch.to_uppercase().collect::<String>()
+            }
+            KeyCode::Char(ch) => ch.to_string(),
+            KeyCode::Enter => "Enter".to_owned(),
+            KeyCode::Escape => "Esc".to_owned(),
+            KeyCode::Backspace => "Backspace".to_owned(),
+            KeyCode::Tab => "Tab".to_owned(),
+            KeyCode::Up => "Up".to_owned(),
+            KeyCode::Down => "Down".to_owned(),
+            KeyCode::Left => "Left".to_owned(),
+            KeyCode::Right => "Right".to_owned(),
+            KeyCode::Home => "Home".to_owned(),
+            KeyCode::End => "End".to_owned(),
+            KeyCode::PageUp => "Page Up".to_owned(),
+            KeyCode::PageDown => "Page Down".to_owned(),
+            KeyCode::Insert => "Insert".to_owned(),
+            KeyCode::Delete => "Delete".to_owned(),
+            KeyCode::F(n) => format!("F{n}"),
+        };
+        out.push_str(&key);
+        out
+    }
+}
+
 impl<'de> Deserialize<'de> for KeyChord {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<KeyChord, D::Error> {
         struct ChordVisitor;

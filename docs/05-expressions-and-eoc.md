@@ -305,8 +305,13 @@ As built (decision D-542), in `clash_sim::reader`:
   the social one (15 §13, decision D-766): the name of the persona the
   reader takes someone for if it knows it, else the name of the template
   that persona looks like with its article (`the person`), else
-  `someone`; a thing that is no one goes by its own name. A package or
-  a test may put another in its place with `Sim::set_reader_lens`. The
+  `someone`; a thing that is no one goes by its own name, or with none
+  by what it was made from (decision D-862): an item by its
+  definition's `name` (`the parcel`; a stack by its count, `12
+  arrows`), a device by its definition's, anything else made from
+  templates by the first template's name; only what has none of them
+  is "something". A package or a test may put another in its place with
+  `Sim::set_reader_lens`. The
   lens is not state: a loaded simulation is bound with the social one
   again.
 - The English forms are built in until the `language` definition type

@@ -2,10 +2,10 @@ clash-frame 1
 size 40x6
 chars
 |┌ All ─────────────┐┌ Speech ──────────┐|
-|│combat line 1    █││speech line 3     │|
-|│combat line 2    │││speech line 6     │|
-|│speech line 3    │││speech line 9     │|
-|│combat line 4    │││                  │|
+|│Combat line 1    █││Speech line 3     │|
+|│Combat line 2    │││Speech line 6     │|
+|│Speech line 3    │││Speech line 9     │|
+|│Combat line 4    │││                  │|
 |└──────────────────┘└──────────────────┘|
 fg
 |0022200000000000000000222222000000000000|

@@ -1,5 +1,5 @@
 [
-  { "//": "Character creation: the screen of the role `creation`, reached from the new-game screen with F2. It edits the creation session the application keeps (06 §10.3), which it reads as `app.creation` and changes through the `app` service `creation`. Everything it shows comes from the templates' data: the choices of every kind, their options, parts, bounds and budgets, what is chosen and whether the character is complete. With no session in progress it lists `app.templates` to begin one from. A choice is changed in the popup `create_choice`, which shows the widget that fits its kind. Begin finishes the character and asks for the game, at the start the screen was opened for (`scenario`).",
+  { "//": "Character creation: the screen of the role `creation`, reached from the new-game screen with F2. It edits the creation session the application keeps (06 §10.3), which it reads as `app.creation` and changes through the `app` service `creation`. Everything it shows comes from the templates' data: the choices of every kind, their options, parts, bounds and budgets, what is chosen and whether the character is complete. With no session in progress it lists `app.templates` to begin one from: what the game it was opened for offers (13 §4.2), each with what sort of person it makes. Where the game gives its characters ready-made (`app.creation.editable` false) the choices are shown and only the name can be changed. A choice is changed in the popup `create_choice`, which shows the widget that fits its kind. Begin finishes the character and asks for the game, at the start the screen was opened for (`scenario`).",
     "type": "screen", "id": "create",
     "title": "Make a character",
     "min_size": [60, 20],
@@ -11,7 +11,7 @@
         { "fill": 1,
           "list": { "id": "templates", "rows": "app.templates",
                     "item": "{it.name}  <dim>{it.description}</>",
-                    "empty": "The loaded mods offer nothing to make a character from.",
+                    "empty": "In this game you are given who you are: there is nothing to make or choose. Esc goes back.",
                     "tip": "Enter begins a character of this kind.",
                     "on_activate": [
                       { "app": { "creation": { "op": "'begin'", "template": "it.id" } } },
@@ -32,11 +32,16 @@
                         "on_activate": [
                           { "set": { "screen.creation_seed": "(screen.creation_seed * 1103515245 + 12345) % 1000000000" } },
                           { "app": { "creation": { "op": "'seed'", "value": "screen.creation_seed" } } } ] } } ] },
-        { "text": "<dim>Made from</> {if screen.made_from != '' then screen.made_from else str(app.creation.templates[0] ?? '')}" },
+        { "text": "<dim>Made from</> {if screen.made_from != '' then screen.made_from else (app.creation.made_from ?? '')}" },
         { "fill": 1, "cols": [
-          { "fill": 3, "frame": "Choices",
+          { "if": "not app.creation.editable", "fill": 3, "frame": "Ready-made",
+            "list": { "id": "fixed", "rows": "app.creation.choices",
+                      "item": "{if it.depth > 0 then '  ' else ''}{it.name}  <dim>{if (it.shown ?? '') == '' then 'none yet' else it.shown}</>",
+                      "empty": "There is nothing to choose.",
+                      "tip": "In this game you choose who you are, ready-made: give them a name above, or Start over to choose another." } },
+          { "if": "app.creation.editable", "fill": 3, "frame": "Choices",
             "list": { "id": "choices", "rows": "app.creation.choices", "selected": "choice",
-                      "item": "{if it.depth > 0 then '  ' else ''}{it.name}  <dim>{if it.kind == 'text' then (if (it.value ?? '') == '' then 'none yet' else it.value) else if it.kind == 'range' then str(it.value) else if it.kind == 'pick' then (if len(it.value) == 1 then first(it.value) else str(len(it.value)) + ' of ' + str(it.count)) else if it.kind == 'points' then str(it.spent) + ' of ' + str(it.budget) + ' spent' else str(len(it.value)) + ' of ' + str(it.budget) + ' parts'}</>",
+                      "item": "{if it.depth > 0 then '  ' else ''}{it.name}  <dim>{if (it.shown ?? '') == '' then 'none yet' else it.shown}{if it.kind == 'points' then ' (' + str(it.spent) + ' of ' + str(it.budget) + ' points)' else if it.kind == 'assemble' then ' of ' + str(it.budget) else ''}</>",
                       "empty": "There is nothing to choose.",
                       "tip": "Enter changes this choice.",
                       "on_activate": [

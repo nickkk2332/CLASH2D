@@ -134,6 +134,24 @@ pub fn tag_names(source: &str) -> Result<Vec<String>, TextError> {
 }
 
 impl RichText {
+    /// The same text with its first letter a capital, where the first
+    /// character that is not a space is a lower-case letter that has a
+    /// capital of its own: how every line of the log begins (decision
+    /// D-866). Its style is kept.
+    #[must_use]
+    pub fn capitalised(mut self) -> RichText {
+        if let Some(at) = self.chars.iter().position(|ch| !ch.is_whitespace())
+            && let Some(first) = self.chars.get(at).copied()
+            && first.is_lowercase()
+        {
+            let mut upper = first.to_uppercase();
+            if let (Some(capital), None) = (upper.next(), upper.next()) {
+                self.chars[at] = capital;
+            }
+        }
+        self
+    }
+
     /// Text with no styles at all. Angle brackets are taken literally.
     pub fn plain_text(text: &str) -> RichText {
         let chars: Vec<char> = text.chars().collect();

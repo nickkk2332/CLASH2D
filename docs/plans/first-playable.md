@@ -1133,6 +1133,33 @@ reader; the case file, codex, trade, fitting, make, build, work,
 device, know-how and the helm; the region map and the chart.
 Decisions D-660 to D-669, D-790 to D-799.
 
+Essentials (decisions D-860 to D-867): the gaps a first player met are
+closed. The creation screen lists `app.templates`, which the application
+now gives for the game F2 names (`creation` with `scenario`): the
+playable templates of `mods/core` (an ordinary person, a brawler, a
+marksman, an adept who chooses two or three powers, the sampler), made
+with every choice or chosen ready-made as the game says (13 §4.2),
+`app.creation.editable`, `made_from` and each choice's `shown`. The
+inventory's actions are the `core` mod's (`holding.json`: `pick_up`,
+`drop`, `wear`, `take_off`, `stow`, `put_in`, `take_out`, `give`), each
+refused in words through `hold_fault`; `ui:interact` lists what lies
+loose within reach (`view.loose_near`) to pick up, and the control
+`pick_up` (`g`, `,`) picks up or asks which. Things are named by what
+they were made from and strangers as the character knows them; body
+parts by their labels; the keys screen writes keys for people
+(`shown`); the setup screen says how the seed is chosen; every log line
+begins with a capital; Options offers Cutscenes only where cutscenes are
+loaded (`app.defines`). Tested in `crates/clash-app/tests/essentials.rs`
+from the title (a character made, chosen and given; an adept made with
+its powers and one used; things picked up, worn, stowed, taken out,
+given and dropped; the armoury's key taken from the sergeant's desk and
+the armoury opened, over the fixture `guardhouse`; a made character
+saved and loaded unchanged; no internal name on the screens or in the
+log), with the new golden frames `create_templates`, `create_adept` and
+`inventory_item`. Still stubbed: the result's body as a figure,
+traits, a part browser for `assemble`, a text's suggestions,
+`app.creation.attributes`.
+
 ### U10 — Cutscenes
 
 **Spec** 12 §8 · **Size** M
@@ -1235,6 +1262,21 @@ frames `target_selected`, `struck`, `attack_choose`, `attack_part`,
 line of keys. Stubbed: previews of a blow (07 §13), since
 `strike_preview` reads the target as it is and a screen may not call
 it; the region map.
+
+Essentials (decisions D-860 to D-866): the application gives
+`app.templates` for the game the character is made for, refuses to
+begin from a template the game does not offer and to change a
+ready-made character's choices, makes a finished character only for
+the game it was made for, and names the game on F2; screens name
+everyone but the player's character through the reader lens with the
+character as the reader; the part picker labels parts by `label`;
+`app.defines` answers from the loaded definitions. The golden frames
+`aim_choose`, `attack_choose`, `attack_part`, `bump_ask`,
+`context_menu`, `door_locked`, `door_opened`, `empty_weapon`,
+`errand_intro`, `errand_summary`, `help_controls`, `reaction_prompt`,
+`setup`, `target_selected` and `through_door` changed for names
+(`a parcel`, `the person`, `left arm`, keys as `Shift+J`, the seed in
+words, a blade needed in words).
 
 ### Z1 — Benchmarks and budget gate
 

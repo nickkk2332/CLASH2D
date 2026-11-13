@@ -979,16 +979,16 @@ mod tests {
             assert_eq!(queue.moment(), Some(Tick(-1)));
             // What is due now is played by an advance of no time.
             assert_eq!(queue.advance(0.0, 1.0, None, &mut log).events, 1);
-            assert_eq!(texts(&log), ["one"]);
+            assert_eq!(texts(&log), ["One"]);
             queue.advance(0.17, 1.0, None, &mut log);
-            assert_eq!(texts(&log), ["one"], "{scale}");
+            assert_eq!(texts(&log), ["One"], "{scale}");
             queue.advance(0.01, 1.0, None, &mut log);
-            assert_eq!(texts(&log), ["one", "two"], "{scale}");
+            assert_eq!(texts(&log), ["One", "Two"], "{scale}");
             assert_eq!(queue.moment(), Some(Tick(2 * scale - 1)));
             queue.advance(0.16, 1.0, None, &mut log);
-            assert_eq!(texts(&log), ["one", "two"]);
+            assert_eq!(texts(&log), ["One", "Two"]);
             queue.advance(0.02, 1.0, None, &mut log);
-            assert_eq!(texts(&log), ["one", "two", "three"]);
+            assert_eq!(texts(&log), ["One", "Two", "Three"]);
             assert!(queue.is_caught_up() && queue.is_idle());
             assert_eq!(queue.moment(), None);
             assert_eq!(queue.reached(), Some(Tick(2 * scale)));
@@ -1009,11 +1009,11 @@ mod tests {
         // The wait counts for two seconds and the blows for one: the
         // first blow falls at two thirds of the stretch, not at its end.
         queue.advance(0.22, 1.0, None, &mut log);
-        assert_eq!(texts(&log), ["sleep"]);
+        assert_eq!(texts(&log), ["Sleep"]);
         queue.advance(0.02, 1.0, None, &mut log);
-        assert_eq!(texts(&log), ["sleep", "blow"]);
+        assert_eq!(texts(&log), ["Sleep", "Blow"]);
         queue.advance(0.12, 1.0, None, &mut log);
-        assert_eq!(texts(&log), ["sleep", "blow", "blow again"]);
+        assert_eq!(texts(&log), ["Sleep", "Blow", "Blow again"]);
     }
 
     #[test]
@@ -1039,19 +1039,19 @@ mod tests {
         held.hold = 1.0;
         queue.push(vec![held, said(1, "after")]);
         queue.advance(0.9, 1.0, None, &mut log);
-        assert_eq!(texts(&log), ["crash"]);
+        assert_eq!(texts(&log), ["Crash"]);
         queue.advance(0.2, 1.0, None, &mut log);
-        assert_eq!(texts(&log), ["crash", "after"]);
+        assert_eq!(texts(&log), ["Crash", "After"]);
         // A hold on the last event holds the next stretch.
         let mut last = said(5, "boom");
         last.hold = 0.5;
         queue.push(vec![last]);
         queue.push(vec![said(6, "then")]);
         queue.advance(0.4, 1.0, None, &mut log);
-        assert_eq!(texts(&log).last().unwrap(), "boom");
+        assert_eq!(texts(&log).last().unwrap(), "Boom");
         assert!(!queue.is_caught_up());
         queue.advance(0.2, 1.0, None, &mut log);
-        assert_eq!(texts(&log).last().unwrap(), "then");
+        assert_eq!(texts(&log).last().unwrap(), "Then");
     }
 
     #[test]
@@ -1060,7 +1060,7 @@ mod tests {
         let mut log = MessageLog::new();
         fast.push(vec![said(0, "a"), said(10, "b")]);
         fast.advance(0.18, 2.0, None, &mut log);
-        assert_eq!(texts(&log), ["a", "b"], "twice as fast");
+        assert_eq!(texts(&log), ["A", "B"], "twice as fast");
 
         let mut instant = Playback::new();
         let mut log = MessageLog::new();
@@ -1069,7 +1069,7 @@ mod tests {
         instant.push(vec![held, said(10, "b")]);
         instant.push(vec![said(20, "c")]);
         assert_eq!(instant.advance(0.0, 0.0, None, &mut log).events, 3);
-        assert_eq!(texts(&log), ["a", "b", "c"]);
+        assert_eq!(texts(&log), ["A", "B", "C"]);
         assert!(instant.is_idle());
     }
 
@@ -1112,10 +1112,10 @@ mod tests {
         queue.push(vec![held, said(3, "b")]);
         queue.push(vec![said(9, "c")]);
         queue.advance(0.01, 1.0, None, &mut log);
-        assert_eq!(texts(&log), ["a"]);
+        assert_eq!(texts(&log), ["A"]);
         let played = queue.skip(None, &mut log);
         assert_eq!(played.events, 2);
-        assert_eq!(texts(&log), ["a", "b", "c"]);
+        assert_eq!(texts(&log), ["A", "B", "C"]);
         assert!(queue.is_idle());
         assert_eq!(queue.take_cues().len(), 1);
         assert!(queue.take_cues().is_empty());

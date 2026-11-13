@@ -121,7 +121,7 @@ checked when mods load:
 | `options` | `setting` definitions (04 §10) the player is asked about; one that is not defined is a load error |
 | `settings` | Values by setting key, each checked against the setting's definition where there is one |
 | `locked` | Setting keys the `Setting` command refuses in this scenario (`setting.locked`) |
-| `start.characters` | Exactly one: `template` (the character's template when the player made none; checked where templates are loaded), `create` (whether the creation screen may make it; default true), `senses` (given when its templates give none; default every sense) |
+| `start.characters` | Exactly one: `template` (the character's template when the player made or chose none; checked where templates are loaded), `create` (whether the player may make it on the creation screen, with every choice of the template; default true), `pick` (`true` for every playable template, or a list of templates: what is offered to make or choose it from; left out, every playable template where `create` holds and none where it does not; with `create` false the player chooses one ready-made and only names it; section 4.2), `senses` (given when its templates give none; default every sense) |
 | `start.at` | One or more places, each a `name` and exactly one of `cell` (`[x, y]`, footing found in that column, or `[x, y, z]`) and `site` (`def`, `tag` and `name` to match; the party begins at its anchor), with `role` carried |
 | `start.time` | `day` from 1 and `at`, `HH:MM`. Left out, the realm's clock begins at its sky's `starts_at` |
 | `start.do` | Effects run once the party is placed |
@@ -164,6 +164,24 @@ A scenario may name no generated world at all, only an authored one
 | `become` | Takes over someone who already lives in the world: chosen from a query over its notable inhabitants, or at random |
 
 Several entries make a party (03 §5.1). Each has a control mode.
+
+As built (decision D-860): a template marked `playable` (06 §10.4) may
+be a player's character. A scenario's character entry has `create`
+(default true) and `pick`: with `create` the player makes the character
+on the creation screen from what is offered, making every choice; with
+`create` false and `pick` the player chooses one of what is offered,
+ready-made, and may only name it; with neither the player is given the
+character of `template`. What is offered is what `pick` lists, or every
+playable template, in order of qualified id. Making or choosing is
+offered, not forced: a game begun without it gives `template` with its
+defaults. `spec`, `roster`, `become`, `kinds` and tags as limits, and a
+party of several are not built.
+
+| Bundled game | The character |
+|--------------|---------------|
+| `core:town_life`, `core:town` | Made: any playable template, every choice |
+| `core:the_errand`, `core:last_stand` | Chosen: any playable template, ready-made, named |
+| `core:wayside` | Given: an ordinary person |
 
 `become` works because every notable in the world is a full character
 (06 §12). A game about being nobody in particular in a town that does not
@@ -725,7 +743,9 @@ As built (decision D-758; 12 §3.4): `ui:new_game` lists the scenarios
 and takes the name and the seed; a scenario with more than one place or
 with options opens `ui:setup` (the role `setup`), which reads
 `app.setup` and asks for the game at the place chosen; the creation
-screen is reached with F2 as before; the world is made and
+screen is reached with F2, which names the game selected to the
+creation session so that it offers what that game allows (step 4,
+section 4.2); the world is made and
 `BeginScenario` submitted; the introduction, if the scenario has one,
 is shown on `ui:intro` (the role `intro`) over the play screen.
 

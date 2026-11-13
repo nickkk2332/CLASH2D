@@ -304,6 +304,32 @@ impl_state_hash!(PartInst {
     held
 });
 
+/// What a reader calls a part of a body (decision D-863): the `name`
+/// the body's plan gives the part, or else its side and its
+/// definition's name (`left arm`), or the definition's name alone, or
+/// at last its name in the body.
+pub fn label_of(defs: &BodyDefs, body: &Body, part: &PartInst) -> String {
+    let planned = defs.plan(body.plan()).and_then(|plan| {
+        plan.parts
+            .iter()
+            .find(|entry| entry.id.value == part.name())
+            .and_then(|entry| entry.name.clone())
+    });
+    if let Some(name) = planned.filter(|name| !name.trim().is_empty()) {
+        return name;
+    }
+    let kind = defs
+        .part(part.def())
+        .and_then(|def| def.name.as_ref())
+        .map(|name| name.raw().trim().to_owned())
+        .filter(|name| !name.is_empty());
+    match (part.side(), kind) {
+        (Some(side), Some(kind)) if !side.trim().is_empty() => format!("{} {kind}", side.trim()),
+        (_, Some(kind)) => kind,
+        _ => part.name().replace('_', " "),
+    }
+}
+
 impl PartInst {
     /// The part's number in its body.
     pub fn key(&self) -> PartKey {

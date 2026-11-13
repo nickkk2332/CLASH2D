@@ -284,6 +284,9 @@ impl Run {
         for (number, name, parent, state, condition) in parts {
             let part = self.part(number);
             host.set(part, "name", name);
+            // What a reader calls it, as the body's plan gives it.
+            let label = name.replace("l_", "left ").replace("r_", "right ");
+            host.set(part, "label", label.as_str());
             host.set(part, "state", state);
             host.set(
                 part,
@@ -336,6 +339,7 @@ impl Run {
             .expect("the fixture's damage type");
         host.set(wound, "part", subject(self.part(3)));
         host.set(wound, "kind", Value::Id(cut));
+        host.set(wound, "kind_name", "cut");
         host.set(wound, "state", "open");
         host.set(wound, "depth", 2);
         host.set(wound, "stump", false);
@@ -536,7 +540,7 @@ fn scripted_input_goes_from_the_title_to_a_made_character_in_play() {
     // The session's first frame: every choice of the template, with what
     // is chosen now, and the character is complete with its defaults.
     assert!(run.text().contains("Made from Person"), "{}", run.text());
-    assert!(run.row_with("Build").contains("average"));
+    assert!(run.row_with("Build").contains("Average"));
     assert!(run.text().contains("Ready to begin."), "{}", run.text());
     assert_golden(golden("create_first"), run.shown());
 
@@ -644,7 +648,7 @@ fn a_template_with_a_choice_of_every_kind_is_made_on_the_one_screen() {
     );
     run.press(&["escape"]);
     // The option taken opens a choice of its own, right after its own.
-    assert!(run.row_with("Script").contains("plain"), "{}", run.text());
+    assert!(run.row_with("Script").contains("Plain"), "{}", run.text());
 
     // The nested `pick`.
     run.press(&["down", "enter", "down", "enter", "escape"]);
@@ -726,7 +730,7 @@ fn the_inventory_lists_what_is_held_worn_and_carried_and_offers_what_can_be_done
         run.text()
     );
     assert!(run.row_with("  rope  in pack").starts_with("││"));
-    assert!(run.row_with("l_arm").contains("coat"));
+    assert!(run.row_with("left arm").contains("coat"));
     assert!(run.text().contains("Carrying 5.2 kg."), "{}", run.text());
     assert_golden(golden("inventory"), run.shown());
 
@@ -778,11 +782,11 @@ fn the_condition_shows_the_body_as_a_tree_its_wounds_reserves_and_attributes() {
     let mut run = Run::new();
     run.press(&["c"]);
     assert_eq!(run.top(), "ui:condition");
-    assert!(run.row_with("l_arm").contains("42%"));
-    assert!(run.row_with("l_arm").contains("disabled, 1 wound"));
+    assert!(run.row_with("left arm").contains("42%"));
+    assert!(run.row_with("left arm").contains("disabled, 1 wound"));
     assert!(run.row_with("heart").contains("100%"));
     assert!(
-        run.row_with("l_arm: person:cut").contains("open, 2 deep"),
+        run.row_with("left arm: cut").contains("open, 2 deep"),
         "{}",
         run.text()
     );
@@ -792,9 +796,9 @@ fn the_condition_shows_the_body_as_a_tree_its_wounds_reserves_and_attributes() {
     assert_golden(golden("condition"), run.shown());
     // The tree's branches close and open.
     run.press(&["left"]);
-    assert!(!run.text().contains("l_hand"), "{}", run.text());
+    assert!(!run.text().contains("left hand"), "{}", run.text());
     run.press(&["right"]);
-    assert!(run.text().contains("l_hand"), "{}", run.text());
+    assert!(run.text().contains("left hand"), "{}", run.text());
 }
 
 // ---------------------------------------------------------------------
@@ -832,7 +836,7 @@ fn the_keys_of_play_are_listed_from_the_keymap_in_force() {
     run.press(&["end"]);
     assert_eq!(run.top(), "ui:help");
     assert!(
-        run.row_with("Walk north").contains("k, up"),
+        run.row_with("Walk north").contains("k, Up"),
         "{}",
         run.text()
     );

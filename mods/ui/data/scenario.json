@@ -1,12 +1,13 @@
 [
-  { "//": "The screens of game scenarios (13 §12, 12 §10.7): setting a scenario up, its introduction, the journal and the summary. A profile names `setup`, `intro` and `summary` for the roles of those names; a scenario may name its own for `intro` and `summary` in its `screens`. The setup screen reads `app.setup`, the scenario being set up: its places, the options it asks about and how its seed is chosen. Choosing a place begins the game there with the options as they stand.",
+  { "//": "The screens of game scenarios (13 §12, 12 §10.7): setting a scenario up, its introduction, the journal and the summary. A profile names `setup`, `intro` and `summary` for the roles of those names; a scenario may name its own for `intro` and `summary` in its `screens`. The setup screen reads `app.setup`, the scenario being set up: its places, the options it asks about and how its seed is chosen, said in words (the seed given on the new-game screen, which the application sets `creation_seed` to; a new one each game; or always the same). Choosing a place begins the game there with the options as they stand.",
     "type": "screen", "id": "setup",
     "title": "Where to begin",
     "params": { "scenario": "string" },
+    "vars": { "creation_seed": 1 },
     "min_size": [60, 16],
     "layout": { "frame": "{app.setup.name ?? 'Where to begin'}", "rows": [
       { "text": "{app.setup.doc ?? ''}" },
-      { "text": "<dim>Seed: {app.setup.seed ?? 'ask'}</>" },
+      { "text": "<dim>The world: {if (app.setup.seed ?? 'ask') == 'ask' then 'made from the seed you gave, ' + str(screen.creation_seed) else if app.setup.seed == 'random' then 'a new one each game' else 'always the same, seed ' + str(app.setup.seed)}.</>" },
       { "height": 1, "spacer": {} },
       { "if": "len(app.setup.options ?? []) > 0", "text": "<header>Options</>" },
       { "if": "len(app.setup.options ?? []) > 0", "height": 4,

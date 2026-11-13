@@ -131,6 +131,7 @@ must be able to hold what `strike` leaves in it.
 | `gripped` | `true`: the first creature the attacker grips, in the order the grips were taken (section 9.4). With `surface`, the first working part of it, by key, that has that surface, scaled as a part's is: it strikes, and takes the recoil. Nothing gripped is a refusal (`combat.nothing_gripped`). In a defence's `with` the surface may be left out: the creature is put in the way whole. |
 | `surface` | The surface's id among those of the part or the item. Required with the three above, but for `gripped` in a defence. |
 | `kind`, `area`, `give`, `span` | An inline surface (08 §7.7): a damage type, an area above zero, a give above zero and a span, default 0. It takes no recoil. |
+| `needs` | What a reader is told the blow needs when nothing answers, in words: `a blade`, read "Slash needs a blade in hand." Left out, the tag or the part is named in plain words with its article (decision D-864). |
 
 A part's surface scales with the part (06 §6.4): its area with the square
 of the part's size, its give and its span with the size. An item's is as

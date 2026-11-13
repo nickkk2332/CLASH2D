@@ -16,9 +16,11 @@
 //! | Entry | Is |
 //! |-------|----|
 //! | `template` | The qualified id of the session's first template |
+//! | `made_from` | What that template is called: `Brawler` |
 //! | `name` | The name the character is to have, as last given |
 //! | `seed` | The seed the next game is made with |
 //! | `finished` | Whether the player has finished: `new_game` will use this character |
+//! | `editable` | Whether the game the character is made for lets the player make its choices (`create`), or only choose it ready-made and name it (13 §4.2) |
 //!
 //! # What a screen asks: the service `creation`
 //!
@@ -30,24 +32,37 @@
 //! | `name` | `value` | The character's name: kept, and selected for the template's text choice that sets the name |
 //! | `seed` | `value` | The seed the next game is made with, and the one random selections are drawn from |
 //! | `finish` | | Checks the character. Refused with the reason if it cannot be made; otherwise it is kept for `new_game` |
+//! | `scenario` | `value` | The game the character is made for, by the qualified id of its scenario, or null for none: `app.templates` offers what that game allows (13 §4.2, decision D-860). A change drops the session and the finished character |
 //!
 //! A refusal is the service's reason, which the application shows on the
 //! screen of the role `error` (12 §3.2). Every op but `name` and `seed`
 //! needs a session in progress; those two are kept without one, for the
 //! next session and for the new-game screen.
 //!
+//! # What may be made (13 §4.2; decision D-860)
+//!
+//! The templates offered, `app.templates`, are those the game the
+//! character is made for offers (`CharacterEntry::offered`: what its
+//! `pick` lists, or every template marked `playable`), or with no game
+//! named every playable template. `begin` takes only one of them. A game
+//! whose character is chosen ready-made (`create` false) lets the
+//! player choose and name it and nothing more: `select` and `clear` are
+//! refused there, but for the choice that sets the name.
+//!
 //! # What `new_game` makes
 //!
-//! The finished character if there is one; otherwise the start's
-//! template with every choice at its default and the name given
-//! ([`Creation::spec_for`]). Either way the seed given is the world's and
-//! the spec's, and once the game has begun the session and the finished
-//! character are dropped.
+//! The finished character if there is one and it was made for this game
+//! (or for no game in particular, and the game offers its template);
+//! otherwise the scenario's template with every choice at its default
+//! and the name given ([`Creation::spec_for`]). Either way the seed given
+//! is the world's and the spec's, and once the game has begun the
+//! session and the finished character are dropped.
 
 use clash_core::Real;
 use clash_data::Defs;
 use clash_expr::Value;
-use clash_scene::AppRequest;
+use clash_scene::{AppEntry, AppRequest};
+use clash_sim::scenario::ScenarioDef;
 use clash_sim::template::{
     CharacterSpec, ChoiceKind, CreationSession, Selection, Sets, TemplateDef,
 };
@@ -64,6 +79,8 @@ pub const OP_NAME: &str = "name";
 pub const OP_SEED: &str = "seed";
 /// Finishes the character.
 pub const OP_FINISH: &str = "finish";
+/// Names the game the character is made for.
+pub const OP_SCENARIO: &str = "scenario";
 
 /// The fields of the character being made that a screen variable named
 /// `creation_<field>` is set to when its screen opens (12 §3.4).
@@ -82,6 +99,108 @@ pub struct Creation {
     seed: u64,
     /// The character the player finished, for `new_game`.
     finished: Option<CharacterSpec>,
+    /// The game the character is being made for, by the qualified id of
+    /// its scenario: what `app.templates` offers.
+    scenario: Option<String>,
+    /// The game the finished character was made for, if any was named.
+    made_for: Option<String>,
+}
+
+/// The scenario's character entry by the scenario's qualified id, with
+/// its namespace.
+fn character_of<'a>(
+    defs: &'a Defs,
+    scenario: &'a str,
+) -> Option<(&'a clash_sim::scenario::def::CharacterEntry, &'a str)> {
+    let scenarios = defs.try_registry::<ScenarioDef>()?;
+    let def = scenarios.get(scenarios.lookup(scenario)?);
+    let namespace = clash_sim::scenario::def::namespace_of(scenario);
+    def.character().map(|character| (character, namespace))
+}
+
+/// Every template marked playable, in order of qualified id.
+fn every_playable(defs: &Defs) -> Vec<String> {
+    let Some(templates) = defs.try_registry::<TemplateDef>() else {
+        return Vec::new();
+    };
+    let mut ids: Vec<String> = templates
+        .iter()
+        .filter(|(_, def)| def.playable)
+        .map(|(id, _)| templates.name(id).to_owned())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// The qualified ids of the templates a game offers the player's
+/// character from (13 §4.2): with no game named, every playable one.
+pub fn offered(defs: &Defs, scenario: Option<&str>) -> Vec<String> {
+    match scenario {
+        Some(scenario) => character_of(defs, scenario)
+            .map(|(character, namespace)| character.offered(defs, namespace))
+            .unwrap_or_default(),
+        None => every_playable(defs),
+    }
+}
+
+/// Whether a game lets the player make its character's choices: with
+/// no game named, or a game that names no character, it does.
+pub fn editable(defs: &Defs, scenario: Option<&str>) -> bool {
+    scenario
+        .and_then(|scenario| character_of(defs, scenario))
+        .is_none_or(|(character, _)| character.editable())
+}
+
+/// The templates offered, as `app.templates` lists them: each by its
+/// qualified `id`, its `name` and its `description`.
+pub fn template_entries(defs: &Defs, scenario: Option<&str>) -> Vec<AppEntry> {
+    let Some(templates) = defs.try_registry::<TemplateDef>() else {
+        return Vec::new();
+    };
+    offered(defs, scenario)
+        .into_iter()
+        .filter_map(|id| {
+            let def = templates.get(templates.lookup(&id)?);
+            let text = |text: Option<&clash_data::Text>| {
+                text.map(|text| text.raw().trim().to_owned())
+                    .filter(|text| !text.is_empty())
+            };
+            Some(AppEntry {
+                name: text(def.name.as_ref())
+                    .unwrap_or_else(|| id.rsplit(':').next().unwrap_or(&id).replace('_', " ")),
+                description: text(def.description.as_ref()).unwrap_or_default(),
+                state: "enabled".to_owned(),
+                id,
+            })
+        })
+        .collect()
+}
+
+/// What a scenario is called, for a sentence.
+fn scenario_name(defs: &Defs, scenario: &str) -> String {
+    defs.try_registry::<ScenarioDef>()
+        .and_then(|scenarios| {
+            let id = scenarios.lookup(scenario)?;
+            Some(scenarios.get(id).shown_name(scenario))
+        })
+        .unwrap_or_else(|| "this game".to_owned())
+}
+
+/// What a template is called, for a sentence.
+fn template_shown(defs: &Defs, template: &str) -> String {
+    defs.try_registry::<TemplateDef>()
+        .and_then(|templates| {
+            let def = templates.get(templates.lookup(template)?);
+            def.name.as_ref().map(|name| name.raw().trim().to_owned())
+        })
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            template
+                .rsplit(':')
+                .next()
+                .unwrap_or(template)
+                .replace('_', " ")
+        })
 }
 
 /// The qualified id of a template a session or a start names, if it is
@@ -172,6 +291,52 @@ impl Creation {
         self.seed
     }
 
+    /// The game the character is being made for, if one was named.
+    pub fn scenario(&self) -> Option<&str> {
+        self.scenario.as_deref()
+    }
+
+    /// `app.templates`: the templates the game the character is made for
+    /// offers, each by its qualified id, its name and its description.
+    pub fn templates(&self, defs: &Defs) -> Vec<AppEntry> {
+        template_entries(defs, self.scenario.as_deref())
+    }
+
+    /// Names the game the character is made for. A change drops the
+    /// session and the finished character.
+    pub fn set_scenario(&mut self, scenario: Option<String>) {
+        if self.scenario != scenario {
+            self.session = None;
+            self.finished = None;
+            self.made_for = None;
+        }
+        self.scenario = scenario;
+    }
+
+    /// Why a selection for a choice is refused in a game whose character
+    /// is chosen ready-made: every choice but the one that sets the name.
+    fn fixed(&self, defs: &Defs, key: &str) -> Result<(), String> {
+        if editable(defs, self.scenario.as_deref()) {
+            return Ok(());
+        }
+        let names = self
+            .session
+            .iter()
+            .flat_map(|session| session.spec().templates.iter())
+            .filter_map(|template| name_choice(defs, template))
+            .any(|name| name == key);
+        if names {
+            return Ok(());
+        }
+        let game = self
+            .scenario
+            .as_deref()
+            .map_or_else(|| "this game".to_owned(), |id| scenario_name(defs, id));
+        Err(format!(
+            "In {game} you choose who you are, ready-made: you may name them, and nothing more."
+        ))
+    }
+
     /// What a screen variable named `creation_<field>` is set to when
     /// its screen opens: the name and the seed, whether or not a session
     /// is in progress.
@@ -205,11 +370,22 @@ impl Creation {
             .first()
             .and_then(|name| template_name(defs, name))
             .map_or(Value::Null, Value::text);
+        let made_from = session
+            .spec()
+            .templates
+            .first()
+            .and_then(|name| template_name(defs, name))
+            .map_or(Value::Null, |id| Value::text(template_shown(defs, &id)));
         entries.push(("template".to_owned(), template));
+        entries.push(("made_from".to_owned(), made_from));
         for (field, value) in self.fields() {
             entries.push((field.to_owned(), value));
         }
         entries.push(("finished".to_owned(), Value::Bool(self.finished.is_some())));
+        entries.push((
+            "editable".to_owned(),
+            Value::Bool(editable(defs, self.scenario.as_deref())),
+        ));
         Value::map(entries)
     }
 
@@ -260,6 +436,16 @@ impl Creation {
                 )?;
                 let qualified = template_name(defs, template)
                     .ok_or_else(|| format!("there is no template `{template}`"))?;
+                if !offered(defs, self.scenario.as_deref()).contains(&qualified) {
+                    let game = self
+                        .scenario
+                        .as_deref()
+                        .map_or_else(|| "this game".to_owned(), |id| scenario_name(defs, id));
+                    return Err(format!(
+                        "{game} does not offer a character made as a {}.",
+                        template_shown(defs, &qualified).to_lowercase()
+                    ));
+                }
                 let session =
                     CreationSession::new(defs, [qualified]).map_err(|reason| reason.message)?;
                 self.session = Some(session);
@@ -274,6 +460,7 @@ impl Creation {
                 let key = request
                     .text("key")
                     .ok_or("`creation` with `select` needs the `key` of the choice")?;
+                self.fixed(defs, key)?;
                 let session = self.session_mut()?;
                 let kind = session
                     .choices(defs)
@@ -303,6 +490,7 @@ impl Creation {
                     .text("key")
                     .ok_or("`creation` with `clear` needs the `key` of the choice")?
                     .to_owned();
+                self.fixed(defs, &key)?;
                 self.session_mut()?.clear(defs, &key);
                 self.finished = None;
                 Ok(())
@@ -325,10 +513,32 @@ impl Creation {
                 let mut spec = session.finish(defs).map_err(|reason| reason.message)?;
                 spec.seed = self.seed;
                 self.finished = Some(spec);
+                self.made_for = self.scenario.clone();
+                Ok(())
+            }
+            OP_SCENARIO => {
+                let scenario = match &value {
+                    Value::Null => None,
+                    value => Some(
+                        value
+                            .as_str()
+                            .ok_or("`creation` with `scenario` needs the scenario's id as a text `value`, or null")?
+                            .to_owned(),
+                    ),
+                };
+                if let Some(id) = &scenario
+                    && defs
+                        .try_registry::<ScenarioDef>()
+                        .and_then(|scenarios| scenarios.lookup(id))
+                        .is_none()
+                {
+                    return Err(format!("there is no game scenario `{id}`"));
+                }
+                self.set_scenario(scenario);
                 Ok(())
             }
             other => Err(format!(
-                "`creation` has no op `{other}`: it has begin, select, clear, name, seed and finish"
+                "`creation` has no op `{other}`: it has begin, select, clear, name, seed, finish and scenario"
             )),
         }
     }
@@ -337,11 +547,37 @@ impl Creation {
         self.session.as_mut().ok_or_else(|| NO_SESSION.to_owned())
     }
 
-    /// The character a new game makes for the player: the finished one,
-    /// or else `default` (the start's template) with every choice at its
-    /// default and the name given. Refused if there is neither.
-    pub fn spec_for(&self, defs: &Defs, default: Option<&str>) -> Result<CharacterSpec, String> {
-        if let Some(finished) = &self.finished {
+    /// The character a new game of `scenario` makes for the player: the
+    /// finished one, if it was made for this game, or for none named and
+    /// this game offers its template; or else `default` (the scenario's
+    /// template) with every choice at its default and the name given.
+    /// Refused if there is neither, and for a finished character made for
+    /// no game in particular from a template this game does not offer.
+    pub fn spec_for(
+        &self,
+        defs: &Defs,
+        scenario: &str,
+        default: Option<&str>,
+    ) -> Result<CharacterSpec, String> {
+        let for_this = self
+            .made_for
+            .as_deref()
+            .is_none_or(|made_for| made_for == scenario);
+        if let Some(finished) = self.finished.as_ref().filter(|_| for_this) {
+            let first = finished
+                .templates
+                .first()
+                .and_then(|template| template_name(defs, template));
+            let allowed = offered(defs, Some(scenario));
+            if let Some(first) = first
+                && !allowed.contains(&first)
+            {
+                return Err(format!(
+                    "{} does not offer a character made as a {}: make or choose another with F2.",
+                    scenario_name(defs, scenario),
+                    template_shown(defs, &first).to_lowercase()
+                ));
+            }
             return Ok(CharacterSpec {
                 seed: self.seed,
                 ..finished.clone()
@@ -365,6 +601,8 @@ impl Creation {
     pub fn begun(&mut self) {
         self.session = None;
         self.finished = None;
+        self.made_for = None;
+        self.scenario = None;
     }
 }
 

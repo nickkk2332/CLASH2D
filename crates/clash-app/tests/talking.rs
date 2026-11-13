@@ -53,7 +53,8 @@ fn a_greeting_is_chosen_from_what_can_be_said_and_answered_in_the_log() {
     script(&mut run, "wait 30\n");
     settle(&mut run);
     script(&mut run, "tab\n");
-    assert!(run.text().contains("Target Bram"), "{}", run.text());
+    // Named as the character knows them (05 §4.6; decision D-862).
+    assert!(run.text().contains("Target The person"), "{}", run.text());
 
     // What can be said to Bram, gathered without changing the game.
     let hash = run
@@ -72,7 +73,7 @@ fn a_greeting_is_chosen_from_what_can_be_said_and_answered_in_the_log() {
     );
     assert_eq!(commands(&run), before);
     let shown = run.text();
-    assert!(shown.contains("Talk to Bram"), "{shown}");
+    assert!(shown.contains("Talk to the person"), "{shown}");
     assert!(shown.contains("Greet"), "{shown}");
     assert!(shown.contains("Tell them to stay back"), "{shown}");
     assert_golden(golden("talk_options"), run.frame());
@@ -91,7 +92,7 @@ fn a_greeting_is_chosen_from_what_can_be_said_and_answered_in_the_log() {
     // spoke; Bram's are worded for Ada, who has not learned his name.
     let lines: Vec<String> = log(&run).into_iter().map(|(_, text)| text).collect();
     assert!(
-        lines.iter().any(|line| line == "Ada speaks to Bram."),
+        lines.iter().any(|line| line == "Ada speaks to the person."),
         "what the character said: {lines:?}"
     );
     let replies: Vec<&String> = lines
