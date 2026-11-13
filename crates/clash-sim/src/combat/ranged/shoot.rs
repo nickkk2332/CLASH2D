@@ -85,6 +85,10 @@ pub struct ShotSpec {
     pub height: Option<Real>,
     /// For a ray: how far it goes, in metres.
     pub range: Option<Real>,
+    /// The kind of reaction window it opens for `target` (07 §11.2): it
+    /// opens as the shot is fired and closes as the shot is expected to
+    /// arrive. `None`, or no target, or an instant shot: none.
+    pub window: Option<crate::action::WindowKindId>,
 }
 
 impl ShotSpec {
@@ -108,6 +112,7 @@ impl ShotSpec {
             lob: false,
             height: None,
             range: None,
+            window: None,
         }
     }
 }
@@ -233,6 +238,7 @@ pub fn shoot(sim: &mut Sim, spec: &ShotSpec, cause: Cause) -> Result<Fired, Reas
         .map_or(Real::ZERO, |ambient| ambient.gravity);
     let mut fired = Fired::default();
     let mut load = Some(first);
+    let mut first_speed = None;
     for shot in 0..spec.count {
         let current = match load.take() {
             Some(current) => current,
@@ -266,6 +272,7 @@ pub fn shoot(sim: &mut Sim, spec: &ShotSpec, cause: Cause) -> Result<Fired, Reas
         if !(speed.is_finite() && speed > Real::ZERO) {
             return Err(bad_number("speed", speed));
         }
+        first_speed.get_or_insert(speed);
         let energy = energy.unwrap_or(Real::of(0.5) * mass * speed * speed);
         let base = if spec.lob {
             aim::ballistic_dir(toward, speed, gravity)
@@ -329,7 +336,82 @@ pub fn shoot(sim: &mut Sim, spec: &ShotSpec, cause: Cause) -> Result<Fired, Reas
             fired.rounds += 1;
         }
     }
+    if let (Some(kind), Some(speed)) = (spec.window, first_speed)
+        && !fired.bodies.is_empty()
+    {
+        let aimed = aimed_at(sim, spec.target, spec.aim);
+        let tags: Vec<u64> = fired
+            .bodies
+            .iter()
+            .filter_map(|body| match sim.truth().cosmos().body(*body)?.owner {
+                BodyOwner::Projectile(projectile) => Some(projectile.tag),
+                _ => None,
+            })
+            .collect();
+        if let Some(window) =
+            open_shot_window(sim, kind, spec.shooter, aimed, aim::norm(toward), speed)
+        {
+            for tag in tags {
+                sim.ranged.set_shot_window(tag, window);
+            }
+        }
+    }
     Ok(fired)
+}
+
+/// Whom a shot's window is for (07 §11.2): the entity it was aimed at;
+/// for one aimed at a cell, whoever with a body stands there, by id.
+fn aimed_at(sim: &Sim, target: Option<EntityId>, at: Aim) -> Vec<EntityId> {
+    if let Some(target) = target {
+        return vec![target];
+    }
+    let Aim::At(loc, _) = at else {
+        return Vec::new();
+    };
+    let found = sim
+        .truth()
+        .cosmos()
+        .occupants_at(loc, &clash_world::OccupantFilter::ANY)
+        .unwrap_or_default();
+    let mut ids: Vec<EntityId> = found
+        .into_iter()
+        .map(|occupied| occupied.id)
+        .filter(|id| sim.components().body.contains(*id))
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
+/// Opens the `shot` window of a shot or a throw (07 §11.2): for whoever
+/// it is aimed at, from now until it is expected to arrive, at `speed`
+/// over `distance` metres. Those who notice it in time may answer it
+/// (03 §7). Nothing is opened for a shot aimed at nobody; a window that
+/// cannot be opened is a fault.
+fn open_shot_window(
+    sim: &mut Sim,
+    kind: crate::action::WindowKindId,
+    source: EntityId,
+    aimed_at: Vec<EntityId>,
+    distance: Real,
+    speed: Real,
+) -> Option<crate::action::WindowId> {
+    if aimed_at.is_empty() || !(speed > Real::ZERO && distance.is_finite()) {
+        return None;
+    }
+    let open_for = clash_core::Dur::from_secs_real(distance.max(Real::ZERO) / speed);
+    match sim.open_window(crate::action::OpenWindow {
+        kind,
+        source: Some(source),
+        aimed_at,
+        open_for,
+    }) {
+        Ok(window) => Some(window),
+        Err(reason) => {
+            sim.fault(reason);
+            None
+        }
+    }
 }
 
 /// The setting of how far an instant shot goes, or its default.
@@ -542,7 +624,23 @@ pub struct ThrowSpec {
 /// surface the item does not have (`ranged.no_surface`), a thrower not
 /// standing in the world, and a speed or energy it cannot use.
 pub fn throw(sim: &mut Sim, spec: &ThrowSpec, cause: Cause) -> Result<BodyId, Reason> {
+    throw_opening(sim, spec, None, cause)
+}
+
+/// [`throw`], opening a reaction window of the kind given for whoever
+/// it is aimed at (07 §11.2), as a shot's does: the `throw` verb's
+/// `window`.
+pub fn throw_opening(
+    sim: &mut Sim,
+    spec: &ThrowSpec,
+    window: Option<crate::action::WindowKindId>,
+    cause: Cause,
+) -> Result<BodyId, Reason> {
     sim.known(spec.thrower)?;
+    // A creature the thrower grips is thrown as a body (07 §9.2).
+    if crate::combat::grip::grips(sim, spec.thrower, spec.what) {
+        return throw_held(sim, spec, cause);
+    }
     if crate::item::holder_of(sim, spec.what) != Some(spec.thrower) {
         return Err(refuse(
             reason::NOT_HELD,
@@ -675,7 +773,101 @@ pub fn throw(sim: &mut Sim, spec: &ThrowSpec, cause: Cause) -> Result<BodyId, Re
     if let Err(reason) = sim.raise(Where::Entity(spec.thrower), cause, payload) {
         sim.fault(reason);
     }
+    if let Some(kind) = window {
+        let aimed = aimed_at(sim, spec.target, spec.aim);
+        if let Some(window) =
+            open_shot_window(sim, kind, spec.thrower, aimed, aim::norm(toward), speed)
+        {
+            sim.ranged.set_throw_window(spec.what, window);
+        }
+    }
     Ok(id)
+}
+
+/// Throws a creature the thrower grips (07 §9.2): the grip ends, and the
+/// held is launched as a body in flight from where it stands, at the
+/// middle of its body, at `speed`, or `√(2 E / m)` of its own mass,
+/// toward the aim; the world resolves what it meets (02 §15.2), and
+/// movement takes it back when it lands. Raises `launched` and
+/// `thrown`.
+fn throw_held(sim: &mut Sim, spec: &ThrowSpec, cause: Cause) -> Result<BodyId, Reason> {
+    let held = spec.what;
+    let mass = crate::combat::push::mass_of(sim, held);
+    if mass <= Real::ZERO {
+        return Err(bad_number("mass", mass));
+    }
+    let speed = match (spec.speed, spec.energy) {
+        (Some(speed), _) => speed,
+        (None, Some(energy)) if energy.is_finite() && energy >= Real::ZERO => {
+            (Real::of(2.0) * energy / mass).sqrt()
+        }
+        (None, Some(energy)) => return Err(bad_number("energy", energy)),
+        (None, None) => {
+            return Err(refuse(
+                reason::NO_ENERGY,
+                "a throw names neither a speed nor an energy",
+            ));
+        }
+    };
+    if !(speed.is_finite() && speed > Real::ZERO) {
+        return Err(bad_number("speed", speed));
+    }
+    if !(spec.spread.is_finite() && spec.spread >= Real::ZERO) {
+        return Err(bad_number("spread", spec.spread));
+    }
+    let from = aim::band_point(sim, held, None).ok_or_else(|| not_in_world(held))?;
+    let toward = match spec.aim {
+        Aim::Dir(dir) => dir,
+        Aim::At(loc, point) => aim::between(sim, from, (loc, point))
+            .ok_or_else(|| no_aim("a place in another grid"))?,
+    };
+    // Thrown at itself, or at where it stands: away from the thrower, on
+    // the level.
+    let toward = if spec.target == Some(held)
+        || aim::norm([toward[0], toward[1], Real::ZERO]) < Real::of(0.5)
+    {
+        let away = crate::combat::strike::offset(sim, spec.thrower, held)
+            .ok_or_else(|| no_aim("nowhere"))?;
+        [away[0], away[1], Real::ZERO]
+    } else {
+        toward
+    };
+    let gravity = sim
+        .truth()
+        .cosmos()
+        .ambient(from.0)
+        .map_or(Real::ZERO, |ambient| ambient.gravity);
+    let base = if spec.lob {
+        aim::ballistic_dir(toward, speed, gravity)
+            .or_else(|| aim::furthest_dir(toward))
+            .unwrap_or(toward)
+    } else {
+        toward
+    };
+    let base = aim::unit(base).ok_or_else(|| no_aim("nowhere"))?;
+    let dir = aim::disperse(base, spec.spread, sim.rng.stream(SHOT_STREAM));
+    crate::combat::grip::let_fly(sim, spec.thrower, held, cause)?;
+    if !crate::combat::push::launch_body(sim, held, aim::scale(dir, speed), cause)? {
+        return Err(not_in_world(held));
+    }
+    let body = sim
+        .truth()
+        .cosmos()
+        .body_of(held)
+        .ok_or_else(|| not_in_world(held))?;
+    crate::combat::push::launched(sim, held, speed, dir, false, cause);
+    let mut payload = EventPayload::new(THROWN)
+        .subject("self", Subject::Entity(spec.thrower))
+        .subject("what", Subject::Entity(held))
+        .with("speed", speed)
+        .with("energy", Real::of(0.5) * mass * speed * speed);
+    if let Some(target) = spec.target {
+        payload = payload.subject("target", Subject::Entity(target));
+    }
+    if let Err(reason) = sim.raise(Where::Entity(spec.thrower), cause, payload) {
+        sim.fault(reason);
+    }
+    Ok(body)
 }
 
 /// The point to aim at for an entity: the middle of a part's band, or

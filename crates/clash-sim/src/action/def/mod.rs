@@ -257,6 +257,11 @@ pub struct ActionDef {
     /// phases, avoiding a strike or putting something in its way.
     #[serde(default)]
     pub defence: Option<crate::combat::DefenceDef>,
+    /// The cutscene the action names (07 §10, 12 §8.1): when it begins,
+    /// `cutscene_cued` is raised with every participant, a cue for the
+    /// application. It decides nothing.
+    #[serde(default)]
+    pub cutscene: Option<String>,
 }
 
 impl ActionDef {
@@ -468,6 +473,7 @@ impl ActionDef {
             reacts: Vec::new(),
             attacks: crate::combat::Attacks::default(),
             defence: None,
+            cutscene: None,
         }
     }
 

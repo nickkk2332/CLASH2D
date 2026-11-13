@@ -113,6 +113,12 @@ pub const ACTION_BAD_TIME: &str = "action.bad_time";
 pub const COMMAND_NOT_CONTROLLED: &str = "command.not_controlled";
 /// A command carried a value it cannot use.
 pub const COMMAND_BAD_ARGUMENT: &str = "command.bad_argument";
+/// An action of a participant forced into a joint action was ended to
+/// make room for it (03 §8).
+pub const ACTION_TAKEN_OVER: &str = "action.taken_over";
+/// A joint action has a role that is not forced: offering a role to its
+/// participant is not built (03 §8).
+pub const ROLE_NOT_OFFERED: &str = "action.role_not_offered";
 
 /// The reasons of the action runtime and of the commands that act,
 /// beside the 23 of [`reason`](super::reason), for the generated
@@ -141,6 +147,14 @@ pub const RUNTIME_REASONS: &[ReasonInfo] = &[
     ReasonInfo {
         code: COMMAND_BAD_ARGUMENT,
         doc: "A command carried a value it cannot use: a wait of less than no time. Values: `entity`, `argument`.",
+    },
+    ReasonInfo {
+        code: ACTION_TAKEN_OVER,
+        doc: "An action of a participant forced into a joint action held slots the joint action's role claims, and was interrupted to make room (03 §8). The reason `action_interrupted` carries. Values: `action`, the joint action.",
+    },
+    ReasonInfo {
+        code: ROLE_NOT_OFFERED,
+        doc: "A joint action has a role that is not `forced`: its participant would have to accept it, and offering a role is not built yet (03 §8). Values: `action`, `role`.",
     },
 ];
 
@@ -173,7 +187,16 @@ pub(crate) struct Prepared {
     claim: Vec<(ChannelId, u16)>,
     /// The actions to cancel to make room.
     displace: Vec<ActionId>,
+    /// For a joint action, each other participant: who, the position of
+    /// its role, the slots to claim of its channels, and its own actions
+    /// to interrupt to make room (03 §8).
+    joined: Vec<JoinedPrep>,
 }
+
+/// One participant of a joint action other than its actor, as a start
+/// found it: who, the position of its role, the slots its role claims
+/// and its own actions to interrupt to make room.
+type JoinedPrep = (EntityId, u16, Vec<(ChannelId, u16)>, Vec<ActionId>);
 
 impl Prepared {
     /// The locals it would start with, in slot order.
@@ -230,9 +253,9 @@ impl Sim {
             .actions
             .iter()
             .filter_map(|id| {
-                let action = self.actions.get(*id)?;
-                let held = action
-                    .held
+                let held = self
+                    .actions
+                    .held_of(*id, entity)?
                     .iter()
                     .find(|(have, _)| *have == channel)
                     .map(|(_, count)| *count)?;
@@ -582,7 +605,13 @@ impl Sim {
                     if displaced.contains(&holder) {
                         continue;
                     }
-                    if self.may_cancel_for(holder, &def.tags) {
+                    // A joint action someone else leads is not the
+                    // actor's to break off (03 §8).
+                    let own = self
+                        .actions
+                        .get(holder)
+                        .is_some_and(|action| action.actor == actor);
+                    if own && self.may_cancel_for(holder, &def.tags) {
                         displaced.push(holder);
                         free = free.saturating_add(count);
                     }
@@ -603,13 +632,128 @@ impl Sim {
             }
             claim.push((channel, needed));
         }
+        let joined = self.prepare_roles(actor, def, &locals, &action_id)?;
         Ok(Prepared {
             def: id,
             actor,
             locals,
             claim,
             displace: displaced,
+            joined,
         })
+    }
+
+    /// The other participants of a joint action (03 §8), with the slots
+    /// each role claims of its participant's channels: every enabled
+    /// slot of a channel its role uses `all` of, else the number named
+    /// (`engine:action_channel_lacking` for too few). A participant's own
+    /// actions holding them are interrupted when it begins; slots held
+    /// by another's joint action make it busy
+    /// (`engine:action_channel_busy`). A role that is not `forced` is
+    /// refused: offering a role is not built.
+    fn prepare_roles(
+        &self,
+        actor: EntityId,
+        def: &ActionDef,
+        locals: &[Value],
+        action_id: &Value,
+    ) -> Result<Vec<JoinedPrep>, Reason> {
+        let mut joined: Vec<JoinedPrep> = Vec::new();
+        for (position, role) in def.roles().iter().enumerate().skip(1) {
+            let role_value = Value::from(role.name.value.as_str());
+            let unfilled = |sim: &Sim| {
+                sim.refusal(
+                    &why::ROLE_UNFILLED,
+                    actor,
+                    &[("action", action_id.clone()), ("role", role_value.clone())],
+                    None,
+                )
+            };
+            let Some(participant) = locals
+                .get(usize::from(role.slot()))
+                .and_then(|value| self.subject_of(value))
+                .and_then(|subject| subject.entity())
+            else {
+                return Err(unfilled(self));
+            };
+            if !role.forced {
+                return Err(Reason::new(
+                    ROLE_NOT_OFFERED,
+                    format!(
+                        "the role `{}` is not forced, and offering a role is not built",
+                        role.name.value
+                    ),
+                )
+                .with("action", action_id.to_stored())
+                .with("role", role.name.value.as_str()));
+            }
+            if participant == actor
+                || joined.iter().any(|(have, _, _, _)| *have == participant)
+                || self.entities.location(participant).is_none()
+            {
+                return Err(unfilled(self));
+            }
+            let mut claim = Vec::new();
+            let mut displaced: Vec<ActionId> = Vec::new();
+            for need in role.uses.needs() {
+                let channel = need.channel;
+                let enabled = self.enabled_slots(participant, channel);
+                let needed = match need.slots {
+                    Slots::Count(count) => count,
+                    Slots::All => enabled,
+                };
+                let channel_name = Value::from(self.channel_name(channel).as_str());
+                if enabled < needed {
+                    return Err(self.refusal(
+                        &why::CHANNEL_LACKING,
+                        actor,
+                        &[
+                            ("action", action_id.clone()),
+                            ("channel_name", channel_name),
+                            ("needed", Value::Int(i64::from(needed))),
+                            ("enabled", Value::Int(i64::from(enabled))),
+                        ],
+                        None,
+                    ));
+                }
+                if needed == 0 {
+                    continue;
+                }
+                let mut free = enabled.saturating_sub(self.held_slots(participant, channel));
+                for (holder, count) in self.holders(participant, channel) {
+                    if free >= needed {
+                        break;
+                    }
+                    // Its own actions give way; another's joint action
+                    // does not.
+                    let own = self
+                        .actions
+                        .get(holder)
+                        .is_some_and(|action| action.actor == participant);
+                    if own && !displaced.contains(&holder) {
+                        displaced.push(holder);
+                        free = free.saturating_add(count);
+                    }
+                }
+                if free < needed {
+                    return Err(self.refusal(
+                        &why::CHANNEL_BUSY,
+                        actor,
+                        &[
+                            ("action", action_id.clone()),
+                            ("channel_name", channel_name),
+                            ("needed", Value::Int(i64::from(needed))),
+                            ("free", Value::Int(i64::from(free))),
+                        ],
+                        None,
+                    ));
+                }
+                claim.push((channel, needed));
+            }
+            let position = u16::try_from(position).unwrap_or(u16::MAX);
+            joined.push((participant, position, claim, displaced));
+        }
+        Ok(joined)
     }
 
     /// Whether a value fits a parameter: its type and, for a list, its
@@ -711,6 +855,7 @@ impl Sim {
             mut locals,
             claim,
             displace,
+            joined,
         } = prepared;
         let name = action_name(&defs, def_id);
         let refused = |sim: &mut Sim, reason: Reason| {
@@ -831,6 +976,31 @@ impl Sim {
         if let Some(record) = self.entities.get_mut(actor) {
             record.actions.push(id);
         }
+        // The other participants of a joint action are locked in: their
+        // own actions that hold what their roles claim give way, and the
+        // action is theirs too until it ends (03 §8).
+        if !joined.is_empty() {
+            let mut kept = Vec::with_capacity(joined.len());
+            for (participant, role, held, displaced) in joined {
+                for holder in displaced {
+                    let reason = Reason::new(
+                        ACTION_TAKEN_OVER,
+                        format!("{participant} was taken into `{name}`"),
+                    )
+                    .with("action", name.as_str());
+                    self.interrupt_action(holder, reason, cause);
+                }
+                if let Some(record) = self.entities.get_mut(participant) {
+                    record.actions.push(id);
+                }
+                kept.push(super::state::Joined {
+                    entity: participant,
+                    role,
+                    held,
+                });
+            }
+            self.actions.set_joined(id, kept);
+        }
         self.emit(
             Where::Entity(actor),
             cause,
@@ -854,6 +1024,8 @@ impl Sim {
             self.interrupt_action(id, reason, cause);
             return Ok(id);
         }
+        // An action that names a cutscene cues it (07 §10, 12 §8.1).
+        crate::combat::takedown::cue(self, id, cause);
         if !self.run_list(id, |def| Some(&def.on_start)) {
             return Ok(id);
         }
@@ -890,6 +1062,8 @@ impl Sim {
         }
         let mut locals = self.locals_of(id);
         let subjects = [self.actor_value(actor)];
+        // Verbs that belong to the action running them (`seize`) know it.
+        let outer = self.acting.replace(id);
         self.run_effects(
             effects,
             &subjects,
@@ -897,6 +1071,7 @@ impl Sim {
             Some(Subject::Entity(actor)),
             Self::action_cause(actor),
         );
+        self.acting = outer;
         if let Some(action) = self.actions.get_mut(id) {
             action.locals = locals.iter().map(Value::to_stored).collect();
         }
@@ -1299,12 +1474,29 @@ impl Sim {
         if self.actions.get(id).is_some() {
             self.close_windows_of(id);
         }
+        // Its grips end with it (07 §9.1, invariant C7).
+        crate::combat::grip::action_ended(self, id);
         let action = self.actions.remove(id)?;
         for wake in [action.wake, action.tick].into_iter().flatten() {
             self.cancel_wake(wake);
         }
         if let Some(record) = self.entities.get_mut(action.actor) {
             record.actions.retain(|have| *have != id);
+        }
+        // The other participants of a joint action are let go together
+        // with its actor, and are free (03 §8).
+        let joined = self.actions.take_joined(id);
+        for participant in &joined {
+            if let Some(record) = self.entities.get_mut(participant.entity) {
+                record.actions.retain(|have| *have != id);
+            }
+        }
+        for participant in joined {
+            self.after_action(
+                participant.entity,
+                FreeReason::Finished(id),
+                Cause::new(CauseKind::Process),
+            );
         }
         Some(action)
     }
@@ -1544,8 +1736,8 @@ impl Sim {
         let channels: Vec<ChannelId> = self
             .actions_of(entity)
             .iter()
-            .filter_map(|id| self.actions.get(*id))
-            .flat_map(|action| action.held.iter().map(|(channel, _)| *channel))
+            .filter_map(|id| self.actions.held_of(*id, entity))
+            .flat_map(|held| held.iter().map(|(channel, _)| *channel))
             .collect();
         for channel in channels {
             while self.held_slots(entity, channel) > self.enabled_slots(entity, channel) {
@@ -1598,6 +1790,16 @@ impl Sim {
     /// wakes or is revived.
     fn stop_acting(&mut self, entity: EntityId, interrupted: Option<Reason>, cause: Cause) {
         for id in self.actions_of(entity).to_vec() {
+            // A participant forced into someone else's joint action that
+            // goes limp is what a takedown is for: the action goes on
+            // (03 §8).
+            if self
+                .actions
+                .get(id)
+                .is_some_and(|action| action.actor != entity)
+            {
+                continue;
+            }
             match &interrupted {
                 Some(reason) => {
                     self.end_interrupted(id, reason.clone(), cause);

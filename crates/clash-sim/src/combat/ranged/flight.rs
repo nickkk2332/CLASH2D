@@ -280,6 +280,110 @@ pub(crate) fn strike_creature(
     Struck::Passed
 }
 
+/// What a shot's `strike_defended` and `defence_resolving` name as its
+/// attack (07 §11.6): a shot is no attack of an action.
+pub const SHOT_ATTACK: &str = "shot";
+
+/// Where a shot comes from, for the defences it meets (07 §11.6).
+pub(crate) struct ShotFrom<'a> {
+    /// The one who fired or threw it.
+    pub by: Option<EntityId>,
+    /// What `strike_defended` names as its action: the projectile's
+    /// qualified id, empty for an item thrown.
+    pub projectile: &'a str,
+}
+
+/// Strikes a creature a shot met (07 §11.6), as [`strike_creature`]
+/// does, once the defences in force for it have been tried, as a
+/// strike's are at its step 5 (07 §5), the one it comes `from` as the
+/// attacker. One that avoids makes it pass by at full speed. One that
+/// interposes turns its share aside and puts its surfaces in the way of
+/// the rest, each taking a packet at the projectile's own intensity
+/// over the projectile's contact (decision D-811); what passes them
+/// goes on into the body. A shot from no one, or at something with no
+/// body, meets no defence.
+pub(crate) fn strike_guarded(
+    sim: &mut Sim,
+    from: &ShotFrom<'_>,
+    target: EntityId,
+    pos: Vec3,
+    surface: Surface,
+    energy: Real,
+    cause: Cause,
+) -> Struck {
+    let projectile = from.projectile;
+    let Some(attacker) = from
+        .by
+        .filter(|by| *by != target && sim.truth().entity(*by).is_some())
+    else {
+        return strike_creature(sim, target, pos, surface, energy, cause);
+    };
+    if !sim.components().body.contains(target) {
+        return strike_creature(sim, target, pos, surface, energy, cause);
+    }
+    let incoming = crate::combat::defence::Incoming {
+        attacker,
+        target,
+        part: None,
+        energy,
+        action: projectile,
+        attack: SHOT_ATTACK,
+        cause,
+    };
+    match crate::combat::defence::defend(sim, &incoming) {
+        crate::combat::defence::Defended::Nothing => {
+            strike_creature(sim, target, pos, surface, energy, cause)
+        }
+        crate::combat::defence::Defended::Avoided(_) => Struck::Passed,
+        crate::combat::defence::Defended::Interposed {
+            turned, surfaces, ..
+        } => {
+            let left = (energy - turned).max(Real::ZERO);
+            let blow = crate::combat::Surface {
+                kind: surface.kind,
+                area: surface.area,
+                give: surface.give,
+                span: surface.span,
+                striker: crate::combat::Striker::Inline,
+                reach: Real::ZERO,
+            };
+            let (harm, guarded, _) =
+                match crate::combat::strike::guard_takes(sim, &blow, cause, &surfaces, left, false)
+                {
+                    Ok(taken) => taken,
+                    Err(refusal) => {
+                        sim.fault(refusal);
+                        (left, Real::ZERO, Real::ZERO)
+                    }
+                };
+            if harm <= Real::ZERO {
+                return Struck::Hit {
+                    part: None,
+                    absorbed: guarded,
+                    exits: Real::ZERO,
+                };
+            }
+            match strike_creature(sim, target, pos, surface, harm, cause) {
+                Struck::Hit {
+                    part,
+                    absorbed,
+                    exits,
+                } => Struck::Hit {
+                    part,
+                    absorbed: absorbed + guarded,
+                    exits,
+                },
+                Struck::Passed => Struck::Hit {
+                    part: None,
+                    absorbed: guarded,
+                    exits: harm,
+                },
+                Struck::Stopped => Struck::Stopped,
+            }
+        }
+    }
+}
+
 /// What `projectile_hit` says.
 pub(crate) struct HitNews {
     pub shooter: Option<EntityId>,
@@ -525,7 +629,12 @@ pub(crate) fn follow(sim: &mut Sim, news: FlightNews) {
             };
             pass_by(sim, key, Some(body), pos, Some(occupant), cause);
             let surface = surface_of(sim, key, &shot, body, kind);
-            let struck = strike_creature(sim, occupant, pos, surface, energy, cause);
+            let name = projectile_name(sim, shot.projectile);
+            let from = ShotFrom {
+                by: shot.by,
+                projectile: &name,
+            };
+            let struck = strike_guarded(sim, &from, occupant, pos, surface, energy, cause);
             let exits = match struck {
                 Struck::Passed => energy,
                 Struck::Stopped => Real::ZERO,
@@ -703,6 +812,57 @@ fn burst(
 /// leaves its field where it ends, and is forgotten; an item thrown is
 /// forgotten, and lies where the world leaves it.
 fn end(sim: &mut Sim, key: ShotKey, body: Option<BodyId>, at: Option<Location>, cause: Cause) {
+    // Its window closes once nothing it opened it for is in flight
+    // (07 §11.2).
+    let window = match key {
+        ShotKey::Tag(tag) => sim.ranged.shot_window(tag),
+        ShotKey::Item(item) => sim.ranged.throw_window(item),
+    };
+    end_flight(sim, key, body, at, cause);
+    if let Some(window) = window
+        && !sim.ranged.window_in_flight(window)
+    {
+        sim.close_window(window);
+    }
+}
+
+/// A shot caught in flight (07 §11.6, `catch_shot`): its body is taken
+/// out of the air where it is and the shot is forgotten, leaving no
+/// field; its window closes once nothing it was opened for is in
+/// flight.
+pub(crate) fn caught(sim: &mut Sim, key: ShotKey, body: BodyId) {
+    if sim.truth().cosmos().body(body).is_some()
+        && let Err(error) = sim.world(|ctx| ctx.arrest(body))
+    {
+        sim.fault(crate::reason::Reason::from_world(&error));
+    }
+    let window = match key {
+        ShotKey::Tag(tag) => {
+            let window = sim.ranged.shot_window(tag);
+            sim.ranged.end_shot(tag);
+            window
+        }
+        ShotKey::Item(item) => {
+            let window = sim.ranged.throw_window(item);
+            sim.ranged.end_throw(item);
+            window
+        }
+    };
+    if let Some(window) = window
+        && !sim.ranged.window_in_flight(window)
+    {
+        sim.close_window(window);
+    }
+}
+
+/// [`end`], but for the window.
+fn end_flight(
+    sim: &mut Sim,
+    key: ShotKey,
+    body: Option<BodyId>,
+    at: Option<Location>,
+    cause: Cause,
+) {
     match key {
         ShotKey::Tag(tag) => {
             if let Some(body) = body

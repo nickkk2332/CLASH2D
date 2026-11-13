@@ -30,6 +30,17 @@ pub enum Striker {
     },
     /// Nothing: a surface given inline (08 §7.7). It takes no recoil.
     Inline,
+    /// A creature the attacker grips (07 §9.2): swung as a weapon, it
+    /// strikes with a surface of one of its parts and takes the recoil
+    /// there; put in a blow's way, it takes the blow on its body, struck
+    /// with the blow's own surface.
+    Gripped {
+        /// The creature held.
+        held: EntityId,
+        /// The part of it whose surface strikes; `None` where it is put
+        /// in the way whole.
+        part: Option<PartKey>,
+    },
 }
 
 /// A striking surface (07 §3.2), found for one strike.
@@ -123,7 +134,8 @@ fn no_surface(action: &str, attack: &str, with: &str) -> Reason {
 ///   and has the surface, one that grasps nothing before one that does.
 /// - `held`: the first item, by id, held in a grasp, that carries the
 ///   tag (any, for an empty tag) and whose definition has the surface.
-/// - `gripped`: refused, grips are not built.
+/// - `gripped`: what the attacker grips (07 §9.2): a surface of one of
+///   its parts, or the creature whole.
 /// - inline: as written.
 pub fn find(
     sim: &Sim,
@@ -152,14 +164,7 @@ pub fn find(
                 reach,
             })
         }
-        WithSource::Gripped => Err(Reason::new(
-            reason::NOTHING_GRIPPED,
-            format!(
-                "the attack `{attack}` of `{action}` strikes with something gripped, and nothing is"
-            ),
-        )
-        .with("action", action)
-        .with("attack", attack)),
+        WithSource::Gripped => gripped(sim, attacker, with, action, attack),
         WithSource::Part(name) => {
             let what = format!("the part `{name}`");
             let (body, defs) =
@@ -235,6 +240,75 @@ pub fn find(
             Err(no_surface(action, attack, &what))
         }
     }
+}
+
+/// The surface of what an attacker grips (07 §9.2): the first creature
+/// it grips, in the order the grips were taken. With a `surface`, the
+/// first working part of the creature, by key, that has it, scaled as a
+/// part's is; with none, the creature put in the way whole, which takes
+/// a blow with the blow's own surface (and whose kind here is never
+/// read).
+fn gripped(
+    sim: &Sim,
+    attacker: EntityId,
+    with: &WithDef,
+    action: &str,
+    attack: &str,
+) -> Result<Surface, Reason> {
+    let none = || {
+        Reason::new(
+            reason::NOTHING_GRIPPED,
+            format!(
+                "the attack `{attack}` of `{action}` strikes with something gripped, and nothing is"
+            ),
+        )
+        .with("action", action)
+        .with("attack", attack)
+    };
+    let held = super::grip::gripped_by_holder(sim, attacker)
+        .into_iter()
+        .find(|held| sim.components().body.contains(*held))
+        .ok_or_else(none)?;
+    let reach = body_of(sim, attacker).map_or(Real::ZERO, |(body, defs)| body.reach(&defs))
+        + clash_world::dims::CELL_M;
+    let Some(id) = with.surface.as_deref() else {
+        return Ok(Surface {
+            kind: DamageTypeId::new(0),
+            area: Real::ZERO,
+            give: Real::ZERO,
+            span: Real::ZERO,
+            striker: Striker::Gripped { held, part: None },
+            reach,
+        });
+    };
+    let what = format!("a surface `{id}` of what is gripped");
+    let (body, defs) = body_of(sim, held).ok_or_else(|| no_surface(action, attack, &what))?;
+    let part = body
+        .parts()
+        .iter()
+        .find(|part| {
+            part.is_working()
+                && defs
+                    .part(part.def())
+                    .is_some_and(|def| named(&def.surfaces, Some(id)).is_some())
+        })
+        .ok_or_else(|| no_surface(action, attack, &what))?;
+    let def = defs
+        .part(part.def())
+        .and_then(|def| named(&def.surfaces, Some(id)))
+        .ok_or_else(|| no_surface(action, attack, &what))?;
+    let scale = body.part_scale(part);
+    Ok(Surface {
+        kind: def.kind.id(),
+        area: def.area * scale * scale,
+        give: def.give.get() * scale,
+        span: def.span.get() * scale,
+        striker: Striker::Gripped {
+            held,
+            part: Some(part.key()),
+        },
+        reach,
+    })
 }
 
 /// How far an item held reaches: the reach of the part holding it and
