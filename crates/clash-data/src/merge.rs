@@ -45,6 +45,68 @@ pub const DIRECTIVE_KEYS: &[&str] = &[
     "add",
 ];
 
+/// What each of [`DIRECTIVE_KEYS`] does, for the generated reference
+/// (04 §5, §6), with `//`, which is read anywhere.
+pub const DIRECTIVE_DOCS: &[(&str, &str)] = &[
+    (
+        "type",
+        "The definition type: one of the types of this reference. Required.",
+    ),
+    (
+        "id",
+        "The definition's id. A bare name defines it in the namespace of the mod that wrote it; a qualified `namespace:name` in another namespace is allowed only with `patch` or `override`. Required.",
+    ),
+    ("//", "A comment. Ignored anywhere, at any depth."),
+    (
+        "abstract",
+        "`true`: the definition exists only to be inherited from with `copy_from`. It is never instantiated, and need not give every required field. Not inherited.",
+    ),
+    (
+        "if_mod",
+        "A mod id, or a list of them: the definition is read only if every one is in the profile.",
+    ),
+    (
+        "unless_mod",
+        "A mod id, or a list of them: the definition is read only if none is in the profile.",
+    ),
+    (
+        "obsolete",
+        "`true`: the definition stays loadable so that saves that name it work, and is left out of generation, spawning and lists. Referring to it from a definition that is not obsolete is a warning. Not inherited.",
+    ),
+    (
+        "copy_from",
+        "The id of a definition of the same type: this one is that one's finished definition with this object applied as a change (04 §6.2). It may be defined later or in another mod.",
+    ),
+    (
+        "patch",
+        "`true`: changes the existing definition of this id in place, field by field (04 §6.3). Patches apply in load order; patching what does not exist is an error unless `optional` is set.",
+    ),
+    (
+        "override",
+        "`true`: replaces the existing definition of this id completely (04 §6.4). Earlier patches are discarded.",
+    ),
+    (
+        "optional",
+        "With `patch`: if there is nothing to patch, skip this object rather than report an error.",
+    ),
+    (
+        "extend",
+        "An object of field paths and values to append to a list or a set, or merge into a map: `{ \"tags\": [\"x\"] }` (04 §6.1).",
+    ),
+    (
+        "delete",
+        "An object of field paths and entries to remove from a list or a set, or keys to remove from a map: `{ \"tags\": [\"y\"] }`.",
+    ),
+    (
+        "scale",
+        "An object of field paths and factors to multiply numbers by: `{ \"density\": 1.2 }`. Applied once the final value is known, before `add`.",
+    ),
+    (
+        "add",
+        "An object of field paths and amounts to add to numbers, which may carry a unit: `{ \"span\": 2 }`.",
+    ),
+];
+
 /// A mod in load order.
 #[derive(Clone, Debug)]
 pub(crate) struct LoadedMod {

@@ -84,6 +84,7 @@ mod props;
 pub mod query;
 pub mod reader;
 pub mod reason;
+pub mod recipe;
 pub mod registry;
 pub mod reshape;
 pub mod rule;
@@ -91,6 +92,7 @@ pub mod scenario;
 mod sim;
 pub mod stats;
 pub mod subject;
+pub mod substance;
 pub mod template;
 pub mod traits;
 pub mod vars;
@@ -123,8 +125,8 @@ pub use host::{Bound, MAX_HOST_WARNINGS, RULE_STREAM, SimHost};
 pub use later::{ActionId, ActionTable, ChannelSlots, EocId, Plan, RuleState, WindowTable};
 pub use reason::{KERNEL_REASONS, Reason, ReasonInfo, codes};
 pub use registry::{
-    ArgDef, Bindings, FunctionDef, PropertyDef, engine_functions, engine_properties,
-    engine_registry, register_engine,
+    ArgDef, Bindings, FunctionDef, PropertyDef, ReasonDoc, SettingInfo, engine_functions,
+    engine_properties, engine_reasons, engine_registry, engine_settings, register_engine,
 };
 pub use sim::{LoadError, SAVE_KIND, SAVE_VERSION, Sim, SimHashes, Truth};
 pub use subject::{Kinds, SUBJECT_KIND_DOCS};
@@ -151,6 +153,8 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     perception::register_defs(types);
     device::register_defs(types);
     interaction::register_defs(types);
+    recipe::register_defs(types);
+    substance::register_defs(types);
     traits::register_defs(types);
     ability::register_defs(types);
     ai::register_defs(types);

@@ -1,0 +1,83 @@
+[
+  { "//": "Using what is made (16 §3, §8, §9.5): interactions on items held, and the actions a screen or a mind starts. `make` is the work action: its parameters `recipe` and `station` make the engine check, as it starts, that the recipe can be begun there, and its held phase works until the recipe is done or the worker stops, when the work done stays where it was kept. `eat`, `drink` and `apply` take what is held as `what`. Nothing here is a bonus: what a mouthful or a salve does is the substance's.",
+    "type": "action", "id": "make", "name": "Make",
+    "params": { "recipe": "any", "station": { "type": "any?", "default": "null" } },
+    "requires": "self.can_make($recipe, $station)",
+    "fail_text": "{self.make_fault($recipe, $station) ?? 'that cannot be made now'}",
+    "phases": [
+      { "id": "work", "time": "hold", "cancel": true,
+        "do": [ { "work": { "who": "self", "recipe": "$recipe", "at": "$station" } } ] }
+    ] },
+
+  { "type": "action", "id": "eat", "name": "Eat",
+    "params": { "what": "entity" },
+    "requires": "contains(self.carried, $what)",
+    "fail_text": "You must be holding it to eat it.",
+    "phases": [
+      { "id": "eat", "time": "3 s", "cancel": true,
+        "on_exit": [ { "take_in": { "who": "self", "what": "$what", "route": "ingest" } } ] } ] },
+
+  { "type": "action", "id": "drink", "name": "Drink",
+    "params": { "what": "entity" },
+    "requires": "contains(self.carried, $what)",
+    "fail_text": "You must be holding it to drink from it.",
+    "phases": [
+      { "id": "drink", "time": "2 s", "cancel": true,
+        "on_exit": [ { "dose": { "who": "self", "from": "$what", "route": "ingest", "amount": "250 ml" } } ] } ] },
+
+  { "//": "Applies a bandage, a salve, or a coating on a blade: whatever interaction the thing offers to be applied.",
+    "type": "action", "id": "apply", "name": "Apply",
+    "params": { "what": "entity" },
+    "requires": "contains(self.carried, $what)",
+    "fail_text": "You must be holding it to apply it.",
+    "phases": [
+      { "id": "apply", "time": "4 s", "cancel": true,
+        "on_exit": [
+          { "if": "$what.has_tag('bandage')",
+            "then": [ { "interact": { "who": "self", "target": "$what", "interaction": "apply_bandage" } } ] },
+          { "if": "$what.has_tag('medical') and not $what.has_tag('bandage')",
+            "then": [ { "interact": { "who": "self", "target": "$what", "interaction": "apply_salve" } } ] },
+          { "if": "$what.has_tag('vessel') and not $what.has_tag('medical')",
+            "then": [ { "interact": { "who": "self", "target": "$what", "interaction": "coat_blade" } } ] } ] } ] },
+
+  { "type": "interaction", "id": "eat", "name": "Eat", "target": "entity",
+    "reach": "held", "time": "3 s", "noise": 0.1,
+    "do": [ { "take_in": { "who": "self", "what": "target", "route": "ingest" } } ] },
+
+  { "type": "interaction", "id": "drink", "name": "Drink", "target": "entity",
+    "reach": "held", "time": "2 s", "noise": 0.1,
+    "if": "target.fill > 0",
+    "fail_text": "It is empty.",
+    "do": [ { "dose": { "who": "self", "from": "target", "route": "ingest", "amount": "250 ml" } } ] },
+
+  { "//": "Binds the wounds that bleed: each open wound is closed (06 §7.3), and the bandage is used up.",
+    "type": "interaction", "id": "apply_bandage", "name": "Bandage your wounds", "target": "entity",
+    "reach": "held", "time": "4 s", "noise": 0.1,
+    "if": "len(self.wounds) > 0",
+    "fail_text": "You have no wound to bind.",
+    "do": [ { "for_each": "self.wounds", "as": "wound",
+              "do": [ { "if": "$wound.state == 'open'", "then": [ { "close_wound": "$wound" } ] } ] },
+            { "destroy_item": { "item": "target" } } ] },
+
+  { "//": "Rubs ten millilitres of salve into the skin: what it does is the substance's, and the hurt parts mend a little.",
+    "type": "interaction", "id": "apply_salve", "name": "Rub on salve", "target": "entity",
+    "reach": "held", "time": "4 s", "noise": 0.1,
+    "if": "target.fill > 0",
+    "fail_text": "There is no salve left.",
+    "do": [ { "dose": { "who": "self", "from": "target", "route": "skin", "amount": "10 ml" } },
+            { "for_each": "self.parts", "as": "part",
+              "do": [ { "heal_part": { "part": "$part", "share": 0.1 } } ] } ] },
+
+  { "//": "Puts four millilitres of what the vial holds on each blade in hand.",
+    "type": "interaction", "id": "coat_blade", "name": "Coat a blade", "target": "entity",
+    "reach": "held", "time": "3 s", "noise": 0.1,
+    "if": "target.fill > 0 and len(self.held('grasp')) > 1",
+    "fail_text": "You need a blade in the other hand, and something in the vial.",
+    "do": [ { "for_each": "self.held('grasp')", "as": "thing",
+              "do": [ { "if": "$thing.has_tag('blade')",
+                        "then": [ { "coat": { "surface": "$thing", "from": "target", "amount": "4 ml" } } ] } ] } ] },
+
+  { "type": "interaction", "id": "read", "name": "Read", "target": "entity",
+    "reach": "held", "time": "10 s", "noise": 0.0,
+    "do": [ { "learn_from": { "who": "self", "from": "target" } } ] }
+]

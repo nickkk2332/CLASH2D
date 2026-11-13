@@ -57,6 +57,8 @@ pub(crate) fn equal(sim: &Sim, a: EntityId, b: EntityId) -> bool {
         && sim.entities.contents(a).is_empty()
         && sim.entities.contents(b).is_empty()
         && sim.components.get::<Identity>(a) == sim.components.get::<Identity>(b)
+        && sim.components.get::<crate::substance::Substances>(a)
+            == sim.components.get::<crate::substance::Substances>(b)
 }
 
 /// Whether two entities are in the same place and held the same way.
@@ -117,6 +119,14 @@ pub fn split(sim: &mut Sim, item: EntityId, count: u32, cause: Cause) -> Result<
     );
     if let Some(identity) = sim.components.get::<Identity>(item).cloned() {
         sim.components.insert(piece, identity);
+    }
+    // Each member holds what the others do (16 §9.5).
+    if let Some(held) = sim
+        .components
+        .get::<crate::substance::Substances>(item)
+        .cloned()
+    {
+        sim.components.insert(piece, held);
     }
     let undo = |sim: &mut Sim, reason: Reason| {
         let _ = sim.remove_entity(piece, cause);

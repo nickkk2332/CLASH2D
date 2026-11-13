@@ -1,0 +1,26 @@
+# Null field (mods/core/data/powers): an area anchored to its maker
+# suppresses everyone else's powers inside it (08 §6.2). Coming into it
+# ends a running mode; leaving it restores the ability but not the
+# mode. The maker's own shield resists its own field, by a rule on
+# `ability_suppressing`.
+use default seed=31
+gen core:test_city size=1
+look @c:17,20,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+look @c:17,12,0
+do { "spawn": { "template": "core:power_sampler", "at": "here" } }
+start_mode who=@e:0 ability=core:null_field mode=on
+expect event binding_created ability=core:null_field what=area
+start_mode who=@e:0 ability=core:shield mode=raised
+assert "@e:0.ability('core:shield').state == 'active' and @e:0.has_trait('core:shielded')"
+start_mode who=@e:1 ability=core:shield mode=raised
+assert "@e:1.has_trait('core:shielded')"
+move @e:1 @c:18,20,0
+expect event mode_ended ability=core:shield mode=raised how=suppressed
+assert "not @e:1.has_trait('core:shielded') and @e:1.ability('core:shield').state == 'suppressed'"
+assert "@e:0.ability('core:null_field').mode_on('on') and @e:0.has_trait('core:shielded')"
+advance 2s
+move @e:1 @c:17,12,0
+expect event ability_restored ability=core:shield
+assert "@e:1.ability('core:shield').state == 'active' and not @e:1.ability('core:shield').mode_on('raised')"
+expect hash f4300ae81f72235038b90e863db91ee2

@@ -1108,6 +1108,10 @@ fn at_target(
             stopped(sim, striking, target, &reason);
             return Ok(AtTarget::Missed);
         }
+        // A coated blade's coating (16 §9.5).
+        if let super::surface::Striker::Item { item, .. } = surface.striker {
+            crate::substance::after_hit(sim, item, target, &outcome, striking.cause);
+        }
         let report = &outcome.report;
         let mut absorbed = report.absorbed;
         for worn in &report.worn {

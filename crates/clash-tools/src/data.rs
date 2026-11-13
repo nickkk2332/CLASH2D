@@ -41,7 +41,9 @@ pub struct Output {
 }
 
 impl Output {
-    fn usage(message: impl Into<String>) -> Output {
+    /// The usage of the data commands, after a message that says what
+    /// was wrong.
+    pub(crate) fn usage(message: impl Into<String>) -> Output {
         Output {
             out: String::new(),
             err: format!("clash-tools: {}\n\n{USAGE}", message.into()),
@@ -62,23 +64,54 @@ data commands:
         Print the long explanation of a diagnostic code, such as E0203.
   show [<type>] <id> [--mods <dir>]... [--profile <file or name>]
         Print a finished definition and where each value came from.
-  schema --out <dir>
-        Write JSON Schemas for the definition types. Not built yet.
+  docs [--out <dir>] [--format md|json]
+        Write the modding reference, generated from the engine's
+        registries: one page per definition type, events, hooks, verbs,
+        effects, functions, properties, queries, settings, reasons, units
+        and diagnostic codes. Reports what has no documentation.
+  schema [--type <type>] [--out <dir>] [--with-ids] [--profile <p>] [--mods <dir>]...
+        Write the JSON Schema of a data file, or of one definition type.
+        --with-ids lists the ids of the loaded definitions for references.
+  init-mod <id> [--dir <mods dir>]
+        Make a mod: mod.json, editor settings that attach the schemas, and
+        a data folder with a small example of each common kind.
+  new <type> <id>
+        Print a skeleton definition of a type with its required fields.
+  refs [<type>] <id> [--mods <dir>]... [--profile <p>]
+        Every reference to a definition in the loaded mods, with file and
+        line: fields, copies, patches and mentions in plain text; and
+        what the definition refers to. The id may be a bare name.
+  find <type> [where=<condition>]... [<text>]... [--mods <dir>]... [--profile <p>]
+        The definitions of a type (`*` for any) that meet every
+        condition: `path`, `!path`, or `path<op>value` with `==`, `!=`,
+        `<`, `<=`, `>`, `>=` or `~` (holds the text). A path is the keys
+        of a field, lists looked through; a quantity compares in SI
+        units, a reference by its id. Plain words are looked for in the
+        id, `name`, `description` and `doc`.
 ";
 
 /// The options the data commands share.
 #[derive(Debug, Default)]
-struct Options {
-    positional: Vec<String>,
-    mods: Vec<PathBuf>,
-    profile: Option<String>,
-    lenient: bool,
-    json: bool,
+pub(crate) struct Options {
+    pub(crate) positional: Vec<String>,
+    pub(crate) mods: Vec<PathBuf>,
+    pub(crate) profile: Option<String>,
+    pub(crate) lenient: bool,
+    pub(crate) json: bool,
+    /// Where `docs` and `schema` write, and `init-mod` makes the mod.
+    pub(crate) out: Option<PathBuf>,
+    /// `md` or `json`, for `docs`.
+    pub(crate) format: Option<String>,
+    /// The one definition type `schema` writes, or `refs` and `find`
+    /// look in.
+    pub(crate) type_name: Option<String>,
+    /// Whether `schema` lists the ids of loaded definitions.
+    pub(crate) with_ids: bool,
     /// What `lint` runs once the definitions are loaded.
-    checks: Vec<BuildCheck>,
+    pub(crate) checks: Vec<BuildCheck>,
 }
 
-fn parse_options(args: &[String]) -> Result<Options, String> {
+pub(crate) fn parse_options(args: &[String]) -> Result<Options, String> {
     let mut options = Options::default();
     let mut args = args.iter();
     while let Some(arg) = args.next() {
@@ -91,6 +124,24 @@ fn parse_options(args: &[String]) -> Result<Options, String> {
                 Some(profile) => options.profile = Some(profile.clone()),
                 None => return Err("`--profile` needs a file or a name".to_owned()),
             },
+            "--out" | "--dir" => match args.next() {
+                Some(dir) => options.out = Some(PathBuf::from(dir)),
+                None => return Err(format!("`{arg}` needs a directory")),
+            },
+            "--format" => match args.next() {
+                Some(format) if format == "md" || format == "json" => {
+                    options.format = Some(format.clone());
+                }
+                Some(format) => {
+                    return Err(format!("`--format` is `md` or `json`, not `{format}`"));
+                }
+                None => return Err("`--format` needs `md` or `json`".to_owned()),
+            },
+            "--type" => match args.next() {
+                Some(name) => options.type_name = Some(name.clone()),
+                None => return Err("`--type` needs a definition type".to_owned()),
+            },
+            "--with-ids" => options.with_ids = true,
             "--lenient" => options.lenient = true,
             "--json" => options.json = true,
             flag if flag.starts_with("--") => return Err(format!("unknown option `{flag}`")),
@@ -113,7 +164,12 @@ pub fn run(
         "lint" => lint,
         "explain" => explain,
         "show" => show,
-        "schema" => schema,
+        "docs" => crate::reference::docs_command,
+        "schema" => crate::schema::command,
+        "init-mod" => crate::scaffold::init_mod_command,
+        "new" => crate::scaffold::new_command,
+        "refs" => crate::refs::refs_command,
+        "find" => crate::refs::find_command,
         _ => return None,
     };
     Some(match parse_options(args) {
@@ -129,7 +185,7 @@ pub fn run(
 /// kinds, properties, functions and events the simulation offers
 /// (05 §5.3), so that a mod's expressions are held to what the game
 /// will hold them to.
-fn loader<'t>(types: &'t DefTypes, options: &Options) -> Loader<'t> {
+pub(crate) fn loader<'t>(types: &'t DefTypes, options: &Options) -> Loader<'t> {
     let mut loader = clash_scene::engine_loader(types).lenient(options.lenient);
     for dir in &options.mods {
         loader = loader.search_path(dir.clone());
@@ -140,7 +196,7 @@ fn loader<'t>(types: &'t DefTypes, options: &Options) -> Loader<'t> {
 /// Loads a profile given as a file or as a name. With no `--mods`, mods
 /// are looked for beside the profile's own `profiles/` directory, or in
 /// `mods`.
-fn load_profile(types: &DefTypes, options: &Options, profile: &str) -> LoadOutcome {
+pub(crate) fn load_profile(types: &DefTypes, options: &Options, profile: &str) -> LoadOutcome {
     let path = Path::new(profile);
     let mut loader = loader(types, options);
     if path.is_file() {
@@ -506,17 +562,6 @@ fn show_node(
     }
 }
 
-/// `schema --out <dir>`: not built yet.
-fn schema(_types: &DefTypes, _options: &Options) -> Output {
-    Output {
-        out: String::new(),
-        err: "clash-tools: `schema` is not built yet. JSON Schemas are generated by package P5 \
-              of docs/plans/sim-kernel.md.\n"
-            .to_owned(),
-        code: EXIT_USAGE,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use clash_core::{Real, define_id};
@@ -832,15 +877,16 @@ material ash:cinder
             &["explain"],
             &["show"],
             &["show", "a", "b", "c"],
+            &["schema", "extra"],
+            &["docs", "--format", "pdf"],
+            &["docs", "--out"],
+            &["schema", "--type"],
         ] {
             let output = run_with(&types(), words);
             assert_eq!(output.code, EXIT_USAGE, "{words:?}");
             assert!(output.err.contains("data commands:"), "{words:?}");
         }
         assert!(run(&types(), &[], "worldview", &[]).is_none());
-        let schema = run_with(&types(), &["schema", "--json"]);
-        assert_eq!(schema.code, EXIT_USAGE);
-        assert!(schema.err.contains("not built yet"));
     }
 
     #[test]

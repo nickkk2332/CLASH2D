@@ -111,6 +111,11 @@ pub const BENCHES: &[Bench] = &[
         run: condition,
     },
     Bench {
+        name: "recipe.start_and_complete",
+        what: "a recipe by hand started and completed: its checks, its input used up, its wake-up scheduled and handled, its output made",
+        run: recipe_cycle,
+    },
+    Bench {
         name: "scene.map_frame",
         what: "a 200 x 60 frame of the map of a generated city, from the view model",
         run: map_frame,
@@ -578,6 +583,31 @@ fn city_sim(kit: &mut Kit) -> Result<Sim, String> {
     }
     sim.drain_events();
     Ok(sim)
+}
+
+/// A recipe by hand (16 §8.2), started and completed over and over by a
+/// creature in the street: the cloth it uses is made in it each time,
+/// and five seconds are advanced for the work.
+fn recipe_cycle(kit: &mut Kit) -> Result<Measured, String> {
+    let mut sim = city_sim(kit)?;
+    let worker = create(&mut sim, Place::at(sim_street(2)))?;
+    let recipe = sim
+        .defs()
+        .lookup::<clash_sim::recipe::RecipeDef>("core:bandage")
+        .ok_or("no recipe `core:bandage`")?;
+    let cloth = clash_sim::item::def_named(&sim, "core:cloth").map_err(|reason| reason.message)?;
+    let ns = best_ns(5, 200, || {
+        let made = clash_sim::item::create(&mut sim, cloth, 1, Place::In(worker), Cause::DEBUG);
+        let started =
+            clash_sim::recipe::work::start(&mut sim, Some(worker), recipe, None, Cause::DEBUG);
+        let until = clash_core::Tick(sim.now().as_micros() + 5_000_001);
+        let _ = sim.advance(AdvanceLimit::Until(until));
+        (made.is_ok(), started.is_ok())
+    });
+    Ok(Measured::new(
+        ns,
+        "start and completion together, with making the cloth and advancing the clock",
+    ))
 }
 
 fn sim_street(dx: i32) -> Location {

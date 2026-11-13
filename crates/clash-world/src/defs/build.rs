@@ -1024,6 +1024,24 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
         {
             at.error(errors, "clock_rate", "must be zero or more");
         }
+        let gravity = match def.gravity {
+            Some(super::raw::GravitySpec::Scale(scale)) => {
+                if !scale.is_finite() {
+                    at.error(errors, "gravity", "a scale of gravity must be finite");
+                }
+                Some(crate::area::GravityOverride::Scale(scale))
+            }
+            Some(super::raw::GravitySpec::Vector(vector)) => {
+                if vector.iter().any(|axis| !axis.is_finite()) {
+                    at.error(errors, "gravity", "an acceleration must be finite");
+                }
+                Some(crate::area::GravityOverride::Vector(vector))
+            }
+            None => None,
+        };
+        if def.suppresses.iter().any(String::is_empty) {
+            at.error(errors, "suppresses", "a tag cannot be empty");
+        }
         area_kinds.entries.push(AreaKind {
             tags: tags(&def.tags),
             vars,
@@ -1033,6 +1051,9 @@ pub(super) fn build(raw: RawWorldDefs) -> Result<WorldDefs, Vec<DefError>> {
             leak: def.leak.clone(),
             ambience: def.ambience.as_ref().map(|ambience| ambience.0.clone()),
             rules: def.rules.clone(),
+            gravity,
+            light: light_of(def.light.as_ref(), at, "light", errors),
+            suppresses: tags(&def.suppresses),
         });
     }
 

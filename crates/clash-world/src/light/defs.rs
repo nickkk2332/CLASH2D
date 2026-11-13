@@ -8,7 +8,7 @@
 
 use clash_core::{Dur, Real, define_id};
 use clash_data::Time;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{
     LIGHT_NEGLIGIBLE, LIGHT_RADIUS_MAX_M, SKY_DARK, SKY_REACH_MAX_CELLS, SKY_SPREAD_LOSS,
@@ -38,9 +38,10 @@ pub struct LightSpec {
     pub radius: Option<Length>,
 }
 
-/// A resolved source of light: an element state that gives light off, or
-/// a moving source handed in with a query.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// A resolved source of light: an element state that gives light off,
+/// an area that carries one (02 §8.3), or a moving source handed in with
+/// a query.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct LightSource {
     /// The light it gives its own cell. A cell `d` metres away, in its
     /// line of sight and within its radius, gets `intensity / (1 + d²)`.
@@ -48,6 +49,8 @@ pub struct LightSource {
     /// How far it shines, in metres. At most [`LIGHT_RADIUS_MAX_M`].
     pub radius: Real,
 }
+
+clash_core::impl_state_hash!(LightSource { intensity, radius });
 
 impl LightSource {
     /// A source of this intensity that shines as far as its light stays
@@ -71,12 +74,19 @@ impl LightSource {
     /// The source as an element wrote it, or why it cannot be. `None`
     /// for an intensity of zero: no source.
     pub(crate) fn from_spec(spec: &LightSpec) -> Result<Option<LightSource>, String> {
-        if !spec.intensity.is_finite() {
+        LightSource::shining(spec.intensity, spec.radius.map(|radius| radius.get()))
+    }
+
+    /// A source of an intensity and, if given, a radius in metres, or
+    /// why it cannot be: an intensity that is not finite, a radius
+    /// outside 0 to [`LIGHT_RADIUS_MAX_M`]. `None` for an intensity of
+    /// zero: no source. A negative intensity darkens (15 §3.3).
+    pub fn shining(intensity: Real, radius: Option<Real>) -> Result<Option<LightSource>, String> {
+        if !intensity.is_finite() {
             return Err("the intensity must be finite".to_owned());
         }
-        let radius = match spec.radius {
+        let radius = match radius {
             Some(radius) => {
-                let radius = radius.get();
                 if radius < Real::ZERO || radius > LIGHT_RADIUS_MAX_M || !radius.is_finite() {
                     return Err(format!(
                         "the radius must be from 0 to {LIGHT_RADIUS_MAX_M} m, not {radius}"
@@ -84,15 +94,12 @@ impl LightSource {
                 }
                 radius
             }
-            None => default_radius(spec.intensity),
+            None => default_radius(intensity),
         };
-        if spec.intensity == Real::ZERO {
+        if intensity == Real::ZERO {
             return Ok(None);
         }
-        Ok(Some(LightSource {
-            intensity: spec.intensity,
-            radius,
-        }))
+        Ok(Some(LightSource { intensity, radius }))
     }
 
     /// The furthest whole cell the source reaches along an axis.

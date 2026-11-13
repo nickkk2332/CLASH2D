@@ -28,9 +28,10 @@
       { "on": "hit_incoming",
         "do": [ { "modify": { "event.energy": "event.energy * 0.4" } } ] } ] },
 
-  { "//": "Gives every power of this file, for rules and the console: `add_trait to=@a trait=core:power_sampler`.",
+  { "//": "Gives every power of this directory, for rules and the console: `add_trait to=@a trait=core:power_sampler`.",
     "type": "trait", "id": "power_sampler", "name": "Gifted",
-    "abilities": ["dash", "force_push", "firebolt", "shield", "heal"] },
+    "abilities": ["dash", "force_push", "firebolt", "shield", "heal",
+                  "time_stop", "null_field", "gravity_well", "float", "summon_hound", "stone_wall", "shadow"] },
 
   { "//": "The actions the powers start. Each takes what it needs as parameters, which the ability's grant supplies from its own numbers; tagged `power`, so that whoever offers actions can offer these through their abilities.",
     "type": "action", "id": "dash", "name": "Dash",
@@ -91,7 +92,7 @@
 
   { "type": "ability", "id": "dash", "name": "Dash",
     "description": "A burst of speed, paid for in stamina.",
-    "tags": ["movement"],
+    "tags": ["power", "movement"],
     "params": { "seconds": "2 + ability.rank" },
     "grants": [
       { "action": "dash", "params": { "seconds": "ability.seconds" },
@@ -99,7 +100,7 @@
 
   { "type": "ability", "id": "force_push", "name": "Force push",
     "description": "A cone of force that throws people.",
-    "tags": ["force"], "seat": "mind",
+    "tags": ["power", "force"], "seat": "mind",
     "params": { "power": "3.0e6 * 1.5 ^ (ability.rank - 1)" },
     "grants": [
       { "action": "force_push", "params": { "energy": "ability.power" },
@@ -108,7 +109,7 @@
   { "//": "Its rank is its track's level, and each use feeds the track.",
     "type": "ability", "id": "firebolt", "name": "Fire bolt",
     "description": "A bolt of heat that sets fire where it lands; held, it grows.",
-    "tags": ["elemental", "fire"], "seat": "mind",
+    "tags": ["power", "elemental", "fire"], "seat": "mind",
     "track": "pyromancy",
     "params": { "power": "2.0e4 * 2 ^ ability.rank", "fire": "20 + 5 * ability.rank" },
     "grants": [
@@ -120,7 +121,7 @@
 
   { "type": "ability", "id": "shield", "name": "Shield",
     "description": "Held up, it turns three fifths of every hit aside, for as long as the reserve lasts.",
-    "tags": ["protection"], "seat": "mind",
+    "tags": ["power", "protection"], "seat": "mind",
     "params": { "drain": "5" },
     "modes": [
       { "id": "raised", "name": "Shield raised", "trait": "shielded",
@@ -128,7 +129,7 @@
 
   { "type": "ability", "id": "heal", "name": "Heal",
     "description": "A touch that closes wounds.",
-    "tags": ["healing"],
+    "tags": ["power", "healing"],
     "params": { "share": "0.5" },
     "grants": [
       { "action": "heal", "params": { "share": "ability.share" },
@@ -137,5 +138,6 @@
   { "//": "Someone with every power of the sampler and the pools to pay for them: what the test scripts under `scenarios/powers` make, and what a start offers once the application offers abilities.",
     "type": "template", "id": "power_sampler", "copy_from": "person", "name": "Gifted person",
     "pools": ["blood", "pain", "stamina", "reserve"],
-    "abilities": ["dash", "force_push", "firebolt", "shield", "heal"] }
+    "abilities": ["dash", "force_push", "firebolt", "shield", "heal",
+                  "time_stop", "null_field", "gravity_well", "float", "summon_hound", "stone_wall", "shadow"] }
 ]

@@ -56,9 +56,13 @@ pub struct MustHaveDef {
     pub at: Option<Sited<String>>,
 }
 
+/// A site every instance has, written as an object: the site and
+/// where it goes.
 #[derive(Deserialize)]
 struct MustHaveObject {
+    /// The site definition every instance has. Required.
     site: Ref<SiteDef>,
+    /// Where: `centre`, `edge` or `anywhere`. Left out, anywhere.
     #[serde(default)]
     at: Option<Sited<String>>,
 }

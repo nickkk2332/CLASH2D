@@ -405,6 +405,67 @@ None is safe for belief. Reasons: `device.none` (`element`: the element
 names no device), `device.unknown_def` (`device`), `device.no_element`
 (`layer`), `device.not_registered`.
 
+**As built (package G2, beta; decision D-820).** The device model as
+far as stations need; `clash_sim::device`. Networks are package G3's:
+until they exist a device draws on its own stores.
+
+| Field of `device` | Type | Meaning |
+|-------------------|------|---------|
+| `modes` | list of texts | Its operating states; it starts in the first. Two of one name are a load error |
+| `config` | list of `{ id, name?, kind, default?, options?, min?, max? }` | Settings: `kind` is `flag`, `number`, `choice` (one of `options`, which it must have) or `text`; `default` must be a value of the kind (left out: false, 0, the first option, empty) |
+| `stores` | map of resource name to `{ capacity, start?, rate? }` | Quantities it holds and recipes at it draw on: at most `capacity` (above zero), `start` when it is made (default 0), and with `rate` no more than that a second |
+| `speed` | number, or `{ value, when }` | How fast it works recipes (default 1); with `when`, nothing in any other mode |
+| `auto` | `true`, `false`, or `{ when }` | Whether it starts recipes by itself (section 8.2), and in which modes |
+| `provides` | list of know-how ids, or `{ know_how, when }` | Know-how whoever works at it has (section 8.5) |
+| `recipes` | list of recipe ids | What it runs by itself, in order of preference; left out, every recipe with `auto` whose `at` names one of its tags, in order of id |
+
+A `when` names modes of the definition's `modes`; one that does not is a
+load error. The `Device` component holds, beside its definition and
+element, the position of its mode, the settings set (a setting set back
+to its default is forgotten) and the level of each store that has been
+filled or drawn on. A device whose mode is its first, with nothing set,
+every store at its start and no recipe under way, is as it was made:
+with nothing inside it and its element in its default state it is
+demoted as before. A recipe under way at it is its `Process` component
+(section 8.6).
+
+**Passive loads.** An element's `load` and `when_supplied` are not read
+until networks exist (G3); the counting they describe is what promotion
+already gives: four hundred lamps in their default state are four
+hundred cells and no entity, and switching one off makes exactly one
+device.
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `device_mode_changed` | `self` (the device) | `old`, `new` (`string`): the modes | `set_mode` changed its mode |
+| `device_configured` | `self` | `key` (`string`), `old`, `new` (`any`) | `set_config` set a setting |
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `set_mode` | `of: any` (a device, or an element whose definition names one, which is promoted), `mode: string` | Puts it in the mode, raises `device_mode_changed`; recipes at it are worked out again. Gives whether it changed |
+| `set_config` | `of: any`, `key: string`, `value: any` | Sets a setting, raises `device_configured` |
+| `add_resource` | `to: any`, `resource: string`, `amount: real` | Adds to a store, within its capacity; gives what was added |
+| `drain_resource` | `from: any`, `resource: string`, `amount: real` | Takes from a store, down to nothing; gives what was taken |
+
+| Property | Gives |
+|----------|-------|
+| `entity.mode` | `string?`: a device's mode; null for anything else or a device with no modes |
+| `entity.config` | `map<any>`: its settings by id, set or default: `self.config.enabled` |
+| `entity.store(resource: string)` | `real?`: what a store holds now, less what a recipe under way has drawn |
+| `element.mode` | `string?`: its device's mode, or the first of its device definition's `modes` while it is plain |
+| `element.store(resource: string)` | `real?`: its device's store, or the definition's `start` while it is plain |
+
+None is safe for belief. Reasons: `device.not_a_device` (`entity`),
+`device.unknown_mode` (`mode`), `device.unknown_config` (`key`),
+`device.bad_config_value` (`key`: a value of the wrong kind, a number
+outside `min` and `max`, a choice not offered), `device.no_store`
+(`resource`), `device.bad_amount` (`amount`), `device.bad_argument`
+(`verb`, `arg`). Reachable only from Rust: `device::device_for`,
+`device_now`, `def_for`, `speed_now`, `speed_of`, `auto_now`,
+`provided_by_def`. Not built: ports, port and store states on networks,
+`produces`, `consumes`, `converts`, signals, slots, `rules` on devices,
+`climate`, `keeps`, the device screen.
+
 ### 4.4 Services
 
 Whole-city grids are not wired cell by cell. A tract may carry **services**
@@ -805,6 +866,159 @@ one world may hold side by side.
 The **know-how** screen (12 §10.7) lists what a character knows, what each
 thing lets them make, and what is now within reach.
 
+### 8.6 As built
+
+Packages G6 (recipes and work) and G17 (know-how), beta; decisions D-821
+to D-825; `clash_sim::recipe`.
+
+**The definition.** `recipe` has these fields, all optional:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name`, `description` | text | What a menu calls it, and a closer look |
+| `at` | list of tags | The station: a device whose definition carries one of them. `["hand"]` (the default) for none |
+| `inputs` | list of `{ item, count }`, `{ tag, count }` or `{ substance, amount }` | Used up when it starts: items of a definition, items carrying a tag (`count` default 1), or a volume of a substance drawn from containers |
+| `tools` | list of `{ quality, level }`, `{ item }` or `{ tag }` | At hand and not used up: an item whose `qualities` has the quality at `level` (default 1) or more, of a definition, or carrying a tag |
+| `know_how` | list of know-how ids | What it needs known (section 8.5): by the worker, or provided at the station. The structured form of `needs: knows_how(...)` |
+| `needs`, `fail_text` | condition, truth; text | A condition on the worker, `self`, with `station` (the device, or null) and `here`; and what its refusal says |
+| `while` | map of resource to a quantity a second, or a condition | Rates drawn from the station's stores while it works, or a condition on the place (section 8.4), pure, with `self`, `station` and `here` |
+| `work` | duration | The time it takes at a rate of 1 |
+| `rate` | number expression, pure | The worker's rate (skill, tools, injuries), of `self`; left out, 1 |
+| `check_every` | duration | How often a process is looked at again (below); left out, the setting `recipe.step` |
+| `outputs` | list of `{ item, count, chance }` or `{ substance, amount, chance }` | What it gives; `chance` from 0 to 1, drawn from the stream `recipes` |
+| `repairs` | `{ tag, share }` | It mends the most damaged item at hand carrying the tag by a share of its capacity |
+| `result` | effects, truth | Run when it completes, with `self`, `station`, `here` |
+| `emits` | `{ field: { id: levels }, noise }` | Field levels added at the place when it starts and at each step while it advances; `noise` is carried |
+| `auto` | bool | A machine may run it by itself |
+
+An input names one of `item`, `tag` and `substance`, a substance one an
+`amount` above zero, a tool one of `quality`, `item` and `tag`, and an
+output one of `item` and `substance`; anything else is a load error.
+
+**Starting.** `work::check(sim, worker, recipe, station)` says whether a
+recipe can be started or resumed now, and why not: a recipe made at a
+station needs one carrying a tag of `at` (`recipe.no_station`) within a
+step of the worker (`recipe.out_of_reach`), with nothing else under way
+there (`recipe.busy`); its know-how is known or provided
+(`recipe.unknown_how`); the station's speed applies in its mode
+(`recipe.station_idle`); `needs` holds (`recipe.needs`); then, unless it
+resumes work under way where it would be kept, its inputs, tools and
+what it mends are at hand (`recipe.missing_input`,
+`recipe.missing_tool`, `recipe.nothing_to_mend`) and there is room in
+containers at hand for the substances it gives (`recipe.no_room`).
+`work::start` does what it says against truth, promotes the station,
+raises the hook `recipe_starting`, uses up the inputs of a new start and
+raises `recipe_started`.
+
+**Supply.** Inputs and tools are looked for in what the worker holds,
+wears and carries at any depth; in the station's device; then in the
+contents of devices and items that hold things within
+`recipe.supply_range` cells (default 6) of where the work is done, on
+the same storey, nearest last by id. A container whose contents are
+still latent is passed by. A machine working alone looks in its own
+holds only. What a character is told is worked out through the seam
+`recipe::supply::belief`, which reads truth until perception keeps what
+characters know of containers' contents.
+
+**Doing the work.** A recipe under way is the `Process` component of the
+station's device, or of the worker for work by hand: the recipe, the
+worker and the action it works by, the station, the work done when it
+was last recorded, at what moment of the own time of the worker (while
+one works) or the station, the rate and the share of its `while` the
+stores give, its one wake-up, why it does not advance, and what it
+mends. Its rate is the worker's `rate` (1 for a machine alone whose
+`auto` applies; nothing for a process nobody works) times the station's
+speed, times the least share its stores give (a store that is empty
+gives none; one with a `rate` gives at most that over what is wanted),
+times one if its condition on the place holds and none if it does not.
+Its wake-up is the earliest of its completion at the present rate, the
+moment a store it draws on runs dry, and, for a recipe with a `rate`, a
+condition on the place, `emits` or `check_every`, its next step; a
+process with none of these schedules nothing while its rate stands
+(invariant G7). Whenever the station's mode, settings or stores change,
+or its worker stops, the work done and the stores drawn are brought up
+to date at the old rate and the wake-up scheduled again at the new
+(invariant G5). Completing raises the hook `recipe_completing`, whose
+handlers may set `spoiled` or cancel; unless spoiled, the outputs are
+made (into the station's holds where they fit, else where it stands; by
+hand into the worker's grasp where it can take them, else where it
+stands; substances into containers at hand with room), what it mends is
+repaired and `result` runs; `recipe_completed` follows, the worker's
+held action is let go, and a machine may start its next recipe.
+
+**Working.** An action whose parameters are named `recipe` (an id, or a
+qualified id as a text) and `station` (an element, a device or null) is
+a work action: when it starts, the simulation's handler of
+`action_starting` refuses it with the reason `check` gives. The bundled
+`core:make` has one held phase whose `do` is the verb `work`. When the
+action ends before the work is done (cancelled, interrupted, its worker
+gone) the work stops where it is kept, and starting the same recipe
+there again goes on with it. Work by hand left unfinished is kept on
+the worker until it starts another recipe by hand.
+
+**Machines.** A device whose `auto` applies, with nothing under way,
+starts the first of its recipes that it can from what is in its own
+holds and with the know-how it provides, when something is put into it
+and when its mode, settings or stores change; and again when a recipe
+completes.
+
+**Know-how.** `know_how` has `name`, `description`, `needs` (know-how
+ids) and `group` (a text). What a mind knows is the `KnowHow` component
+of the entity it is in; `transfer_mind` moves it with the mind. A
+template's `know_how` (ids as written) is given to what is made from it
+when `entity_spawned` is raised, without asking what each needs. An
+item's `teaches` is taught by `learn_from`, and its `provides` is known
+at a station it lies in; a device's `provides` in its mode now.
+
+| Event | Subjects | Fields | Raised |
+|-------|----------|--------|--------|
+| `recipe_starting` (hook) | `self` (the worker, or the machine), `station?` (the device) | `recipe` (`string`) | Before a recipe begins or resumes. A handler cancels with a reason |
+| `recipe_started` | the same | `recipe`; `resumed` (`bool`); `work` (`real`, seconds at rate 1) | It began, its inputs used up, or resumed |
+| `recipe_stalled` | the same | `recipe`; `why` (`string`): `stopped`, `station`, `supply`, `condition`, `worker` or `cancelled` | It stopped advancing |
+| `recipe_completing` (hook) | the same | `recipe`; `spoiled` (`bool`, mutable) | Its work is done, before its outputs. A handler may spoil it |
+| `recipe_completed` | the same | `recipe`; `spoiled` (`bool`) | Its outputs are made |
+| `know_how_gained` | `self` | `know_how` (`string`); `how` (`string`): `template`, `taught`, `read`, or what a rule said | A mind came to know something |
+| `know_how_lost` | `self` | `know_how`; `how` (`unlearned`) | A mind no longer knows it |
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `work` | `who: entity`, `recipe: any`, `at: any?` | Starts or resumes a recipe by a worker, from its held action; refused, it interrupts that action |
+| `start_recipe` | `at: any`, `recipe: any` | Starts a recipe at a machine with nobody working it |
+| `cancel_recipe` | `at: any` | Gives up what is under way at a station, or a worker's work by hand; gives whether there was one |
+| `teach` | `who: entity`, `what: id<know_how>`, `how: string?` | Teaches it; refused with `know_how.needs` while what it needs is not known; gives whether it is new |
+| `unlearn` | `who: entity`, `what: id<know_how>` | Takes it away; gives whether it was known |
+| `learn_from` | `who: entity`, `from: entity` | Teaches what an item `teaches`; gives how many were new |
+
+| Property | Gives |
+|----------|-------|
+| `entity.recipe_options` | `list<map<any>>`: what the entity, as it believes, could make here, by hand and at each station within a step; each row `recipe`, `id`, `name`, `station`, `where` (`hand`, `here`, a compass direction), `available`, `resumes`, `why`, `work`, `inputs` (maps of `what`, `need`, `have`, `text`), `takes`, `gives`. The make screen lists it |
+| `entity.can_make(recipe: any, station: any)` | `bool`: as the entity believes, it could start it now |
+| `entity.make_fault(recipe: any, station: any)` | `string?`: why not |
+| `entity.making` | `map<any>?`: the recipe under way it keeps: `recipe`, `name`, `progress` (0 to 1 now), `rate`, `worker`, `why` |
+| `entity.knows_how(what: id<know_how>)` | `bool` |
+| `entity.know_how` | `list<string>`: what it knows |
+| `entity.know_how_list` | `list<map<any>>`: every know-how, as the entity stands to it: `id`, `name`, `group`, `known`, `ready`, `makes`, `needs`. The know-how screen lists it |
+
+None is safe for belief; a character reads its own. Settings:
+`recipe.supply_range` (cells, default 6), `recipe.step` (seconds,
+default 10). Reasons: `recipe.unknown` (`recipe`), `recipe.no_station`
+(`recipe`, `at`), `recipe.out_of_reach`, `recipe.busy` (`recipe`,
+`other`), `recipe.unknown_how` (`recipe`, `know_how`),
+`recipe.station_idle` (`recipe`, `mode`), `recipe.needs`,
+`recipe.missing_input` (`recipe`, `what`, `need`, `have`),
+`recipe.missing_tool` (`recipe`, `what`), `recipe.nothing_to_mend`
+(`recipe`, `tag`), `recipe.no_room`, `recipe.bad_argument` (`verb`,
+`arg`), `know_how.unknown` (`know_how`), `know_how.needs` (`know_how`,
+`needs`), `know_how.no_mind` (`entity`), `know_how.teaches_nothing`
+(`item`). The `Stepper` wake-up domain is recipes'.
+
+Reachable only from Rust: `work::check`, `work::start`,
+`recipe::progress`, `recipe_options`, `stations_near`,
+`supply::at_hand`, `supply::plan`. Not built: jobs and work that several
+share (G8), `while` rates drawn from networks, resource and account
+inputs, the work rate of tools, light and injuries other than through
+`rate`, `noise` as a signal, the query `recipes`, construction.
+
 ## 9. Moving items
 
 ### 9.1 Movers
@@ -921,6 +1135,75 @@ Recipes may take substances as inputs and give them as outputs, by
 volume, from and into containers at the station. Brewing, distilling and
 alchemy are recipes. What something tastes of when swallowed is raised as
 `tasted`, with the strongest `taste` in the mixture, for rules to notice.
+
+**As built** (package G19, beta, as far as food, drink, medicine and
+poison need; decisions D-826, D-827; `clash_sim::substance`).
+
+| Field of `substance` | Type | Meaning |
+|----------------------|------|---------|
+| `name`, `unknown_name` | text | What a reader calls it; what someone who does not know it does (carried) |
+| `color` | text | Carried |
+| `taste` | 0 to 1 | How strongly it tastes |
+| `forms` | `{ loose, vapour, piped, still }`, each an id or null | `loose` is read: the field a spill of it is; the others are carried |
+| `levels_per_litre` | number, default 10 | Levels of its `loose` field a litre poured onto a cell adds, at most 255 |
+| `in_body` | `{ routes, adds, traits }` | `routes`: a factor for each of `ingest`, `inject`, `skin`, `breath`; `adds`: `{ pool, per_ml }`, negative for an antidote; `traits`: `{ trait, at_least_ml, for }` |
+| `share` | 0 to 1, default 0.5 | The share of a coating a breaching hit puts in |
+| `wipes` | 0 to 1, default 0.25 | The share of a coating every hit wipes off |
+
+On items: `contains` (a volume) and `filled` (a volume for each
+substance) of 06 §9.1. An item filled and with no `contains` holds what
+it was filled with: a loaf is made of bread. What one member of an item
+holds, and what is coated on it, is its `Substances` component, in
+cubic metres; equal items stack only when they hold the same, and a
+member split off holds what the others do.
+
+A dose by a route: for each substance, its volume in millilitres times
+the route's factor gets in; for each pool it `adds` to, the hook
+`exposure_incoming` runs with `pool`, `amount`, `route` and the
+substance's qualified id as `field`, and what its handlers leave is
+added to the pool if the body has it; each trait whose `at_least_ml`
+got in is given for its `for` (or its own duration); `dosed` is raised
+for each substance, and `tasted` once for a dose by `ingest`.
+
+A hit an item lands on a body (07 §3.4, step 6) delivers its coating:
+if the blow got through the outermost layer of the body's own part it
+struck (what is worn does not count), `share` of each coated substance
+goes in by `inject`; then `wipes` of what is left comes off, breaching
+or not.
+
+| Event | Subjects | Fields | Raised |
+|-------|----------|--------|--------|
+| `poured` | `self` (what it came out of) | `amount` (`real`, m³); `onto` (`any`: the container or the cell) | Something was poured |
+| `dosed` | `self` (the body) | `substance` (`string`); `amount` (`real`, ml that got in); `route` (`string`) | A body took a substance in |
+| `tasted` | `self` | `substance` (`string`); `taste` (`real`) | Something swallowed tasted of something |
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `pour` | `from: entity`, `to: any` (a container or a cell), `amount: real?` | Pours a share of a mixture (all with none), as far as there is room; onto a cell, as its `loose` field. Gives the volume that left |
+| `fill` | `container: entity`, `from: any` | From another container, as `pour`; from a cell, each substance whose `loose` field is there, a level for every `1 / levels_per_litre` litres |
+| `dose` | `who: entity`, `from: entity?`, `route: string`, `amount: real?`, `substance: id<substance>?` | Puts an amount of a container's mixture into a body, or with `substance` an amount from nowhere. Gives the millilitres that got in |
+| `coat` | `surface: entity`, `from: entity`, `amount: real` | Puts some of a mixture on an item |
+| `take_in` | `who: entity`, `what: entity`, `route: string` | One member of an item goes into a body whole, with what it holds: eating. (`consume` is a reserved effect name) |
+
+| Property | Gives |
+|----------|-------|
+| `entity.mixture` | `map<real>`: what one member holds, by substance, in m³ |
+| `entity.holds_substance(substance: id<substance>)` | `real`: how much of one |
+| `entity.fill` | `real`: how much in all |
+| `entity.room` | `real?`: the room left; null for what holds none |
+| `entity.coating` | `map<real>`: what is on its surfaces |
+
+A recipe's condition on the place reads a field with the queries'
+`loc.field(field)` (05 §11).
+
+None is safe for belief. Reasons: `substance.unknown` (`substance`),
+`substance.not_a_container` (`entity`), `substance.empty` (`entity`),
+`substance.no_room` (`entity`, `room`), `substance.bad_amount`
+(`amount`), `substance.bad_route` (`route`), `substance.bad_argument`
+(`verb`, `arg`), `substance.not_registered`. Not built: devices and
+body parts that contain, pipes and tanks (`piped`), standing liquid and
+wells (`still`), fields that are a form of a substance exposing by its
+routes, pools that name a substance spilling it, `unknown_name`.
 
 ## 10. Construction
 
@@ -1302,6 +1585,21 @@ Rust, each a gap until queries are built (05 §11):
 `interaction::interactions_for`, `default_for`, `bump_default`,
 `reaches`, and `device::device_at`, `promote`, `settle`
 and `unbind`.
+
+Packages G2, G6, G17 and G19 (sections 4.3, 8.6 and 9.5, each with its
+tables) add the types `recipe`, `know_how` and `substance`; on devices
+`modes`, `config`, `stores`, `speed`, `auto`, `provides` and `recipes`;
+on items `filled`, `qualities`, `provides` and `teaches`; on templates
+`know_how`; the events `device_mode_changed`, `device_configured`,
+`recipe_started`, `recipe_stalled`, `recipe_completed`,
+`know_how_gained`, `know_how_lost`, `poured`, `dosed` and `tasted`; the
+hooks `recipe_starting` and `recipe_completing`; the effects `set_mode`,
+`set_config`, `add_resource`, `drain_resource`, `work`, `start_recipe`,
+`cancel_recipe`, `teach`, `unlearn`, `learn_from`, `pour`, `fill`,
+`dose`, `coat` and `take_in`; the settings `recipe.supply_range` and
+`recipe.step`. Reachable only from Rust, each a gap until queries are
+built: `recipe::work::check`, `recipe::recipe_options` (whose rows the
+property `recipe_options` gives) and `recipe::supply::at_hand`.
 
 ## 15. Invariants
 

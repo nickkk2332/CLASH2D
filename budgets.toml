@@ -120,3 +120,12 @@ spec = "12 §15"
 row = "Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080"
 limit = "16 ms"
 margin = 0.25
+
+# ---- 16 §16, devices and machines ------------------------------------------
+
+[[budget]]
+bench = "recipe.start_and_complete"
+spec = "16 §16"
+row = "Recipe start or completion"
+limit = "3 µs"
+margin = 0.5
