@@ -1,0 +1,33 @@
+[
+  { "//": "The kinds of people the bundled town's settlement asks for, by role (10 §11.2): each a `person` (or a `dog`) thinking by a mind of its own. The settlement's data names them in its zones and sites; what they do all day is their minds' routines.",
+    "type": "template", "id": "shopkeeper", "copy_from": "person",
+    "name": "Shopkeeper", "mind": "shopkeeper" },
+
+  { "type": "template", "id": "watch_guard", "copy_from": "person",
+    "name": "Watchman", "mind": "watchman",
+    "tags": ["person", "guard", "watch"],
+    "groups": { "watch": "guard" },
+    "glyph": { "ch": "@", "fg": "blue" } },
+
+  { "type": "template", "id": "brawler", "copy_from": "person",
+    "name": "Brawler", "mind": "brawler" },
+
+  { "type": "template", "id": "house_dog", "copy_from": "dog",
+    "name": "Dog", "mind": "house_dog",
+    "rules": ["find_master", "find_master_again"] },
+
+  { "//": "A house dog made in the world takes the nearest person to it for its master, as it is made and as it comes back into the world: it holds `core:loyal` toward them, and `follow_owner` keeps it near them.",
+    "type": "eoc", "id": "find_master", "on": "entity_spawned", "attached": true,
+    "doc": "Makes a house dog loyal to the nearest person within twelve metres of where it is made.",
+    "do": [ { "for_each": { "entities": { "around": "self", "radius": 12, "tag": "person",
+                                          "where": "it != self", "limit": 1 } },
+              "as": "master",
+              "do": [ { "set_relation": { "who": "self", "toward": "$master", "kind": "core:loyal", "value": 1 } } ] } ] },
+
+  { "type": "eoc", "id": "find_master_again", "on": "agent_loaded", "attached": true,
+    "doc": "Makes a house dog that comes back into the world loyal to the nearest person within twelve metres.",
+    "do": [ { "for_each": { "entities": { "around": "self", "radius": 12, "tag": "person",
+                                          "where": "it != self", "limit": 1 } },
+              "as": "master",
+              "do": [ { "set_relation": { "who": "self", "toward": "$master", "kind": "core:loyal", "value": 1 } } ] } ] }
+]

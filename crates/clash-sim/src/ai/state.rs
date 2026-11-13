@@ -130,16 +130,102 @@ pub struct Pending {
     pub whom: Option<EntityId>,
     /// What came of it so far.
     pub outcome: Outcome,
+    /// For a step that moves: a closed way it met, and opening it
+    /// ([`doors`](super::doors)).
+    #[serde(default)]
+    pub door: Door,
 }
 
-impl_state_hash!(Pending {
-    kind,
-    action,
-    target,
-    within,
-    whom,
-    outcome
-});
+impl StateHash for Pending {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.kind.state_hash(hasher);
+        self.action.state_hash(hasher);
+        self.target.state_hash(hasher);
+        self.within.state_hash(hasher);
+        self.whom.state_hash(hasher);
+        self.outcome.state_hash(hasher);
+        // A step that met no door hashes as before doors were opened.
+        if self.door != Door::None {
+            self.door.state_hash(hasher);
+        }
+    }
+}
+
+/// A closed way a step that moves met, and what is being done about it
+/// (09 §5.3; [`doors`](super::doors)).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Door {
+    /// None met.
+    #[default]
+    None,
+    /// A step was refused because the way is closed, in this direction
+    /// (the step's `dir` as data writes it, by its index in
+    /// `clash_world::StepKind::ALL`), after `tries` openings.
+    Met {
+        /// The direction, by its index.
+        dir: u8,
+        /// How many times a door on this step has been opened already.
+        tries: u8,
+    },
+    /// The interaction that opens it is under way, as this action.
+    Opening {
+        /// The action doing the interaction.
+        action: ActionId,
+        /// How many times a door on this step has been opened, this
+        /// one included.
+        tries: u8,
+    },
+    /// It was opened (or the opening ended): the step is begun again.
+    Opened {
+        /// How many times a door on this step has been opened.
+        tries: u8,
+    },
+    /// Begun again after opening doors: walking on.
+    Walking {
+        /// How many times a door on this step has been opened.
+        tries: u8,
+    },
+}
+
+impl StateHash for Door {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        match *self {
+            Door::None => hasher.write_u8(0),
+            Door::Met { dir, tries } => {
+                hasher.write_u8(1);
+                hasher.write_u8(dir);
+                hasher.write_u8(tries);
+            }
+            Door::Opening { action, tries } => {
+                hasher.write_u8(2);
+                action.state_hash(hasher);
+                hasher.write_u8(tries);
+            }
+            Door::Opened { tries } => {
+                hasher.write_u8(3);
+                hasher.write_u8(tries);
+            }
+            Door::Walking { tries } => {
+                hasher.write_u8(4);
+                hasher.write_u8(tries);
+            }
+        }
+    }
+}
+
+impl Door {
+    /// How many times a door on the step has been opened.
+    pub const fn tries(self) -> u8 {
+        match self {
+            Door::None => 0,
+            Door::Met { tries, .. }
+            | Door::Opening { tries, .. }
+            | Door::Opened { tries }
+            | Door::Walking { tries } => tries,
+        }
+    }
+}
 
 impl Pending {
     /// A pending step of a kind.
@@ -151,6 +237,7 @@ impl Pending {
             within: Real::ZERO,
             whom: None,
             outcome: Outcome::Running,
+            door: Door::None,
         }
     }
 
@@ -265,24 +352,35 @@ pub struct MindState {
     /// The wake-up of the wait it took to rest, with nothing to do: a
     /// goal taken up ends it.
     pub(super) rest: Option<WakeId>,
+    /// Closed ways it found it could not open, most recent last, at most
+    /// [`MAX_SHUT`](super::doors::MAX_SHUT): its paths go round them
+    /// ([`doors`](super::doors)).
+    #[serde(default)]
+    pub(super) shut: Vec<Location>,
 }
 
-impl_state_hash!(MindState {
-    def,
-    held,
-    rng,
-    home,
-    stances,
-    settled_tracks,
-    settled_memories,
-    penalties,
-    interval,
-    next_think,
-    thought_at,
-    thoughts,
-    last_failure,
-    rest
-});
+impl StateHash for MindState {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.def.state_hash(hasher);
+        self.held.state_hash(hasher);
+        self.rng.state_hash(hasher);
+        self.home.state_hash(hasher);
+        self.stances.state_hash(hasher);
+        self.settled_tracks.state_hash(hasher);
+        self.settled_memories.state_hash(hasher);
+        self.penalties.state_hash(hasher);
+        self.interval.state_hash(hasher);
+        self.next_think.state_hash(hasher);
+        self.thought_at.state_hash(hasher);
+        self.thoughts.state_hash(hasher);
+        self.last_failure.state_hash(hasher);
+        self.rest.state_hash(hasher);
+        // A mind that has met no shut door hashes as before.
+        if !self.shut.is_empty() {
+            self.shut.state_hash(hasher);
+        }
+    }
+}
 
 impl MindState {
     /// A new state, drawing from its own stream.
@@ -302,7 +400,13 @@ impl MindState {
             thoughts: 0,
             last_failure: None,
             rest: None,
+            shut: Vec::new(),
         }
+    }
+
+    /// The closed ways it found it could not open, most recent last.
+    pub fn shut_doors(&self) -> &[Location] {
+        &self.shut
     }
 
     /// A state for tests of the component store, differing by `seed`.

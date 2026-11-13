@@ -54,7 +54,7 @@
     "retry_after": "5 s",
     "methods": [
       { "steps": [
-          { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Help!", "volume": 2 } },
+          { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Help!", "volume": 2, "kind": "help" } },
           { "if": "now() - self.var.called_out_at > 30", "set": { "var": "core:called_out_at", "value": "now()" } },
           { "keep_from": { "from": "$about.loc", "distance": 12 } },
           { "wait": { "time": "3 s" } },
@@ -74,7 +74,7 @@
     "interrupts": true,
     "methods": [
       { "steps": [
-          { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Help!", "volume": 2 } },
+          { "if": "now() - self.var.called_out_at > 30", "say": { "text": "Help!", "volume": 2, "kind": "help" } },
           { "if": "now() - self.var.called_out_at > 30", "set": { "var": "core:called_out_at", "value": "now()" } },
           { "keep_from": { "from": "$about", "distance": 15 } },
           { "wait": { "time": "2 s" } } ] },

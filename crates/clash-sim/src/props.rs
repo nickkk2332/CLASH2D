@@ -148,6 +148,26 @@ fn position(sim: &Sim, value: &Value) -> Option<(Location, u16)> {
     }
 }
 
+/// Where a thing is as a character believes it (05 §7.3): the character
+/// itself, and anything it holds or is inside, where it is; another
+/// entity where the character believes it to be, `None` if it has no
+/// idea or the viewer is not an entity; any other place where it is.
+fn believed_position(sim: &Sim, viewer: Option<&Value>, value: &Value) -> Option<Location> {
+    match sim.subject_of(value)? {
+        Subject::Entity(id) => {
+            let Some(Subject::Entity(viewer)) = viewer.and_then(|v| sim.subject_of(v)) else {
+                return None;
+            };
+            let top = sim.entities.outermost(id)?;
+            if top == viewer || sim.entities.outermost(viewer) == Some(top) {
+                return position(sim, value).map(|(loc, _)| loc);
+            }
+            crate::perception::belief::believed_loc(sim, viewer, id)
+        }
+        _ => position(sim, value).map(|(loc, _)| loc),
+    }
+}
+
 fn bad_value(wanted: &str, value: &Value) -> Reason {
     Reason::new(
         codes::WRITE_BAD_VALUE,
@@ -1481,7 +1501,7 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
             "dist",
             "real?",
             GROUP_SPACE,
-            "The distance between two things in metres, a storey counting three, the shorter way round on wrapped axes (02 §3.3). Each is a cell, an element, or something that is somewhere: an entity, an area (its middle), a site (its anchor). Null if either is nowhere or they are in different grids.",
+            "The distance between two things in metres, a storey counting three, the shorter way round on wrapped axes (02 §3.3). Each is a cell, an element, or something that is somewhere: an entity, an area (its middle), a site (its anchor). Null if either is nowhere or they are in different grids. In a mind context it is `believed_dist` with the character first: an entity is where the character believes it is.",
             |sim, args| {
                 let ends = args
                     .first()
@@ -1495,12 +1515,57 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
         .arg("a", "any", "One end.")
         .arg("b", "any", "The other end.")
         .safe()
+        .believed_as("believed_dist")
+        .changed_by(&["entity_relocated"]),
+        f(
+            "believed_dist",
+            "real?",
+            GROUP_SPACE,
+            "`dist` as a character believes it: what `dist(a, b)` is compiled as in that character's mind context (05 §7.3). The character itself, and whatever it holds or is inside, is where it is; anyone else is where it believes them to be (`believed_loc`), null if it has no idea; cells, elements, areas and sites are where they are. Reads that character's beliefs, so it is not safe for belief itself.",
+            |sim, args| {
+                let viewer = args.first();
+                let ends = args
+                    .get(1)
+                    .and_then(|a| believed_position(sim, viewer, a))
+                    .zip(args.get(2).and_then(|b| believed_position(sim, viewer, b)));
+                opt(ends
+                    .and_then(|(a, b)| sim.cosmos.delta(a, b))
+                    .map(distance_m))
+            },
+        )
+        .arg("viewer", "any", "The character whose belief is read.")
+        .arg("a", "any", "One end.")
+        .arg("b", "any", "The other end.")
+        .changed_by(&["entity_relocated"]),
+        f(
+            "believed_dir",
+            "list<int>?",
+            GROUP_SPACE,
+            "`dir` as a character believes it, as `believed_dist` is `dist`: what `dir(from, to)` is compiled as in that character's mind context.",
+            |sim, args| {
+                let viewer = args.first();
+                let ends = args
+                    .get(1)
+                    .and_then(|a| believed_position(sim, viewer, a))
+                    .zip(args.get(2).and_then(|b| believed_position(sim, viewer, b)));
+                opt(ends.and_then(|(a, b)| sim.cosmos.delta(a, b)).map(|by| {
+                    Value::list(
+                        [by.x, by.y, by.z]
+                            .into_iter()
+                            .map(|part| Value::Int(i64::from(part.signum()))),
+                    )
+                }))
+            },
+        )
+        .arg("viewer", "any", "The character whose belief is read.")
+        .arg("from", "any", "Where the step starts.")
+        .arg("to", "any", "What it is toward.")
         .changed_by(&["entity_relocated"]),
         f(
             "dir",
             "list<int>?",
             GROUP_SPACE,
-            "The step from one thing toward another: the signs of the shortest offset east, south and up, each -1, 0 or 1. Null where `dist` is null.",
+            "The step from one thing toward another: the signs of the shortest offset east, south and up, each -1, 0 or 1. Null where `dist` is null. In a mind context it is `believed_dir` with the character first.",
             |sim, args| {
                 let ends = args
                     .first()
@@ -1520,6 +1585,7 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
         .arg("from", "any", "Where the step starts.")
         .arg("to", "any", "What it is toward.")
         .safe()
+        .believed_as("believed_dir")
         .changed_by(&["entity_relocated"]),
         f(
             "offset",

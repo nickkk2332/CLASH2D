@@ -36,6 +36,7 @@
 //! | To evaluate an expression | [`Sim::host`] or [`Sim::with_random`] with a [`Bound`], through `clash_data::Runner`; [`Sim::eval`] for one |
 //! | Variables | [`Sim::var`], [`Sim::set_var`]; see [`vars`] |
 //! | Minds: goals, methods, thinking | [`ai`] |
+//! | Residents, agents, routines, calendars | [`agent`] |
 //! | What `set` and `add` write | [`Sim::assign`], [`Sim::assign_to`], [`Sim::set_property`] |
 //!
 //! # Rules this crate keeps
@@ -58,6 +59,7 @@ pub mod ability;
 pub mod action;
 pub mod activity;
 pub mod advance;
+pub mod agent;
 pub mod ai;
 pub mod body;
 pub mod bus;
@@ -159,6 +161,7 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     traits::register_defs(types);
     ability::register_defs(types);
     ai::register_defs(types);
+    agent::register_defs(types);
     social::register_defs(types);
     // Last: the events of living things name the kinds the steps above
     // registered, and so do some of the engine's verbs.

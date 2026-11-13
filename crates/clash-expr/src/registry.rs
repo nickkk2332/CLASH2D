@@ -283,6 +283,14 @@ pub struct FunctionSpec {
     /// it may be used in a reactive expression (05 §7.5). `None` means it
     /// may not.
     pub changed_by: Option<Vec<String>>,
+    /// The function it stands for in a mind context, if it reads where
+    /// things are (05 §7.3): there a call is compiled as a call of this
+    /// one, with the context's own character before the arguments
+    /// written, so that whatever it reads of anyone else is what that
+    /// character believes. The form takes one parameter more than the
+    /// function, first, of any type. `None`: the function is the same
+    /// in every context, and `belief_safe` alone decides.
+    pub belief_form: Option<String>,
 }
 
 impl FunctionSpec {
@@ -299,7 +307,16 @@ impl FunctionSpec {
             belief_safe: true,
             random: false,
             changed_by: None,
+            belief_form: None,
         }
+    }
+
+    /// Names the function this one stands for in a mind context: see
+    /// the field of the same name.
+    #[must_use]
+    pub fn belief_form(mut self, form: impl Into<String>) -> FunctionSpec {
+        self.belief_form = Some(form.into());
+        self
     }
 
     /// Sets the documentation.
