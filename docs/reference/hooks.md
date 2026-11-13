@@ -30,6 +30,21 @@ Fields:
 
 A handler may change no field; it may cancel.
 
+<a id="ability-suppressing"></a>
+## `ability_suppressing`
+
+Runs before a suppression takes hold of one ability (08 §6.2, §7.9): once for each ability and each suppression, when the suppression is imposed, the trait is given, the owner comes into the area or the ability is gained. A handler may cancel, with a reason: the ability resists, and that suppression passes it over for as long as it lasts.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `ability` (string): The qualified id of the ability.
+- `by` (string): What would suppress it: `effect` (`suppress_abilities`), `trait` (a trait of the owner whose definition lists `suppresses`) or `area` (an area the owner is inside whose kind does).
+- `source` (any): For `area`, the area; for `trait`, the trait's qualified id; for `effect`, null.
+
+A handler may change no field; it may cancel.
+
 <a id="ability-using"></a>
 ## `ability_using`
 
@@ -59,6 +74,24 @@ Fields:
 - `params` (any): The action's parameters by name, as a map, defaults filled in. Mutable: a value a handler puts there is held to the parameter's type, and one that does not fit refuses the action.
 
 A handler may change `params`, or cancel.
+
+<a id="binding-ending"></a>
+## `binding_ending`
+
+Runs before a binding ends (08 §7.3, §7.9). A handler may change how it ends (`on_end`), prolong it (`prolong`), or cancel, with a reason, to keep it: one whose time ran out then lasts until something else ends it. When its ability is revoked, lost or moved, or its owner removed, prolonging and cancelling are not honoured: it ends, as `on_end` then says.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `ability` (string): The qualified id of the ability.
+- `name` (string): The name the binding was given, or empty.
+- `what` (string): What is bound: `trait`, `entity`, `edit`, `area` or `rule`.
+- `why` (string): Why it ends: `duration`, `dismissed`, `dispelled`, `mode`, `suppressed`, `dormant`, `owner_stops`, `revoked`, `lost`, `moved` or `owner_removed`.
+- `on_end` (string): What will happen to what is bound: `remove`, `restore` or `release`. A handler may change it.
+- `prolong` (real): 0. A handler that sets seconds above zero keeps the binding that much longer of its owner's own time, in place of ending it.
+
+A handler may change `on_end`, `prolong`, or cancel.
 
 <a id="body-changing"></a>
 ## `body_changing`
@@ -115,8 +148,8 @@ Fields:
 
 - `pool` (id<pool>): The pool the dose adds to.
 - `amount` (real): The dose.
-- `route` (string): The route it takes: `breath`, `skin` or `any`.
-- `field` (string): The field it comes from: the qualified id of a `field`.
+- `route` (string): The route it takes: `breath`, `skin` or `any` from a field; `ingest`, `inject`, `skin` or `breath` for a substance (16 §9.5).
+- `field` (string): What it comes from: the qualified id of a `field`, or of the `substance` dosed (16 §9.5).
 
 A handler may change `amount`, or cancel.
 
@@ -276,6 +309,33 @@ Fields:
 
 - `from` (string): The qualified id of the posture it is in; empty for none.
 - `to` (string): The qualified id of the posture it would take; empty for none.
+
+A handler may change no field; it may cancel.
+
+<a id="recipe-completing"></a>
+## `recipe_completing`
+
+Runs as a recipe's work is done, before its outputs are made (16 §8.2). A handler may set `spoiled`, or cancel, and nothing is made: the inputs are gone all the same.
+
+Subjects, in delivery order: `self` (entity), `station` (entity).
+
+Fields:
+
+- `recipe` (string): The recipe's qualified id.
+- `spoiled` (bool): Whether it comes to nothing. Mutable.
+
+A handler may change `spoiled`, or cancel.
+
+<a id="recipe-starting"></a>
+## `recipe_starting`
+
+Runs before a recipe begins or resumes (16 §8.2), by hand or at a station, by a worker or a machine alone, once it could be. `self` is the worker, or the machine; `station` the station's device. A handler may cancel with a reason, which refuses it.
+
+Subjects, in delivery order: `self` (entity), `station` (entity).
+
+Fields:
+
+- `recipe` (string): The recipe's qualified id.
 
 A handler may change no field; it may cancel.
 

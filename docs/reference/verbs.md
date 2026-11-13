@@ -46,6 +46,15 @@ Adds a new part of a definition to a body (06 §6.5), on the part `on` in a sock
 - `side` (string?, optional): Its side label.
 - `scale` (real?, optional): Its size relative to the body, above zero. Default 1.
 
+<a id="add-resource"></a>
+## `add_resource`
+
+Adds an amount to a device's store of a resource, within its capacity (16 §5.2): stoking a stove, filling a still's boiler. Gives what was added. Refused with `device.not_a_device`, `device.no_store` and `device.bad_amount`.
+
+- `to` (any): The device, or an element whose definition names one: it is promoted.
+- `resource` (string): The resource, as the device's `stores` name it.
+- `amount` (real): How much, in the resource's unit.
+
 <a id="add-tag"></a>
 ## `add_tag`
 
@@ -114,6 +123,32 @@ Gives an entity a sense (15 §4): it sweeps at the sense's interval from now on.
 - `who` (entity): Who is given it.
 - `sense` (string): The sense's id, qualified or bare.
 
+<a id="bind-rule"></a>
+## `bind_rule`
+
+Attaches a rule to someone, bound to an ability (08 §7.3): it is detached when the binding ends (or stays, with `release`). Returns whether it was attached: false if it was already, and then nothing is bound. Refused for a rule that cannot be attached, and as the other verbs that bind are.
+
+- `to` (entity): Who it is attached to.
+- `eoc` (id<eoc>): The rule: one with `on`.
+- `ability` (ability?, optional): The ability it is bound to. Left out, the `ability` where the effect is written: a mode's `on_start`, an ability's own effects.
+- `for` (real?, optional): Seconds of the owner's own time before the binding ends. Left out, it lasts until something else ends it.
+- `ends_on` (list<string>?, optional): What else ends it: `mode` (the mode that made it ends), `suppressed`, `dormant` (its ability is), `owner_stops` (its owner dies). Left out, all of them. Revoking or losing the ability always ends it.
+- `on_end` (string?, optional): What happens to what is bound when it ends: `remove`, `restore` (cells: put back what was there) or `release` (it stays, unbound).
+- `as` (string?, optional): A name for the binding: `ability.bound(name)` then gives what it holds.
+
+<a id="bind-trait"></a>
+## `bind_trait`
+
+Gives someone a trait bound to an ability (08 §7.3): a curse, a blessing, a mark. The trait has the binding as its giver, and goes when the binding ends (or stays, with `release`). Returns the stacks it has. Refused as `add_trait` is, and as the other verbs that bind are.
+
+- `to` (entity): Who is given it.
+- `trait` (id<trait>): The trait.
+- `ability` (ability?, optional): The ability it is bound to. Left out, the `ability` where the effect is written: a mode's `on_start`, an ability's own effects.
+- `for` (real?, optional): Seconds of the owner's own time before the binding ends. Left out, it lasts until something else ends it.
+- `ends_on` (list<string>?, optional): What else ends it: `mode` (the mode that made it ends), `suppressed`, `dormant` (its ability is), `owner_stops` (its owner dies). Left out, all of them. Revoking or losing the ability always ends it.
+- `on_end` (string?, optional): What happens to what is bound when it ends: `remove`, `restore` (cells: put back what was there) or `release` (it stays, unbound).
+- `as` (string?, optional): A name for the binding: `ability.bound(name)` then gives what it holds.
+
 <a id="cancel-action"></a>
 ## `cancel_action`
 
@@ -123,6 +158,13 @@ Cancels an entity's running actions that match, each in a phase whose `cancel` i
 - `action` (id<action>, optional): Only actions of this definition.
 - `channel` (id<channel>, optional): Only actions holding slots of this channel.
 - `tag` (string, optional): Only actions whose definition carries this tag.
+
+<a id="cancel-recipe"></a>
+## `cancel_recipe`
+
+Gives up the recipe under way at a station, or a worker's work by hand: what was used up is lost, and `recipe_stalled` is raised with `why` `cancelled`. Gives whether there was one.
+
+- `at` (any): The station, or the worker.
 
 <a id="catch-shot"></a>
 ## `catch_shot`
@@ -196,6 +238,15 @@ Closes an open wound: it stops leaking and what it goes through begins to heal (
 
 - `wound` (wound): The wound.
 
+<a id="coat"></a>
+## `coat`
+
+Puts some of what a container holds on an item that strikes (16 §9.5 `coat`): a poisoned blade. A hit with it that gets through the outermost layer of the body's own part puts the substance's `share` in by `inject`, and every hit wipes `wipes` of what is left off. Gives what went on. Refused with `substance.not_a_container`, `substance.empty` and `substance.bad_amount`.
+
+- `surface` (entity): The item coated.
+- `from` (entity): The container it comes from.
+- `amount` (real): How much, in cubic metres.
+
 <a id="complete-interaction"></a>
 ## `complete_interaction`
 
@@ -215,18 +266,43 @@ Settles an active objective as done (13 §5.1): its `on_done` runs and `objectiv
 - `id` (string): The objective's id.
 - `mission` (int, optional): The number of the mission it is part of; left out, one of the scenario's own.
 
+<a id="conjure"></a>
+## `conjure`
+
+Places an element in a cell, or in each cell of a straight line from `at` to `to`, through `WorldEdit`, bound to an ability and remembering what was there (08 §7.3). When the binding ends, a cell that is still what was conjured is put back as it was (`restore`, the default), emptied (`remove`), or left (`release`); a cell altered since is left alone. Returns how many cells it placed. Refused, changing nothing, for a cell that is not loaded, a state the layer has not, more than 64 cells, and as the other verbs that bind are.
+
+- `at` (loc): The cell, or the first of the line.
+- `to` (loc?, optional): The last cell of the line.
+- `layer` (string?, optional): `floor`, `block` or `fixture`. Default `block`.
+- `what` (string): What to place, as data writes a state: `def`, `def@material`, `def#state`.
+- `ability` (ability?, optional): The ability it is bound to. Left out, the `ability` where the effect is written: a mode's `on_start`, an ability's own effects.
+- `for` (real?, optional): Seconds of the owner's own time before the binding ends. Left out, it lasts until something else ends it.
+- `ends_on` (list<string>?, optional): What else ends it: `mode` (the mode that made it ends), `suppressed`, `dormant` (its ability is), `owner_stops` (its owner dies). Left out, all of them. Revoking or losing the ability always ends it.
+- `on_end` (string?, optional): What happens to what is bound when it ends: `remove`, `restore` (cells: put back what was there) or `release` (it stays, unbound).
+- `as` (string?, optional): A name for the binding: `ability.bound(name)` then gives what it holds.
+
 <a id="create-area"></a>
 ## `create_area`
 
-Makes an area (02 §8.3): a box from `at` to `to`, every cell within `radius` metres of `at`, or the one cell `at`. Whoever it comes over is told (`area_entered`). Returns the area. Refused for a box in two grids, a kind that does not exist, and a shape larger than the engine allows.
+Makes an area (02 §8.3): a box from `at` to `to`, every cell within `radius` metres of `at`, or the one cell `at`; anchored to an entity, it moves with it; it may set gravity inside it and carry a light. Whoever it comes over is told (`area_entered`). Returns the area. Refused for a box in two grids, a kind that does not exist, an anchor that does not exist, gravity that is neither a scale nor three numbers, a light whose radius is out of range, and a shape larger than the engine allows.
 
-- `at` (loc): A corner of the box, or the middle.
+- `at` (loc?, optional): A corner of the box, or the middle. Left out, the cell its `anchor` is in.
 - `to` (loc?, optional): The other corner of a box.
 - `radius` (real?, optional): For a round area: the distance in metres, a storey counting three.
 - `kind` (id<area_kind>?, optional): Its kind, which gives default tags, variables, clock rate, priority and rules.
 - `tags` (list<string>?, optional): Tags, added to its kind's.
 - `clock_rate` (real?, optional): The rate of a clock of its own, relative to its realm's.
 - `priority` (int?, optional): Which area applies where several overlap.
+- `anchor` (entity?, optional): An entity it moves with (02 §8.3): when the entity moves, the area moves by as much, and who it comes over or leaves is told. An aura, a bubble round its maker.
+- `gravity` (any, optional): Gravity inside it in place of the stratum's: a number scales the stratum's (0 is weightlessness), a list of three numbers replaces it (m/s² east, south and up). Left out, its kind's.
+- `light` (real?, optional): The intensity of a source of light it carries at its middle (15 §3.3), on the scale where full daylight is 1. Negative darkens; the light of a cell never goes below zero. Left out, its kind's.
+- `light_radius` (real?, optional): How far that light shines, in metres, at most 16. Left out, as far as it stays noticeable.
+- `bound` (bool?, optional): Whether it is bound to an ability (08 §7.3) and removed when the binding ends. Giving any of the binding's terms below binds it too.
+- `ability` (ability?, optional): The ability it is bound to. Left out, the `ability` where the effect is written: a mode's `on_start`, an ability's own effects.
+- `for` (real?, optional): Seconds of the owner's own time before the binding ends. Left out, it lasts until something else ends it.
+- `ends_on` (list<string>?, optional): What else ends it: `mode` (the mode that made it ends), `suppressed`, `dormant` (its ability is), `owner_stops` (its owner dies). Left out, all of them. Revoking or losing the ability always ends it.
+- `on_end` (string?, optional): What happens to what is bound when it ends: `remove`, `restore` (cells: put back what was there) or `release` (it stays, unbound).
+- `as` (string?, optional): A name for the binding: `ability.bound(name)` then gives what it holds.
 
 <a id="create-item"></a>
 ## `create_item`
@@ -314,6 +390,46 @@ Disables a part from outside, whatever its condition, until `restore_part` (06 �
 `part` may be given directly.
 
 - `part` (part): The part.
+
+<a id="dismiss"></a>
+## `dismiss`
+
+Ends the bindings an entity's ability holds, or the one of a name (08 §7.3), each as its `on_end` says unless `how` says otherwise; `binding_ending` runs for each first. Returns how many ended.
+
+- `who` (entity): Whose ability.
+- `ability` (id<ability>): The ability.
+- `as` (string?, optional): Only the binding of this name. Left out, all of them.
+- `how` (string?, optional): `remove`, `restore` or `release`, in place of each binding's own `on_end`.
+
+<a id="dispel"></a>
+## `dispel`
+
+Ends bindings (08 §7.3): those whose abilities have any of `tags`, whose owner is `owner`, and whose thing is within `radius` metres of `at`, as many of the three as are given; `binding_ending` runs for each first. Returns how many ended.
+
+- `tags` (list<string>?, optional): Only bindings of abilities with any of these tags.
+- `owner` (entity?, optional): Only bindings of this entity's abilities.
+- `at` (loc?, optional): Only bindings whose thing is near here: an entity, the one a trait or rule is on, an area's middle, a conjured cell.
+- `radius` (real?, optional): How near `at`, in metres. Default 0: the cell itself.
+
+<a id="dose"></a>
+## `dose`
+
+Puts something into a body by a route (16 §9.5): an amount of what a container holds (all of it with none), or with `substance` an amount of that substance from nowhere, for a sting or a spell. Each substance adds to the pools it names, after the hook `exposure_incoming`, and gives its traits; `dosed` is raised for each, and `tasted` for what is swallowed. Gives what got in, in millilitres. Refused with `substance.not_a_container`, `substance.empty`, `substance.bad_route` and `substance.bad_amount`.
+
+- `who` (entity): The body.
+- `from` (entity?, optional): The container it comes from.
+- `route` (string): How it gets in: `ingest`, `inject`, `skin` or `breath`.
+- `amount` (real?, optional): How much, in cubic metres. Left out, all the container holds.
+- `substance` (id<substance>?, optional): Instead of `from`: a substance, of which `amount` goes in.
+
+<a id="drain-resource"></a>
+## `drain_resource`
+
+Takes an amount from a device's store of a resource, down to nothing (16 §5.2). Gives what was taken. Refused as `add_resource` is.
+
+- `from` (any): The device, or an element whose definition names one: it is promoted.
+- `resource` (string): The resource, as the device's `stores` name it.
+- `amount` (real): How much, in the resource's unit.
 
 <a id="drop"></a>
 ## `drop`
@@ -405,6 +521,14 @@ Settles an active objective as failed (13 §5.1): its `on_failed` runs and `obje
 
 - `id` (string): The objective's id.
 - `mission` (int, optional): The number of the mission it is part of; left out, one of the scenario's own.
+
+<a id="fill"></a>
+## `fill`
+
+Fills a container (16 §9.5): from another container, as `pour` from it would, or from a cell, taking up each substance whose `loose` field is there, a level for every `1 / levels_per_litre` litres, as far as there is room. Gives the volume that went in. Refused with `substance.not_a_container`, `substance.no_room` and `substance.empty`.
+
+- `container` (entity): What is filled.
+- `from` (any): Another container, or a cell.
 
 <a id="fit"></a>
 ## `fit`
@@ -518,6 +642,14 @@ Throws an entity that stands in the world (02 §15): it becomes a body in flight
 - `what` (entity): Who or what is thrown.
 - `vel` (any): Its velocity in m/s, east, south and up, as a list of three numbers.
 
+<a id="learn-from"></a>
+## `learn_from`
+
+Teaches an entity what an item `teaches` (16 §8.5: reading a book), each as `teach` does, passing by what cannot be taught yet. Gives how many were new. Refused with `know_how.teaches_nothing`, and with the first refusal of `teach` when none could be taught.
+
+- `who` (entity): Who reads.
+- `from` (entity): The item.
+
 <a id="load"></a>
 ## `load`
 
@@ -591,6 +723,15 @@ Applies a rate to a pool under a key, replacing the one that key had applied (06
 - `pool` (id<pool>): Which pool.
 - `key` (string): The name the rate is applied under.
 - `rate` (number, optional): What the pool gains each second of its owner's time; negative to drain. Left out, the rate under this key is removed.
+
+<a id="pour"></a>
+## `pour`
+
+Pours a share of what a container holds (16 §9.5): into another container as far as there is room, or onto a cell, where each substance with a `loose` form adds `levels_per_litre` levels a litre to that field. One member of a stack is split off first. Raises `poured`; gives the volume that left it. Refused with `substance.not_a_container`, `substance.empty`, `substance.no_room` and `substance.bad_amount`.
+
+- `from` (entity): The container poured from.
+- `to` (any): Another container, or a cell.
+- `amount` (real?, optional): How much, in cubic metres (`"100 ml"`). Left out, all of it.
 
 <a id="promote"></a>
 ## `promote`
@@ -749,6 +890,14 @@ Swaps a part's definition (06 §6.5), keeping its name, its place and what is at
 - `part` (part?): The part.
 - `with` (id<body_part>): The new definition.
 
+<a id="restore-abilities"></a>
+## `restore_abilities`
+
+Lifts early the suppressions `suppress_abilities` imposed on an entity that name any of `tags`, or every one (08 §12). What a trait of its or an area it is inside suppresses lasts as long as they do. Abilities no longer suppressed confer again (`ability_restored`); their modes stay off. Returns how many suppressions were lifted.
+
+- `who` (entity): Whose ability.
+- `tags` (list<string>?, optional): Lifts only the suppressions that name any of these tags, or that name none. Left out, every one.
+
 <a id="restore-checkpoint"></a>
 ## `restore_checkpoint`
 
@@ -862,6 +1011,15 @@ Changes the colour an item carries (06 §9.1), for every member of its stack; nu
 - `of` (entity): The item.
 - `color` (string?, optional): The colour's name. Null for none.
 
+<a id="set-config"></a>
+## `set_config`
+
+Sets one of a device's settings (16 §4.2 `config`) and raises `device_configured`. The value is kept with the device and saved. Refused with `device.not_a_device`, `device.unknown_config` and `device.bad_config_value`.
+
+- `of` (any): The device, or an element whose definition names one: it is promoted.
+- `key` (string): The setting's id.
+- `value` (any): Its new value: a truth value for a flag, a number within its bounds, one of a choice's options, or a text.
+
 <a id="set-control"></a>
 ## `set_control`
 
@@ -945,6 +1103,14 @@ Makes a character think by another `mind` definition (09 §17): it gives up the 
 
 - `who` (entity): The character, which must have a mind.
 - `mind` (id<mind>): The `mind` definition it thinks by from now on.
+
+<a id="set-mode"></a>
+## `set_mode`
+
+Puts a device in one of its definition's `modes` (16 §4.2) and raises `device_mode_changed`. Recipes under way at it work at the speed the new mode gives from now on, and a machine with `auto` may start one. Gives whether the mode changed. Refused with `device.not_a_device` and `device.unknown_mode`.
+
+- `of` (any): The device, or an element whose definition names one: it is promoted.
+- `mode` (string): The mode, by name.
 
 <a id="set-movement"></a>
 ## `set_movement`
@@ -1069,6 +1235,14 @@ Switches a mode of an ability on (08 §5.4): what switching costs is taken, its 
 - `ability` (id<ability>): The ability.
 - `mode` (string): The mode's id within the ability.
 
+<a id="start-recipe"></a>
+## `start_recipe`
+
+Starts a recipe at a machine with nobody working it (16 §8.2), from what is in its own holds and with the know-how it provides: what a machine's rules call. It advances while the machine's `auto` applies. Refused with the reasons of `recipe.*`.
+
+- `at` (any): The machine: an element or a device.
+- `recipe` (any): The recipe: its id, or its qualified id as a text.
+
 <a id="step"></a>
 ## `step`
 
@@ -1085,6 +1259,30 @@ Puts a thing into the first container `who` wears or grasps that would take it, 
 
 - `who` (entity): Whose containers.
 - `what` (entity): The thing, wherever it is.
+
+<a id="summon"></a>
+## `summon`
+
+Makes an entity from a template at a cell, bound to an ability (08 §7.3): it lasts as the binding's terms say and is removed when the binding ends (or left free, with `on_end` `release`). With `obey`, it takes the stances its summoner's mind holds toward others and holds none toward its summoner (09 §3.4). Returns the entity. Refused with `ability.no_binder`, `ability.too_many_bindings`, `ability.bad_binding`, and as `spawn` is.
+
+- `template` (id<template>): What it is made from.
+- `at` (loc): The cell to put it in.
+- `mind` (string?, optional): The `mind` it thinks by in place of its template's, by name.
+- `obey` (bool?, optional): Whether it takes its summoner's stances. Default true.
+- `ability` (ability?, optional): The ability it is bound to. Left out, the `ability` where the effect is written: a mode's `on_start`, an ability's own effects.
+- `for` (real?, optional): Seconds of the owner's own time before the binding ends. Left out, it lasts until something else ends it.
+- `ends_on` (list<string>?, optional): What else ends it: `mode` (the mode that made it ends), `suppressed`, `dormant` (its ability is), `owner_stops` (its owner dies). Left out, all of them. Revoking or losing the ability always ends it.
+- `on_end` (string?, optional): What happens to what is bound when it ends: `remove`, `restore` (cells: put back what was there) or `release` (it stays, unbound).
+- `as` (string?, optional): A name for the binding: `ability.bound(name)` then gives what it holds.
+
+<a id="suppress-abilities"></a>
+## `suppress_abilities`
+
+Suppresses an entity's abilities that have any of `tags`, or every one (08 §6.2): each confers nothing, its modes end (`how` `suppressed`), what was bound to end on suppression ends, and its grants cannot be used, until the suppression lifts. Abilities gained while it lasts are suppressed too. Before it takes hold of each ability the hook `ability_suppressing` runs, and a handler may resist. It lasts `for` seconds of the entity's own time, or until `restore_abilities`. Returns how many of its abilities it suppresses now. Refused with `ability.bad_duration`.
+
+- `who` (entity): Whose ability.
+- `tags` (list<string>?, optional): The tags of the abilities it suppresses: any of them. Left out, every ability.
+- `for` (real?, optional): How long it lasts, in seconds of the entity's own time. Left out, until it is lifted.
 
 <a id="take"></a>
 ## `take`
@@ -1103,6 +1301,15 @@ Gives the player direct control of a character (13 §13): it joins the party, th
 
 - `who` (entity): The character.
 
+<a id="take-in"></a>
+## `take_in`
+
+Takes one member of an item into a body whole: eating a loaf, swallowing a pill (16 §9.5). What it holds goes in by the route, as `dose` puts it, and the member is gone. Gives what got in, in millilitres. Refused with `substance.bad_route` and `substance.bad_argument`.
+
+- `who` (entity): The body.
+- `what` (entity): The item; one member of a stack is taken.
+- `route` (string): How it gets in: `ingest`, `inject`, `skin` or `breath`.
+
 <a id="take-out"></a>
 ## `take_out`
 
@@ -1110,6 +1317,15 @@ Takes a thing out of the container it is stowed in or enclosed by (06 §9.2): in
 
 - `what` (entity): The thing, wherever it is.
 - `to` (entity?, optional): Who takes it into a grasp. Null to put it where the container is.
+
+<a id="teach"></a>
+## `teach`
+
+Teaches an entity's mind a piece of know-how (16 §8.5) and raises `know_how_gained`. Gives whether it was new. Refused with `know_how.needs` while something it needs is not known, and `know_how.no_mind`.
+
+- `who` (entity): Who learns.
+- `what` (id<know_how>): The know-how.
+- `how` (string?, optional): What `know_how_gained` says of how; `taught` if left out.
 
 <a id="think"></a>
 ## `think`
@@ -1145,6 +1361,14 @@ Moves a mind to another entity, with the attributes, pools and tracks seated in 
 - `to` (entity): Where it goes.
 - `swap` (bool, optional): True to let a mind that `to` has go the other way; left out, `to` must have none.
 
+<a id="unlearn"></a>
+## `unlearn`
+
+Takes a piece of know-how from an entity's mind (16 §8.5) and raises `know_how_lost`. Gives whether it was known.
+
+- `who` (entity): Who forgets.
+- `what` (id<know_how>): The know-how.
+
 <a id="use-ability"></a>
 ## `use_ability`
 
@@ -1170,4 +1394,13 @@ Puts an item on `who` (06 §9.2): it covers the outer parts its `wear` selects, 
 
 - `who` (entity): The creature that holds or wears it: it needs a body.
 - `what` (entity): The thing, wherever it is.
+
+<a id="work"></a>
+## `work`
+
+Starts a recipe, or goes on with it where it is under way, by a worker (16 §8.2): what a work action's held phase does. Checks as `can_make` does against truth, promotes the station, raises the hook `recipe_starting`, uses up the inputs of a new start and raises `recipe_started`. When the work is done the recipe completes and the worker's held action is let go; if the action ends first the work done is kept. Refused with the reasons of `recipe.*`; the worker's held action is then interrupted.
+
+- `who` (entity): Who works.
+- `recipe` (any): The recipe: its id, or its qualified id as a text.
+- `at` (any, optional): The station: an element or a device. Left out, by hand.
 

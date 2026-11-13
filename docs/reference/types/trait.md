@@ -16,6 +16,7 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `grants` (list of [`GrantDef`](#grantdef); optional): Actions its holder may use (03 §6; 08 §5.1). Carried until the action runtime offers them.
 - `abilities` (list of string; optional): Abilities conferred while it lasts and is not dormant (08 §3.3), by id as written: each instance is a source of each (`crate::ability`).
 - `ability_params` (list of object [`ParamModifierDef`](#parammodifierdef); optional): Changes to the parameters of its holder's abilities while it lasts and is not dormant (08 §4.2), once for each stack: each names an ability or a tag, a parameter, and `add` and `mul`.
+- `suppresses` (list of string; optional): Tags of its holder's abilities it suppresses while it lasts and is not dormant (08 §6.2): a null collar, a dampener. Given effect by `crate::ability`.
 - `channels` (object, id of a [`channel`](channel.md) → whole number; optional): Channel slots added (a positive count) or disabled (a negative one) while it lasts (03 §6.2). Read by `channel_change` for the action runtime.
 - `senses` (list of string; optional): Senses added or altered (15), by name as written. Carried until perception is built.
 - `rules` (list of [`eoc`](eoc.md), by id or [written in place](../values.md#inline-definitions); optional): Rules attached to its holder while it lasts (05 §9.3).

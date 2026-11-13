@@ -26,7 +26,11 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `traits` (list of string; optional): Traits given to whoever holds or wears it, by id. Carried until traits are built.
 - `rules` (list of [`eoc`](eoc.md), by id or [written in place](../values.md#inline-definitions); optional): Rules attached to whoever holds or wears it. Carried for the rule runtime.
 - `guards` (object, name → number; optional): While worn, the share of exposure it keeps out, by route (02 §16). Carried until exposure reads it.
-- `contains` ([volume](../units.md#volume) in `m3`, or `null`; optional): A volume of substances it can hold as a mixture (16 §9.5). Carried until substances are built.
+- `contains` ([volume](../units.md#volume) in `m3`, or `null`; optional): A volume of substances it can hold as a mixture (16 §9.5): a cup, a flask, a pot.
+- `filled` (object, id of a [`substance`](substance.md) → [volume](../units.md#volume) in `m3`; optional): What each one holds when it is made, by substance (16 §9.5 `filled`): `{ "water": "290 ml" }`. Needs no `contains` of its own: a loaf is made of what it is filled with.
+- `qualities` (object, name → number; optional): The tool qualities it has, by name, each at a level (16 §8.3): `{ "cutting": 2, "hammering": 1 }`.
+- `provides` (list of id of a [`know_how`](know_how.md); optional): Know-how it provides at a station it is in (16 §8.5): a manual on a bench, a pattern loaded into a machine.
+- `teaches` (list of id of a [`know_how`](know_how.md); optional): Know-how reading it teaches (16 §8.5): `learn_from`.
 - `color` ([`ColorChoice`](#colorchoice); optional): The colour an item of this kind carries.
 - `glyph` (object [`GlyphSpec`](#glyphspec), or `null`; optional): How it is drawn.
 - `contents` (list of object [`ContentDef`](#contentdef); optional): What a container of this kind is found to hold when it is first opened (06 §9.3).

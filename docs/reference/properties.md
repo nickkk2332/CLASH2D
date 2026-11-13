@@ -5,13 +5,13 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 
 | Kind | What it refers to | Properties |
 |------|-------------------|-----------:|
-| [`ability`](#ability) | An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself. | 8 |
+| [`ability`](#ability) | An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself. | 9 |
 | [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 14 |
 | [`app_entry`](#app-entry) | One entry of a list `app` offers: a save, a profile, a mod or a scenario. | 4 |
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
-| [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 15 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 114 |
+| [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 17 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 130 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
@@ -29,6 +29,9 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 
 An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself.
 
+- `ability.bound(name: string) -> any`: What its binding of a name holds (08 §7.3), if it is still there: the summoned entity, the area, the one a bound trait or rule is on, or the conjured cells as a list of `loc`; null otherwise.
+  Changed by `binding_created`, `binding_ended`.
+  - `name` (string): Which.
 - `ability.cooldown(action: id<action>) -> real`: Seconds of its owner's own time before the grant of an action can be used again: 0 when it is ready. Moves with time, so it cannot be kept current.
   - `action` (id<action>): Which.
 - `ability.def -> id<ability>?`: Its definition.
@@ -40,8 +43,8 @@ An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability
   Changed by `mind_transferred`, `ability_revoked`.
 - `ability.rank -> int`: Its rank: its track's level, or the rank set directly (08 §4.1).
   Changed by `rank_changed`.
-- `ability.state -> string?`: `active` or `dormant` (08 §6.1); null once it is not held.
-  Changed by `ability_dormant`, `ability_active`.
+- `ability.state -> string?`: `active`, `dormant` (its `while` does not hold; 08 §6.1) or `suppressed` (active, and suppressed from outside; 08 §6.2); null once it is not held.
+  Changed by `ability_dormant`, `ability_active`, `ability_suppressed`, `ability_restored`.
 - `ability.tags -> list<string>?`: Its definition's tags.
 
 <a id="app"></a>
@@ -138,10 +141,14 @@ The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here
 - `element.loc -> loc` · safe for belief: The cell it is in.
 - `element.material -> id<material>?`: What it is made of.
   Changed by `element_changed`.
+- `element.mode -> string?`: The mode of the device the element gives behaviour to (16 §4.2): its device's, or the first of its device definition's `modes` while it has not been promoted. Null for an element that names no device or one with no modes.
+  Changed by `device_mode_changed`, `device_promoted`, `device_demoted`.
 - `element.state -> int?`: Its state: the index of the named state its definition declares, or the definition's own number (an amount, a facing).
   Changed by `element_changed`.
 - `element.state_name -> string?`: The name of its state, where its definition declares named states.
   Changed by `element_changed`.
+- `element.store(resource: string) -> real?`: What the store of a resource of the device the element gives behaviour to holds now: its device's, or its definition's `start` while it has not been promoted. Null for a store it does not have.
+  - `resource` (string): The resource, as the device's `stores` name it.
 - `element.tags -> list<string>?`: The tags of the element's definition, in order.
 
 <a id="entity"></a>
@@ -165,9 +172,13 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   - `x` (entity): Whom or what it is asked about.
 - `entity.believed_loc(x: entity) -> loc?`: Where this mind last perceived `x`, or was told it was (15 §7.2). Null if it never has.
   - `x` (entity): Whom or what it is asked about.
+- `entity.bound_by -> entity?`: Whose ability the entity is bound to (08 §7.3), as a summoned servant is to its summoner: the owner of the ability whose `summon` made it, while the binding lasts; null otherwise. A character may read its own: whom it serves.
 - `entity.can_interact(target: any, interaction: id<interaction>) -> bool`: Whether the entity, as it believes, can do an interaction to a target now: the target offers it, it is in reach and its `if` holds (16 §3.2). What an interaction's action `requires`.
   - `target` (any): An element or an entity.
   - `interaction` (id<interaction>): The interaction.
+- `entity.can_make(recipe: any, station: any) -> bool`: Whether the entity, as it believes, could start or resume a recipe now, by hand or at a station: what a work action `requires`.
+  - `recipe` (any): The recipe: its id, or its qualified id as a text.
+  - `station` (any): The station: an element or a device; null by hand.
 - `entity.can_reach(to: loc) -> bool`: Whether a cell is next to the entity and it believes it can step into it.
   - `to` (loc): The cell.
 - `entity.can_step(dir: string) -> bool`: Whether the entity believes it can step in a direction from where it stands: a cell is there and one of its ways of moving makes the step. Who else is in the cell is not asked.
@@ -182,6 +193,7 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.carried_mass -> real?`: The mass of everything inside the entity, to any depth, in kilograms. Null for one with no physical component.
   Changed by `entity_relocated`.
 - `entity.clock_rate -> real?`: How fast time passes for the entity against universal time: the rate of the clock it is on, with every clock above it. Null if it is on none.
+- `entity.coating -> map<real>` · same owner: What is coated on an item's striking surfaces (16 §9.5 `coat`): the volume of each substance in cubic metres, by qualified id.
 - `entity.color -> string?` · settable: The colour an item carries, by name: one its definition fixed or one picked when it was made. Null for none. Setting it changes it; setting null takes it away.
 - `entity.condition -> real?`: How whole an item is, from 1 for undamaged to 0 for broken: one less its damage in 255ths. Null for what is not an item.
   Changed by `item_damaged`, `item_repaired`.
@@ -189,6 +201,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.confidence(x: entity) -> real?`: How sure this mind is of its track of `x`, 0 to 1: halved for every `mind.confidence_halflife` since it last perceived it (15 §7.2). Null if it never has.
   - `x` (entity): Whom or what it is asked about.
+- `entity.config -> map<any>`: A device's settings (16 §4.2 `config`), by id: what its user set, else each one's default. Read as `self.config.enabled`. Null for anything that is not a device.
+  Changed by `device_configured`.
 - `entity.container -> entity?` · settable: What the entity is directly inside, or null. Setting it puts the entity inside another (`entity_relocated`); setting null takes it out, to where its container is.
   Changed by `entity_relocated`.
 - `entity.contents -> list<entity>`: What is directly inside the entity, in id order.
@@ -211,6 +225,7 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   - `x` (entity): Whom it is asked about.
 - `entity.feed -> entity?` · same owner: The store an item fires from (07 §11.5): itself if it is a store, else the first store fitted to it. Null for neither.
   Changed by `entity_relocated`.
+- `entity.fill -> real`: How much one member of an item holds in all, in cubic metres.
 - `entity.fn -> functions` · same owner: What the entity's body can do: follow with a function's id, as in `self.fn.<id>`.
 - `entity.free_grasp(channel: id<channel>) -> int`: How many slots of a channel the working parts of the entity's body supply that nothing it grasps occupies. Zero for something with no body.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
@@ -245,6 +260,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.holder -> entity?`: What holds the entity: what it is directly inside. Null for one that is inside nothing.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
+- `entity.holds_substance(substance: id<substance>) -> real`: How much of a substance one member of an item holds, in cubic metres.
+  - `substance` (id<substance>): The substance.
 - `entity.home -> loc`: Where this character's mind belongs: where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.
 - `entity.hostile(x: entity) -> bool`: Whether this character's mind holds `x` hostile (09 §3.4): by a stance it took, or, once it has perceived `x`, by a tag `x` presents that its mind's `hostile_to` names. Relations (15 §9) will take its place.
   Changed by `detected`, `perceived`.
@@ -264,12 +281,18 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `contents_materialised`.
 - `entity.item -> id<item>?`: The `item` definition the entity was made from. Null for what is not an item, and for an item made from none: a part that came off a body.
 - `entity.kind -> string` · safe for belief: The name of the kind of subject this is: `entity`, `loc`, `element`, `area`, `site`, `tract`, `realm` or `global`.
+- `entity.know_how -> list<string>`: The qualified ids of what the entity's mind knows, in order of id.
+  Changed by `know_how_gained`, `know_how_lost`.
+- `entity.know_how_list -> list<map<any>>`: Every piece of know-how there is, as the entity stands to it, for the know-how screen (12 §10.7): one map each, in order of id: `id`, `name`, `group`, `known`, `ready` (known, or all it needs is known), `makes` (the names of the recipes that need it) and `needs` (the names of what it needs).
 - `entity.knows(x: entity) -> bool`: Whether this mind has a track of what it perceives `x` as (15 §7.2). False for what it has never perceived.
   Changed by `detected`, `lost_track`.
   - `x` (entity): Whom or what it is asked about.
 - `entity.knows_element(at: any, layer: string) -> bool?`: Whether this mind knows the floor, block or fixture of a cell for what it is (15 §7.3): it is not tagged `hidden`, or the mind has noted it. Null for a cell that cannot be read or a layer that is not `floor`, `block` or `fixture`.
   - `at` (any): A cell, or something that is somewhere.
   - `layer` (string): `floor`, `block` or `fixture`.
+- `entity.knows_how(what: id<know_how>) -> bool`: Whether the entity's mind knows something (16 §8.5): what a recipe's `know_how` and any condition may ask.
+  Changed by `know_how_gained`, `know_how_lost`.
+  - `what` (id<know_how>): The know-how.
 - `entity.last_failure -> string?`: The code of the reason this character's last step or goal failed (09 §16). Null if none has.
   Changed by `step_failed`, `goal_failed`.
 - `entity.last_seen(x: entity) -> real?`: Seconds of this mind's own time since it last perceived `x` or heard of it (15 §7.2). Null if it never has.
@@ -279,10 +302,18 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.loc -> loc?` · settable: The cell the entity is in: its own, or that of whatever it is inside. Null if it is not in the world. Setting it relocates the entity to stand in that cell (`entity_relocated`); setting null takes it out of the world.
   Changed by `entity_relocated`.
 - `entity.local_time -> real?`: The local time of the clock the entity is on, in seconds. Null if it is on none.
+- `entity.make_fault(recipe: any, station: any) -> string?`: Why the entity, as it believes, could not start a recipe now: null if it could. A refusal's sentence, for a work action's `fail_text`.
+  - `recipe` (any): The recipe: its id, or its qualified id as a text.
+  - `station` (any): The station: an element or a device; null by hand.
+- `entity.making -> map<any>?`: The recipe under way that the entity keeps (16 §8.2): a station's, or work by hand on a worker. A map: `recipe` (its qualified id), `name`, `progress` (the share done now, 0 to 1), `rate`, `worker` (or null) and `why` (why it does not advance, else empty). Null when there is none.
+  Changed by `recipe_started`, `recipe_stalled`, `recipe_completed`.
 - `entity.mass -> real?`: The mass of the entity and everything inside it, in kilograms.
   Changed by `entity_relocated`.
 - `entity.material -> id<material>?`: What an item is made of. Null for what is not an item.
 - `entity.mind_def -> string?`: The qualified id of the `mind` definition this character thinks by. Null for one that thinks by none.
+- `entity.mixture -> map<real>` · same owner: What one member of an item holds (16 §9.5): the volume of each substance in cubic metres, by qualified id. Empty for one that holds nothing.
+- `entity.mode -> string?`: The mode a device is in (16 §4.2), by name: one of its definition's `modes`. Null for anything that is not a device, or a device whose definition has no modes.
+  Changed by `device_mode_changed`.
 - `entity.name -> string?`: The entity's own name, if it has been given one. Null for one that goes by its definition's.
 - `entity.next_round -> entity?` · same owner: The round an item's feed gives up next (07 §11.5). Null for an empty one.
   Changed by `item_taken`, `item_dropped`, `entity_relocated`, `entity_removed`.
@@ -311,8 +342,10 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `posture_changed`.
 - `entity.reach -> real?`: How far the body can reach to strike, in metres: the greatest length, from the trunk out, among its working parts that have a striking surface. Null for something with no body.
   Changed by `part_disabled`, `part_restored`, `part_severed`, `part_destroyed`.
+- `entity.recipe_options -> list<map<any>>`: What the entity, as it believes, could make here (16 §8; 12 §10.7 Make): every recipe done by hand, and every recipe of each station within a step, in order of recipe. Each is a map: `recipe` (its id), `id` (its qualified id), `name`, `station` (the element or device, null by hand), `where` (`hand`, `here` or a compass direction), `available`, `resumes` (it goes on with work under way there), `why` (the refusal's sentence, else empty), `work` (seconds at a rate of 1), `inputs` (a list of maps: `what`, `need`, `have`, `text`), `takes` and `gives` (texts).
 - `entity.remembers(at: any) -> bool`: Whether this character's map memory holds a cell (15 §13): only directly controlled characters keep one.
   - `at` (any): A cell, or something that is somewhere.
+- `entity.room -> real?`: The room left in one member of an item for substances, in cubic metres. Null for what holds none.
 - `entity.rounds -> int`: How many rounds an item can fire before it is empty (07 §11.5): the members of the rounds in its feed. Zero for one with none.
   Changed by `item_taken`, `item_dropped`, `item_merged`, `item_split`, `entity_relocated`, `entity_removed`.
 - `entity.scale -> real?`: The body's overall size factor. Null for something with no body.
@@ -331,6 +364,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   - `dir` (string): The direction: `north` to `north_west`, `up` or `down`.
 - `entity.step_time(dir: string) -> real?`: How long the entity expects a step in a direction to take, in seconds of its own time: the length of the step it believes lies there, with what its way of moving makes of rough ground and climbing, over that way's speed now. What a phase's `time` waits before the step is taken and checked against the world as it then is. Null if it believes it cannot make the step, or `dir` is not a direction.
   - `dir` (string): The direction: `north` to `north_west`, `up` or `down`.
+- `entity.store(resource: string) -> real?`: What a device's store of a resource holds now (16 §5.2), in the resource's unit, less what a recipe under way has drawn from it. Null for a store it does not have.
+  - `resource` (string): The resource, as the device's `stores` name it.
 - `entity.store_of(tag: string) -> entity?` · same owner: The first store the entity has that takes things carrying a tag (07 §11.5): itself, then what it holds in any way but enclosed, in order of id, and what is fitted to those. A quiver worn, a magazine fitted to a rifle held. Null for none.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
   - `tag` (string): A tag the store takes.

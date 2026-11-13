@@ -4,6 +4,8 @@
 Every refusal carries a reason: a stable code and the values involved (14 §5). A verb that declines, a command refused, a fault while a rule runs are reported with one. Mods add their own with the [`reason`](types/reason.md) type and give them with `cancel_event`.
 
 - <a id="ability-bad-argument"></a>`ability.bad_argument`: A verb of abilities was given an argument that is missing or of the wrong kind. Values: `arg`, the argument's name.
+- <a id="ability-bad-binding"></a>`ability.bad_binding`: A term of a binding is not one there is: `for` not above zero, a word of `ends_on` other than `mode`, `suppressed`, `dormant` and `owner_stops`, an `on_end` or `how` other than `remove`, `restore` and `release`, an empty `as`. Values: `arg`.
+- <a id="ability-bad-duration"></a>`ability.bad_duration`: A duration given to a verb of abilities is not above zero or not finite. Values: `seconds`.
 - <a id="ability-bad-rank"></a>`ability.bad_rank`: A rank is not a whole number from 0 to 10,000. Values: `rank`.
 - <a id="ability-condition"></a>`ability.condition`: The grant's `if` does not hold. Values: `ability`, `action`.
 - <a id="ability-cooling-down"></a>`ability.cooling_down`: The grant is waiting out its cooldown. Values: `ability`, `action`, `left`: seconds of the owner's own time.
@@ -15,11 +17,14 @@ Every refusal carries a reason: a stable code and the values involved (14 §5). 
 - <a id="ability-mode-off"></a>`ability.mode_off`: The mode is not on. Values: `ability`, `mode`.
 - <a id="ability-mode-on"></a>`ability.mode_on`: The mode is on already. Values: `ability`, `mode`.
 - <a id="ability-mode-unknown"></a>`ability.mode_unknown`: The ability has no mode of that id. Values: `ability`, `mode`.
+- <a id="ability-no-binder"></a>`ability.no_binder`: Something was to be bound (08 §7.3) and there is no ability held to bind it to: no `ability` was given and none is bound where the effect is written. Nothing was made. Values: none.
 - <a id="ability-no-grant"></a>`ability.no_grant`: The ability grants no such action, or grants several and none was named. Values: `ability`, `action` (empty when none was named).
 - <a id="ability-not-held"></a>`ability.not_held`: The entity does not hold the ability, or it was revoked. Values: `entity`, `ability`.
 - <a id="ability-not-registered"></a>`ability.not_registered`: The definitions were loaded without the `ability` definition type. Values: none.
 - <a id="ability-rank-from-track"></a>`ability.rank_from_track`: `set_rank` was asked of an ability whose rank is its track's level: advance the track. Values: `ability`.
 - <a id="ability-rank-too-low"></a>`ability.rank_too_low`: The ability's rank is below the `at_rank` of the grant or mode. Values: `ability`, `rank`, `needed`.
+- <a id="ability-suppressed"></a>`ability.suppressed`: The ability is suppressed from outside (08 §6.2): by `suppress_abilities`, a trait of its owner or an area its owner is inside. Values: `ability`, `by` (`effect`, `trait` or `area`).
+- <a id="ability-too-many-bindings"></a>`ability.too_many_bindings`: The ability holds as many bindings as `rules.max_bindings` allows (default 64). Nothing was made. Values: `limit`.
 - <a id="ability-unknown"></a>`ability.unknown`: The id is not an `ability` definition. Values: `ability`, as given.
 - <a id="ability-upkeep"></a>`ability.upkeep`: A mode's upkeep cannot be met: the entity lacks the pool or it is empty. Values: `ability`, `mode`, `pool`.
 - <a id="action-bad-time"></a>`action.bad_time`: An action's tempo came out at zero or below, or null; a phase's `time` or `max` below zero or null; or a tick's `every` at zero or below, or null. A fault: the tempo counts as 1, the duration as none, and the tick does not repeat. Values: `action`, `phase`.
@@ -59,10 +64,17 @@ Every refusal carries a reason: a stable code and the values involved (14 §5). 
 - <a id="command-not-controlled"></a>`command.not_controlled`: A command that only a controller gives (`Act`, `Wait`, `Cancel`, `ClearPlan`) addressed an entity whose control is `none` (03 §5.1). Values: `entity`.
 - <a id="component-missing"></a>`component.missing`: The entity has no component of the kind the change needs.
 - <a id="decision-none-pending"></a>`decision.none_pending`: The entity is not waiting for a decision. Values: `entity`.
+- <a id="device-bad-amount"></a>`device.bad_amount`: An amount for a store is not finite. Values: `amount`.
+- <a id="device-bad-argument"></a>`device.bad_argument`: A verb of devices was given an argument that is missing or of the wrong kind. Values: `verb`, `arg`.
+- <a id="device-bad-config-value"></a>`device.bad_config_value`: `set_config` gave a value of the wrong kind for the setting, a number outside its `min` and `max`, or a choice it does not offer. Values: `key`.
 - <a id="device-no-element"></a>`device.no_element`: There is no element on that layer of the cell. Values: `layer`.
+- <a id="device-no-store"></a>`device.no_store`: `add_resource` or `drain_resource` named a resource the device's `stores` do not hold. Values: `resource`.
 - <a id="device-none"></a>`device.none`: An element was to be promoted whose definition names no `device`. Values: `element`, the element's state as data writes it.
+- <a id="device-not-a-device"></a>`device.not_a_device`: What a verb of devices was given is not a device, and is not an element whose definition names one. Values: `entity`.
 - <a id="device-not-registered"></a>`device.not_registered`: The definitions were loaded without the `device` definition type. Values: none.
+- <a id="device-unknown-config"></a>`device.unknown_config`: `set_config` named a setting the device's `config` does not. Values: `key`.
 - <a id="device-unknown-def"></a>`device.unknown_def`: The `device` an element's definition names is not a `device` definition. Values: `device`.
+- <a id="device-unknown-mode"></a>`device.unknown_mode`: `set_mode` named a mode the device's `modes` do not. Values: `mode`.
 - <a id="engineaction-cancel-only-for"></a>`engine:action_cancel_only_for`: The actor tried to abandon an action in a phase whose `cancel` lists tags, for something that carries none of them.
   Shown as `{cap(the(self))} cannot break off for that.`.
   - `action` (id<action>): The action that was asked for.

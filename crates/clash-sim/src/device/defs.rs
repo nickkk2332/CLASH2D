@@ -222,10 +222,15 @@ pub struct SpeedDef {
     pub when: WhenModes,
 }
 
+/// `speed` written as an object: a factor that holds only in some modes.
 #[derive(Deserialize)]
 struct SpeedObject {
+    /// The factor on the rate of work done at the device, 1 if left out.
     #[serde(default = "one")]
     value: Real,
+    /// The modes, by name, in which the device works at this speed; in
+    /// every other mode it does not work at all. Empty or left out: every
+    /// mode.
     #[serde(default)]
     when: Vec<String>,
 }
@@ -269,8 +274,12 @@ pub struct AutoDef {
     pub when: WhenModes,
 }
 
+/// `auto` written as an object: the device runs recipes by itself only
+/// in some modes.
 #[derive(Deserialize)]
 struct WhenObject {
+    /// The modes, by name, in which the device runs recipes by itself.
+    /// Empty or left out: every mode.
     #[serde(default)]
     when: Vec<String>,
 }
@@ -310,9 +319,14 @@ pub struct ProvidesDef {
     pub when: WhenModes,
 }
 
+/// `provides` written as an object: know-how the device provides only
+/// in some modes.
 #[derive(Deserialize)]
 struct ProvidesObject {
+    /// The know-how provided to whoever works at the device.
     know_how: Ref<KnowHowDef>,
+    /// The modes, by name, in which the device provides it. Empty or left
+    /// out: every mode.
     #[serde(default)]
     when: Vec<String>,
 }

@@ -21,7 +21,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`contest`](contest.md) | A comparison of two numbers with chance: their difference or log-ratio, scaled, with logistic noise of a given spread (07 §4.1). |
 | [`control`](control.md) | Something the player can do, by a name a keymap gives to a key: interface effects to run (12 §9.2). |
 | [`damage_type`](damage_type.md) | A kind of harm, with the resistance of anything that states none of its own (02 §12.2). |
-| [`device`](device.md) | What an element becomes when it needs state of its own, or a machine standing alone: what it holds and the tags it carries (16 §4.2). |
+| [`device`](device.md) | What an element becomes when it needs state of its own, or a machine standing alone: what it holds, its tags, modes, settings and stores, how fast and whether by itself it works recipes, and the know-how it provides (16 §4.2). |
 | [`eoc`](eoc.md) | A rule: when an event happens, or when it is called, if a condition holds, do a list of effects (05 §9). |
 | [`event`](event.md) | An event that a mod raises with `emit` and that rules listen for: its subjects, its fields, and whether it is a hook (05 §8.1). |
 | [`event_signal`](event_signal.md) | An event that gives off a signal where it happens, with a strength worked out from the event (15 §3.2). |
@@ -36,6 +36,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`interaction`](interaction.md) | Something a character can do to a thing: its reach, time, conditions and effects (16 §3.1). |
 | [`item`](item.md) | A kind of item: what it is made of, how it is held and worn, what it holds and what it confers (06 §9.1). |
 | [`keymap`](keymap.md) | For each context, the name each key has in it (12 §9.2). |
+| [`know_how`](know_how.md) | Something someone may know how to do, held by a mind and asked for by recipes; what must be known first (16 §8.5). |
 | [`map`](map.md) | A place written as rows of characters, one layer for each storey, with a palette saying what each character stands for (10 §3). |
 | [`material`](material.md) | What elements are made of: density, toughness and resistances (02 §5.4). |
 | [`method`](method.md) | A method written on its own: a condition and the steps that pursue a goal, which become the character's actions one at a time (09 §4). |
@@ -52,6 +53,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`projectile`](projectile.md) | A kind of projectile: a mass with a cross-section and a striking surface that flies as a body when something shoots (07 §11.1). |
 | [`realm`](realm.md) | A world: its extent, wrap, storeys, strata, fill, clock rate and edges (02 §4.1). |
 | [`reason`](reason.md) | A reason a mod gives for a refusal of its own: a sentence and the values it carries (14 §15). |
+| [`recipe`](recipe.md) | What is used up, what is needed, how much work it takes and what it gives: crafting by hand, processing at a station, cooking, brewing and growing (16 §8). |
 | [`region_kind`](region_kind.md) | The recipe for surveying a region: its tract definitions in patches, the sites it holds, the settlements it may hold and the paths that cross its edges (10 §8.1). |
 | [`rule_group`](rule_group.md) | A set of rules that is switched on and off together (05 §9.6). |
 | [`scenario`](scenario.md) | A game the player can start: its worlds, who the player is and where they begin, the rules in force, its objectives, how it ends and how it is saved (13 §3). |
@@ -63,6 +65,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`signal_kind`](signal_kind.md) | A kind of signal: light off a body, a sound, a scent. |
 | [`site`](site.md) | A named place with identity: the map that stands there, its roles from the map's marks, and who works there (10 §11.1). |
 | [`sky`](sky.md) | The light a stratum's sky gives by time of day, how it spreads under cover, and a backdrop (15 §3.3). |
+| [`substance`](substance.md) | One stuff, whatever form it is in: what it tastes of, what it is as a spill, and what a dose of it does in a body by each route (16 §9.5). |
 | [`template`](template.md) | What a kind of thing is made of: a body, stats, tags, rules, starting traits and items, and choices (06 §10). |
 | [`theme`](theme.md) | Colours and styles by name, border characters, a font and the engine's marks (12 §4.3). |
 | [`track`](track.md) | An accumulating counter with levels. |

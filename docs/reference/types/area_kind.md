@@ -15,3 +15,27 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `leak` ([any JSON value](../values.md#json), or `null`; optional): How fast a sealed area's held temperature moves toward the outside (11 §4.6). Stored as written.
 - `ambience` (string, or `null`; optional): How it looks inside (12 §6.4). Stored as written.
 - `rules` (list of [any JSON value](../values.md#json); optional): Rules attached to every area of this kind (05 §9.3): rule ids or inline rules. Carried as written until the rule runtime exists.
+- `gravity` ([`GravitySpec`](#gravityspec), or `null`; optional): Gravity inside every area of this kind, in place of the stratum's (02 §8.3): a number scales the stratum's gravity (0 is weightlessness), a list of three numbers replaces it (m/s² east, south and up). An area's own override is laid over it.
+- `light` (object [`LightSpec`](#lightspec), or `null`; optional): A source of light every area of this kind carries at the middle of its shape (15 §3.3), as an element writes one: a negative intensity darkens.
+- `suppresses` (list of string; optional): Tags of abilities suppressed in everyone inside an area of this kind (08 §6.2). The world carries them for the simulation.
+
+<a id="gravityspec"></a>
+### `GravitySpec`
+
+Gravity an `area_kind` sets, as mods write it: a number is a scale of the stratum's gravity, a list of three numbers an acceleration in m/s² east, south and up.
+
+Written as a scale of the stratum's gravity, or a list of three accelerations.
+
+Takes:
+
+- an integer
+- a number
+- a list: list of number
+
+<a id="lightspec"></a>
+### `LightSpec`
+
+The `light` of a floor, block or fixture, or of one of its states, as mods write it: `"light": { "intensity": 1.0, "radius": "8 m" }`.
+
+- `intensity` (number; **required**): How bright it is in its own cell, on the scale where full daylight is 1. Negative for a source of darkness. Zero is no source: a state writes it to put the definition's light out.
+- `radius` (a length as a number in SI units or a string with a unit, or `null`; optional): How far it shines. Left out, it shines as far as its light stays above `LIGHT_NEGLIGIBLE`, and never further than `LIGHT_RADIUS_MAX_M`.

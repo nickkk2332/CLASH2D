@@ -52,6 +52,17 @@ Fields:
 - `reason` (string): The code of the reason.
 - `message` (string): The reason, in words.
 
+<a id="ability-restored"></a>
+## `ability_restored`
+
+The last suppression of an ability lifted: it confers again, unless it is dormant. Its modes do not come back by themselves.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `ability` (string): The qualified id of the ability.
+
 <a id="ability-revoked"></a>
 ## `ability_revoked`
 
@@ -63,6 +74,18 @@ Fields:
 
 - `ability` (string): The qualified id of the ability.
 - `how` (string): `revoked` by `revoke_ability`, `lost` with its last source, or `moved` with a mind to another body (08 §3.4).
+
+<a id="ability-suppressed"></a>
+## `ability_suppressed`
+
+Something outside an ability suppressed it (08 §6.2): it confers nothing, its modes have ended (`how` `suppressed`) and what was bound to end then has ended.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `ability` (string): The qualified id of the ability.
+- `by` (string): What suppressed it: `effect` (`suppress_abilities`), `trait` or `area`.
 
 <a id="ability-used"></a>
 ## `ability_used`
@@ -211,6 +234,36 @@ An anonymous individual became notable: something about it would be lost by forg
 Subjects, in delivery order: `self` (entity).
 
 No fields.
+
+<a id="binding-created"></a>
+## `binding_created`
+
+Something was bound to an ability (08 §7.3): a trait, a summoned entity, conjured cells, an area or a rule.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `ability` (string): The qualified id of the ability.
+- `name` (string): The name it was given (`as`), or empty.
+- `what` (string): What is bound: `trait`, `entity`, `edit` (conjured cells), `area` or `rule`.
+- `on_end` (string): What will happen to it when it ends: `remove`, `restore` or `release`.
+
+<a id="binding-ended"></a>
+## `binding_ended`
+
+A binding ended (08 §7.3) and what it held was removed, restored or released.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `ability` (string): The qualified id of the ability.
+- `name` (string): The name it was given, or empty.
+- `what` (string): `trait`, `entity`, `edit`, `area` or `rule`.
+- `why` (string): `duration`, `dismissed`, `dispelled`, `mode`, `suppressed`, `dormant`, `owner_stops`, `revoked`, `lost`, `moved` or `owner_removed`.
+- `how` (string): What was done: `remove`, `restore` or `release`.
+- `thing` (any): What it held: the entity, the area, the one a trait or rule was on, or the first conjured cell.
 
 <a id="body-changed"></a>
 ## `body_changed`
@@ -473,6 +526,19 @@ Fields:
 - `sense` (string): The qualified id of the sense.
 - `where` (loc?): Where it was perceived.
 
+<a id="device-configured"></a>
+## `device_configured`
+
+A setting of a device was set (16 §4.2) by `set_config`. The value is kept with the device and saved with it.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `key` (string): The setting's id.
+- `old` (any): What it held before.
+- `new` (any): What it holds now.
+
 <a id="device-demoted"></a>
 ## `device_demoted`
 
@@ -481,6 +547,18 @@ A device entity was dropped: its element is back in its default state with nothi
 Subjects, in delivery order: `self` (entity), `element` (element).
 
 No fields.
+
+<a id="device-mode-changed"></a>
+## `device_mode_changed`
+
+A device's mode changed (16 §4.2): by `set_mode`, from a rule, an interaction or a machine's own rules. Recipes under way at it work at the speed the new mode gives from now on.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `old` (string): The mode it was in.
+- `new` (string): The mode it is in now.
 
 <a id="device-promoted"></a>
 ## `device_promoted`
@@ -501,6 +579,19 @@ Subjects, in delivery order: `self` (entity), `device` (entity), `here` (loc).
 Fields:
 
 - `layer` (string): Which of the cell's elements the device was bound to: `floor`, `block` or `fixture`.
+
+<a id="dosed"></a>
+## `dosed`
+
+A body took a substance in by a route (16 §9.5): once for each substance of a dose, after its pools and traits.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `substance` (string): The substance's qualified id.
+- `amount` (real): What got in, in millilitres: its volume times the route's factor.
+- `route` (string): `ingest`, `inject`, `skin` or `breath`.
 
 <a id="driver-changed"></a>
 ## `driver_changed`
@@ -950,6 +1041,30 @@ Fields:
 
 - `parts` (int): How many parts it covers.
 
+<a id="know-how-gained"></a>
+## `know_how_gained`
+
+A mind came to know something (16 §8.5).
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `know_how` (string): The know-how's qualified id.
+- `how` (string): `template`, `taught` or `read`, or what the rule that taught it said.
+
+<a id="know-how-lost"></a>
+## `know_how_lost`
+
+A mind no longer knows something (16 §8.5 `unlearn`).
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `know_how` (string): The know-how's qualified id.
+- `how` (string): `unlearned`.
+
 <a id="landed"></a>
 ## `landed`
 
@@ -1116,7 +1231,7 @@ Fields:
 
 - `ability` (string): The qualified id of the ability.
 - `mode` (string): The mode's id within the ability.
-- `how` (string): `ended` (switched off), `empty` (its upkeep ran a pool dry), `dormant`, `revoked`, `rank` (the rank fell below it) or `moved` (with a mind to another body).
+- `how` (string): `ended` (switched off), `empty` (its upkeep ran a pool dry), `dormant`, `suppressed`, `revoked`, `lost`, `rank` (the rank fell below it) or `moved` (with a mind to another body).
 
 <a id="mode-started"></a>
 ## `mode_started`
@@ -1376,6 +1491,18 @@ Fields:
 - `to` (string): The qualified id of the posture it is in; empty for none.
 - `look` (string): The `look` of the posture it is in, as its definition writes it; empty for none.
 
+<a id="poured"></a>
+## `poured`
+
+Something was poured out of a container (16 §9.5): into another, or onto a cell. `self` is what it came out of.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `amount` (real): The volume that left it, in cubic metres.
+- `onto` (any): Where it went: the container, or the cell.
+
 <a id="projectile-fired"></a>
 ## `projectile_fired`
 
@@ -1436,6 +1563,43 @@ Fields:
 - `ability` (string): The qualified id of the ability.
 - `old` (int): The rank before.
 - `new` (int): The rank now.
+
+<a id="recipe-completed"></a>
+## `recipe_completed`
+
+A recipe's work is done (16 §8.2): its outputs are made, what it mends is mended and its `result` has run, unless it was spoiled.
+
+Subjects, in delivery order: `self` (entity), `station` (entity).
+
+Fields:
+
+- `recipe` (string): The recipe's qualified id.
+- `spoiled` (bool): Whether it came to nothing.
+
+<a id="recipe-stalled"></a>
+## `recipe_stalled`
+
+A recipe under way stopped advancing (16 §8.2): its worker stopped, its station does not work in its mode, a store it draws on ran dry, its condition on the place does not hold, or its worker's rate came to nothing. Its work done is kept.
+
+Subjects, in delivery order: `self` (entity), `station` (entity).
+
+Fields:
+
+- `recipe` (string): The recipe's qualified id.
+- `why` (string): `stopped`, `station`, `supply`, `condition` or `worker`.
+
+<a id="recipe-started"></a>
+## `recipe_started`
+
+A recipe began, its inputs used up, or resumed where it was left (16 §8.2).
+
+Subjects, in delivery order: `self` (entity), `station` (entity).
+
+Fields:
+
+- `recipe` (string): The recipe's qualified id.
+- `resumed` (bool): Whether it goes on with work already done.
+- `work` (real): How much work it takes in all, in seconds at a rate of 1.
 
 <a id="release-started"></a>
 ## `release_started`
@@ -1716,6 +1880,18 @@ Fields:
 
 - `tag` (string): The tag.
 - `added` (bool): Whether it was added; false if it was taken away.
+
+<a id="tasted"></a>
+## `tasted`
+
+Something swallowed tasted of something (16 §9.5): the substance with the strongest `taste` in what was taken in by `ingest`, for rules to notice.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `substance` (string): The substance's qualified id.
+- `taste` (real): How strongly, from 0 to 1.
 
 <a id="thrown"></a>
 ## `thrown`
