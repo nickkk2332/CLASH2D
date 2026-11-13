@@ -13,6 +13,8 @@
 mod session;
 
 use clash_app::headless::Headless;
+use clash_core::EntityId;
+use clash_expr::Value;
 use clash_world::Location;
 use session::*;
 
@@ -154,6 +156,210 @@ fn a_word_a_blow_the_watch_and_a_wardrobe() {
         answer(&mut run);
         press(&mut run, "p");
     }
+    assert_eq!(top(&run), "ui:play");
+}
+
+/// What a property of an entity reads as text, or empty (the session's
+/// assertions read truth).
+fn text_of(run: &Headless, entity: EntityId, property: &str) -> String {
+    run.game()
+        .with_session(|session| {
+            session
+                .sim
+                .property_named(clash_sim::Subject::Entity(entity), property, &[])
+        })
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+/// Everyone in the world whose mind is named by a word, by id.
+fn minds_named(run: &Headless, word: &str) -> Vec<EntityId> {
+    let all: Vec<EntityId> = run
+        .game()
+        .with_session(|session| session.sim.truth().entities().ids().collect())
+        .unwrap_or_default();
+    all.into_iter()
+        .filter(|entity| text_of(run, *entity, "mind_def").contains(word))
+        .collect()
+}
+
+/// Whether a character's mind holds another hostile.
+fn holds_hostile(run: &Headless, who: EntityId, of: EntityId) -> bool {
+    about(run, who, "hostile", of)
+}
+
+/// A property of a character's mind about another (`hostile`,
+/// `perceives`), false where it reads anything but true.
+fn about(run: &Headless, who: EntityId, property: &str, of: EntityId) -> bool {
+    run.game()
+        .with_session(|session| {
+            let of = session
+                .sim
+                .exprs()
+                .kinds()
+                .handle(clash_sim::Subject::Entity(of))?;
+            session
+                .sim
+                .property_named(clash_sim::Subject::Entity(who), property, &[Value::from(of)])
+                .as_bool()
+        })
+        .flatten()
+        .unwrap_or(false)
+}
+
+/// The market fight: someone in the square struck until a blow lands,
+/// and the watch, which holds hostile whoever it sees hurt someone, comes
+/// for the one who struck. It does not (the second round's known issue
+/// 2): a watchman struck by a rowdy, or by the same character delegated,
+/// answers in a test script, but struck by the player's character he
+/// walks on. Kept, ignored, until the AI stream finds why.
+#[test]
+#[ignore = "known issue: struck by the player, the watch does not answer (docs/playtest-beta.md, the second round, issue 2)"]
+fn a_fight_in_the_square_and_the_watch_answers() {
+    let data = DataDir::new("market-fight");
+    let mut run = boot_default(data.path(), 4);
+    begin_in_the_square(&mut run);
+    let ada = player(&run);
+
+    // Someone in the square who is not of the watch.
+    let mut victim = None;
+    for _ in 0..40 {
+        press(&mut run, "tab");
+        if let Some(sprite) = run.game().scene().target() {
+            let entity = EntityId::from_bits(sprite.raw());
+            let mind = text_of(&run, entity, "mind_def");
+            if !mind.is_empty() && !mind.contains("watch") {
+                victim = Some(entity);
+                break;
+            }
+        }
+        press(&mut run, ".");
+    }
+    let victim = victim.expect("someone in the square");
+    eprintln!("struck: {}", text_of(&run, victim, "mind_def"));
+    assert!(walk_up_to_target(&mut run, 40), "{}", run.text());
+
+    // Blows until one lands, or a minute's worth of keys.
+    let before = log_len(&run);
+    let mut hurt = false;
+    for _ in 0..60 {
+        answer(&mut run);
+        if !walk_up_to_target(&mut run, 6) {
+            break;
+        }
+        press(&mut run, "f");
+        if !["ui:play", "ui:reaction"].contains(&top(&run).as_str()) {
+            press(&mut run, "escape");
+        }
+        press(&mut run, ".");
+        hurt = log_since(&run, before)
+            .iter()
+            .any(|line| line.contains("is wounded") || line.contains("staggers"));
+        if hurt {
+            break;
+        }
+    }
+    let fight = log_since(&run, before);
+    assert!(hurt, "no blow landed: {fight:?}");
+    if let Some(sprite) = run.game().scene().target() {
+        let struck = EntityId::from_bits(sprite.raw());
+        eprintln!(
+            "struck {}: perceives her {}, hostile {}, goal {:?}",
+            text_of(&run, struck, "mind_def"),
+            about(&run, struck, "perceives", ada),
+            about(&run, struck, "hostile", ada),
+            text_of(&run, struck, "goal"),
+        );
+    }
+
+    // Then the character stands and waits: the watch is told, or sees,
+    // and comes for the one who struck.
+    let watch = minds_named(&run, "watch");
+    assert!(!watch.is_empty(), "the town has a watch");
+    let mut answered = false;
+    for _ in 0..180 {
+        answer(&mut run);
+        press(&mut run, ".");
+        answered = watch.iter().any(|guard| holds_hostile(&run, *guard, ada));
+        if answered || top(&run) != "ui:play" {
+            break;
+        }
+    }
+    let after = log_since(&run, before);
+    for guard in &watch {
+        eprintln!(
+            "watchman {guard}: perceives her {}, goal {:?}",
+            about(&run, *guard, "perceives", ada),
+            text_of(&run, *guard, "goal")
+        );
+    }
+    assert!(answered, "the watch never came: {after:?}");
+}
+
+/// How many of the town's people a routine has doing something now.
+fn doing(run: &Headless, people: &[EntityId], what: &str) -> usize {
+    people
+        .iter()
+        .filter(|who| text_of(run, **who, "routine_doing") == what)
+        .count()
+}
+
+/// A day of routines, its morning: from nine to noon in the square,
+/// waited an hour at a time. Three hours among the town's hot minds
+/// take too long in a debug build for the suite (the second round,
+/// responsiveness); run it with `--ignored`.
+#[test]
+#[ignore = "slow: three hours waited in the populated square (docs/playtest-beta.md, the second round)"]
+fn a_morning_and_a_noon_in_the_square() {
+    let data = DataDir::new("market-day");
+    let mut run = boot_default(data.path(), 4);
+    begin_in_the_square(&mut run);
+    let people: Vec<EntityId> = run
+        .game()
+        .with_session(|session| session.sim.truth().entities().ids().collect())
+        .unwrap_or_default();
+    let people: Vec<EntityId> = people
+        .into_iter()
+        .filter(|who| !text_of(&run, *who, "routine").is_empty())
+        .collect();
+    assert!(people.len() > 40, "{} keep routines", people.len());
+
+    // Nine in the morning: the stalls are kept.
+    let at_nine = time_of_day(&run);
+    assert!((32_400.0..33_000.0).contains(&at_nine), "{at_nine}");
+    assert!(doing(&run, &people, "keeping_stall") > 0);
+    let seen = |run: &Headless| {
+        run.game()
+            .scene()
+            .world()
+            .map(|world| world.model().sprites().count())
+            .unwrap_or(0)
+    };
+    let at_first = seen(&run);
+
+    // Three hours waited an hour at a time, as a player would, till
+    // noon: the market fills, and the character sees people come and go.
+    let started = std::time::Instant::now();
+    for _ in 0..3 {
+        press(&mut run, "shift+p");
+        until_asked(&mut run, 600);
+        answer(&mut run);
+    }
+    let waited = started.elapsed();
+    let at_noon = time_of_day(&run);
+    eprintln!(
+        "three hours in the square took {:.1} s; {} then {} seen; at noon {} at market, {} keeping stalls, {} asleep",
+        waited.as_secs_f64(),
+        at_first,
+        seen(&run),
+        doing(&run, &people, "at_market"),
+        doing(&run, &people, "keeping_stall"),
+        doing(&run, &people, "asleep"),
+    );
+    assert!(at_noon >= 43_000.0, "waited to {at_noon}");
+    assert!(doing(&run, &people, "at_market") > 0);
+    assert!(doing(&run, &people, "keeping_stall") > 0);
+    assert_eq!(doing(&run, &people, "asleep"), 0);
     assert_eq!(top(&run), "ui:play");
 }
 

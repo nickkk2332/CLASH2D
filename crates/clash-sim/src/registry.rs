@@ -537,6 +537,9 @@ pub fn register_engine(registry: &mut Registry) {
     for info in crate::agent::AGENT_EVENTS {
         mirror_event(registry, info);
     }
+    for info in crate::ai::warm::LEVEL_EVENTS {
+        mirror_event(registry, info);
+    }
 }
 
 /// The registry of everything the simulation offers so far: the

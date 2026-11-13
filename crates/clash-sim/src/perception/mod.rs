@@ -251,6 +251,13 @@ pub fn on_wake(sim: &mut Sim, id: WakeId, wake: Wake) {
     }
 }
 
+/// A character promoted from warm (09 §9.2): its senses sweep again.
+pub(crate) fn resume_sweeps(sim: &mut Sim, entity: EntityId) {
+    if sim.entities.location(entity).is_some() {
+        senses::ensure_sweeps(sim, entity);
+    }
+}
+
 /// What the pump calls for every event it delivers (03 §4.3): the event
 /// gives off its `event_signal`s, an observer that moved turns and looks
 /// again, and the party's tag of the event is recorded.

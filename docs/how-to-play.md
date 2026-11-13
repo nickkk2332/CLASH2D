@@ -450,7 +450,9 @@ what is true.
   strangers of Last stand are such) go after anyone they hold hostile or
   saw hurt someone; once they lose them they go to where they last
   believed them to be, look round, and give up. People tell each other
-  what they saw, at a little less certainty each time.
+  what they saw, at a little less certainty each time. (In this beta
+  the town's watch does not yet come for you when it is your character
+  who strikes: see the release notes' known issues.)
 
 Your character works the same way: the map shows what they have seen,
 and someone you cannot see is not drawn.

@@ -147,6 +147,9 @@ play, and what trying the game headless on the build branch showed.
 - **With no arrow left, `s` gives the pistol's reason** ("There is no
   loaded weapon in hand"), not the bow's.
 - **Tab can select someone who has died;** the log says who died.
+- **The watch does not answer your blows.** Strike someone in the
+  market square and no watchman comes for you, though the watch goes
+  for anyone else it sees hurt someone.
 
 **Saving and running**
 
@@ -154,9 +157,10 @@ play, and what trying the game headless on the build branch showed.
   keeps one save; it is not written at intervals, so a crash loses the
   night.
 - **The market town is slow to wait in.** With every resident about, a
-  minute waited takes some six seconds of real time (release build),
-  an hour some six minutes: the errand's five hours are long to wait
-  out. Elsewhere an hour takes seconds.
+  minute waited in the square takes 2.2 to 2.6 seconds of real time
+  (release build, after performance 2), an hour some two and a half
+  minutes: the errand's five hours are long to wait out. Elsewhere an
+  hour takes seconds.
 - **The log fills with `Footsteps, somewhere close.`** in the town:
   every step heard and not seen writes it.
 - **The window was not seen on a real screen** before the beta: it is

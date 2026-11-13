@@ -490,6 +490,10 @@ pub struct AiState {
     /// Whether more changed than `changed` keeps: every route is
     /// checked.
     pub(super) all_changed: bool,
+    /// Who is hot and who warm, and the warm stepper (09 §9;
+    /// [`warm`](super::warm)).
+    #[serde(default)]
+    pub(super) levels: super::warm::Levels,
 }
 
 impl StateHash for AiState {
@@ -498,13 +502,21 @@ impl StateHash for AiState {
         self.schedule.state_hash(hasher);
         self.changed.state_hash(hasher);
         self.all_changed.state_hash(hasher);
+        // Levels hash only while they hold something, so that a
+        // simulation in which nobody was ever warm hashes as before.
+        if !self.levels.is_empty() {
+            self.levels.state_hash(hasher);
+        }
     }
 }
 
 impl AiState {
     /// Whether nothing is due or scheduled and nothing changed.
     pub fn is_empty(&self) -> bool {
-        self.due.is_empty() && self.schedule.is_empty() && self.changed.is_empty()
+        self.due.is_empty()
+            && self.schedule.is_empty()
+            && self.changed.is_empty()
+            && self.levels.is_empty()
     }
 
     /// How many minds are prompted to think at the next batch.
@@ -515,5 +527,10 @@ impl AiState {
     /// How many minds have a thought scheduled.
     pub fn scheduled_count(&self) -> usize {
         self.schedule.len()
+    }
+
+    /// Who is hot and who warm (09 §9).
+    pub fn levels(&self) -> &super::warm::Levels {
+        &self.levels
     }
 }

@@ -317,6 +317,44 @@ pub fn away_from(sim: &Sim, entity: EntityId, from: Location, distance: Real) ->
     best.map(|(_, spot)| spot)
 }
 
+/// How many cells a mind's search for a way to a place may visit, at
+/// least (D-896).
+pub const WAY_NODES_BASE: u32 = 1_500;
+
+/// How many more cells it may visit for each metre the place is from it
+/// in a straight line (D-896).
+pub const WAY_NODES_PER_M: u32 = 150;
+
+/// The limits of a mind's search for a way to a place (09 §5.4a;
+/// D-896): [`WAY_NODES_BASE`] cells and [`WAY_NODES_PER_M`] more for
+/// each metre the place is off in a straight line, no more than a search
+/// for anyone may visit. A way it cannot find within them is no way it
+/// sets out on: a place a few steps off behind a wall with no way round
+/// is given up without searching the whole town.
+pub fn way_limits(sim: &Sim, entity: EntityId, to: Location) -> PathLimits {
+    let metres = distance_to(sim, entity, to)
+        .unwrap_or(Real::ZERO)
+        .ceil()
+        .to_i64()
+        .clamp(0, i64::from(u32::MAX));
+    let nodes = u64::from(WAY_NODES_BASE) + u64::from(WAY_NODES_PER_M) * metres as u64;
+    PathLimits {
+        max_nodes: u32::try_from(nodes)
+            .unwrap_or(u32::MAX)
+            .min(PathLimits::DEFAULT.max_nodes),
+        max_cost_m: Real::INFINITY,
+    }
+}
+
+/// Whether a mind believes there is a way from where it stands to a
+/// place within the limits of [`way_limits`].
+pub fn way_within(sim: &Sim, entity: EntityId, to: Location, limits: PathLimits) -> bool {
+    let Some(from) = sim.entities.location(entity) else {
+        return false;
+    };
+    crate::movement::believed_path(sim, entity, from, to, &[], limits).is_ok()
+}
+
 /// The length of a step between cells, in metres, a storey counting
 /// [`STOREY_M`](clash_world::dims::STOREY_M).
 pub fn metres(by: clash_core::IVec3) -> Real {

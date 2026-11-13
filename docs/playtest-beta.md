@@ -181,8 +181,12 @@ the first round's known issues that are not performance were fixed, at
 their causes, what was not played was played, and the last stand was
 played to dawn and tuned. The performance stream ("performance 2",
 making the populated town fast) had not landed on the build branch when
-this round was played: sessions in the market town were kept short, and
-their timings are as slow as the first round's.
+most of this round was played: sessions in the market town were kept
+short, and their timings are as slow as the first round's. It landed
+(`3bc76b9`, D-890 to D-899) near the end of the round and was merged;
+the last stand's sessions were run again on it and pass as before, and
+the market fight and the morning of a day of routines were played on it
+(below, and *After performance 2*).
 
 ### Sessions
 
@@ -199,6 +203,15 @@ their timings are as slow as the first round's.
 
 The first round's sessions were run again on this round's fixes; the
 golden frames that moved are named with the fixes below.
+
+### After performance 2
+
+| Session | Test | Plays | Found |
+|---------|------|-------|-------|
+| The market fight | `play_market.rs` (`a_fight_in_the_square_and_the_watch_answers`, ignored for the known issue) | Tab to someone in the square, up to them, `f` until a blow lands; then three minutes waited a second at a time, watching for the watch | `Ada strikes the watchman.` `The watchman staggers.` `The watchman is wounded.` (Tab had moved to the watchman on the way), and no watchman held her hostile in three minutes: the watch does not answer the player (known issue 2) |
+| The watch, by script | (probes, not kept) | A watchman struck in the square by a rowdy; and by the player's character made delegated, with the same punches | Both answer: the watchman takes up `confront`. Only the player's own blows go unanswered |
+| A day of routines, its morning | `play_market.rs` (`a_morning_and_a_noon_in_the_square`, ignored as slow) | Begun at nine in the square with the stalls kept; Shift+P three times, to noon | Too slow for the suite in a debug build: three hours among 150 hot minds did not finish in half an hour of real time on a loaded machine. The routines themselves are checked by the test script `scenarios/town/routine_day.scn`, which watches from outside the town |
+| The last stand, again | `play_last_stand.rs` | All six sessions on the merged build | Pass unchanged: 320 s in a debug build |
 
 ### What was found and fixed
 
@@ -257,24 +270,31 @@ and 5), and hiding may win it too surely (known issue 8).
 
 Worst first.
 
-1. **Waiting and walking in the market town are slow** (the first
-   round's first issue, performance 2's to fix): a game minute costs
-   one to two seconds of real time in a debug build, several in the
-   sessions' worst moments; the errand's failure session takes some
-   twenty minutes in a debug build.
-2. **Struck in the square, the watchman walked on.** Greeted, he
-   answered; struck once with bare hands (`The watchman is wounded.`),
-   he went out of sight, nobody came for the one who struck him, and
-   three minutes in a wardrobe upstairs passed without anyone looking.
-   The watch's minds hold hostile whoever they see hurt someone
-   (`hostile_after`); why this blow did not was not found (the AI's
-   stepping is performance 2's to change). The market fight with the
-   watch answering, fleeing and being caught were therefore not played.
+1. **Struck by the player, the watch does not answer.** Greeted, the
+   watchman answered; struck with bare hands until a blow landed
+   (`The watchman is wounded.`), he walked on, no watchman held the
+   player hostile in three minutes, and three minutes in a wardrobe
+   upstairs passed without anyone looking. The watch's minds hold
+   hostile whoever they see hurt someone (`hostile_after`), and a test
+   script shows it working for a rowdy's blows and for the same
+   character's when it is delegated (the watchman perceives her
+   beforehand in both): what differs for a directly controlled striker
+   is in the AI's perception of the blow, which this stream keeps out
+   of. The market fight with the watch answering, fleeing and being
+   caught cannot be played until it is found; its session is kept,
+   ignored, to show it (`a_fight_in_the_square_and_the_watch_answers`).
+2. **Waiting among the town's people is still slow** after performance
+   2: a minute's wait in the square is 2.2 to 2.6 s of real time in a
+   release build (performance 2's own figure, against a target of 1 s),
+   several times that in a debug build, so a day of routines watched
+   from the square cannot be a session in the suite, and the errand's
+   failure session takes some twenty minutes in a debug build.
 3. **Part of what this round set out to play was not played**, for the
-   cost of the town: a bandage *made* (the recipe; one was bound on in
-   the last stand), a blade coated with poison and someone cut with it,
-   a pistol's shot and reload in a fight (the marksman ready-made has
-   the bow), a disguise, and a day of routines from a bench.
+   cost of the town and of time: a bandage *made* (the recipe; one was
+   bound on in the last stand), a blade coated with poison and someone
+   cut with it, a pistol's shot and reload in a fight (the marksman
+   ready-made has the bow), a disguise, and the afternoon and night of
+   a day of routines.
 4. **Blocking a blade with the forearm stops the blow and cuts the
    arm**, and Block is first in the reaction prompt: a player who
    blocks every blow bleeds to death from blows the log says were

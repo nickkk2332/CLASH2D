@@ -1416,6 +1416,21 @@ ticket of its own promotes it. The kernel promotes a warm entity
 automatically when it is named as a participant, target or window candidate
 of a hot entity's action.
 
+As built (09 §9.4; decisions D-890 to D-892): levels are kept for
+characters with minds only, by the AI layer (`clash_sim::ai::warm`), and
+set by the attention cap; a mind in a warm tract is ranked with the
+rest, nearest first, its perception a warm observer's there. One
+stepper on universal time, a wake-up of the `Stepper` domain told apart
+by its tag, wakes every `WARM_STEP` while anybody is warm or could be,
+and advances each warm character by the time its own clock has run. An
+action that starts promotes every warm character it names (its actor, an
+entity among its parameters, a participant) before it claims anything; a
+window's candidates are those its source's action named, so they are
+promoted with it. Warm characters finish actions already running, but an
+action walking a step that moves ends at its next phase, its path kept
+(09 §9.2); they start none: a warm mind about to start one is promoted
+first. Not built: `low_attention` (section 11); a stepper per realm.
+
 ## 11. Long waits
 
 Sleeping, travelling and waiting are plans or held actions. Time passes as
@@ -1469,6 +1484,10 @@ Every event and hook is registered with its subjects and fields
 (05 §8.1), and the generated reference lists them (04 §13). Where this
 document names one without them, the package that builds it writes them
 here.
+
+As built: `EntityPromoted` is `entity_promoted` (`self`; `why`: string,
+`attention`, `seen`, `involved` or `acting`) and `EntityDemoted` is
+`entity_demoted` (`self`), raised for characters with minds (09 §9.4).
 
 The kernel's events, as built. Each also binds `actor` and `instigator`
 from its cause where the cause names them, and carries what section 12

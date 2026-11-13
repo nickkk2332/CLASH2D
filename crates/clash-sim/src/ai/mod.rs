@@ -15,6 +15,7 @@
 //! | [`MindState`], [`AiState`] | The `mind_state` component; what the simulation keeps for every mind | [`state`] |
 //! | [`think_due`], [`prompt`] | When minds think, choosing, pursuing | [`think`] |
 //! | [`MindCosts`], [`recheck_routes`], [`away_from`] | Navigation for minds, the beta subset | [`nav`] |
+//! | [`warm::Levels`], [`warm::census`] | Hot and warm minds, the warm stepper and attention (09 §9) | [`warm`] |
 //! | Properties, verbs, events | What rules and expressions see | [`properties`], [`verbs`], [`events`] |
 //!
 //! # Belief, not truth
@@ -42,7 +43,8 @@
 //! definition's `reactions` that may start); `use`, `job`, `goal`, `follow` and `run` steps (they
 //! wait for interactions, jobs and queries); the hook `goal_scoring`;
 //! routines (L2); hierarchical regions and flow fields (I2); collectives
-//! (I7); warm stepping (I8); the inspector's views (I9). Stances stand
+//! (I7); bulk exchanges between warm characters (I8); the inspector's
+//! views (I9). Stances stand
 //! in for relations (S7) and speech raises `said` until speech (S8) is
 //! built.
 
@@ -53,6 +55,7 @@ pub mod nav;
 mod props;
 pub mod state;
 pub mod think;
+pub mod warm;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -195,6 +198,11 @@ pub const SETTINGS: &[(&str, i64, &str)] = &[
         DEFAULT_MAX_STEPS,
         "How many steps that take no time one thought takes.",
     ),
+    (
+        warm::MAX_HOT_SETTING,
+        warm::DEFAULT_MAX_HOT,
+        "How many characters with minds are hot at once (09 §9.3); those beyond it, ranked by attention, are stepped warm.",
+    ),
 ];
 
 /// What the definitions say minds listen for: made with the simulation,
@@ -319,6 +327,7 @@ pub fn on_event(sim: &mut Sim, event: &SimEvent) {
         EventBody::Custom(payload) => on_custom(sim, event, &payload.name),
         _ => {}
     }
+    warm::on_event(sim, event);
     if !sim.ai_defs.wake.is_empty() && sim.ai_defs.wake.contains(event.name()) {
         for (_, subject) in event.subjects() {
             if let Subject::Entity(entity) = subject

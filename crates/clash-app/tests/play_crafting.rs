@@ -101,6 +101,9 @@ fn bread_is_baked_in_the_bakery_oven() {
         now_s(&run) - before >= 120.0,
         "the work took its two minutes"
     );
+    // The log is written as playback shows the work, which the screen
+    // plays in a moment once the two minutes have passed.
+    settle(&mut run);
     let lines = log_text(&run);
     assert!(
         lines

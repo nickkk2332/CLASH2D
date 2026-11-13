@@ -714,6 +714,15 @@ Subjects, in delivery order: `self` (entity).
 
 No fields.
 
+<a id="entity-demoted"></a>
+## `entity_demoted`
+
+A hot character became warm (09 §9.2): ranked beyond `sim.max_hot_minds`. It no longer sweeps, hears only loud things and is stepped in bulk; what it was doing runs on.
+
+Subjects, in delivery order: `self` (entity).
+
+No fields.
+
 <a id="entity-died"></a>
 ## `entity_died`
 
@@ -735,6 +744,17 @@ Fields:
 - `kind` (string): The kind of damage: the qualified id of a `damage_type`.
 - `energy` (real): Joules delivered to the cell.
 - `intensity` (real): How concentrated the delivery was, in pascals.
+
+<a id="entity-promoted"></a>
+## `entity_promoted`
+
+A character stepped warm became hot (09 §9.2): its senses sweep again and its mind thinks at once, going on with what it was doing.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `why` (string): Why: `attention` (ranked under the cap at a warm step), `seen` (the party came to see it), `involved` (an action that started names it) or `acting` (its own mind was to start an action).
 
 <a id="entity-relocated"></a>
 ## `entity_relocated`

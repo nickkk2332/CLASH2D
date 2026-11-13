@@ -404,6 +404,14 @@ pub fn key_of(kind: StepKind) -> &'static str {
     }
 }
 
+/// The cell a direction key steps into from a cell, on its storey.
+fn cell_toward(from: CellPos, key: &str) -> Option<CellPos> {
+    StepKind::ALL[..8]
+        .iter()
+        .map(|kind| from + kind.delta())
+        .find(|to| key_between(from, *to) == Some(key))
+}
+
 /// The key that steps from one cell to the next, if they touch.
 fn key_between(from: CellPos, to: CellPos) -> Option<&'static str> {
     let delta = to - from;
@@ -416,6 +424,16 @@ fn key_between(from: CellPos, to: CellPos) -> Option<&'static str> {
 /// The keys of the way the character believes leads from where it
 /// stands to a place: the path its own `go_to` would plan.
 pub fn believed_way(run: &Headless, to: Location) -> Result<Vec<&'static str>, String> {
+    believed_way_round(run, to, &[])
+}
+
+/// [`believed_way`], round cells the walker has found someone standing
+/// in.
+fn believed_way_round(
+    run: &Headless,
+    to: Location,
+    avoid: &[CellPos],
+) -> Result<Vec<&'static str>, String> {
     run.game()
         .with_session(|session| {
             let from = session
@@ -426,7 +444,7 @@ pub fn believed_way(run: &Headless, to: Location) -> Result<Vec<&'static str>, S
                 session.player,
                 from,
                 to,
-                &[],
+                avoid,
                 PathLimits::DEFAULT,
             )
             .map_err(|fail| format!("no way from {from:?} to {to:?}: {fail:?}"))?;
@@ -446,11 +464,19 @@ pub fn believed_way(run: &Headless, to: Location) -> Result<Vec<&'static str>, S
 /// way the character believes leads there, until it stands within
 /// `near` cells of it (on its storey) or `max_keys` keys are pressed.
 /// A step that does not move the character (a door opened by walking
-/// into it, someone in the way) is tried again after the way is looked
-/// for afresh. Returns how many keys were pressed.
+/// into it) is tried again after the way is looked for afresh; someone
+/// standing in the way is walked round, as a player would, for the next
+/// few keys. Returns how many keys were pressed.
 pub fn walk_to(run: &mut Headless, to: Location, near: i32, max_keys: usize) -> usize {
+    /// How many keys a cell someone stood in is walked round for.
+    const ROUND_FOR: usize = 6;
     let mut pressed = 0;
+    // Cells someone stood in, and the key count until which they are
+    // walked round.
+    let mut round: Vec<(CellPos, usize)> = Vec::new();
     while pressed < max_keys {
+        round.retain(|(_, until)| *until > pressed);
+        let avoid: Vec<CellPos> = round.iter().map(|(cell, _)| *cell).collect();
         let at = player_loc(run).expect("the character is in the world");
         let delta = to.cell - at.cell;
         if delta.x.abs().max(delta.y.abs()) <= near && delta.z == 0 {
@@ -458,16 +484,20 @@ pub fn walk_to(run: &mut Headless, to: Location, near: i32, max_keys: usize) -> 
         }
         // A place one cannot stand in (a shut door, a wall) is walked up
         // to: the way to the nearest cell beside it that one can.
-        let way = believed_way(run, to).or_else(|problem| {
-            StepKind::ALL[..8]
-                .iter()
-                .filter_map(|kind| {
-                    let beside = Location::new(to.grid, to.cell + kind.delta());
-                    believed_way(run, beside).ok()
-                })
-                .min_by_key(Vec::len)
-                .ok_or(problem)
-        });
+        let way = believed_way_round(run, to, &avoid)
+            .or_else(|_| believed_way(run, to))
+            .or_else(|problem| {
+                StepKind::ALL[..8]
+                    .iter()
+                    .filter_map(|kind| {
+                        let beside = Location::new(to.grid, to.cell + kind.delta());
+                        believed_way_round(run, beside, &avoid)
+                            .or_else(|_| believed_way(run, beside))
+                            .ok()
+                    })
+                    .min_by_key(Vec::len)
+                    .ok_or(problem)
+            });
         let way = way.unwrap_or_else(|problem| panic!("{problem}"));
         let Some(key) = way.first() else {
             return pressed;
@@ -475,10 +505,12 @@ pub fn walk_to(run: &mut Headless, to: Location, near: i32, max_keys: usize) -> 
         press(run, key);
         pressed += 1;
         // Walking into someone in the way asks whether to strike them:
-        // no, and a second goes by for them to move on.
+        // no, and the way is looked for round the cell they stand in.
         if top(run) == "ui:confirm" {
             press(run, "escape");
-            press(run, ".");
+            if let Some(cell) = cell_toward(at.cell, key) {
+                round.push((cell, pressed + ROUND_FOR));
+            }
         }
         // Anything else on top of the play screen (a reaction prompt)
         // stops the walk for the session to answer.
