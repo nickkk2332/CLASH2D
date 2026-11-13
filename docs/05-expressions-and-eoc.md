@@ -2176,6 +2176,10 @@ Targets, unmeasured.
 | Compile 20,000 rules | under 1 s |
 | Tracing disabled | no measurable cost |
 
+Measured by `cargo xtask bench` (D-730) for the first row: a condition of
+23 operations over a person and locals, through the runner against the
+simulation, in 190 to 230 ns.
+
 Measured for the first row when package X3 was built, in a release build:
 a condition of 17 operations over locals evaluates in about 130 ns, and
 one of 19 operations with five reads from the host in about 200 ns. The

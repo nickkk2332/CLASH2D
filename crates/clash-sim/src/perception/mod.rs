@@ -189,7 +189,7 @@ pub const REASONS: &[ReasonInfo] = &[
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct PerceptionState {
     /// Delayed signals on their way, in order of id.
-    flights: Vec<signal::Flight>,
+    flights: signal::Flights,
     next_flight: u64,
     party: party::PartyState,
 }

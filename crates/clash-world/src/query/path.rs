@@ -14,11 +14,12 @@ use clash_core::{Dir8, IVec3, LookupMap, Real};
 
 use crate::cosmos::{Cosmos, GridView};
 use crate::defs::{CellFlags, ElementFlags, EngineFlag, Layer, WALK_STEP_M, WorldDefs};
+use crate::dims::CHUNK_CELLS;
 use crate::dims::{CELL_M, STOREY_M};
 use crate::error::WorldError;
 use crate::grid::Column;
 use crate::iter::step_cost;
-use crate::pos::{CellBox, CellPos, GridId, Location};
+use crate::pos::{CellBox, CellPos, ChunkPos, GridId, Location, TractPos};
 use crate::topology::Topology;
 
 use super::locate;
@@ -135,6 +136,11 @@ fn cell_geometry(
     cell: CellPos,
 ) -> Result<CellGeometry, WorldError> {
     let (column, cell) = locate(view, cell)?;
+    Ok(geometry_in(defs, column, cell))
+}
+
+/// The geometry of a cell, inside its grid, of a column that is loaded.
+fn geometry_in(defs: &WorldDefs, column: &Column, cell: CellPos) -> CellGeometry {
     let flags = column.flags(cell);
     let states = column.cell(cell);
     let block = defs.block_info(states.block);
@@ -169,7 +175,7 @@ fn cell_geometry(
                         .any(|other| !other.cell.contains(CellFlags::WALK_BLOCKED))
                 })
         });
-    Ok(CellGeometry {
+    CellGeometry {
         cell,
         flags,
         footing,
@@ -183,7 +189,7 @@ fn cell_geometry(
             || fixture.flags.has(EngineFlag::Rough)
             || floor.flags.has(EngineFlag::Rough),
         opens,
-    })
+    }
 }
 
 /// Which way a step goes.
@@ -633,12 +639,87 @@ struct Node {
 /// cell storey by storey, row by row.
 type Open = Reverse<(Real, Real, CellPos, u32)>;
 
+/// Where each cell the search has met is among its nodes: for each
+/// chunk met, a table of its cells, each 0 or one more than the cell's
+/// node (D-736). Finding a node is then a look at the chunk met last and
+/// an index, with no hash of the cell.
+#[derive(Debug, Default)]
+struct NodeIndex {
+    tables: Vec<Box<[u32]>>,
+    by_chunk: LookupMap<ChunkPos, usize>,
+    last: Option<(ChunkPos, usize)>,
+    /// The cells given a node, so that their entries can be emptied.
+    keys: Vec<CellPos>,
+    /// Tables emptied by an earlier search.
+    spare: Vec<Box<[u32]>>,
+}
+
+impl NodeIndex {
+    /// The place of a chunk's table, made if `make`.
+    #[inline]
+    fn table(&mut self, chunk: ChunkPos, make: bool) -> Option<usize> {
+        if let Some((have, at)) = self.last
+            && have == chunk
+        {
+            return Some(at);
+        }
+        let at = match self.by_chunk.get(&chunk) {
+            Some(at) => *at,
+            None if make => {
+                let table = self
+                    .spare
+                    .pop()
+                    .unwrap_or_else(|| vec![0; CHUNK_CELLS].into_boxed_slice());
+                self.tables.push(table);
+                let at = self.tables.len() - 1;
+                self.by_chunk.insert(chunk, at);
+                at
+            }
+            None => return None,
+        };
+        self.last = Some((chunk, at));
+        Some(at)
+    }
+
+    #[inline]
+    fn get(&mut self, cell: CellPos) -> Option<u32> {
+        let at = self.table(cell.chunk(), false)?;
+        self.tables[at][cell.idx().index()].checked_sub(1)
+    }
+
+    #[inline]
+    fn insert(&mut self, cell: CellPos, node: u32) {
+        let Some(at) = self.table(cell.chunk(), true) else {
+            return;
+        };
+        self.tables[at][cell.idx().index()] = node.saturating_add(1);
+        self.keys.push(cell);
+    }
+
+    /// Forgets every node, keeping the tables, emptied, for the next
+    /// search.
+    fn clear(&mut self) {
+        for cell in self.keys.drain(..) {
+            if let Some(at) = self.by_chunk.get(&cell.chunk()) {
+                self.tables[*at][cell.idx().index()] = 0;
+            }
+        }
+        self.spare.append(&mut self.tables);
+        self.spare.truncate(NODE_TABLES_KEPT);
+        self.by_chunk.clear();
+        self.last = None;
+    }
+}
+
+/// How many emptied tables a [`PathFinder`] keeps between searches.
+const NODE_TABLES_KEPT: usize = 24;
+
 /// The working storage of [`Cosmos::find_path`]: keep one and search
 /// with it again, and a search allocates only its answer.
 #[derive(Debug, Default)]
 pub struct PathFinder {
     nodes: Vec<Node>,
-    index: LookupMap<CellPos, u32>,
+    index: NodeIndex,
     open: BinaryHeap<Open>,
 }
 
@@ -661,15 +742,36 @@ impl PathFinder {
     }
 
     /// The node of a cell, made if this is the first time it is met.
-    fn node(&mut self, view: &GridView<'_>, defs: &WorldDefs, cell: CellPos) -> Option<u32> {
+    fn node<'a>(
+        &mut self,
+        view: &GridView<'a>,
+        defs: &WorldDefs,
+        cell: CellPos,
+        last: &mut Option<(TractPos, &'a Column)>,
+    ) -> Option<u32> {
         // Unreadable cells are remembered by the position given.
-        let key = view.normalize(cell).unwrap_or(cell);
-        if let Some(at) = self.index.get(&key) {
-            return Some(*at);
+        let normal = view.normalize(cell).ok();
+        let key = normal.unwrap_or(cell);
+        if let Some(at) = self.index.get(key) {
+            return Some(at);
         }
         let at = u32::try_from(self.nodes.len()).ok()?;
+        // The column of the cell met before is nearly always this one's:
+        // as `cell_geometry` reads it, without looking it up again.
+        let geometry = normal.and_then(|cell| {
+            let tract = cell.tract();
+            let column = match *last {
+                Some((have, column)) if have == tract => column,
+                _ => {
+                    let column = view.column(tract)?;
+                    *last = Some((tract, column));
+                    column
+                }
+            };
+            Some(geometry_in(defs, column, cell))
+        });
         self.nodes.push(Node {
-            geometry: cell_geometry(view, defs, key).ok(),
+            geometry,
             cost: Real::INFINITY,
             parent: at,
             settled: false,
@@ -709,7 +811,8 @@ impl PathFinder {
         }
         let topology = *view.topology();
         let no_route = PathFail::NoRoute { from, to };
-        let Some(start) = self.node(&view, defs, from.cell) else {
+        let mut last: Option<(TractPos, &Column)> = None;
+        let Some(start) = self.node(&view, defs, from.cell, &mut last) else {
             return Err(no_route);
         };
         if let Some(node) = self.nodes.get_mut(start as usize) {
@@ -742,7 +845,8 @@ impl PathFinder {
             }
             settled += 1;
             for kind in StepKind::ALL {
-                let Some(next) = self.node(&view, defs, cell.offset(kind.delta())) else {
+                let Some(next) = self.node(&view, defs, cell.offset(kind.delta()), &mut last)
+                else {
                     continue;
                 };
                 let Some(there) = self.geometry(next) else {
@@ -757,7 +861,7 @@ impl PathFinder {
                 }
                 let sides = match kind.sides() {
                     Some(offsets) => offsets.map(|offset| {
-                        let side = self.node(&view, defs, cell.offset(offset))?;
+                        let side = self.node(&view, defs, cell.offset(offset), &mut last)?;
                         self.geometry(side)
                     }),
                     None => [None, None],
@@ -903,5 +1007,51 @@ impl Cosmos {
         limits: PathLimits,
     ) -> Result<Path, PathFail> {
         PathFinder::new().find(self, from, to, rules, limits)
+    }
+}
+
+#[cfg(test)]
+mod index_tests {
+    //! The search's index of nodes by chunk tables against the hash map
+    //! it replaces (D-736): the same answers to every question, search
+    //! after search.
+
+    use proptest::prelude::*;
+
+    use super::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(96))]
+
+        #[test]
+        fn the_index_answers_as_a_map_of_cells_would(
+            searches in prop::collection::vec(
+                prop::collection::vec((-70_i32..70, -70_i32..70, -12_i32..12, any::<bool>()), 0..300),
+                1..4,
+            ),
+        ) {
+            let mut index = NodeIndex::default();
+            for search in searches {
+                index.clear();
+                let mut reference: LookupMap<CellPos, u32> = LookupMap::new();
+                let mut next = 0_u32;
+                for (x, y, z, insert) in search {
+                    let cell = CellPos::new(x, y, z);
+                    prop_assert_eq!(index.get(cell), reference.get(&cell).copied());
+                    if insert && reference.get(&cell).is_none() {
+                        index.insert(cell, next);
+                        reference.insert(cell, next);
+                        next += 1;
+                    }
+                    prop_assert_eq!(index.get(cell), reference.get(&cell).copied());
+                }
+                for (cell, node) in reference.into_sorted_vec() {
+                    prop_assert_eq!(index.get(cell), Some(node));
+                }
+            }
+            // Emptied tables kept for the next search hold nothing.
+            index.clear();
+            prop_assert!(index.spare.iter().all(|table| table.iter().all(|at| *at == 0)));
+        }
     }
 }

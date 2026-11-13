@@ -1,0 +1,115 @@
+# The budgets of the specifications that have a benchmark (14 §6.3).
+#
+# Each `[[budget]]` is one row of the budget table at the end of a
+# specification: `spec` names the document and section, `row` is the
+# row's first column word for word (a test checks it against the
+# document), `limit` its target, and `bench` the benchmark of
+# `clash-tools bench` that measures it. `margin` is the share of the
+# limit a measurement may exceed it by before `cargo xtask bench --check`
+# fails. When a target is replaced by a measured figure, the
+# specification's table and this file change together.
+#
+# Run the benchmarks with `cargo xtask bench` (all of them, in release)
+# or `cargo xtask bench <filter>`. They are not part of `cargo xtask
+# check`: they take minutes, and their figures depend on the machine.
+
+# ---- 02 §25, the world -------------------------------------------------
+
+[[budget]]
+bench = "world.cell_flag_read"
+spec = "02 §25"
+row = "Cell flag read"
+limit = "10 ns"
+margin = 0.5
+
+[[budget]]
+bench = "world.cell_state_read"
+spec = "02 §25"
+row = "Cell state read"
+limit = "30 ns"
+margin = 0.5
+
+[[budget]]
+bench = "world.realize_city_tract"
+spec = "02 §25"
+row = "Realize a `test_city` tract"
+limit = "2 ms"
+margin = 0.25
+
+[[budget]]
+bench = "world.field_step"
+spec = "02 §25"
+row = "Field step, 50,000 active cells"
+limit = "5 ms"
+margin = 0.25
+
+# ---- 09 §19, minds and paths ---------------------------------------------
+
+[[budget]]
+bench = "world.path_60_steps"
+spec = "09 §19"
+row = "A path across a loaded tract, typical"
+limit = "150 µs"
+margin = 0.25
+
+# ---- 15 §17, perception and light ---------------------------------------
+
+[[budget]]
+bench = "light.fill_cell"
+spec = "15 §17"
+row = "Light at a cell, cached, in a fill"
+limit = "30 ns"
+margin = 0.5
+
+[[budget]]
+bench = "light.one_cell"
+spec = "15 §17"
+row = "Light at one cell asked for alone, cached"
+limit = "1 µs"
+margin = 0.25
+
+[[budget]]
+bench = "light.view_after_edit"
+spec = "15 §17"
+row = "Light of an 80 × 50 view after one edit that light cares about"
+limit = "1 ms"
+margin = 0.25
+
+[[budget]]
+bench = "perception.sight_30m"
+spec = "15 §17"
+row = "One observer-target evaluation, including line of sight at 30 m"
+limit = "2 µs"
+margin = 0.25
+
+[[budget]]
+bench = "perception.signal_to_50"
+spec = "15 §17"
+row = "Emitting a signal to 50 observers in range"
+limit = "100 µs"
+margin = 0.25
+
+[[budget]]
+bench = "perception.crowd_of_50"
+spec = "15 §17"
+row = "One simulated second of perception for 300 hot characters in a crowd"
+limit = "4 ms"
+margin = 0.25
+
+# ---- 05 §19, expressions -------------------------------------------------
+
+[[budget]]
+bench = "expr.condition"
+spec = "05 §19"
+row = "Evaluate a condition of about ten operations"
+limit = "300 ns"
+margin = 0.25
+
+# ---- 12 §15, presentation ------------------------------------------------
+
+[[budget]]
+bench = "scene.map_frame"
+spec = "12 §15"
+row = "Build a 200 × 60 frame"
+limit = "1.5 ms"
+margin = 0.25
