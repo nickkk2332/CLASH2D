@@ -775,13 +775,16 @@ to try first.
 **Spec** 12 §11 · **Size** L
 
 Build
-- Window, glyph atlas from the theme font, grid and sprite quads, frame
-  effects, keyboard and mouse with cell coordinates.
+- Window, glyph atlas from the theme font, the grid and sprites drawn on
+  the processor into a pixel buffer shown with `softbuffer` (D-830), frame
+  effects, keyboard and mouse with cell coordinates; drawing to an image
+  file for tests.
 
 Done when
 - The same frame renders in both frontends with the same characters in the
   same cells.
-- The quad budget of 12 §15 is benchmarked.
+- A frame drawn headless to an image matches its golden image.
+- The drawing budget of 12 §15 is benchmarked.
 
 ### U4 — View model and world drawing
 

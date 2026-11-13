@@ -2171,7 +2171,7 @@ it for, the parameters it is opened with, and its slots:
 
 | | Window | Terminal |
 |---|--------|----------|
-| Crates | `winit`, `wgpu`, a font rasteriser | `crossterm` |
+| Crates | `winit`, `softbuffer`, `fontdue` | `crossterm` |
 | Grid | Yes | Yes |
 | Sprites at sub-cell positions, scale, alpha | Yes | Snapped to cells |
 | Shake, flash, zoom, bars | Yes | Ignored |
@@ -2179,8 +2179,14 @@ it for, the parameters it is opened with, and its slots:
 | Mouse | Yes | Optional |
 | Fonts | From the theme | The terminal's |
 
-The window frontend draws the grid and sprites as textured quads from a
-glyph atlas built from the theme's font.
+The window frontend draws on the processor, not the graphics card
+(decision D-830): each frame is drawn into a buffer of pixels by copying
+glyphs from an atlas that `fontdue` rasterises from the theme's font,
+with sprites, scale, alpha and the frame effects applied in the same
+pass, and `softbuffer` shows the buffer in a `winit` window. The same
+drawing can write the buffer to an image instead of a window, so the
+window's frames are tested headless, and compared cell by cell with the
+terminal's.
 
 A third, **null** frontend records frames for tests.
 
@@ -2342,7 +2348,7 @@ Targets, unmeasured but where a figure is given: those rows are in
 | Build a 200 × 60 frame | under 1.5 ms (measured by `cargo xtask bench`: 1.7 to 2.1 ms for the map of a generated city alone, from the view model, without the widgets round it) |
 | Ingest 10,000 events | under 5 ms |
 | Re-evaluate bindings of a busy screen | under 0.5 ms |
-| Window frontend, 20,000 quads | 60 frames per second |
+| Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080 | under 16 ms: 60 frames per second |
 | Input to visible response | within one frame |
 
 ## 16. Open questions
