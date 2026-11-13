@@ -106,6 +106,21 @@ pub const BENCHES: &[Bench] = &[
         run: party_sweep,
     },
     Bench {
+        name: "town.step_in_market",
+        what: "the market town (core:town, seed 7) with its residents, the player standing in the square from nine in the morning: one simulated second, a player's step, over a minute",
+        run: super::town::step_in_market,
+    },
+    Bench {
+        name: "town.step_walking",
+        what: "the market town with its residents, the player walking from the square across the town: one simulated second, over a minute",
+        run: super::town::step_walking,
+    },
+    Bench {
+        name: "town.minute_wait",
+        what: "the market town with its residents, a minute's wait in the square in one call",
+        run: super::town::minute_wait,
+    },
+    Bench {
         name: "expr.condition",
         what: "a condition of about ten operations over a person and locals, through the runner",
         run: condition,
@@ -160,7 +175,7 @@ impl Kit {
 }
 
 /// The repository's mods.
-fn mods_dir() -> std::path::PathBuf {
+pub(super) fn mods_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods")
 }
 
