@@ -122,7 +122,7 @@ fn spawn_person(run: &mut Headless, at: Location) -> EntityId {
 /// once: the town is made from the same seed every time.
 fn hidden_room_cell() -> (Location, Location) {
     let mut run = start("perceiving-scout");
-    press(&mut run, &["enter", "tab", "tab", "enter"]);
+    press(&mut run, &["enter", "tab", "tab", "down", "down", "enter"]);
     let seen_outside = in_view(&run);
     let (_, outside) = player(&run);
     press(&mut run, &["k", "k", "k", "k"]);
@@ -148,7 +148,7 @@ fn hidden_room_cell() -> (Location, Location) {
 fn a_person_behind_a_wall_is_not_drawn_until_seen() {
     let (outside, target) = hidden_room_cell();
     let mut run = start("perceiving");
-    press(&mut run, &["enter", "tab", "tab", "enter"]);
+    press(&mut run, &["enter", "tab", "tab", "down", "down", "enter"]);
     assert_eq!(player(&run).1, outside, "the town is the same town");
     let someone = spawn_person(&mut run, target);
     settle(&mut run);
@@ -191,7 +191,12 @@ fn someone_moving_behind_a_wall_is_heard_not_seen() {
     // The lane, whose doors are shut: up to the door of the house south
     // of it, with someone in the room behind the door.
     let mut run = start("hearing");
-    press(&mut run, &["enter", "tab", "tab", "down", "enter"]);
+    press(
+        &mut run,
+        &[
+            "enter", "tab", "tab", "down", "down", "down", "down", "enter",
+        ],
+    );
     press(&mut run, &["j", "j", "j", "l", "l"]);
     let (_, at_door) = player(&run);
     let near =

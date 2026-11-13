@@ -1118,12 +1118,23 @@ frame and has the same state hash as when it was saved (12 §3.6). Both
 `tests/saving.rs`, with `perceiving.rs` and `interacting.rs`. The
 golden frames `first_play`, `inside_house` and `wall` changed to what
 the character's sight takes in; `door_opened`, `through_door`,
-`door_locked` and `carried_on` are new. Seams: game scenarios (the
-`start` type) and the senses the application gives (until templates
-carry `senses`). Not built: the window frontend and frontend choice,
-switching profiles or reloading mods while running, reaction windows
-(T5) and `Ui` commands from screens, saving at intervals under
-`single`, a benchmark of the loop.
+`door_locked` and `carried_on` are new. Game scenarios (decisions
+D-750 to D-759): the `start` type is gone; a game begins from a
+`scenario` (13 §3): `app.scenarios` lists them, a scenario with a
+choice of place or options is set up on the screen of the role `setup`
+(`app.setup`), its introduction is shown on `intro`, the simulation
+gives the party senses as the game begins (`BeginScenario`), and the
+loop carries out the simulation's requests at safe points: checkpoints,
+going back to one, the character played now, and an ending, which
+stops the game, removes a `single` game's save and shows the role
+`summary`. The journal (`ui:journal`, `shift+j`) lists
+`view.objectives`. Tested in `tests/scenarios.rs` with the new golden
+frames `errand_intro`, `errand_journal`, `errand_summary` and `setup`;
+`new_game` changed to list the scenarios. Not built: the window
+frontend and frontend choice, switching profiles or reloading mods
+while running, reaction windows (T5) and `Ui` commands from screens,
+saving at intervals under `single`, markers drawn on the map, a
+benchmark of the loop.
 
 ### Z1 — Benchmarks and budget gate
 

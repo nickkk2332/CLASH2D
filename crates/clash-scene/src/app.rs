@@ -17,6 +17,7 @@
 //! | `profile`, `scenario` | `app_entry?` | The ones in use |
 //! | `pref(id)` | `any` | A preference's value |
 //! | `creation` | `any` | The character being made (06 §10.3) |
+//! | `setup` | `any` | The game being set up: the scenario chosen, its places, options and seed (13 §12) |
 //! | `templates` | `list<app_entry>` | The templates a character may be made from |
 //! | `keys(context)` | `list<map>` | What each name of a keymap context is bound to |
 //! | `size` | `list<int>` | The grid, as `[columns, rows]` |
@@ -161,6 +162,14 @@ pub trait AppState {
         ExprValue::Null
     }
 
+    /// The game being set up on the new-game screens (13 §12), as a value
+    /// bindings can read: `app.setup`. Null when none is. The bundled
+    /// application gives the scenario chosen with its places, options
+    /// and seed.
+    fn setup(&self) -> ExprValue {
+        ExprValue::Null
+    }
+
     /// The templates a character may be made from for the game being
     /// set up, each by its qualified `id` and its `name`: `app.templates`,
     /// what the creation screen begins a session with (`creation` with
@@ -209,6 +218,7 @@ enum AppProp {
     Current(AppCurrent),
     Pref,
     Creation,
+    Setup,
     Templates,
     Keys,
     Size,
@@ -263,6 +273,8 @@ pub fn register_expr(registry: &mut Registry) {
             .doc("The value of a preference (12 §10.4)."),
         PropertySpec::new(app, "creation", Type::Any)
             .doc("The character being made (06 §10.3); null when none is."),
+        PropertySpec::new(app, "setup", Type::Any)
+            .doc("The game being set up on the new-game screens (13 §12): the scenario chosen, its places, the options it asks about and how its seed is chosen; null when none is."),
         PropertySpec::new(app, "templates", Type::list(Type::Subject(entry)))
             .doc("The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3)."),
         PropertySpec::new(app, "keys", Type::list(Type::map(Type::Str)))
@@ -315,6 +327,7 @@ impl AppIds {
         }
         add(app, "pref", AppProp::Pref);
         add(app, "creation", AppProp::Creation);
+        add(app, "setup", AppProp::Setup);
         add(app, "templates", AppProp::Templates);
         add(app, "keys", AppProp::Keys);
         add(app, "size", AppProp::Size);
@@ -452,6 +465,7 @@ impl AppReader<'_> {
             },
             AppProp::Pref => args.first().map_or(ExprValue::Null, |id| self.pref(id)),
             AppProp::Creation => self.state.creation(),
+            AppProp::Setup => self.state.setup(),
             AppProp::Templates => ExprValue::list(
                 (0..self.state.templates().len())
                     .map(|index| self.entry_handle(TEMPLATES_CODE, index)),
@@ -526,6 +540,7 @@ mod tests {
                 "saves",
                 "scenario",
                 "scenarios",
+                "setup",
                 "size",
                 "templates"
             ]

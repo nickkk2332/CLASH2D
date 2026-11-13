@@ -13,20 +13,21 @@
 //! |--------|-------|
 //! | `profiles` | Each `profiles/<name>.json` beside a searched mods directory and in the `profiles/` of each loaded mod. `state` is `current` for the one in use, `broken` for one that cannot be read. |
 //! | `mods` | Each directory of a searched mods directory that holds a `mod.json`. `state` is `enabled` for a mod of the profile in use, else `disabled`; `broken` for a manifest that cannot be read. |
-//! | `scenarios` | The `start` definitions of the loaded mods, in id order: the stand-in for game scenarios (`clash_scene::StartDef`). |
+//! | `scenarios` | The `scenario` definitions of the loaded mods (13 §3), in order of qualified id. |
 //! | `saves` | What the save backend lists, newest first ([`crate::saves`]) |
-//! | `profile`, `scenario` | The profile in use; the start of the game being played. |
+//! | `profile`, `scenario` | The profile in use; the scenario of the game being played. |
 //! | `creation` | The character being made for the next game: null while none is, else the creation session as [`crate::creation`] says. |
+//! | `setup` | The game being set up (13 §12): null until a scenario is asked for, then the map [`Setup::value`] gives: its `id`, `name`, `doc`, `seed` (`ask`, `random` or the number), `places` (each `name` and `index`) and `options` (each `id`, `name`, `kind`, `value`, `next` and `choices`). |
 //!
 //! # The services
 //!
 //! | Service | Does |
 //! |---------|------|
-//! | `new_game` | Starts a game from the start with the id `scenario` (left out, the first), with the character the player finished, or else the start's template with its defaults, and the name and seed given ([`crate::session::new_game`]) |
-//! | `creation` | The creation session: `begin`, `select`, `clear`, `name`, `seed`, `finish` ([`crate::creation`]) |
+//! | `new_game` | Starts a game from the scenario with the id `scenario` (left out, the first) at its place `place`, with the character the player finished, or else the scenario's template with its defaults, the name and seed given and the options chosen ([`crate::session::new_game`]). Without `place`, a scenario that offers more than one place or asks about options is set up instead: `app.setup` holds it and the screen of the role `setup` is opened with `scenario` |
+//! | `creation` | The creation session: `begin`, `select`, `clear`, `name`, `seed`, `finish` ([`crate::creation`]); and `option` with `key` and `value`, an answer to an option of the scenario being set up |
 //! | `edit_creation` | The older form of `creation`'s `name` and `seed`: sets the `field` `name` or `seed` to a `value` |
 //! | `set_pref`, `rebind` | Keeps what the scene has already changed ([`crate::prefs`]) |
-//! | `save` | Saves the game under the `name` given (left out or empty, the character's name, or else the start's), through the save backend ([`crate::saves`]); refused unless the game's saving policy is `free` (13 §9.2) |
+//! | `save` | Saves the game under the `name` given (left out or empty, the character's name, or else the scenario's), through the save backend ([`crate::saves`]); refused unless the game's saving policy is `free` (13 §9.2), and once it has ended |
 //! | `load` | Loads the `save` with that id and carries it on: from the title, or in a game whose saving policy is `free`. What differs from when it was saved is told (`warnings`) |
 //! | `delete_save` | Deletes the `save` with that id |
 //! | `quit` | Nothing more: the scene has noted it and the loop ends |
@@ -34,12 +35,12 @@
 //!
 //! # Saving policies (13 §9.2)
 //!
-//! A game has the policy its start names (`saving`), or `free`:
+//! A game has the policy its scenario names (`saving.policy`), or `free`:
 //!
 //! | Policy | `app.can_save` | `app.can_load` in the game | Saved by the application |
 //! |--------|----------------|----------------------------|--------------------------|
 //! | `free` | While a game is played | While there is a save | Never by itself |
-//! | `single` | False | False | When the game is left, under the character's name |
+//! | `single` | False | False | When the game is left, under the character's name; an ending removes it |
 //! | `checkpoints` | False | False | When a rule asks for a checkpoint |
 //! | `none` | False | False | Never |
 //!
@@ -52,7 +53,8 @@ use std::rc::Rc;
 
 use clash_expr::Value as ExprValue;
 use clash_scene::ui::{AppService, to_var};
-use clash_scene::{AppCurrent, AppEntry, AppList, AppRequest, AppState, StartDef};
+use clash_scene::{AppCurrent, AppEntry, AppList, AppRequest, AppState};
+use clash_sim::scenario::{ScenarioDef, SettingDef};
 use serde_json::Value as Json;
 
 use crate::boot::Loaded;
@@ -79,6 +81,185 @@ pub const POLICY_SINGLE: &str = "single";
 /// The saving policy of a game with no saves at all.
 pub const POLICY_NONE: &str = "none";
 
+/// The op of the service `creation` that answers an option of the
+/// scenario being set up.
+pub const OP_OPTION: &str = "option";
+
+/// The game being set up on the new-game screens (13 §12): the scenario
+/// chosen and the answers to its options so far.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Setup {
+    /// The scenario, by qualified id.
+    pub scenario: String,
+    /// The answers given, by setting key.
+    pub options: Vec<(String, clash_core::Value)>,
+}
+
+/// A setting's value as JSON, for checking against its definition.
+fn json_of(value: &clash_core::Value) -> Json {
+    match value {
+        clash_core::Value::Bool(flag) => Json::Bool(*flag),
+        clash_core::Value::Int(int) => Json::from(*int),
+        clash_core::Value::Real(real) => Json::from(real.get()),
+        clash_core::Value::Str(text) => Json::String(text.clone()),
+        _ => Json::Null,
+    }
+}
+
+impl Setup {
+    /// The scenario's setting definitions it asks about, each with its
+    /// qualified key, in order.
+    fn asked<'a>(
+        loaded: &'a Loaded,
+        def: &ScenarioDef,
+        scenario: &str,
+    ) -> Vec<(String, &'a SettingDef)> {
+        let namespace = scenario
+            .split_once(':')
+            .map_or("", |(namespace, _)| namespace);
+        let Some(settings) = loaded.defs.try_registry::<SettingDef>() else {
+            return Vec::new();
+        };
+        def.options
+            .iter()
+            .filter_map(|option| {
+                let key = clash_sim::scenario::def::qualified(&option.value, namespace);
+                let id = settings.lookup(&key)?;
+                Some((key, settings.get(id)))
+            })
+            .collect()
+    }
+
+    /// The answer for a setting: the one given, or the setting's
+    /// default.
+    fn answer(&self, key: &str, def: &SettingDef) -> clash_core::Value {
+        self.options
+            .iter()
+            .find(|(have, _)| have == key)
+            .map(|(_, value)| value.clone())
+            .or_else(|| clash_sim::scenario::stored_value(&def.default))
+            .unwrap_or(clash_core::Value::Null)
+    }
+
+    /// The value after one in a setting's choices, round: what `next`
+    /// of an option row is, for a screen that steps through them.
+    fn next(value: &clash_core::Value, def: &SettingDef) -> clash_core::Value {
+        match def.kind.as_str() {
+            "flag" => clash_core::Value::Bool(!matches!(value, clash_core::Value::Bool(true))),
+            "choice" => {
+                let at = def
+                    .options
+                    .iter()
+                    .position(
+                        |option| matches!(value, clash_core::Value::Str(text) if text == option),
+                    )
+                    .map_or(0, |at| (at + 1) % def.options.len().max(1));
+                def.options
+                    .get(at)
+                    .map_or(clash_core::Value::Null, |option| {
+                        clash_core::Value::Str(option.clone())
+                    })
+            }
+            _ => value.clone(),
+        }
+    }
+
+    /// The answers to give `new_game`: one for each option asked.
+    pub fn answers(&self, loaded: &Loaded) -> Vec<(String, clash_core::Value)> {
+        let Ok((def, _)) = session::scenario_of(loaded, &self.scenario) else {
+            return Vec::new();
+        };
+        Setup::asked(loaded, def, &self.scenario)
+            .into_iter()
+            .map(|(key, setting)| {
+                let value = self.answer(&key, setting);
+                (key, value)
+            })
+            .collect()
+    }
+
+    /// `app.setup`: see the [module](self) documentation.
+    pub fn value(&self, loaded: &Loaded) -> ExprValue {
+        let Ok((def, entry)) = session::scenario_of(loaded, &self.scenario) else {
+            return ExprValue::Null;
+        };
+        let places = def
+            .place_names()
+            .into_iter()
+            .enumerate()
+            .map(|(index, name)| {
+                ExprValue::map([
+                    ("name", ExprValue::text(name)),
+                    ("index", ExprValue::Int(index as i64)),
+                ])
+            });
+        let options =
+            Setup::asked(loaded, def, &self.scenario)
+                .into_iter()
+                .map(|(key, setting)| {
+                    let value = self.answer(&key, setting);
+                    let next = Setup::next(&value, setting);
+                    let name = if setting.name.is_empty() {
+                        key.clone()
+                    } else {
+                        setting.name.clone()
+                    };
+                    ExprValue::map([
+                        ("id", ExprValue::text(key)),
+                        ("name", ExprValue::text(name)),
+                        ("kind", ExprValue::text(setting.kind.as_str())),
+                        ("value", ExprValue::from(value)),
+                        ("next", ExprValue::from(next)),
+                        (
+                            "choices",
+                            ExprValue::list(
+                                setting
+                                    .options
+                                    .iter()
+                                    .map(|option| ExprValue::text(option.as_str())),
+                            ),
+                        ),
+                    ])
+                });
+        let seed = def
+            .world()
+            .map_or_else(|| "ask".to_owned(), |world| world.seed.written());
+        ExprValue::map([
+            ("id", ExprValue::text(entry.id)),
+            ("name", ExprValue::text(entry.name)),
+            ("doc", ExprValue::text(entry.description)),
+            ("seed", ExprValue::text(seed)),
+            ("places", ExprValue::list(places)),
+            ("options", ExprValue::list(options)),
+        ])
+    }
+
+    /// Answers an option: refused for a setting the scenario does not
+    /// ask about, or a value it does not take.
+    fn give(&mut self, loaded: &Loaded, key: &str, value: clash_core::Value) -> Result<(), String> {
+        let (def, _) = session::scenario_of(loaded, &self.scenario)?;
+        let asked = Setup::asked(loaded, def, &self.scenario);
+        let (_, setting) = asked
+            .iter()
+            .find(|(have, _)| have == key)
+            .ok_or_else(|| format!("the scenario does not ask about `{key}`"))?;
+        setting
+            .check(&json_of(&value))
+            .map_err(|why| format!("`{key}`: {why}"))?;
+        self.options.retain(|(have, _)| have != key);
+        self.options.push((key.to_owned(), value));
+        Ok(())
+    }
+}
+
+/// A seed drawn for a scenario whose seed is `random`: from the clock,
+/// which the application may read (01 R5 binds the simulation).
+fn drawn_seed() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(1, |since| since.as_secs() ^ u64::from(since.subsec_nanos()))
+}
+
 /// Everything the application holds outside the scene. See the
 /// [module](self) documentation.
 pub struct Shared {
@@ -90,8 +271,17 @@ pub struct Shared {
     pub profiles: Vec<AppEntry>,
     /// `app.mods`.
     pub mods: Vec<AppEntry>,
-    /// `app.scenarios`: the starts.
-    pub starts: Vec<AppEntry>,
+    /// `app.scenarios`: the game scenarios.
+    pub scenarios: Vec<AppEntry>,
+    /// `app.setup`: the game being set up, if one is.
+    pub setup: Option<Setup>,
+    /// A scenario `new_game` asked to be set up: the loop opens the
+    /// screen of the role `setup` for it.
+    pub wants_setup: Option<String>,
+    /// The introduction of a game just begun, `(title, text)`: the loop
+    /// opens the screen of the role `intro` with it once the game is
+    /// shown.
+    pub intro: Option<(String, String)>,
     /// `app.creation`: the character being made for the next game, its
     /// name and the seed.
     pub creation: Creation,
@@ -252,27 +442,26 @@ pub fn list_mods(loaded: &Loaded) -> Vec<AppEntry> {
     entries
 }
 
-/// The starts of the loaded mods, in id order: `app.scenarios`.
-pub fn list_starts(loaded: &Loaded) -> Vec<AppEntry> {
-    let Some(starts) = loaded.defs.try_registry::<StartDef>() else {
+/// The game scenarios of the loaded mods, in order of qualified id:
+/// `app.scenarios`.
+pub fn list_scenarios(loaded: &Loaded) -> Vec<AppEntry> {
+    let Some(scenarios) = loaded.defs.try_registry::<ScenarioDef>() else {
         return Vec::new();
     };
-    starts
+    let mut entries: Vec<AppEntry> = scenarios
         .iter()
         .map(|(id, def)| {
-            let id = starts.name(id).to_owned();
+            let id = scenarios.name(id).to_owned();
             AppEntry {
-                name: if def.name.is_empty() {
-                    id.clone()
-                } else {
-                    def.name.clone()
-                },
+                name: def.shown_name(&id),
                 description: def.doc.clone(),
                 state: STATE_ENABLED.to_owned(),
                 id,
             }
         })
-        .collect()
+        .collect();
+    entries.sort_by(|a, b| a.id.cmp(&b.id));
+    entries
 }
 
 /// The scene's handle on the application's state: the [`AppState`] it
@@ -290,25 +479,62 @@ impl App {
 }
 
 /// Starts a game: the `new_game` service. The character is the one the
-/// player finished, or else the start's template with its defaults
-/// ([`Creation::spec_for`]).
+/// player finished, or else the scenario's template with its defaults
+/// ([`Creation::spec_for`]). A scenario that offers a choice of place
+/// or asks about options, asked for with no `place`, is set up instead:
+/// see the [module](self) documentation.
 fn start_game(shared: &mut Shared, request: &AppRequest) -> Result<(), String> {
-    let start = match request.text("scenario") {
+    let scenario = match request.text("scenario") {
         Some(id) => id.to_owned(),
         None => shared
-            .starts
+            .scenarios
             .first()
-            .map(|start| start.id.clone())
-            .ok_or("the loaded mods define no way to start a game")?,
+            .map(|entry| entry.id.clone())
+            .ok_or("the loaded mods define no game scenario to start")?,
     };
-    let template = session::start_template(&shared.loaded, &start)?;
+    let (def, entry) = session::scenario_of(&shared.loaded, &scenario)?;
+    let place = match request.args.get("place").and_then(ExprValue::as_int) {
+        Some(place) => {
+            Some(u32::try_from(place).map_err(|_| format!("there is no place {place}"))?)
+        }
+        None => None,
+    };
+    let offers_choice = def.start.at.len() > 1 || !def.options.is_empty();
+    let intro = (!def.intro.is_empty()).then(|| (entry.name.clone(), def.intro.clone()));
+    if shared
+        .setup
+        .as_ref()
+        .is_none_or(|setup| setup.scenario != scenario)
+    {
+        shared.setup = Some(Setup {
+            scenario: scenario.clone(),
+            options: Vec::new(),
+        });
+    }
+    let Some(place) = place.or((!offers_choice).then_some(0)) else {
+        shared.wants_setup = Some(scenario);
+        return Ok(());
+    };
+    let options = shared
+        .setup
+        .as_ref()
+        .map(|setup| setup.answers(&shared.loaded))
+        .unwrap_or_default();
+    let template = session::scenario_template(&shared.loaded, &scenario)?;
     let defs = &shared.loaded.defs;
     let spec = shared.creation.spec_for(defs, template.as_deref())?;
-    let seed = shared.creation.seed();
+    let answers = session::Answers {
+        seed: shared.creation.seed(),
+        drawn: drawn_seed(),
+        place,
+        options,
+    };
     let name = shared.creation.name().to_owned();
-    let session = session::new_game(&shared.loaded, &start, seed, spec, &name)?;
+    let session = session::new_game(&shared.loaded, &scenario, &answers, spec, &name)?;
     shared.session = Some(session);
     shared.creation.begun();
+    shared.setup = None;
+    shared.intro = intro;
     shared.started = true;
     Ok(())
 }
@@ -348,7 +574,7 @@ impl AppState for App {
                 .list(shared.saves_dir().as_deref(), &shared.loaded),
             AppList::Profiles => shared.profiles.clone(),
             AppList::Mods => shared.mods.clone(),
-            AppList::Scenarios => shared.starts.clone(),
+            AppList::Scenarios => shared.scenarios.clone(),
         }
     }
 
@@ -356,7 +582,10 @@ impl AppState for App {
         let shared = self.shared.borrow();
         match which {
             AppCurrent::Profile => Some(shared.profile.clone()),
-            AppCurrent::Scenario => shared.session.as_ref().map(|session| session.start.clone()),
+            AppCurrent::Scenario => shared
+                .session
+                .as_ref()
+                .map(|session| session.scenario.clone()),
         }
     }
 
@@ -366,7 +595,7 @@ impl AppState for App {
             && shared
                 .session
                 .as_ref()
-                .is_some_and(|session| session.saving == POLICY_FREE)
+                .is_some_and(|session| session.saving == POLICY_FREE && session.ended.is_none())
     }
 
     fn can_load(&self) -> bool {
@@ -386,6 +615,14 @@ impl AppState for App {
         shared.creation.value(&shared.loaded.defs)
     }
 
+    fn setup(&self) -> ExprValue {
+        let shared = self.shared.borrow();
+        shared
+            .setup
+            .as_ref()
+            .map_or(ExprValue::Null, |setup| setup.value(&shared.loaded))
+    }
+
     fn service(&mut self, request: &AppRequest) -> Result<(), String> {
         let mut shared = self.shared.borrow_mut();
         let shared = &mut *shared;
@@ -393,6 +630,23 @@ impl AppState for App {
         match request.service {
             AppService::NewGame => start_game(shared, request),
             AppService::EditCreation => edit_creation(shared, request),
+            AppService::Creation if request.text("op") == Some(OP_OPTION) => {
+                let key = request
+                    .text("key")
+                    .ok_or("`option` needs the `key` of the setting it answers")?
+                    .to_owned();
+                let value = request
+                    .args
+                    .get("value")
+                    .map(ExprValue::to_stored)
+                    .ok_or("`option` needs the `value` chosen")?;
+                let loaded = &shared.loaded;
+                shared
+                    .setup
+                    .as_mut()
+                    .ok_or("no game is being set up to answer an option of")?
+                    .give(loaded, &key, value)
+            }
             AppService::Creation => {
                 let defs = std::sync::Arc::clone(&shared.loaded.defs);
                 shared.creation.service(&defs, request)
@@ -424,6 +678,11 @@ impl AppState for App {
                     return Err(format!(
                         "this game cannot be saved by hand: its saving policy is `{}` (13 §9.2)",
                         session.saving
+                    ));
+                }
+                if let Some(outcome) = &session.ended {
+                    return Err(format!(
+                        "this game has ended, {outcome}: there is nothing to save"
                     ));
                 }
                 let name = request

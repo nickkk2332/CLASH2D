@@ -745,6 +745,18 @@ replays stay exact. Kinds: `flag`, `choice`, `number` with a range.
 Preferences that affect only display and input belong to document 12 and
 are not visible to rules.
 
+As built (decision D-753, package P6 in part): the `setting` definition
+type has `name`, `kind` (`flag`, `choice` or `number`), `options` (a
+choice's values), `range` (a number's least and greatest), `default`
+and `doc`; a default the setting does not take is a load error. The
+`Setting { key, value }` command (03 §4.4) checks a value against the
+definition of its key, where there is one (`setting.bad_value`), and is
+refused for a setting the scenario being played locks
+(`setting.locked`); a change raises `setting_changed` with `key`, `old`
+and `new`. A scenario's `settings`, `locked` and `options` name settings
+by key (13 §3). Not built: showing settings on the options screens, and
+a setting's range on an engine setting.
+
 **Engine settings.** The limits and thresholds the specifications name
 (`world.min_intensity`, `rules.max_cascade`, `sim.max_hot_minds` and the
 rest) are settings too, registered by the engine in reserved namespaces

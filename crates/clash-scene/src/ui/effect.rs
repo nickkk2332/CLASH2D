@@ -244,7 +244,7 @@ impl AppService {
     /// The service's arguments: each name and whether it must be given.
     pub const fn args(self) -> &'static [(&'static str, bool)] {
         match self {
-            AppService::NewGame => &[("scenario", false)],
+            AppService::NewGame => &[("scenario", false), ("place", false)],
             AppService::Save => &[("name", false)],
             AppService::Load | AppService::DeleteSave => &[("save", true)],
             AppService::Quit | AppService::ReloadMods => &[],
