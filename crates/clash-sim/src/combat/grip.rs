@@ -295,11 +295,7 @@ pub fn seize(sim: &mut Sim, ask: &Seize, cause: Cause) -> Result<(), Reason> {
             .with("target", held.to_string())
             .with("reach", reach));
     }
-    if sim
-        .grips
-        .of_action(action)
-        .any(|grip| grip.held == held)
-    {
+    if sim.grips.of_action(action).any(|grip| grip.held == held) {
         return Ok(());
     }
     // The hook: a handler may make it fail, or change what it pins.
@@ -376,8 +372,9 @@ fn end_where(
     interrupt: Option<&'static str>,
     cause: Cause,
 ) -> usize {
-    let (ended, kept): (Vec<Grip>, Vec<Grip>) =
-        std::mem::take(&mut sim.grips.grips).into_iter().partition(|grip| matches(grip));
+    let (ended, kept): (Vec<Grip>, Vec<Grip>) = std::mem::take(&mut sim.grips.grips)
+        .into_iter()
+        .partition(|grip| matches(grip));
     sim.grips.grips = kept;
     for grip in &ended {
         if let Some(record) = sim.entity_mut(grip.held) {
@@ -448,15 +445,18 @@ pub fn release_grip(sim: &mut Sim, who: EntityId, other: Option<EntityId>, cause
 /// Ends the grip of a holder on a creature it throws: the grip ends with
 /// how `thrown`. Refused for a creature the thrower does not grip
 /// (`combat.not_gripped`).
-pub(crate) fn let_fly(sim: &mut Sim, thrower: EntityId, held: EntityId, cause: Cause) -> Result<(), Reason> {
-    if !sim
-        .grips
-        .of_holder(thrower)
-        .any(|grip| grip.held == held)
-    {
-        return Err(refuse(NOT_GRIPPED, format!("{thrower} does not grip {held}"))
-            .with("who", thrower.to_string())
-            .with("what", held.to_string()));
+pub(crate) fn let_fly(
+    sim: &mut Sim,
+    thrower: EntityId,
+    held: EntityId,
+    cause: Cause,
+) -> Result<(), Reason> {
+    if !sim.grips.of_holder(thrower).any(|grip| grip.held == held) {
+        return Err(
+            refuse(NOT_GRIPPED, format!("{thrower} does not grip {held}"))
+                .with("who", thrower.to_string())
+                .with("what", held.to_string()),
+        );
     }
     end_where(
         sim,
@@ -533,11 +533,8 @@ pub(crate) fn on_event(sim: &mut Sim, event: &SimEvent) {
             let (from, to) = (*from, *to);
             // The holder moved: what it holds follows into where it was.
             if let (Place::At { loc: left, .. }, Place::At { .. }) = (from, to) {
-                let held: Vec<EntityId> = sim
-                    .grips
-                    .of_holder(entity)
-                    .map(|grip| grip.held)
-                    .collect();
+                let held: Vec<EntityId> =
+                    sim.grips.of_holder(entity).map(|grip| grip.held).collect();
                 for held in held {
                     let Some(at) = sim.truth().location(held) else {
                         continue;
@@ -549,7 +546,11 @@ pub(crate) fn on_event(sim: &mut Sim, event: &SimEvent) {
                         continue;
                     }
                     if crate::movement::move_to(sim, held, left, event.cause).is_err() {
-                        lose(sim, |grip| grip.holder == entity && grip.held == held, event.cause);
+                        lose(
+                            sim,
+                            |grip| grip.holder == entity && grip.held == held,
+                            event.cause,
+                        );
                     }
                 }
             }
@@ -566,7 +567,11 @@ pub(crate) fn on_event(sim: &mut Sim, event: &SimEvent) {
         }
         EventBody::EntityRemoved { entity } => {
             let entity = *entity;
-            lose(sim, |grip| grip.holder == entity || grip.held == entity, event.cause);
+            lose(
+                sim,
+                |grip| grip.holder == entity || grip.held == entity,
+                event.cause,
+            );
         }
         _ => {}
     }
@@ -591,7 +596,11 @@ fn check_beside(sim: &mut Sim, entity: EntityId, cause: Cause) {
         .map(|grip| (grip.holder, grip.held))
         .collect();
     for (holder, held) in apart {
-        lose(sim, |grip| grip.holder == holder && grip.held == held, cause);
+        lose(
+            sim,
+            |grip| grip.holder == holder && grip.held == held,
+            cause,
+        );
     }
 }
 
@@ -631,8 +640,7 @@ fn seize_verb(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value,
     let holder = entity_arg(sim, call, 0)
         .or_else(|| self_of(sim, call))
         .ok_or_else(|| bad_argument(VERB, "who", "an entity"))?;
-    let held =
-        entity_arg(sim, call, 1).ok_or_else(|| bad_argument(VERB, "target", "an entity"))?;
+    let held = entity_arg(sim, call, 1).ok_or_else(|| bad_argument(VERB, "target", "an entity"))?;
     let on = arg(call, 2)
         .as_subject()
         .and_then(|handle| part_of_handle(&sim.components().body, handle))
@@ -686,8 +694,18 @@ pub fn verbs() -> Vec<VerbDef> {
                         ("who", "entity", true, "Who takes hold. Default `self`."),
                         ("target", "entity", false, "What is held."),
                         ("part", "part", true, "The part held, if a particular one."),
-                        ("pins", "bool", true, "Whether the part held is pinned: its channel slots are disabled while the grip lasts. Default false."),
-                        ("drags", "real", true, "The most mass, in kilograms, the holder drags with it when it steps; a step with more is refused. Default: any."),
+                        (
+                            "pins",
+                            "bool",
+                            true,
+                            "Whether the part held is pinned: its channel slots are disabled while the grip lasts. Default false.",
+                        ),
+                        (
+                            "drags",
+                            "real",
+                            true,
+                            "The most mass, in kilograms, the holder drags with it when it steps; a step with more is refused. Default: any.",
+                        ),
                     ],
                 )
             },
@@ -701,7 +719,12 @@ pub fn verbs() -> Vec<VerbDef> {
                     "release_grip",
                     "Ends the grips `who` holds or is held by (07 §9.1), only those with `other` if it is given, giving back what they pinned; raises `grip_broken` for each. A grip ended other than by its maintaining action's own lists interrupts that action: `combat.grip_broken` when the held broke free, `combat.grip_released` when the holder let go. What a break-free action ends in. Returns how many ended.",
                     &[
-                        ("who", "entity", true, "The holder or the held. Default `self`."),
+                        (
+                            "who",
+                            "entity",
+                            true,
+                            "The holder or the held. Default `self`.",
+                        ),
                         ("other", "entity", true, "Only the grips with this one."),
                     ],
                 )
@@ -751,7 +774,11 @@ pub const GRIP_EVENTS: &[CombatEvent] = &[
         name: SEIZE_RESOLVING,
         subjects: &[("self", "entity"), ("target", "entity")],
         fields: &[
-            ("part", "part?", "The part to be held; null for none in particular."),
+            (
+                "part",
+                "part?",
+                "The part to be held; null for none in particular.",
+            ),
             ("pins", "bool", "Whether it pins that part."),
         ],
         hook: Some(&["part", "pins"]),
@@ -761,9 +788,17 @@ pub const GRIP_EVENTS: &[CombatEvent] = &[
         name: SEIZED,
         subjects: &[("self", "entity"), ("target", "entity")],
         fields: &[
-            ("part", "part?", "The part held; null for none in particular."),
+            (
+                "part",
+                "part?",
+                "The part held; null for none in particular.",
+            ),
             ("pins", "bool", "Whether it pins that part."),
-            ("action", "int", "The number of the holder's action that maintains it."),
+            (
+                "action",
+                "int",
+                "The number of the holder's action that maintains it.",
+            ),
         ],
         hook: None,
         doc: "`self` took hold of `target` (07 §9.1). The grip lasts as long as the action that took it.",

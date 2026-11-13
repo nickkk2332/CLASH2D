@@ -54,8 +54,7 @@ fn within(sim: &Sim, who: EntityId, body: BodyId, reach: Real) -> bool {
         return false;
     };
     let at = Location::new(flying.grid, CellPos::containing(flying.pos));
-    aim::between(sim, (loc, middle), (at, flying.pos))
-        .is_some_and(|way| aim::norm(way) <= reach)
+    aim::between(sim, (loc, middle), (at, flying.pos)).is_some_and(|way| aim::norm(way) <= reach)
 }
 
 /// Catches what a `shot` window was opened for (07 §11.6): see the

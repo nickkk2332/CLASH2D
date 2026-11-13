@@ -233,7 +233,9 @@ fn window_kind(
             sim.defs()
                 .lookup::<crate::action::WindowKindDef>(&name)
                 .map(Some)
-                .ok_or_else(|| bad_argument(verb, "window", "the id of a window kind that is loaded"))
+                .ok_or_else(|| {
+                    bad_argument(verb, "window", "the id of a window kind that is loaded")
+                })
         }
     }
 }
@@ -616,7 +618,12 @@ pub fn verbs() -> Vec<VerbDef> {
                     "Catches what a `shot` window was opened for (07 §11.6): the first of its projectiles still in flight, in the order they were fired, then an item thrown, whose body is within `reach` of the middle of `who`'s body, is taken out of the air where it is (`arrest`, 02 §15) and its window closes once nothing of it flies. An item thrown is taken into `who`'s hand; a projectile becomes the item its definition's `item` names, in `who`'s hand, or nothing; with no hand free it falls where `who` stands. Returns whether anything was caught: nothing within reach is not a refusal. Refused with `ranged.not_in_world` and `ranged.bad_number`.",
                     &[
                         ("who", "entity", true, "Who catches. Default `self`."),
-                        ("window", "window", true, "The window a shot or a throw opened: a reaction's `$window`."),
+                        (
+                            "window",
+                            "window",
+                            true,
+                            "The window a shot or a throw opened: a reaction's `$window`.",
+                        ),
                         (
                             "reach",
                             "real",

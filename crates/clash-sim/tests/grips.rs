@@ -308,7 +308,12 @@ fn faults(events: &[SimEvent]) -> Vec<String> {
 fn dump(events: &[SimEvent]) {
     if std::env::var("GRIPS_DEBUG").is_ok() {
         for event in events {
-            eprintln!("{} {} {:?}", event.tick.as_micros(), event.name(), event.body);
+            eprintln!(
+                "{} {} {:?}",
+                event.tick.as_micros(),
+                event.name(),
+                event.body
+            );
         }
     }
 }
@@ -437,7 +442,12 @@ fn caught_arrow_a_quick_hand_catches_a_slow_shot() {
         .components()
         .get::<clash_sim::item::Item>(arrow)
         .and_then(|item| item.def())
-        .map(|def| sim.defs().registry::<clash_sim::item::ItemDef>().name(def).to_owned());
+        .map(|def| {
+            sim.defs()
+                .registry::<clash_sim::item::ItemDef>()
+                .name(def)
+                .to_owned()
+        });
     assert_eq!(def.as_deref(), Some("core:arrow"));
     assert!(named(&told, "projectile_hit").is_empty());
 
@@ -494,7 +504,10 @@ fn parry_needs_something_with_a_flat_in_hand() {
         }
         watch(&mut sim, bram, ada);
         sim.pump();
-        { let params = vec![target(&sim, "target", bram)]; act(&mut sim, ada, "core:punch", params) };
+        {
+            let params = vec![target(&sim, "target", bram)];
+            act(&mut sim, ada, "core:punch", params)
+        };
         run_for(&mut sim, 150 * MS);
         let window = sim
             .windows()
@@ -580,13 +593,19 @@ fn a_pinned_arm_s_actions_are_unavailable_until_release() {
     let params = vec![target(&sim, "target", ada)];
     let shove = try_act(&mut sim, bram, "core:shove", params);
     let error = shove.expect_err("both arms are not free");
-    assert!(error.contains("action_channel_lacking") || error.contains("arm"), "{error}");
+    assert!(
+        error.contains("action_channel_lacking") || error.contains("arm"),
+        "{error}"
+    );
     // Released, it can be done.
     grip::release_grip(&mut sim, ada, None, Cause::DEBUG);
     sim.pump();
     assert!(grip::holder_of(&sim, bram).is_none());
-    { let params = vec![target(&sim, "target", ada)]; try_act(&mut sim, bram, "core:shove", params) }
-        .expect("the arm is free again");
+    {
+        let params = vec![target(&sim, "target", ada)];
+        try_act(&mut sim, bram, "core:shove", params)
+    }
+    .expect("the arm is free again");
 }
 
 #[test]
@@ -637,14 +656,23 @@ fn thrown_through_a_window() {
     let thrown_mass = clash_sim::combat::push::mass_of(&sim, bram).get();
     sim.pump();
     sim.drain_events();
-    { let params = vec![target(&sim, "target", bram)]; act(&mut sim, ada, "core:throw_person", params) };
+    {
+        let params = vec![target(&sim, "target", bram)];
+        act(&mut sim, ada, "core:throw_person", params)
+    };
     run_for(&mut sim, 4_000 * MS);
     let told = sim.drain_events();
     dump(&told);
     assert_eq!(faults(&told), Vec::<String>::new());
     let thrown = named(&told, "thrown");
     assert_eq!(thrown.len(), 1);
-    let speed = thrown[0].body.field("speed").unwrap().as_real().unwrap().get();
+    let speed = thrown[0]
+        .body
+        .field("speed")
+        .unwrap()
+        .as_real()
+        .unwrap()
+        .get();
     let mass = thrown_mass;
     let expected = (2.0 * 1500.0 * 30.0 / mass).sqrt();
     assert!((speed - expected).abs() < 1e-6, "{speed} vs {expected}");
@@ -652,7 +680,11 @@ fn thrown_through_a_window() {
         named(&told, "element_destroyed").iter().any(|_| true),
         "the window broke"
     );
-    assert!(x_of(&sim, bram) > 12, "landed outside: x {}", x_of(&sim, bram));
+    assert!(
+        x_of(&sim, bram) > 12,
+        "landed outside: x {}",
+        x_of(&sim, bram)
+    );
     assert!(sim.grips().is_empty());
 }
 
@@ -669,11 +701,17 @@ fn human_shield_a_blow_lands_on_the_one_held() {
     set_attr(&mut sim, cora, "core:strength", 20.0);
     set_attr(&mut sim, cora, "core:wits", 60.0);
     sim.pump();
-    { let params = vec![target(&sim, "target", bram)]; act(&mut sim, ada, "core:human_shield", params) };
+    {
+        let params = vec![target(&sim, "target", bram)];
+        act(&mut sim, ada, "core:human_shield", params)
+    };
     run_for(&mut sim, 500 * MS);
     assert_eq!(grip::holder_of(&sim, bram), Some(ada));
     sim.drain_events();
-    { let params = vec![target(&sim, "target", ada)]; act(&mut sim, cora, "core:slash", params) };
+    {
+        let params = vec![target(&sim, "target", ada)];
+        act(&mut sim, cora, "core:slash", params)
+    };
     run_for(&mut sim, 800 * MS);
     let told = sim.drain_events();
     dump(&told);
@@ -688,7 +726,10 @@ fn human_shield_a_blow_lands_on_the_one_held() {
         .filter_map(|event| event.body.field("energy").and_then(|value| value.as_real()))
         .map(Real::get)
         .sum();
-    assert!(through < 95.0, "only what went through him reached her: {through} J");
+    assert!(
+        through < 95.0,
+        "only what went through him reached her: {through} J"
+    );
 }
 
 #[test]
@@ -739,7 +780,13 @@ fn takedown_locks_the_unaware_victim_in_and_strikes() {
     // legs, and he can start nothing that needs them.
     assert_eq!(sim.actions_of(bram), &[joint]);
     assert!(sim.actions.held_of(joint, bram).is_some());
-    assert!({ let params = vec![target(&sim, "target", ada)]; try_act(&mut sim, bram, "core:shove", params) }.is_err());
+    assert!(
+        {
+            let params = vec![target(&sim, "target", ada)];
+            try_act(&mut sim, bram, "core:shove", params)
+        }
+        .is_err()
+    );
     run_for(&mut sim, 1_000 * MS);
     let told = sim.drain_events();
     dump(&told);
@@ -750,7 +797,10 @@ fn takedown_locks_the_unaware_victim_in_and_strikes() {
     let landed = named(&told, "strike_landed");
     assert_eq!(landed.len(), 1);
     assert!(
-        matches!(landed[0].body.field("margin"), Some(clash_sim::FieldValue::Null)),
+        matches!(
+            landed[0].body.field("margin"),
+            Some(clash_sim::FieldValue::Null)
+        ),
         "sure: it did not aim"
     );
     assert!(wounds(&sim, bram) > 0 || sim.vital(bram) != Some(clash_sim::mind::VitalState::Awake));
@@ -788,7 +838,10 @@ fn a_steel_collar_stops_the_takedown_blow() {
     assert_eq!(faults(&told), Vec::<String>::new());
     assert_eq!(named(&told, "strike_landed").len(), 1, "it was delivered");
     assert_eq!(wounds(&sim, bram), 0, "and the layer stopped it");
-    assert!(!named(&told, "strike_recoiled").is_empty(), "back into the fist");
+    assert!(
+        !named(&told, "strike_recoiled").is_empty(),
+        "back into the fist"
+    );
 }
 
 #[test]
@@ -804,7 +857,11 @@ fn a_choke_knocks_out_and_the_action_goes_on() {
         sim.vital(bram),
         Some(clash_sim::mind::VitalState::Unconscious)
     );
-    assert_eq!(named(&told, "action_finished").len(), 1, "it ran to its end");
+    assert_eq!(
+        named(&told, "action_finished").len(),
+        1,
+        "it ran to its end"
+    );
     assert!(sim.actions_of(bram).is_empty());
 }
 
@@ -815,7 +872,11 @@ fn interrupting_the_attacker_ends_it_for_both() {
     run_for(&mut sim, 500 * MS);
     let joint = sim.actions_of(ada)[0];
     assert_eq!(sim.actions_of(bram), &[joint]);
-    sim.interrupt_action(joint, clash_sim::Reason::new("test.stop", "stopped"), Cause::DEBUG);
+    sim.interrupt_action(
+        joint,
+        clash_sim::Reason::new("test.stop", "stopped"),
+        Cause::DEBUG,
+    );
     assert!(sim.actions_of(bram).is_empty());
     assert!(sim.actions_of(ada).is_empty());
     assert_eq!(sim.vital(bram), Some(clash_sim::mind::VitalState::Awake));
@@ -847,12 +908,8 @@ fn trait_value(sim: &Sim, name: &str) -> clash_core::Value {
         .defs()
         .lookup::<clash_sim::traits::TraitDef>(name)
         .unwrap();
-    let ty = sim
-        .defs()
-        .expr_registry()
-        .def_type_id("trait")
-        .unwrap();
-    Value::Id(clash_expr::DefRef::new(ty, u32::from(id.raw()))).to_stored()
+    let ty = sim.defs().expr_registry().def_type_id("trait").unwrap();
+    Value::Id(clash_expr::DefRef::new(ty, id.raw())).to_stored()
 }
 
 #[test]
@@ -860,7 +917,12 @@ fn stances_exclude_each_other_and_hold_a_guarded_blow_back() {
     let (mut sim, ada, bram) = behind(37);
     for stance in ["core:aggressive", "core:defensive"] {
         let value = trait_value(&sim, stance);
-        act(&mut sim, ada, "core:take_stance", vec![("stance".to_owned(), value)]);
+        act(
+            &mut sim,
+            ada,
+            "core:take_stance",
+            vec![("stance".to_owned(), value)],
+        );
         run_for(&mut sim, 500 * MS);
     }
     let has = |sim: &Sim, tag: &str| {
@@ -870,7 +932,10 @@ fn stances_exclude_each_other_and_hold_a_guarded_blow_back() {
     assert!(has(&sim, "defensive"));
     assert!(!has(&sim, "aggressive"), "taking one leaves the other");
     sim.drain_events();
-    { let params = vec![target(&sim, "target", bram)]; act(&mut sim, ada, "core:punch", params) };
+    {
+        let params = vec![target(&sim, "target", bram)];
+        act(&mut sim, ada, "core:punch", params)
+    };
     run_for(&mut sim, 800 * MS);
     let told = sim.drain_events();
     let effort = named(&told, "strike_landed")
@@ -900,8 +965,16 @@ fn strike_preview_draws_nothing_and_changes_nothing() {
     assert!(preview.odds_near > preview.odds);
     assert!((preview.energy.get() - 80.0 * 0.9).abs() < 1e-6);
     // The same through the function the application calls.
-    let read = clash_sim::combat::preview::strike_preview(&sim, ada, punch, None, bram, None, Real::of(0.5))
-        .unwrap();
+    let read = clash_sim::combat::preview::strike_preview(
+        &sim,
+        ada,
+        punch,
+        None,
+        bram,
+        None,
+        Real::of(0.5),
+    )
+    .unwrap();
     assert!((read.energy.get() - 36.0).abs() < 1e-6);
     assert_eq!(sim.state_hash(), before.0);
     // Against one who has not seen it coming, the bundled `evasion` is
@@ -922,7 +995,9 @@ fn a_guard_lays_hands_on_a_thief_who_runs() {
     let thief = spawn(&mut sim, "Thief", 11);
     sim.entity_mut(thief).unwrap().tags.insert("outlaw");
     sim.pump();
-    let away = sim.subject_value(Subject::Loc(common::at(30, 10))).to_stored();
+    let away = sim
+        .subject_value(Subject::Loc(common::at(30, 10)))
+        .to_stored();
     act(&mut sim, thief, "core:go_to", vec![("to".to_owned(), away)]);
     run_for(&mut sim, 6_000 * MS);
     let told = sim.drain_events();
@@ -932,7 +1007,11 @@ fn a_guard_lays_hands_on_a_thief_who_runs() {
         seized.iter().any(|event| about(event, guard)),
         "the guard took hold of him"
     );
-    assert!(x_of(&sim, thief) < 20, "he did not get far: x {}", x_of(&sim, thief));
+    assert!(
+        x_of(&sim, thief) < 20,
+        "he did not get far: x {}",
+        x_of(&sim, thief)
+    );
 }
 
 #[test]
@@ -962,8 +1041,7 @@ fn two_guards_fight_to_a_conclusion_under_the_bundled_minds() {
 
 #[test]
 fn document_07_states_grips_takedowns_shots_and_previews() {
-    let document =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/07-combat.md");
+    let document = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/07-combat.md");
     let text = std::fs::read_to_string(document).unwrap();
     let registry = DEFS.expr_registry();
     let events = clash_sim::combat::GRIP_EVENTS
@@ -971,10 +1049,18 @@ fn document_07_states_grips_takedowns_shots_and_previews() {
         .chain(clash_sim::combat::takedown::TAKEDOWN_EVENTS);
     for info in events {
         assert!(registry.event_id(info.name).is_some(), "{}", info.name);
-        assert!(text.contains(&format!("| `{}`", info.name)), "{}", info.name);
+        assert!(
+            text.contains(&format!("| `{}`", info.name)),
+            "{}",
+            info.name
+        );
         for (field, _, doc) in info.fields {
             assert!(!doc.is_empty());
-            assert!(text.contains(&format!("`{field}`")), "{}.{field}", info.name);
+            assert!(
+                text.contains(&format!("`{field}`")),
+                "{}.{field}",
+                info.name
+            );
         }
     }
     for info in clash_sim::combat::GRIP_REASONS {
@@ -983,7 +1069,11 @@ fn document_07_states_grips_takedowns_shots_and_previews() {
     for verb in grip::verbs() {
         let id = registry.verb_id(verb.name).unwrap();
         let spec = &registry.verb(id).unwrap().spec;
-        assert!(text.contains(&format!("| `{}` |", verb.name)), "{}", verb.name);
+        assert!(
+            text.contains(&format!("| `{}` |", verb.name)),
+            "{}",
+            verb.name
+        );
         for arg in &spec.args {
             assert!(!arg.doc.is_empty(), "{}.{}", verb.name, arg.name);
             assert!(
@@ -1009,8 +1099,8 @@ fn document_07_states_grips_takedowns_shots_and_previews() {
         assert!(text.contains(&format!("| `{}` |", function.name)));
     }
     assert!(text.contains("| `seize_resolving` (hook)"));
-    let kernel = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../docs/03-time-and-actions.md");
+    let kernel =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/03-time-and-actions.md");
     let kernel = std::fs::read_to_string(kernel).unwrap();
     assert!(kernel.contains("| `cutscene` |"));
 }

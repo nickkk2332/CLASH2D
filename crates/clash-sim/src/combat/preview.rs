@@ -98,7 +98,14 @@ pub fn strike_preview(
         None => return None,
     };
     let action_name = crate::action::run::action_name(&defs, action);
-    let found = surface::find(sim, who, &attack_def.with, &action_name, &attack_def.id.value).ok()?;
+    let found = surface::find(
+        sim,
+        who,
+        &attack_def.with,
+        &action_name,
+        &attack_def.id.value,
+    )
+    .ok()?;
     let body_defs = sim.life.body_defs().ok();
     let weapon = match found.striker {
         Striker::Item { item, .. } | Striker::Gripped { held: item, .. } => {
@@ -154,7 +161,9 @@ pub fn strike_preview(
     let mut eval = |expr: &clash_data::Expr<clash_data::expr::Number>| {
         expr.eval(&mut runner.on(&defs, &mut host))
     };
-    let energy = eval(&attack_def.energy).unwrap_or(Real::ZERO).max(Real::ZERO);
+    let energy = eval(&attack_def.energy)
+        .unwrap_or(Real::ZERO)
+        .max(Real::ZERO);
     let push = eval(&attack_def.push)
         .unwrap_or(Real::ZERO)
         .clamp(Real::ZERO, Real::ONE);
@@ -187,11 +196,8 @@ pub fn strike_preview(
         }
         None => (Real::ONE, Real::ONE),
     };
-    let push_speed = super::push::push_speed(
-        put_in * push,
-        Real::ZERO,
-        super::push::mass_of(sim, target),
-    );
+    let push_speed =
+        super::push::push_speed(put_in * push, Real::ZERO, super::push::mass_of(sim, target));
     let stagger_at = setting(sim, STAGGER_AT_SETTING, DEFAULT_STAGGER_AT);
     let launch_at = setting(sim, LAUNCH_AT_SETTING, DEFAULT_LAUNCH_AT);
     Some(Preview {
@@ -228,10 +234,7 @@ fn preview_fn(sim: &Sim, args: &[Value]) -> Value {
         .and_then(|handle| part_of_handle(&sim.components().body, handle))
         .filter(|(owner, _)| *owner == target)
         .map(|(_, key)| key);
-    let effort = args
-        .get(4)
-        .and_then(Value::as_number)
-        .unwrap_or(Real::ONE);
+    let effort = args.get(4).and_then(Value::as_number).unwrap_or(Real::ONE);
     let attack = args.get(5).and_then(Value::as_str);
     strike_preview(sim, who, action, attack, target, part, effort).map_or(Value::Null, |preview| {
         Value::map([

@@ -605,7 +605,14 @@ fn through_guard(
     interposed: &[defence::Interposed],
     harm: Real,
 ) -> Result<(Real, Real, Real), Reason> {
-    guard_takes(sim, &striking.surface, striking.cause, interposed, harm, true)
+    guard_takes(
+        sim,
+        &striking.surface,
+        striking.cause,
+        interposed,
+        harm,
+        true,
+    )
 }
 
 /// What the surfaces defences put in a blow's way take of it (07 §5.3),

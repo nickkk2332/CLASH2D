@@ -60,9 +60,9 @@ pub use attack::{
     WEAPON_SUBJECT, WithDef, WithSource,
 };
 pub use contest::{ContestDef, ContestForm, ContestId};
-pub use grip::{GRIP_EVENTS, GRIP_REASONS, Grip, GripTable};
 pub use defence::{Covers, DefenceContest, DefenceDef, DefenceForm, Handles, WithList, defending};
 pub use events::{COMBAT_EVENTS, CombatEvent, event_types};
+pub use grip::{GRIP_EVENTS, GRIP_REASONS, Grip, GripTable};
 pub use push::{Push, Pushed};
 pub use reason::{COMBAT_REASONS, COMBAT_SETTINGS};
 pub use strike::{StrikeArgs, StrikeTally, run_strike};

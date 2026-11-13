@@ -155,15 +155,12 @@ pub(crate) fn cast(sim: &mut Sim, ray: &Ray, cause: Cause) -> u32 {
                     .try_registry::<super::defs::ProjectileDef>()
                     .map(|registry| registry.name(ray.projectile).to_owned())
                     .unwrap_or_default();
+                let from = flight::ShotFrom {
+                    by: Some(ray.shooter),
+                    projectile: &name,
+                };
                 match flight::strike_guarded(
-                    sim,
-                    Some(ray.shooter),
-                    &name,
-                    occupant,
-                    hit.point,
-                    surface,
-                    energy,
-                    cause,
+                    sim, &from, occupant, hit.point, surface, energy, cause,
                 ) {
                     Struck::Passed => {}
                     Struck::Hit {

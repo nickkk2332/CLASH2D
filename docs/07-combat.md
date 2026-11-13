@@ -1471,16 +1471,18 @@ A warm entity attacked by a hot one is promoted first (03 §10).
 
 ## 16. Modding surface
 
-**Definition types**: `contest`, `projectile`. Blocks `attacks`, `defence`
-and `cutscene` on actions; `surfaces` and `band` on body parts; `give` and
-`span` on surfaces; `group` on traits; `thrust`, `guidance` and
-`on_impact` on projectiles; `round` on items; `contact` on elements.
+**Definition types**: `contest`, `projectile`. Blocks `attacks` and
+`defence` and the field `cutscene` on actions (03 §6.1); `surfaces` and
+`band` on body parts; `give` and `span` on surfaces; `group` on traits;
+`thrust`, `guidance`, `on_impact` and `item` on projectiles; `round` on
+items; `contact` on elements.
 
 **Events**: `strike_landed`, `strike_missed`, `strike_stopped`,
 `strike_defended`, `strike_recoiled`, `staggered`, `launched`,
 `clash_resolved`, `seized`,
-`grip_broken`, `thrown`, `projectile_fired`, `projectile_hit`,
-`projectile_passed`, `projectile_lost_lock`, `contact_struck`.
+`grip_broken`, `thrown`, `cutscene_cued`, `projectile_fired`,
+`projectile_hit`, `projectile_passed`, `projectile_lost_lock`,
+`contact_struck`.
 
 **Hooks**: `strike_resolving`, `defence_resolving`, `knockback_incoming`,
 `clash_resolving`, `seize_resolving`.
@@ -1497,16 +1499,17 @@ and `cutscene` on actions; `surfaces` and `band` on body parts; `give` and
 gripped thing with the one gripping it.
 
 **Effects**: `strike`, `shoot`, `throw`, `seize`, `release_grip`, `drag`,
-`shove`, `wrench`, `intercept`.
+`shove`, `wrench`, `intercept`, `catch_shot`.
 
 **Functions**: `contest`, `odds`, `strike_preview`, `lead_point`,
-`ballistic_dir`, `band_point`, `closing_energy`.
+`ballistic_dir`, `band_point`, `closing_energy`, `aside_from`.
 
 **Queries**: `grips` (of or on an entity), `defences` (in force on an
 entity), `in_arc`.
 
 **Properties**: `self.gripping`, `self.gripped_by`, `self.defending`,
-`self.reach`; on running actions, `attack(id)` with its current `energy`
+`self.helpless`, `self.wielding_surface(surface)`, `self.reach`; on
+running actions, `attack(id)` with its current `energy`
 and time to impact. In a mind context these are readable only for the
 mind's own actions.
 
@@ -1619,6 +1622,17 @@ the default part and effort in section 12; `strike_preview` in section
 `grips`, `defences` and `in_arc`, `entity.reach` and an action's
 `attack(id)`, swings meeting the world, contact surfaces (section 6.5),
 reach in height (section 4.3) and `closing_energy` (section 3.5).
+
+**Gaps.** Reachable only from Rust for now: every grip there is, and the
+grips an action keeps (`Sim::grips`, `GripTable::of_action`), where
+content reads only the first a creature holds or is held by
+(`entity.gripping`, `entity.gripped_by`) until the query `grips`; who is
+locked into a running joint action and the slots each role holds
+(`ActionTable::joined`, `held_of`), which content sees only in
+`cutscene_cued`; which shots in flight a `shot` window was opened for
+(`RangedState::of_window`), which `catch_shot` reads; and the preview as
+a struct (`combat::preview::strike_preview`), the same numbers the
+function gives.
 
 ## 17. Invariants
 

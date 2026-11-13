@@ -284,26 +284,38 @@ pub(crate) fn strike_creature(
 /// attack (07 §11.6): a shot is no attack of an action.
 pub const SHOT_ATTACK: &str = "shot";
 
+/// Where a shot comes from, for the defences it meets (07 §11.6).
+pub(crate) struct ShotFrom<'a> {
+    /// The one who fired or threw it.
+    pub by: Option<EntityId>,
+    /// What `strike_defended` names as its action: the projectile's
+    /// qualified id, empty for an item thrown.
+    pub projectile: &'a str,
+}
+
 /// Strikes a creature a shot met (07 §11.6), as [`strike_creature`]
 /// does, once the defences in force for it have been tried, as a
-/// strike's are at its step 5 (07 §5): `by` is the one who fired or
-/// threw it, from whom it comes. One that avoids makes it pass by at
-/// full speed. One that interposes turns its share aside and puts its
-/// surfaces in the way of the rest, each taking a packet at the energy
-/// over its own area times its give; what passes them goes on into the
-/// body. A shot from no one, or at something with no body, meets no
-/// defence.
+/// strike's are at its step 5 (07 §5), the one it comes `from` as the
+/// attacker. One that avoids makes it pass by at full speed. One that
+/// interposes turns its share aside and puts its surfaces in the way of
+/// the rest, each taking a packet at the projectile's own intensity
+/// over the projectile's contact (decision D-811); what passes them
+/// goes on into the body. A shot from no one, or at something with no
+/// body, meets no defence.
 pub(crate) fn strike_guarded(
     sim: &mut Sim,
-    by: Option<EntityId>,
-    projectile: &str,
+    from: &ShotFrom<'_>,
     target: EntityId,
     pos: Vec3,
     surface: Surface,
     energy: Real,
     cause: Cause,
 ) -> Struck {
-    let Some(attacker) = by.filter(|by| *by != target && sim.truth().entity(*by).is_some()) else {
+    let projectile = from.projectile;
+    let Some(attacker) = from
+        .by
+        .filter(|by| *by != target && sim.truth().entity(*by).is_some())
+    else {
         return strike_creature(sim, target, pos, surface, energy, cause);
     };
     if !sim.components().body.contains(target) {
@@ -336,7 +348,8 @@ pub(crate) fn strike_guarded(
                 reach: Real::ZERO,
             };
             let (harm, guarded, _) =
-                match crate::combat::strike::guard_takes(sim, &blow, cause, &surfaces, left, false) {
+                match crate::combat::strike::guard_takes(sim, &blow, cause, &surfaces, left, false)
+                {
                     Ok(taken) => taken,
                     Err(refusal) => {
                         sim.fault(refusal);
@@ -617,9 +630,11 @@ pub(crate) fn follow(sim: &mut Sim, news: FlightNews) {
             pass_by(sim, key, Some(body), pos, Some(occupant), cause);
             let surface = surface_of(sim, key, &shot, body, kind);
             let name = projectile_name(sim, shot.projectile);
-            let struck = strike_guarded(
-                sim, shot.by, &name, occupant, pos, surface, energy, cause,
-            );
+            let from = ShotFrom {
+                by: shot.by,
+                projectile: &name,
+            };
+            let struck = strike_guarded(sim, &from, occupant, pos, surface, energy, cause);
             let exits = match struck {
                 Struck::Passed => energy,
                 Struck::Stopped => Real::ZERO,
