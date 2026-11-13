@@ -17,11 +17,11 @@ Vehicle package V5 depends on it.
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
 | G1 | Interactions | M | E12, T3 | beta |
-| G2 | Device model | M | E12 | in progress |
+| G2 | Device model | M | E12 | beta |
 | G3 | Resources and network balancing | L | G2, K7 | todo |
 | G4 | Conduits and ports | L | G3, W6 | todo |
 | G5 | Signals and control | M | G4, A1 | todo |
-| G6 | Recipes and work | L | G3, E8 | in progress |
+| G6 | Recipes and work | L | G3, E8 | beta |
 | G7 | Movers and item conduits | M | G6, G4 | todo |
 | G8 | Construction and jobs | L | G6, W13 | todo |
 | G9 | Assemblies and gadgets | M | G3, E3, E8 | todo |
@@ -32,9 +32,9 @@ Vehicle package V5 depends on it.
 | G14 | Trade and delivery | M | G13, G1, E8, L5, U9 | todo |
 | G15 | Assemblies that stand alone | M | G10, E6, E7, I3 | todo |
 | G16 | Structures | M | G2, G4, WG1 | todo |
-| G17 | Know-how | S | G6, E7 | in progress |
+| G17 | Know-how | S | G6, E7 | done |
 | G18 | Screens for making, building and work | L | G6, G8, G5, U9, U4 | todo |
-| G19 | Substances | M | G6, G3, W16, E2, C2 | in progress |
+| G19 | Substances | M | G6, G3, W16, E2, C2 | beta |
 
 ## Order and parallelism
 
@@ -126,6 +126,18 @@ Done when
 - A config change through the `set_config` verb is saved and raises
   `device_configured`.
 
+Beta (decision D-820), in `clash_sim::device` (16 §4.3 as built):
+`modes`, `config`, `stores`, `speed`, `auto`, `provides` and `recipes` on
+the `device` type, `when` on `speed`, `auto` and `provides`; the
+component keeps the mode, the settings and the stores' levels; the verbs
+`set_mode`, `set_config`, `add_resource`, `drain_resource`, the events
+`device_mode_changed` and `device_configured`, the properties `mode`,
+`config` and `store` of devices and elements. `tests/making.rs` covers
+both items above. Stubbed: ports and networks (a station draws on its
+own stores), `load` and `when_supplied` (the promotion rule gives the
+counting), the generic device screen, climate devices, containers that
+keep.
+
 ### G3 — Resources and network balancing
 
 **Spec** 16 §5 · **Size** L
@@ -206,6 +218,18 @@ Done when
 - A machine on half supply takes twice as long.
 - A bench recipe finds inputs on a shelf within range and not beyond it.
 - A crop advances only while its condition holds.
+
+Beta (decisions D-821 to D-824), in `clash_sim::recipe` (16 §8.6): the
+`recipe` type; processes on stations and workers with one wake-up that
+follows the rate; the work action (`core:make`) and the verbs `work`,
+`start_recipe`, `cancel_recipe`; machines with `auto`; supply from holds,
+the station and racks within range; `qualities`; `emits`;
+`recipe_starting`, `recipe_completing`; conditions on the place;
+`repairs`; `recipe_options` for the make screen. Test scripts
+`bench_shelf`, `half_supply` and `crop_condition` under
+`scenarios/making/`, and `tests/making.rs`, cover the four items above.
+Stubbed: `while` on networks (stores stand in), jobs (G8), resource and
+account inputs, `noise`, the query `recipes`.
 
 ### G7 — Movers and item conduits
 
@@ -403,6 +427,10 @@ Done when
 - Know-how moves with a transferred mind and stays out of the body left
   behind.
 
+Done (decision D-825), in `clash_sim::recipe::know_how` (16 §8.6):
+`tests/making.rs` covers the four items above. The know-how screen is
+`ui:know_how` (12 §10.7).
+
 ### G19 — Substances
 
 **Spec** 16 §9.5; 02 §16; 06 §6.1, §9.1 · **Size** M · Added by the review
@@ -431,6 +459,19 @@ Done when
 - A well poisoned at one cell poisons what is drawn from that cell.
 - A breached pipe of a substance spills its loose field with no rule
   written for it.
+
+Beta (decisions D-826, D-827), in `clash_sim::substance` (16 §9.5 as
+built), as far as food, drink, medicine and poison need: the
+`substance` type, `contains` and `filled` on items, mixtures by member,
+`pour`, `fill`, `dose`, `coat` and `take_in`, routes, pools and traits
+for a time, coatings delivered by breaching hits and wiped by every
+hit, `poured`, `dosed`, `tasted`. `tests/making.rs` covers the first
+item (by a cell's `loose` field), `spiked` and the breaching half of
+`envenomed`; the test script `poisoned_blade` a coated blade's cut.
+Stubbed: devices and body parts that contain, piped and still forms,
+wells, breached pipes, fields that expose by a substance's routes,
+pools that spill, the test scripts `spiked` and `envenomed`, armour
+in the way of a coated blade (not tested).
 
 ### G18 — Screens for making, building and work
 

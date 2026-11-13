@@ -1375,7 +1375,11 @@ material and volume. Weapons notch and break; armour wears through.
 | `holder_tags` | list of tags | Tags whoever holds it in a grasp or wears it carries while they do |
 | `grants`, `traits`, `rules` | lists | Given to whoever holds or wears it. Its `traits`, by id, are given to the holder with the item as their giver (section 5) and withdrawn when it leaves the grasp or comes off; `grants` and `rules` are carried until actions and the rule runtime read them. |
 | `guards` | map of route to share | While worn, the share of exposure it keeps out, by route: `{ "breath": 0.95 }` for a mask (02 §16). Carried until exposure reads it. |
-| `contains` | volume | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup. Carried until substances are built. |
+| `contains` | volume | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup. |
+| `filled` | map of `id<substance>` to volume | What each one holds when it is made (16 §9.5). An item filled with no `contains` holds what it was filled with: a loaf is made of bread. |
+| `qualities` | map of name to number | The tool qualities it has, each at a level (16 §8.3): `{ "cutting": 2 }`. |
+| `provides` | list of `id<know_how>` | Know-how known at a station it lies in (16 §8.5): a manual on a bench, a pattern in a machine. |
+| `teaches` | list of `id<know_how>` | Know-how reading it teaches: the verb `learn_from` (16 §8.5). |
 | `color` | colour name, or a list | A colour this particular item carries: fixed, or picked from a list by the item's seed when it is made. `set_color` changes it. Glyphs draw it with `"fg": "own"` and descriptions name it (12 §4.3). Creatures may carry one too. |
 | `glyph` | glyph | How it is drawn |
 | `contents` | list of `{ item, count, chance }` | What a container is found to hold when it is first opened (section 9.3). `count` is a number or `[least, most]`, default 1; `chance` from 0 to 1, default 1. Needs `holds`. |
@@ -1701,6 +1705,7 @@ optional:
 | `remains` | What is left of a body destroyed entirely, as written |
 | `blocks` | Whether it blocks movement through its cell. Default true for one with a body. A thing with a body also collides with bodies in flight (02 §15.2; decision D-741) |
 | `choices` | Section 10.2 |
+| `know_how` | Know-how its mind knows (16 §8.5), by id as written: given when `entity_spawned` is raised, without asking what each needs (decision D-825). Not on options |
 
 A choice has an `id` (no `.`), a `name`, a `kind` and a `default`; a
 `pick` has `options` and `count` (default 1); `points` has `options`,

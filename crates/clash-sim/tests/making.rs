@@ -754,3 +754,50 @@ fn recipe_options_say_what_is_at_hand_and_why_not() {
     assert!(salve.get("why").and_then(Value::as_str).is_some_and(|why| why.contains("Herbalism")));
 }
 
+// ---- The document states what is built --------------------------------------
+
+#[test]
+fn document_16_states_every_event_verb_property_and_reason_of_making() {
+    let document = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/16-devices-and-machines.md");
+    let text = std::fs::read_to_string(document).expect("document 16 can be read");
+    let registry = DEFS.expr_registry();
+    let events = recipe::event_types()
+        .into_iter()
+        .chain(substance::event_types())
+        .chain(device::event_types());
+    for event in events {
+        assert!(registry.event_id(&event.name).is_some(), "`{}` is not registered", event.name);
+        assert!(text.contains(&format!("| `{}`", event.name)), "16 does not state the event `{}`", event.name);
+        for field in &event.fields {
+            assert!(text.contains(&format!("`{}`", field.name)), "16 does not state `{}.{}`", event.name, field.name);
+        }
+    }
+    let verbs = recipe::verbs()
+        .into_iter()
+        .chain(substance::verbs())
+        .chain(device::verbs());
+    for verb in verbs {
+        assert!(registry.verb_id(verb.name).is_some(), "`{}` is not registered", verb.name);
+        assert!(text.contains(&format!("`{}`", verb.name)), "16 does not state the verb `{}`", verb.name);
+    }
+    let properties = recipe::properties()
+        .into_iter()
+        .chain(substance::properties())
+        .chain(device::properties());
+    for property in properties {
+        assert!(
+            text.contains(&format!("`{}.{}", property.kind, property.name)),
+            "16 does not state the property `{}.{}`",
+            property.kind,
+            property.name
+        );
+    }
+    let reasons = recipe::RECIPE_REASONS
+        .iter()
+        .chain(substance::SUBSTANCE_REASONS)
+        .chain(device::DEVICE_REASONS);
+    for reason in reasons {
+        assert!(text.contains(&format!("`{}`", reason.code)), "16 does not state the reason `{}`", reason.code);
+    }
+}
+
