@@ -118,8 +118,13 @@ play, and what trying the game headless on the build branch showed.
   define, and each says so in the log ("Nothing can do `drop`: no loaded
   mod defines that action."). Putting what you hold into a container
   works through `e`.
-- **No crouching or lying down,** though posture changes how loud and
-  how visible a character is.
+- **No crouching or lying down, and no stances,** though posture
+  changes how loud and how visible a character is.
+- **A bow's draw runs to its end in one go,** so there is no moment to
+  hold it or let it go with `z`.
+- **The log names people by their own names,** even strangers your
+  character does not know; what is said to you names them as you know
+  them.
 
 **Screens**
 

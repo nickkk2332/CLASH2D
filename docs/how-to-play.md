@@ -85,8 +85,9 @@ sound came from. Common symbols:
 | `%` `;` | rubble | | |
 
 **The log**, under the map, says what happened that your character
-perceived, worded as they would know it: a stranger is "someone" until
-you know them. It also says why something you tried could not be done.
+perceived: what they saw, and what they only heard ("Footsteps,
+somewhere close."). It also says why something you tried could not be
+done.
 
 **The status column** has your name, your **Blood** and **Pain**, and
 what is in your hands.
@@ -321,7 +322,7 @@ that).
 that can be made; `S` (Shift+S) chooses the shot, the place aimed at and
 the height, with the line drawn to it. `r` reloads the weapon in hand
 from what you carry, `t` throws what is in your hand, and `z` stops what
-you are doing: a drawn bow is let go. An empty weapon says so.
+you are doing. An empty weapon says so.
 
 **Holds and takedowns.** `v` lists the holds, throws and takedowns you
 could try on the target, greyed with the reason where you cannot: grab,
