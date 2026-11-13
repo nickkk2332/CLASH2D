@@ -101,13 +101,18 @@ pub struct GrantDef {
 /// The object form of a grant.
 #[derive(Deserialize)]
 struct GrantObject {
+    /// The action the trait makes available. Required.
     action: Ref<ActionDef>,
+    /// What starting it spends: by pool, an expression of the amount.
     #[serde(default)]
     cost: BTreeMap<String, Located<String>>,
+    /// Local time of the holder before it can be used again.
     #[serde(default)]
     cooldown: Option<Time>,
+    /// The least rank of the ability that gives the trait.
     #[serde(default)]
     at_rank: Option<u32>,
+    /// A further condition that must hold for it to be offered.
     #[serde(default, rename = "if")]
     condition: Option<Located<String>>,
 }

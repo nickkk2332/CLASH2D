@@ -772,3 +772,239 @@ fn index(table: &mut Vec<u32>, slot: usize, at: usize) {
         *entry = at;
     }
 }
+
+/// A setting the engine reads (04 §10): its name in a reserved
+/// namespace, the value it has when nothing sets it, and what it does.
+/// For the generated reference.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SettingInfo {
+    /// The name, `namespace.name`.
+    pub name: &'static str,
+    /// The value the engine uses when the setting is not set.
+    pub default: Value,
+    /// What it does, and the unit of its value.
+    pub doc: &'static str,
+}
+
+/// Every setting the engine reads, in order of name. A package that
+/// reads a setting adds it here, with its default and documentation.
+pub fn engine_settings() -> Vec<SettingInfo> {
+    use crate::{ability, action, advance, ai, body, combat, perception, query, rule};
+    let int = |name, default: i64, doc| SettingInfo {
+        name,
+        default: Value::Int(default),
+        doc,
+    };
+    let real = |name, default: f64, doc| SettingInfo {
+        name,
+        default: Value::Real(clash_core::Real::of(default)),
+        doc,
+    };
+    let limit = |name: &str| {
+        rule::LIMIT_SETTINGS
+            .iter()
+            .find(|(setting, _)| *setting == name)
+            .map_or("", |(_, doc)| *doc)
+    };
+    let combat_doc = |name: &str| {
+        combat::COMBAT_SETTINGS
+            .iter()
+            .find(|(setting, _)| *setting == name)
+            .map_or("", |(_, doc)| *doc)
+    };
+    let mut settings = vec![
+        int(
+            "rules.max_steps",
+            i64::try_from(rule::DEFAULT_MAX_STEPS).unwrap_or(i64::MAX),
+            limit("rules.max_steps"),
+        ),
+        int(
+            "rules.max_call_depth",
+            i64::try_from(rule::DEFAULT_MAX_CALL_DEPTH).unwrap_or(i64::MAX),
+            limit("rules.max_call_depth"),
+        ),
+        int(
+            "rules.max_queued",
+            i64::try_from(rule::DEFAULT_MAX_QUEUED).unwrap_or(i64::MAX),
+            limit("rules.max_queued"),
+        ),
+        int(
+            "rules.max_value_size",
+            i64::try_from(rule::DEFAULT_MAX_VALUE_SIZE).unwrap_or(i64::MAX),
+            limit("rules.max_value_size"),
+        ),
+        int(
+            "rules.max_value_depth",
+            i64::try_from(rule::DEFAULT_MAX_VALUE_DEPTH).unwrap_or(i64::MAX),
+            limit("rules.max_value_depth"),
+        ),
+        int(
+            advance::MAX_CASCADE_SETTING,
+            advance::DEFAULT_MAX_CASCADE,
+            "The most events one pump may deliver before it stops with `events.cascade_limit` (03 §4.3). Default 10,000.",
+        ),
+        int(
+            query::MAX_QUERY_CELLS_SETTING,
+            i64::try_from(clash_expr::DEFAULT_MAX_QUERY_CELLS).unwrap_or(i64::MAX),
+            "The most cells one spatial query may cover; a query over more is refused when it runs, and one whose radius is a constant over the default is a load error (05 §11). Default 1,048,576.",
+        ),
+        int(
+            ability::reactive::MAX_REACTIVE_ROUNDS_SETTING,
+            ability::reactive::DEFAULT_MAX_REACTIVE_ROUNDS,
+            "How many rounds of re-evaluating reactive expressions one pump runs before it leaves the rest stale until the next (05 §7.5). Default 8.",
+        ),
+        int(
+            action::MAX_TRANSITIONS_SETTING,
+            action::DEFAULT_MAX_TRANSITIONS,
+            "The most phase changes an action may make without time passing before it ends with `engine:transition_limit` (03 §13). Default 1,000.",
+        ),
+        SettingInfo {
+            name: action::IDLE_WAIT_SETTING,
+            default: Value::Real(action::DEFAULT_IDLE_WAIT.as_secs_real()),
+            doc: "Seconds of its own time an entity that nothing gave anything to do idles before it is asked again (03 §5.2). Default 1.",
+        },
+        real(
+            combat::reason::STAGGER_AT_SETTING,
+            combat::reason::DEFAULT_STAGGER_AT,
+            combat_doc(combat::reason::STAGGER_AT_SETTING),
+        ),
+        real(
+            combat::reason::LAUNCH_AT_SETTING,
+            combat::reason::DEFAULT_LAUNCH_AT,
+            combat_doc(combat::reason::LAUNCH_AT_SETTING),
+        ),
+        SettingInfo {
+            name: body::hit::OVERKILL_SETTING,
+            default: Value::Real(body::hit::DEFAULT_OVERKILL_FACTOR),
+            doc: "How many times what a whole body could absorb a hit spread over it must carry to destroy it outright (06 §7.4). Default 10.",
+        },
+        SettingInfo {
+            name: perception::WARM_FACTOR_SETTING,
+            default: Value::Real(perception::percept::DEFAULT_WARM_FACTOR),
+            doc: "The multiple of its threshold a signal must reach to be received by an observer simulated in warm detail (15 §14). At least 1. Default 4.",
+        },
+        int(
+            perception::MAX_AWARENESS_SETTING,
+            perception::detect::DEFAULT_MAX_AWARENESS,
+            "The most others an observer keeps awareness of; the least aware are forgotten first (15 §15). Default 128.",
+        ),
+        int(
+            perception::MAX_CANDIDATES_SETTING,
+            perception::detect::DEFAULT_MAX_CANDIDATES,
+            "The most entities one sweep of one sense considers, the nearest first (15 §15). Default 32.",
+        ),
+        SettingInfo {
+            name: perception::OMNISCIENT_SETTING,
+            default: Value::Bool(false),
+            doc: "Whether every event counts as seen by the party, for development (15 §13). Default false.",
+        },
+        int(
+            perception::party::MAP_SLABS_SETTING,
+            perception::party::DEFAULT_MAP_SLABS,
+            "How many slabs of map memory a member of the party keeps, a slab being one storey of one tract; the oldest are forgotten first. Default 1,024.",
+        ),
+        int(
+            perception::MAX_TRACKS_SETTING,
+            perception::belief::DEFAULT_MAX_TRACKS,
+            "The most tracks a mind keeps; the least confident are forgotten first (15 §15). Default 64.",
+        ),
+        int(
+            perception::MAX_MEMORIES_SETTING,
+            perception::belief::DEFAULT_MAX_MEMORIES,
+            "The most memories a mind keeps; the least salient are forgotten first (15 §15). Default 32.",
+        ),
+        int(
+            perception::MAX_NOTED_SETTING,
+            perception::belief::DEFAULT_MAX_NOTED,
+            "The most noted things a mind keeps (15 §15). Default 32.",
+        ),
+        int(
+            perception::TRACK_CAPABILITIES_SETTING,
+            perception::belief::DEFAULT_TRACK_CAPABILITIES,
+            "The most observed capabilities one track keeps (15 §15). Default 8.",
+        ),
+        real(
+            perception::CONFIDENCE_HALFLIFE_SETTING,
+            perception::belief::DEFAULT_CONFIDENCE_HALFLIFE_S,
+            "Seconds in which a track's confidence halves while its subject is not perceived (15 §7). Default 60.",
+        ),
+        real(
+            perception::SALIENCE_HALFLIFE_SETTING,
+            perception::belief::DEFAULT_SALIENCE_HALFLIFE_S,
+            "Seconds in which a memory's salience halves (15 §7). Default 600.",
+        ),
+    ];
+    for (name, default, doc) in ai::SETTINGS {
+        settings.push(int(name, *default, doc));
+    }
+    settings.sort_by(|a, b| a.name.cmp(b.name));
+    settings
+}
+
+/// A reason the engine refuses or reports with (14 §5): its code, when
+/// it is given, and for the action system's, the values it carries and
+/// the sentence a player is shown. For the generated reference.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReasonDoc {
+    /// The stable code.
+    pub code: &'static str,
+    /// When it is given, and what its values say.
+    pub doc: &'static str,
+    /// The values it carries: name, type and meaning. Empty where the
+    /// documentation names them.
+    pub values: Vec<(&'static str, &'static str, &'static str)>,
+    /// The sentence a player is shown, as a text template, where the
+    /// engine words one.
+    pub text: Option<&'static str>,
+}
+
+/// Every reason the simulation gives, in order of code. A package that
+/// adds reasons adds its table here.
+pub fn engine_reasons() -> Vec<ReasonDoc> {
+    let tables: &[&[crate::reason::ReasonInfo]] = &[
+        crate::reason::KERNEL_REASONS,
+        crate::rule::RULE_REASONS,
+        crate::kernel_verbs::VERB_REASONS,
+        crate::world_verbs::WORLD_VERB_REASONS,
+        crate::action::RUNTIME_REASONS,
+        crate::action::windows::WINDOW_REASONS,
+        crate::life::LIFE_REASONS,
+        crate::mind::MIND_REASONS,
+        crate::template::TEMPLATE_REASONS,
+        crate::item::ITEM_REASONS,
+        crate::movement::MOVEMENT_REASONS,
+        crate::perception::REASONS,
+        crate::device::DEVICE_REASONS,
+        crate::interaction::INTERACTION_REASONS,
+        crate::traits::TRAIT_REASONS,
+        crate::reshape::EDIT_REASONS,
+        crate::ability::ABILITY_REASONS,
+        crate::combat::COMBAT_REASONS,
+        crate::ai::REASONS,
+    ];
+    let mut reasons: Vec<ReasonDoc> = tables
+        .iter()
+        .flat_map(|table| table.iter())
+        .map(|info| ReasonDoc {
+            code: info.code,
+            doc: info.doc,
+            values: Vec::new(),
+            text: None,
+        })
+        .collect();
+    reasons.extend(crate::action::reason::REASONS.iter().map(|reason| {
+        ReasonDoc {
+            code: reason.code,
+            doc: reason.doc,
+            values: reason
+                .values
+                .iter()
+                .map(|value| (value.name, value.ty, value.doc))
+                .collect(),
+            text: Some(reason.text),
+        }
+    }));
+    reasons.sort_by(|a, b| a.code.cmp(b.code));
+    reasons.dedup_by(|a, b| a.code == b.code);
+    reasons
+}

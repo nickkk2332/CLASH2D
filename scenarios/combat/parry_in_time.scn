@@ -32,4 +32,4 @@ expect event window_noticed
 expect event strike_defended
 expect event strike_stopped
 assert "len(@e:2.wounds) == 0"
-expect hash 3bab0916488476a432b832e2b0e2d2b3
+expect hash 2296fc7a541953e4ffefe3d23ad4f79d

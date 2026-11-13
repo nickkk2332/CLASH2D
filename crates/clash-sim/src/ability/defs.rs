@@ -123,16 +123,27 @@ pub struct CostDef {
     pub count: u32,
 }
 
+/// A cost written as an object: an amount from a pool, with where a
+/// shortfall is made up and who pays, or an item consumed.
 #[derive(Deserialize)]
 struct CostObject {
+    /// How much, for a pool: an expression with the owner as `self` and the
+    /// instance as `ability`.
     #[serde(default)]
     amount: Option<Expr<Number>>,
+    /// Where a shortfall is made up from, if it may be: `{ "from": pool,
+    /// "ratio": 2.0 }`.
     #[serde(default)]
     overdraw: Option<OverdrawDef>,
+    /// Who pays in the owner's place: an expression that gives an entity, such
+    /// as something bound to the ability (08 §7.3). Left out, the owner pays.
     #[serde(default)]
     from: Option<Expr<Any>>,
+    /// Whether the key names an item consumed rather than a pool. Default
+    /// false.
     #[serde(default)]
     item: bool,
+    /// For an item: how many are consumed. Default 1.
     #[serde(default)]
     count: Option<u32>,
 }
@@ -205,21 +216,37 @@ pub struct AbilityGrantDef {
     pub value: Option<Expr<Number>>,
 }
 
+/// A grant written as an object: the action, with what the ability
+/// supplies and asks of using it.
 #[derive(Deserialize)]
 struct GrantObject {
+    /// The action the ability makes available. Required.
     action: Ref<ActionDef>,
+    /// Parameters of the action the ability supplies, by name: expressions with
+    /// the owner as `self` and the instance as `ability`. They stand in for
+    /// whatever a command gives under the same names.
     #[serde(default)]
     params: BTreeMap<String, Expr<Any>>,
+    /// What starting it spends, by the pool it is paid from or the item
+    /// consumed (08 §5.2).
     #[serde(default)]
     cost: Costs,
+    /// Seconds of the owner's own time before it can be used again: an
+    /// expression with the owner as `self` and the instance as `ability`.
     #[serde(default)]
     cooldown: Option<Expr<Number>>,
+    /// The least rank of the ability it needs.
     #[serde(default)]
     at_rank: Option<u32>,
+    /// A further condition, in the owner's mind: what it believes, its own
+    /// state and the instance.
     #[serde(default, rename = "if")]
     condition: Option<Cond>,
+    /// A hint to whoever chooses for a character: what using it is for.
     #[serde(default)]
     intent: Option<Intent>,
+    /// A score of a use, for choosers that cannot preview it (08 §11). Carried
+    /// for the AI layer.
     #[serde(default)]
     value: Option<Expr<Number>>,
 }
