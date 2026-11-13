@@ -1470,7 +1470,7 @@ the thing is or how strong its holder is: an action's `requires` does.
 | `destroy_item` | `item: entity` | null | Unmakes an item and every member of its stack. What it held is put down where it was; latent contents are never made. |
 | `set_color` | `of: entity`, `color: string?` | null | Changes the colour an item carries; null takes it away |
 | `repair_item` | `item: entity`, `share: real` | entity | Takes a share of its capacity off its damage; 1 mends it entirely. It rejoins an equal stack in the same hold. |
-| `materialise_contents` | `container: entity` | `list<entity>` | Makes a latent container's contents (section 9.3) |
+| `materialise_contents` | `container: any` | `list<entity>` | Makes a latent container's contents (section 9.3): an item's, or an element's that generation filled |
 
 A debug command, `CreateItem { def, count, place }`, makes items by
 qualified id for tools and test scripts.
@@ -1556,8 +1556,7 @@ nesting too deep, a cell not loaded) is refused as relocation refuses it.
 
 A container that generation filled does not create its items until
 something looks. It keeps the positional seed it was made with, and its
-definition's `contents` list (a `content_table` definition, shared between
-containers, is not built yet). The first search, opening or hit
+definition's `contents` list, or what a map put in it (below). The first search, opening or hit
 materialises the items, and they are always the same items: each entry is
 drawn, in order, from a generator seeded by the container's seed alone,
 with every draw made whether or not it matters, so that the same seed
@@ -1569,6 +1568,54 @@ first packet that affects it. What the list gives is stowed whether or not
 it fits: the list is its author's to keep within `holds`. A thing that
 stacks is made as one stack; one that does not, as so many entities.
 `contents_materialised` reports it.
+
+**Content tables** (decision D-852). What a map puts in a cell (10 §3.2)
+is an item or a `content_table`, shared by every map and table that
+names it:
+
+```json
+{ "type": "content_table", "id": "kitchen_goods", "each": true,
+  "entries": [ { "item": "loaf", "count": [1, 2], "chance": 0.8 },
+               { "table": "drinks", "chance": 0.7 },
+               { "item": "knife", "chance": 0.6 } ] }
+```
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `entries` | The entries, in order, at least one. Each names exactly one of `item` (an item definition), `table` (another content table) and `none` (nothing), with `weight` (above zero), `count` (a number or `[least, most]`: how many of the item, or how many draws from the table) and `chance` (from 0 to 1, that a chosen entry gives anything) | required |
+| `each` | Every entry is rolled on each draw, each with its `chance`, rather than one picked by `weight` | false |
+
+A table is drawn from with a seed and a number of draws. Every random
+number a draw could use is made whether or not it matters, from a
+generator seeded by the seed alone, so the same seed always gives the
+same things. A table nested more than eight deep gives nothing there; a
+table that nests itself is a load error, at the entry that closes the
+loop.
+
+**Generation's containers** (decisions D-850, D-851). Items a map puts in
+a cell whose element is a container, an element whose device `holds`
+things (16 §4.3), are that element's **latent contents**. The element
+stays an element: the simulation keeps the lots by element (its cell
+and layer) with the seed each was drawn from, saves and hashes them, and
+makes them, stowed in the device, the first time the element becomes a
+device for whatever reason (opened, something put in it, someone hiding
+in it, work started at it, a rule's `promote`), when
+`materialise_contents` is called on it, or when a packet damages it.
+If another element, or none, stands there first (destroyed, replaced),
+they spill where something dropped into the cell comes to rest, as a
+device's contents do. They are not made when the tract is realised, and
+they stay the same through saving, loading and unloading. Anywhere else
+a map's items are made lying in the cell when the tract first loads,
+and nothing is ever made twice: what was made is in the world, shelved
+with its tract when the tract unloads.
+
+| Property | Gives |
+|----------|-------|
+| `element.latent` | `bool`: whether generation left contents in the element that have not been made yet. Not safe for belief |
+
+`materialise_contents` takes an element as well as an item: it promotes
+the element, which makes its latent contents, and gives what its device
+holds.
 
 ### 9.4 Ageing
 
@@ -2215,8 +2262,8 @@ package), what the worn layers took is damage to the items, a part that
 came off becomes an item with what was worn on it, and what a part that
 can no longer hold was grasping is dropped. The query `held` (05 §11) is
 a list property until queries are built. Not built: ageing (section 9.4),
-`look`, `round`, `interactions` and `device` on items, `content_table`,
-what `grants`, `rules`, `guards` and `contains` give (carried
+`look`, `round`, `interactions` and `device` on items, a `table` in an
+item's own `contents`, what `grants`, `rules`, `guards` and `contains` give (carried
 as data), what seats and fixed holds mean, a check of an item's colour
 names against the `color` definitions, and `age`.
 

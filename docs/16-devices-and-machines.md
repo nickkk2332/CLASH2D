@@ -435,6 +435,15 @@ already gives: four hundred lamps in their default state are four
 hundred cells and no entity, and switching one off makes exactly one
 device.
 
+**From maps** (decisions D-850, D-851). A device a map gives settings
+(10 §3.2: `device` with `config`) has state of its own from the start:
+when its tract first loads, its element is promoted and each setting set
+in order of key, and a setting it does not have is a fault with its
+reason, the map and the cell. A device a map only names stays a plain
+element; the name waits for links (section 6). Items a map puts in the
+cell of an element whose device `holds` things are its latent contents
+(06 §9.3), made when it is first promoted.
+
 | Event | Subjects | Fields | Raised when |
 |-------|----------|--------|-------------|
 | `device_mode_changed` | `self` (the device) | `old`, `new` (`string`): the modes | `set_mode` changed its mode |
