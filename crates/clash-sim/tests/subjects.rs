@@ -160,6 +160,13 @@ fn everything_the_simulation_offers_is_registered_and_documented() {
     }
     let properties = engine_properties();
     assert!(properties.len() > 90, "{}", properties.len());
+    // The events of combat and of living things are entered by their
+    // own registry steps, which run once the bodies' step has registered
+    // the kinds their fields name; a property may say one of them
+    // changes it.
+    let mut events = engine_registry();
+    clash_sim::combat::events::register(&mut events);
+    clash_sim::life::events::register(&mut events);
     for property in &properties {
         let kind = registry.kind_id(property.kind).unwrap();
         let id = registry
@@ -176,7 +183,7 @@ fn everything_the_simulation_offers_is_registered_and_documented() {
         }
         // Every event a property says changes it is an event.
         for event in &spec.changed_by {
-            assert!(registry.event_id(event).is_some(), "{label}: {event}");
+            assert!(events.event_id(event).is_some(), "{label}: {event}");
         }
     }
     for function in engine_functions() {
@@ -484,8 +491,9 @@ fn an_entity_answers_for_itself() {
     // `tests/devices.rs`, those of interactions in
     // `tests/interactions.rs`, those of traits in `tests/traits.rs`,
     // those of defences in `tests/reactions.rs`, those of abilities in
-    // `tests/abilities.rs`, those of minds in `tests/ai.rs`, and those of
-    // ranged combat in `tests/ranged.rs`.
+    // `tests/abilities.rs`, those of minds in `tests/ai.rs`, those of
+    // ranged combat in `tests/ranged.rs`, and those of grips and
+    // takedowns in `tests/grips.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::device::properties().iter())
@@ -495,6 +503,8 @@ fn an_entity_answers_for_itself() {
         .chain(clash_sim::ability::properties().iter())
         .chain(clash_sim::ai::properties().iter())
         .chain(clash_sim::combat::ranged::properties().iter())
+        .chain(clash_sim::combat::grip::properties().iter())
+        .chain(clash_sim::combat::takedown::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {

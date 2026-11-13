@@ -7,7 +7,9 @@
 //! slow arrow is caught (`caught_arrow`); a raised shield interposes;
 //! `parry` is unavailable with nothing that has a flat in hand.
 //!
-//! C7: a grip lasts exactly as long as its action (invariant C7); a
+//! C7: a grip lasts exactly as long as its action (invariant C7); it
+//! reads from both ends (`entity.gripping`, `entity.gripped_by`) and a
+//! pin leaves the held `helpless`; a
 //! pinned arm's actions are unavailable until release, with the reason;
 //! the held cannot step away and is dragged; a throw sends the held
 //! through a window (`thrown_through`); a held creature takes a blow
@@ -583,6 +585,52 @@ fn a_grip_lasts_exactly_as_long_as_its_action() {
     );
     assert_eq!(grip::holder_of(&sim, bram), None);
     assert!(sim.grips().is_empty());
+}
+
+/// Reads `source` with `self` bound to `who`.
+fn read(sim: &Sim, who: EntityId, source: &str) -> Value {
+    let kinds = sim.exprs().kinds();
+    let scope = clash_expr::Context::new().subject("self", clash_expr::Type::Subject(kinds.entity));
+    let outcome = clash_expr::compile(
+        source,
+        sim.exprs().registry(),
+        &scope,
+        &clash_expr::Type::Any,
+    );
+    let code = match outcome.value {
+        Some(code) if !outcome.has_errors() => code,
+        _ => panic!("`{source}` does not compile: {:?}", outcome.diagnostics),
+    };
+    let bound = clash_sim::Bound::new().subject(sim.subject_value(Subject::Entity(who)));
+    sim.eval(&code, bound)
+}
+
+#[test]
+fn a_grip_reads_from_both_ends_and_a_pin_leaves_the_held_helpless() {
+    // `entity.gripping` and `entity.gripped_by` name the other of a
+    // grip; a pin leaves the held `helpless` (07 §9.1, §10). All three
+    // read as nothing again once the grip ends.
+    let (mut sim, ada, bram) = grabbed(13);
+    let gripping = read(&sim, ada, "self.gripping").to_stored();
+    assert_eq!(gripping, entity_value(&sim, bram));
+    let gripped_by = read(&sim, bram, "self.gripped_by").to_stored();
+    assert_eq!(gripped_by, entity_value(&sim, ada));
+    assert_eq!(read(&sim, ada, "self.gripped_by"), Value::Null);
+    assert_eq!(read(&sim, bram, "self.gripping"), Value::Null);
+    assert_eq!(read(&sim, bram, "self.helpless"), Value::Bool(true));
+    assert_eq!(read(&sim, ada, "self.helpless"), Value::Bool(false));
+
+    let running = sim.actions_of(ada)[0];
+    sim.submit(Command::Cancel {
+        entity: ada,
+        action: running,
+        abandon: true,
+    })
+    .unwrap();
+    sim.pump();
+    assert_eq!(read(&sim, ada, "self.gripping"), Value::Null);
+    assert_eq!(read(&sim, bram, "self.gripped_by"), Value::Null);
+    assert_eq!(read(&sim, bram, "self.helpless"), Value::Bool(false));
 }
 
 #[test]
