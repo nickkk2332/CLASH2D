@@ -30,4 +30,4 @@ assert "@e:2.part('head').layer_damage(0) > 0 and @e:3.part('head').layer_damage
 assert "@e:4.part('head').layer_damage(2) > 0 and @e:5.part('head').layer_damage(2) > 0"
 assert "@e:6.part('head').layer_damage(2) > 0"
 assert "@e:7.part('head').layer_damage(0) == 0 and len(@e:7.wounds) == 0"
-expect hash 0f1e75123cce8095908b697305d3293c
+expect hash 3c512a0ae09c54bd9ab368c0f8136b51

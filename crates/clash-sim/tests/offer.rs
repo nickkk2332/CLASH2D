@@ -64,7 +64,10 @@ fn the_actions_of_a_tag_say_whether_they_could_start_and_why_not() {
         &[Value::from("strike"), far.clone()],
     );
     assert_eq!(field(&at_far[0], "available"), Value::Bool(false));
-    assert_eq!(field(&at_far[0], "why"), Value::from("That is out of reach."));
+    assert_eq!(
+        field(&at_far[0], "why"),
+        Value::from("That is out of reach.")
+    );
 
     // Another tag, another list; a tag nobody carries, none.
     let waves = rows(&sim, me, "actions_with", &[Value::from("greeting")]);

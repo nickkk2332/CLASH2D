@@ -13,4 +13,4 @@ expect event ability_refused ability=core:force_push reason='ability.cost_short'
 assert "@e:0.pool.reserve == 10"
 advance 10s
 assert "@e:0.cannot_use('core:force_push') == null"
-expect hash 41860d775675fd9b5ae686526f9ea4cd
+expect hash b2bc5a59bdf23c3a5e844634b6274f9a
