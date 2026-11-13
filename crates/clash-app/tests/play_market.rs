@@ -200,7 +200,11 @@ fn about(run: &Headless, who: EntityId, property: &str, of: EntityId) -> bool {
                 .handle(clash_sim::Subject::Entity(of))?;
             session
                 .sim
-                .property_named(clash_sim::Subject::Entity(who), property, &[Value::from(of)])
+                .property_named(
+                    clash_sim::Subject::Entity(who),
+                    property,
+                    &[Value::from(of)],
+                )
                 .as_bool()
         })
         .flatten()

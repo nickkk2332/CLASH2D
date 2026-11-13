@@ -210,7 +210,7 @@ golden frames that moved are named with the fixes below.
 |---------|------|-------|-------|
 | The market fight | `play_market.rs` (`a_fight_in_the_square_and_the_watch_answers`, ignored for the known issue) | Tab to someone in the square, up to them, `f` until a blow lands; then three minutes waited a second at a time, watching for the watch | `Ada strikes the watchman.` `The watchman staggers.` `The watchman is wounded.` (Tab had moved to the watchman on the way), and no watchman held her hostile in three minutes: the watch does not answer the player (known issue 2) |
 | The watch, by script | (probes, not kept) | A watchman struck in the square by a rowdy; and by the player's character made delegated, with the same punches | Both answer: the watchman takes up `confront`. Only the player's own blows go unanswered |
-| A day of routines, its morning | `play_market.rs` (`a_morning_and_a_noon_in_the_square`, ignored as slow) | Begun at nine in the square with the stalls kept; Shift+P three times, to noon | Too slow for the suite in a debug build: three hours among 150 hot minds did not finish in half an hour of real time on a loaded machine. The routines themselves are checked by the test script `scenarios/town/routine_day.scn`, which watches from outside the town |
+| A day of routines, its morning | `play_market.rs` (`a_morning_and_a_noon_in_the_square`, ignored as slow) | Begun at nine in the square with the stalls kept; Shift+P three times, to noon | Too slow for the suite in a debug build: three hours among 150 hot minds had not finished after 33 minutes of real time on a loaded machine (stopped there). The quarrel and the armoury sessions pass on the merge. The routines themselves are checked by the test script `scenarios/town/routine_day.scn`, which watches from outside the town |
 | The last stand, again | `play_last_stand.rs` | All six sessions on the merged build | Pass unchanged: 320 s in a debug build |
 
 ### What was found and fixed
@@ -277,10 +277,14 @@ Worst first.
    upstairs passed without anyone looking. The watch's minds hold
    hostile whoever they see hurt someone (`hostile_after`), and a test
    script shows it working for a rowdy's blows and for the same
-   character's when it is delegated (the watchman perceives her
-   beforehand in both): what differs for a directly controlled striker
-   is in the AI's perception of the blow, which this stream keeps out
-   of. The market fight with the watch answering, fleeing and being
+   character's when it is delegated. In the session, read from truth
+   when the blow had landed, the watchman struck perceived her, did not
+   hold her hostile, and held the goal `answer_call` (someone had called
+   for help); the four other watchmen did not perceive her. What
+   differs for a directly controlled striker lies between the blow's
+   signal and the stance it should give (`perception::percept::receive`,
+   `ai::on_custom`), which this stream keeps out of; it is the AI
+   stream's to find. The market fight with the watch answering, fleeing and being
    caught cannot be played until it is found; its session is kept,
    ignored, to show it (`a_fight_in_the_square_and_the_watch_answers`).
 2. **Waiting among the town's people is still slow** after performance
