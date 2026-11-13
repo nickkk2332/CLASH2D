@@ -7,7 +7,8 @@
 //! Built so far: the data commands of `docs/04-data-and-modding.md`
 //! section 13, in [`data`]: `lint`, `explain` and `show`, with the
 //! definition types of the world and of the interface registered; `docs`,
-//! the reference generated from the engine's registries ([`reference`]);
+//! the reference generated from the engine's registries
+//! ([`reference`](mod@reference));
 //! `schema` ([`schema`]); `init-mod` and `new` ([`scaffold`]); `refs` and
 //! `find` ([`refs`](mod@refs)). Beside them: `scenario run`, which runs
 //! test scripts against the simulation in the four modes ([`scenario`]);
@@ -17,7 +18,8 @@
 //! of the specifications, `bench` ([`bench`](mod@bench)). `save`,
 //! `replay` and `worldview` drive the console's host of `clash-save`.
 //! The modding guide, `docs/modding-guide.md`, is run by the tests of
-//! [`guide`]. The rest is filled in by `docs/plans/tooling.md`.
+//! the `guide` module, which is built only for tests. The rest is filled
+//! in by `docs/plans/tooling.md`.
 
 use std::process::ExitCode;
 
