@@ -363,6 +363,8 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::combat::ranged::properties());
     properties.extend(crate::scenario::journal::properties());
     properties.extend(crate::offer::properties());
+    properties.extend(crate::combat::grip::properties());
+    properties.extend(crate::combat::takedown::properties());
     properties
 }
 

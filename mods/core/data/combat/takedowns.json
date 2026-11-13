@@ -1,0 +1,56 @@
+[
+  { "//": "Takedowns (07 §10), written as any mod would write them: joint actions in which the victim's role is forced. The attacker sees beforehand only whether the victim is close enough (`requires`); whether the victim has noticed them is tested when the attempt is made (`requires_at_start`): against someone who perceives the attacker and can resist, the attempt is over before it begins, and says why. Locked in, the victim's arms and legs are held and it has no defence. The blow is still a blow, delivered through what the victim wears: a steel collar stops a fist. Each names a cutscene the application may play.",
+    "type": "item", "id": "gorget", "name": "gorget",
+    "material": "steel", "mass": "1 kg", "volume": 0.002, "length": "0.2 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": "head", "layer": 4, "thickness": "4 mm", "coverage": 1.0 },
+    "tags": ["clothing", "armour"],
+    "glyph": { "ch": "^", "fg": "material" } },
+
+  { "//": "Being choked: pain mounts by itself until it knocks one out (`pain` stops a mind at 90).",
+    "type": "trait", "id": "choked", "name": "Choked",
+    "description": "Cannot breathe.",
+    "rates": [ { "pool": "pain", "rate": 25 } ],
+    "tags": ["choked"] },
+
+  { "//": "A blow to the head of someone who has not seen it coming: a sure strike with the fist, at a strength's worth of joules, where the victim is held still.",
+    "type": "action", "id": "knock_out", "name": "Knock out",
+    "roles": {
+      "attacker": { "uses": { "arm": 1 } },
+      "victim":   { "uses": { "arm": "all", "leg": "all" }, "forced": true } },
+    "requires": "dist(self, $victim) < 3",
+    "fail_text": "That is out of reach.",
+    "requires_at_start": "not (perceives($victim, $attacker) ?? false) or $victim.helpless",
+    "cutscene": "knock_out",
+    "tags": ["takedown"],
+    "attacks": {
+      "blow": {
+        "with":   { "part": "hand", "surface": "fist" },
+        "energy": "(self.attr.strength ?? 10) * 15",
+        "push":   0 } },
+    "phases": [
+      { "id": "close",  "time": "200 ms" },
+      { "id": "blow",   "time": "300 ms",
+        "do": [ { "strike": { "attack": "blow", "target": "$victim", "part": "$victim.part('head')", "sure": true } } ] },
+      { "id": "settle", "time": "300 ms" } ] },
+
+  { "//": "A choke from behind: an arm round the throat while the victim's own are held, for four seconds; pain mounts until the victim goes limp, and stops as the arm lets go.",
+    "type": "action", "id": "choke", "name": "Choke",
+    "roles": {
+      "attacker": { "uses": { "arm": "all" } },
+      "victim":   { "uses": { "arm": "all", "leg": "all" }, "forced": true } },
+    "requires": "dist(self, $victim) < 3",
+    "fail_text": "That is out of reach.",
+    "requires_at_start": "not (perceives($victim, $attacker) ?? false) or $victim.helpless",
+    "cutscene": "choke",
+    "tags": ["takedown"],
+    "phases": [
+      { "id": "seize",   "time": "300 ms" },
+      { "id": "squeeze", "time": "4 s",
+        "do": [ { "add_trait": { "to": "$victim", "trait": "choked" } } ],
+        "on_exit": [ { "remove_trait": { "from": "$victim", "trait": "choked" } } ] },
+      { "id": "settle",  "time": "400 ms" } ],
+    "on_interrupt": [ { "remove_trait": { "from": "$victim", "trait": "choked" } } ],
+    "on_cancel":    [ { "remove_trait": { "from": "$victim", "trait": "choked" } } ],
+    "on_abandon":   [ { "remove_trait": { "from": "$victim", "trait": "choked" } } ] }
+]
