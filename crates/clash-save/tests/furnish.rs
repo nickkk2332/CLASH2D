@@ -178,6 +178,10 @@ impl Town {
                 place: Place::at(at),
             }))
             .unwrap();
+        // Its mind thinks by no `mind` definition: nothing moves it but
+        // what the test does.
+        self.sim.remove_mind(who, Cause::DEBUG).unwrap();
+        self.sim.create_mind(who, None, Cause::DEBUG).unwrap();
         self.sim
             .submit(Command::Debug(DebugCommand::SetControl {
                 entity: who,

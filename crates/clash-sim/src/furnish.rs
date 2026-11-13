@@ -436,7 +436,11 @@ pub fn open_element(
         return Ok(Vec::new());
     }
     let device = promote(sim, loc, layer, cause)?;
-    Ok(sim.entities.contents(device).to_vec())
+    let held = sim.entities.contents(device).to_vec();
+    // Contents that came to nothing leave a device with nothing of its
+    // own: it is plain again.
+    crate::device::settle(sim, device, cause);
+    Ok(held)
 }
 
 /// Latent contents whose element has gone: made where something
@@ -483,8 +487,11 @@ pub(crate) fn on_event(sim: &mut Sim, event: &SimEvent) {
         EventBody::World(WorldEvent::ElementDamaged { loc, layer, .. })
             if sim.furnish.latent.contains_key(&(*loc, *layer)) =>
         {
-            if let Err(reason) = promote(sim, *loc, *layer, event.cause) {
-                sim.fault(reason);
+            match promote(sim, *loc, *layer, event.cause) {
+                Ok(device) => {
+                    crate::device::settle(sim, device, event.cause);
+                }
+                Err(reason) => sim.fault(reason),
             }
         }
         _ => {}

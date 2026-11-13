@@ -2234,6 +2234,7 @@ is not reachable from a mind (05 §7.3). Those that follow holding name
 | `entity.capacity_volume`, `entity.capacity_mass` | `real?`: a container's `holds`, in cubic metres and kilograms; null for none or no limit |
 | `entity.stowed_volume` | `real?`: the space what is directly inside it takes up |
 | `entity.is_latent` | `bool`: a container whose contents have not been made |
+| `element.latent` | `bool`: an element whose contents generation left latent (section 9.3) |
 | `entity.conferred_tags` | `list<string>`: the tags it carries only because of what it grasps or wears |
 
 **Traits** are built with their definition type, verbs, properties,
@@ -2264,7 +2265,9 @@ came off becomes an item with what was worn on it, and what a part that
 can no longer hold was grasping is dropped. The query `held` (05 §11) is
 a list property until queries are built. Not built: ageing (section 9.4),
 `look`, `round`, `interactions` and `device` on items, a `table` in an
-item's own `contents`, what `grants`, `rules`, `guards` and `contains` give (carried
+item's own `contents`, a verb that makes items from a content table
+(drawing from one is reachable only from Rust: `item::table::draw`, and
+answering a tract's furnishing requests is `furnish::honour`), what `grants`, `rules`, `guards` and `contains` give (carried
 as data), what seats and fixed holds mean, a check of an item's colour
 names against the `color` definitions, and `age`.
 
