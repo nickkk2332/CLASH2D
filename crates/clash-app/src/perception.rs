@@ -11,7 +11,7 @@
 //!
 //! | When | What |
 //! |------|------|
-//! | A character becomes the player's | [`give_senses`]: the senses its templates gave, or else those the start names, or else every sense the loaded mods define (`attach_sense`) |
+//! | A character becomes the player's | Nothing: the simulation gives it senses when the game begins (`BeginScenario`), if its templates gave none |
 //! | The simulation has moved | [`look`]: the frames are taken (`drain_frames`), and what is in view as the batch ends is worked out: the cells of the party's view (`party_view`) with what is in them now, and who stands in them. Playback is answered from it. |
 //! | Playback asks | [`perceived`] is `Sim::party_perceived`; [`seen_cell`] and [`seen_sprite`] answer from what is in view |
 //! | Playback has caught up | [`show`] gives the view model what no event said: the cells the frames recorded, as map memory holds them, the cells that left view, the cells in view as they are now, and who is in view |
@@ -57,7 +57,7 @@ use clash_scene::view::{
 };
 use clash_scene::{GlyphDef, GlyphInputs, GlyphPart, Perceived, Theme};
 use clash_sim::Sim;
-use clash_sim::perception::{self, PartyFrame, PartyPerception, Remembered, SenseDef};
+use clash_sim::perception::{self, PartyFrame, PartyPerception, Remembered};
 use clash_world::{CellBox, CellPos, GridId, Location, OccupantFilter, OccupantKind, SkyTime};
 
 /// The bare name of the preference that switches the omniscient view
@@ -147,42 +147,6 @@ pub fn remembered(seen: &Remembered) -> CellContents {
         open_sky: seen.open_sky,
         light: seen.light,
     }
-}
-
-/// Gives a character the senses it perceives with, if its templates gave
-/// it none (15 §4): those named, by qualified id, or with none named
-/// every `sense` the loaded mods define, in order of qualified id. It
-/// then belongs to the party once its control is direct (15 §13).
-///
-/// Senses are given directly (`attach_sense`), not by command: the
-/// simulation has no command for it until templates carry `senses`
-/// (15 §15). The application does it once, before the character is put
-/// in the world.
-pub fn give_senses(sim: &mut Sim, entity: EntityId, named: &[String]) -> Result<(), String> {
-    if sim.components().senses.contains(entity) {
-        return Ok(());
-    }
-    let names: Vec<String> = if named.is_empty() {
-        sim.defs()
-            .try_registry::<SenseDef>()
-            .map(|senses| {
-                let mut names: Vec<String> = senses.names().to_vec();
-                names.sort();
-                names
-            })
-            .unwrap_or_default()
-    } else {
-        named.to_vec()
-    };
-    for name in names {
-        let sense = sim
-            .perception_defs()
-            .sense_named(&name)
-            .ok_or_else(|| format!("there is no sense `{name}` to give the character"))?;
-        perception::attach_sense(sim, entity, sense)
-            .map_err(|reason| format!("the character could not be given `{name}`: {reason}"))?;
-    }
-    Ok(())
 }
 
 /// The glyph of the interface for a look written as a character and two

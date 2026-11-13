@@ -1061,7 +1061,7 @@ from the start, before it confers anything (`ability_suppressed`
 follows `ability_granted`). Its `state` reads `suppressed` while it is
 active and suppressed. What suppresses each instance and what it
 resisted are kept in it, and the imposed suppressions in the owner's
-`Abilities` (save layout 14), so nothing is derived.
+`Abilities` (save layout 15), so nothing is derived.
 
 Dormancy (section 6.1) is as A1 to A4 built it: an ability's `while` is
 kept current, and a trait's where everything it reads names its events.

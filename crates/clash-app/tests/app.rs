@@ -186,7 +186,10 @@ fn preferences_and_bindings_are_kept_between_runs() {
     // The next run starts with them.
     let mut again = bundled("default", &data);
     assert_eq!(theme(&again), Some(Value::Str("ui:night".to_owned())));
-    press(&mut again, &["enter", "tab", "tab", "enter"]);
+    press(
+        &mut again,
+        &["enter", "tab", "tab", "down", "down", "enter"],
+    );
     let before = player(&again);
     press(&mut again, &["w"]);
     let after = player(&again);
@@ -235,7 +238,7 @@ fn sim_omniscient(run: &Headless) -> bool {
 fn the_development_profile_can_see_everything() {
     let data = data_dir("omniscient");
     let mut run = bundled("dev", &data);
-    press(&mut run, &["enter", "tab", "tab", "enter"]);
+    press(&mut run, &["enter", "tab", "tab", "down", "down", "enter"]);
     // Into the house: the street is now remembered.
     press(&mut run, &["k", "k", "k", "k"]);
     let at = player(&run);
@@ -282,7 +285,7 @@ fn the_development_profile_can_see_everything() {
 fn outside_a_development_profile_f12_sees_nothing_more() {
     let data = data_dir("not-omniscient");
     let mut run = bundled("default", &data);
-    press(&mut run, &["enter", "tab", "tab", "enter"]);
+    press(&mut run, &["enter", "tab", "tab", "down", "down", "enter"]);
     let at = player(&run);
     let believed = known_count(&run, at);
     let before = run.text();

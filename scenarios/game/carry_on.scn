@@ -1,0 +1,23 @@
+# carry_on (plans/scenarios.md, SC7): under `on_party_gone: continue`
+# the player resumes as another character in the same world, with the
+# first one's body still where it fell (13 §9.3). `core:town_life`
+# carries on with a newcomer made from its character template at the
+# place the party began. The character dies; `party_gone` is raised;
+# the newcomer is made, placed and given direct control; the first is
+# counted fallen and stays where it was, dead.
+use default seed=7
+begin core:town_life place=0 as=first
+assert "@first.loc.time_of_day == 32400"
+advance 2s
+die who=@first
+advance 2s
+expect event party_gone
+assert "fallen() == [@first]"
+assert "len(party()) == 1 and party()[0] != @first"
+assert "party()[0].control == 'direct' and @first.control == 'none'"
+assert "@first.loc.x == 2040 and @first.loc.y == 898"
+assert "party()[0].loc.x == 2040 and party()[0].loc.y == 898"
+assert "is_null(scenario_id()) == false"
+advance 10s
+assert "len(party()) == 1"
+expect hash 8159088f8bb6f055d0c5f794225da661

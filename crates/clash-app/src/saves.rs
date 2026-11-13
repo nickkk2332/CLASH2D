@@ -17,7 +17,7 @@
 //! holds the metadata of 01 §11.2: the name; a summary the application
 //! writes (who, where it began, and how long the game has run); the
 //! seed; and, as the saver's own bytes, what the application needs to
-//! carry the game on ([`SaveMeta`]: the start it began from, the
+//! carry the game on ([`SaveMeta`]: the scenario it began from, the
 //! character's name and who the character is).
 //!
 //! # The list
@@ -73,8 +73,8 @@ pub const SAVE_BROKEN: &str = "broken";
 /// does not hold. Kept in the save's bytes of the saver's own, as JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct SaveMeta {
-    /// The qualified id of the start the game began from.
-    pub start: String,
+    /// The qualified id of the scenario the game began from.
+    pub scenario: String,
     /// What the player called the character.
     pub name: String,
     /// The player's character, if the saver knows it.
@@ -89,7 +89,7 @@ impl SaveMeta {
     /// The saver's own bytes: JSON.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut map = serde_json::Map::new();
-        map.insert("start".to_owned(), self.start.clone().into());
+        map.insert("scenario".to_owned(), self.scenario.clone().into());
         map.insert("name".to_owned(), self.name.clone().into());
         if let Some(player) = self.player {
             map.insert("player".to_owned(), player.to_bits().into());
@@ -99,7 +99,7 @@ impl SaveMeta {
 
     /// Reads back what [`SaveMeta::to_bytes`] wrote, with the seed and
     /// the summary from the save. Bytes that are not that give an empty
-    /// start, which the application refuses with a reason.
+    /// scenario, which the application refuses with a reason.
     pub fn from_save(meta: &clash_save::SaveMeta) -> SaveMeta {
         let read: serde_json::Value = serde_json::from_slice(&meta.app).unwrap_or_default();
         let text = |field: &str| {
@@ -109,7 +109,7 @@ impl SaveMeta {
                 .to_owned()
         };
         SaveMeta {
-            start: text("start"),
+            scenario: text("scenario"),
             name: text("name"),
             player: read
                 .get("player")
@@ -409,7 +409,7 @@ mod tests {
     #[test]
     fn what_the_application_keeps_reads_back() {
         let meta = SaveMeta {
-            start: "core:town".to_owned(),
+            scenario: "core:town".to_owned(),
             name: "Ada".to_owned(),
             player: Some(EntityId::from_bits(7)),
             seed: 3,
@@ -422,6 +422,6 @@ mod tests {
         assert_eq!(SaveMeta::from_save(&saved), meta);
         // Bytes of someone else's: nothing to carry on from.
         let other = clash_save::SaveMeta::new("x").app(b"\x00\x01".to_vec());
-        assert_eq!(SaveMeta::from_save(&other).start, "");
+        assert_eq!(SaveMeta::from_save(&other).scenario, "");
     }
 }
