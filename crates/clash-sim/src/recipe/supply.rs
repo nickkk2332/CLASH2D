@@ -121,7 +121,13 @@ pub fn at_hand(
 /// container whose contents are still latent.
 fn open_contents(sim: &Sim, holder: EntityId) -> Vec<EntityId> {
     let mut out = Vec::new();
-    let mut stack: Vec<EntityId> = sim.entities.contents(holder).iter().rev().copied().collect();
+    let mut stack: Vec<EntityId> = sim
+        .entities
+        .contents(holder)
+        .iter()
+        .rev()
+        .copied()
+        .collect();
     while let Some(id) = stack.pop() {
         out.push(id);
         let latent = sim.components.get::<Item>(id).is_some_and(Item::is_latent);
@@ -272,13 +278,18 @@ pub fn standing(sim: &Sim, recipe: &RecipeDef, items: &[EntityId]) -> Vec<InputS
                             .filter(|(item, _)| item == id)
                             .map(|(_, count)| *count)
                             .sum();
-                        let take = item_count(sim, *id).saturating_sub(already).min(need - have);
+                        let take = item_count(sim, *id)
+                            .saturating_sub(already)
+                            .min(need - have);
                         if take > 0 {
                             used.push((*id, take));
                             have += take;
                         }
                     }
-                    (Real::from_i64(i64::from(need)), Real::from_i64(i64::from(have)))
+                    (
+                        Real::from_i64(i64::from(need)),
+                        Real::from_i64(i64::from(have)),
+                    )
                 }
             };
             InputStanding {
@@ -293,7 +304,12 @@ pub fn standing(sim: &Sim, recipe: &RecipeDef, items: &[EntityId]) -> Vec<InputS
 /// What a recipe would use of what is at hand, or why it cannot be
 /// started: an input short (`recipe.missing_input`), a tool missing
 /// (`recipe.missing_tool`), nothing to mend (`recipe.nothing_to_mend`).
-pub fn plan(sim: &Sim, id: super::RecipeId, recipe: &RecipeDef, items: &[EntityId]) -> Result<Plan, Reason> {
+pub fn plan(
+    sim: &Sim,
+    id: super::RecipeId,
+    recipe: &RecipeDef,
+    items: &[EntityId],
+) -> Result<Plan, Reason> {
     let name = recipe_name(sim, id);
     let mut plan = Plan::default();
     for (input, standing) in recipe.inputs.iter().zip(standing(sim, recipe, items)) {
@@ -365,12 +381,11 @@ pub fn plan(sim: &Sim, id: super::RecipeId, recipe: &RecipeDef, items: &[EntityI
             Some(item) => plan.tools.push(item),
             None => {
                 let what = tool_name(sim, tool);
-                return Err(Reason::new(
-                    codes::MISSING_TOOL,
-                    format!("a tool is wanted: {what}"),
-                )
-                .with("recipe", name.as_str())
-                .with("what", what.as_str()));
+                return Err(
+                    Reason::new(codes::MISSING_TOOL, format!("a tool is wanted: {what}"))
+                        .with("recipe", name.as_str())
+                        .with("what", what.as_str()),
+                );
             }
         }
     }
@@ -382,7 +397,10 @@ pub fn plan(sim: &Sim, id: super::RecipeId, recipe: &RecipeDef, items: &[EntityI
                 sim.entities
                     .get(*item)
                     .is_some_and(|entity| entity.tags.contains(&repairs.tag))
-                    && sim.components.get::<Item>(*item).is_some_and(|it| it.damage() > 0)
+                    && sim
+                        .components
+                        .get::<Item>(*item)
+                        .is_some_and(|it| it.damage() > 0)
                     && !plan.takes.iter().any(|(taken, _)| taken == item)
             })
             .max_by_key(|item| {

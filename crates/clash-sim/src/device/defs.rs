@@ -331,7 +331,9 @@ impl<'de> FromKind<'de> for ProvidesDef {
                 know_how: object.know_how,
                 when: WhenModes(object.when),
             }),
-            other => Err(other.unexpected("a know-how id, or an object with `know_how` and `when`")),
+            other => {
+                Err(other.unexpected("a know-how id, or an object with `know_how` and `when`"))
+            }
         }
     }
 }
@@ -406,9 +408,7 @@ impl Def for DeviceDef {
             let fits = match (entry.kind, &entry.default) {
                 (_, None) | (ConfigKind::Flag, Some(ConfigValue::Bool(_))) => true,
                 (ConfigKind::Number, Some(ConfigValue::Number(number))) => number.is_finite(),
-                (ConfigKind::Choice, Some(ConfigValue::Text(text))) => {
-                    entry.options.contains(text)
-                }
+                (ConfigKind::Choice, Some(ConfigValue::Text(text))) => entry.options.contains(text),
                 (ConfigKind::Text, Some(ConfigValue::Text(_))) => true,
                 _ => false,
             };

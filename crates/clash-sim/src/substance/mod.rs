@@ -57,9 +57,7 @@ use crate::registry::PropertyDef;
 use crate::verb::VerbDef;
 use crate::world_verbs::{ArgRow, arg, spec};
 
-pub use defs::{
-    AddsDef, FormsDef, GivesTraitDef, InBodyDef, ROUTES, SubstanceDef, SubstanceId,
-};
+pub use defs::{AddsDef, FormsDef, GivesTraitDef, InBodyDef, ROUTES, SubstanceDef, SubstanceId};
 
 /// Millilitres in a cubic metre: what `per_ml` and `at_least_ml` count
 /// in.
@@ -301,7 +299,11 @@ pub fn room_in(sim: &Sim, item: EntityId) -> Option<Real> {
 }
 
 fn store(sim: &mut Sim, item: EntityId, held: Mixture, coat: Option<Mixture>) {
-    let mut found = sim.components.get::<Substances>(item).cloned().unwrap_or_default();
+    let mut found = sim
+        .components
+        .get::<Substances>(item)
+        .cloned()
+        .unwrap_or_default();
     found.held = held;
     tidy(&mut found.held);
     if let Some(mut coat) = coat {
@@ -401,11 +403,10 @@ pub(crate) fn on_made(sim: &mut Sim, item: EntityId) {
 
 fn container_arg(sim: &Sim, item: EntityId) -> Result<(), Reason> {
     if capacity(sim, item).is_none() {
-        return Err(refuse(
-            codes::NOT_A_CONTAINER,
-            "that cannot hold anything poured",
-        )
-        .with("entity", item.to_string()));
+        return Err(
+            refuse(codes::NOT_A_CONTAINER, "that cannot hold anything poured")
+                .with("entity", item.to_string()),
+        );
     }
     Ok(())
 }
@@ -500,7 +501,9 @@ fn spill(sim: &mut Sim, loc: Location, id: SubstanceId, volume: Real, cause: Cau
     let Some(field) = sim.cosmos.defs().fields().resolve(&field_name, namespace) else {
         return;
     };
-    let levels = (volume * L_PER_M3 * def.levels_per_litre).min(FIELD_MAX).max(Real::ZERO);
+    let levels = (volume * L_PER_M3 * def.levels_per_litre)
+        .min(FIELD_MAX)
+        .max(Real::ZERO);
     let levels = i16::try_from(levels.floor().to_i64()).unwrap_or(0);
     if levels > 0 {
         let _ = sim.world(|ctx| ctx.edit(cause).add_field(loc, field, levels));
@@ -511,7 +514,12 @@ fn spill(sim: &mut Sim, loc: Location, id: SubstanceId, volume: Real, cause: Cau
 /// as `pour` from it would; or from a cell, taking up to the room left
 /// of each substance whose `loose` field is there, a level for every
 /// `1 / levels_per_litre` litres. Returns the volume that went in.
-pub fn fill(sim: &mut Sim, container: EntityId, from: Subject, cause: Cause) -> Result<Real, Reason> {
+pub fn fill(
+    sim: &mut Sim,
+    container: EntityId,
+    from: Subject,
+    cause: Cause,
+) -> Result<Real, Reason> {
     container_arg(sim, container)?;
     match from {
         Subject::Entity(source) => pour(sim, source, PourTo::Item(container), None, cause),
@@ -531,7 +539,8 @@ pub fn fill(sim: &mut Sim, container: EntityId, from: Subject, cause: Cause) -> 
                 let Some(def) = def(sim, id) else {
                     continue;
                 };
-                let (Some(field_name), per_litre) = (def.forms.loose.clone(), def.levels_per_litre) else {
+                let (Some(field_name), per_litre) = (def.forms.loose.clone(), def.levels_per_litre)
+                else {
                     continue;
                 };
                 if per_litre <= Real::ZERO {
@@ -548,7 +557,8 @@ pub fn fill(sim: &mut Sim, container: EntityId, from: Subject, cause: Cause) -> 
                 }
                 let available = Real::from_i64(i64::from(level)) / per_litre / L_PER_M3;
                 let volume = available.min(room);
-                let levels = i16::try_from((volume * L_PER_M3 * per_litre).floor().to_i64()).unwrap_or(0);
+                let levels =
+                    i16::try_from((volume * L_PER_M3 * per_litre).floor().to_i64()).unwrap_or(0);
                 if levels <= 0 {
                     continue;
                 }
@@ -559,8 +569,10 @@ pub fn fill(sim: &mut Sim, container: EntityId, from: Subject, cause: Cause) -> 
                 went += volume;
             }
             if went <= Real::ZERO {
-                return Err(refuse(codes::EMPTY, "there is nothing here to fill it with")
-                    .with("entity", container.to_string()));
+                return Err(
+                    refuse(codes::EMPTY, "there is nothing here to fill it with")
+                        .with("entity", container.to_string()),
+                );
             }
             Ok(went)
         }
@@ -654,7 +666,13 @@ pub fn dose_body(
             .in_body
             .traits
             .iter()
-            .map(|given| (given.given.clone(), given.at_least_ml, given.lasts.map(|lasts| lasts.0)))
+            .map(|given| {
+                (
+                    given.given.clone(),
+                    given.at_least_ml,
+                    given.lasts.map(|lasts| lasts.0),
+                )
+            })
             .collect();
         let name = qualified(sim, *id);
         if ml > Real::ZERO {
@@ -772,7 +790,13 @@ pub fn dose_from(
 /// Takes one member of an item into a body whole (`take_in`): what it
 /// holds goes in by the route, and the member is gone. Returns what got
 /// in, in millilitres.
-pub fn take_in(sim: &mut Sim, who: EntityId, what: EntityId, route: &str, cause: Cause) -> Result<Real, Reason> {
+pub fn take_in(
+    sim: &mut Sim,
+    who: EntityId,
+    what: EntityId,
+    route: &str,
+    cause: Cause,
+) -> Result<Real, Reason> {
     route_ok(route)?;
     if sim.components.get::<Item>(what).is_none() {
         return Err(bad_argument("take_in", "what", "an item"));
@@ -805,7 +829,8 @@ pub fn after_hit(
     let mut delivered = Vec::new();
     let mut left = Vec::new();
     for (id, volume) in coating {
-        let (share, wipes) = def(sim, id).map_or((Real::ZERO, Real::ONE), |def| (def.share, def.wipes));
+        let (share, wipes) =
+            def(sim, id).map_or((Real::ZERO, Real::ONE), |def| (def.share, def.wipes));
         let goes = if breached { volume * share } else { Real::ZERO };
         if goes > Real::ZERO {
             delivered.push((id, goes));
@@ -815,7 +840,9 @@ pub fn after_hit(
     }
     let kept = held(sim, item);
     store(sim, item, kept, Some(left));
-    if !delivered.is_empty() && let Err(reason) = dose_body(sim, target, &delivered, "inject", cause) {
+    if !delivered.is_empty()
+        && let Err(reason) = dose_body(sim, target, &delivered, "inject", cause)
+    {
         sim.fault(reason);
     }
 }
@@ -842,7 +869,11 @@ const EVENTS: &[EventRow] = &[
         doc: "Something was poured out of a container (16 §9.5): into another, or onto a cell. `self` is what it came out of.",
         subjects: &[("self", "entity")],
         fields: &[
-            ("amount", "real", "The volume that left it, in cubic metres."),
+            (
+                "amount",
+                "real",
+                "The volume that left it, in cubic metres.",
+            ),
             ("onto", "any", "Where it went: the container, or the cell."),
         ],
     },
@@ -852,7 +883,11 @@ const EVENTS: &[EventRow] = &[
         subjects: &[("self", "entity")],
         fields: &[
             ("substance", "string", "The substance's qualified id."),
-            ("amount", "real", "What got in, in millilitres: its volume times the route's factor."),
+            (
+                "amount",
+                "real",
+                "What got in, in millilitres: its volume times the route's factor.",
+            ),
             ("route", "string", "`ingest`, `inject`, `skin` or `breath`."),
         ],
     },
@@ -1000,14 +1035,25 @@ pub fn properties() -> Vec<PropertyDef> {
     ]
 }
 
-fn entity(sim: &Sim, verb: &str, call: &crate::rule::VerbCall<'_>, index: usize, name: &str) -> Result<EntityId, Reason> {
+fn entity(
+    sim: &Sim,
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+    name: &str,
+) -> Result<EntityId, Reason> {
     match sim.subject_of(arg(call, index)) {
         Some(Subject::Entity(id)) => Ok(id),
         _ => Err(bad_argument(verb, name, "an entity")),
     }
 }
 
-fn optional_volume(verb: &str, call: &crate::rule::VerbCall<'_>, index: usize, name: &str) -> Result<Option<Real>, Reason> {
+fn optional_volume(
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+    name: &str,
+) -> Result<Option<Real>, Reason> {
     match arg(call, index) {
         Value::Null => Ok(None),
         value => value
@@ -1039,7 +1085,12 @@ pub fn verbs() -> Vec<VerbDef> {
                     &[
                         ("from", "entity", false, "The container poured from."),
                         ("to", "any", false, "Another container, or a cell."),
-                        ("amount", "real", true, "How much, in cubic metres (`\"100 ml\"`). Left out, all of it."),
+                        (
+                            "amount",
+                            "real",
+                            true,
+                            "How much, in cubic metres (`\"100 ml\"`). Left out, all of it.",
+                        ),
                     ] as &[ArgRow],
                 )
             },
@@ -1086,8 +1137,18 @@ pub fn verbs() -> Vec<VerbDef> {
                         ("who", "entity", false, "The body."),
                         ("from", "entity", true, "The container it comes from."),
                         ("route", "string", false, ROUTE_DOC),
-                        ("amount", "real", true, "How much, in cubic metres. Left out, all the container holds."),
-                        ("substance", "id<substance>", true, "Instead of `from`: a substance, of which `amount` goes in."),
+                        (
+                            "amount",
+                            "real",
+                            true,
+                            "How much, in cubic metres. Left out, all the container holds.",
+                        ),
+                        (
+                            "substance",
+                            "id<substance>",
+                            true,
+                            "Instead of `from`: a substance, of which `amount` goes in.",
+                        ),
                     ],
                 )
             },
@@ -1097,8 +1158,9 @@ pub fn verbs() -> Vec<VerbDef> {
                 let amount = optional_volume("dose", call, 3, "amount")?;
                 match substance_of(sim, arg(call, 4)) {
                     Some(substance) => {
-                        let amount = amount_ok(amount)?
-                            .ok_or_else(|| bad_argument("dose", "amount", "a volume, with `substance`"))?;
+                        let amount = amount_ok(amount)?.ok_or_else(|| {
+                            bad_argument("dose", "amount", "a volume, with `substance`")
+                        })?;
                         dose_body(sim, who, &[(substance, amount)], &route, cause).map(Value::Real)
                     }
                     None => {
@@ -1139,7 +1201,12 @@ pub fn verbs() -> Vec<VerbDef> {
                     "Takes one member of an item into a body whole: eating a loaf, swallowing a pill (16 §9.5). What it holds goes in by the route, as `dose` puts it, and the member is gone. Gives what got in, in millilitres. Refused with `substance.bad_route` and `substance.bad_argument`.",
                     &[
                         ("who", "entity", false, "The body."),
-                        ("what", "entity", false, "The item; one member of a stack is taken."),
+                        (
+                            "what",
+                            "entity",
+                            false,
+                            "The item; one member of a stack is taken.",
+                        ),
                         ("route", "string", false, ROUTE_DOC),
                     ],
                 )
@@ -1173,7 +1240,13 @@ mod tests {
         add_into(&mut mixture, SubstanceId::new(1), Real::of(2.0));
         add_into(&mut mixture, SubstanceId::new(0), Real::of(1.0));
         add_into(&mut mixture, SubstanceId::new(1), Real::of(1.0));
-        assert_eq!(mixture, vec![(SubstanceId::new(0), Real::of(1.0)), (SubstanceId::new(1), Real::of(3.0))]);
+        assert_eq!(
+            mixture,
+            vec![
+                (SubstanceId::new(0), Real::of(1.0)),
+                (SubstanceId::new(1), Real::of(3.0))
+            ]
+        );
         assert_eq!(total(&mixture), Real::of(4.0));
     }
 }

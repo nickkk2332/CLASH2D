@@ -6,7 +6,9 @@
 
 use clash_core::{EntityId, Real};
 use clash_expr::Value;
-use clash_world::{CellPos, Layer, Location, OccupantFilter, OccupantKind, OccupantKinds, distinct_ids};
+use clash_world::{
+    CellPos, Layer, Location, OccupantFilter, OccupantKind, OccupantKinds, distinct_ids,
+};
 
 use super::defs::{RecipeDef, RecipeId};
 use super::supply;
@@ -63,7 +65,8 @@ pub fn stations_near(sim: &Sim, who: EntityId) -> Vec<Target> {
             if let Ok(here) = sim.cosmos.occupants_at(loc, &filter) {
                 for id in distinct_ids(&here) {
                     let target = Target::Entity(id);
-                    let carries = device::def_for(sim, target).is_some_and(|def| !def.tags.is_empty());
+                    let carries =
+                        device::def_for(sim, target).is_some_and(|def| !def.tags.is_empty());
                     if carries && !found.contains(&target) {
                         found.push(target);
                     }
@@ -144,7 +147,11 @@ fn gives(sim: &Sim, recipe: &RecipeDef) -> String {
     let mut parts: Vec<String> = Vec::new();
     for output in &recipe.outputs {
         if let Some(item) = output.item {
-            parts.push(format!("{} {}", output.count, super::item_def_name(sim, item.id())));
+            parts.push(format!(
+                "{} {}",
+                output.count,
+                super::item_def_name(sim, item.id())
+            ));
         }
         if let (Some(substance), Some(amount)) = (output.substance, output.amount) {
             parts.push(format!(
@@ -163,7 +170,10 @@ fn gives(sim: &Sim, recipe: &RecipeDef) -> String {
 /// [`recipe_options`] as the property `recipe_options` gives it: a list
 /// of maps.
 pub(crate) fn options_value(sim: &Sim, who: EntityId) -> Value {
-    let recipe_type = sim.exprs.registry().def_type_id(<RecipeDef as clash_data::Def>::TYPE);
+    let recipe_type = sim
+        .exprs
+        .registry()
+        .def_type_id(<RecipeDef as clash_data::Def>::TYPE);
     let Some(registry) = sim.defs.try_registry::<RecipeDef>() else {
         return Value::list([]);
     };
@@ -172,7 +182,9 @@ pub(crate) fn options_value(sim: &Sim, who: EntityId) -> Value {
         let Some(recipe) = registry.try_get(option.recipe) else {
             continue;
         };
-        let device = option.station.and_then(|station| device::device_now(sim, station));
+        let device = option
+            .station
+            .and_then(|station| device::device_now(sim, station));
         let here = option
             .station
             .and_then(|station| crate::world_verbs::position_of(sim, station.subject()))
@@ -210,7 +222,12 @@ pub(crate) fn options_value(sim: &Sim, who: EntityId) -> Value {
                     standing.what
                 )
             })
-            .chain(recipe.tools.iter().map(|tool| format!("tool: {}", supply::tool_name(sim, tool))))
+            .chain(
+                recipe
+                    .tools
+                    .iter()
+                    .map(|tool| format!("tool: {}", supply::tool_name(sim, tool))),
+            )
             .collect();
         let recipe_value = recipe_type.map_or_else(
             || Value::text(super::recipe_name(sim, option.recipe)),
@@ -232,7 +249,10 @@ pub(crate) fn options_value(sim: &Sim, who: EntityId) -> Value {
             ("available", Value::Bool(option.refusal.is_none())),
             ("resumes", Value::Bool(option.resumes)),
             ("why", Value::text(why)),
-            ("work", Value::Real(recipe.work.0.as_secs_real().max(Real::ZERO))),
+            (
+                "work",
+                Value::Real(recipe.work.0.as_secs_real().max(Real::ZERO)),
+            ),
             ("inputs", Value::list(inputs)),
             ("takes", Value::text(takes.join(", "))),
             ("gives", Value::text(gives(sim, recipe))),
@@ -269,7 +289,10 @@ pub(crate) fn know_how_value(sim: &Sim, who: EntityId) -> Value {
             .collect();
         rows.push(Value::map([
             ("id", Value::text(super::know_how::know_how_name(sim, id))),
-            ("name", Value::text(super::know_how::know_how_label(sim, id))),
+            (
+                "name",
+                Value::text(super::know_how::know_how_label(sim, id)),
+            ),
             ("group", Value::text(def.group.clone().unwrap_or_default())),
             ("known", Value::Bool(known)),
             ("ready", Value::Bool(known || ready)),

@@ -1172,7 +1172,7 @@ working but is not destroyed is still that body.
 | `body_destroyed` | `self` | None. The root was destroyed: the body is in pieces (section 7.5). |
 | `part_detached` | `self`, `here?` | `part` (`string`), the name of the part that came off; `how` (`string`), `severed`, `destroyed` or `removed`; `mass` (`real`), kilograms of it and everything that went with it; `parts` (`int`), how many parts came off; `leaves_item` (`bool`), whether its definition says it leaves an item. In Rust it carries the part itself, for whoever makes an item of it (section 7.5). |
 | `hit_exited` | `self`, `here?` | `part` (`part?`), the part it left through; `kind` (`id<damage_type>`); `energy`, `intensity` (`real`); `dir` (`list<real>?`) |
-| `exposure_incoming` (hook) | `self`, `here?` | `pool` (`id<pool>`), `amount` (`real`), `route` (`string`: `breath`, `skin` or `any`), `field` (`string`, the qualified id of the field). A handler may change `amount`, or cancel. |
+| `exposure_incoming` (hook) | `self`, `here?` | `pool` (`id<pool>`), `amount` (`real`), `route` (`string`: `breath`, `skin` or `any` from a field; `ingest`, `inject`, `skin` or `breath` for a substance, 16 §9.5), `field` (`string`, the qualified id of the field, or of the substance dosed). A handler may change `amount`, or cancel. |
 
 The hit is the verb `hit { target, kind, energy, intensity, part?,
 height?, spread?, area?, span?, dir? }`: with `spread` true it is spread

@@ -805,7 +805,13 @@ fn device_arg(
     let target = sim
         .subject_of(crate::world_verbs::arg(call, index))
         .and_then(crate::interaction::Target::of)
-        .ok_or_else(|| bad_argument(verb, name, "a device, or an element whose definition names one"))?;
+        .ok_or_else(|| {
+            bad_argument(
+                verb,
+                name,
+                "a device, or an element whose definition names one",
+            )
+        })?;
     device_for(sim, target, cause)
 }
 
@@ -882,7 +888,12 @@ fn state_verbs() -> Vec<VerbDef> {
                     &[
                         OF_DEVICE,
                         ("key", "string", false, "The setting's id."),
-                        ("value", "any", false, "Its new value: a truth value for a flag, a number within its bounds, one of a choice's options, or a text."),
+                        (
+                            "value",
+                            "any",
+                            false,
+                            "Its new value: a truth value for a flag, a number within its bounds, one of a choice's options, or a text.",
+                        ),
                     ],
                 )
             },
@@ -902,8 +913,18 @@ fn state_verbs() -> Vec<VerbDef> {
                     "add_resource",
                     "Adds an amount to a device's store of a resource, within its capacity (16 §5.2): stoking a stove, filling a still's boiler. Gives what was added. Refused with `device.not_a_device`, `device.no_store` and `device.bad_amount`.",
                     &[
-                        ("to", "any", false, "The device, or an element whose definition names one: it is promoted."),
-                        ("resource", "string", false, "The resource, as the device's `stores` name it."),
+                        (
+                            "to",
+                            "any",
+                            false,
+                            "The device, or an element whose definition names one: it is promoted.",
+                        ),
+                        (
+                            "resource",
+                            "string",
+                            false,
+                            "The resource, as the device's `stores` name it.",
+                        ),
                         ("amount", "real", false, "How much, in the resource's unit."),
                     ],
                 )
@@ -923,8 +944,18 @@ fn state_verbs() -> Vec<VerbDef> {
                     "drain_resource",
                     "Takes an amount from a device's store of a resource, down to nothing (16 §5.2). Gives what was taken. Refused as `add_resource` is.",
                     &[
-                        ("from", "any", false, "The device, or an element whose definition names one: it is promoted."),
-                        ("resource", "string", false, "The resource, as the device's `stores` name it."),
+                        (
+                            "from",
+                            "any",
+                            false,
+                            "The device, or an element whose definition names one: it is promoted.",
+                        ),
+                        (
+                            "resource",
+                            "string",
+                            false,
+                            "The resource, as the device's `stores` name it.",
+                        ),
                         ("amount", "real", false, "How much, in the resource's unit."),
                     ],
                 )
@@ -933,7 +964,8 @@ fn state_verbs() -> Vec<VerbDef> {
                 let device = device_arg(sim, "drain_resource", call, 0, "from", cause)?;
                 let resource = text_arg("drain_resource", call, 1, "resource")?;
                 let amount = number_arg("drain_resource", call, 2, "amount")?;
-                add_resource(sim, device, &resource, -amount, cause).map(|moved| Value::Real(-moved))
+                add_resource(sim, device, &resource, -amount, cause)
+                    .map(|moved| Value::Real(-moved))
             },
         },
     ]

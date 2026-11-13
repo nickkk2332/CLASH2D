@@ -44,7 +44,6 @@ pub mod options;
 pub mod supply;
 pub mod work;
 
-
 use clash_core::{Dur, EntityId, Real, impl_state_hash};
 use clash_data::{Def, DefTypes, Text};
 use clash_expr::{EventSpec, Registry, Type, Value};
@@ -63,8 +62,8 @@ use crate::verb::VerbDef;
 use crate::world_verbs::{ArgRow, arg, spec};
 
 pub use defs::{
-    BY_HAND, EmitsDef, InputDef, KnowHowDef, KnowHowId, OutputDef, RecipeDef, RecipeId,
-    RepairsDef, ToolDef, WhileDef,
+    BY_HAND, EmitsDef, InputDef, KnowHowDef, KnowHowId, OutputDef, RecipeDef, RecipeId, RepairsDef,
+    ToolDef, WhileDef,
 };
 pub use know_how::KnowHow;
 pub use options::{RecipeOption, recipe_options, stations_near};
@@ -204,7 +203,10 @@ pub fn recipe_name(sim: &Sim, id: RecipeId) -> String {
     sim.defs
         .try_registry::<RecipeDef>()
         .filter(|registry| id.index() < registry.len())
-        .map_or_else(|| id.raw().to_string(), |registry| registry.name(id).to_owned())
+        .map_or_else(
+            || id.raw().to_string(),
+            |registry| registry.name(id).to_owned(),
+        )
 }
 
 /// What a reader calls a recipe: its `name`, else its id.
@@ -416,8 +418,16 @@ const EVENTS: &[EventRow] = &[
         subjects: WORK_SUBJECTS,
         fields: &[
             RECIPE_FIELD,
-            ("resumed", "bool", "Whether it goes on with work already done."),
-            ("work", "real", "How much work it takes in all, in seconds at a rate of 1."),
+            (
+                "resumed",
+                "bool",
+                "Whether it goes on with work already done.",
+            ),
+            (
+                "work",
+                "real",
+                "How much work it takes in all, in seconds at a rate of 1.",
+            ),
         ],
         mutable: &[],
         hook: false,
@@ -428,7 +438,11 @@ const EVENTS: &[EventRow] = &[
         subjects: WORK_SUBJECTS,
         fields: &[
             RECIPE_FIELD,
-            ("why", "string", "`stopped`, `station`, `supply`, `condition` or `worker`."),
+            (
+                "why",
+                "string",
+                "`stopped`, `station`, `supply`, `condition` or `worker`.",
+            ),
         ],
         mutable: &[],
         hook: false,
@@ -461,7 +475,11 @@ const EVENTS: &[EventRow] = &[
         subjects: &[("self", "entity")],
         fields: &[
             ("know_how", "string", "The know-how's qualified id."),
-            ("how", "string", "`template`, `taught` or `read`, or what the rule that taught it said."),
+            (
+                "how",
+                "string",
+                "`template`, `taught` or `read`, or what the rule that taught it said.",
+            ),
         ],
         mutable: &[],
         hook: false,
@@ -545,7 +563,10 @@ pub const STATION_PARAM: &str = "station";
 /// [`work::check`] gives. Called when the simulation is set up and after
 /// a load.
 pub(crate) fn bind(sim: &mut Sim) {
-    let _ = sim.on(crate::action::ACTION_STARTING, Handler::new(action_starting));
+    let _ = sim.on(
+        crate::action::ACTION_STARTING,
+        Handler::new(action_starting),
+    );
 }
 
 fn action_starting(sim: &mut Sim, delivery: &mut crate::bus::Delivery<'_>) {
@@ -556,7 +577,10 @@ fn action_starting(sim: &mut Sim, delivery: &mut crate::bus::Delivery<'_>) {
     let Some(map) = params.as_map() else {
         return;
     };
-    let Some(recipe) = map.get(RECIPE_PARAM).and_then(|value| recipe_of(sim, value)) else {
+    let Some(recipe) = map
+        .get(RECIPE_PARAM)
+        .and_then(|value| recipe_of(sim, value))
+    else {
         return;
     };
     let station = map
@@ -612,9 +636,14 @@ pub(crate) fn on_wake(sim: &mut Sim, id: WakeId, wake: Wake) {
 // ---- Properties --------------------------------------------------------------------
 
 /// The recipe and the station a property's arguments name.
-fn recipe_and_station(sim: &Sim, args: &[Value]) -> Option<(RecipeId, Option<crate::interaction::Target>)> {
+fn recipe_and_station(
+    sim: &Sim,
+    args: &[Value],
+) -> Option<(RecipeId, Option<crate::interaction::Target>)> {
     let recipe = recipe_of(sim, args.first()?)?;
-    let station = args.get(1).and_then(|value| options::station_of(sim, value));
+    let station = args
+        .get(1)
+        .and_then(|value| options::station_of(sim, value));
     Some((recipe, station))
 }
 
@@ -726,19 +755,36 @@ pub fn properties() -> Vec<PropertyDef> {
 
 // ---- Verbs -------------------------------------------------------------------------
 
-fn entity_at(sim: &Sim, verb: &str, call: &crate::rule::VerbCall<'_>, index: usize, name: &str) -> Result<EntityId, Reason> {
+fn entity_at(
+    sim: &Sim,
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+    name: &str,
+) -> Result<EntityId, Reason> {
     match sim.subject_of(arg(call, index)) {
         Some(Subject::Entity(id)) => Ok(id),
         _ => Err(bad_argument(verb, name, "an entity")),
     }
 }
 
-fn recipe_at(sim: &Sim, verb: &str, call: &crate::rule::VerbCall<'_>, index: usize) -> Result<RecipeId, Reason> {
+fn recipe_at(
+    sim: &Sim,
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+) -> Result<RecipeId, Reason> {
     recipe_of(sim, arg(call, index)).ok_or_else(|| bad_argument(verb, "recipe", "a recipe"))
 }
 
-fn know_how_at(sim: &Sim, verb: &str, call: &crate::rule::VerbCall<'_>, index: usize) -> Result<KnowHowId, Reason> {
-    know_how::know_how_of(sim, arg(call, index)).ok_or_else(|| bad_argument(verb, "what", "a piece of know-how"))
+fn know_how_at(
+    sim: &Sim,
+    verb: &str,
+    call: &crate::rule::VerbCall<'_>,
+    index: usize,
+) -> Result<KnowHowId, Reason> {
+    know_how::know_how_of(sim, arg(call, index))
+        .ok_or_else(|| bad_argument(verb, "what", "a piece of know-how"))
 }
 
 const WHO_WORKS: ArgRow = ("who", "entity", false, "Who works.");
@@ -762,7 +808,12 @@ pub fn verbs() -> Vec<VerbDef> {
                     &[
                         WHO_WORKS,
                         RECIPE_ARG,
-                        ("at", "any", true, "The station: an element or a device. Left out, by hand."),
+                        (
+                            "at",
+                            "any",
+                            true,
+                            "The station: an element or a device. Left out, by hand.",
+                        ),
                     ],
                 )
             },
@@ -856,7 +907,12 @@ pub fn verbs() -> Vec<VerbDef> {
                     &[
                         ("who", "entity", false, "Who learns."),
                         ("what", "id<know_how>", false, "The know-how."),
-                        ("how", "string", true, "What `know_how_gained` says of how; `taught` if left out."),
+                        (
+                            "how",
+                            "string",
+                            true,
+                            "What `know_how_gained` says of how; `taught` if left out.",
+                        ),
                     ],
                 )
             },

@@ -98,11 +98,7 @@ pub fn mode_of(sim: &Sim, target: Target) -> Option<String> {
 pub fn set_mode(sim: &mut Sim, device: EntityId, mode: &str, cause: Cause) -> Result<bool, Reason> {
     let def = def_of(sim, device).ok_or_else(not_a_device)?;
     let index = def.mode_index(mode).ok_or_else(|| {
-        Reason::new(
-            codes::UNKNOWN_MODE,
-            format!("that has no mode `{mode}`"),
-        )
-        .with("mode", mode)
+        Reason::new(codes::UNKNOWN_MODE, format!("that has no mode `{mode}`")).with("mode", mode)
     })?;
     let old = mode_name(sim, device).unwrap_or_default();
     let Some(component) = sim.components.get_mut::<Device>(device) else {
@@ -192,7 +188,8 @@ pub fn set_config(
                 .as_number()
                 .filter(|number| number.is_finite())
                 .ok_or_else(bad)?;
-            if entry.min.is_some_and(|min| number < min) || entry.max.is_some_and(|max| number > max)
+            if entry.min.is_some_and(|min| number < min)
+                || entry.max.is_some_and(|max| number > max)
             {
                 return Err(bad());
             }
@@ -203,7 +200,9 @@ pub fn set_config(
         {
             clash_core::Value::Str(text.to_string())
         }
-        (super::defs::ConfigKind::Text, Value::Str(text)) => clash_core::Value::Str(text.to_string()),
+        (super::defs::ConfigKind::Text, Value::Str(text)) => {
+            clash_core::Value::Str(text.to_string())
+        }
         _ => return Err(bad()),
     };
     let default = entry.default_value();
@@ -309,11 +308,8 @@ pub fn add_resource(
     // first, and its rate worked out again after.
     crate::recipe::bring_up_to_date(sim, device, cause);
     let before = stored(sim, device, resource).ok_or_else(|| {
-        Reason::new(
-            codes::NO_STORE,
-            format!("that stores no `{resource}`"),
-        )
-        .with("resource", resource)
+        Reason::new(codes::NO_STORE, format!("that stores no `{resource}`"))
+            .with("resource", resource)
     })?;
     record_store(sim, device, resource, before + amount);
     let after = stored(sim, device, resource).unwrap_or(before);

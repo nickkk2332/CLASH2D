@@ -29,8 +29,8 @@ use clash_world::{Cause, Location};
 use super::defs::{RecipeDef, RecipeId, WhileDef};
 use super::supply::{self, Plan};
 use super::{
-    Process, RECIPE_COMPLETED, RECIPE_COMPLETING, RECIPE_STALLED, RECIPE_STARTED,
-    RECIPE_STARTING, codes, recipe_def, recipe_name,
+    Process, RECIPE_COMPLETED, RECIPE_COMPLETING, RECIPE_STALLED, RECIPE_STARTED, RECIPE_STARTING,
+    codes, recipe_def, recipe_name,
 };
 use crate::Sim;
 use crate::bus::{EventPayload, FieldValue};
@@ -79,12 +79,23 @@ fn place_of(sim: &Sim, worker: Option<EntityId>, station: Option<Target>) -> Opt
 
 /// The values a recipe's expressions are bound to: the worker (or the
 /// machine), the station, and the place.
-fn bound(sim: &Sim, worker: Option<EntityId>, station: Option<EntityId>, here: Option<Location>) -> Vec<clash_expr::Value> {
+fn bound(
+    sim: &Sim,
+    worker: Option<EntityId>,
+    station: Option<EntityId>,
+    here: Option<Location>,
+) -> Vec<clash_expr::Value> {
     let worker = worker.or(station);
     vec![
-        worker.map_or(clash_expr::Value::Null, |id| sim.subject_value(Subject::Entity(id))),
-        station.map_or(clash_expr::Value::Null, |id| sim.subject_value(Subject::Entity(id))),
-        here.map_or(clash_expr::Value::Null, |loc| sim.subject_value(Subject::Loc(loc))),
+        worker.map_or(clash_expr::Value::Null, |id| {
+            sim.subject_value(Subject::Entity(id))
+        }),
+        station.map_or(clash_expr::Value::Null, |id| {
+            sim.subject_value(Subject::Entity(id))
+        }),
+        here.map_or(clash_expr::Value::Null, |loc| {
+            sim.subject_value(Subject::Loc(loc))
+        }),
     ]
 }
 
@@ -96,7 +107,8 @@ fn bound_of(values: &[clash_expr::Value]) -> Bound {
 
 /// Whether a station's definition carries one of a recipe's `at` tags.
 fn station_fits(sim: &Sim, recipe: &RecipeDef, station: Target) -> bool {
-    device::def_for(sim, station).is_some_and(|def| def.tags.iter().any(|tag| recipe.at.contains(tag)))
+    device::def_for(sim, station)
+        .is_some_and(|def| def.tags.iter().any(|tag| recipe.at.contains(tag)))
 }
 
 /// The running action of a worker whose phase is held: what its work
@@ -153,7 +165,10 @@ pub fn check(
         if !station_fits(sim, recipe, at) {
             return Err(Reason::new(
                 codes::NO_STATION,
-                format!("that is not a place to make it: it is made at {}", recipe.at.join(" or ")),
+                format!(
+                    "that is not a place to make it: it is made at {}",
+                    recipe.at.join(" or ")
+                ),
             )
             .with("recipe", name.as_str())
             .with("at", recipe.at.join(", ")));
@@ -174,7 +189,9 @@ pub fn check(
     let under_way = holder.and_then(|holder| sim.components.get::<Process>(holder));
     let resume = match under_way {
         Some(process) if process.recipe == id => {
-            let busy = process.worker.is_some_and(|other| Some(other) != worker && process_action_runs(sim, process));
+            let busy = process
+                .worker
+                .is_some_and(|other| Some(other) != worker && process_action_runs(sim, process));
             if busy {
                 return Err(Reason::new(codes::BUSY, "someone is working there")
                     .with("recipe", name.as_str()));
@@ -185,7 +202,10 @@ pub fn check(
             let other = recipe_name(sim, process.recipe);
             return Err(Reason::new(
                 codes::BUSY,
-                format!("{} is under way there", super::recipe_label(sim, process.recipe)),
+                format!(
+                    "{} is under way there",
+                    super::recipe_label(sim, process.recipe)
+                ),
             )
             .with("recipe", name.as_str())
             .with("other", other.as_str()));
@@ -197,12 +217,11 @@ pub fn check(
         let known = worker.is_some_and(|worker| super::know_how::knows(sim, worker, needed.id()));
         if !known && !provided.contains(&needed.id()) {
             let what = super::know_how::know_how_label(sim, needed.id());
-            return Err(Reason::new(
-                codes::UNKNOWN_HOW,
-                format!("it needs know-how of {what}"),
-            )
-            .with("recipe", name.as_str())
-            .with("know_how", super::know_how::know_how_name(sim, needed.id())));
+            return Err(
+                Reason::new(codes::UNKNOWN_HOW, format!("it needs know-how of {what}"))
+                    .with("recipe", name.as_str())
+                    .with("know_how", super::know_how::know_how_name(sim, needed.id())),
+            );
         }
     }
     if let Some(at) = station
@@ -271,13 +290,20 @@ pub fn check(
 
 /// Whether the action a process's worker works it by is still running.
 fn process_action_runs(sim: &Sim, process: &Process) -> bool {
-    process.action.is_some_and(|action| sim.actions.get(action).is_some())
+    process
+        .action
+        .is_some_and(|action| sim.actions.get(action).is_some())
 }
 
 // ---- Starting ------------------------------------------------------------------
 
 /// The subjects of this module's events.
-fn payload(name: &'static str, actor: EntityId, station: Option<EntityId>, recipe: &str) -> EventPayload {
+fn payload(
+    name: &'static str,
+    actor: EntityId,
+    station: Option<EntityId>,
+    recipe: &str,
+) -> EventPayload {
     let mut payload = EventPayload::new(name)
         .subject("self", Subject::Entity(actor))
         .with("recipe", FieldValue::text(recipe));
@@ -309,12 +335,18 @@ pub fn start(
         None => None,
     };
     let Some(holder) = device.or(worker) else {
-        return Err(Reason::new(codes::NO_STATION, "nothing is there to work it")
-            .with("recipe", name.as_str()));
+        return Err(
+            Reason::new(codes::NO_STATION, "nothing is there to work it")
+                .with("recipe", name.as_str()),
+        );
     };
     let actor = worker.unwrap_or(holder);
     if sim.bus.has_listeners(RECIPE_STARTING) {
-        let raised = sim.raise(Where::Entity(actor), cause, payload(RECIPE_STARTING, actor, device, &name))?;
+        let raised = sim.raise(
+            Where::Entity(actor),
+            cause,
+            payload(RECIPE_STARTING, actor, device, &name),
+        )?;
         if let Some(reason) = raised.cancelled {
             if let Some(device) = device {
                 device::settle(sim, device, cause);
@@ -341,7 +373,8 @@ pub fn start(
                 sim.cancel_wake(wake);
             }
             use_up(sim, &plan, cause)?;
-            let needed = recipe_def(sim, id).map_or(Real::ZERO, |recipe| recipe.work.0.as_secs_real());
+            let needed =
+                recipe_def(sim, id).map_or(Real::ZERO, |recipe| recipe.work.0.as_secs_real());
             Process {
                 recipe: id,
                 worker: None,
@@ -371,7 +404,10 @@ pub fn start(
     sim.components.insert(holder, process);
     let started = payload(RECIPE_STARTED, actor, device, &name)
         .with("resumed", resumed)
-        .with("work", recipe_def(sim, id).map_or(Real::ZERO, |recipe| recipe.work.0.as_secs_real()));
+        .with(
+            "work",
+            recipe_def(sim, id).map_or(Real::ZERO, |recipe| recipe.work.0.as_secs_real()),
+        );
     let _ = sim.raise(Where::Entity(actor), cause, started);
     emit(sim, holder, cause);
     refresh(sim, holder, cause);
@@ -429,7 +465,9 @@ pub(crate) fn drawn_since(sim: &Sim, station: EntityId, resource: &str) -> Real 
     if process.rate <= Real::ZERO {
         return Real::ZERO;
     }
-    let Some(WhileDef::Rates(rates)) = recipe_def(sim, process.recipe).and_then(|recipe| recipe.during.as_ref()) else {
+    let Some(WhileDef::Rates(rates)) =
+        recipe_def(sim, process.recipe).and_then(|recipe| recipe.during.as_ref())
+    else {
         return Real::ZERO;
     };
     let Some(want) = rates.get(resource) else {
@@ -459,19 +497,24 @@ fn rate_now(sim: &Sim, holder: EntityId, process: &Process) -> (Real, Real, Opti
     let values = bound(sim, process.worker, process.station, here);
     // Who works it.
     let worker_rate = match process.worker {
-        Some(worker) if sim.entities.contains(worker) && process_action_runs(sim, process) => match &recipe.rate {
-            Some(rate) => {
-                let mut host = sim.host(bound_of(&values));
-                rate.eval_on(&sim.defs, &mut host)
-                    .filter(|rate| rate.is_finite())
-                    .unwrap_or(Real::ZERO)
-                    .max(Real::ZERO)
+        Some(worker) if sim.entities.contains(worker) && process_action_runs(sim, process) => {
+            match &recipe.rate {
+                Some(rate) => {
+                    let mut host = sim.host(bound_of(&values));
+                    rate.eval_on(&sim.defs, &mut host)
+                        .filter(|rate| rate.is_finite())
+                        .unwrap_or(Real::ZERO)
+                        .max(Real::ZERO)
+                }
+                None => Real::ONE,
             }
-            None => Real::ONE,
-        },
+        }
         Some(_) => return (Real::ZERO, process.supply, Some(WHY_STOPPED)),
         None => {
-            let alone = process.station.is_some_and(|station| device::auto_now(sim, station)) && recipe.auto;
+            let alone = process
+                .station
+                .is_some_and(|station| device::auto_now(sim, station))
+                && recipe.auto;
             if alone {
                 Real::ONE
             } else {
@@ -482,7 +525,9 @@ fn rate_now(sim: &Sim, holder: EntityId, process: &Process) -> (Real, Real, Opti
     if worker_rate <= Real::ZERO {
         return (Real::ZERO, process.supply, Some(WHY_WORKER));
     }
-    let speed = process.station.map_or(Real::ONE, |station| device::speed_now(sim, station));
+    let speed = process
+        .station
+        .map_or(Real::ONE, |station| device::speed_now(sim, station));
     if speed <= Real::ZERO {
         return (Real::ZERO, process.supply, Some(WHY_STATION));
     }
@@ -582,12 +627,13 @@ pub(crate) fn refresh(sim: &mut Sim, holder: EntityId, cause: Cause) {
             }
         }
     }
-    let stepping = steps(recipe) && (rate > Real::ZERO || matches!(recipe.during, Some(WhileDef::Place(_))) || process.worker.is_some());
+    let stepping = steps(recipe)
+        && (rate > Real::ZERO
+            || matches!(recipe.during, Some(WhileDef::Place(_)))
+            || process.worker.is_some());
     if stepping && why != Some(WHY_STOPPED) {
         let step = recipe.check_every.map_or_else(
-            || {
-                Dur::from_secs(sim.setting_int(STEP_SETTING, DEFAULT_STEP_S).max(1)).as_secs_real()
-            },
+            || Dur::from_secs(sim.setting_int(STEP_SETTING, DEFAULT_STEP_S).max(1)).as_secs_real(),
             |every| every.0.as_secs_real(),
         );
         sooner(step);
@@ -609,7 +655,8 @@ pub(crate) fn refresh(sim: &mut Sim, holder: EntityId, cause: Cause) {
     if newly_stalled && let Some(why) = why {
         let name = recipe_name(sim, recipe_id);
         let actor = worker.unwrap_or(holder);
-        let stalled = payload(RECIPE_STALLED, actor, station, &name).with("why", FieldValue::text(why));
+        let stalled =
+            payload(RECIPE_STALLED, actor, station, &name).with("why", FieldValue::text(why));
         let _ = sim.raise(Where::Entity(actor), cause, stalled);
     }
 }
@@ -645,19 +692,26 @@ fn emit(sim: &mut Sim, holder: EntityId, cause: Cause) {
     let Some(process) = sim.components.get::<Process>(holder) else {
         return;
     };
-    let Some(emits) = recipe_def(sim, process.recipe).and_then(|recipe| recipe.emits.as_ref()) else {
+    let Some(emits) = recipe_def(sim, process.recipe).and_then(|recipe| recipe.emits.as_ref())
+    else {
         return;
     };
     let Some(here) = sim.entities.location(holder) else {
         return;
     };
     let owner = recipe_name(sim, process.recipe);
-    let namespace = owner.split_once(':').map(|(namespace, _)| namespace.to_owned());
+    let namespace = owner
+        .split_once(':')
+        .map(|(namespace, _)| namespace.to_owned());
     let fields: Vec<(clash_world::FieldId, i16)> = emits
         .field
         .iter()
         .filter_map(|(name, amount)| {
-            let field = sim.cosmos.defs().fields().resolve(name, namespace.as_deref())?;
+            let field = sim
+                .cosmos
+                .defs()
+                .fields()
+                .resolve(name, namespace.as_deref())?;
             Some((field, i16::from(*amount)))
         })
         .collect();
@@ -707,7 +761,8 @@ pub(crate) fn complete(sim: &mut Sim, holder: EntityId, cause: Cause) {
     let actor = process.worker.unwrap_or(holder);
     let mut spoiled = false;
     if sim.bus.has_listeners(RECIPE_COMPLETING) {
-        let completing = payload(RECIPE_COMPLETING, actor, process.station, &name).with("spoiled", false);
+        let completing =
+            payload(RECIPE_COMPLETING, actor, process.station, &name).with("spoiled", false);
         match sim.raise(Where::Entity(actor), cause, completing) {
             Ok(raised) => {
                 spoiled = raised.cancelled.is_some()
@@ -723,10 +778,14 @@ pub(crate) fn complete(sim: &mut Sim, holder: EntityId, cause: Cause) {
     if !spoiled {
         give_outputs(sim, &process, holder, cause);
     }
-    let completed = payload(RECIPE_COMPLETED, actor, process.station, &name).with("spoiled", spoiled);
+    let completed =
+        payload(RECIPE_COMPLETED, actor, process.station, &name).with("spoiled", spoiled);
     let _ = sim.raise(Where::Entity(actor), cause, completed);
     if let (Some(worker), Some(action)) = (process.worker, process.action)
-        && sim.actions.get(action).is_some_and(|running| running.actor == worker)
+        && sim
+            .actions
+            .get(action)
+            .is_some_and(|running| running.actor == worker)
     {
         let _ = sim.cancel_action(worker, action, false, cause);
     }
@@ -751,7 +810,12 @@ fn give_outputs(sim: &mut Sim, process: &Process, holder: EntityId, cause: Cause
     let here = place_of(sim, process.worker, process.station.map(Target::Entity))
         .or_else(|| sim.entities.location(holder));
     for output in &recipe.outputs {
-        if output.chance < Real::ONE && !sim.rng.stream(super::work::RECIPE_STREAM).chance(output.chance) {
+        if output.chance < Real::ONE
+            && !sim
+                .rng
+                .stream(super::work::RECIPE_STREAM)
+                .chance(output.chance)
+        {
             continue;
         }
         if let Some(item) = output.item {
@@ -768,7 +832,9 @@ fn give_outputs(sim: &mut Sim, process: &Process, holder: EntityId, cause: Cause
                     continue;
                 }
                 let went = substance::put(sim, container, &[(substance.id(), left)]);
-                left -= went.iter().fold(Real::ZERO, |sum, (_, volume)| sum + *volume);
+                left -= went
+                    .iter()
+                    .fold(Real::ZERO, |sum, (_, volume)| sum + *volume);
             }
         }
     }
@@ -812,7 +878,8 @@ fn make_item(
         .is_some_and(|def| def.stack);
     let (batch, times) = if stacks { (count, 1) } else { (1, count) };
     for _ in 0..times {
-        let made = match crate::item::create(sim, def, batch, crate::entity::Place::at(here), cause) {
+        let made = match crate::item::create(sim, def, batch, crate::entity::Place::at(here), cause)
+        {
             Ok(made) => made,
             Err(reason) => {
                 sim.fault(reason);
@@ -850,7 +917,9 @@ pub(crate) fn auto_check(sim: &mut Sim, device: EntityId, cause: Cause) {
                 registry
                     .iter()
                     .filter(|(_, recipe)| {
-                        recipe.auto && !recipe.by_hand() && def.tags.iter().any(|tag| recipe.at.contains(tag))
+                        recipe.auto
+                            && !recipe.by_hand()
+                            && def.tags.iter().any(|tag| recipe.at.contains(tag))
                     })
                     .map(|(id, _)| id)
                     .collect()

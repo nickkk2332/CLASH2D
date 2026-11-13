@@ -108,13 +108,15 @@ pub enum WhileDef {
 }
 
 impl<'de> FromKind<'de> for WhileDef {
-    fn from_kind<A: MapAccess<'de>>(kind: Kind, value: KindValue<'_, A>) -> Result<WhileDef, A::Error> {
+    fn from_kind<A: MapAccess<'de>>(
+        kind: Kind,
+        value: KindValue<'_, A>,
+    ) -> Result<WhileDef, A::Error> {
         match kind {
             Kind::Object => value.read().map(WhileDef::Rates),
             Kind::String => value.read().map(WhileDef::Place),
-            other => Err(other.unexpected(
-                "a map of resources to rates a second, or a condition on the place",
-            )),
+            other => Err(other
+                .unexpected("a map of resources to rates a second, or a condition on the place")),
         }
     }
 }
@@ -298,7 +300,11 @@ impl Def for RecipeDef {
             }
         }
         for (index, tool) in self.tools.iter().enumerate() {
-            let kinds = [tool.quality.is_some(), tool.item.is_some(), tool.tag.is_some()];
+            let kinds = [
+                tool.quality.is_some(),
+                tool.item.is_some(),
+                tool.tag.is_some(),
+            ];
             if kinds.iter().filter(|set| **set).count() != 1 {
                 cx.error(format!(
                     "tools {index}: a tool names one of `quality`, `item` or `tag`"

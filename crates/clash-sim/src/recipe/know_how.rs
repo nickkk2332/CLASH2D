@@ -143,7 +143,10 @@ fn unknown(name: &str) -> Reason {
 pub fn know_how_of(sim: &Sim, value: &clash_expr::Value) -> Option<KnowHowId> {
     match value {
         clash_expr::Value::Id(id)
-            if sim.exprs.registry().def_type_id(<KnowHowDef as clash_data::Def>::TYPE)
+            if sim
+                .exprs
+                .registry()
+                .def_type_id(<KnowHowDef as clash_data::Def>::TYPE)
                 == Some(id.ty) =>
         {
             u16::try_from(id.index).ok().map(KnowHowId::new)
@@ -186,7 +189,13 @@ pub fn grant(sim: &mut Sim, who: EntityId, id: KnowHowId, how: &str, cause: Caus
 /// Teaches an entity a piece of know-how (16 §8.5 `teach`): refused with
 /// `know_how.no_mind` for one with no mind and `know_how.needs` while
 /// something it `needs` is not known. Returns whether it is new.
-pub fn teach(sim: &mut Sim, who: EntityId, id: KnowHowId, how: &str, cause: Cause) -> Result<bool, Reason> {
+pub fn teach(
+    sim: &mut Sim,
+    who: EntityId,
+    id: KnowHowId,
+    how: &str,
+    cause: Cause,
+) -> Result<bool, Reason> {
     sim.known(who)?;
     let name = know_how_name(sim, id);
     let def = registry(sim)
@@ -207,12 +216,11 @@ pub fn teach(sim: &mut Sim, who: EntityId, id: KnowHowId, how: &str, cause: Caus
         .collect();
     if let Some(first) = missing.first() {
         let needed = know_how_label(sim, *first);
-        return Err(Reason::new(
-            codes::NEEDS_FIRST,
-            format!("{needed} must be known first"),
-        )
-        .with("know_how", name.as_str())
-        .with("needs", know_how_name(sim, *first)));
+        return Err(
+            Reason::new(codes::NEEDS_FIRST, format!("{needed} must be known first"))
+                .with("know_how", name.as_str())
+                .with("needs", know_how_name(sim, *first)),
+        );
     }
     Ok(grant(sim, who, id, how, cause))
 }
@@ -243,12 +251,19 @@ pub fn unlearn(sim: &mut Sim, who: EntityId, id: KnowHowId, cause: Cause) -> Res
 /// many were new. Refused with `know_how.teaches_nothing` for an item
 /// that teaches nothing, and with the first refusal when none could be
 /// taught.
-pub fn learn_from(sim: &mut Sim, who: EntityId, item: EntityId, cause: Cause) -> Result<i64, Reason> {
+pub fn learn_from(
+    sim: &mut Sim,
+    who: EntityId,
+    item: EntityId,
+    cause: Cause,
+) -> Result<i64, Reason> {
     let taught: Vec<KnowHowId> = sim
         .components
         .get::<Item>(item)
         .and_then(|it| crate::item::def_of(&sim.defs, it))
-        .map_or_else(Vec::new, |def| def.teaches.iter().map(|id| id.id()).collect());
+        .map_or_else(Vec::new, |def| {
+            def.teaches.iter().map(|id| id.id()).collect()
+        });
     if taught.is_empty() {
         return Err(Reason::new(
             codes::TEACHES_NOTHING,
@@ -307,7 +322,11 @@ pub(crate) fn from_templates(sim: &mut Sim, who: EntityId, cause: Cause) {
             continue;
         };
         let owner = registry.name(template).to_owned();
-        names.extend(def.know_how.iter().map(|name| (owner.clone(), name.clone())));
+        names.extend(
+            def.know_how
+                .iter()
+                .map(|name| (owner.clone(), name.clone())),
+        );
     }
     for (owner, written) in names {
         let id = if written.contains(':') {

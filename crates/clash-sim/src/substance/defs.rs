@@ -177,7 +177,9 @@ impl Def for SubstanceDef {
         }
         for (index, given) in self.in_body.traits.iter().enumerate() {
             if !(given.at_least_ml.is_finite() && given.at_least_ml >= Real::ZERO) {
-                cx.error(format!("in_body.traits {index}: `at_least_ml` is zero or more"));
+                cx.error(format!(
+                    "in_body.traits {index}: `at_least_ml` is zero or more"
+                ));
             }
             if given.lasts.is_some_and(|lasts| lasts.0.as_micros() <= 0) {
                 cx.error(format!("in_body.traits {index}: `for` is above zero"));

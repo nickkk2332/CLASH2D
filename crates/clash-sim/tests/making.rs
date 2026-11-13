@@ -87,7 +87,10 @@ fn core_dir(sub: &str) -> Vec<(String, String)> {
         .iter()
         .map(|file| {
             let name = file.file_name().unwrap().to_string_lossy();
-            (format!("data/{sub}/{name}"), std::fs::read_to_string(file).unwrap())
+            (
+                format!("data/{sub}/{name}"),
+                std::fs::read_to_string(file).unwrap(),
+            )
         })
         .collect()
 }
@@ -95,7 +98,10 @@ fn core_dir(sub: &str) -> Vec<(String, String)> {
 /// A file of `mods/core/data`, as written.
 fn core_file(name: &str) -> (String, String) {
     let path = common::mods_dir().join("core/data").join(name);
-    (format!("data/{name}"), std::fs::read_to_string(path).unwrap())
+    (
+        format!("data/{name}"),
+        std::fs::read_to_string(path).unwrap(),
+    )
 }
 
 /// `items.json` without its colour, which is the interface's type. It
@@ -153,7 +159,13 @@ fn person(name: &str) -> CharacterSpec {
 
 fn spawn(sim: &mut Sim, name: &str, place: Place) -> EntityId {
     let id = sim.truth().entities().next_id().unwrap();
-    debug(sim, DebugCommand::Spawn { spec: person(name), place });
+    debug(
+        sim,
+        DebugCommand::Spawn {
+            spec: person(name),
+            place,
+        },
+    );
     debug(
         sim,
         DebugCommand::SetControl {
@@ -175,7 +187,13 @@ fn city(seed: u64) -> (Sim, EntityId, EntityId) {
     cosmos.create_realm(&mut timeline, def, CITY_SEED).unwrap();
     let mut sim = Sim::from_parts(defs, cosmos, timeline, seed);
     let ada = spawn(&mut sim, "Ada", Place::Stored);
-    debug(&mut sim, DebugCommand::StartSession { entity: ada, at: cell(17, 1) });
+    debug(
+        &mut sim,
+        DebugCommand::StartSession {
+            entity: ada,
+            at: cell(17, 1),
+        },
+    );
     let bram = spawn(&mut sim, "Bram", Place::at(cell(18, 1)));
     sim.pump();
     (sim, ada, bram)
@@ -188,8 +206,11 @@ fn put_fixture(sim: &mut Sim, at: Location, written: &str) {
         .fixture_state(written, None)
         .unwrap_or_else(|error| panic!("{written}: {error}"))
         .raw();
-    sim.world(|ctx| ctx.edit(Cause::DEBUG).set_element(at, Layer::Fixture, state))
-        .unwrap();
+    sim.world(|ctx| {
+        ctx.edit(Cause::DEBUG)
+            .set_element(at, Layer::Fixture, state)
+    })
+    .unwrap();
     sim.pump();
 }
 
@@ -230,7 +251,10 @@ fn level(sim: &Sim, who: EntityId, name: &str) -> Real {
 }
 
 fn act(sim: &mut Sim, who: EntityId, name: &str, params: Params) {
-    let action = sim.defs().lookup::<ActionDef>(&format!("core:{name}")).unwrap();
+    let action = sim
+        .defs()
+        .lookup::<ActionDef>(&format!("core:{name}"))
+        .unwrap();
     sim.submit(Command::Act {
         entity: who,
         action,
@@ -269,7 +293,8 @@ fn text(value: &str) -> clash_core::Value {
 }
 
 fn element(sim: &Sim, at: Location) -> clash_core::Value {
-    sim.subject_value(Subject::Element(at, Layer::Fixture)).to_stored()
+    sim.subject_value(Subject::Element(at, Layer::Fixture))
+        .to_stored()
 }
 
 fn entity_value(sim: &Sim, who: EntityId) -> clash_core::Value {
@@ -301,7 +326,11 @@ fn four_hundred_passive_lamps_create_no_entities_and_switching_one_off_creates_o
     let (mut sim, _, _) = city(41);
     for x in 0..20 {
         for y in 0..20 {
-            put_fixture(&mut sim, Location::new(GRID, CellPos::new(16 + x, 30 + y, 0)), "test_lamp#on");
+            put_fixture(
+                &mut sim,
+                Location::new(GRID, CellPos::new(16 + x, 30 + y, 0)),
+                "test_lamp#on",
+            );
         }
     }
     assert_eq!(sim.components().store::<Device>().len(), 0);
@@ -320,13 +349,31 @@ fn set_config_is_kept_saved_and_raises_device_configured() {
     let (mut sim, _, _) = city(42);
     let at = cell(20, 1);
     put_fixture(&mut sim, at, "test_lamp#on");
-    let lamp = device::device_for(&mut sim, Target::Element(at, Layer::Fixture), Cause::DEBUG).unwrap();
-    assert_eq!(device::config_value(&sim, lamp, "brightness"), Some(clash_core::Value::Real(Real::ONE)));
-    device::set_config(&mut sim, lamp, "brightness", &Value::Real(Real::of(1.5)), Cause::DEBUG).unwrap();
-    let refused = device::set_config(&mut sim, lamp, "brightness", &Value::Real(Real::of(3.0)), Cause::DEBUG)
-        .unwrap_err();
+    let lamp =
+        device::device_for(&mut sim, Target::Element(at, Layer::Fixture), Cause::DEBUG).unwrap();
+    assert_eq!(
+        device::config_value(&sim, lamp, "brightness"),
+        Some(clash_core::Value::Real(Real::ONE))
+    );
+    device::set_config(
+        &mut sim,
+        lamp,
+        "brightness",
+        &Value::Real(Real::of(1.5)),
+        Cause::DEBUG,
+    )
+    .unwrap();
+    let refused = device::set_config(
+        &mut sim,
+        lamp,
+        "brightness",
+        &Value::Real(Real::of(3.0)),
+        Cause::DEBUG,
+    )
+    .unwrap_err();
     assert_eq!(refused.code, "device.bad_config_value");
-    let refused = device::set_config(&mut sim, lamp, "shade", &Value::text("green"), Cause::DEBUG).unwrap_err();
+    let refused = device::set_config(&mut sim, lamp, "shade", &Value::text("green"), Cause::DEBUG)
+        .unwrap_err();
     assert_eq!(refused.code, "device.bad_config_value");
     sim.pump();
     let events = sim.drain_events();
@@ -339,7 +386,14 @@ fn set_config_is_kept_saved_and_raises_device_configured() {
         Some(clash_core::Value::Real(Real::of(1.5)))
     );
     // A device whose settings are as made is plain again.
-    device::set_config(&mut loaded, lamp, "brightness", &Value::Real(Real::ONE), Cause::DEBUG).unwrap();
+    device::set_config(
+        &mut loaded,
+        lamp,
+        "brightness",
+        &Value::Real(Real::ONE),
+        Cause::DEBUG,
+    )
+    .unwrap();
     assert!(device::device_at(&loaded, at, Layer::Fixture).is_none());
 }
 
@@ -350,7 +404,8 @@ fn completion_follows_every_change_of_rate_exactly() {
     let (mut sim, _, _) = city(43);
     let at = cell(20, 1);
     put_fixture(&mut sim, at, "test_kiln");
-    let kiln = device::device_for(&mut sim, Target::Element(at, Layer::Fixture), Cause::DEBUG).unwrap();
+    let kiln =
+        device::device_for(&mut sim, Target::Element(at, Layer::Fixture), Cause::DEBUG).unwrap();
     device::add_resource(&mut sim, kiln, "fuel", Real::of(10.0), Cause::DEBUG).unwrap();
     let start = sim.now().as_micros();
     device::set_mode(&mut sim, kiln, "on", Cause::DEBUG).unwrap();
@@ -380,7 +435,8 @@ fn a_store_that_runs_dry_stalls_the_work_and_fuel_resumes_it() {
     let (mut sim, _, _) = city(44);
     let at = cell(20, 1);
     put_fixture(&mut sim, at, "test_kiln");
-    let kiln = device::device_for(&mut sim, Target::Element(at, Layer::Fixture), Cause::DEBUG).unwrap();
+    let kiln =
+        device::device_for(&mut sim, Target::Element(at, Layer::Fixture), Cause::DEBUG).unwrap();
     device::add_resource(&mut sim, kiln, "fuel", Real::of(2.0), Cause::DEBUG).unwrap();
     device::set_mode(&mut sim, kiln, "on", Cause::DEBUG).unwrap();
     run_for(&mut sim, 10 * SECOND);
@@ -444,7 +500,10 @@ fn a_bench_recipe_finds_inputs_on_a_rack_within_range_and_not_beyond() {
     // The near rack gave its log; the far one kept its own.
     assert!(device::device_at(&sim, cell(23, 2), Layer::Fixture).is_none());
     assert_eq!(sim.truth().contents(device_at(&sim, cell(24, 2))).len(), 1);
-    assert!(!sim.actions_of(ada).iter().any(|_| true), "the work action ended");
+    assert!(
+        !sim.actions_of(ada).iter().any(|_| true),
+        "the work action ended"
+    );
 }
 
 #[test]
@@ -455,8 +514,11 @@ fn a_crop_advances_only_while_its_condition_holds() {
     let world = Arc::clone(sim.truth().cosmos().defs());
     let wall = world.block_state("wall", None).unwrap().raw();
     for (x, y) in [(29, 1), (31, 1), (30, 0), (30, 2)] {
-        sim.world(|ctx| ctx.edit(Cause::DEBUG).set_element(cell(x, y), Layer::Block, wall))
-            .unwrap();
+        sim.world(|ctx| {
+            ctx.edit(Cause::DEBUG)
+                .set_element(cell(x, y), Layer::Block, wall)
+        })
+        .unwrap();
     }
     let seed = make(&mut sim, "core:herbs", 1, Place::at(bed));
     device::put_inside(&mut sim, seed, bed, Layer::Fixture, Cause::DEBUG).unwrap();
@@ -466,11 +528,13 @@ fn a_crop_advances_only_while_its_condition_holds() {
     run_for(&mut sim, 65 * SECOND);
     assert_eq!(recipe::progress(&sim, device), Some(Real::ZERO));
     let water = world.fields().resolve("water", Some("core")).unwrap();
-    sim.world(|ctx| ctx.edit(Cause::DEBUG).add_field(bed, water, 100)).unwrap();
+    sim.world(|ctx| ctx.edit(Cause::DEBUG).add_field(bed, water, 100))
+        .unwrap();
     run_for(&mut sim, 60 * SECOND);
     let wet = recipe::progress(&sim, device).unwrap();
     assert!(wet > Real::ZERO);
-    sim.world(|ctx| ctx.edit(Cause::DEBUG).set_field(bed, water, 0)).unwrap();
+    sim.world(|ctx| ctx.edit(Cause::DEBUG).set_field(bed, water, 0))
+        .unwrap();
     run_for(&mut sim, 31 * SECOND);
     let dried = recipe::progress(&sim, device).unwrap();
     run_for(&mut sim, 300 * SECOND);
@@ -490,7 +554,8 @@ fn a_recipe_that_needs_know_how_is_unavailable_until_known_or_provided() {
     give(&mut sim, ada, "core:club", 1);
     give(&mut sim, ada, "core:herbs", 2);
     let bench = Target::Element(cell(17, 2), Layer::Fixture);
-    let refused = recipe::work::check(&sim, Some(ada), recipe_id("healing_salve"), Some(bench)).unwrap_err();
+    let refused =
+        recipe::work::check(&sim, Some(ada), recipe_id("healing_salve"), Some(bench)).unwrap_err();
     assert_eq!(refused.code, "recipe.unknown_how");
     // A herbal on the bench provides it.
     let book = make(&mut sim, "core:herbal", 1, Place::at(cell(17, 2)));
@@ -499,7 +564,10 @@ fn a_recipe_that_needs_know_how_is_unavailable_until_known_or_provided() {
     // Taken away again, it does not; read, it is known.
     let book = clash_sim::item::take_out(&mut sim, book, None, Cause::DEBUG).unwrap();
     assert!(recipe::work::check(&sim, Some(ada), recipe_id("healing_salve"), Some(bench)).is_err());
-    assert_eq!(recipe::know_how::learn_from(&mut sim, ada, book, Cause::DEBUG), Ok(1));
+    assert_eq!(
+        recipe::know_how::learn_from(&mut sim, ada, book, Cause::DEBUG),
+        Ok(1)
+    );
     assert!(recipe::know_how::knows(&sim, ada, know_how("herbalism")));
     assert!(recipe::work::check(&sim, Some(ada), recipe_id("healing_salve"), Some(bench)).is_ok());
 }
@@ -528,19 +596,44 @@ fn a_machine_working_alone_runs_a_recipe_only_with_a_pattern_loaded() {
 #[test]
 fn teach_is_refused_while_what_it_needs_is_not_known() {
     let (mut sim, ada, _) = city(50);
-    let refused = recipe::know_how::teach(&mut sim, ada, know_how("test_engraving"), "taught", Cause::DEBUG)
-        .unwrap_err();
+    let refused = recipe::know_how::teach(
+        &mut sim,
+        ada,
+        know_how("test_engraving"),
+        "taught",
+        Cause::DEBUG,
+    )
+    .unwrap_err();
     assert_eq!(refused.code, "know_how.needs");
     assert_eq!(
-        recipe::know_how::teach(&mut sim, ada, know_how("test_casting"), "taught", Cause::DEBUG),
+        recipe::know_how::teach(
+            &mut sim,
+            ada,
+            know_how("test_casting"),
+            "taught",
+            Cause::DEBUG
+        ),
         Ok(true)
     );
     assert_eq!(
-        recipe::know_how::teach(&mut sim, ada, know_how("test_engraving"), "taught", Cause::DEBUG),
+        recipe::know_how::teach(
+            &mut sim,
+            ada,
+            know_how("test_engraving"),
+            "taught",
+            Cause::DEBUG
+        ),
         Ok(true)
     );
-    assert_eq!(recipe::know_how::unlearn(&mut sim, ada, know_how("test_casting"), Cause::DEBUG), Ok(true));
-    assert!(!recipe::know_how::knows(&sim, ada, know_how("test_casting")));
+    assert_eq!(
+        recipe::know_how::unlearn(&mut sim, ada, know_how("test_casting"), Cause::DEBUG),
+        Ok(true)
+    );
+    assert!(!recipe::know_how::knows(
+        &sim,
+        ada,
+        know_how("test_casting")
+    ));
 }
 
 #[test]
@@ -579,8 +672,23 @@ fn spiked_drink_ingested_on_the_skin_and_an_antidote() {
     let vial = give(&mut sim, ada, "core:poison_vial", 1);
     let ale = give(&mut sim, ada, "core:mug_of_ale", 1);
     // There is no room in a full mug: half of it is drunk first.
-    substance::dose_from(&mut sim, bram, ale, Some(Real::of(0.0002)), "ingest", Cause::DEBUG).unwrap();
-    substance::pour(&mut sim, vial, PourTo::Item(ale), Some(Real::of(0.000_005)), Cause::DEBUG).unwrap();
+    substance::dose_from(
+        &mut sim,
+        bram,
+        ale,
+        Some(Real::of(0.0002)),
+        "ingest",
+        Cause::DEBUG,
+    )
+    .unwrap();
+    substance::pour(
+        &mut sim,
+        vial,
+        PourTo::Item(ale),
+        Some(Real::of(0.000_005)),
+        Cause::DEBUG,
+    )
+    .unwrap();
     assert_eq!(substance::amount_of(&sim, ale, poison), Real::of(0.000_005));
     let got = substance::dose_from(&mut sim, bram, ale, None, "ingest", Cause::DEBUG).unwrap();
     assert!(got > Real::of(204.9));
@@ -589,7 +697,14 @@ fn spiked_drink_ingested_on_the_skin_and_an_antidote() {
     let swallowed = level(&sim, bram, "toxin");
     assert_eq!(swallowed, Real::of(20.0));
     // The same on the skin gets a twentieth of it in.
-    substance::dose_body(&mut sim, ada, &[(poison, Real::of(0.000_005))], "skin", Cause::DEBUG).unwrap();
+    substance::dose_body(
+        &mut sim,
+        ada,
+        &[(poison, Real::of(0.000_005))],
+        "skin",
+        Cause::DEBUG,
+    )
+    .unwrap();
     assert_eq!(level(&sim, ada, "toxin"), Real::of(1.0));
     // An antidote takes it down.
     let cup = give(&mut sim, bram, "core:test_cup", 1);
@@ -609,7 +724,14 @@ fn a_poisoned_blade_doses_through_the_skin_and_loses_its_coating() {
     substance::coat(&mut sim, knife, vial, Real::of(0.000_004), Cause::DEBUG).unwrap();
     let poison = DEFS.lookup::<SubstanceDef>("core:nightshade").unwrap();
     let kinds = sim.body_defs().unwrap().kinds();
-    let arm = sim.components().body.get(bram).unwrap().part_named("r_arm").unwrap().key();
+    let arm = sim
+        .components()
+        .body
+        .get(bram)
+        .unwrap()
+        .part_named("r_arm")
+        .unwrap()
+        .key();
     let part = Value::Subject(clash_sim::body::props::part_handle(kinds, bram, arm)).to_stored();
     let params = vec![
         ("target".to_owned(), entity_value(&sim, bram)),
@@ -637,7 +759,14 @@ fn a_person_makes_a_bandage_and_binds_a_wound_with_it() {
     // A cut to the arm, as a blade's edge gives one.
     let world = Arc::clone(sim.truth().cosmos().defs());
     let cut = world.damage_types().lookup("core:cut").unwrap();
-    let arm = sim.components().body.get(ada).unwrap().part_named("r_arm").unwrap().key();
+    let arm = sim
+        .components()
+        .body
+        .get(ada)
+        .unwrap()
+        .part_named("r_arm")
+        .unwrap()
+        .key();
     let hit = clash_sim::body::Hit {
         target: ada,
         at: clash_sim::body::HitAt::Part(arm),
@@ -650,7 +779,12 @@ fn a_person_makes_a_bandage_and_binds_a_wound_with_it() {
     sim.pump();
     give(&mut sim, ada, "core:cloth", 1);
     assert!(!sim.components().body.get(ada).unwrap().wounds().is_empty());
-    act(&mut sim, ada, "make", vec![("recipe".to_owned(), text("core:bandage"))]);
+    act(
+        &mut sim,
+        ada,
+        "make",
+        vec![("recipe".to_owned(), text("core:bandage"))],
+    );
     run_for(&mut sim, 6 * SECOND);
     let events = sim.drain_events();
     no_faults(&events);
@@ -660,7 +794,11 @@ fn a_person_makes_a_bandage_and_binds_a_wound_with_it() {
         .contents(ada)
         .iter()
         .copied()
-        .find(|id| sim.truth().entity(*id).is_some_and(|entity| entity.tags.contains("bandage")))
+        .find(|id| {
+            sim.truth()
+                .entity(*id)
+                .is_some_and(|entity| entity.tags.contains("bandage"))
+        })
         .expect("a bandage in hand");
     let params = vec![("what".to_owned(), entity_value(&sim, bandage))];
     act(&mut sim, ada, "apply", params);
@@ -673,7 +811,8 @@ fn a_person_makes_a_bandage_and_binds_a_wound_with_it() {
 #[test]
 fn eating_bread_restores_nourishment() {
     let (mut sim, ada, _) = city(56);
-    sim.pool_spend(ada, pool("nourishment"), Real::of(50.0), Cause::DEBUG).unwrap();
+    sim.pool_spend(ada, pool("nourishment"), Real::of(50.0), Cause::DEBUG)
+        .unwrap();
     let start = level(&sim, ada, "nourishment");
     let loaf = give(&mut sim, ada, "core:loaf", 2);
     let params = vec![("what".to_owned(), entity_value(&sim, loaf))];
@@ -686,7 +825,9 @@ fn eating_bread_restores_nourishment() {
     assert!(fed > start + Real::of(39.9) && fed <= start + Real::of(40.0));
     // One of the two is gone.
     assert_eq!(
-        sim.components().get::<clash_sim::item::Item>(loaf).map(clash_sim::item::Item::count),
+        sim.components()
+            .get::<clash_sim::item::Item>(loaf)
+            .map(clash_sim::item::Item::count),
         Some(1)
     );
 }
@@ -698,7 +839,12 @@ fn save_and_load_in_the_middle_of_work_changes_nothing() {
     let (mut sim, ada, _) = city(57);
     give(&mut sim, ada, "core:stick", 1);
     give(&mut sim, ada, "core:cloth", 1);
-    act(&mut sim, ada, "make", vec![("recipe".to_owned(), text("core:torch"))]);
+    act(
+        &mut sim,
+        ada,
+        "make",
+        vec![("recipe".to_owned(), text("core:torch"))],
+    );
     run_for(&mut sim, 4 * SECOND);
     let (mut loaded, unplaced) = common::save_and_load(&sim);
     assert!(unplaced.is_empty());
@@ -715,7 +861,12 @@ fn replay_reproduces_the_hash() {
     let (mut sim, ada, _) = city(58);
     make(&mut sim, "core:stick", 1, Place::In(ada));
     make(&mut sim, "core:cloth", 1, Place::In(ada));
-    act(&mut sim, ada, "make", vec![("recipe".to_owned(), text("core:torch"))]);
+    act(
+        &mut sim,
+        ada,
+        "make",
+        vec![("recipe".to_owned(), text("core:torch"))],
+    );
     run_for(&mut sim, 11 * SECOND);
     let defs = Arc::clone(&DEFS);
     let world = WorldDefs::from_defs(&defs).unwrap();
@@ -741,24 +892,38 @@ fn recipe_options_say_what_is_at_hand_and_why_not() {
     let rows = rows.as_list().unwrap();
     let row = |id: &str| {
         rows.iter()
-            .find(|row| row.as_map().and_then(|map| map.get("id")).and_then(Value::as_str) == Some(id))
+            .find(|row| {
+                row.as_map()
+                    .and_then(|map| map.get("id"))
+                    .and_then(Value::as_str)
+                    == Some(id)
+            })
             .and_then(Value::as_map)
             .cloned()
             .unwrap_or_else(|| panic!("no row for {id}"))
     };
-    assert_eq!(row("core:bandage").get("available"), Some(&Value::Bool(true)));
+    assert_eq!(
+        row("core:bandage").get("available"),
+        Some(&Value::Bool(true))
+    );
     let club = row("core:club");
     assert_eq!(club.get("available"), Some(&Value::Bool(false)));
     assert_eq!(club.get("where").and_then(Value::as_str), Some("south"));
     let salve = row("core:healing_salve");
-    assert!(salve.get("why").and_then(Value::as_str).is_some_and(|why| why.contains("Herbalism")));
+    assert!(
+        salve
+            .get("why")
+            .and_then(Value::as_str)
+            .is_some_and(|why| why.contains("Herbalism"))
+    );
 }
 
 // ---- The document states what is built --------------------------------------
 
 #[test]
 fn document_16_states_every_event_verb_property_and_reason_of_making() {
-    let document = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/16-devices-and-machines.md");
+    let document = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/16-devices-and-machines.md");
     let text = std::fs::read_to_string(document).expect("document 16 can be read");
     let registry = DEFS.expr_registry();
     let events = recipe::event_types()
@@ -766,10 +931,23 @@ fn document_16_states_every_event_verb_property_and_reason_of_making() {
         .chain(substance::event_types())
         .chain(device::event_types());
     for event in events {
-        assert!(registry.event_id(&event.name).is_some(), "`{}` is not registered", event.name);
-        assert!(text.contains(&format!("| `{}`", event.name)), "16 does not state the event `{}`", event.name);
+        assert!(
+            registry.event_id(&event.name).is_some(),
+            "`{}` is not registered",
+            event.name
+        );
+        assert!(
+            text.contains(&format!("| `{}`", event.name)),
+            "16 does not state the event `{}`",
+            event.name
+        );
         for field in &event.fields {
-            assert!(text.contains(&format!("`{}`", field.name)), "16 does not state `{}.{}`", event.name, field.name);
+            assert!(
+                text.contains(&format!("`{}`", field.name)),
+                "16 does not state `{}.{}`",
+                event.name,
+                field.name
+            );
         }
     }
     let verbs = recipe::verbs()
@@ -777,8 +955,16 @@ fn document_16_states_every_event_verb_property_and_reason_of_making() {
         .chain(substance::verbs())
         .chain(device::verbs());
     for verb in verbs {
-        assert!(registry.verb_id(verb.name).is_some(), "`{}` is not registered", verb.name);
-        assert!(text.contains(&format!("`{}`", verb.name)), "16 does not state the verb `{}`", verb.name);
+        assert!(
+            registry.verb_id(verb.name).is_some(),
+            "`{}` is not registered",
+            verb.name
+        );
+        assert!(
+            text.contains(&format!("`{}`", verb.name)),
+            "16 does not state the verb `{}`",
+            verb.name
+        );
     }
     let properties = recipe::properties()
         .into_iter()
@@ -797,7 +983,10 @@ fn document_16_states_every_event_verb_property_and_reason_of_making() {
         .chain(substance::SUBSTANCE_REASONS)
         .chain(device::DEVICE_REASONS);
     for reason in reasons {
-        assert!(text.contains(&format!("`{}`", reason.code)), "16 does not state the reason `{}`", reason.code);
+        assert!(
+            text.contains(&format!("`{}`", reason.code)),
+            "16 does not state the reason `{}`",
+            reason.code
+        );
     }
 }
-
