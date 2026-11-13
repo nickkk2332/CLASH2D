@@ -60,7 +60,10 @@ and a recovery. A blow seen coming in time stops the game and asks how
 to answer it: parry, block, dodge or step back. Punches, kicks, cuts,
 thrusts, shoves; grips, drags, throws of a person, a held person as a
 shield, and takedowns from behind; pistols, rifles, bows and throwing,
-with magazines, quivers and reloading; stances.
+with magazines, quivers and reloading; stances. From the keyboard each
+is quick (`f` strikes the target with the first blow that can be made)
+or chosen in detail (`F` lists every blow, greyed with why it cannot be
+made, and asks for the part aimed at and how hard).
 
 **Powers.** Twelve powers built from the same parts as everything else:
 dash, force push, fire bolt, shield, heal, time stop, null field,
@@ -82,8 +85,9 @@ pause menu, and Continue on the title.
 
 **Screens.** The title, new game and setup, the play screen with its
 log and status, look mode, inventory, condition, use, make, know-how,
-journal, saving and loading, options with key rebinding, and help
-listing every key; two themes. The same frames in a terminal or in a window
+abilities with quick slots, talk, the map with the journal's markers,
+the journal, saving and loading, options with key rebinding, a menu on
+the second mouse button, and help listing every control; two themes. The same frames in a terminal or in a window
 drawn by the processor, with sprites gliding between cells, shake and
 flash.
 
@@ -98,13 +102,12 @@ world viewer with a console, and save tools.
 What a player will meet: the stubs the plan's Log records that show in
 play, and what trying the game headless on the build branch showed.
 
-**Missing from the keyboard**
+**Missing in play**
 
-- **Nothing attacks, shoots, uses a power or talks.** The simulation
-  has blows, shots, grips, takedowns and twelve powers, and people
-  attack you, but the default keymap has no key that starts one of
-  your own. You can still parry, block, dodge and step back when the
-  game asks.
+- **No bundled game gives you powers.** The abilities screen (`a`) and
+  the quick slots work, but the person every bundled game gives you
+  has none, and the "Gifted person" with twelve cannot be chosen (see
+  making a character, below).
 - **Nothing lying loose can be picked up.** Items on a kitchen table, a
   desk or the street have no "take" in the use list (`e`); only what is
   inside a container, rack, stall or workbench is taken, with "Take
@@ -124,15 +127,16 @@ play, and what trying the game headless on the build branch showed.
   Make a character, which says "The loaded mods offer nothing to make a
   character from." Every character is a person of average build with no
   training.
-- **Empty screens.** Abilities (`a`), the map (`m`) and the second mouse
-  button's menu are empty placeholders.
 - **Things carried show as "something".** The errand's parcel is
   "something" in the status column and the inventory, and the body's
   parts show by their ids (`l_arm`, `r_eye`).
 - **The setup screen says "Seed: ask"** for a game whose seed was taken
   from the new-game screen.
-- **The keys screen (`?`) writes keys as a keymap does** (`shift+j`,
-  `escape`), and Options offers Cutscenes though there are none.
+- **Some words are the engine's.** The keys screen (`?`) writes keys
+  as a keymap does (`shift+j`, `tab`); a blow that cannot be made says
+  it "needs something in hand that is `blade`"; Tab with nobody in sight
+  logs "nobody is in sight to choose", in lower case. Options offers
+  Cutscenes though there are none.
 
 **The world**
 

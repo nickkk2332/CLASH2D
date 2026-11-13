@@ -127,15 +127,29 @@ controls, read from the data.
 | `Shift+M` | Make something | List what can be made here, by hand and at the stations within a step, and start one. |
 | `Shift+K` | Know-how | List what the character knows how to do and what it could learn next. |
 | `o` | Options | Opens Options. |
-| `?`, `F1` | Keys | Show what each key does in play. |
+| `?`, `F1` | Keys | Show every control and its keys in play. |
 | `Esc` | Pause | Open the pause menu. |
 | `F12` | See everything | Switch between what the character sees and what is really there, in a development profile. |
+| `Tab` | Next target | Select the nearest creature in sight, or the next one after the target. |
+| `Shift+Tab` | Previous target | Select the previous creature in sight. |
+| `f` | Attack | Strike the target with the first blow that can be made now; with no target, choose one. |
+| `Shift+F` | Attack, choosing how | Choose the blow, the target, the part aimed at and how hard. |
+| `s` | Shoot | Shoot or throw at the target with the first shot that can be made now; with no target, choose one. |
+| `Shift+S` | Aim | Choose the shot, the target, the place aimed at and the height. |
+| `r` | Reload | Load the weapon in hand from what is carried. |
+| `t` | Throw | Throw what is in hand at the target; with no target, choose one. |
+| `z` | Stop | Stop what the character is doing: a held draw or charge is let go. |
+| `v` | Grab or take down | Choose a hold, a throw or a takedown to try on the target. |
+| `Shift+T` | Talk | Talk to the target: list what the character could say to them, and say one. |
+| `1` to `9` | Quick slots 1 to 9 | Use the ability on the quick slot of that number. |
 
-These have no key: the application runs the first two when you walk
-into something closed, and the mouse the last two.
+These have no key: the application runs the first four when you walk
+into someone or into something closed, and the mouse the last two.
 
 | Control | Does | What it does |
 |---------|------|--------------|
+| `attack_bump` | Attack who is in the way | Strike someone walked into with the first blow that can be made. |
+| `attack_bump_ask` | Ask before attacking who is in the way | Ask, then strike someone walked into. |
 | `bump` | Use what is in the way | Do what the thing walked into offers by default: open a shut door. |
 | `bump_ask` | Ask before using what is in the way | Ask, then do what the thing walked into offers by default. |
 | `click` | Go there |  |
@@ -146,6 +160,7 @@ really is, not as your character sees it; it works only in the
 development profile (`-- --profile dev`).
 
 In a window the mouse works too: the first button on the map walks
+there, and the second opens a menu of what can be done with what is
 there.
 
 ### Looking and choosing a place
@@ -255,7 +270,13 @@ bucklers, bows and arrows (the armoury door is locked). What lies loose
 on a table, a desk or the street cannot be picked up yet.
 
 **`i` is your inventory**: what you carry, how, and what you wear on
-each part of your body.
+each part of your body. Enter on a thing lists what to do with it.
+
+**`m` is the map**: the place as your character knows it, zoomed out,
+with the journal's markers (`X`) where they last knew the thing to be,
+and beside it the places they know by name and their goals, with which
+way and how far each is. The direction keys move it; `<` and `>` change
+storey.
 
 ## Your body
 
@@ -282,13 +303,60 @@ wind-up in time can parry, block, dodge or step back (see
 with something else is simply hit. Facing matters: people see in an arc
 ahead of them.
 
+**Choosing whom.** Tab selects the nearest creature in sight as your
+target, and Tab again the next one; Shift+Tab goes back. The status
+column names the target and the map marks it. Only someone your
+character sees can be chosen.
+
+**Hand to hand.** `f` strikes the target with the first blow you can
+make now: a punch or a kick with empty hands, a cut or a thrust with a
+knife, a blow with a club. With no target it asks for one. `F`
+(Shift+F) lists every blow, greying those you cannot make with the
+reason, and asks how: the target, the part of them you aim at, and how
+hard. Walking into someone you hold hostile or fear strikes them;
+walking into anyone else asks first ("Into someone" in Options changes
+that).
+
+**At range.** `s` shoots or throws at the target with the first shot
+that can be made; `S` (Shift+S) chooses the shot, the place aimed at and
+the height, with the line drawn to it. `r` reloads the weapon in hand
+from what you carry, `t` throws what is in your hand, and `z` stops what
+you are doing: a drawn bow is let go. An empty weapon says so.
+
+**Holds and takedowns.** `v` lists the holds, throws and takedowns you
+could try on the target, greyed with the reason where you cannot: grab,
+drag, throw, hold up as a shield, break free, knock out, choke.
+
+In a window, the second mouse button on someone offers Attack, Shoot
+and Talk, beside Go there, Use what is near and Look around.
+
 What you hold matters. A knife or a club can parry; a buckler blocks.
 The workshop's chest keeps knives and clubs, and the racks of the
 guardhouse's armoury clubs, bucklers, bows and arrows.
 
-The default keymap does not yet start a blow, a shot or a power of your
-own: the [release notes](release-notes-beta.md#known-issues) say what is
-missing.
+## Powers
+
+`a` lists your abilities: each use with its rank, what it costs, and
+whether it is ready, cooling down or cannot be used now, and why. Enter
+uses one, asking for whatever it needs. Modes, such as a shield kept up,
+are switched on and off there. On that screen a number key puts the use
+selected on a quick slot; in play the same number uses it, at the target
+if it takes one.
+
+| Keys | Name |
+|------|------|
+| `1` to `9` | `bind_1` to `bind_9` |
+
+The person the bundled games give you has no powers, so the list is
+empty; a character a mod gives powers to (the `core` mod's "Gifted
+person" has twelve) uses them so.
+
+## Talking
+
+`T` (Shift+T) talks to the target: it lists what you could say to them
+(in the bundled game, a greeting, or telling them to stay back) and
+Enter says it. What is said back is in the log. Anyone in earshot hears
+what is said, and people pass on to each other what they saw.
 
 ## Making things
 
@@ -370,7 +438,9 @@ which way and how far each one is.
 
 ## Tips
 
-- Look before you walk in: `x` and Tab go through what is in sight.
+- Look before you walk in: `x`, then Tab, goes through what is in sight.
+- Tab before you fight: a target chosen is a blow aimed, and `F` shows
+  every blow you could make, and why the others cannot be.
 - Light gives you away. At night, out of the light of windows and
   doors, you are hard to see; so is everyone else.
 - People remember. If someone saw you hurt someone, leave their sight

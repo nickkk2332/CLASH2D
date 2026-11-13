@@ -26,7 +26,8 @@ What works now:
   no hit points. One bad cut can end a fight.
 - Fighting on one shared timeline: blows with a wind-up you can see
   coming and answer (parry, block, dodge, step back), weapons, guns and
-  bows, grips, throws and takedowns, and powers.
+  bows, grips, throws and takedowns, quick or chosen in detail, and
+  powers with costs, cooldowns and quick slots.
 - Doors, windows, locks and keys, wardrobes to hide in, chests and
   cupboards, ovens, hearths, stills and workbenches; making things from
   recipes; eating, drinking and bandaging.
@@ -104,12 +105,21 @@ Options rebinds them. [How to play](docs/how-to-play.md) has them all.
 | `.` | Wait a second |
 | `x` | Look around |
 | `e` | Use something within a step: doors, windows, wardrobes, chests, what you hold (eat, drink, bandage) |
-| `i` | Inventory |
-| `c` | Your body and wounds |
-| `J` (Shift+J) | Journal: what you are trying to do |
-| `M` (Shift+M) | Make something |
+| Tab, Shift+Tab | Choose a target among those in sight |
+| `f`; `F` | Strike the target; choose the blow, the part and how hard |
+| `s`; `S` | Shoot or throw at the target; aim |
+| `r`, `t`, `z` | Reload, throw what is in hand, stop |
+| `v` | Grab, throw or take down the target |
+| `T` | Talk to the target |
+| `a`; `1` to `9` | Abilities; use the one on that quick slot |
+| `i`, `c` | Inventory; your body and wounds |
+| `m`, `J` | Map; journal, with what you are trying to do |
+| `M`, `K` | Make something; know-how |
 | `?` or F1 | Every key |
 | Esc | Pause menu: save, load, options, quit |
+
+Capital letters are Shift with the letter. When a blow or a shot you see
+coming is about to land, the game stops and asks how to answer it.
 
 ## Saves and settings
 
