@@ -194,14 +194,15 @@ their timings are as slow as the first round's.
 | A marksman, inside | `play_last_stand.rs` | Chosen ready-made (the bow); `r` with a bow (`There is nothing in hand to load.`: each shot nocks from the quiver); inside, the door opened onto the lit porch; the long wait broken off by a stranger in sight, Tab and `s`, a dodge or a step back at each blow: twelve arrows into the first stranger, who dies at the door | ~1 min |
 | The night at the door | `play_last_stand.rs` | An ordinary person and a brawler, each inside with what lies on the table taken up (by the lamp in the room), holding the door with `f`, the long wait between strangers | ~1 min each |
 | The night in the dark | `play_last_stand.rs` | Inside, the lamp in the room switched off, waiting with Shift+P: never found, and at five `The game has ended: survived.`, `[x] Hold out until dawn.` | ~4 min |
-| A quarrel in the square | `play_market.rs` | [MARKET] | [MARKET-TIME] |
+| The armoury | `play_market.rs` | From the square to the guardhouse by the streets, `g` on the key lying on the sergeant's desk (`Holding a key`), the locked door of the armoury walked into: unlocked, then opened; in, and Take out from a rack: `Holding a key and a club` | ~7 min |
+| A quarrel in the square | `play_market.rs` | The market town begun in the square; Tab to the nearest, up to them, Shift+T and a greeting: `Ada speaks to the watchman.` `The watchman says: "Morning."` (a stranger to him); struck with `f`: `Ada strikes the watchman.` `The watchman is wounded.`, and he walks on; half a minute; upstairs in a house by the square to its wardrobe, Hide inside, three minutes waited: nobody came | ~8 min |
 
 The first round's sessions were run again on this round's fixes; the
 golden frames that moved are named with the fixes below.
 
 ### What was found and fixed
 
-In commits `8dd05c9` (the known issues, D-900 to D-908) and [COMMIT2]
+In commits `8dd05c9` (the known issues, D-900 to D-908) and `88fa0cc`
 (the last stand, the log's lines for fights, D-909, D-910).
 
 | Found | How a player met it | Fixed |
@@ -249,8 +250,8 @@ choice that decides it is a player's: stay on the lane and die, fight
 at the door and bleed unless the wounds are bound, or hide in the dark.
 It feels fair in that the danger comes one at a time, is heard before
 it is seen, and the house holds what is needed; it is still brutal, and
-two things make it less fair than it should be, below (known issues 3
-and 4).
+two things make it less fair than it should be, below (known issues 4
+and 5), and hiding may win it too surely (known issue 8).
 
 ### Known issues that remain
 
@@ -261,36 +262,42 @@ Worst first.
    one to two seconds of real time in a debug build, several in the
    sessions' worst moments; the errand's failure session takes some
    twenty minutes in a debug build.
-2. **Part of what this round set out to play was not played**, for the
+2. **Struck in the square, the watchman walked on.** Greeted, he
+   answered; struck once with bare hands (`The watchman is wounded.`),
+   he went out of sight, nobody came for the one who struck him, and
+   three minutes in a wardrobe upstairs passed without anyone looking.
+   The watch's minds hold hostile whoever they see hurt someone
+   (`hostile_after`); why this blow did not was not found (the AI's
+   stepping is performance 2's to change). The market fight with the
+   watch answering, fleeing and being caught were therefore not played.
+3. **Part of what this round set out to play was not played**, for the
    cost of the town: a bandage *made* (the recipe; one was bound on in
    the last stand), a blade coated with poison and someone cut with it,
-   the guardhouse armoury opened with its key and a weapon taken (the
-   essentials stream's test does it on a fixture), a pistol's shot and
-   reload in a fight (the marksman ready-made has the bow), and a day of
-   routines from a bench. [MARKET-NOT]
-3. **Blocking a blade with the forearm stops the blow and cuts the
+   a pistol's shot and reload in a fight (the marksman ready-made has
+   the bow), a disguise, and a day of routines from a bench.
+4. **Blocking a blade with the forearm stops the blow and cuts the
    arm**, and Block is first in the reaction prompt: a player who
    blocks every blow bleeds to death from blows the log says were
    stopped. The log now says `Ada is wounded.`, but not where or how
    badly (another's body is not the reader's to read; one's own could
    be, and is not yet).
-4. **Binding wounds needs a free hand**, and an ordinary person with a
+5. **Binding wounds needs a free hand**, and an ordinary person with a
    club and bandages has none: the club must be put down (inventory,
    Drop), the bandage put on, the club picked up again, in the middle
    of a fight.
-5. **The quick shot says the pistol's reason when the bow cannot
+6. **The quick shot says the pistol's reason when the bow cannot
    shoot**: with no arrow left, `s` says `There is no loaded weapon in
    hand, or nowhere to aim.`, the first refusal of the list, not the
    bow's.
-6. **The target cycle includes the dead**, so Tab can select a body;
+7. **The target cycle includes the dead**, so Tab can select a body;
    the log now says who died.
-7. **Hiding may win the last stand too surely.** Inside with the lamp
+8. **Hiding may win the last stand too surely.** Inside with the lamp
    out, the ordinary person was never found by the strangers who walk
    the lane; whether one who saw her go in comes for her in the dark,
    and how often, was not played beyond this one seed.
-8. **Residents do not eat**: hunger is only for characters someone
+9. **Residents do not eat**: hunger is only for characters someone
    plays (D-906).
-9. **`Footsteps, somewhere close.`** is the commonest line in a town's
+10. **`Footsteps, somewhere close.`** is the commonest line in a town's
    log: every step heard and not seen writes it (folded when it
    repeats).
 
