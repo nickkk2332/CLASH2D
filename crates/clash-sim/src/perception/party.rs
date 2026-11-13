@@ -345,6 +345,12 @@ impl PartyState {
     }
 }
 
+/// Whether a cell was in the view of a member of the party at its last
+/// observation (15 §13): what attention ranks by (09 §9.3).
+pub(crate) fn sees(sim: &Sim, loc: Location) -> bool {
+    sim.perception.party.in_view(loc)
+}
+
 /// Whether an entity is of the party: directly controlled, with senses.
 pub fn is_member(sim: &Sim, entity: EntityId) -> bool {
     sim.components.senses.contains(entity)
@@ -425,6 +431,10 @@ pub(super) fn after_sweep(sim: &mut Sim, member: EntityId, sense: SenseId) {
     }
     seen.sort_by_key(|cell| cell.loc);
     let entities = entities_in(sim, &after);
+    // The party perceives only hot characters at full detail: whoever
+    // stands in view and is warm is promoted (09 §9.3).
+    let standing: Vec<EntityId> = entities.iter().map(|seen| seen.entity).collect();
+    crate::ai::warm::seen_by_party(sim, &standing);
     let heard = core::mem::take(&mut sim.perception.party.heard);
     let frame = PartyFrame {
         tick: sim.now(),

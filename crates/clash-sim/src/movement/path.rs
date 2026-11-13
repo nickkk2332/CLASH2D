@@ -189,6 +189,14 @@ pub fn follow_path(sim: &mut Sim, entity: EntityId, cause: Cause) -> Result<Step
             Ok(stepped)
         }
         Err(reason) => {
+            // A closed way met by a mind that opens what it meets
+            // (D-781): the mind opens it and begins the step again, so the
+            // path ends here rather than being planned round the door, a
+            // search that finds no other way in (D-895).
+            if reason.code == codes::CLOSED && crate::ai::doors::opens_on_the_way(sim, entity) {
+                clear_path(sim, entity);
+                return Err(reason);
+            }
             mark_stale(sim, entity, Some(next));
             Err(reason)
         }
@@ -224,6 +232,28 @@ fn mark_stale(sim: &mut Sim, entity: EntityId, avoid: Option<clash_world::CellPo
             journey.avoid.push(cell);
         }
     }
+}
+
+/// The path an entity is following, if it follows one: for a warm
+/// mind that walks it in bulk (09 §9.1).
+pub(crate) fn journey_of(sim: &Sim, entity: EntityId) -> Option<Journey> {
+    sim.components()
+        .get::<Mover>(entity)
+        .and_then(Mover::journey)
+        .cloned()
+}
+
+/// Puts back a path an entity was following, as [`journey_of`] gave
+/// it: what a mind stepped down to warm keeps of the action it walked
+/// with, which forgot the path as it ended (09 §9.2).
+pub(crate) fn keep_journey(sim: &mut Sim, entity: EntityId, journey: Option<Journey>) {
+    let Some(journey) = journey else {
+        return;
+    };
+    sim.components_mut()
+        .store_mut::<Mover>()
+        .get_or_insert_with(entity, Mover::default)
+        .journey = Some(journey);
 }
 
 /// Forgets the path an entity is following, with what it learned on

@@ -23,7 +23,7 @@ concern the layered simulation. The two tracks meet at L2.
 | I5 | Options, threat, positions, reactions | L | I4, C11, A3 | beta (reactions subset) |
 | I6 | Work, hauling, stations | M | I4, G8 | todo |
 | I7 | Collectives, orders, formations | M | I4, I2, S7 | todo |
-| I8 | Warm stepping and bulk exchanges | M | I4, T7, C11 | todo |
+| I8 | Warm stepping and bulk exchanges | M | I4, T7, C11 | beta |
 | I9 | Explaining | S | I5, K10 | todo |
 | I10 | Bundled minds | M | I5, I6, C12 | beta |
 | L1 | Cold records, scheduling, calendars | M | E11, K7 | beta |
@@ -244,6 +244,19 @@ Done when
   dwell time allows.
 - Scenario `six_hundred`: a battle wholly inside the hot radius runs with
   the cap's number hot and the rest warm, within the budgets of 09 §19.
+
+Status `beta` (performance 2; D-890 to D-899; 09 §9.4). Built: warm
+minds stepped in bulk by one universal stepper (route walked with
+`follow_path`, routine and goals at the warm step, no sweeps, only loud
+signals), the moves between levels, the attention cap with its ranking,
+dwell and promotion by involvement, by the party's sight and by a warm
+mind needing to act, the events `entity_promoted` and `entity_demoted`,
+and the town benchmarks. Tested in `crates/clash-sim/tests/levels.rs`,
+with a property test that a character's level never changes what the
+party perceives in view. Stubbed: bulk exchanges (a warm mind that would
+strike is promoted and fights in full), so the matching of bulk and
+resolved results and the scenario `six_hundred` wait; a per-realm
+stepper.
 
 ### I9 — Explaining
 

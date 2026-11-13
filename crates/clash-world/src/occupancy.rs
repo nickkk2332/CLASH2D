@@ -859,6 +859,29 @@ impl Cosmos {
         Ok(ids)
     }
 
+    /// Who [`occupants_within`](Cosmos::occupants_within) finds, in no
+    /// order and once for each of their cells in reach, added to `out`:
+    /// for a caller that keeps only a few of them and puts those in order
+    /// itself (decision D-897).
+    pub fn occupant_ids_within_unordered(
+        &self,
+        centre: Location,
+        radius_m: Real,
+        filter: &OccupantFilter,
+        out: &mut Vec<EntityId>,
+    ) -> Result<(), WorldError> {
+        let view = self.grid(centre.grid)?;
+        if radius_m < Real::ZERO {
+            return Ok(());
+        }
+        out.extend(
+            within(&view, centre, radius_m, filter)?
+                .into_iter()
+                .map(|occupied| occupied.id),
+        );
+        Ok(())
+    }
+
     /// The occupants in the cells a straight line passes through, from a
     /// point to another point of the same grid, in the order the line
     /// reaches the cells and by id within a cell. The cells are those of

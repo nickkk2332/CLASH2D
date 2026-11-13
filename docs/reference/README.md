@@ -12,12 +12,12 @@ For a walkthrough, start with the [modding guide](../modding-guide.md). The spec
 | [units](units.md) | The units a quantity may be written in | 30 |
 | [properties](properties.md) | Kinds of subject and their properties, by kind | 18 kinds, 325 properties |
 | [functions](functions.md) | Functions: arguments, result, whether random, whether safe in a mind context | 77 |
-| [events](events.md) | Events: their subjects and fields | 185 |
+| [events](events.md) | Events: their subjects and fields | 187 |
 | [hooks](hooks.md) | Hooks: their subjects and fields, and which fields a handler may change | 32 |
 | [verbs](verbs.md) | Verbs a rule's effects call: arguments and types | 174 |
 | [effects](effects.md) | The effects of the rule system itself: control flow, variables, time, rules and events | 29 |
 | [queries](queries.md) | Kinds of query: arguments and results | 5 |
-| [settings](settings.md) | The engine's settings, with their defaults | 27 |
+| [settings](settings.md) | The engine's settings, with their defaults | 28 |
 | [reasons](reasons.md) | Reasons the engine refuses or reports with | 258 |
 | [diagnostics](diagnostics.md) | Diagnostic codes of the loader, the expression compiler and the console | 176 |
 | [modding-guide](../modding-guide.md) | The modding guide: making a mod, step by step |  |

@@ -940,6 +940,13 @@ impl Sim {
             }
         }
 
+        // Whoever it names that is stepped warm is promoted before it
+        // starts (03 §10).
+        if !self.ai.levels().is_empty() {
+            let participants: Vec<EntityId> = joined.iter().map(|joined| joined.0).collect();
+            crate::ai::warm::involve(self, actor, &locals, &participants);
+        }
+
         // Room is made, then the slots are claimed.
         for holder in displace {
             self.end_cancelled(holder, cause);

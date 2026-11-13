@@ -352,20 +352,42 @@ pub struct Whom {
 /// a part with a `chance` may be skipped several days running.
 pub const LOOK_DAYS: i64 = 8;
 
-/// When a part of a routine begins on a day, for a character: its
+/// When each part of a routine begins in a day, for a character: its
 /// `from`, scaled to the realm's day, and its own delay within the
-/// part's `jitter`; as a reckoned time. `None` if it does not keep that
-/// part that day (its `chance`).
-fn start_on(def: &RoutineDef, day: Day, seed: u64, entry: usize, on: i64) -> Option<i64> {
+/// part's `jitter`, as microseconds into the day; `None` for a part
+/// whose `from` does not read. The same every day: worked out once for
+/// all the days [`entry_at`] and [`next_start`] look at.
+fn day_starts(def: &RoutineDef, day: Day, seed: u64) -> Vec<Option<i64>> {
+    def.day
+        .iter()
+        .enumerate()
+        .map(|(entry, part)| {
+            let from = calendar::scaled(calendar::parse_clock(&part.from)?, day.length).as_micros();
+            let jitter = calendar::scaled(part.jitter.dur(), day.length).as_micros();
+            let delay = if jitter > 0 {
+                let hash = pos_hash(seed, JITTER_DOMAIN, entry as i32, 0, 0, 0);
+                (hash % (jitter as u64 + 1)) as i64
+            } else {
+                0
+            };
+            Some(from + delay)
+        })
+        .collect()
+}
+
+/// When a part of a routine begins on a day, for a character, as a
+/// reckoned time: its start in the day from [`day_starts`]. `None` if it
+/// does not keep that part that day (its `chance`).
+fn start_on(
+    def: &RoutineDef,
+    day: Day,
+    seed: u64,
+    starts: &[Option<i64>],
+    entry: usize,
+    on: i64,
+) -> Option<i64> {
     let part = def.day.get(entry)?;
-    let from = calendar::scaled(calendar::parse_clock(&part.from)?, day.length).as_micros();
-    let jitter = calendar::scaled(part.jitter.dur(), day.length).as_micros();
-    let delay = if jitter > 0 {
-        let hash = pos_hash(seed, JITTER_DOMAIN, entry as i32, 0, 0, 0);
-        (hash % (jitter as u64 + 1)) as i64
-    } else {
-        0
-    };
+    let start = (*starts.get(entry)?)?;
     if part.chance < Real::ONE {
         let hash = pos_hash(
             seed,
@@ -381,7 +403,7 @@ fn start_on(def: &RoutineDef, day: Day, seed: u64, entry: usize, on: i64) -> Opt
         }
     }
     let length = day.length.as_micros().max(1);
-    Some(on * length + from + delay)
+    Some(on * length + start)
 }
 
 /// The part of a routine's day a character is at, at a reckoned time
@@ -392,10 +414,11 @@ fn start_on(def: &RoutineDef, day: Day, seed: u64, entry: usize, on: i64) -> Opt
 pub fn entry_at(def: &RoutineDef, day: Day, reckoned: Dur, seed: u64) -> Option<(usize, Dur)> {
     let length = day.length.as_micros().max(1);
     let today = reckoned.as_micros().div_euclid(length);
+    let starts = day_starts(def, day, seed);
     let mut found: Option<(i64, usize)> = None;
     for on in (today - LOOK_DAYS)..=today {
         for entry in 0..def.day.len() {
-            let Some(start) = start_on(def, day, seed, entry, on) else {
+            let Some(start) = start_on(def, day, seed, &starts, entry, on) else {
                 continue;
             };
             if start <= reckoned.as_micros() && found.is_none_or(|(have, _)| start >= have) {
@@ -411,10 +434,11 @@ pub fn entry_at(def: &RoutineDef, day: Day, reckoned: Dur, seed: u64) -> Option<
 pub fn next_start(def: &RoutineDef, day: Day, after: Dur, seed: u64) -> Option<Dur> {
     let length = day.length.as_micros().max(1);
     let today = after.as_micros().div_euclid(length);
+    let starts = day_starts(def, day, seed);
     let mut found: Option<i64> = None;
     for on in today..=(today + LOOK_DAYS) {
         for entry in 0..def.day.len() {
-            let Some(start) = start_on(def, day, seed, entry, on) else {
+            let Some(start) = start_on(def, day, seed, &starts, entry, on) else {
                 continue;
             };
             if start > after.as_micros() && found.is_none_or(|have| start < have) {

@@ -53,7 +53,7 @@ start while the world model is being built.
 | T4 | Control, plans, free decisions | M | T3 | beta |
 | T5 | Windows and reactions | M | T4, T1 | beta |
 | T6 | Joint actions | M | T5 | beta |
-| T7 | Unloading and lower detail | M | T3, K7 | todo |
+| T7 | Unloading and lower detail | M | T3, K7 | beta |
 | T8 | Benchmarks and budget gate | S | X3, then recurring | beta |
 
 ## Order and parallelism
@@ -908,6 +908,15 @@ Done when
 - A warm entity named as the target of a hot entity's action is promoted
   before the action starts.
 - A long `low_attention` action lowers and restores tickets.
+
+Status `beta` (performance 2; D-890, D-892). Built: the warm stepper
+(one, on universal time, in the `Stepper` domain, handing the AI layer
+each warm character), warm entities finishing their running actions and
+starting none, and automatic promotion: a warm entity named by an action
+that starts (actor, parameter, participant) is promoted before it
+claims anything (`tests/levels.rs`). Stubbed: `low_attention`; abandoning
+actions and storing timers on unload stay as K4 left them (invariant T9
+holds by cancelling); a stepper per realm.
 
 ### T8 — Benchmarks and budget gate
 
