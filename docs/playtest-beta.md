@@ -51,7 +51,8 @@ with poison (below).
 
 ## What was found and fixed
 
-All in commit `ced8d26`, with decisions D-870 to D-878.
+In commit `ced8d26`, with decisions D-870 to D-878, but for the last
+stand's dawn (D-879) and the keys of the long waits, which came after.
 
 | Found | How a player met it | Fixed |
 |-------|---------------------|-------|
@@ -71,6 +72,7 @@ All in commit `ced8d26`, with decisions D-870 to D-878.
 | Take out faulted once the hands were full | `Fault: \`take\` declined (item.no_free_grasp)` after emptying a cupboard | It takes while a hand is free and leaves the rest (D-877) |
 | Talking to the target was refused | Tab chose Cora across the market, shift+t said `You cannot see or hear them now.` | Someone seen in view can be talked to (D-878) |
 | Every creature's sense sweeps sorted all the occupancy entries in sight range, twice a second | A minute's wait in the market town took 7.9 s | Candidates gathered by id without the sort, the same results (D-875) |
+| The last stand could not be won: its dawn timer, set in the scenario's `start.do`, faulted when it fell due (the rule runtime looked for a timer's effects only in actions and rules), and the game never ended | Waiting out the night behind the door: dawn came and nothing happened (found by the full-night session) | A scenario's and a mission's effects are found again where they are written (D-879, a later commit) |
 | A refusal named the character by its number | Pressing keys while knocked out: `0v0 is unconscious` | `unconscious, and cannot act until they come to` (D-878) |
 
 ## Known issues

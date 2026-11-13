@@ -268,6 +268,8 @@ fn only_what_is_marked_is_safe_for_belief() {
         "loc.grid",
         "loc.kind",
         "loc.realm",
+        // The hour where one stands, as the sky shows it (D-872).
+        "loc.time_of_day",
         "loc.tract",
         "loc.x",
         "loc.y",

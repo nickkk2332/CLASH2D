@@ -381,6 +381,50 @@ pub fn register_defs(types: &mut DefTypes) {
         .add_cross_check(def::check_scenarios);
 }
 
+/// Finds the compiled effect lists of a game scenario or a mission by
+/// its qualified id, so that the rule runtime can find an effect written
+/// in one again from where it is written
+/// ([`EffectRoots`](crate::rule::EffectRoots)): a timer a scenario's
+/// `start.do` sets (the last stand's dawn) runs when it falls due, an
+/// `ask` there is answered after a save (decision D-879).
+pub(crate) fn effect_roots<'a>(
+    defs: &'a clash_data::Defs,
+    def_type: &str,
+    def: &str,
+    out: &mut Vec<&'a crate::rule::Block>,
+) {
+    use clash_data::Def;
+    let objectives = |objectives: &'a [def::ObjectiveDef],
+                      out: &mut Vec<&'a crate::rule::Block>| {
+        for objective in objectives {
+            out.extend(objective.on_done.block());
+            out.extend(objective.on_failed.block());
+        }
+    };
+    if def_type == ScenarioDef::TYPE {
+        let Some(registry) = defs.try_registry::<ScenarioDef>() else {
+            return;
+        };
+        let Some(scenario) = registry.lookup(def).and_then(|id| registry.try_get(id)) else {
+            return;
+        };
+        out.extend(scenario.start.effects.block());
+        objectives(&scenario.objectives, out);
+        out.extend(scenario.saving.on_party_gone.effects.block());
+    } else if def_type == MissionDef::TYPE {
+        let Some(registry) = defs.try_registry::<MissionDef>() else {
+            return;
+        };
+        let Some(mission) = registry.lookup(def).and_then(|id| registry.try_get(id)) else {
+            return;
+        };
+        objectives(&mission.objectives, out);
+        out.extend(mission.on_done.block());
+        out.extend(mission.on_failed.block());
+        out.extend(mission.on_expired.block());
+    }
+}
+
 /// Enters the hook of scenarios in a registry, unless it is there.
 /// Called while the engine's registry is built, before its properties.
 pub fn register_types(registry: &mut Registry) {
