@@ -33,8 +33,8 @@ const TOWN: usize = 2;
 const TOWN_LIFE: usize = 3;
 const WAYSIDE: usize = 4;
 
-/// The playable templates as the creation screen lists them.
-const ADEPT: usize = 0;
+/// The playable templates as the creation screen lists them, after the
+/// adept.
 const BRAWLER: usize = 1;
 const MARKSMAN: usize = 2;
 
@@ -348,9 +348,7 @@ fn an_adept_is_made_with_the_powers_chosen_and_uses_one() {
     let mut run = boot_default(&data);
     new_game_at(&mut run, TOWN_LIFE, "Ada");
     script(&mut run, "f2\n");
-    for _ in 0..ADEPT {
-        script(&mut run, "down\n");
-    }
+    // The adept is the first of the list.
     script(&mut run, "enter\n");
     // The powers, the fifth choice: Heal put back, Force push taken.
     focus_on(&mut run, "choices");
@@ -776,7 +774,7 @@ fn the_armoury_key_is_taken_from_the_desk_and_opens_the_armoury() {
         .game()
         .with_session(|session| session.player_loc())
         .flatten()
-        .map(|at| {
+        .and_then(|at| {
             let mut found = None;
             for dy in -10..=10 {
                 for dx in -10..=10 {
@@ -788,7 +786,6 @@ fn the_armoury_key_is_taken_from_the_desk_and_opens_the_armoury() {
             }
             found
         })
-        .flatten()
         .expect("the armoury's door is locked");
     // Outside is the side of the door nearer the desk; from there a step
     // toward the door walks into it.

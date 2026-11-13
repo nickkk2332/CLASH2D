@@ -344,6 +344,22 @@ impl RichText {
 }
 
 #[cfg(test)]
+mod capitals {
+    use super::RichText;
+
+    #[test]
+    fn a_line_begins_with_a_capital_and_keeps_the_rest() {
+        let shown = |text: &str| RichText::plain_text(text).capitalised().plain();
+        assert_eq!(shown("nobody is in sight."), "Nobody is in sight.");
+        assert_eq!(shown("  the door opens."), "  The door opens.");
+        assert_eq!(shown("Already so."), "Already so.");
+        assert_eq!(shown("“quoted” stays."), "“quoted” stays.");
+        assert_eq!(shown("12 arrows."), "12 arrows.");
+        assert_eq!(shown(""), "");
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::color::{Ansi16, Color};

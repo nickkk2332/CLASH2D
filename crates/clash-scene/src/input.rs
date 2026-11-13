@@ -513,6 +513,25 @@ mod tests {
     }
 
     #[test]
+    fn a_key_is_written_for_a_person_as_on_the_keyboard() {
+        for (text, shown) in [
+            ("h", "h"),
+            ("shift+j", "Shift+J"),
+            ("tab", "Tab"),
+            ("shift+tab", "Shift+Tab"),
+            ("f1", "F1"),
+            ("escape", "Esc"),
+            ("page_up", "Page Up"),
+            ("ctrl+d", "Ctrl+D"),
+            ("space", "Space"),
+            (",", ","),
+            ("?", "?"),
+        ] {
+            assert_eq!(KeyChord::parse(text).unwrap().label(), shown, "{text}");
+        }
+    }
+
+    #[test]
     fn a_frontend_key_is_brought_to_the_same_form_as_data() {
         assert_eq!(KeyChord::char('A'), KeyChord::parse("shift+a").unwrap());
         assert_eq!(

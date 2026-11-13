@@ -22,7 +22,7 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | [`tracks`](#tracks) | The tracks of one entity, reached as `entity.track` (06 §4.3). | 2 |
 | [`tract`](#tract) | A tract of a realm, loaded or not: what the engine knows of it is its record (02 §9.1). | 10 |
 | [`window`](#window) | A reaction window (03 §7.1): an opportunity with a deadline that those who notice it may answer. | 0 |
-| [`wound`](#wound) | A wound on a part of a body (06 §7.3). | 10 |
+| [`wound`](#wound) | A wound on a part of a body (06 §7.3). | 11 |
 
 <a id="ability"></a>
 ## `ability`
@@ -658,6 +658,7 @@ A wound on a part of a body (06 §7.3).
 - `wound.depth -> int`: How many of the part's layers it goes through, from the outside.
 - `wound.energy -> real`: The joules the part absorbed in making it.
 - `wound.kind -> id<damage_type>`: The kind of damage that made it.
+- `wound.kind_name -> string`: The kind of damage that made it in plain words, for a reader: its damage type's bare id with spaces for underscores (`cut`).
 - `wound.owner -> entity` · same owner: Whose wound it is.
 - `wound.part -> part` · same owner: The part it is on.
 - `wound.rate -> real`: What it drains from pools each second, every pool summed. 0 once it is closed.
