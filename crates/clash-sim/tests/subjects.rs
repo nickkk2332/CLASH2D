@@ -493,8 +493,9 @@ fn an_entity_answers_for_itself() {
     // those of defences in `tests/reactions.rs`, those of abilities in
     // `tests/abilities.rs`, those of minds in `tests/ai.rs`, those of
     // ranged combat in `tests/ranged.rs`, those of scenarios in
-    // `tests/scenario.rs`, and those of grips and takedowns in
-    // `tests/grips.rs`.
+    // `tests/scenario.rs`, those of grips and takedowns in
+    // `tests/grips.rs`, and those of what a character could do in
+    // `tests/offer.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::device::properties().iter())
@@ -507,6 +508,7 @@ fn an_entity_answers_for_itself() {
         .chain(clash_sim::scenario::journal::properties().iter())
         .chain(clash_sim::combat::grip::properties().iter())
         .chain(clash_sim::combat::takedown::properties().iter())
+        .chain(clash_sim::offer::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {
