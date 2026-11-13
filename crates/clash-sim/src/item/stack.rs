@@ -13,7 +13,7 @@
 use clash_core::EntityId;
 use clash_world::{Cause, OccupantFilter, OccupantKind};
 
-use super::hold::{Hold, Holds, hold_of, notify, set_entry};
+use super::hold::{Hold, Holds, hold_of, notify, place_beside, set_entry, store_order};
 use super::make::{ITEM_STREAM, set_count};
 use super::{ITEM_MERGED, ITEM_SPLIT, Item, def_of, item_of, reason, refuse};
 use crate::Sim;
@@ -136,6 +136,8 @@ pub fn split(sim: &mut Sim, item: EntityId, count: u32, cause: Cause) -> Result<
     }
     if let (Place::In(holder), Some(hold)) = (place, hold) {
         set_entry(sim, holder, piece, hold);
+        // In a store a piece keeps the place of the stack it came from.
+        place_beside(sim, holder, piece, item);
     }
     let payload = EventPayload::new(ITEM_SPLIT)
         .subject("self", Subject::Entity(item))
@@ -178,8 +180,10 @@ pub fn merge(sim: &mut Sim, item: EntityId, into: EntityId, cause: Cause) -> Res
 
 /// Joins an item to an equal one that is where it is, if there is one:
 /// the first in order of id among what shares its container and kind of
-/// hold, or its cell. Returns the entity that now holds its members:
-/// the stack it joined, or the item itself.
+/// hold, or its cell. In a store (07 §11.5) it joins only the stack put
+/// in just before it, so that the store keeps its order. Returns the
+/// entity that now holds its members: the stack it joined, or the item
+/// itself.
 pub fn rejoin(sim: &mut Sim, item: EntityId, cause: Cause) -> EntityId {
     if !stacks(sim, item) {
         return item;
@@ -188,6 +192,19 @@ pub fn rejoin(sim: &mut Sim, item: EntityId, cause: Cause) -> EntityId {
         return item;
     };
     let found = match place {
+        // A store keeps its order: what is put in joins only what was
+        // put in just before it (07 §11.5).
+        Place::In(container) if store_order(sim, container).is_some() => sim
+            .components
+            .get::<Holds>(container)
+            .and_then(|holds| {
+                let order = holds.order();
+                let at = order.iter().position(|stowed| *stowed == item)?;
+                at.checked_sub(1)
+                    .and_then(|before| order.get(before))
+                    .copied()
+            })
+            .filter(|other| equal(sim, item, *other) && together(sim, item, *other)),
         Place::In(container) => sim
             .entities
             .contents(container)

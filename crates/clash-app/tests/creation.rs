@@ -160,7 +160,7 @@ fn a_screen_makes_a_character_through_the_creation_session() {
 }
 
 #[test]
-fn a_start_that_names_no_template_there_is_is_a_located_error() {
+fn a_scenario_that_names_no_template_there_is_is_a_located_error() {
     let dir = std::env::temp_dir().join(format!("clash-app-no-template-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let data = dir.join("mods/elsewhere/data");
@@ -171,9 +171,9 @@ fn a_start_that_names_no_template_there_is_is_a_located_error() {
     )
     .unwrap();
     std::fs::write(
-        data.join("starts.json"),
-        r#"[ { "type": "start", "id": "nowhere", "realm": "core:countryside", "at": [1, 1],
-               "template": "nobody" } ]"#,
+        data.join("scenarios.json"),
+        r#"[ { "type": "scenario", "id": "nowhere", "worlds": [ { "realm": "core:countryside" } ],
+               "start": { "characters": [ { "template": "nobody" } ], "at": [ { "cell": [1, 1] } ] } } ]"#,
     )
     .unwrap();
     let profile = dir.join("elsewhere.json");
@@ -188,6 +188,6 @@ fn a_start_that_names_no_template_there_is_is_a_located_error() {
         problem.contains("there is no template `elsewhere:nobody`"),
         "{problem}"
     );
-    assert!(problem.contains("starts.json"), "{problem}");
+    assert!(problem.contains("scenarios.json"), "{problem}");
     let _ = std::fs::remove_dir_all(&dir);
 }

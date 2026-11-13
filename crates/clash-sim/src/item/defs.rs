@@ -160,6 +160,26 @@ pub struct HoldsDef {
     /// them. Empty for anything.
     #[serde(default)]
     pub accepts: Vec<String>,
+    /// For a store (07 §11.5): the order it gives up what is stowed in
+    /// it. Left out, it keeps no order, and equal things put in join
+    /// whatever equal stack is there.
+    #[serde(default)]
+    pub order: Option<StoreOrder>,
+}
+
+/// The order a store gives up what is stowed in it (07 §11.5): a
+/// magazine, a quiver, a belt.
+///
+/// A store keeps what was put into it in the order it was put in. An
+/// equal thing put in joins only the stack put in last, so that two
+/// kinds of round loaded in turn stay in turn.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StoreOrder {
+    /// What was put in first comes out first: a belt.
+    FirstIn,
+    /// What was put in last comes out first: a box magazine, a quiver.
+    LastIn,
 }
 
 /// An attribute modifier an item confers on whoever holds it in a grasp
@@ -404,6 +424,14 @@ pub struct ItemDef {
     /// The interactions it offers (16 §3.2), done to it as an entity.
     #[serde(default)]
     pub interactions: Vec<Ref<crate::interaction::InteractionDef>>,
+    /// For ammunition (07 §11.5): the projectile it fires and with what
+    /// energy.
+    #[serde(default)]
+    pub round: Option<crate::combat::ranged::RoundDef>,
+    /// For what fires shots, or is fitted to what does (07 §11.5): the
+    /// numbers a shot through it takes, and what may be fitted to it.
+    #[serde(default)]
+    pub shot: Option<crate::combat::ranged::ShotDef>,
 }
 
 impl ItemDef {
@@ -547,6 +575,12 @@ impl Def for ItemDef {
             && keeps.ageing.is_some_and(|factor| !amount(factor))
         {
             cx.error("keeps: `ageing` must be a finite factor of zero or more");
+        }
+        if let Some(round) = &self.round {
+            round.validate(cx);
+        }
+        if let Some(shot) = &self.shot {
+            shot.validate(cx);
         }
     }
 }

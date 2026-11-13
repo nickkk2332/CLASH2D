@@ -33,6 +33,8 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `ages` (object [`AgesDef`](#agesdef), or `null`; optional): How it ages. Carried as data.
 - `keeps` (object [`KeepsDef`](#keepsdef), or `null`; optional): What it keeps for its contents. Carried as data.
 - `interactions` (list of id of a [`interaction`](interaction.md); optional): The interactions it offers (16 §3.2), done to it as an entity.
+- `round` (object [`RoundDef`](#rounddef), or `null`; optional): For ammunition (07 §11.5): the projectile it fires and with what energy.
+- `shot` (object [`ShotDef`](#shotdef), or `null`; optional): For what fires shots, or is fitted to what does (07 §11.5): the numbers a shot through it takes, and what may be fitted to it.
 
 <a id="surfacedef"></a>
 ### `SurfaceDef`
@@ -65,6 +67,7 @@ An item's `holds`: its capacity as a container (06 §9.1).
 - `volume` ([volume](../units.md#volume) in `m3`, or `null`; optional): The most space what is stowed in it may take up. Left out, any amount.
 - `mass` ([mass](../units.md#mass) in `kg`, or `null`; optional): The most what is stowed in it may weigh, with everything inside that. Left out, any amount.
 - `accepts` (list of string; optional): The tags it takes: an item goes in if it carries at least one of them. Empty for anything.
+- `order` (one of `"first_in"`, `"last_in"` ([`StoreOrder`](#storeorder)), or `null`; optional): For a store (07 §11.5): the order it gives up what is stowed in it. Left out, it keeps no order, and equal things put in join whatever equal stack is there.
 
 <a id="modifierdef"></a>
 ### `ModifierDef`
@@ -125,6 +128,30 @@ What a container keeps for its contents (06 §9.4). Carried as data: ageing is n
 - `temperature` ([temperature](../units.md#temperature) in `K`, or `null`; optional): The temperature its contents read in place of the room's.
 - `ageing` (number, or `null`; optional): A factor on the ageing of its contents.
 
+<a id="rounddef"></a>
+### `RoundDef`
+
+What a round fires (07 §11.5): the `round` block of an item.
+
+- `projectile` (id of a [`projectile`](projectile.md); **required**): The projectile it launches.
+- `energy` ([energy](../units.md#energy) in `J`; **required**): The energy it gives each projectile, before the weapon's efficiency.
+- `count` (whole number, 0 or more; optional): How many projectiles it launches at once: shot in a cartridge. Default 1.
+- `casing` (id of a [`item`](item.md), or `null`; optional): What it leaves where it was fired from, if anything: a casing.
+
+<a id="shotdef"></a>
+### `ShotDef`
+
+The numbers a shot fired through an item takes (07 §11.5): the `shot` block of an item.
+
+On what fires (a firearm, a bow) they are what it gives a shot; on what is fitted to it (a scope, a suppressor) they are factors. A shot through an item takes the product of the item's and those of everything fitted to it (held `fixed` in it) that state the number.
+
+- `spread` (number, or `null`; optional): The spread of a shot, in radians: the standard deviation of each of its two angles of dispersion (07 §11.1).
+- `efficiency` (number, or `null`; optional): The share of a round's energy that goes into its projectiles.
+- `noise` (number, or `null`; optional): How loud a shot is: the strength of the sound it gives off, in the units of the signal kind content uses (15 §3.2).
+- `flash` (number, or `null`; optional): How bright a shot is: the strength of the light it gives off.
+- `energy` ([energy](../units.md#energy) in `J`, or `null`; optional): The most energy it puts into a shot of its own: a bow at full draw, a sling.
+- `fits` (list of string; optional): The tags of what may be fitted to it, one of each: `sight`, `muzzle`, a magazine's.
+
 <a id="weardef"></a>
 ### `WearDef`
 
@@ -135,6 +162,18 @@ One entry of an item's `wear`: a layer the item adds over some parts of whoever 
 - `material` (id of a [`material`](material.md), or `null`; optional): What the layer is made of. Left out, the item's own material.
 - `thickness` ([length](../units.md#length) in `m`; **required**): How thick the layer is there.
 - `coverage` (number; optional): The share of hits on a covered part that the layer is in the way of, from 0 to 1. Default 1.
+
+<a id="storeorder"></a>
+### `StoreOrder`
+
+The order a store gives up what is stowed in it (07 §11.5): a magazine, a quiver, a belt.
+
+A store keeps what was put into it in the order it was put in. An equal thing put in joins only the stack put in last, so that two kinds of round loaded in turn stay in turn.
+
+One of:
+
+- `"first_in"`: What was put in first comes out first: a belt.
+- `"last_in"`: What was put in last comes out first: a box magazine, a quiver.
 
 <a id="countrange"></a>
 ### `CountRange`

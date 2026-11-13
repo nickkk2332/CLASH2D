@@ -1,0 +1,34 @@
+[
+  { "//": "Hold out in a house on the lane through one night (13 §11, a survival game in small). The game begins at ten at night in front of a house; `start.do` brings three strangers onto the lane, each a person who thinks with the `guard` mind (09 §3.1), tags them `hostile` and has each hold the character hostile, so that they come for the character once they see it; and it sets a timer for dawn, eight hours on, that completes the objective of holding out. Getting inside comes first. The game ends when dawn comes or when the character dies, and it has one save, gone when it ends.",
+    "type": "scenario", "id": "last_stand", "name": "Last stand",
+    "doc": "A house on the lane at night, and strangers on the road. Hold out until dawn.",
+    "intro": "It is ten at night. Three strangers are on the lane and they mean you harm. Get into the house and hold out until dawn.",
+    "tags": ["survival"],
+    "worlds": [ { "realm": "countryside", "seed": "ask" } ],
+    "start": {
+      "characters": [ { "template": "person" } ],
+      "at": [ { "name": "Before the house", "cell": [17, 45] } ],
+      "time": { "day": 1, "at": "22:00" },
+      "do": [
+        { "spawn": { "template": "person", "also": ["guard"], "at": "offset(start_cell, -14, 0, 0) ?? start_cell" } },
+        { "spawn": { "template": "person", "also": ["guard"], "at": "offset(start_cell, 14, 0, 0) ?? start_cell" } },
+        { "spawn": { "template": "person", "also": ["guard"], "at": "offset(start_cell, 24, 0, 0) ?? start_cell" } },
+        { "for_each": { "entities": { "around": "self", "radius": 30, "tag": "person", "where": "it != self" } },
+          "as": "stranger",
+          "do": [ { "add_tag": { "to": "$stranger", "tag": "hostile" } },
+                  { "set_stance": { "who": "$stranger", "of": "self", "stance": "hostile" } } ] },
+        { "set": { "global.var.refuge": "offset(start_cell, 0, -2, 0) ?? start_cell" } },
+        { "after": "8 h", "owner": "global",
+          "do": [ { "complete_objective": "dawn" } ] } ] },
+    "objectives": [
+      { "id": "inside", "text": "Get inside the house.",
+        "done": "not taker.loc.under_open_sky",
+        "marker": { "at": "global.var.refuge" } },
+      { "id": "dawn", "text": "Hold out until dawn." } ],
+    "ends": [
+      { "on": "objective_changed", "filter": { "id": "dawn", "state": "done" }, "as": "survived" } ],
+    "saving": { "policy": "single", "on_party_gone": "end" } },
+
+  { "type": "variable", "id": "refuge", "scope": "global", "value": "loc", "belief_safe": true,
+    "doc": "The door of the house the character holds out in (`core:last_stand`)." }
+]

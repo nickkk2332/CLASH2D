@@ -28,7 +28,7 @@ says which.
 | TL2 | Reasons | M | K2, T3 | todo |
 | TL3 | Traces | M | K10 | todo |
 | TL4 | Inspector | L | U6b, TL3, K4 | todo |
-| TL5 | Profiler and the budgets file | M | K2, W23 | todo |
+| TL5 | Profiler and the budgets file | M | K2, W23 | beta |
 | TL6 | Test scripts | M | TL1, U1 | beta |
 | TL7 | Invariant checkers | M | TL6 | todo |
 | TL8 | Replay, divergence, diff, rewind | M | K7, TL6 | todo |
@@ -169,6 +169,14 @@ Done when
 - Every row of every specification's budget table is in the file, checked
   by a test that reads the documents.
 - A budget exceeded by more than its margin fails the gate.
+
+Status `beta` (D-730). Built: `budgets.toml` at the root with the rows
+that have a benchmark, each checked by a test against the table of its
+specification; `clash-tools bench` and `cargo xtask bench [--check]
+[<filter>]`, which fails on a measurement over its limit by more than
+its margin; 14 §6.3 says how to run them. Stubbed: the rows that have
+no benchmark yet; the profiler's views (time by subsystem and rule,
+counts, the live budgets view).
 
 ### TL6 — Test scripts
 

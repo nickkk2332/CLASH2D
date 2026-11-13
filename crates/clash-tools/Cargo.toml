@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 clash-core.workspace = true
+clash-time.workspace = true
 clash-data.workspace = true
 clash-expr.workspace = true
 clash-world.workspace = true
@@ -18,7 +19,6 @@ clash-scene.workspace = true
 clash-front-term.workspace = true
 
 [dev-dependencies]
-clash-time.workspace = true
 serde.workspace = true
 
 [lints]

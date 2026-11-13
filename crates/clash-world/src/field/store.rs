@@ -5,6 +5,7 @@ use clash_core::{EntityId, StateHash, StateHasher};
 use serde::{Deserialize, Serialize};
 
 use crate::chunk::FieldId;
+use crate::dims::CHUNK_CELLS;
 use crate::pos::CellIdx;
 use crate::storage::SparseCells;
 
@@ -29,28 +30,207 @@ impl StateHash for FieldCell {
     }
 }
 
+/// A layer holding more cells than this is kept as a table of every
+/// cell of its chunk, so that a cell is found, added and taken away
+/// without moving any other (D-734).
+pub const FIELD_DENSE_FROM: usize = 512;
+
+/// A layer kept as a table goes back to a list when it holds fewer
+/// cells than this.
+pub const FIELD_SPARSE_BELOW: usize = 128;
+
+/// How a layer keeps its cells: a list in cell order, or a table of
+/// every cell of the chunk with a count of those that hold the field.
+/// Which it is changes nothing that can be seen: not what is read, not
+/// the order cells come in, not what is saved or hashed.
+#[derive(Clone, Debug)]
+enum Cells {
+    List(SparseCells<FieldCell>),
+    Table {
+        cells: Box<[Option<FieldCell>]>,
+        len: usize,
+    },
+}
+
+impl Default for Cells {
+    fn default() -> Cells {
+        Cells::List(SparseCells::new())
+    }
+}
+
+impl Cells {
+    #[inline]
+    fn get(&self, idx: CellIdx) -> Option<&FieldCell> {
+        match self {
+            Cells::List(list) => list.get(idx),
+            Cells::Table { cells, .. } => cells.get(idx.index())?.as_ref(),
+        }
+    }
+
+    #[inline]
+    fn get_mut(&mut self, idx: CellIdx) -> Option<&mut FieldCell> {
+        match self {
+            Cells::List(list) => list.get_mut(idx),
+            Cells::Table { cells, .. } => cells.get_mut(idx.index())?.as_mut(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Cells::List(list) => list.len(),
+            Cells::Table { len, .. } => *len,
+        }
+    }
+
+    fn insert(&mut self, idx: CellIdx, cell: FieldCell) -> Option<FieldCell> {
+        let old = match self {
+            Cells::List(list) => list.insert(idx, cell),
+            Cells::Table { cells, len } => {
+                let old = cells.get_mut(idx.index())?.replace(cell);
+                if old.is_none() {
+                    *len += 1;
+                }
+                old
+            }
+        };
+        if let Cells::List(list) = self
+            && list.len() > FIELD_DENSE_FROM
+        {
+            let mut cells = vec![None; CHUNK_CELLS].into_boxed_slice();
+            for (at, cell) in list.iter() {
+                cells[at.index()] = Some(*cell);
+            }
+            let len = list.len();
+            *self = Cells::Table { cells, len };
+        }
+        old
+    }
+
+    fn remove(&mut self, idx: CellIdx) -> Option<FieldCell> {
+        let old = match self {
+            Cells::List(list) => list.remove(idx),
+            Cells::Table { cells, len } => {
+                let old = cells.get_mut(idx.index())?.take();
+                if old.is_some() {
+                    *len -= 1;
+                }
+                old
+            }
+        };
+        if let Cells::Table { len, .. } = self
+            && *len < FIELD_SPARSE_BELOW
+        {
+            let list = self.list();
+            *self = Cells::List(list);
+        }
+        old
+    }
+
+    /// The cells as a list in cell order.
+    fn list(&self) -> SparseCells<FieldCell> {
+        match self {
+            Cells::List(list) => list.clone(),
+            Cells::Table { .. } => {
+                let mut list = SparseCells::new();
+                for (idx, cell) in self.iter() {
+                    list.insert(idx, *cell);
+                }
+                list
+            }
+        }
+    }
+
+    fn iter(&self) -> CellsIter<'_> {
+        match self {
+            Cells::List(list) => CellsIter::List(list.entries().iter()),
+            Cells::Table { cells, .. } => CellsIter::Table(cells.iter().enumerate()),
+        }
+    }
+
+    fn heap_bytes(&self) -> usize {
+        match self {
+            Cells::List(list) => list.heap_bytes(),
+            Cells::Table { cells, .. } => cells.len() * core::mem::size_of::<Option<FieldCell>>(),
+        }
+    }
+}
+
+/// The cells of a layer that hold the field, in cell order.
+enum CellsIter<'a> {
+    List(core::slice::Iter<'a, (CellIdx, FieldCell)>),
+    Table(core::iter::Enumerate<core::slice::Iter<'a, Option<FieldCell>>>),
+}
+
+impl<'a> Iterator for CellsIter<'a> {
+    type Item = (CellIdx, &'a FieldCell);
+
+    #[inline]
+    fn next(&mut self) -> Option<(CellIdx, &'a FieldCell)> {
+        match self {
+            CellsIter::List(list) => list.next().map(|(idx, cell)| (*idx, cell)),
+            CellsIter::Table(table) => {
+                table.find_map(|(at, cell)| Some((CellIdx::from_index(at)?, cell.as_ref()?)))
+            }
+        }
+    }
+}
+
 /// One field's cells in a chunk.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(from = "SparseCells<FieldCell>", into = "SparseCells<FieldCell>")]
 pub struct FieldLayer {
-    cells: SparseCells<FieldCell>,
+    cells: Cells,
     /// How many of the cells are awake.
     awake: u32,
 }
 
+/// Two layers are equal when they hold the same cells, however each
+/// keeps them.
+impl PartialEq for FieldLayer {
+    fn eq(&self, other: &FieldLayer) -> bool {
+        self.awake == other.awake
+            && self.cells.len() == other.cells.len()
+            && self.cells.iter().eq(other.cells.iter())
+    }
+}
+
+impl Eq for FieldLayer {}
+
 impl From<SparseCells<FieldCell>> for FieldLayer {
     fn from(cells: SparseCells<FieldCell>) -> FieldLayer {
         let awake = cells.iter().filter(|(_, cell)| cell.awake).count();
-        FieldLayer {
-            cells,
+        let mut layer = FieldLayer {
+            cells: Cells::List(SparseCells::new()),
             awake: u32::try_from(awake).unwrap_or(u32::MAX),
+        };
+        if cells.len() > FIELD_DENSE_FROM {
+            for (idx, cell) in cells.iter() {
+                layer.cells.insert(idx, *cell);
+            }
+        } else {
+            layer.cells = Cells::List(cells);
         }
+        layer
     }
 }
 
 impl From<FieldLayer> for SparseCells<FieldCell> {
     fn from(layer: FieldLayer) -> SparseCells<FieldCell> {
-        layer.cells
+        match layer.cells {
+            Cells::List(list) => list,
+            table => table.list(),
+        }
+    }
+}
+
+/// The cells in cell order, as a list of them is hashed.
+impl StateHash for FieldLayer {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        hasher.write_len(self.cells.len());
+        for (idx, cell) in self.cells.iter() {
+            idx.state_hash(hasher);
+            cell.state_hash(hasher);
+        }
     }
 }
 
@@ -68,7 +248,7 @@ impl FieldLayer {
 
     /// Whether no cell holds the field.
     pub fn is_empty(&self) -> bool {
-        self.cells.is_empty()
+        self.cells.len() == 0
     }
 
     /// How many cells of the field are awake.
@@ -183,7 +363,7 @@ impl FieldStore {
             if old.awake {
                 layer.awake = layer.awake.saturating_sub(1);
             }
-            if layer.cells.is_empty() {
+            if layer.is_empty() {
                 layers.remove(at);
                 if layers.is_empty() {
                     self.layers = None;
@@ -249,7 +429,7 @@ impl StateHash for FieldStore {
         hasher.write_len(list.len());
         for (field, layer) in list {
             field.state_hash(hasher);
-            layer.cells.state_hash(hasher);
+            layer.state_hash(hasher);
         }
     }
 }
@@ -301,6 +481,56 @@ mod tests {
         assert!(store.is_empty());
         assert_eq!(Hash128::of(&store), empty);
         assert_eq!(store.heap_bytes(), 0);
+    }
+
+    /// D-734: a layer that grows past [`FIELD_DENSE_FROM`] cells and
+    /// shrinks back reads, iterates, hashes and saves exactly as a list
+    /// of its cells does, the reference.
+    #[test]
+    fn a_layer_kept_as_a_table_is_its_list_to_every_reader() {
+        let field = FieldId::new(1);
+        let mut store = FieldStore::default();
+        let mut reference: SparseCells<FieldCell> = SparseCells::new();
+        let mut state = 0x2545_f491_u32;
+        let mut became_table = false;
+        for step in 0..6000_u32 {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let idx = CellIdx::from_index((state >> 8) as usize % CHUNK_CELLS).unwrap();
+            // Grow for the first half, then mostly shrink.
+            let adding = if step < 3000 {
+                !state.is_multiple_of(5)
+            } else {
+                state.is_multiple_of(5)
+            };
+            let level = (state >> 24) as u8;
+            if adding && level > 0 {
+                let new = cell(level, !state.is_multiple_of(3));
+                assert_eq!(store.set(field, idx, Some(new)), reference.insert(idx, new));
+            } else {
+                assert_eq!(store.set(field, idx, None), reference.remove(idx));
+            }
+            if let Some(layer) = store.layer(field) {
+                became_table |= matches!(layer.cells, Cells::Table { .. });
+                assert_eq!(layer.len(), reference.len());
+                assert_eq!(layer.get(idx), reference.get(idx));
+                if step % 97 == 0 {
+                    assert!(layer.cells().eq(reference.iter()));
+                    let awake = reference.iter().filter(|(_, cell)| cell.awake).count();
+                    assert_eq!(layer.awake() as usize, awake);
+                    assert_eq!(store.awake() as usize, awake);
+                    let as_list = FieldLayer::from(reference.clone());
+                    assert_eq!(layer, &as_list);
+                    assert_eq!(Hash128::of(layer), Hash128::of(&reference));
+                    let bytes = clash_core::codec::to_bytes(layer).unwrap();
+                    assert_eq!(bytes, clash_core::codec::to_bytes(&reference).unwrap());
+                    let back: FieldLayer = clash_core::codec::from_bytes(&bytes).unwrap();
+                    assert_eq!(&back, layer);
+                }
+            } else {
+                assert!(reference.is_empty());
+            }
+        }
+        assert!(became_table, "the layer never grew into a table");
     }
 
     #[test]

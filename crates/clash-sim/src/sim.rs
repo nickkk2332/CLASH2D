@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 12;
+pub const SAVE_VERSION: u32 = 14;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -139,6 +139,14 @@ pub struct Sim {
     /// relation toward another, until relations exist
     /// ([`Sim::set_intervenes`]). Set it again after a load.
     pub(crate) intervenes: Option<crate::action::IntervenesFn>,
+    /// The shots in flight (07 §11; [`ranged`](crate::combat::ranged)).
+    pub(crate) ranged: crate::combat::ranged::RangedState,
+    /// The game being played, if one is (13 §3): saved, and hashed when
+    /// there is one ([`scenario`](crate::scenario)).
+    pub(crate) scenario: crate::scenario::ScenarioState,
+    /// Not state: what the scenarios' objectives watch, from the
+    /// definitions.
+    pub(crate) scenario_rt: Arc<crate::scenario::Tables>,
 }
 
 /// Why saved state could not be loaded.
@@ -226,6 +234,8 @@ struct SavedRef<'a> {
     perception: &'a PerceptionState,
     abilities: &'a crate::ability::AbilityIndex,
     ai: &'a crate::ai::AiState,
+    ranged: &'a crate::combat::ranged::RangedState,
+    scenario: &'a crate::scenario::ScenarioState,
 }
 
 /// What [`Sim::load`] reads: the same fields in the same order, owned.
@@ -252,6 +262,8 @@ struct Saved {
     perception: PerceptionState,
     abilities: crate::ability::AbilityIndex,
     ai: crate::ai::AiState,
+    ranged: crate::combat::ranged::RangedState,
+    scenario: crate::scenario::ScenarioState,
 }
 
 impl Sim {
@@ -287,6 +299,7 @@ impl Sim {
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
         let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
         let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
+        let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
             defs,
@@ -322,6 +335,9 @@ impl Sim {
             ai_defs,
             strike_depth: 0,
             intervenes: None,
+            ranged: crate::combat::ranged::RangedState::default(),
+            scenario: crate::scenario::ScenarioState::default(),
+            scenario_rt,
         };
         sim.bind_runtime();
         sim
@@ -643,7 +659,13 @@ impl Sim {
             }
             // What the world did to someone's body or pools (06 §7.4;
             // 02 §16), to be carried out once its events are queued.
-            let harm = crate::life::harm::Harm::of(&event);
+            // A shot in flight strikes with its own surface (07 §11.1),
+            // in place of the blunt blow the world's event would give.
+            let flight = crate::combat::ranged::flight::FlightNews::of(self, &event);
+            let harm = match &flight {
+                Some(news) if news.replaces_harm() => None,
+                _ => crate::life::harm::Harm::of(&event),
+            };
             let (cause, loc) = (event.cause(), event.location());
             let stamped = self.stamped(Where::Loc(loc), cause, EventBody::World(event));
             self.events.push_back(stamped);
@@ -670,6 +692,9 @@ impl Sim {
             }
             if let Some(harm) = harm {
                 self.apply_harm(harm);
+            }
+            if let Some(news) = flight {
+                crate::combat::ranged::flight::follow(self, news);
             }
         }
     }
@@ -717,6 +742,14 @@ impl Sim {
         self.perception.state_hash(&mut kernel);
         self.abilities.state_hash(&mut kernel);
         self.ai.state_hash(&mut kernel);
+        // A simulation that has never fired hashes as one from before
+        // shots were kept.
+        if !self.ranged.is_pristine() {
+            self.ranged.state_hash(&mut kernel);
+        }
+        // Nothing when no game is being played: a simulation that was
+        // never begun from a scenario hashes as before.
+        self.scenario.state_hash(&mut kernel);
         let kernel = kernel.finish();
         let total = Hash128::of(&[
             cosmos, timeline, entities, components, rules, settings, rng, kernel,
@@ -774,6 +807,8 @@ impl Sim {
                 perception: &self.perception,
                 abilities: &self.abilities,
                 ai: &self.ai,
+                ranged: &self.ranged,
+                scenario: &self.scenario,
             },
         )
     }
@@ -827,6 +862,7 @@ impl Sim {
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
         let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
         let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
+        let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
             defs,
@@ -862,6 +898,9 @@ impl Sim {
             ai_defs,
             strike_depth: 0,
             intervenes: None,
+            ranged: saved.ranged,
+            scenario: saved.scenario,
+            scenario_rt,
         };
         sim.bind_runtime();
         Ok(sim)
@@ -873,6 +912,7 @@ impl Sim {
     fn bind_runtime(&mut self) {
         self.bind_rules();
         crate::interaction::bind(self);
+        crate::scenario::bind(self);
         // Recurring global rules have a timer from the start (05 §9.4).
         self.start_recurring_rules();
     }

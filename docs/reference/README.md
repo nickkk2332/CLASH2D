@@ -7,14 +7,14 @@ For a walkthrough, start with the [modding guide](../modding-guide.md). The spec
 
 | Page | What it lists | Items |
 |------|---------------|------:|
-| [types](types/README.md) | Definition types: each field with its value, unit, default, whether it is required and what it refers to; the keys every definition carries | 63 types, 1066 fields |
+| [types](types/README.md) | Definition types: each field with its value, unit, default, whether it is required and what it refers to; the keys every definition carries | 66 types, 1167 fields |
 | [values](values.md) | How each kind of field value is written: quantities, references, tags, texts, expressions, conditions, effects |  |
 | [units](units.md) | The units a quantity may be written in | 30 |
-| [properties](properties.md) | Kinds of subject and their properties, by kind | 18 kinds, 254 properties |
-| [functions](functions.md) | Functions: arguments, result, whether random, whether safe in a mind context | 64 |
-| [events](events.md) | Events: their subjects and fields | 140 |
-| [hooks](hooks.md) | Hooks: their subjects and fields, and which fields a handler may change | 22 |
-| [verbs](verbs.md) | Verbs a rule's effects call: arguments and types | 111 |
+| [properties](properties.md) | Kinds of subject and their properties, by kind | 18 kinds, 263 properties |
+| [functions](functions.md) | Functions: arguments, result, whether random, whether safe in a mind context | 72 |
+| [events](events.md) | Events: their subjects and fields | 154 |
+| [hooks](hooks.md) | Hooks: their subjects and fields, and which fields a handler may change | 23 |
+| [verbs](verbs.md) | Verbs a rule's effects call: arguments and types | 124 |
 | [effects](effects.md) | The effects of the rule system itself: control flow, variables, time, rules and events | 29 |
 | [queries](queries.md) | Kinds of query: arguments and results | 5 |
 | [settings](settings.md) | The engine's settings, with their defaults | 27 |

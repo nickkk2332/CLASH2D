@@ -360,6 +360,8 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::combat::defence::properties());
     properties.extend(crate::ability::properties());
     properties.extend(crate::ai::properties());
+    properties.extend(crate::combat::ranged::properties());
+    properties.extend(crate::scenario::journal::properties());
     properties
 }
 
@@ -371,6 +373,7 @@ pub fn engine_functions() -> Vec<FunctionDef> {
     table.extend(crate::perception::props::functions());
     table.extend(crate::combat::functions());
     table.extend(crate::action::windows::functions());
+    table.extend(crate::scenario::journal::functions());
     table
 }
 
@@ -437,6 +440,7 @@ pub fn register_engine(registry: &mut Registry) {
     crate::ability::register_types(registry);
     crate::combat::register_types(registry);
     crate::action::windows::register_types(registry);
+    crate::scenario::register_types(registry);
     for property in engine_properties() {
         let known = registry
             .kind_id(property.kind)
@@ -475,6 +479,9 @@ pub fn register_engine(registry: &mut Registry) {
         mirror_event(registry, info);
     }
     for info in crate::ability::ABILITY_EVENTS {
+        mirror_event(registry, info);
+    }
+    for info in crate::scenario::SCENARIO_EVENTS {
         mirror_event(registry, info);
     }
 }

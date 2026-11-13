@@ -20,3 +20,16 @@ An item's `holds`: its capacity as a container (06 §9.1).
 - `volume` ([volume](../units.md#volume) in `m3`, or `null`; optional): The most space what is stowed in it may take up. Left out, any amount.
 - `mass` ([mass](../units.md#mass) in `kg`, or `null`; optional): The most what is stowed in it may weigh, with everything inside that. Left out, any amount.
 - `accepts` (list of string; optional): The tags it takes: an item goes in if it carries at least one of them. Empty for anything.
+- `order` (one of `"first_in"`, `"last_in"` ([`StoreOrder`](#storeorder)), or `null`; optional): For a store (07 §11.5): the order it gives up what is stowed in it. Left out, it keeps no order, and equal things put in join whatever equal stack is there.
+
+<a id="storeorder"></a>
+### `StoreOrder`
+
+The order a store gives up what is stowed in it (07 §11.5): a magazine, a quiver, a belt.
+
+A store keeps what was put into it in the order it was put in. An equal thing put in joins only the stack put in last, so that two kinds of round loaded in turn stay in turn.
+
+One of:
+
+- `"first_in"`: What was put in first comes out first: a belt.
+- `"last_in"`: What was put in last comes out first: a box magazine, a quiver.

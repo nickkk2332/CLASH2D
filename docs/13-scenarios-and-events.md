@@ -108,12 +108,38 @@ moment that perhaps only the character remembers.
 A scenario's state (objectives, plot, director, cases) is part of the
 simulation and is saved with it.
 
-Until this type is built, a game begins from a `start` definition
-(12 §3.4): one realm, one place in its base grid, and a character drawn
-with a glyph. The application lists starts as `app.scenarios`, and the
-`new_game` service takes the id of one as its `scenario`. A start is a
-scenario with one world, one `at` and a ready-made character, and the
-type is deleted when this one lands.
+As built (decisions D-750 to D-754; `clash_sim::scenario`). The `start`
+type is gone; the bundled starts are scenarios. The fields, each
+checked when mods load:
+
+| Field | As built |
+|-------|----------|
+| `name`, `doc` | What the new-game screen shows. `name` left out is the id |
+| `intro` | A text shown on the screen of the role `intro` as the game begins (12 §3.4); left out, none |
+| `tags` | Carried. The new-game list is in order of qualified id |
+| `worlds` | Exactly one: `realm` (a qualified id or a bare name in the scenario's namespace; one no mod defines is a load error), `as` (carried), `seed`: a whole number, `random` or `ask` (the default) |
+| `options` | `setting` definitions (04 §10) the player is asked about; one that is not defined is a load error |
+| `settings` | Values by setting key, each checked against the setting's definition where there is one |
+| `locked` | Setting keys the `Setting` command refuses in this scenario (`setting.locked`) |
+| `start.characters` | Exactly one: `template` (the character's template when the player made none; checked where templates are loaded), `create` (whether the creation screen may make it; default true), `senses` (given when its templates give none; default every sense) |
+| `start.at` | One or more places, each a `name` and exactly one of `cell` (`[x, y]`, footing found in that column, or `[x, y, z]`) and `site` (`def`, `tag` and `name` to match; the party begins at its anchor), with `role` carried |
+| `start.time` | `day` from 1 and `at`, `HH:MM`. Left out, the realm's clock begins at its sky's `starts_at` |
+| `start.do` | Effects run once the party is placed |
+| `rules` | `rule_group` definitions in force only in this scenario (section 4.4) |
+| `objectives`, `ends`, `saving` | Sections 5, 9.2 to 9.4 |
+| `screens` | Screens in place of the profile's for the roles `intro` and `summary` |
+
+A scenario's expressions bind, in order, `self` and `taker` (the
+objective's taker; in `start.do` and `ends`, the character played
+now), `party` (`list<entity>`, truth contexts only), `start_site`
+(`site?`), `start_cell` (`loc`) and `global`. A scenario's own
+variables are global variables (`global.var.*`); `party()`,
+`fallen()`, `scenario_id()`, `objective_state(id, mission?)`,
+`mission_state(mission)` and `played_for()` read the game anywhere
+(section 13).
+
+Not built: several `worlds`, a party of several, `director`, `plot`,
+`then`; `screens` for `creation` and `play`.
 
 ## 4. Starting
 
@@ -156,6 +182,41 @@ entry of a realm, or coordinates. A list offers the player a choice.
 introduction, move the character somewhere they have never been. A story
 that begins with being pulled into another world is a `teleport` here.
 
+### 4.5 As built
+
+Decisions D-751 to D-753. Whoever starts a game (the application, the
+console's `begin`) first calls `make_world(defs, world, scenario,
+seed)`: the scenario's realm is created with the seed its `seed`
+chooses (`SeedSpec::choose(asked, drawn)`), and universal time is moved
+on, before anything is in the world, until the realm's clock reads
+`start.time` by its sky's `day` and `starts_at` (a day earlier than the
+sky starts its clock is the next day). It then spawns the character
+(the command `Spawn`) and submits
+`Command::BeginScenario { scenario, party, place, options }`, which:
+
+1. refuses, changing nothing, while a game is being played
+   (`scenario.begun`), for a scenario not loaded (`scenario.unknown`), a
+   place it does not have (`scenario.bad_place`), a party of no one or
+   of entities that do not exist (`scenario.bad_party`), a simulation
+   with no realm of the scenario's (`scenario.bad_world`), an answer to a
+   setting it does not ask about (`setting.not_an_option`) and a value a
+   setting does not take (`setting.bad_value`);
+2. for a `site` place surveys every region of a realm of at most 64
+   regions and draws one of the matching sites from the rule stream
+   (none: `scenario.bad_place`, the survey left behind);
+3. gives the party senses, starts the first character's session at the
+   place and puts it where a walker can stand in that column, or in the
+   nearest column within 8 cells that has footing;
+4. applies `settings`, then the answers (`setting_changed` for each
+   change), switches every rule group a scenario names (on if this
+   scenario names it, off otherwise: a group meant only for scenarios is
+   written `"enabled": false`), gives the party direct control;
+5. records the game, shows the objectives that wait for nothing (each
+   `objective_changed` with `active`), runs `start.do` and raises
+   `scenario_started`.
+
+The same answers give the same state hash (test script `fresh_start`).
+
 ## 5. Objectives and missions
 
 ### 5.1 Objectives
@@ -182,6 +243,33 @@ know (15 §7). "Find out who did it" should be the second kind.
 
 An objective obliges nothing. A sandbox may have none.
 
+As built (decisions D-755, D-756). An objective is written in a
+scenario's or a mission's `objectives`:
+
+| Field | Is |
+|-------|----|
+| `id` | Unique in its list |
+| `text` | A template read in the taker's mind context |
+| `done`, `failed` | Reactive conditions (05 §7.5) that read truth; `failed` is tested first |
+| `marker` | Exactly one of `last_known` (an entity: where the taker last perceived it or was told it was, `believed_loc`; none while it never has), `site` (its anchor) and `at` (a cell), each read in the taker's mind context |
+| `parent` | Another objective of the list. One with children and no `done` is done when all its children are |
+| `after` | Objectives of the list that must be done before it is shown; until then it is `hidden` |
+| `hidden` | Hidden until `add_objective` shows it |
+| `expires` | How long it may be active before it fails, in universal time |
+| `on_done`, `on_failed` | Effects run when it settles |
+
+States are `hidden`, `active`, `done` and `failed`; done and failed do
+not change again. Each condition is looked through when mods load for
+the events that change what it reads: a property's and a function's
+`changed_by`, `var_changed` for a variable (declare it with `watch`).
+A condition that reads something with none registered, or a query,
+watches every event. While a game is being played, a watched event
+delivered marks the objectives that watch it, and at every safe point
+those are evaluated again, in rounds while settling one changes what
+others read, at most `rules.max_reactive_rounds` (default 8). So an
+objective's state equals a fresh evaluation until it settles
+(invariant Z4), and one whose inputs do not change is never looked at.
+
 ### 5.2 Missions
 
 ```json
@@ -198,6 +286,17 @@ An objective obliges nothing. A sandbox may have none.
 
 A **mission** is a template for objectives, started with parameters.
 Starting one gives the player its objectives; several may run at once.
+
+As built (decision D-756). A `mission` has `name` (a template in the
+taker's mind context), `doc`, `params` (names and types; the values are
+the locals `$name` in every expression of the mission), `objectives`,
+`expires`, `failed` (a reactive condition), `on_done`, `on_failed` and
+`on_expired`. `start_mission { mission, taker?, with? }` starts one and
+gives its number, from 1 in its game; its objectives that wait for
+nothing are shown. It is done when every objective is, failed when one
+fails, its `failed` holds or `fail_mission` is called, and expired when
+`expires` runs out while it is active. Postings are not built: they
+wait for published knowledge (09 §12).
 
 Missions come from the world:
 
@@ -426,14 +525,15 @@ returns it (03 §4.3); the application carries it out at a safe point.
 | `checkpoints` | Has only the saves the scenario's rules make |
 | `none` | Cannot save: a single sitting |
 
-As built (decision D-704): until the `scenario` type exists, a `start`
-names its policy in `saving` (12 §3.4), `free` if it names none, and the
-application keeps it (12 §3.6): `app.can_save` holds only under `free`;
-loading into a game being played is allowed only under `free`; `single`
-saves the game under the character's name as it is left, and not yet at
-intervals; a rule's `checkpoint` is saved under every policy but
-`none`. Restoring a checkpoint by rule, endings and `on_party_gone` are
-not built.
+As built (decisions D-704, D-757): a scenario names its policy in
+`saving.policy`, `free` if it names none, and the application keeps it
+(12 §3.6): `app.can_save` holds only under `free` while the game has not
+ended; loading into a game being played is allowed only under `free`;
+`single` saves the game under the character's name as it is left, and
+not yet at intervals, and an ending removes that save; a rule's
+`checkpoint` is saved under every policy but `none`, and
+`restore_checkpoint` loads it back at the next safe point. Memories are
+not yet carried.
 
 ### 9.3 When the party is gone
 
@@ -463,6 +563,18 @@ reason, and the scenario ends as `end` would.
 marked as foreknowledge. A character who dies, wakes at the last dawn and
 remembers is a scenario with one line of configuration.
 
+As built (decision D-759): `when` is its default only: no character of
+the party directly controlled and not dead. `party_gone` is raised once
+and `do` runs, with the last of the party as `taker`; then `end` ends
+the game as `as` (default `lost`); `restore` asks for the last
+checkpoint, or with none ends the game with the reason in
+`scenario_ended.reason`; `continue` tries `by` in order, `own` (another
+of the party still alive) then `create` (a new character from the
+scenario's character template, with every choice at its default, at the
+place the party began) by default, takes control of the first found
+(`take_control`), and ends the game when there is none. The fallen keep
+their bodies where they fell. `become` waits for package SC2.
+
 ### 9.4 Endings
 
 ```json
@@ -476,6 +588,18 @@ An ending names an outcome. The application shows the scenario's summary
 screen, writes legacy variables, applies the save policy, and either
 returns to the title, offers to continue playing where that makes sense, or
 starts what follows.
+
+As built (decision D-757): an entry of `ends` has `as` and exactly one
+of `if` (a reactive condition that reads truth) and `on` (an event,
+with `filter`: fields and the constants they must equal). The first that
+comes to hold ends the game through `end_scenario`: the hook
+`scenario_ending` (handlers may change `as` or cancel), then the outcome
+is recorded, `scenario_ended` raised and `EndScenario { outcome }` asked
+of the application, which stops the game, removes a `single` game's
+save and opens the summary with `title`, `outcome` and `text` (how long
+the game ran and each objective as the character knows it). Leaving the
+summary returns to the title. `then` and legacy variables are not built
+(SC8).
 
 ### 9.5 Turning back the whole world (experimental)
 
@@ -597,6 +721,14 @@ A total conversion (04 §14) ships its own scenarios and may ship only one.
 
 Every step that shows something is a screen (12) the scenario may replace.
 
+As built (decision D-758; 12 §3.4): `ui:new_game` lists the scenarios
+and takes the name and the seed; a scenario with more than one place or
+with options opens `ui:setup` (the role `setup`), which reads
+`app.setup` and asks for the game at the place chosen; the creation
+screen is reached with F2 as before; the world is made and
+`BeginScenario` submitted; the introduction, if the scenario has one,
+is shown on `ui:intro` (the role `intro`) over the play screen.
+
 ## 13. Modding surface
 
 **Definition types**: `scenario`, `mission`, `director`, `case_kind`.
@@ -647,6 +779,72 @@ step `examine` (09 §10.3).
 | `director_choosing` | The director starts what it drew, where it chose | Change the entry or the place; cancel |
 | `case_judging` | A holder accepts or refuses an accusation | Decide it |
 | `scenario_ending` | An ending takes effect | Change which ending; cancel |
+
+**As built** (decisions D-750 to D-759; `clash_sim::scenario`).
+
+Definition types: `scenario` (section 3), `mission` (section 5.2),
+`setting` (04 §10: `name`, `kind` `flag`, `choice` or `number`,
+`options`, `range`, `default`, `doc`).
+
+Commands (03 §4.4): `BeginScenario { scenario, party, place, options }`
+(section 4.5); `Setting { key, value }`, refused with `setting.locked`
+and `setting.bad_value`.
+
+Events, each raised with a payload; every one also binds `actor?` and
+`instigator?`:
+
+| Event | Subjects | Fields |
+|-------|----------|--------|
+| `scenario_started` | `self` (the first of the party) | `scenario` (string, qualified id), `place` (int, from 0) |
+| `objective_changed` | `taker` | `id` (string), `state` (string: `active`, `done`, `failed`), `mission` (int; 0 for the scenario's own) |
+| `mission_started`, `mission_done`, `mission_failed`, `mission_expired` | `taker` | `mission` (string, qualified id), `serial` (int) |
+| `party_gone` | `self` (the last of the party) | `then` (string) |
+| `checkpoint_made` | | `name` (string) |
+| `scenario_ended` | | `as` (string), `reason` (string; empty unless an ending stands in for a refusal) |
+| `setting_changed` | | `key` (string), `old`, `new` (any) |
+
+Hook: `scenario_ending`, field `as` (string), which a handler may
+change, or cancel: the game goes on.
+
+Verbs, each refused with no game (`scenario.no_game`) or once it has
+ended (`scenario.ended`) beside what is listed:
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `complete_objective` | `id` (string, direct), `mission` (int, optional) | Settles an active objective as done (`scenario.no_objective`) |
+| `fail_objective` | as above | Settles it as failed |
+| `add_objective` | as above | Shows a hidden objective |
+| `start_mission` | `mission` (string, direct), `taker` (entity, optional: the character played now), `with` (map, optional) | Starts a mission and gives its number (`scenario.no_mission`, `scenario.bad_params`) |
+| `fail_mission` | `mission` (int, direct) | Fails an active mission (`scenario.no_mission`) |
+| `checkpoint` | `name` (string, direct) | Asks for a checkpoint; raises `checkpoint_made` |
+| `restore_checkpoint` | `name` (string, optional: the last) | Asks to go back to one (`scenario.no_checkpoint`) |
+| `end_scenario` | `as` (string, direct) | Ends the game through `scenario_ending`; a cancelled ending is refused with the handler's reason |
+| `take_control` | `who` (entity, direct) | Gives the player direct control of a character |
+
+Reasons: `scenario.no_game`, `scenario.ended`, `scenario.begun`,
+`scenario.unknown`, `scenario.bad_place`, `scenario.bad_party`,
+`scenario.bad_world`, `scenario.no_objective`, `scenario.no_mission`,
+`scenario.bad_params`, `scenario.no_checkpoint`, `setting.locked`,
+`setting.bad_value`, `setting.not_an_option`
+(`clash_sim::scenario::SCENARIO_REASONS`).
+
+Functions, each safe for belief: `objective_state(id: string,
+mission: int?) -> string?`, `mission_state(mission: int) -> string?`,
+`scenario_id() -> string?`, `party() -> list<entity>`, `fallen() ->
+list<entity>`, `played_for() -> real`. Properties: `entity.objectives`
+(`list<map<any>>`, the journal; 14 §13) and `entity.site` (`site?`, the
+site of where the entity is, changed by `entity_relocated`). The setting
+`rules.max_reactive_rounds` (default 8).
+
+Requests to the application (`AppRequest`): `Checkpoint { name }`,
+`RestoreCheckpoint { name }`, `EndScenario { outcome }`, `TakeControl
+{ entity }`.
+
+**Gaps** reachable only from Rust: the game's record
+(`Sim::scenario`, `fresh_objective_state`); not built: the queries
+`objectives`, `missions` and `postings`, `post_mission`,
+`cancel_mission`, `next_scenario`, `keep_character`, legacy variables,
+the director, plots and cases.
 
 **Properties**: `scenario.id`, `scenario.var.*`, `scenario.director`,
 `party`, `party.count`, `party.tension`, `start.site`, `start.realm`,

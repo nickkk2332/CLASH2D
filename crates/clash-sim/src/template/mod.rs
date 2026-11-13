@@ -284,11 +284,16 @@ impl Sim {
             self.life.stat_defs()?;
         }
 
-        let flags = if resolved.blocks {
+        let mut flags = if resolved.blocks {
             OccupantFlags::BLOCKS_MOVE
         } else {
             OccupantFlags::NONE
         };
+        // Something with a body is struck by what flies into its cell
+        // (02 §15.2; 07 §11.1).
+        if resolved.body.is_some() {
+            flags = flags | OccupantFlags::COLLIDES;
+        }
         let mut entity_spec = EntitySpec::new(OccupantKind::Creature).with_presence(
             Presence::new(OccupantKind::Creature)
                 .with_flags(flags)

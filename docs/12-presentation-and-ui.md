@@ -131,7 +131,7 @@ the log and never written over.
 **Loading.** The profile is read with the engine's definition types and
 expression registry. The interface's definitions are built and checked
 (section 10), and the world's and generation's tables are built. A
-profile that defines no `start` (section 3.4) need not have world
+profile that defines no `scenario` (section 3.4) need not have world
 tables that build: a total conversion may be a title screen and nothing
 else. Whatever is wrong is printed on standard error as located
 diagnostics, each with its file, line, column and JSON path, and the
@@ -203,10 +203,14 @@ D-652):
 
 The loop never waits on the simulation: a pass that runs out of its
 slice presents a frame and carries on in the next. A request a rule
-makes of the application (13 §9.1) is a checkpoint save, which goes to
-the save backend under the checkpoint's name unless the game's saving
-policy is `none` (section 3.6), or is reported in the log as not yet
-possible.
+makes of the application (13 §9.1) is carried out between two calls of
+`advance`, which is a safe point (decision D-757): a checkpoint is saved
+under its name unless the game's saving policy is `none` (section 3.6);
+`RestoreCheckpoint` loads the save of that name and carries it on as a
+load does; `TakeControl` makes the character the player's, the camera
+following it, and says so in the log; `EndScenario` stops advancing the
+game, removes its save under `single` and opens the summary (section
+3.4). The loop also runs while a request waits.
 
 The commands the play screen submits become the simulation's own
 through the host (`clash_app::host::command_for`): an `act` of an
@@ -227,10 +231,9 @@ refusal the loop answers itself (section 3.7). Tools and tests hand the
 game a command of their own with `Game::submit`, through `Sim::submit`
 as everything else.
 
-Nothing stands in for a package any more. Two small seams remain, each
-named where it is: a game begins from a `start` until game scenarios
-exist (section 3.4), and the player's character is given its senses by
-the application until templates carry them (section 3.5).
+Nothing stands in for a package any more. A game begins from a game
+scenario (section 3.4), and the simulation gives the party its senses
+as the game begins, where templates give none (section 3.5).
 
 **The omniscient view.** While a preference whose bare name is
 `omniscient` holds true, the view model is filled from truth round the
@@ -271,42 +274,63 @@ Any other line stops the run with its number and what is wrong, and the
 program leaves with code 1. Once the game has ended the rest of the
 script is not read.
 
-### 3.4 Starts, until game scenarios exist
+### 3.4 Game scenarios
 
-A game scenario (13 §3) says which worlds a game has, who the player is
-and where they begin. Until that definition type is built, a mod lists
-**starts**, definitions of the type `start`, and the application offers
-them as `app.scenarios`:
+A game scenario (13 §3) says which world a game has, who the player is
+and where they begin. The application offers the `scenario`
+definitions of the loaded mods as `app.scenarios`, in order of
+qualified id (decisions D-750, D-758):
 
 ```json
-{ "type": "start", "id": "lane", "name": "The lane",
+{ "type": "scenario", "id": "wayside", "name": "The lane",
   "doc": "Houses between fields. Their doors are shut.",
-  "realm": "countryside", "at": [39, 45], "template": "person" }
+  "worlds": [ { "realm": "countryside", "seed": "ask" } ],
+  "start": { "characters": [ { "template": "person" } ],
+             "at": [ { "name": "The lane", "cell": [39, 45] } ] } }
 ```
 
-| Field | Is |
-|-------|----|
-| `name` | What it is called where the player chooses. Left out, its id. |
-| `doc` | A line or two about it: its entry's `description`. |
-| `realm` | The `realm` definition the world is made from: a qualified id, or a bare name in the start's own namespace. Required; one no mod defines is a load error. |
-| `at` | Where the character begins in the realm's base grid: `[x, y]`, the highest cell of that column a walker can stand in, or `[x, y, z]`, that cell. Required. |
-| `template` | The `template` the player's character is made from, every choice at its default, when the player has finished no character of their own (06 §10): a qualified id, or a bare name in the start's own namespace. One no mod defines is a load error, where templates are loaded. Left out, a game begins here only with a character the player made. |
-| `glyph` | How the player's character is drawn when none of its templates gives a glyph, with a `ch`. Left out, such a character is drawn as the theme's suspected mark. |
-| `senses` | The `sense` definitions the player's character perceives with when its templates give it none (section 3.5): qualified ids, or bare names in the start's own namespace. One no mod defines is a load error, where senses are loaded. Left out, every sense the loaded mods define. |
-| `saving` | The game's saving policy (13 §9.2, section 3.6): `free`, `single`, `checkpoints` or `none`. Left out, `free`. Anything else is a load error. |
+The service `new_game { scenario, place? }` starts the game: the
+scenario's world made by `clash_sim::scenario::make_world` with the seed
+its `seed` chooses (the one given on the new-game screen for `ask`, one
+the application draws from the clock for `random`) and its clock at
+the time the scenario begins; a simulation over it with the generators
+of the loaded mods and a store; the player's character, made by the
+debug command `spawn` (`Sim::spawn_template`, 06 §10.4) from the
+character the player finished in the creation session, or else from the
+scenario's character `template` with every choice at its default and
+the name given; and the command `BeginScenario`, which places it, gives
+it senses and direct control, and sets the game up (13 §4.5). With no
+`scenario` it takes the first. The character is drawn with its
+templates' glyph.
 
-The service `new_game { scenario }` starts the game: a simulation with
-the realm made from the seed, the generators of the loaded mods and a
-store; the player's character, made by the debug command `spawn`
-(`Sim::spawn_template`, 06 §10.4) from the character the player
-finished in the creation session, or else from the start's `template`
-with every choice at its default and the name given; its session at
-the start's place, which loads the tracts round it; and direct control,
-which asks it its first free decision. With no `scenario` it takes the
-first start. The bundled `core` mod has two, both of the template
-`core:person`: `core:town`, the test city with its doors open, and
-`core:wayside`, the countryside, whose doors are shut. The character is
-drawn with its templates' glyph (decision D-654).
+**Setting a game up.** A scenario with more than one place, or with
+options, asked for without `place`, is not begun: the application
+holds it as `app.setup` and opens the screen of the role `setup` with
+the parameter `scenario`. `app.setup` is a map of the scenario's `id`,
+`name`, `doc`, `seed` (`ask`, `random` or the number), `places` (each
+`name` and `index`) and `options` (each the setting's `id`, `name`,
+`kind`, `value`, `next`, the value after it in its choices, and
+`choices`). The service `creation` with the op `option`, a `key` and a
+`value` answers an option, checked against the setting's definition;
+`new_game` with `place` then begins the game there with the answers
+given, or each setting's default.
+
+**The introduction and the summary.** A game begun from a scenario
+with an `intro` opens, over the play screen, the screen its `screens`
+names for `intro`, else the screen of the role `intro`, with `title`
+(the scenario's name) and `text`. When the game ends (13 §9.4) the
+application opens the screen named for `summary`, else of the role
+`summary`, with `title`, `outcome` and `text`: how long the game ran
+and each objective and mission as the character knows them (`[x]` done,
+`[-]` failed or expired, `[ ]` not). An ended game is not advanced,
+cannot be saved, and saves nothing as it is left.
+
+The bundled `core` mod has five, all of the template `core:person`:
+`core:town`, the test city with its doors open; `core:wayside`, the
+countryside; `core:town_life`, the generated market town to live in,
+begun on its north street or in its square, carrying on as a newcomer
+when the character dies; `core:the_errand`, a parcel to take across the
+market town; and `core:last_stand`, a night in a house on the lane.
 
 **The character being made** (decision D-653). The application keeps
 the creation session (06 §10.3) beside the scene, with the name and the
@@ -344,13 +368,11 @@ The simulation decides what the party sees and hears (15 §13); the
 application, in `clash_app::perception`, turns that into the view model
 and into the host's answers to playback (decision D-700).
 
-**Senses.** When the player's character is made, before it is put in
-the world, it is given senses if its templates gave it none: those its
-start names in `senses`, or else every `sense` the loaded mods define,
-in order of qualified id, through `attach_sense` (decision D-705). Once
-its control is direct it is of the party. This is the one change to the
-simulation the application makes outside `submit`: templates carry no
-`senses` yet (15 §15).
+**Senses.** As the game begins, before the character is put in the
+world, the command `BeginScenario` gives it senses if its templates gave
+it none: those its scenario's character entry names in `senses`, or
+else every `sense` the loaded mods define, in order of qualified id
+(decision D-751). Once its control is direct it is of the party.
 
 **As a batch ends**, the frames are taken (`drain_frames`), and what is
 in view is worked out: the cells of the party's view as the members
@@ -392,7 +414,7 @@ services say so.
 
 | Service | Does |
 |---------|------|
-| `save { name? }` | Saves the game as `saves/<id>.c2save`, its id made of the name's letters and digits in lower case with `-` between (a name of nothing is the character's name, or else the start's). A save of the same id is replaced. The metadata holds the name, a summary the application writes (`Ada, The town, 0:04:12 in`: who, where the game began and how long it has run), the seed, and as the saver's own bytes the start, the character's name and who the character is. A line in the log says it was saved. |
+| `save { name? }` | Saves the game as `saves/<id>.c2save`, its id made of the name's letters and digits in lower case with `-` between (a name of nothing is the character's name, or else the scenario's). A save of the same id is replaced. The metadata holds the name, a summary the application writes (`Ada, The town, 0:04:12 in`: who, where the game began and how long it has run), the seed, and as the saver's own bytes the scenario, the character's name and who the character is. A line in the log says it was saved. |
 | `load { save }` | Reads the game back over the loaded definitions and the generators bound to them, and carries it on: the screens give way to the play screen, the view model is built afresh from what the party remembers and sees (section 3.5), and nothing is played back. What differs from when it was saved (`load_warnings`: mods missing, added or at another version, definitions that became placeholders) is written in the log and shown on the screen of the role `notice`, with the parameters `title` and `text`. The state hash is what it was when the game was saved. |
 | `delete_save { save }` | Deletes the file. |
 
@@ -403,13 +425,13 @@ the summary and when it was written (`2026-11-12 09:30`, UTC), and its
 for one made with other mods or versions (it loads, with warnings) and
 `broken` for one that cannot be read (its `description` says why).
 
-**Saving policies** (13 §9.2). A game has the policy its start names
-(`saving`, section 3.4), or `free` (decision D-704):
+**Saving policies** (13 §9.2). A game has the policy its scenario names
+(`saving.policy`), or `free` (decisions D-704, D-757):
 
 | Policy | `app.can_save` | `app.can_load` while playing | Saved by the application |
 |--------|----------------|------------------------------|--------------------------|
 | `free` | True | While there is a save | Never by itself |
-| `single` | False | False | As the game is left, under the character's name: its one save |
+| `single` | False | False | As the game is left, under the character's name: its one save, which an ending removes |
 | `checkpoints` | False | False | When a rule asks for a checkpoint |
 | `none` | False | False | Never |
 
@@ -1715,7 +1737,8 @@ properties, all safe for belief:
 
 | `app.` | Type | Is |
 |--------|------|----|
-| `saves`, `profiles`, `mods`, `scenarios` | `list<app_entry>` | What there is of each. Until game scenarios exist, `scenarios` lists the `start` definitions (section 3.4). |
+| `saves`, `profiles`, `mods`, `scenarios` | `list<app_entry>` | What there is of each: `scenarios` lists the game scenarios (section 3.4). |
+| `setup` | `any` | The game being set up (section 3.4): null until a scenario with a choice is asked for |
 | `profile`, `scenario` | `app_entry?` | The ones in use |
 | `pref(id)` | `any` | A preference's value (below). `id` is the id of a `preference`, checked when mods load. |
 | `creation` | `any` | The character being made (06 §10.3, section 3.4): null while no creation session is in progress, else the map `CreationSession::to_value` gives (`templates`; `choices`, each a map of `key`, `name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`, `max`, `max_length`, `options` with `id`, `name`, `cost` and `chosen`, `parts`, `value` and `by_default`; `complete`; `problem`) with `template`, the first template's qualified id, `name`, `seed`, and `finished`, whether `new_game` will make this character. |
@@ -1989,7 +2012,8 @@ know-how appear in them with no screen written.
 
 | Role | Opened when |
 |------|-------------|
-| `play`, `creation`, `summary` | A game is being played, a character made, a game ended |
+| `play`, `creation`, `summary` | A game is being played, a character made, a game ended (`title`, `outcome`, `text`; section 3.4) |
+| `setup`, `intro` | A scenario with a choice is being set up (`scenario`); a game whose scenario has an introduction begins (`title`, `text`) |
 | `decision.free`, `decision.reaction`, `decision.choice` | The simulation asks for a decision of that kind (section 9.5). `decision.free` is the play screen. |
 | `picker.<name>` | A parameter is being chosen with that picker (section 9.3): `entity`, `cell`, `route`, `direction`, `number`, `text`, `list`, `multi`, or a kind of subject's name. `picker.list` is also what the `pick` effect opens (section 10.5). |
 | `confirm` | The `confirm` effect asks |
@@ -2002,7 +2026,8 @@ role the profile leaves out is found out when it is needed: the effect
 that wanted its screen fails with the reason.
 
 The bundled profile names the `ui` mod's screens: `ui:play` for `play`
-and `decision.free`, `ui:create` for `creation`, `ui:reaction`, `ui:choice`, `ui:confirm`,
+and `decision.free`, `ui:create` for `creation`, `ui:setup`, `ui:intro`
+and `ui:summary` for the roles of those names, `ui:reaction`, `ui:choice`, `ui:confirm`,
 `ui:error`, `ui:notice`, `ui:pick_list`, `ui:pick_entity`, `ui:pick_cell`,
 `ui:pick_direction`, `ui:pick_number`, `ui:pick_text`, `ui:pick_multi`
 and `ui:context_menu`; its `boot_screen` is `ui:title`.
@@ -2012,7 +2037,8 @@ and `ui:context_menu`; its `boot_screen` is `ui:title`.
 newest save) and Load (`ui:load`) when there is a save, Options and
 Quit; Esc quits. `ui:new_game`
 takes a name and a seed into `app.creation` and lists `app.scenarios`;
-activating one starts the game there. `ui:options` sets the preferences
+activating one starts that game, or opens `ui:setup` for a scenario
+with a choice of place or options (section 3.4). `ui:options` sets the preferences
 `theme`, `playback_speed` and `cutscenes`, has the slot
 `ui:options.prefs` for a mod's own (the `ui` mod puts `bump` there),
 and gives a key a meaning: the
@@ -2031,6 +2057,16 @@ read, and loads the one chosen; `ui:notice`, which the bundled profiles
 name for the role `notice`, shows its `title` and `text` and a button
 to carry on.
 
+**Game scenarios** are in `mods/ui/data/scenario.json` (section 3.4,
+13 §12): `ui:setup` shows `app.setup`, its options as a list in which
+Enter takes the next value, and its places, Enter on one beginning the
+game there; `ui:intro` and `ui:summary` are popups over the play screen,
+the summary's button and Esc returning to the title, which ends the
+game; and `ui:journal`, opened by the control `journal` (`shift+j`),
+lists `view.objectives` (14 §13): each objective and mission as the
+character knows it, `[x]` done, `[-]` failed, `[ ]` still to do,
+indented under its mission, with which way and how far its marker is.
+
 **Using things** is in `mods/ui/data/interact.json` (section 3.7): the
 control `interact`, on `e` in play, opens `ui:interact`, the list of
 `view.offers_near`; the controls `bump` and `bump_ask` are what walking
@@ -2047,8 +2083,9 @@ control. The `ui` mod's controls are the ten directions (`north` to
 `north_west`, `up`, `down`), which start the action `step` with a
 `dir`; `wait`, the command of that name for one second; `look`, which
 opens look mode (`ui:look`); `inventory` and `condition`, which open
-`ui:inventory` and `ui:condition`; `abilities`, `map` and `journal`,
-which open screens that are empty and titled until they are built;
+`ui:inventory` and `ui:condition`; `abilities` and `map`, which open
+screens that are empty and titled until they are built; `journal`,
+which opens `ui:journal`;
 `help`, which opens `ui:help`; `interact`, on `e`, which opens
 `ui:interact` (section 3.7); `options`, which opens `ui:options`;
 `pause`, which opens `ui:pause`; `omniscient`, the development
@@ -2112,7 +2149,7 @@ driven by the templates' data, so a new species with new choices needs no
 new screen.
 
 As built, `ui:create` is the screen of the role `creation`, opened from
-the new-game screen with F2 (the name `more`) for the start selected
+the new-game screen with F2 (the name `more`) for the scenario selected
 there, which it is given as `scenario`. With no session in progress it
 lists `app.templates`, and Enter begins one (`creation` with `begin`).
 Then it has the name and the seed, which `Roll` draws afresh from the
@@ -2121,7 +2158,7 @@ from; every choice open, indented by depth, with what is chosen; the
 result, `app.creation.attributes` where the application gives them,
 and the slot `ui:create.result`; whether the character is complete or
 the session's `problem`; `Begin`, shown only while it is complete,
-which finishes it and asks for `new_game` at the start; and `Start
+which finishes it and asks for `new_game` for the scenario; and `Start
 over`, which picks another template to begin from. Enter on a choice
 opens `ui:create_choice` with the choice's number in `app.creation.choices`
 and its value to start from: the options of a `pick` or a `points`
@@ -2142,7 +2179,11 @@ it for, the parameters it is opened with, and its slots:
 | Screen | Role | Parameters | Slots | Is |
 |--------|------|------------|-------|----|
 | `ui:title` | the profile's `boot_screen` | | | New game, Continue, Options, Quit |
-| `ui:new_game` | | | | Name, seed and where to begin; F2 opens `ui:create` |
+| `ui:new_game` | | | | Name, seed and the game to play; F2 opens `ui:create` |
+| `ui:setup` | `setup` | `scenario` | | A scenario's places and options |
+| `ui:intro` | `intro` | `title`, `text` | | A scenario's introduction |
+| `ui:summary` | `summary` | `title`, `outcome`, `text` | | How a game ended |
+| `ui:journal` | | | | The objectives and missions as the character knows them |
 | `ui:create` | `creation` | `scenario` | `ui:create.result` | Character creation |
 | `ui:create_choice` | | `index` | | One choice of the session, by kind |
 | `ui:options` | | | `ui:options.prefs` | Preferences and binding a key |
@@ -2155,7 +2196,7 @@ it for, the parameters it is opened with, and its slots:
 | `ui:item` | | `item`, `hold`, `name` | | What can be done with one thing |
 | `ui:condition` | | | `ui:condition.pools`, `ui:condition.attributes`, `ui:condition.extra` | The body, wounds, reserves and attributes |
 | `ui:help` | | | | The keys of play |
-| `ui:abilities`, `ui:map`, `ui:journal` | | | | Empty and titled until built |
+| `ui:abilities`, `ui:map` | | | | Empty and titled until built |
 | `ui:context_menu` | `context_menu` | `place` | | What the second button opens; empty until built |
 | `ui:confirm` | `confirm` | `text`, `yes`, `no` | | A question |
 | `ui:pick_list` | `picker.list` | `options`, `title` | | One of a list |
@@ -2171,7 +2212,7 @@ it for, the parameters it is opened with, and its slots:
 
 | | Window | Terminal |
 |---|--------|----------|
-| Crates | `winit`, `wgpu`, a font rasteriser | `crossterm` |
+| Crates | `winit`, `softbuffer`, `fontdue` | `crossterm` |
 | Grid | Yes | Yes |
 | Sprites at sub-cell positions, scale, alpha | Yes | Snapped to cells |
 | Shake, flash, zoom, bars | Yes | Ignored |
@@ -2179,8 +2220,14 @@ it for, the parameters it is opened with, and its slots:
 | Mouse | Yes | Optional |
 | Fonts | From the theme | The terminal's |
 
-The window frontend draws the grid and sprites as textured quads from a
-glyph atlas built from the theme's font.
+The window frontend draws on the processor, not the graphics card
+(decision D-830): each frame is drawn into a buffer of pixels by copying
+glyphs from an atlas that `fontdue` rasterises from the theme's font,
+with sprites, scale, alpha and the frame effects applied in the same
+pass, and `softbuffer` shows the buffer in a `winit` window. The same
+drawing can write the buffer to an image instead of a window, so the
+window's frames are tested headless, and compared cell by cell with the
+terminal's.
 
 A third, **null** frontend records frames for tests.
 
@@ -2203,7 +2250,7 @@ A third, **null** frontend records frames for tests.
 
 **Definition types**: `screen`, `ui_part`, `theme`, `color`, `ambience`,
 `overlay`, `preference`, `figure`, `keymap`, `control`, `show`, `anim`,
-`cutscene`, and `start` until game scenarios exist (section 3.4). Theme `marks`: the glyphs the engine draws for itself (a pile
+`cutscene`. Game scenarios are 13's `scenario` (section 3.4). Theme `marks`: the glyphs the engine draws for itself (a pile
 of items, a suspected presence, something only heard, a capsized vessel).
 A glyph may give a `layer` to be drawn over or under its usual place in
 the order of section 6.1. Functions `between(a, b)` and `dir(a, b)`. The `glyph`
@@ -2234,8 +2281,9 @@ more for each event of the kernel and the world.
 what it holds, and the headless script: sections 3.1 and 3.3. The roles
 `error` and `notice`, the commands the play screen submits, the services
 `creation` and `edit_creation`, `app.creation` and the
-`creation_<field>` variables: sections 3.2, 3.4 and 10.4. A start's
-`senses` and `saving`: section 3.4. The saves, their ids, summaries and
+`creation_<field>` variables: sections 3.2, 3.4 and 10.4. The roles
+`setup`, `intro` and `summary`, `app.setup` and the op `option`:
+section 3.4. The saves, their ids, summaries and
 states, and the saving policies: section 3.6. The preference `bump` and
 the controls `bump`, `bump_ask` and `interact`, what each is given and
 the property `offers_near` they read: section 3.7.
@@ -2275,8 +2323,7 @@ again. The grid of a headless run, its time step, the frame time and the
 share of it given to the simulation, the wake-ups one call of `advance`
 may handle and the hour of simulation time one pass may cover are the
 application's constants. The senses a character made without any is
-given are named by its start, or are every sense loaded, and are given
-outside the input log until templates carry `senses` (15 §15). A save's
+given are named by its scenario, or are every sense loaded (15 §15). A save's
 id is made from its name by the application's own rule, and `single`
 saves only as a game is left, not at intervals. The words with which a
 load's warnings are introduced, and the summary a save is given, are
@@ -2334,14 +2381,15 @@ event says nothing of what was destroyed that the reader may know.
 
 ## 15. Budgets
 
-Targets, unmeasured.
+Targets, unmeasured but where a figure is given: those rows are in
+`budgets.toml` and measured by `cargo xtask bench` (14 §6.3, D-730).
 
 | Operation | Target |
 |-----------|--------|
-| Build a 200 × 60 frame | under 1.5 ms |
+| Build a 200 × 60 frame | under 1.5 ms (measured by `cargo xtask bench`: 1.7 to 2.1 ms for the map of a generated city alone, from the view model, without the widgets round it) |
 | Ingest 10,000 events | under 5 ms |
 | Re-evaluate bindings of a busy screen | under 0.5 ms |
-| Window frontend, 20,000 quads | 60 frames per second |
+| Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080 | under 16 ms: 60 frames per second |
 | Input to visible response | within one frame |
 
 ## 16. Open questions

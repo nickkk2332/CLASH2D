@@ -30,7 +30,7 @@ start while the world model is being built.
 | P3 | Profiles and running without mods | S | F4 | beta |
 | P4 | Typed loading and validation stages | M | P2 | beta |
 | P5 | Schemas, reference, scaffolding | M | P1, P4 | done |
-| P6 | Settings | S | K5 | todo |
+| P6 | Settings | S | K5 | beta |
 | P7 | Migration and obsoletion | M | P4, W10 | todo |
 | P8 | Hot reload | M | K7, P7 | todo |
 | X1 | Expression parser | M | F2 | done |
@@ -54,7 +54,7 @@ start while the world model is being built.
 | T5 | Windows and reactions | M | T4, T1 | beta |
 | T6 | Joint actions | M | T5 | todo |
 | T7 | Unloading and lower detail | M | T3, K7 | todo |
-| T8 | Benchmarks and budget gate | S | X3, then recurring | todo |
+| T8 | Benchmarks and budget gate | S | X3, then recurring | beta |
 
 ## Order and parallelism
 
@@ -221,6 +221,12 @@ Done when
 - A setting changed by command is saved, replayed from the input log, and
   visible to rules.
 - A value outside a setting's range is refused.
+
+Beta (built with scenarios, decision D-753): the `setting` type, the
+`Setting` command with `setting.locked` and `setting.bad_value`,
+`setting_changed`; tested in `crates/clash-sim/tests/scenario.rs`. Not
+built: the options screens listing settings, ranges for engine
+settings.
 
 ### P7 — Migration and obsoletion
 
@@ -890,6 +896,13 @@ Build
 - A benchmark for each row of those tables as packages land; thresholds in
   the gate introduced by W23; measured figures written back into the
   documents.
+
+Status `beta` (D-730). Built: the benchmark of 05 §19's first row, a
+condition of about ten operations over a person and locals evaluated
+through the runner against the simulation, in `budgets.toml`. Stubbed:
+the other rows of 05 §19 (the ignored timing tests of
+`crates/clash-sim/tests/rules.rs` still print them) and every row of
+03 §15 and 04 §18.
 
 ## Scenario catalogue
 

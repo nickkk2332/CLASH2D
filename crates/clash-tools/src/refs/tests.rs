@@ -63,28 +63,71 @@ fn every_field_that_names_steel_is_found_where_it_was_written() {
             })
             .collect()
     };
-    let set = |places: &[&str]| -> BTreeSet<String> {
-        places.iter().map(|place| (*place).to_owned()).collect()
-    };
-    // Items read their material as a reference.
-    assert_eq!(
-        found(RefKind::Field),
-        set(&[
-            "core/data/locks.json:4",
-            "core/data/items.json:33",
-            "core/data/items.json:59",
-            "core/data/items.json:74",
-        ])
-    );
-    // The world's elements read it as a string, resolved when the
-    // world's tables are built (D-803).
-    assert_eq!(
-        found(RefKind::Mentions),
-        set(&[
-            "core/data/world/usable.json:10",
-            "core/data/world/lighting.json:33"
-        ])
-    );
+    let items = found(RefKind::Field);
+    let mentions = found(RefKind::Mentions);
+    // Items read their material as a reference; the world's elements read
+    // it as a string, resolved when the world's tables are built (D-803).
+    for place in ["core/data/locks.json:4", "core/data/items.json:33"] {
+        assert!(items.contains(place), "{place}: {items:?}");
+    }
+    for place in [
+        "core/data/world/usable.json:10",
+        "core/data/world/lighting.json:33",
+    ] {
+        assert!(mentions.contains(place), "{place}: {mentions:?}");
+    }
+    // Between them, every line of the bundled mods that gives steel as a
+    // material, and nothing else.
+    assert!(items.is_disjoint(&mentions));
+    let both: BTreeSet<String> = items.union(&mentions).cloned().collect();
+    assert_eq!(both, written(r#""material":"steel""#), "{both:?}");
+}
+
+/// Every line of the bundled mods' files that holds `text`, spaces aside,
+/// as `file:line` with the file's path from the mods directory.
+fn written(text: &str) -> BTreeSet<String> {
+    fn walk(dir: &std::path::Path, base: &std::path::Path, text: &str, out: &mut BTreeSet<String>) {
+        let mut entries: Vec<_> = std::fs::read_dir(dir)
+            .expect("a directory")
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                walk(&path, base, text, out);
+            } else if path.extension().is_some_and(|ext| ext == "json") {
+                let file = path
+                    .strip_prefix(base)
+                    .expect("inside the mods")
+                    .components()
+                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/");
+                let source = std::fs::read_to_string(&path).expect("a file");
+                for (at, line) in source.lines().enumerate() {
+                    let line: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+                    if line.contains(text) {
+                        out.insert(format!("{file}:{}", at + 1));
+                    }
+                }
+            }
+        }
+    }
+    let mut out = BTreeSet::new();
+    walk(&mods_dir(), &mods_dir(), text, &mut out);
+    out
+}
+
+/// How many definitions refer to steel by a field, and how many name it
+/// in plain text, as `refs` counts them.
+fn steel_counts() -> (usize, usize) {
+    let incoming = incoming("material", "core:steel");
+    let mentions = incoming
+        .iter()
+        .filter(|reference| reference.kind == RefKind::Mentions)
+        .count();
+    (incoming.len() - mentions, mentions)
 }
 
 #[test]
@@ -196,9 +239,17 @@ fn a_definition_lists_what_it_refers_to_and_what_refers_to_it() {
     assert!(text.contains("channel core:arm  at `grip`"), "{text}");
     let steel = defs.tree("material", "core:steel").expect("steel");
     let text = describe(defs, steel, all());
-    assert!(text.contains("referred to by (4):"), "{text}");
+    let (sure, mentions) = steel_counts();
+    assert!(sure >= 4 && mentions >= 2, "{sure} {mentions}");
+    assert!(
+        text.contains(&format!("referred to by ({sure}):")),
+        "{text}"
+    );
     assert!(text.contains("item core:knife, at `material`"), "{text}");
-    assert!(text.contains("named in plain text by (2)"), "{text}");
+    assert!(
+        text.contains(&format!("named in plain text by ({mentions})")),
+        "{text}"
+    );
     assert!(text.contains("fixture core:lamp, at `material`"), "{text}");
 }
 
@@ -252,13 +303,18 @@ fn find_compares_fields_quantities_and_references() {
     let heavy = ids(Some("material"), &["where=density>5000"]);
     assert!(heavy.contains(&"core:steel".to_owned()), "{heavy:?}");
     assert!(!heavy.contains(&"core:leather".to_owned()), "{heavy:?}");
+    // A reference, bare or qualified; the bundled items grow, so what is
+    // checked is that the two conditions part every item between them.
     let of_steel = ids(Some("item"), &["where=material==steel"]);
-    assert_eq!(of_steel.len(), 4, "{of_steel:?}");
+    assert!(of_steel.contains(&"core:knife".to_owned()), "{of_steel:?}");
+    assert!(!of_steel.contains(&"core:club".to_owned()), "{of_steel:?}");
     assert_eq!(ids(Some("item"), &["where=material==core:steel"]), of_steel);
-    assert!(
-        ids(Some("item"), &["where=material!=steel"])
-            .iter()
-            .all(|id| !of_steel.contains(id))
+    let not_steel = ids(Some("item"), &["where=material!=steel"]);
+    assert!(not_steel.iter().all(|id| !of_steel.contains(id)));
+    assert_eq!(
+        of_steel.len() + not_steel.len(),
+        ids(Some("item"), &[]).len(),
+        "{of_steel:?} {not_steel:?}"
     );
     // A quantity, in SI units whatever it was written in.
     let tough = ids(Some("material"), &["where=resist.impact.threshold>=2MPa"]);
@@ -269,7 +325,10 @@ fn find_compares_fields_quantities_and_references() {
     );
     // Keys of a map, and words.
     assert!(ids(Some("material"), &["where=resist~heat"]).contains(&"core:leather".to_owned()));
-    assert_eq!(ids(None, &["knife"]), vec!["core:knife".to_owned()]);
+    let knives = ids(None, &["knife"]);
+    assert!(knives.contains(&"core:knife".to_owned()), "{knives:?}");
+    assert!(!knives.contains(&"core:club".to_owned()), "{knives:?}");
+    assert!(ids(None, &["no definition says this"]).is_empty());
     assert!(ids(Some("item"), &["where=!glyph"]).len() < ids(Some("item"), &[]).len());
 }
 
@@ -283,7 +342,12 @@ fn the_commands_print_what_they_find() {
     };
     let output = run(&["refs", "steel"]);
     assert_eq!(output.code, EXIT_OK, "{}", output.err);
-    assert!(output.out.contains("referred to by (4):"), "{}", output.out);
+    let (sure, _) = steel_counts();
+    assert!(
+        output.out.contains(&format!("referred to by ({sure}):")),
+        "{}",
+        output.out
+    );
     let output = run(&["refs", "material", "steal"]);
     assert_eq!(output.code, EXIT_FAILED);
     assert!(
@@ -298,7 +362,21 @@ fn the_commands_print_what_they_find() {
         "{}",
         output.out
     );
-    assert!(output.out.ends_with("4 definitions\n"), "{}", output.out);
+    let listed = output
+        .out
+        .lines()
+        .filter(|line| line.starts_with("item "))
+        .count();
+    assert!(
+        output.out.ends_with(&format!("\n{listed} definitions\n")),
+        "{}",
+        output.out
+    );
+    let of_steel = incoming("material", "core:steel")
+        .into_iter()
+        .filter(|reference| reference.kind == RefKind::Field && reference.from_type == "item")
+        .count();
+    assert_eq!(listed, of_steel, "{}", output.out);
     let output = run(&["find", "iten"]);
     assert!(
         output.err.contains("did you mean `item`?"),

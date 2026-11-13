@@ -390,6 +390,88 @@ A random int from `a` to `b`, both included. `a` if `b` is less than `a`.
 - `a` (int): The least the result may be.
 - `b` (int): The most the result may be.
 
+## Ranged combat
+
+<a id="ballistic-dir"></a>
+### `ballistic_dir`
+
+`ballistic_dir(from: any, to: any, speed: real) -> list<real>?` · not in a mind context
+
+The direction, east, south and up, of length one, that sends a shot at `speed` from `from` down onto `to` under the gravity where `from` is, along the lower of the two arcs, with no drag (07 §11.4). An entity is taken at the height a shot leaves it from, a cell at its floor, and a list of three numbers as a point in metres. Null where no arc reaches it at that speed.
+
+- `from` (any): Where the shot leaves from.
+- `to` (any): Where it is to come down.
+- `speed` (real): Its speed, in metres a second.
+
+<a id="band-point"></a>
+### `band_point`
+
+`band_point(target: entity, part?: any) -> list<real>?` · not in a mind context
+
+The point in metres, east, south and up in its grid, at the middle of the band of a part of an entity where it stands (07 §11.4); for no part, the middle of its body. Reads truth. Null for one not in the world.
+
+- `target` (entity): Whose part.
+- `part` (any, optional): The part, of the kind `part`; null for the middle of the body.
+
+## Scenario
+
+<a id="fallen"></a>
+### `fallen`
+
+`fallen() -> list<entity>` · safe for belief · reactive
+
+The characters the player played who are gone, in the order they fell (13 §9.3). Empty with no game.
+
+Its result changes on `control_changed`.
+
+<a id="mission-state"></a>
+### `mission_state`
+
+`mission_state(mission: int) -> string?` · safe for belief · reactive
+
+Where a mission of the game stands, by its number (13 §5.2): `active`, `done`, `failed` or `expired`; null if there is none.
+
+- `mission` (int): The mission's number.
+
+Its result changes on `mission_started`, `mission_done`, `mission_failed`, `mission_expired`.
+
+<a id="objective-state"></a>
+### `objective_state`
+
+`objective_state(id: string, mission?: int) -> string?` · safe for belief · reactive
+
+Where an objective of the game stands (13 §5.1): `hidden`, `active`, `done` or `failed`; null if the game has none of that id.
+
+- `id` (string): The objective's id.
+- `mission` (int, optional): The number of the mission it is part of; left out, one of the scenario's own.
+
+Its result changes on `objective_changed`, `mission_started`.
+
+<a id="party"></a>
+### `party`
+
+`party() -> list<entity>` · safe for belief · reactive
+
+The characters the player plays in the game, in the order they were taken up: the last is the one played now (13 §9.3). Empty with no game.
+
+Its result changes on `control_changed`.
+
+<a id="played-for"></a>
+### `played_for`
+
+`played_for() -> real` · safe for belief
+
+How long the game has run, in seconds of universal time since it began; 0 with no game.
+
+<a id="scenario-id"></a>
+### `scenario_id`
+
+`scenario_id() -> string?` · safe for belief · reactive
+
+The qualified id of the scenario being played (13 §3); null if none is.
+
+Its result changes on `scenario_started`.
+
 ## Space
 
 <a id="dir"></a>

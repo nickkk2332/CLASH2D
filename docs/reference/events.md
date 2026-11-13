@@ -322,6 +322,17 @@ Fields:
 - `old` (any): Its value before; null if it had none.
 - `new` (any): Its value after; null if it has none.
 
+<a id="checkpoint-made"></a>
+## `checkpoint_made`
+
+A rule asked for a checkpoint (13 §9.1). The application saves it at the next safe point, unless the game's saving policy is `none`.
+
+Subjects: none of its own.
+
+Fields:
+
+- `name` (string): The checkpoint's name.
+
 <a id="choice-made"></a>
 ## `choice_made`
 
@@ -1020,6 +1031,54 @@ Fields:
 
 - `swap` (bool): Whether the two minds changed places.
 
+<a id="mission-done"></a>
+## `mission_done`
+
+Every objective of a mission is done. Its `on_done` has run.
+
+Subjects, in delivery order: `taker` (entity).
+
+Fields:
+
+- `mission` (string): The mission definition's qualified id.
+- `serial` (int): The mission's number in this game, from 1.
+
+<a id="mission-expired"></a>
+## `mission_expired`
+
+A mission's `expires` ran out while it was active. Its `on_expired` has run.
+
+Subjects, in delivery order: `taker` (entity).
+
+Fields:
+
+- `mission` (string): The mission definition's qualified id.
+- `serial` (int): The mission's number in this game, from 1.
+
+<a id="mission-failed"></a>
+## `mission_failed`
+
+An objective of a mission failed, its `failed` came to hold, or `fail_mission` was called. Its `on_failed` has run.
+
+Subjects, in delivery order: `taker` (entity).
+
+Fields:
+
+- `mission` (string): The mission definition's qualified id.
+- `serial` (int): The mission's number in this game, from 1.
+
+<a id="mission-started"></a>
+## `mission_started`
+
+A mission was started (13 §5.2): its objectives that wait for nothing are shown.
+
+Subjects, in delivery order: `taker` (entity).
+
+Fields:
+
+- `mission` (string): The mission definition's qualified id.
+- `serial` (int): The mission's number in this game, from 1.
+
 <a id="mode-ended"></a>
 ## `mode_ended`
 
@@ -1044,6 +1103,19 @@ Fields:
 
 - `ability` (string): The qualified id of the ability.
 - `mode` (string): The mode's id within the ability.
+
+<a id="objective-changed"></a>
+## `objective_changed`
+
+An objective was shown, done or failed (13 §5.1). Its `on_done` or `on_failed` has run. `taker` is who it is for.
+
+Subjects, in delivery order: `taker` (entity).
+
+Fields:
+
+- `id` (string): The objective's id.
+- `state` (string): What it is now: `active` (shown), `done` or `failed`.
+- `mission` (int): The number of the mission it is part of; 0 for one of the scenario's own.
 
 <a id="occupant-displaced"></a>
 ## `occupant_displaced`
@@ -1170,6 +1242,17 @@ Fields:
 - `part` (part): The part.
 - `parent` (part?): The part it was joined to.
 
+<a id="party-gone"></a>
+## `party_gone`
+
+No directly controlled character of the party remains alive (13 §9.3). `self` is the last of them. Raised once, before what follows is done.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `then` (string): What follows, by the scenario's `on_party_gone`: `end`, `continue` or `restore`.
+
 <a id="path-failed"></a>
 ## `path_failed`
 
@@ -1267,6 +1350,54 @@ Fields:
 - `to` (string): The qualified id of the posture it is in; empty for none.
 - `look` (string): The `look` of the posture it is in, as its definition writes it; empty for none.
 
+<a id="projectile-fired"></a>
+## `projectile_fired`
+
+`self` fired a projectile (07 §11.1), aimed at `target` if at anyone, with `weapon` if with anything. Raised once for each projectile, before any of it strikes. Content gives it off as a sound and a light (15 §3.2), so that shots are heard and seen.
+
+Subjects, in delivery order: `self` (entity), `target` (entity), `weapon` (entity).
+
+Fields:
+
+- `projectile` (string): The qualified id of the projectile; empty for an item thrown.
+- `body` (int?): The number of its body in flight (02 §15); null for an instant shot.
+- `speed` (real): Its speed as it left, in metres a second.
+- `energy` (real): The energy it left with, in joules.
+- `noise` (real): How loud the shot was: the weapon's `shot.noise`, or the effect's.
+- `flash` (real): How bright the shot was: the weapon's `shot.flash`, or the effect's.
+- `instant` (bool): Whether it was cast as a ray and struck at once (07 §11.3).
+
+<a id="projectile-hit"></a>
+## `projectile_hit`
+
+A projectile, or an item thrown, fired by `self` struck `target`, or the element of the cell `here` (07 §11.1). What the hit did is told by the body's, the item's or the world's own events.
+
+Subjects, in delivery order: `self` (entity), `target` (entity), `here` (loc).
+
+Fields:
+
+- `projectile` (string): The qualified id of the projectile; empty for an item thrown.
+- `body` (int?): The number of its body in flight (02 §15); null for an instant shot.
+- `part` (part?): The part of `target` it landed on; null for an element or an item.
+- `energy` (real): Joules it arrived with.
+- `intensity` (real): How concentrated, in pascals: the energy over its surface's area times its give.
+- `absorbed` (real): Joules what it struck took: the target's layers and what it wears, an item, an element.
+- `passed` (real): Joules it went on with beyond what it struck.
+- `instant` (bool): Whether it was an instant shot.
+
+<a id="projectile-passed"></a>
+## `projectile_passed`
+
+A projectile, or an item thrown, fired by `shooter` passed within `projectile.near_miss` of `self` without striking it (07 §11.1). Told once for each projectile. What being shot at does to a person is content.
+
+Subjects, in delivery order: `self` (entity), `shooter` (entity).
+
+Fields:
+
+- `projectile` (string): The qualified id of the projectile; empty for an item thrown.
+- `body` (int?): The number of its body in flight (02 §15); null for an instant shot.
+- `distance` (real): How close it passed to the middle of `self`, in metres; zero for one that went by at a height where nothing of `self` was.
+
 <a id="rank-changed"></a>
 ## `rank_changed`
 
@@ -1313,6 +1444,43 @@ Fields:
 
 - `text` (string): What was said.
 - `volume` (real): How loud, as a factor content gives its signal; 1 for an ordinary voice.
+
+<a id="scenario-ended"></a>
+## `scenario_ended`
+
+The game ended (13 §9.4). The application shows the summary and applies the saving policy.
+
+Subjects: none of its own.
+
+Fields:
+
+- `as` (string): The outcome the ending names.
+- `reason` (string): Why, where an ending stands in for something refused (a `restore` with no checkpoint); else empty.
+
+<a id="scenario-started"></a>
+## `scenario_started`
+
+A game began (13 §12): the party is placed, its settings and rules are in force and `start.do` has run. `self` is the first of the party.
+
+Subjects, in delivery order: `self` (entity).
+
+Fields:
+
+- `scenario` (string): The scenario's qualified id.
+- `place` (int): Which of its places the party began at, from 0.
+
+<a id="setting-changed"></a>
+## `setting_changed`
+
+The `Setting` command, or a scenario as it began, changed a setting (04 §10).
+
+Subjects: none of its own.
+
+Fields:
+
+- `key` (string): The setting's key.
+- `old` (any): What it was; null if it was not set.
+- `new` (any): What it is now.
 
 <a id="slots-gained"></a>
 ## `slots_gained`
@@ -1509,6 +1677,18 @@ Fields:
 
 - `tag` (string): The tag.
 - `added` (bool): Whether it was added; false if it was taken away.
+
+<a id="thrown"></a>
+## `thrown`
+
+`self` threw the item `what` (07 §11.1), aimed at `target` if at anyone. It flies as a body (02 §15) and strikes with the surface it was thrown with.
+
+Subjects, in delivery order: `self` (entity), `what` (entity), `target` (entity).
+
+Fields:
+
+- `speed` (real): Its speed as it left the hand, in metres a second.
+- `energy` (real): The energy it left with, in joules.
 
 <a id="ticket-refused"></a>
 ## `ticket_refused`

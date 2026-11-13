@@ -662,8 +662,9 @@ As stored (decision D-467):
 
 Not built: the scopes `region` and `subgrid` (their kinds are not
 served yet; the world keeps a region's variables and
-`Cosmos::set_region_var` writes them), `action`, `scenario` and
-`legacy`, which come with their packages.
+`Cosmos::set_region_var` writes them), `action` and `legacy`, which
+come with their packages. A scenario's variables are global variables
+(decision D-754): a game is one scenario.
 
 ## 7. Where expressions appear
 
@@ -899,6 +900,16 @@ As built (package A1, decisions D-720, D-721), in
 
 Not built: device outputs (16 §7) do not use it yet; they are package
 G5's.
+
+A scenario's objectives and endings (decision D-755, 13 §5.1) are kept
+current by a coarser form of their own: staleness is by event type, not
+by subject. When mods load, each
+condition's properties and functions are looked up for their
+`changed_by` events, and a variable it reads adds `var_changed`; a read
+with no events registered, or a query, makes it stale on every event.
+Re-evaluation is at every safe point rather than the end of each pump,
+and what is still stale after the rounds stays stale, unreported, for
+the next. Moving them onto the watcher above is left for later.
 
 ## 8. Events
 
@@ -2164,6 +2175,10 @@ Targets, unmeasured.
 | Simple effect (set a variable) | under 200 ns plus its expressions |
 | Compile 20,000 rules | under 1 s |
 | Tracing disabled | no measurable cost |
+
+Measured by `cargo xtask bench` (D-730) for the first row: a condition of
+23 operations over a person and locals, through the runner against the
+simulation, in 190 to 230 ns.
 
 Measured for the first row when package X3 was built, in a release build:
 a condition of 17 operations over locals evaluates in about 130 ns, and

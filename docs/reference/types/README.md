@@ -40,6 +40,7 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`material`](material.md) | What elements are made of: density, toughness and resistances (02 §5.4). |
 | [`method`](method.md) | A method written on its own: a condition and the steps that pursue a goal, which become the character's actions one at a time (09 §4). |
 | [`mind`](mind.md) | A mind: the goals a character may have, the weights that colour its choices, how often it thinks, and how it stands toward others (09 §3.1). |
+| [`mission`](mission.md) | A template for objectives, started with parameters by `start_mission`: a bounty, a delivery, a job (13 §5.2). |
 | [`movement`](movement.md) | A way of moving: where it takes its mover, how fast, and what it needs (06 §11). |
 | [`overlay`](overlay.md) | Shading a map view draws over its cells where an expression over a cell holds (12 §6.2). |
 | [`palette`](palette.md) | What each character of a map stands for, shared between maps (10 §3.2). |
@@ -48,18 +49,20 @@ A data file is a JSON array of definitions, or a single one. Each is an object w
 | [`pool`](pool.md) | A bounded quantity that fills, drains and regenerates. |
 | [`posture`](posture.md) | How a body holds itself: what that makes of its height, its speed, how it is perceived and what it can use (06 §11.1). |
 | [`preference`](preference.md) | A player's choice about display and input, kept outside saves and invisible to rules (12 §10.4). |
+| [`projectile`](projectile.md) | A kind of projectile: a mass with a cross-section and a striking surface that flies as a body when something shoots (07 §11.1). |
 | [`realm`](realm.md) | A world: its extent, wrap, storeys, strata, fill, clock rate and edges (02 §4.1). |
 | [`reason`](reason.md) | A reason a mod gives for a refusal of its own: a sentence and the values it carries (14 §15). |
 | [`region_kind`](region_kind.md) | The recipe for surveying a region: its tract definitions in patches, the sites it holds, the settlements it may hold and the paths that cross its edges (10 §8.1). |
 | [`rule_group`](rule_group.md) | A set of rules that is switched on and off together (05 §9.6). |
+| [`scenario`](scenario.md) | A game the player can start: its worlds, who the player is and where they begin, the rules in force, its objectives, how it ends and how it is saved (13 §3). |
 | [`screen`](screen.md) | A screen of the interface: its variables, its layout tree and its keys (12 §10.1). |
 | [`sense`](sense.md) | What an entity perceives signals of one kind with: its range, arc, threshold and how fast awareness builds and fades (15 §4). |
+| [`setting`](setting.md) | A choice content offers players, read by rules with `setting(id)` and changed only by the `Setting` command (04 §10). |
 | [`settlement`](settlement.md) | A town, a village or a camp: a pattern of streets, the lots between them filled by maps chosen by zone, and the sites every instance has (10 §8.4). |
 | [`show`](show.md) | How an event appears when it is played back: changes to the picture, an animation, a log line, what to do if it was only heard (12 §7.3). |
 | [`signal_kind`](signal_kind.md) | A kind of signal: light off a body, a sound, a scent. |
 | [`site`](site.md) | A named place with identity: the map that stands there, its roles from the map's marks, and who works there (10 §11.1). |
 | [`sky`](sky.md) | The light a stratum's sky gives by time of day, how it spreads under cover, and a backdrop (15 §3.3). |
-| [`start`](start.md) | A way a game can begin, until game scenarios exist: a realm, where the character begins and the template it is made from by default (12 §3.4). |
 | [`template`](template.md) | What a kind of thing is made of: a body, stats, tags, rules, starting traits and items, and choices (06 §10). |
 | [`theme`](theme.md) | Colours and styles by name, border characters, a font and the engine's marks (12 §4.3). |
 | [`track`](track.md) | An accumulating counter with levels. |

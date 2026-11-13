@@ -279,6 +279,19 @@ Fields:
 
 A handler may change no field; it may cancel.
 
+<a id="scenario-ending"></a>
+## `scenario_ending`
+
+Runs before an ending takes effect (13 §9.4). A handler may change `as`, or cancel: the game goes on.
+
+Subjects: none of its own.
+
+Fields:
+
+- `as` (string): The outcome the ending names. A handler may change it.
+
+A handler may change `as`, or cancel.
+
 <a id="strike-resolving"></a>
 ## `strike_resolving`
 

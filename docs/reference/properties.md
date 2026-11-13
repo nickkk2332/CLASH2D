@@ -6,12 +6,12 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | Kind | What it refers to | Properties |
 |------|-------------------|-----------:|
 | [`ability`](#ability) | An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself. | 8 |
-| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 13 |
+| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 14 |
 | [`app_entry`](#app-entry) | One entry of a list `app` offers: a save, a profile, a mod or a scenario. | 4 |
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 15 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 102 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 110 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
@@ -62,6 +62,7 @@ Things outside the simulation: saves, profiles, mods, scenarios, preferences and
 - `app.saves -> list<app_entry>` · safe for belief: The saved games, newest first as the application lists them.
 - `app.scenario -> app_entry?` · safe for belief: The game scenario being played, if one is.
 - `app.scenarios -> list<app_entry>` · safe for belief: The game scenarios the loaded mods define (13).
+- `app.setup -> any` · safe for belief: The game being set up on the new-game screens (13 §12): the scenario chosen, its places, the options it asks about and how its seed is chosen; null when none is.
 - `app.size -> list<int>` · safe for belief: The grid, as `[columns, rows]`.
 - `app.templates -> list<app_entry>` · safe for belief: The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3).
 
@@ -208,6 +209,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.fears(x: entity) -> bool`: Whether this character's mind fears `x`: by a stance it took, or, once it has perceived `x`, by a tag `x` presents that its mind's `fear_of` names.
   Changed by `detected`, `perceived`.
   - `x` (entity): Whom it is asked about.
+- `entity.feed -> entity?` · same owner: The store an item fires from (07 §11.5): itself if it is a store, else the first store fitted to it. Null for neither.
+  Changed by `entity_relocated`.
 - `entity.fn -> functions` · same owner: What the entity's body can do: follow with a function's id, as in `self.fn.<id>`.
 - `entity.free_grasp(channel: id<channel>) -> int`: How many slots of a channel the working parts of the entity's body supply that nothing it grasps occupies. Zero for something with no body.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
@@ -275,6 +278,10 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.material -> id<material>?`: What an item is made of. Null for what is not an item.
 - `entity.mind_def -> string?`: The qualified id of the `mind` definition this character thinks by. Null for one that thinks by none.
 - `entity.name -> string?`: The entity's own name, if it has been given one. Null for one that goes by its definition's.
+- `entity.next_round -> entity?` · same owner: The round an item's feed gives up next (07 §11.5). Null for an empty one.
+  Changed by `item_taken`, `item_dropped`, `entity_relocated`, `entity_removed`.
+- `entity.objectives -> list<map<any>>`: The game's objectives and missions as the character knows them, for its journal (14 §13): one row for each, with `kind`, `id`, `text`, `state`, `mission`, `depth`, `marker` and `where`. Read of the character itself in a mind context; a marker follows what the character last perceived of its target.
+  Changed by `objective_changed`, `mission_started`, `mission_done`, `mission_failed`, `mission_expired`.
 - `entity.occupant_kind -> string`: What the world is told the entity is, for queries: `creature`, `item`, `device` or `other`.
 - `entity.offers_near -> list<map<any>>`: What the entity, as it believes, could do within a step: every interaction offered by the elements of its cell and the cells round it on its storey, by what stands there and by what it holds (16 §3.5.1), for a menu. Each is a map: `target` (the element or the entity), `interaction` (its id), `id` (its qualified id as a text), `name` (what a menu calls it), `default` (whether it is the target's default), `available` (whether it can be done now), `why` (the refusal's sentence where it cannot, else empty) and `where` (`here`, `held`, a compass direction such as `north-east`, `up` or `down`).
 - `entity.outermost -> entity?`: The entity that is in the world on its behalf: itself, or the container that everything it is nested in is inside.
@@ -300,9 +307,16 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `part_disabled`, `part_restored`, `part_severed`, `part_destroyed`.
 - `entity.remembers(at: any) -> bool`: Whether this character's map memory holds a cell (15 §13): only directly controlled characters keep one.
   - `at` (any): A cell, or something that is somewhere.
+- `entity.rounds -> int`: How many rounds an item can fire before it is empty (07 §11.5): the members of the rounds in its feed. Zero for one with none.
+  Changed by `item_taken`, `item_dropped`, `item_merged`, `item_split`, `entity_relocated`, `entity_removed`.
 - `entity.scale -> real?`: The body's overall size factor. Null for something with no body.
 - `entity.seen_how(x: entity) -> string?`: How this mind last knew of `x`: the qualified id of the kind of signal it perceived it by, or `told`, `inferred` or `carried` (15 §7.1). Null if it never has.
   - `x` (entity): Whom or what it is asked about.
+- `entity.shot(name: string) -> real?`: One of the numbers a shot through an item takes (07 §11.5): `spread`, `efficiency`, `noise`, `flash` or `energy`, the product of the item's own `shot` number and those of everything fitted to it that states it. Null where none states it.
+  Changed by `item_taken`, `item_dropped`, `entity_relocated`.
+  - `name` (string): `spread`, `efficiency`, `noise`, `flash` or `energy`.
+- `entity.site -> site?`: The site of the cell the entity is in, its own or that of whatever it is inside (02 §8.4): null outside every site and out of the world. Kept current for an objective by `entity_relocated`.
+  Changed by `entity_relocated`.
 - `entity.speed -> real?`: How fast the entity moves now by the fastest of its ways of moving that works, its posture included, in metres for each second of its own time. Null if it cannot move.
 - `entity.stance(x: entity) -> string?`: How this character's mind stands toward `x`: `hostile`, `feared`, or null for neither.
   - `x` (entity): Whom it is asked about.
@@ -311,6 +325,9 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   - `dir` (string): The direction: `north` to `north_west`, `up` or `down`.
 - `entity.step_time(dir: string) -> real?`: How long the entity expects a step in a direction to take, in seconds of its own time: the length of the step it believes lies there, with what its way of moving makes of rough ground and climbing, over that way's speed now. What a phase's `time` waits before the step is taken and checked against the world as it then is. Null if it believes it cannot make the step, or `dir` is not a direction.
   - `dir` (string): The direction: `north` to `north_west`, `up` or `down`.
+- `entity.store_of(tag: string) -> entity?` · same owner: The first store the entity has that takes things carrying a tag (07 §11.5): itself, then what it holds in any way but enclosed, in order of id, and what is fitted to those. A quiver worn, a magazine fitted to a rifle held. Null for none.
+  Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
+  - `tag` (string): A tag the store takes.
 - `entity.stowed_volume -> real?`: The space what is directly inside the entity takes up, in cubic metres. Null for an entity that is gone.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.tags -> list<string>?`: The entity's tags, in order.
@@ -331,6 +348,9 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.volume -> real?`: The space the entity takes up, in cubic metres. Null for one with no physical component.
 - `entity.weight(name: string) -> real`: This character's mind's weight of a name (09 §3.1), with what the mind's `adjust` entries whose conditions hold add; 0 if it has none.
   - `name` (string): The weight's name, as the mind writes it.
+- `entity.wielding(tag: string) -> entity?` · same owner: The first thing the entity holds in a grasp, in order of id, that carries a tag; any thing, for an empty tag. Null for none.
+  Changed by `item_taken`, `item_dropped`, `entity_relocated`.
+  - `tag` (string): The tag; empty for any.
 - `entity.worn_on(part: string) -> list<entity>` · same owner: What the entity wears over one part of its body, outermost first. A broken item is not listed: it is no longer a layer.
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
   - `part` (string): The part's name in the body.

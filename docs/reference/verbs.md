@@ -23,6 +23,16 @@ Adds a modifier to an attribute under a key (06 §4.4).
 - `add` (number, optional): Added to the base. Left out, nothing.
 - `mul` (number, optional): Multiplied in after every addition. Left out, one.
 
+<a id="add-objective"></a>
+## `add_objective`
+
+Shows a hidden objective (13 §5.1): it becomes active, its expiry starts and `objective_changed` is raised with `active`. One that is not hidden is left as it is.
+
+`id` may be given directly.
+
+- `id` (string): The objective's id.
+- `mission` (int, optional): The number of the mission it is part of; left out, one of the scenario's own.
+
 <a id="add-part"></a>
 ## `add_part`
 
@@ -121,6 +131,15 @@ Asks for a stability check of a cell and what it holds up (02 §14.2), after the
 
 - `at` (loc): The cell.
 
+<a id="checkpoint"></a>
+## `checkpoint`
+
+Asks the application for a save the player cannot make by hand (13 §9.1), at the next safe point, and raises `checkpoint_made`. It is saved under every saving policy but `none`.
+
+`name` may be given directly.
+
+- `name` (string): The checkpoint's name.
+
 <a id="clear-goal"></a>
 ## `clear_goal`
 
@@ -176,6 +195,16 @@ Ends an interaction its action began (16 §3.4): tests reach and `if` against tr
 - `who` (entity): Who does it: a character, or a device acting.
 - `target` (any): What it is done to: an element or an entity.
 - `interaction` (id<interaction>): The interaction.
+
+<a id="complete-objective"></a>
+## `complete_objective`
+
+Settles an active objective as done (13 §5.1): its `on_done` runs and `objective_changed` is raised. An objective that is not active is left as it is. Refused with no game, or no such objective.
+
+`id` may be given directly.
+
+- `id` (string): The objective's id.
+- `mission` (int, optional): The number of the mission it is part of; left out, one of the scenario's own.
 
 <a id="create-area"></a>
 ## `create_area`
@@ -323,6 +352,15 @@ Switches a mode of an ability off (08 §5.4): its trait and its upkeep go togeth
 - `ability` (id<ability>): The ability.
 - `mode` (string): The mode's id within the ability.
 
+<a id="end-scenario"></a>
+## `end_scenario`
+
+Ends the game (13 §9.4): raises the hook `scenario_ending`, whose handlers may change `as` or cancel, then `scenario_ended`, and asks the application to end it. Refused with no game, once it has ended, and when a handler cancels.
+
+`as` may be given directly.
+
+- `as` (string): The outcome it names: `won`, `lost`, `escaped`.
+
 <a id="enqueue-action"></a>
 ## `enqueue_action`
 
@@ -339,6 +377,33 @@ Turns an entity with senses to face a place or a direction (15 §4).
 
 - `who` (entity): Who turns.
 - `toward` (any): A cell, something that is somewhere, or a number of degrees clockwise from north.
+
+<a id="fail-mission"></a>
+## `fail_mission`
+
+Fails an active mission (13 §5.2): its `on_failed` runs and `mission_failed` is raised.
+
+`mission` may be given directly.
+
+- `mission` (int): The mission's number.
+
+<a id="fail-objective"></a>
+## `fail_objective`
+
+Settles an active objective as failed (13 §5.1): its `on_failed` runs and `objective_changed` is raised. Refused with no game, or no such objective.
+
+`id` may be given directly.
+
+- `id` (string): The objective's id.
+- `mission` (int, optional): The number of the mission it is part of; left out, one of the scenario's own.
+
+<a id="fit"></a>
+## `fit`
+
+Fits an item to another (07 §11.5): a magazine, a sight, a muzzle. It is held `fixed` in it, and gives a shot through it its `shot` numbers while it is; taking it into a grasp takes it off. Returns the item. Refused with `ranged.cannot_fit`: none of its tags is in the other's `shot.fits`, or one carrying it is fitted already.
+
+- `what` (entity): The item fitted.
+- `into` (entity): The item it is fitted to.
 
 <a id="follow-path"></a>
 ## `follow_path`
@@ -443,6 +508,16 @@ Throws an entity that stands in the world (02 §15): it becomes a body in flight
 
 - `what` (entity): Who or what is thrown.
 - `vel` (any): Its velocity in m/s, east, south and up, as a list of three numbers.
+
+<a id="load"></a>
+## `load`
+
+Loads rounds into a store (07 §11.5), one at a time and in that order: from `from`, a container or a stack of rounds; with none, from whatever `who` carries, at any depth. Only rounds the store takes, and as many as fit, at most `count`. `into` is the store, or a weapon with one fitted. Returns how many were loaded. Refused with `ranged.not_a_store`, and with `ranged.nothing_to_load` or the first refusal of `put_in` when none was.
+
+- `who` (entity?, optional): Who loads, whose carried rounds are taken. Default `self`.
+- `into` (entity): The store, or a weapon whose store it fills.
+- `from` (entity?, optional): A container to take rounds from, or a stack of rounds.
+- `count` (int?, optional): The most to load. Default as many as fit.
 
 <a id="make-notable"></a>
 ## `make_notable`
@@ -656,6 +731,15 @@ Swaps a part's definition (06 §6.5), keeping its name, its place and what is at
 
 - `part` (part?): The part.
 - `with` (id<body_part>): The new definition.
+
+<a id="restore-checkpoint"></a>
+## `restore_checkpoint`
+
+Asks the application to go back to a checkpoint (13 §9.1) at the next safe point. Refused, with `scenario.no_checkpoint`, when there is none of that name or none at all. Carrying memories across is not built.
+
+`name` may be given directly.
+
+- `name` (string, optional): The checkpoint. Left out, the last one made.
 
 <a id="restore-part"></a>
 ## `restore_part`
@@ -884,6 +968,29 @@ Gives an entity a clock of its own at a rate, changes the rate of the one it has
 - `who` (entity): Whose personal clock.
 - `rate` (real, optional): Its rate against the clock of where the entity is: zero or more. Null, or left out, takes the personal clock away, and any anchor with it.
 
+<a id="shoot"></a>
+## `shoot`
+
+Fires a shot (07 §11.1): from where `from` stands, at a height, toward `at` or along `dir`, with dispersion of `spread` drawn from the stream `shots`. With a `store`, each of `count` shots takes the store's next round and launches its projectile, as many as the round says, with the round's energy times the weapon's efficiency; with none, `count` projectiles of `projectile`. Each flies as a body in flight (02 §15) and strikes what it meets, or with `speed` `instant` is cast as a ray that strikes at once (07 §11.3). Raises `projectile_fired` for each; spends each round and leaves its casing. Returns how many projectiles were fired. Refused with `ranged.empty`, `ranged.no_projectile`, `ranged.no_energy`, `ranged.no_aim`, `ranged.not_in_world`, `ranged.not_a_store`, `ranged.too_many` and `ranged.bad_number`, having changed nothing.
+
+- `from` (entity?, optional): Who shoots. Default `self`.
+- `at` (any, optional): What it is aimed at: an entity, at the height of `part` or `height`, or the middle of its body; a cell, at `height` above its floor or level; or a point, a list of three numbers in metres. One of `at` and `dir`.
+- `dir` (any, optional): The direction it is aimed along, east, south and up, as a list of three numbers.
+- `part` (part?, optional): The part of the entity aimed at: the shot is aimed at the middle of its band.
+- `height` (real?, optional): Metres above the footing of the entity, or the floor of the cell, it is aimed at; and above the shooter's footing it leaves from. Default: at a part's band, or the middle of a body; it leaves at 0.8 of the shooter's height.
+- `projectile` (id<projectile>?, optional): What it fires, for a shot with no store, or in place of what the store's rounds name.
+- `store` (entity?, optional): The store its rounds come from: a magazine, a quiver, or a weapon with one fitted.
+- `with` (entity?, optional): The weapon it is fired with: its `shot` numbers, and those of what is fitted to it, give the spread, efficiency, noise and flash the effect leaves out.
+- `energy` (real?, optional): Joules each projectile leaves with, in place of the round's times the efficiency.
+- `speed` (any, optional): Metres a second each projectile leaves at, in place of what its energy gives; or `instant`, for a ray.
+- `spread` (real?, optional): Radians: the standard deviation of each of its two angles of dispersion. Default the weapon's, else none.
+- `count` (int?, optional): How many shots: rounds from the store, or projectiles. Default 1; at most `shoot.max_count`.
+- `noise` (real?, optional): How loud, for `projectile_fired`. Default the weapon's, else 0.
+- `flash` (real?, optional): How bright, for `projectile_fired`. Default the weapon's, else 0.
+- `lob` (bool?, optional): Whether it is sent along the lower arc that comes down on the aim point under gravity, not straight at it. Default false.
+- `range` (real?, optional): For an instant shot: how far the ray goes, in metres. Default `shoot.instant_range`.
+- `window` (any, optional): The kind of reaction window it opens for whoever it is aimed at (07 §11.2). Offered to nobody until reaction windows are built.
+
 <a id="spawn"></a>
 ## `spawn`
 
@@ -913,6 +1020,17 @@ Starts an action now, as the `Act` command does (03 §6.6). Gives whether it sta
 - `who` (entity): Who acts.
 - `action` (id<action>): The action.
 - `with` (map<any>, optional): Its parameters, by name; those left out take their defaults.
+
+<a id="start-mission"></a>
+## `start_mission`
+
+Starts a mission (13 §5.2): it is recorded with its parameters, its objectives that wait for nothing are shown and `mission_started` is raised. Gives the mission's number. Refused for a mission that is not loaded, parameters it does not have or lacks, and with no game.
+
+`mission` may be given directly.
+
+- `mission` (string): The mission definition: a qualified id, or a bare name.
+- `taker` (entity, optional): Who takes it on. Left out, the character the player plays.
+- `with` (map<any>, optional): Its parameters by name.
 
 <a id="start-mode"></a>
 ## `start_mode`
@@ -948,6 +1066,15 @@ Takes a thing into a grasp of `who` (06 §9.2): picks it up, draws it from a pac
 - `who` (entity): The creature that holds or wears it: it needs a body.
 - `what` (entity): The thing, wherever it is.
 
+<a id="take-control"></a>
+## `take_control`
+
+Gives the player direct control of a character (13 §13): it joins the party, those of the party that can no longer act are counted fallen, and the application is asked to show it.
+
+`who` may be given directly.
+
+- `who` (entity): The character.
+
 <a id="take-out"></a>
 ## `take_out`
 
@@ -962,6 +1089,23 @@ Takes a thing out of the container it is stowed in or enclosed by (06 §9.2): in
 Makes a mind think at the next batch (09 §3.3). Refused for a character that thinks by no `mind` definition.
 
 - `who` (entity): The character whose mind thinks.
+
+<a id="throw"></a>
+## `throw`
+
+Throws an item `who` holds (07 §11.1): it leaves the hand and flies as a body that is the item, with its own mass and cross-section, from where `who` stands toward `at` or along `dir`, and strikes what it meets with its surface named `surface`, through the same delivery as a projectile's; with none, with a blunt blow. Raises `thrown`. Refused with `ranged.not_held`, `ranged.no_surface`, `ranged.no_energy`, `ranged.no_aim`, `ranged.not_in_world` and `ranged.bad_number`.
+
+- `who` (entity?, optional): Who throws. Default `self`.
+- `what` (entity): The item thrown: one `who` holds.
+- `at` (any, optional): What it is aimed at, as for `shoot`.
+- `dir` (any, optional): The direction it is aimed along, as a list of three numbers.
+- `part` (part?, optional): The part of the entity aimed at.
+- `height` (real?, optional): Metres above the footing of the entity, or the floor of the cell, it is aimed at.
+- `energy` (real?, optional): Joules it leaves the hand with.
+- `speed` (real?, optional): Metres a second it leaves the hand at, in place of what its energy gives.
+- `spread` (real?, optional): Radians of dispersion, as for `shoot`. Default none.
+- `surface` (string?, optional): The id of the item's surface it strikes with. Default none: a blunt blow.
+- `lob` (bool?, optional): Whether it is sent along the arc that comes down on the aim point. Default false.
 
 <a id="transfer-mind"></a>
 ## `transfer_mind`
