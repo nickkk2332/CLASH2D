@@ -117,6 +117,9 @@ Every refusal carries a reason: a stable code and the values involved (14 §5). 
 - <a id="engineaction-no-footing"></a>`engine:action_no_footing`: An action whose `footing` is true was asked of an actor with nothing under it.
   Shown as `{cap(the(self))} {verb(self, 'have')} nothing to stand on.`.
   - `action` (id<action>): The action that was asked for.
+- <a id="engineaction-not-aimed"></a>`engine:action_not_aimed`: `actions_with` was given a target, and the action has no parameter or role named `target` to take it: it cannot be done at them (a blow at a place, `Smash`, when someone is the target). The sentence names the action.
+  Shown as `That is not aimed at someone.`.
+  - `action` (id<action>): The action that was asked for.
 - <a id="engineaction-parameter-invalid"></a>`engine:action_parameter_invalid`: An action was asked for with a parameter whose value is null or of the wrong type.
   Shown as `That is not something {$param} can be.`.
   - `action` (id<action>): The action that was asked for.

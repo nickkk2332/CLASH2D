@@ -375,6 +375,12 @@ impl Sim {
         if control != Control::Direct {
             return Ok(false);
         }
+        // A stopped mind is asked nothing, as it is not when it is free
+        // (06 §8.4): the blow simply lands on someone unconscious, and
+        // time goes on (decision D-907).
+        if self.life_lets_act(entity).is_err() {
+            return Ok(false);
+        }
         let state = self
             .windows
             .get(window)

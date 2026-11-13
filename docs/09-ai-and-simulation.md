@@ -197,7 +197,7 @@ whole of what a modder writes and reads; section 17 lists it by kind.
 | `hostile_after`, `fear_after` | list of event types | Whoever the mind makes out as the actor of such an event it perceives is held hostile or feared from then on |
 | `crowd_cost` | metres, default 3 | What a step into a cell where it saw someone in the last five seconds costs it more (section 5.3) |
 | `hazards` | list of `{ events, radius = 2, cost = 10, below = 0.05 }` | Wherever it remembers one of `events` with salience at least `below`, steps within `radius` metres cost `cost` metres more |
-| `senses` | list of `sense` ids | Given to its character when the mind first thinks, if it has no senses: a character made without any perceives with these. A directly controlled character never thinks, and is given senses by whoever made it |
+| `senses` | list of `sense` ids | Given to its character when the mind's state is first made, if it has no senses: when it first thinks, or before that when it is given a stance, a goal or a home (decision D-901). A character made without any perceives with these. A directly controlled character never thinks, and is given senses by whoever made it |
 | `reactions` | list of `action` ids | The reactions it answers a window its character noticed with, in order of preference (section 6.3). Default none: it answers nothing |
 | `doc` | text | What it is |
 

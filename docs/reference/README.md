@@ -18,7 +18,7 @@ For a walkthrough, start with the [modding guide](../modding-guide.md). The spec
 | [effects](effects.md) | The effects of the rule system itself: control flow, variables, time, rules and events | 29 |
 | [queries](queries.md) | Kinds of query: arguments and results | 5 |
 | [settings](settings.md) | The engine's settings, with their defaults | 27 |
-| [reasons](reasons.md) | Reasons the engine refuses or reports with | 258 |
+| [reasons](reasons.md) | Reasons the engine refuses or reports with | 259 |
 | [diagnostics](diagnostics.md) | Diagnostic codes of the loader, the expression compiler and the console | 176 |
 | [modding-guide](../modding-guide.md) | The modding guide: making a mod, step by step |  |
 

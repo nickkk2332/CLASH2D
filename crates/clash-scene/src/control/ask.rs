@@ -31,6 +31,10 @@ use crate::view::Camera;
 pub const PICKER_ROLE_PREFIX: &str = "picker.";
 /// The picker for an entity: a cursor over the map.
 pub const PICKER_ENTITY: &str = "entity";
+/// Why an entity picker was not opened: nobody the party perceives
+/// could be chosen and nothing was filled in (decision D-904). The same
+/// words the target cycle says.
+pub const NOBODY_TO_CHOOSE: &str = "Nobody is in sight to choose.";
 /// The picker for a cell: a cursor over the map.
 pub const PICKER_CELL: &str = "cell";
 /// The picker for a list of cells, built one step at a time.
@@ -807,9 +811,14 @@ where
                 Ok(id) => out.push(UiOutcome::Opened(id)),
                 Err(reason) => {
                     let command = self.abandon_command().unwrap_or_default();
+                    let reason = if reason == NOBODY_TO_CHOOSE {
+                        reason
+                    } else {
+                        format!("`{command}` cannot be asked for `{}`: {reason}", ask.name)
+                    };
                     out.push(UiOutcome::Failed {
                         effect: "act",
-                        reason: format!("`{command}` cannot be asked for `{}`: {reason}", ask.name),
+                        reason,
                     });
                 }
             }
@@ -1016,6 +1025,20 @@ where
                 }
                 world.show_line(true);
             }
+        }
+        // An entity picker with nobody the party perceives to choose
+        // from, and nothing filled in, is not opened: it would offer the
+        // character only itself (decision D-904).
+        if has_map
+            && picker == PICKER_ENTITY
+            && listed.is_none()
+            && candidates.is_empty()
+            && prefill.is_null()
+        {
+            self.pending.pop();
+            let _ = self.pop_screen();
+            self.restore_camera(saved);
+            return Err(NOBODY_TO_CHOOSE.to_owned());
         }
         if let Some(collecting) = &mut self.collecting {
             collecting.list = chosen;

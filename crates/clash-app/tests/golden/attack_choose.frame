@@ -10,11 +10,11 @@ chars
 |          ┌ Choose ──────────────────────────────────────────────────┐         │|
 |          │Kick                                                      │         │|
 |          │Punch                                                     │         │|
-|          │Smash                                                     │         │|
 |          │Slash: Slash needs a blade in hand.                       │         │|
 |          │Stab: Stab needs a blade in hand.                         │         │|
 |          │Whirl: Whirl needs a blade in hand.                       │         │|
 |          │Shove: That is out of reach.                              │         │|
+|          │Smash: Smash is not aimed at someone.                     │         │|
 |          │                                                          │         │|
 |          │                                                          │         │|
 |          │                                                          │         │|
@@ -35,11 +35,11 @@ fg
 |0000000000tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt000000000c|
 |0000000000tuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuut000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
-|0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
+|0000000000twwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|
 |0000000000tvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvt000000000c|

@@ -205,7 +205,11 @@ D-652):
    `message` for the player also get a line in the log at once
    (categories `fault` and `message`); a fault's line names the code of
    what refused and the definition and path of the effect, where the
-   fault's reason has them (decision D-874). Every line of the log begins
+   fault's reason has them (decision D-874). A fault of a rule says whose
+   doing it was (its reason's `actor`); one of someone outside the party,
+   a resident's door that would not open, is theirs and gets no line: the
+   log shows what the party perceives, and the party's own refusals and
+   faults and those of nobody's doing (decision D-902). Every line of the log begins
    with a capital letter, made so as it is added (decision D-866). The scene is advanced by the
    real time elapsed and plays what falls due.
 5. **The present.** Once playback has caught up, the view model is
@@ -1420,10 +1424,17 @@ without a default is given (`target` fills one of that name); every
 attack's `with` finds its surface on the character, a part that answers
 or something in hand with the tag (07 §3.1), and else says what the blow
 needs; and the character has the slots of each channel it uses.
-Footing, slots other actions hold and hooks are the start's to say. Those
-that could start come first, then those that strike with something held,
-then those that take fewer slots, then by qualified id: the quick blow
-is the lightest that can be made.
+Footing, slots other actions hold and hooks are the start's to say. With
+a target, an action that has no parameter or role named `target` cannot
+be done at them (a blow at a place, `Smash`, is not a blow at someone):
+it is not available, says so (`engine:action_not_aimed`), and comes
+after those that take a target, so that the quick blow at someone out of
+reach is refused with why ("That is out of reach.") rather than turned
+on the world (decision D-904). Those that could start come first, then
+those that strike with something held, then those that take fewer
+slots, then by qualified id: the quick blow is the lightest that can be
+made. Nothing closes the distance by itself: a blow out of reach is
+refused, and walking up is the player's to do.
 
 **Which picker.** The `act` effect's `pick` names the picker for a
 parameter. Without it the parameter's type does:
@@ -1451,8 +1462,11 @@ expression whose list is what may be chosen. Without it the simulation
 is asked what the acting character believes could be chosen
 (`SceneHost::candidates`, with the values settled before it). Without
 either, an entity picker offers what the view model holds on the viewed
-grid, nearest first, and a list picker is empty. Nothing is offered that
-the party does not perceive. The application answers for a parameter of
+grid, nearest first, never the acting character, and a list picker is
+empty. Nothing is offered that the party does not perceive. An entity
+picker with nothing to offer and nothing filled in is not opened: the
+command is abandoned with "Nobody is in sight to choose." (decision
+D-904). The application answers for a parameter of
 the kind `part` (07 §4.2, decision D-794): the parts on the outside of
 the creature settled before it, while the character perceives it, each
 by its name in the body, after a first row, `wherever it lands`, that

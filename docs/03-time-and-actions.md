@@ -1664,6 +1664,7 @@ namespace:
 |--------|-----------|
 | `action_parameter_missing`, `action_parameter_invalid`, `action_list_length` | A command leaves out a parameter that has no default, gives one a value of the wrong type, or gives a list outside its `min` and `max` |
 | `action_requires` | `requires` does not hold when the action is to start, or when a step of a plan comes due. The action's `fail_text` is the sentence shown |
+| `action_not_aimed` | Asked what could be done at someone (`actions_with` with a target), the action has no parameter or role named `target` to take them: a blow at a place is not a blow at someone (12 §9.3, decision D-904). The sentence names the action |
 | `action_no_footing` | `footing` is true and nothing is under the actor |
 | `action_channel_busy`, `action_channel_lacking`, `action_slot_unavailable` | Too few slots of a channel are free; too few are enabled at all; the slot a parameter names cannot be used |
 | `action_vetoed` | A handler of `ActionStarting` cancels without a reason of its own |

@@ -1,0 +1,36 @@
+[
+  { "//": "Going without food (16 §9.5, decision D-906): what an empty `nourishment` pool does, written as traits and one rule; the engine knows nothing of hunger. The pool falls by about two parts in a hundred an hour, so a person who starts fed (70) is hungry below a quarter after about a day, weak below a tenth some seven hours later, and starving at nothing some five hours after that. Starving drains blood faster than the body makes it: about a day later the body falls (the blood pool's stop below 60%), and half a day after that it dies. Eating lifts the pool past a threshold and the trait for where it now stands replaces the last; above a quarter there is none. The three traits are one group, so a character has at most one. Values are illustrative.",
+    "type": "trait", "id": "hungry", "name": "Hungry",
+    "description": "An empty stomach, and a little less in the arms.",
+    "group": "hunger",
+    "modifiers": [ { "attr": "strength", "add": -1 } ],
+    "tags": ["hungry"] },
+
+  { "type": "trait", "id": "weak_with_hunger", "name": "Weak with hunger",
+    "description": "Slow and feeble for want of food.",
+    "group": "hunger",
+    "modifiers": [ { "attr": "strength", "add": -3 }, { "attr": "speed", "mul": 0.8 } ],
+    "tags": ["hungry", "weak"] },
+
+  { "type": "trait", "id": "starving", "name": "Starving",
+    "description": "The body is eating itself: it will fall, and then die, unless it is fed.",
+    "group": "hunger",
+    "modifiers": [ { "attr": "strength", "add": -5 }, { "attr": "speed", "mul": 0.6 } ],
+    "rates": [ { "pool": "blood", "rate": -0.00005 } ],
+    "tags": ["hungry", "weak", "starving"] },
+
+  { "type": "eoc", "id": "hunger", "on": "pool_crossed",
+    "if": "str(event.pool) == 'core:nourishment' and self.control == 'direct'",
+    "doc": "A character someone plays whose nourishment crossed a threshold takes the hunger trait for the band it is now in: falling below a quarter `hungry`, below a tenth `weak_with_hunger`, to nothing `starving`; rising off nothing `weak_with_hunger`, to a tenth `hungry`, to a quarter none. The town's residents are taken to eat at home, and are left out: their meals are not modelled.",
+    "do": [
+      { "if": "event.rising and event.threshold > 0.2",
+        "then": [ { "remove_trait": { "from": "self", "trait": "hungry" } },
+                  { "remove_trait": { "from": "self", "trait": "weak_with_hunger" } },
+                  { "remove_trait": { "from": "self", "trait": "starving" } } ] },
+      { "if": "(event.rising and event.threshold > 0.05 and event.threshold < 0.2) or (not event.rising and event.threshold > 0.2)",
+        "then": [ { "add_trait": { "to": "self", "trait": "hungry" } } ] },
+      { "if": "(event.rising and event.threshold < 0.05) or (not event.rising and event.threshold > 0.05 and event.threshold < 0.2)",
+        "then": [ { "add_trait": { "to": "self", "trait": "weak_with_hunger" } } ] },
+      { "if": "not event.rising and event.threshold < 0.05",
+        "then": [ { "add_trait": { "to": "self", "trait": "starving" } } ] } ] }
+]

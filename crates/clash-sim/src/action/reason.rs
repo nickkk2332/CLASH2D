@@ -104,6 +104,16 @@ pub const REQUIRES: Reason = Reason {
     doc: "An action's `requires` was false, or null, when the action was to start, or when a step of a plan came due. The action's `fail_text` is shown in place of this sentence.",
 };
 
+/// An action listed as what could be done at someone has no parameter
+/// or role that takes them (12 §9.3, decision D-904). The sentence names
+/// the action.
+pub const NOT_AIMED: Reason = Reason {
+    code: "engine:action_not_aimed",
+    text: "That is not aimed at someone.",
+    values: &[ACTION],
+    doc: "`actions_with` was given a target, and the action has no parameter or role named `target` to take it: it cannot be done at them (a blow at a place, `Smash`, when someone is the target). The sentence names the action.",
+};
+
 /// The action needs footing and the actor has nothing under it
 /// (03 §6.1).
 pub const NO_FOOTING: Reason = Reason {
@@ -343,6 +353,7 @@ pub const REASONS: &[Reason] = &[
     PARAMETER_INVALID,
     LIST_LENGTH,
     REQUIRES,
+    NOT_AIMED,
     NO_FOOTING,
     CHANNEL_BUSY,
     CHANNEL_LACKING,

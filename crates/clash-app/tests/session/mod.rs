@@ -244,6 +244,76 @@ pub fn commands(run: &Headless) -> usize {
         .unwrap_or_default()
 }
 
+/// How many times the simulation was told to start an action whose
+/// qualified id is the one given, by `Act`.
+pub fn acts_of(run: &Headless, action: &str) -> usize {
+    run.game()
+        .with_session(|session| {
+            let actions = session
+                .sim
+                .defs()
+                .try_registry::<clash_sim::action::ActionDef>()?;
+            let count = session
+                .sim
+                .input_log()
+                .entries()
+                .iter()
+                .filter(|entry| match &entry.command {
+                    clash_sim::Command::Act { action: id, .. } => actions.name(*id) == action,
+                    _ => false,
+                })
+                .count();
+            Some(count)
+        })
+        .flatten()
+        .unwrap_or_default()
+}
+
+/// Where the character perceives its target to be: the target's sprite
+/// in the picture the player is shown.
+pub fn target_loc(run: &Headless) -> Option<Location> {
+    let scene = run.game().scene();
+    let id = scene.target()?;
+    scene.world()?.model().sprite(id).map(|sprite| sprite.loc)
+}
+
+/// Tab until someone is in sight and selected, a second going by
+/// between tries, at most `tries` times. Returns whether someone is.
+pub fn tab_until_someone(run: &mut Headless, tries: usize) -> bool {
+    for _ in 0..tries {
+        press(run, "tab");
+        if run.game().scene().target().is_some() {
+            return true;
+        }
+        press(run, ".");
+    }
+    false
+}
+
+/// Walks up to the target, following where the character sees it, a
+/// step at a time, until it stands beside it or `max_keys` keys have
+/// been pressed. Returns whether it is beside the target.
+pub fn walk_up_to_target(run: &mut Headless, max_keys: usize) -> bool {
+    for _ in 0..max_keys {
+        // Lost from sight: Tab again for whoever is in sight now.
+        if target_loc(run).is_none() {
+            press(run, "tab");
+        }
+        let (Some(at), Some(to)) = (player_loc(run), target_loc(run)) else {
+            press(run, ".");
+            continue;
+        };
+        let delta = to.cell - at.cell;
+        if delta.x.abs().max(delta.y.abs()) <= 1 && delta.z == 0 {
+            return true;
+        }
+        if walk_to(run, to, 1, 1) == 0 || top(run) != "ui:play" {
+            press(run, ".");
+        }
+    }
+    false
+}
+
 /// The key of the default keymap that steps one way.
 pub fn key_of(kind: StepKind) -> &'static str {
     match kind {
@@ -397,6 +467,111 @@ pub fn press_button(run: &mut Headless, label: &str) {
         press(run, "down");
     }
     press(run, "enter");
+}
+
+/// The id of the widget with the focus on the screen on top.
+pub fn focus(run: &Headless) -> Option<String> {
+    run.game()
+        .scene()
+        .top()
+        .and_then(|screen| screen.focus().map(str::to_owned))
+}
+
+/// Moves down on the screen on top until the widget of that id has the
+/// focus, or panics.
+pub fn down_to(run: &mut Headless, id: &str) {
+    for _ in 0..24 {
+        if focus(run).as_deref() == Some(id) {
+            return;
+        }
+        press(run, "down");
+    }
+    panic!("`{id}` was never reached on {}:\n{}", top(run), run.text());
+}
+
+/// Presses Tab on the screen on top until the widget of that id has
+/// the focus, or panics.
+pub fn tab_to(run: &mut Headless, id: &str) {
+    for _ in 0..24 {
+        if focus(run).as_deref() == Some(id) {
+            return;
+        }
+        press(run, "tab");
+    }
+    panic!(
+        "`{id}` never came into focus on {}:\n{}",
+        top(run),
+        run.text()
+    );
+}
+
+/// From the title: the new-game screen with the name typed and the game
+/// at a place in the list selected, F2, and the template at a place in
+/// that list begun on the creation screen.
+pub fn create(run: &mut Headless, game: usize, template: usize, name: &str) {
+    assert_eq!(top(run), "ui:title");
+    script(run, "enter\n");
+    script(run, &format!("type {name}\n"));
+    script(run, "tab\ntab\n");
+    for _ in 0..game {
+        script(run, "down\n");
+    }
+    press(run, "f2");
+    assert_eq!(top(run), "ui:create", "{}", run.text());
+    for _ in 0..template {
+        press(run, "down");
+    }
+    press(run, "enter");
+}
+
+/// On the creation screen: Begin, then the setup and the introduction
+/// that follow, to play.
+pub fn begin_created(run: &mut Headless) {
+    tab_to(run, "begin");
+    press(run, "enter");
+    until_top_any(run, &["ui:setup", "ui:intro", "ui:play"], 60);
+    if top(run) == "ui:setup" {
+        press(run, "enter");
+        until_top_any(run, &["ui:intro", "ui:play"], 60);
+    }
+    if top(run) == "ui:intro" {
+        press(run, "enter");
+    }
+    settle(run);
+    assert_eq!(top(run), "ui:play", "{}", run.text());
+}
+
+/// Passes until one of the screens named is on top, or panics.
+pub fn until_top_any(run: &mut Headless, screens: &[&str], passes: u32) {
+    for _ in 0..passes {
+        if screens.contains(&top(run).as_str()) {
+            return;
+        }
+        run.pass();
+    }
+    panic!(
+        "none of {screens:?} came to the top; `{}` is there\n{}",
+        top(run),
+        run.text()
+    );
+}
+
+/// From play: the inventory, Enter on the row of what the character
+/// carries at a place in its list, and the button of that id in the
+/// thing's popup. Back in play once the action is chosen.
+pub fn do_with_carried(run: &mut Headless, row: usize, button: &str) {
+    press(run, "i");
+    assert_eq!(top(run), "ui:inventory", "{}", run.text());
+    for _ in 0..row {
+        press(run, "down");
+    }
+    press(run, "enter");
+    assert_eq!(top(run), "ui:item", "{}", run.text());
+    down_to(run, button);
+    press(run, "enter");
+    if top(run) == "ui:inventory" {
+        press(run, "escape");
+    }
 }
 
 /// From play: saves the game under a name through the pause menu,

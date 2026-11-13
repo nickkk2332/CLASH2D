@@ -775,6 +775,28 @@ fn stagger(entity: EntityId) -> Real {
     Real::from_i64((hash >> 11) as i64) / Real::from_i64(1_i64 << 53)
 }
 
+/// Makes the state of a mind that has none, by a definition and, where
+/// one is named for it, under that name; and gives a character with
+/// nothing to perceive with the senses the definition names. Every way
+/// a mind's state is first made comes here, so that a mind given a
+/// stance, a goal or a home before it first thinks perceives as any
+/// other does (decision D-901).
+pub(super) fn begin_state(sim: &mut Sim, mind: EntityId, def: &MindDef, named: Option<&str>) {
+    if sim.components.mind_state.contains(mind) {
+        return;
+    }
+    let mut state = new_state(sim, mind, def);
+    state.def = named.map(str::to_owned);
+    sim.components.mind_state.insert(mind, state);
+    if !sim.components.senses.contains(mind) {
+        for name in &def.senses {
+            if let Some(sense) = sim.perception_defs.sense_named(name) {
+                let _ = crate::perception::attach_sense(sim, mind, sense);
+            }
+        }
+    }
+}
+
 /// The state of a mind that thinks for the first time.
 fn new_state(sim: &Sim, mind: EntityId, def: &MindDef) -> MindState {
     let bits = mind.to_bits();
@@ -820,19 +842,7 @@ pub(super) fn think(sim: &mut Sim, mind: EntityId) {
         return;
     };
     let now = sim.now();
-    if !sim.components.mind_state.contains(mind) {
-        let state = new_state(sim, mind, def);
-        sim.components.mind_state.insert(mind, state);
-        // A character with nothing to perceive with is given the senses
-        // its mind names.
-        if !sim.components.senses.contains(mind) {
-            for name in &def.senses {
-                if let Some(sense) = sim.perception_defs.sense_named(name) {
-                    let _ = crate::perception::attach_sense(sim, mind, sense);
-                }
-            }
-        }
-    }
+    begin_state(sim, mind, def, None);
     let max = sim
         .setting_int(MAX_THOUGHTS_SETTING, DEFAULT_MAX_THOUGHTS)
         .max(1) as u32;
@@ -1958,11 +1968,13 @@ pub(super) fn settle_about(sim: &mut Sim, mind: EntityId, about: &AboutHeld) {
 pub fn set_stance(sim: &mut Sim, mind: EntityId, other: EntityId, stance: Option<Stance>) {
     let persona: PersonaId = belief::persona_of(sim, mind, other);
     if !sim.components.mind_state.contains(mind) {
-        let Some(def) = mind_def_of(sim, mind).and_then(|id| mind_def(sim, id)) else {
+        let defs = Arc::clone(&sim.defs);
+        let Some(def) = mind_def_of(sim, mind)
+            .and_then(|id| defs.try_registry::<MindDef>().and_then(|r| r.try_get(id)))
+        else {
             return;
         };
-        let state = new_state(sim, mind, def);
-        sim.components.mind_state.insert(mind, state);
+        begin_state(sim, mind, def, None);
     }
     if let Some(state) = sim.components.mind_state.get_mut(mind) {
         state.set_stance(persona, stance);

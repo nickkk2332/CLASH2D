@@ -255,56 +255,37 @@ pub fn register_defs(types: &mut DefTypes) {
 }
 
 /// Gives a character that thinks by a `mind` definition its state, if
-/// it has none yet.
+/// it has none yet, and the senses its mind names if it has none
+/// ([`think::begin_state`]).
 pub(crate) fn ensure_state(sim: &mut Sim, who: EntityId) {
     if sim.components.mind_state.contains(who) {
         return;
     }
-    let Some(def) = mind_def_of(sim, who).and_then(|id| think::mind_def(sim, id)) else {
+    let defs = std::sync::Arc::clone(&sim.defs);
+    let Some(def) = mind_def_of(sim, who)
+        .and_then(|id| defs.try_registry::<MindDef>().and_then(|r| r.try_get(id)))
+    else {
         return;
     };
-    let state = MindState::new(
-        clash_core::Rng::from_seed(clash_core::pos_hash(
-            sim.rng.seed(),
-            clash_core::HashDomain::new("ai.mind"),
-            who.to_bits() as i32,
-            (who.to_bits() >> 32) as i32,
-            0,
-            0,
-        )),
-        sim.entities.location(who),
-        def.think.dur(),
-    );
-    sim.components.mind_state.insert(who, state);
+    think::begin_state(sim, who, def, None);
 }
 
 /// Gives a character a state that thinks by a named `mind`, if it has
-/// none yet.
+/// none yet, and the senses that mind names if it has none
+/// ([`think::begin_state`]).
 pub(crate) fn ensure_state_with(sim: &mut Sim, who: EntityId, mind: &str) {
     if sim.components.mind_state.contains(who) {
         return;
     }
+    let defs = std::sync::Arc::clone(&sim.defs);
     let Some(def) = sim
         .ai_defs
         .mind_named(mind)
-        .and_then(|id| think::mind_def(sim, id))
+        .and_then(|id| defs.try_registry::<MindDef>().and_then(|r| r.try_get(id)))
     else {
         return;
     };
-    let mut state = MindState::new(
-        clash_core::Rng::from_seed(clash_core::pos_hash(
-            sim.rng.seed(),
-            clash_core::HashDomain::new("ai.mind"),
-            who.to_bits() as i32,
-            (who.to_bits() >> 32) as i32,
-            0,
-            0,
-        )),
-        sim.entities.location(who),
-        def.think.dur(),
-    );
-    state.def = Some(mind.to_owned());
-    sim.components.mind_state.insert(who, state);
+    think::begin_state(sim, who, def, Some(mind));
 }
 
 /// The entity an event binds under a name, if it is one.

@@ -2,7 +2,7 @@
   { "//": "Food, drink, medicine and poison (16 §9.5): substances, what they do in a body, and the pools and traits they act on. The engine knows none of these words: a substance adds to pools and gives traits by the route it takes, and what a pool then does is its own rates, thresholds and stops (06 §4.2). Values are illustrative. Amounts in a body are per millilitre that gets in: its volume times the route's factor.",
     "type": "pool", "id": "nourishment", "name": "Nourishment",
     "max": 100, "start": 70, "regen": "-0.00058",
-    "thresholds": [0.0, 0.25] },
+    "thresholds": [0.0, 0.1, 0.25] },
 
   { "//": "What poisons build up. The body clears it slowly; too much knocks one out, and more kills.",
     "type": "pool", "id": "toxin", "name": "Toxin",

@@ -309,6 +309,59 @@ fn spawned_people_think_by_the_bundled_minds() {
 }
 
 #[test]
+fn a_mind_given_a_stance_before_it_first_thinks_has_its_senses() {
+    // Decision D-901: whatever makes a mind's state first (a stance, a
+    // goal, a home) gives it the senses its mind names, as its first
+    // thought would have.
+    let mut sim = city(3);
+    let ada = creature(&mut sim, "person", street(9));
+    // Made and given a stance in one go, as a scenario's `start.do`
+    // does: nothing thinks in between.
+    let at = sim.subject_value(Subject::Loc(street(4)));
+    let guard = {
+        let ty = sim.exprs().registry().def_type_id("template").unwrap();
+        let index = sim
+            .defs()
+            .lookup::<clash_sim::template::TemplateDef>("core:guard")
+            .unwrap();
+        clash_expr::Value::Id(clash_expr::DefRef::new(ty, index.raw()))
+    };
+    let made = sim
+        .call_verb(
+            "spawn",
+            &[
+                ("template", clash_expr::Value::from("core:person")),
+                ("at", at),
+                ("also", clash_expr::Value::list([guard])),
+            ],
+            &[],
+            Cause::DEBUG,
+        )
+        .unwrap();
+    let Some(Subject::Entity(watch)) = sim.subject_of(&made) else {
+        panic!("spawn gave {made:?}");
+    };
+    let of = sim.subject_value(Subject::Entity(ada));
+    sim.call_verb(
+        "set_stance",
+        &[
+            ("who", made.clone()),
+            ("of", of),
+            ("stance", clash_expr::Value::from("hostile")),
+        ],
+        &[],
+        Cause::DEBUG,
+    )
+    .unwrap();
+    advance_by(&mut sim, 3.0);
+    assert!(
+        clash_sim::perception::perceives(&sim, watch, ada),
+        "the guard does not perceive the one it holds hostile"
+    );
+    assert_eq!(goal_of(&sim, watch).as_deref(), Some("core:confront"));
+}
+
+#[test]
 fn every_property_of_minds_answers() {
     let mut sim = city(6);
     let watch = spawn(&mut sim, &["core:person", "core:guard"], street(4));

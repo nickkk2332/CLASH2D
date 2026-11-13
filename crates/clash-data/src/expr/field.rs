@@ -242,6 +242,18 @@ impl QueryOp {
             QueryOp::Max => "max",
         }
     }
+
+    /// What a value source of this kind gives over results of a type:
+    /// a count, a list of them, one of them or null, or a number.
+    pub fn gives(self, element: &Type) -> Type {
+        match self {
+            QueryOp::Count => Type::Int,
+            QueryOp::Collect => Type::list(element.clone()),
+            QueryOp::First | QueryOp::Pick => element.clone().nullable(),
+            QueryOp::Sum => Type::Number,
+            QueryOp::Min | QueryOp::Max => Type::Number.nullable(),
+        }
+    }
 }
 
 /// A value source (05 §7.4): an object that says a value an expression
@@ -620,6 +632,20 @@ impl<T: ExprType> Expr<T> {
         }
     }
 
+    /// The type of what the field gives, as it was compiled: an
+    /// expression's type, or what a value source over a query makes of
+    /// its results (`{ "first": { "cells": … } }` gives a cell or null).
+    /// `None` for a field not compiled, a literal, a call and a source
+    /// whose type is not known at load, which a caller takes as `any`
+    /// (decision D-905).
+    pub fn result_type(&self) -> Option<Type> {
+        match &self.ready {
+            Some(Ready::Code(code)) => Some(code.ty().clone()),
+            Some(Ready::Query(ready)) => Some(ready.op.gives(ready.query.element())),
+            _ => None,
+        }
+    }
+
     /// Evaluates the field. Null if it was never compiled.
     pub fn value<H: Host + ?Sized>(&self, eval: &mut Evaluator<'_, H>) -> Value {
         match &self.ready {
@@ -930,14 +956,7 @@ fn compile_query_source(
         queries::compile(&query.node, &at, cx, &scope.clone().without_expectation())?;
     // Warnings name the field the value source is in.
     compiled.query.origin = cx.origin(site);
-    let element = compiled.query.element().clone();
-    let gives = match op {
-        QueryOp::Count => Type::Int,
-        QueryOp::Collect => Type::list(element.clone()),
-        QueryOp::First | QueryOp::Pick => element.clone().nullable(),
-        QueryOp::Sum => Type::Number,
-        QueryOp::Min | QueryOp::Max => Type::Number.nullable(),
-    };
+    let gives = op.gives(compiled.query.element());
     if !expected.accepts(&gives) {
         let registry = cx.registry();
         let message = format!(

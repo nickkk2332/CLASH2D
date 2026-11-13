@@ -662,6 +662,76 @@ fn a_player_controlled_defender_is_asked_and_the_reaction_chosen_runs() {
 }
 
 #[test]
+fn a_block_chosen_in_a_long_wait_ends_and_the_player_is_asked_again() {
+    let (mut sim, ada, bram) = played(10);
+    // A long wait, as shift+p asks.
+    sim.submit(Command::Wait {
+        entity: bram,
+        dur: clash_core::Dur::from_secs(3600),
+    })
+    .ok();
+    sim.drain_events();
+    swing(&mut sim, ada, bram, 0.3, 180.0);
+    let request = until_asked(&mut sim);
+    let DecisionKind::Reaction { window, .. } = request.kind else {
+        panic!("a reaction is asked: {:?}", request.kind);
+    };
+    let block = action(&sim, "core:block");
+    sim.submit(Command::React {
+        entity: bram,
+        window,
+        action: block,
+        params: Vec::new(),
+    })
+    .unwrap();
+    // Play-testing 2: the guard raised holds an arm until the block has
+    // run its course; then the player is asked again.
+    for _ in 0..50 {
+        let until = Tick(sim.now().as_micros() + 100 * MS);
+        if let Advance::NeedInput(_) = sim.advance(AdvanceLimit::Until(until)) {
+            break;
+        }
+    }
+    assert!(sim.actions_of(bram).is_empty(), "the block is over");
+    assert!(
+        sim.pending_decision()
+            .is_some_and(|asked| asked.entity == bram)
+    );
+}
+
+#[test]
+fn an_unconscious_player_is_not_asked_to_react_and_time_goes_on() {
+    // Decision D-907: a stopped mind is asked nothing; asked, a player
+    // who could choose nothing held the game still for good.
+    let (mut sim, ada, bram) = played(9);
+    let pain = sim
+        .defs()
+        .lookup::<clash_sim::stats::PoolDef>("core:pain")
+        .unwrap();
+    sim.pool_add(bram, pain, Real::of(95.0), Cause::DEBUG)
+        .unwrap();
+    sim.pump();
+    assert_eq!(
+        sim.vital(bram),
+        Some(clash_sim::mind::VitalState::Unconscious)
+    );
+    sim.drain_events();
+    swing(&mut sim, ada, bram, 0.3, 1.0);
+    let told = loop {
+        match sim.advance(AdvanceLimit::Until(Tick(
+            sim.now().as_micros() + 1_000 * MS,
+        ))) {
+            Advance::Reached(_) => break sim.drain_events(),
+            Advance::Yielded => {}
+            other => panic!("nobody is asked anything: {other:?}"),
+        }
+    };
+    assert!(sim.pending_decision().is_none());
+    assert!(named(&told, "decision_requested").is_empty());
+    assert_eq!(named(&told, "strike_landed").len(), 1);
+}
+
+#[test]
 fn a_player_who_passes_does_not_react() {
     let (mut sim, ada, bram) = played(8);
     swing(&mut sim, ada, bram, 0.3, 1.0);
