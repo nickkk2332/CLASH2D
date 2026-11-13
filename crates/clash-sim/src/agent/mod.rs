@@ -524,6 +524,46 @@ pub(crate) fn take_spawn_request(sim: &mut Sim, loc: Location, request: &SpawnRe
     true
 }
 
+/// Adds a resident of a realm whose home is a cell, made from a template
+/// by id as written, as a request generation hands over would, whether
+/// or not the cell is loaded: it comes into view where its routine puts
+/// it if that is loaded, and is otherwise an agent from the start. For
+/// rules' and tools' residents, and for tests of the cold layer. `None`
+/// if no template answers to `what` or the realm has no grid.
+pub fn add_resident(
+    sim: &mut Sim,
+    realm: RealmId,
+    home: CellPos,
+    what: &str,
+) -> Option<ResidentKey> {
+    let grid = sim.cosmos.realm(realm)?.base_grid;
+    let request = SpawnRequest {
+        what: what.to_owned(),
+        at: home,
+        params: clash_core::VarMap::new(),
+    };
+    let before = sim.agents.residents.len();
+    if !take_spawn_request(sim, Location::new(grid, home), &request) {
+        return None;
+    }
+    debug_assert_eq!(sim.agents.residents.len(), before + 1);
+    sim.agents
+        .residents
+        .range(
+            ResidentKey {
+                realm,
+                home,
+                index: 0,
+            }..=ResidentKey {
+                realm,
+                home,
+                index: u16::MAX,
+            },
+        )
+        .next_back()
+        .map(|(key, _)| *key)
+}
+
 /// Works out where a cold resident is now: brings it into view if that
 /// is loaded, else keeps its agent state and schedules its wake-up.
 fn place_cold(sim: &mut Sim, key: ResidentKey) {

@@ -29,7 +29,7 @@ actions that call `hit`.
 | E8 | Items and holds | L | E5 | beta |
 | E9 | Templates and creation | L | E3, E6, E8 | beta |
 | E10 | Movement | M | E4, W14, W18 | beta |
-| E11 | Coming and going | L | E9, W8 | todo |
+| E11 | Coming and going | L | E9, W8 | beta |
 | E12 | Minimal devices | M | E8 | beta |
 | S1 | Light | M | W18 | beta |
 | S2 | Signals and senses | M | E3 | beta |
@@ -498,6 +498,15 @@ Done when
 - Reloading a tract shows the same anonymous individuals (invariant B7).
 - Each trigger of 06 §12.2 makes an individual notable.
 - Stored individuals round-trip with identical hashes.
+
+Beta (decisions D-783, D-789), in `clash_sim::agent`: a settlement's
+people are residents keyed on home and index with seeds of their own,
+made the same each time (B7); anonymous ones forgotten and notable ones
+stored as agents when their tract unloads; every trigger of 06 §12.2,
+`make_anonymous`. Tested against `core:town` in
+`crates/clash-save/tests/town_life.rs`. Stubbed: populations as counts
+with presence tables; a population count adjusted by deaths (a resident
+is `gone` instead).
 
 ### E12 — Minimal devices
 

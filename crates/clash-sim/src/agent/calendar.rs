@@ -153,9 +153,10 @@ pub struct Day {
     pub starts_at: Dur,
 }
 
-/// The day of a realm: its sky's, found at the top of its base grid as
-/// a scenario finds it (13 §4.3); a day of twenty-four hours starting at
-/// midnight for a realm with no sky.
+/// The day of a realm: the sky's over storey 0 of its base grid, where
+/// people live, else the sky's at its top, as a scenario finds it
+/// (13 §4.3); a day of twenty-four hours starting at midnight for a
+/// realm with no sky.
 pub fn realm_day(sim: &Sim, realm: RealmId) -> Day {
     let fallback = Day {
         length: WRITTEN_DAY,
@@ -164,11 +165,14 @@ pub fn realm_day(sim: &Sim, realm: RealmId) -> Day {
     let Some(grid) = sim.cosmos.realm(realm).map(|realm| realm.base_grid) else {
         return fallback;
     };
-    sim.cosmos
-        .topology(grid)
-        .ok()
-        .and_then(|topology| {
-            let probe = Location::new(grid, CellPos::new(0, 0, topology.z_max));
+    let Ok(topology) = sim.cosmos.topology(grid) else {
+        return fallback;
+    };
+    let ground = 0.clamp(topology.z_min, topology.z_max);
+    [ground, topology.z_max]
+        .into_iter()
+        .find_map(|z| {
+            let probe = Location::new(grid, CellPos::new(0, 0, z));
             sim.cosmos.sky(probe).ok().flatten().map(|sky| Day {
                 length: if sky.day > Dur::ZERO {
                     sky.day

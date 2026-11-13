@@ -191,6 +191,8 @@ whole of what a modder writes and reads; section 17 lists it by kind.
 | `stretch` | int ≥ 1, default 8 | How many times `think` the interval stretches to while thoughts change nothing |
 | `wake_clarity` | number ≥ 0, default 1 | How clear a percept (`perceived`'s `clarity`) must be to make it think at once |
 | `go_action` | `action` id | The action a `go`, `keep_near` or `keep_from` step starts, given the cell as its parameter `to`. Required if a goal has such a step |
+| `interact_action` | `action` id, as written | The action it does an interaction with (16 §3.5.1): one with the parameters `target` and `interaction`, as `core:interact` has. With one, a closed door on its way is opened (section 4.1) and its paths count a closed door as passable at the cost of opening it; without, a closed door is a wall to it (decision D-781). Checked where interactions are loaded |
+| `routine` | `routine` id, as written | The routine it keeps (section 10.6): checked where routines are loaded |
 | `hostile_to`, `fear_of` | list of entity tags | Whoever presents one of these, once perceived, is held hostile or feared |
 | `hostile_after`, `fear_after` | list of event types | Whoever the mind makes out as the actor of such an event it perceives is held hostile or feared from then on |
 | `crowd_cost` | metres, default 3 | What a step into a cell where it saw someone in the last five seconds costs it more (section 5.3) |
@@ -199,7 +201,7 @@ whole of what a modder writes and reads; section 17 lists it by kind.
 | `reactions` | list of `action` ids | The reactions it answers a window its character noticed with, in order of preference (section 6.3). Default none: it answers nothing |
 | `doc` | text | What it is |
 
-`routine` and `tactics` are not built.
+`tactics` is not built.
 
 **`goal`** (D-691):
 
@@ -297,7 +299,7 @@ in the mind context with `$about` bound (D-693).
 | `choose` | `purpose`: an action tag; `target`: expression, optional | The first action carrying the tag, in load order, that can start, with `target` as its parameter `target` | As `do`; fails with `ai.no_option` when none can start |
 | `wait` | `time`: seconds; `until`: condition | A wait of `time`, or of the mind's interval | After the wait, or when `until` holds at a thought |
 | `look` | `at`: a cell or an entity; `time`: seconds, default 2 | Turning to face it, and a wait | After the wait |
-| `say` | `text`: a text template; `volume`: number, default 1 | The event `said` | At once |
+| `say` | `text`: a text template; `volume`: number, default 1; `kind`: a `message_kind` id, as written | The event `said`; with `kind`, also a message of that kind to everyone who hears it (15 §11), so that rules listening for `message_heard` answer it: a call for help the watch hears (decision D-784) | At once |
 | `set` | `var`: the variable's name as the simulation keeps it, qualified for a declared one; `value`: expression | A variable of the character's own | At once |
 | `settle` | `true` | Marks `$about` settled | At once |
 | `stance` | `of`: an entity; `toward`: `hostile`, `feared` or `none` | The mind's stance toward what it perceives `of` as | At once |
@@ -317,6 +319,22 @@ done as a player does one, by a `do` step of the action that does
 interactions (in `mods/core`, `core:interact` with `target` and
 `interaction`); a `use` step of its own is not built, nor are `job`,
 `goal`, `follow` and `run`, which wait for jobs and queries.
+
+**Doors on the way** (decision D-781). A step of a `go`, `keep_near` or
+`keep_from` whose action's step is refused because the way is closed
+(`step_refused` with the code `move.closed`, what the player meets as a
+bump) is not given up: at its next thought the mind stops walking and
+starts its `interact_action` with the default interaction of what is
+there that can be done now (the block's, else the fixture's, else the
+floor's: `interaction::bump_default`, what walking into it does for the
+player), and when that action ends begins the step again, planning
+afresh. With nothing there it can do by default (a locked door and no
+key), with no `interact_action`, or after four openings on one step,
+the step fails with `ai.door_shut` (values `entity`, `dir`, `why`: what
+the default there says) and the cell is kept among the mind's **shut
+doors**, at most sixteen, which its paths go round from then on. Every
+door opened is an action and an interaction the player could have
+chosen (invariant N2).
 
 ## 5. Navigation
 
@@ -365,7 +383,11 @@ with each region.
 Paths are searched cell by cell over what the mover believes, through
 `movement::believed_path` (D-574, D-619): the mover's own ways of moving
 and their speeds are its profile; static geometry is common knowledge,
-hidden elements count once noted; doors cost 2 m of walking. A character
+hidden elements count once noted; doors cost 2 m of walking for one
+that can open them: a character with no mind definition, or one whose
+mind names an `interact_action`; a mind that names none takes a closed
+door for a wall, and every mind goes round the doors it found it could
+not open (decision D-781). A character
 whose mind has thought adds, through `ai::MindCosts` (D-695):
 
 - `crowd_cost` metres for a step into a cell where it saw someone in the
@@ -785,6 +807,120 @@ be folded back into its population, leaving what it knew in the local
 knowledge of its home (section 12). A cap per region applies, least
 salient first.
 
+### 10.6 As built (beta)
+
+Built in `clash_sim::agent` (packages E11, L1, L2; decisions D-780 to
+D-789): the part of this section a town needs to look alive.
+
+**Who is an agent.** A settlement's people are **residents** (06 §12.2):
+one record each, keyed on its home and index, with a seed that makes it
+the same person every time it is made. A resident that is not loaded,
+anonymous or notable, keeps an `AgentState`:
+
+| Field | Type | Is |
+|-------|------|----|
+| `at` | `At { loc }` or `Travelling { from, to, since, until }` | Where it is: its own spot at a place, or on the straight line between two, from one tick to another |
+| `doing` | `{ what, since, until? }` | Its routine's `doing` now (`waiting` for one with no routine), since when and until when |
+| `aim` | goal id, or null | The goal it held when stored, if not its routine's. Carried: long goals and cold methods (section 10.3) are not built |
+| `wake` | tick, or null | When it next needs attention: the next part of its day it keeps, or its arrival. Null for one with no routine, which waits where it was |
+
+**Wake-ups** (invariant N7). Every cold resident with a wake-up has one
+entry in one schedule, ordered by tick and key, and the timeline holds
+one wake-up for the earliest (in the `Stepper` domain, told from a
+recipe's by its tag). At a wake-up each resident due is placed again by
+its routine; if that place is loaded it comes into view, else its state
+and its next wake-up are kept. Nothing else is scheduled for it. The
+schedule's ticks are worked out at the rate the realm's clock runs when
+they are: a change of rate is caught up at the next wake-up.
+
+**Leaving view.** When a tract unloads, before the kernel shelves what
+stands there, each resident's individual in it becomes an agent: an
+anonymous one is removed, a notable one stored (`agent_stored`). What
+it was pursuing, if not its routine's goal, is its `aim`.
+
+**Coming into view.** When a tract loads, each cold resident of its
+realm whose place, or either end of whose way, is in it is placed by its
+routine; when a wake-up finds a resident's place loaded, the same. It
+comes into view at the free cell nearest where it is (`SPOT_RADIUS`, six
+cells): a stored one comes back (`agent_loaded`), an anonymous one is
+made again from its seed. Its mind thinks as it enters the world, and
+takes up its routine's goal.
+
+**Routines** (`routine`; section 10.2):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `day` | list of parts | The parts of the day, in order of `from`; the last runs on past midnight into the first |
+| `speed` | metres a second, default 1.2 | How fast it is taken to walk between places while unloaded, over a way 1.3 times the straight line (`TRAVEL_DETOUR`) |
+| `doc` | text | What it is |
+
+| Field of a part | Type | Meaning |
+|-----------------|------|---------|
+| `from` | `"HH:MM"` | When it begins, of a twenty-four hour day scaled to the realm's (section 17) |
+| `at` | a place, or a list of places | Where it is meant to be; of a list, the first that names any place. A place is exactly one of `home: true` (where the settlement put it; for a character that is no resident, its mind's home), `site: id` (a site of its realm by definition) and `site_tag: tag`, with `pick`: `nearest` (to its home, the default), `any` (one drawn from its seed, the same every day) or `all` (every one, nearest first). `role` is carried: the world does not record where a site's marks went, so its anchor stands for every role (D-751) |
+| `doing` | text | What it is doing there, a word content chooses |
+| `goal` | `goal` id | The goal it pursues during the part when loaded: it joins the goals its mind may have and is scored as they are |
+| `within` | metres, default 2 | How close to its place counts as there |
+| `spread` | cells, 0 to 16, default 3 | How far from a site's anchor its own spot there may be, drawn from its seed; a home is exact |
+| `chance` | 0 to 1, default 1 | The share of days it keeps the part, drawn for each character and day from its seed; on a day it does not, the part before runs on |
+| `jitter` | time, default 0 | Up to how much after `from` each character begins it, the same every day, drawn from its seed; less than the time to the next part |
+| `beat` | time, default 0 | For a part naming several places: how long it keeps to each, in turn from the first, a beat between them |
+
+Unloaded, a character is at its place, or, from the start of a part for
+the time it takes to walk there from the place of the part before, on
+the straight line between them. Loaded, its routine reaches its mind
+only through its goals: the part's `goal`, and whatever goals of its
+mind read the properties below, so a disturbance another goal scores
+higher overrides the routine and the routine is taken up again after.
+A loaded character whose place is in a tract that is not loaded does not
+walk out of view toward it: `routine_place` is null, and goals that
+read it are not wanted, until the place loads.
+
+**Properties** of an `entity`, read of oneself in a mind context:
+`routine` (`string?`), `routine_doing` (`string?`), `routine_place`
+(`loc?`: its own spot at the place it keeps to now, its home if the part
+names none that answers; null if it keeps no routine or the place is not
+loaded), `routine_places` (`list<loc>`: every place the part names that
+is loaded), `routine_away` (`bool?`: further from `routine_place` than
+the part's `within`), `resident` (`bool`), `resident_home` (`loc?`),
+`agent_doing` (`string?`: an agent's activity). A resident's `home` is
+its resident home.
+
+**Verbs**: `set_routine { who, routine? }` (a routine in place of its
+mind's; left out, its mind's again; refused with
+`agent.unknown_routine`), `make_anonymous { who }` (06 §12.2).
+
+**Events**: `agent_stored` (`self`; `doing`: string, `aim`: string?),
+`agent_loaded` (`self`; `doing`: string), `became_anonymous` (`self`).
+
+**Reasons**: `agent.not_an_individual` (values `entity`),
+`agent.unknown_routine` (values `routine`).
+
+**The bundled town** (package I10; `mods/core/data/ai/`,
+`routines/`, `town/`). Its people and how each behaves:
+
+| Template | Mind | Routine | A day |
+|----------|------|---------|-------|
+| `person` | `townsperson` | `townsfolk_day` | Up at half past six, working at home from nine, to the market at noon on about one day in four, home in the afternoon, asleep from half past nine. Calls for help and runs from danger |
+| `shopkeeper` | `shopkeeper` | `shopkeeping` | Lives over the shop; keeps it from eight to six, a turn round the market at noon now and then |
+| `watch_guard` | `watchman` | `watch_shift` | From six a beat between the civic places, five minutes at each; the evening at the watch's post; asleep after midnight. Answers a call for help, goes for whoever it sees strike |
+| `brawler` | `brawler` | `carousing` | Asleep till late, at the tavern from seven in the evening until two; fights back, joins fights it sees, and while drinking now and then picks one |
+| `house_dog` | `house_dog` | none | Keeps near the person it is loyal to (the nearest person when it was made), barks at anyone else close by at most once in half a minute, cannot open doors |
+
+`keep_routine` takes anyone who is away from its routine's place there;
+`linger`, `keep_shop`, `stand_post` and `sleep` are what the parts name.
+The townsperson's calls for help are messages of the kind `core:help`,
+which `core:heed_help` makes every member of the watch who hears one
+remember as `core:help_called`, and the watchman's `answer_call` takes
+it there.
+
+**Not built**: long goals and cold methods (section 10.3); folding agents
+into populations and the regional cap (section 10.5); walking out of view
+toward an unloaded place; `day_part_changed`; the effects `set_agent`,
+`make_agent` and `fold_agent` (`make_anonymous` does the last for an
+agent); the `agents` query; the hooks `agent_storing` and
+`agent_loading`. Measured: see section 19.
+
 ## 11. Incidents
 
 ### 11.1 Definition
@@ -1065,6 +1201,23 @@ A realm has a **calendar**: the length of its day and year and the names
 of their parts. `here.realm.time_of_day`, `day`, `season` are read by
 routines, sky light and rules. A realm whose clock runs at another rate
 (03 §3.3) has days to match.
+
+As built (package L1; decision D-782): a realm's day is its sky's (02
+§4.1): its length and the time of day its clock starts at, from the sky
+over storey 0 of its base grid, else at its top; a realm with no sky has
+days of twenty-four hours from midnight. Its clock runs at the realm's
+rate, so a fast clock has fast days. A `calendar` definition, named by
+the realm's `calendar` field, adds names: `parts` (each `{ name, from:
+"HH:MM" }`, in order; before the first, the last runs on), `year` (days,
+0 for none) and `seasons` (each `{ name, from }`, a day of the year from
+0, in order). Properties of a `realm`, all safe for belief:
+`time_of_day` (`real?`, seconds since midnight), `day` (`int?`, from 1 on
+the day its clock began, as 13 §4.3 counts), `day_length` (`real?`,
+seconds), `day_part` (`string?`), `season` (`string?`). The bundled
+`core:common` names night, dawn, morning, noon, afternoon, dusk and
+evening, and a year of four seasons; `core:town` names it. The day's
+length stays the sky's: moving it to the calendar (D-411) would make a
+realm's light and its routines disagree when the two were set apart.
 
 ## 15. Devastation
 

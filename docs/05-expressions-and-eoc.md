@@ -567,7 +567,12 @@ marked, and what is marked is arithmetic on a reference: a subject's
 `kind`; a cell's `x`, `y`, `z`, `grid`, `tract` and `realm`; a tract's
 `x`, `y`, `realm` and `loc`; an element's `layer` and `loc`; `global.now`;
 and the functions `dist`, `dir`, `offset`, `now`, `setting` and
-`has_def`. Everything about an entity is truth, which a mind context
+`has_def`. `dist` and `dir` are safe because in a mind context they are
+their belief forms (decision D-780): a function's registration may name
+a **belief form**, a function taking the context's own character before
+the arguments written, which the compiler calls in its place where only
+belief is read; a mind context with no own character cannot read where
+anything is, and the call is refused there. Everything about an entity is truth, which a mind context
 reads of its own subject and of no other. Everything that reads a cell's
 contents is truth as well, the shape that 02 §23 allows included, and so
 are `los` and `light`: the tag `hidden` cannot be honoured until
@@ -738,7 +743,11 @@ A context also says whether it reads **truth** or **belief**.
 | Belief (the **mind context**) | The character's own state; what it has perceived (15 §7); static geometry (15 §7.3); and functions, properties and queries registered as safe for belief | Goals, methods, tactics and option scoring (09); an action's `requires`, defaults and `check` when they are previewed or gathered as a character's options; ordinary screens (12 §10.4); and every function or rule those reach |
 
 Every entry in the registry (section 5.3) says whether it is safe for
-belief. `dist` and `los` are, between places the character knows. Reading
+belief. `dist` and `los` are, between places the character knows: in a
+mind context `dist` and `dir` are compiled as their **belief forms**,
+`believed_dist` and `believed_dir`, with the context's own character as
+their first argument, so that another entity stands for where that
+character believes it is (decision D-780). Reading
 another entity's state is not; neither are queries over entities, contents
 or other minds. In a mind context an unsafe read is a load error. An
 action's `requires` is tested against truth only when the action is
@@ -2107,8 +2116,10 @@ arguments:
 
 | Function | Gives |
 |----------|-------|
-| `dist(a: any, b: any)` | `real?`: metres between two things, a storey counting three, the shorter way round on wrapped axes. Each is a cell, an element, an entity, an area (its middle) or a site (its anchor). Null if either is nowhere or they are in different grids. Safe for belief |
-| `dir(from: any, to: any)` | `list<int>?`: the signs of the shortest offset east, south and up, each -1, 0 or 1. Safe for belief |
+| `dist(a: any, b: any)` | `real?`: metres between two things, a storey counting three, the shorter way round on wrapped axes. Each is a cell, an element, an entity, an area (its middle) or a site (its anchor). Null if either is nowhere or they are in different grids. Safe for belief: in a mind context it is `believed_dist(self, a, b)` |
+| `dir(from: any, to: any)` | `list<int>?`: the signs of the shortest offset east, south and up, each -1, 0 or 1. Safe for belief: in a mind context it is `believed_dir(self, from, to)` |
+| `believed_dist(viewer: any, a: any, b: any)` | `real?`: `dist` as `viewer` believes it (decision D-780). `viewer` itself, and what it holds or is inside, is where it is; another entity is where `viewer` believes it to be (`believed_loc`), null if it has no idea or `viewer` is no entity; any other place is where it is. Not safe for belief: it reads `viewer`'s beliefs, and a mind context reaches it only through `dist` |
+| `believed_dir(viewer: any, from: any, to: any)` | `list<int>?`: `dir` as `viewer` believes it, as `believed_dist` is `dist` |
 | `offset(at: loc, dx: int, dy: int, dz?: int)` | `loc?`: the cell so many cells east, south and up, wrapped; null beyond an edge. Safe for belief |
 | `los(a: any, b: any)` | `bool?`: whether terrain leaves a clear line, an entity seen from the height it stands at; null if either is nowhere or the line reaches space that is not loaded |
 | `light(at: any)` | `real?`: how bright a cell is now (15 §3.3) |

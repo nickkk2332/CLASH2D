@@ -25,9 +25,9 @@ concern the layered simulation. The two tracks meet at L2.
 | I7 | Collectives, orders, formations | M | I4, I2, S7 | todo |
 | I8 | Warm stepping and bulk exchanges | M | I4, T7, C11 | todo |
 | I9 | Explaining | S | I5, K10 | todo |
-| I10 | Bundled minds | M | I5, I6, C12 | todo |
-| L1 | Cold records, scheduling, calendars | M | E11, K7 | todo |
-| L2 | Routines, long goals, coming and going | L | L1, I4 | todo |
+| I10 | Bundled minds | M | I5, I6, C12 | beta |
+| L1 | Cold records, scheduling, calendars | M | E11, K7 | beta |
+| L2 | Routines, long goals, coming and going | L | L1, I4 | beta |
 | L3 | Incidents | L | L2, W17 | todo |
 | L4 | Knowledge stores and spreading | M | L1, S8 | todo |
 | L5 | Populations, stocks, shipments, services | M | L1, G4, W21 | todo |
@@ -271,6 +271,18 @@ Done when
   a day and through a disturbance, by scripted checks.
 - Removing `core` leaves the engine able to run minds defined otherwise.
 
+Beta (decisions D-784, D-786): in `mods/core/data/ai/`, `routines/` and
+`town/`, a townsperson keeping `townsfolk_day`, a shopkeeper, a watchman,
+a brawler, a house dog, the trades' people of the furnished town, and
+the goals of a day (`keep_routine`, `linger`, `keep_shop`, `stand_post`,
+`sleep`, `answer_call`, `pick_fight`, `follow_owner`,
+`bark_at_stranger`); the settlement's data gives them to its residents
+by role. A day and a disturbance in the town are checked in
+`crates/clash-save/tests/town_life.rs` and the test scripts
+`town/routine_day` and `town/town_disturbance`. Stubbed: tactics (none
+of the minds has any), the worker and the predator, the "twice running
+from different seeds" scripts for each mind.
+
 ## Layered simulation
 
 ### L1 — Cold records, scheduling, calendars
@@ -285,6 +297,13 @@ Done when
 - Ten thousand idle agents schedule nothing beyond their next wake-up
   (invariant N7).
 - Time of day follows the realm's clock rate.
+
+Beta (decisions D-782, D-785), in `clash_sim::agent`: `AgentState`, one
+schedule and one timeline wake-up for every cold resident, the
+`calendar` type and the realm's `time_of_day`, `day`, `day_length`,
+`day_part` and `season`; tested in `crates/clash-sim/tests/agents.rs`.
+Stubbed: population counts, site and region statistics (a town's
+residents are its population).
 
 ### L2 — Routines, long goals, coming and going
 
@@ -303,6 +322,16 @@ Done when
   is still pursuing as an agent, and resumes on loading.
 - A notable individual is in exactly one form at all times
   (invariant N4).
+
+Beta (decisions D-781, D-786, D-787): the `routine` type with places by
+role, chance, jitter, beats and travel time; routine wake-ups; a loaded
+resident's goal from its routine, its doors opened on the way; an
+unloaded one placed by its routine when its tract loads, at its place or
+on the street between; a disturbance overriding the routine through the
+mind's goals. `routine_day` holds in `crates/clash-save/tests/town_life.rs`
+and as a test script. Stubbed: cold methods and long goals,
+`pursuit_continues` (an agent's `aim` is kept and not acted on), folding
+and the regional cap, walking out of view toward an unloaded place.
 
 ### L3 — Incidents
 

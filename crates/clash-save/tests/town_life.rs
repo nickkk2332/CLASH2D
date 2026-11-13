@@ -71,7 +71,8 @@ impl Town {
 
     /// Brings the player back to the town square, seeing and hearing.
     fn come_back(&mut self) {
-        self.ok("session @self @c:2007,994,0");
+        let square = square(self.sim());
+        self.ok(&format!("session @self {}", at(square)));
         self.ok("attach_sense @self core:human_sight");
         self.ok("attach_sense @self core:human_hearing");
     }
@@ -89,15 +90,6 @@ impl Town {
         let ahead = (want - now).rem_euclid(86_400);
         if ahead > 0 {
             self.ok(&format!("advance {ahead}s"));
-        }
-    }
-
-    /// The player's character.
-    fn player(&mut self) -> EntityId {
-        let value = self.eval("@self");
-        match self.sim().subject_of(&value) {
-            Some(Subject::Entity(entity)) => entity,
-            other => panic!("`@self` is {other:?}"),
         }
     }
 }
@@ -535,120 +527,299 @@ fn the_same_people_come_back_when_their_tracts_load_again() {
     let _ = marked_key;
 }
 
-#[test]
-fn the_towns_residents_are_made_as_its_tracts_load() {
-    let town = Town::begin(7, 0);
-    let sim = town.sim();
-    let residents: Vec<_> = sim.agents().residents().collect();
+/// Where the residents in the world are, by what their routines have
+/// them doing: for each `doing`, how many are at its place, and how many
+/// are away from it (on the street between, or not yet there). Dogs,
+/// with no routine, are left out.
+fn by_doing(sim: &Sim) -> std::collections::BTreeMap<String, (usize, usize)> {
     let people = in_world(sim);
-    eprintln!(
-        "{} residents, {} in the world",
-        residents.len(),
-        people.len()
+    let ids: Vec<EntityId> = people.iter().map(|(_, id)| *id).collect();
+    let doing = of_each(sim, "self.routine_doing", &ids);
+    let away = of_each(sim, "self.routine_away", &ids);
+    let mut out: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+    for (doing, away) in doing.iter().zip(&away) {
+        let Some(doing) = doing.as_str() else {
+            continue;
+        };
+        let entry = out.entry(doing.to_owned()).or_default();
+        if *away == Value::Bool(true) {
+            entry.1 += 1;
+        } else {
+            entry.0 += 1;
+        }
+    }
+    out
+}
+
+/// The residents in the world doing something, with where they stand.
+fn doing(sim: &Sim, what: &str) -> Vec<(EntityId, Location)> {
+    let people = in_world(sim);
+    let ids: Vec<EntityId> = people.iter().map(|(_, id)| *id).collect();
+    let doing = of_each(sim, "self.routine_doing", &ids);
+    ids.into_iter()
+        .zip(doing)
+        .filter(|(_, doing)| doing.as_str() == Some(what))
+        .filter_map(|(id, _)| Some((id, sim.truth().location(id)?)))
+        .collect()
+}
+
+/// The anchor of the town square.
+fn square(sim: &Sim) -> Location {
+    let site = sim
+        .truth()
+        .cosmos()
+        .sites()
+        .find(|site| site.name == "Town square")
+        .expect("the town has a square");
+    let grid = sim.truth().cosmos().realm(site.realm).unwrap().base_grid;
+    Location::new(grid, site.anchor)
+}
+
+#[test]
+fn routine_day_people_are_where_their_routines_put_them_at_every_hour() {
+    // L2's `routine_day`: with the town unloaded, time passes for its
+    // residents as agents; when it loads again each is found at the
+    // place its routine puts it, or on the street between.
+    let mut town = Town::begin(7, 1);
+    let total = in_world(town.sim()).len();
+
+    // Dawn: everyone who keeps a routine is asleep at home.
+    town.go_away();
+    town.until("05:30");
+    town.come_back();
+    let dawn = by_doing(town.sim());
+    eprintln!("05:30 {dawn:?}");
+    let asleep = dawn.get("asleep").copied().unwrap_or_default();
+    assert!(asleep.0 > total / 2, "most are asleep at home: {dawn:?}");
+    assert_eq!(asleep.1, 0, "nobody asleep is away from bed: {dawn:?}");
+    assert_eq!(
+        dawn.len(),
+        1,
+        "at half past five everyone is asleep: {dawn:?}"
+    );
+
+    // Noon: some at the market, some still on their way, the rest at
+    // work or keeping shop; the watch on its round.
+    town.go_away();
+    town.until("12:40");
+    town.come_back();
+    let noon = by_doing(town.sim());
+    eprintln!("12:40 {noon:?}");
+    let market = noon.get("at_market").copied().unwrap_or_default();
+    assert!(market.0 > 10, "people at the market: {noon:?}");
+    assert!(market.1 > 0, "people on their way to it: {noon:?}");
+    assert!(
+        noon.get("working").is_some_and(|(at, _)| *at > total / 4),
+        "{noon:?}"
     );
     assert!(
-        residents.len() > 300,
-        "the town has its people: {}",
-        residents.len()
+        noon.get("keeping_shop").is_some_and(|(at, _)| *at > 0),
+        "{noon:?}"
     );
-    for site in sim.truth().cosmos().sites() {
-        eprintln!(
-            "site {} {:?} anchor {:?} tags {:?}",
-            site.name, site.id, site.anchor, site.tags
+    assert!(
+        noon.get("on_patrol")
+            .is_some_and(|(at, away)| at + away > 0),
+        "{noon:?}"
+    );
+    let centre = square(town.sim());
+    for (id, loc) in doing(town.sim(), "at_market") {
+        let away = of_each(town.sim(), "self.routine_away", &[id])[0] == Value::Bool(true);
+        if !away {
+            assert!(metres(loc, centre) < 16.0, "{id} at the market: {loc:?}");
+        }
+    }
+
+    // Dusk: home again, the market empty.
+    town.go_away();
+    town.until("18:45");
+    town.come_back();
+    let dusk = by_doing(town.sim());
+    eprintln!("18:45 {dusk:?}");
+    assert!(!dusk.contains_key("at_market"), "{dusk:?}");
+    let home = dusk.get("at_home").copied().unwrap_or_default();
+    assert!(home.0 > total / 2 && home.1 == 0, "{dusk:?}");
+
+    // Midnight: asleep, but for the drinkers at the tavern (the square,
+    // in a town with no tavern).
+    town.go_away();
+    town.until("00:00");
+    town.come_back();
+    let night = by_doing(town.sim());
+    eprintln!("00:00 {night:?}");
+    assert!(
+        night.get("asleep").is_some_and(|(at, _)| *at > total / 2),
+        "{night:?}"
+    );
+    for (id, loc) in doing(town.sim(), "drinking") {
+        assert!(
+            metres(loc, centre) < 20.0,
+            "{id} drinks at the square: {loc:?}"
         );
     }
-    let mut shown = 0;
-    for (key, entity) in &people {
-        let grid = sim.truth().location(*entity).unwrap().grid;
-        let home = Location::new(grid, key.home);
-        let mut doors = Vec::new();
-        for dy in -6..=6 {
-            for dx in -6..=6 {
-                let loc = Location::new(
-                    grid,
-                    CellPos::new(key.home.x + dx, key.home.y + dy, key.home.z),
-                );
-                let text = block_text(sim, loc);
-                if text.contains("door") {
-                    doors.push((dx, dy, text));
-                }
-            }
-        }
-        let resident = sim.agents().resident(key).unwrap();
-        if shown < 25 {
-            eprintln!(
-                "{entity} {} home {:?} at {:?} doors {:?}",
-                resident.what,
-                home.cell,
-                sim.truth().location(*entity).map(|l| l.cell),
-                doors
-            );
-            shown += 1;
-        }
-    }
-    let _ = (
-        at,
-        block_text,
-        Place::Stored,
-        CellPos::new(0, 0, 0),
-        Subject::Global,
-        Bound::new(),
-        Context::new(),
-        Type::Any,
-    );
 }
 
 #[test]
-#[ignore]
-fn debug_far() {
+fn at_the_hour_a_loaded_resident_takes_its_goal_from_its_routine_and_walks() {
+    // A resident in view keeps its routine through its mind: at noon
+    // those whose routine says market take up `keep_routine` and walk.
     let mut town = Town::begin(7, 1);
-    town.ok("session @self @c:600,600,0");
-    town.ok("detach_sense @self core:human_sight");
-    town.ok("detach_sense @self core:human_hearing");
-    let before = town.sim().steps();
-    eprintln!(
-        "scheduled {} wake {:?} entities {}",
-        town.sim().agents().scheduled(),
-        town.sim().agents().timeline_wake(),
-        town.sim().truth().entities().iter().count()
+    town.go_away();
+    town.until("12:20");
+    town.come_back();
+    // Those on their way to market as they come into view.
+    let goers: Vec<(EntityId, Location)> = doing(town.sim(), "at_market")
+        .into_iter()
+        .filter(|(id, _)| of_each(town.sim(), "self.routine_away", &[*id])[0] == Value::Bool(true))
+        .collect();
+    assert!(
+        !goers.is_empty(),
+        "someone is on the way to market at twenty past twelve"
     );
-    let started = std::time::Instant::now();
-    town.ok("advance 60s");
+    let centre = square(town.sim());
+    town.ok("advance 20s");
+    let ids: Vec<EntityId> = goers.iter().map(|(id, _)| *id).collect();
+    let goals = of_each(town.sim(), "self.goal", &ids);
+    let walking: Vec<EntityId> = ids
+        .iter()
+        .zip(&goals)
+        .filter(|(_, goal)| goal.as_str() == Some("core:keep_routine"))
+        .map(|(id, _)| *id)
+        .collect();
+    let nearer = goers
+        .iter()
+        .filter(|(id, was)| {
+            town.sim()
+                .truth()
+                .location(*id)
+                .is_some_and(|loc| metres(loc, centre) + 3.0 < metres(*was, centre))
+        })
+        .count();
     eprintln!(
-        "60 s: {} wake-ups in {:?}",
-        town.sim().steps() - before,
-        started.elapsed()
+        "{} going to market: {} walking, {} nearer",
+        ids.len(),
+        walking.len(),
+        nearer
     );
-    let mut kinds: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-    for record in town.session.records() {
-        *kinds.entry(record.name.clone()).or_default() += 1;
-    }
-    eprintln!("{kinds:?}");
+    assert!(
+        !walking.is_empty(),
+        "they take up `keep_routine`: {goals:?}"
+    );
+    assert!(nearer > 0, "and walk on toward the market");
 }
 
 #[test]
-#[ignore]
-fn debug_steps() {
+fn a_brawl_in_the_market_draws_the_watch_which_arrives_and_acts() {
+    // L2 and I10, test script `town_disturbance`: two brawlers come to
+    // blows in the market; whoever sees it runs and calls for help; the
+    // watch hears, comes, and goes for whoever it sees strike.
     let mut town = Town::begin(7, 1);
-    town.ok("set_routine @e:229 core:watch_shift");
-    town.ok("advance 3s");
-    for record in town.session.records() {
-        let interesting = [
-            "step_failed",
-            "goal_failed",
-            "path_failed",
-            "goal_adopted",
-            "action_refused",
-            "step_refused",
-        ];
-        if interesting.contains(&record.name.as_str()) {
-            let mine = record.fields.iter().any(|(name, value)| {
-                name == "self"
-                    && town.sim().subject_of(value) == Some(Subject::Entity(EntityId::new(229, 0)))
+    town.go_away();
+    town.until("12:50");
+    town.come_back();
+    let centre = square(town.sim());
+    let spot = |dx: i32| {
+        Location::new(
+            centre.grid,
+            CellPos::new(centre.cell.x + 2 + dx, centre.cell.y + 3, centre.cell.z),
+        )
+    };
+    let watch: Vec<EntityId> = in_world(town.sim())
+        .into_iter()
+        .filter(|(key, _)| town.sim().agents().resident(key).unwrap().what == "watch_guard")
+        .map(|(_, id)| id)
+        .collect();
+    assert!(!watch.is_empty(), "the town has a watch");
+    let before: std::collections::BTreeSet<EntityId> = town
+        .sim()
+        .truth()
+        .entities()
+        .iter()
+        .map(clash_sim::KernelEntity::id)
+        .collect();
+    for dx in [0, 1] {
+        town.ok(&format!(
+            "as {} do {{ \"spawn\": {{ \"template\": \"core:brawler\", \"at\": \"self\" }} }}",
+            at(spot(dx))
+        ));
+    }
+    let made: Vec<EntityId> = town
+        .sim()
+        .truth()
+        .entities()
+        .iter()
+        .map(clash_sim::KernelEntity::id)
+        .filter(|id| !before.contains(id))
+        .collect();
+    assert_eq!(made.len(), 2, "two brawlers: {made:?}");
+    town.ok(&format!(
+        "set_stance @e:{} @e:{} hostile",
+        made[0].slot(),
+        made[1].slot()
+    ));
+    let mut called = false;
+    let mut answered = false;
+    let mut struck_by_watch = false;
+    for _ in 0..90 {
+        town.ok("advance 1s");
+        let records = town.session.records();
+        let field = |record: &clash_sim::console::Record, name: &str| {
+            record
+                .fields
+                .iter()
+                .find(|(have, _)| have == name)
+                .map(|(_, value)| value.clone())
+        };
+        let entity = |value: Option<Value>| match value.and_then(|v| town.sim().subject_of(&v)) {
+            Some(Subject::Entity(id)) => Some(id),
+            _ => None,
+        };
+        called = called
+            || records.iter().any(|record| {
+                record.name == "message_heard"
+                    && field(record, "kind") == Some(Value::from("core:help"))
             });
-            if mine {
-                eprintln!("{} {:?}", record.name, record.fields);
-            }
+        answered = answered
+            || records.iter().any(|record| {
+                record.name == "goal_adopted"
+                    && watch.contains(&entity(field(record, "self")).unwrap_or(EntityId::new(0, 0)))
+                    && matches!(
+                        field(record, "goal").as_ref().and_then(Value::as_str),
+                        Some("core:answer_call" | "core:confront")
+                    )
+            });
+        struck_by_watch = records.iter().any(|record| {
+            record.name == "hit_landed"
+                && entity(field(record, "actor")).is_some_and(|actor| watch.contains(&actor))
+        });
+        if struck_by_watch {
+            break;
         }
+    }
+    eprintln!("called {called}, answered {answered}, struck {struck_by_watch}");
+    assert!(
+        called,
+        "someone called for help, as a message the watch hears"
+    );
+    assert!(answered, "the watch took it up");
+    assert!(struck_by_watch, "a watchman arrived and struck");
+}
+
+#[test]
+fn the_towns_residents_are_made_as_its_tracts_load() {
+    // Gap 2 of the town-life brief: the people the settlement asks for
+    // become entities when the town's tracts load, each a resident.
+    let town = Town::begin(7, 0);
+    let sim = town.sim();
+    let residents = sim.agents().residents().count();
+    let people = in_world(sim);
+    assert!(residents > 300, "the town has its people: {residents}");
+    assert_eq!(people.len(), residents, "every one of them is in the world");
+    let made: std::collections::BTreeSet<&str> = sim
+        .agents()
+        .residents()
+        .map(|(_, resident)| resident.what.as_str())
+        .collect();
+    for what in ["person", "shopkeeper", "watch_guard", "house_dog"] {
+        assert!(made.contains(what), "{what} among {made:?}");
     }
 }
