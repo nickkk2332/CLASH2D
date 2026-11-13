@@ -323,7 +323,8 @@ fn the_play_screen_shows_the_map_the_log_and_a_status_column_with_slots() {
     let outcomes = run.press(&["s"]);
     assert_eq!(submitted(&outcomes).name, "shout");
 
-    // The bundled screens are placeholders: an empty titled screen.
+    // The bundled screens open, titled, and Esc leaves each (the map
+    // gives the camera back as it goes).
     for (key, screen, title) in [
         ("i", "ui:inventory", "Inventory"),
         ("c", "ui:condition", "Condition"),
@@ -335,8 +336,8 @@ fn the_play_screen_shows_the_map_the_log_and_a_status_column_with_slots() {
         assert_eq!(outcomes, [UiOutcome::Opened(screen.to_owned())]);
         assert!(run.shown().row_text(0).contains(title));
         assert_eq!(
-            run.press(&["escape"]),
-            [UiOutcome::Closed(screen.to_owned())]
+            run.press(&["escape"]).last(),
+            Some(&UiOutcome::Closed(screen.to_owned()))
         );
     }
     assert_eq!(run.top(), "ui:play");
@@ -815,6 +816,7 @@ fn reaction(run: &Run) -> PendingDecision {
             ],
             time_left: 0.25,
             time_total: 0.4,
+            what: "The fixture: Punch".to_owned(),
         },
     }
 }
@@ -831,7 +833,14 @@ fn a_reaction_prompt_appears_for_a_pending_decision_and_the_response_is_submitte
     );
     assert_eq!(run.scene.decision(), Some(&reaction(&run)));
     let text = run.shown().text();
-    assert!(text.contains("Mara can react."), "{text}");
+    assert!(
+        text.contains("Mara can react, with 0.2 s to spare."),
+        "{text}"
+    );
+    assert!(
+        text.contains("The fixture: Punch"),
+        "what is happening: {text}"
+    );
     assert!(text.contains("Parry (too late)"), "{text}");
     assert_golden(golden("reaction_prompt"), run.shown());
     // It is shown once, however many passes go by.

@@ -223,8 +223,15 @@ option }`, which the choice prompt submits, is `Choose`. `react {
 entity, window, action, params }` and `pass { entity, window }`, which
 the reaction prompt submits, are `React` and `Pass` (03 §7.3); the
 decision behind the prompt is the simulation's `Reaction` decision,
-handed to the scene with its options and the time left and in all, in
-the character's own time (decision D-717). A `run` of a rule is
+handed to the scene with its options, the time left and in all, in
+the character's own time (decision D-717), and what is happening as the
+character perceives it: who does what, `The brute: Punch` (decision
+D-798). `use_ability { ability, action?, params? }`, which the
+abilities screen and the quick slots submit, is `UseAbility` (the
+ability by its id or qualified id, the grant's action by its id or
+name); `set_mode { ability, mode, on }` is `SetMode` (08 §5, decision
+D-795); and `cancel` with no `action` cancels the character's newest
+action, which lets a held phase go. A `run` of a rule is
 refused with the reason until the `Ui` command is built. A refusal is the simulation's
 reason, written in the log; walking into a shut door is the one
 refusal the loop answers itself (section 3.7). Tools and tests hand the
@@ -462,6 +469,23 @@ step's: walking into a locked door without its key says "It does not
 open. It is locked, and you have no key.". The offer `it` is a map
 with the fields of a row of `offers_near` (below), its `where` the
 direction walked.
+
+**Walking into someone** (decision D-790). A step toward a creature the
+party sees standing that way (the view of the last batch: never what it
+does not perceive) is not submitted: the loop offers to strike it, by
+the preference whose bare name is `bump_attack`:
+
+| `bump_attack` | Walking into someone |
+|---------------|----------------------|
+| `hostile` (the default, or no such preference) | One the character holds hostile or fears (`hostile`, `fears`, 09 §3.4) is struck at once with the control named `attack_bump`; anyone else is asked about first with the control named `attack_bump_ask` |
+| `always` | Anyone is struck at once |
+| `ask` | Anyone is asked about first |
+| `never` | The step is submitted as any other, and the simulation refuses it when it is taken |
+
+The controls are given `it`, a map of `target` (the creature as the
+simulation's value for it), `where` (the direction walked) and
+`hostile`. The `ui` mod's start the first blow that can be made at the
+target (`view.actions_with('strike', it.target)`, section 9.3).
 
 **Using what is near.** The control `interact`, on `e` in play, opens
 `ui:interact`: a list of the property `view.offers_near` (16 §3.5.1),
@@ -900,9 +924,12 @@ theme that leaves one out gets the default.
 | `backdrop` | Where a view has looked down `look_down` storeys of open cells and found nothing. The stratum's backdrop, once `sky` definitions (02 §23) supply one. | A space |
 | `section_floor` | A floor in a section view. Only its character is used. | `_` |
 | `line` | A cell between the followed character and the cursor, while something is aimed | `*` |
+| `marker` | A pin: where a marker of the journal is, as the character last perceived its target (`WorldView::set_pins`, decision D-796) | `X`, bold |
 
-And with the theme style `cursor` (reverse unless given) and the theme
-colour `overlay_light` (yellow unless given).
+And with the theme style `cursor` (reverse unless given), the theme
+style `target` for the cell of the creature selected as the target
+(`WorldView::set_marked`; underlined and bold unless given, decision
+D-793) and the theme colour `overlay_light` (yellow unless given).
 
 ## 7. Playback
 
@@ -1221,7 +1248,8 @@ screen see truth. The `ui` mod uses three more:
 |---------|---------|---------------|
 | `menu` | Every screen that names no other | The toolkit's, and `done`, which ends a list in a picker |
 | `play` | The play screen | Controls |
-| `targeting` | Look mode and the pickers that move a cursor or take a direction | The ten directions (`north` to `north_west`, `up`, `down`), `next_target`, `prev_target`, `zoom_in` and `zoom_out`, which those screens bind in their `keys` |
+| `targeting` | Look mode, the map and the pickers that move a cursor or take a direction | The ten directions (`north` to `north_west`, `up`, `down`), `next_target`, `prev_target`, `zoom_in` and `zoom_out`, which those screens bind in their `keys` |
+| `abilities` | The abilities screen | `bind_1` to `bind_9`, which put the use selected on a quick slot |
 
 A **control** says what a name does:
 
@@ -1316,7 +1344,44 @@ in its list do not run. They run once the command has been accepted.
 
 Where the action is written `{ "pick": "…" }`, an expression giving a
 list of actions (ids, or maps with `value` and `label`), the list picker
-asks which before anything else.
+asks which before anything else. Where it is written `{ "first": "…" }`
+the first entry that can be done is taken without asking. An entry that
+is a map may say more of itself (decision D-792): `available`, false
+for one that cannot be done now, which the list picker shows greyed
+with `why` and which is refused with that reason when chosen (`first`
+passes it over, and is refused with the first entry's `why` when none
+can be done); `ability`, the ability whose grant starts the action, so
+that the command is `use_ability` with the ability, the action and the
+parameters asked for; and `given`, the names of the parameters the grant
+supplies, which are neither asked for nor sent. The list picker is
+opened with every field of each entry beside `label`, `value` and
+`chosen`.
+
+**Values given.** The effect's `with` gives values for parameters by
+name, worked out where the effect runs, before anything is asked: with
+`"needed"` a parameter given a value is settled and not asked for; with
+`"all"` its picker is filled in with it. A value that comes to null is
+as if it were not given, and a name the action has no parameter or role
+of is passed over. So one control can strike the target selected in
+play, or ask for one when none is.
+
+**What a character could do** (decision D-791). `view.actions_with(tag,
+target?)` lists the actions of the loaded mods that carry a tag, as the
+character may know of them: each a map with `value` (the action's id),
+`label` and `name` (what a reader calls it), `id` (its qualified id),
+`available` and `why`. Whether one could start is what can be said
+before it is started, changing nothing (`clash_sim::offer::could_start`):
+the character is in the world and its life lets it act; the
+parameters not given take their defaults in its mind, without the random
+streams; its `requires`, with its `fail_text`, once every parameter
+without a default is given (`target` fills one of that name); every
+attack's `with` finds its surface on the character, a part that answers
+or something in hand with the tag (07 §3.1), and else says what the blow
+needs; and the character has the slots of each channel it uses.
+Footing, slots other actions hold and hooks are the start's to say. Those
+that could start come first, then those that strike with something held,
+then those that take fewer slots, then by qualified id: the quick blow
+is the lightest that can be made.
 
 **Which picker.** The `act` effect's `pick` names the picker for a
 parameter. Without it the parameter's type does:
@@ -1341,10 +1406,15 @@ for `route`, the fallback of the table is used.
 
 **What may be chosen.** The effect's `from` gives, for a parameter, an
 expression whose list is what may be chosen. Without it the simulation
-is asked what the acting character believes could be chosen. Without
+is asked what the acting character believes could be chosen
+(`SceneHost::candidates`, with the values settled before it). Without
 either, an entity picker offers what the view model holds on the viewed
 grid, nearest first, and a list picker is empty. Nothing is offered that
-the party does not perceive.
+the party does not perceive. The application answers for a parameter of
+the kind `part` (07 §4.2, decision D-794): the parts on the outside of
+the creature settled before it, while the character perceives it, each
+by its name in the body, after a first row, `wherever it lands`, that
+leaves the part to the body.
 
 **What a picker is given and how it answers.** A picker is opened with
 the parameters below, of which it declares those it has a use for. If
@@ -1388,7 +1458,9 @@ A click on a `map_view` **picks** the cell under the pointer, unless a
 free cursor is on show somewhere else: then the first click moves the
 cursor there, and a click on the cursor picks. Picking runs the view's
 `on_pick`, or, for a view with none, the control named `click`. A click
-with the second button runs the control named `click_second`. `accept`,
+with the second button runs the control named `click_second`; the `ui`
+mod's opens the screen of the role `context_menu` with the place, which
+offers what can be done with it (section 10.7). `accept`,
 while a map view with an `on_pick` has the focus, picks the cell under
 the cursor. In all of them `it` is the place: a map with `cell`, the
 cell as the simulation's value for it; `entity`, the perceived thing
@@ -1408,7 +1480,7 @@ its options and a bar showing time remaining, or the choice screen for
 | Kind | Role of its screen | The screen is given | The answer becomes |
 |------|--------------------|---------------------|--------------------|
 | Free | `decision.free`: the play screen, opened if it is not open | Nothing | Whatever the player does next |
-| Reaction | `decision.reaction` | `who`; `options`, a list of maps with `label`, `value` (the option's number, from 0), `action` and `late` (it would not be ready before the window closes, 03 §7.3); `time_left` and `time_total`, in seconds of the character's own time | `React` with the chosen action and its parameters, or `Pass` |
+| Reaction | `decision.reaction` | `who`; `what`, what is happening as the character perceives it (`The brute: Punch`); `options`, a list of maps with `label`, `value` (the option's number, from 0), `action` and `late` (it would not be ready before the window closes, 03 §7.3); `time_left` and `time_total`, in seconds of the character's own time | `React` with the chosen action and its parameters, or `Pass` |
 | Choice | `decision.choice` | `who`; `prompt`; `options`, a list of maps with `label` and `value` | `Choose` with the option's number |
 
 A prompt answers with the `answer` effect: the option's number. A
@@ -1744,6 +1816,8 @@ properties, all safe for belief:
 | `creation` | `any` | The character being made (06 §10.3, section 3.4): null while no creation session is in progress, else the map `CreationSession::to_value` gives (`templates`; `choices`, each a map of `key`, `name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`, `max`, `max_length`, `options` with `id`, `name`, `cost` and `chosen`, `parts`, `value` and `by_default`; `complete`; `problem`) with `template`, the first template's qualified id, `name`, `seed`, and `finished`, whether `new_game` will make this character. |
 | `templates` | `list<app_entry>` | The templates a character may be made from: each by its qualified `id`, its `name` and, as its `description`, its `kind` |
 | `keys(context)` | `list<map>` | What the keymap in force binds in a context (section 9.2): one map for each name a key there is given, in order of what it is called, with `name`; `label`, the `name` of the control of that name, or else the name; `doc`, the control's `doc`, or empty; and `keys`, every key given that name as a keymap writes it, joined by commas |
+| `controls(context?)` | `list<map>` | Every control the loaded mods define, bound or not, in order of what it is called (decision D-797): one map for each with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, or empty; and `keys`, every key the keymap in force gives it in the context (left out, `play`), joined by commas, or empty |
+| `target` | `any` | The creature selected as the target in play (the `camera` effect's `target`), while the party perceives it; null otherwise. Read of it only what may be read of anyone the party perceives (decision D-793). |
 | `size` | `list<int>` | The grid, as `[columns, rows]` |
 | `can_save`, `can_load` | `bool` | Whether the scenario's saving policy allows it now |
 
@@ -1859,11 +1933,11 @@ screen's bindings (section 10.4): a text is written `"'like this'"`.
 | `confirm` | `"text"`, or an object | `text`: the question. `yes`, `no`: what the two answers are called. |
 | `pick` | An object | `from`: an expression giving the list to choose from. `item`: how an entry is shown, a text over the entry as `it`. `into`: the screen variable or preference the choice is stored in. `title`. |
 | `answer` | A value | The answer: for a `confirm`, true to go on; for a `pick`, the choice, or null for none |
-| `act` | An object | `action`: the action's id, or `{ "pick": "…" }`, an expression giving the actions to choose from. `params`: a value for each parameter by name, or `"needed"` or `"all"` (section 9.3). With `"needed"` or `"all"`: `pick`, for a parameter by name, the picker that asks for it; and `from`, for a parameter by name, an expression giving the values it may be chosen from. |
+| `act` | An object | `action`: the action's id; `{ "pick": "…" }`, an expression giving the actions to choose from; or `{ "first": "…" }`, the same list, of which the first that can be done is taken (section 9.3). `params`: a value for each parameter by name, or `"needed"` or `"all"` (section 9.3). With `"needed"` or `"all"`: `pick`, for a parameter by name, the picker that asks for it; `from`, for a parameter by name, an expression giving the values it may be chosen from; and `with`, for a parameter by name, a value it is given before anything is asked. |
 | `command` | `"name"`, or an object | `name`: the command. `args`: its arguments by name. |
 | `run` | `"rule"`, or an object | `rule`: the rule's id. `args`: its arguments by name. |
 | `app` | `"service"`, or an object with one key, the service, holding its arguments | See below |
-| `camera` | `"release"`, `"turn"`, or an object | `move`: `[east, south]`, the cells the free cursor moves by; it starts at the followed character. `storey`: how many storeys the view shifts up, or down if negative. `zoom`: how many factors it zooms out, or in if negative. `cycle`: `1` or `-1`, the cursor goes to the next or the previous thing that could be chosen: a picker's candidates, or else what the party perceives on the viewed storey, nearest first. `release`: `true` drops the cursor and the storey shift. `turn`: `true` turns the line a section view cuts along. All whole numbers, written outright. |
+| `camera` | `"release"`, `"turn"`, or an object | `move`: `[east, south]`, the cells the free cursor moves by; it starts at the followed character. `storey`: how many storeys the view shifts up, or down if negative. `zoom`: how many factors it zooms out, or in if negative. `cycle`: `1` or `-1`, the cursor goes to the next or the previous thing that could be chosen: a picker's candidates, or else what the party perceives on the viewed storey, nearest first. `release`: `true` drops the cursor and the storey shift. `turn`: `true` turns the line a section view cuts along. `target`: `1` or `-1`, the next or the previous creature the party perceives on the followed character's storey, nearest first and never the party's own, is selected as the target (`app.target`); with none in sight it fails, saying so. `untarget`: `true` drops the target. All whole numbers, written outright. |
 | `picker` | `"done"`, `"undo"`, or `{ "toggle": value }` | `done` ends the list a picker is building, and is refused while it has fewer than its least count. `undo` takes the last entry back. `toggle` adds a value, or takes it out if it is there. |
 
 | Service | Arguments |
@@ -2084,14 +2158,75 @@ control. The `ui` mod's controls are the ten directions (`north` to
 `dir`; `wait`, the command of that name for one second; `look`, which
 opens look mode (`ui:look`); `inventory` and `condition`, which open
 `ui:inventory` and `ui:condition`; `abilities` and `map`, which open
-screens that are empty and titled until they are built; `journal`,
-which opens `ui:journal`;
+`ui:abilities` and `ui:map`; `journal`, which opens `ui:journal`;
 `help`, which opens `ui:help`; `interact`, on `e`, which opens
 `ui:interact` (section 3.7); `options`, which opens `ui:options`;
 `pause`, which opens `ui:pause`; `omniscient`, the development
-profile's view of the truth (section 3.2); and `click` and
-`click_second` (section 9.4). Every screen they open is left by Esc,
-back to play.
+profile's view of the truth (section 3.2); `click` and
+`click_second` (section 9.4); the fighting controls, the quick slots
+and `talk` below. Every screen they open is left by Esc, back to play.
+The status column names the target, while there is one
+(`app.target`), and its line of keys names Tab, `f` and `s`.
+
+**Fighting** is in `mods/ui/data/fighting.json` (07; decisions D-790 to
+D-794). Tab and shift+Tab (`next_target`, `prev_target`) select the
+next or the previous creature the character sees as the target, nearest
+first, with the `camera` effect's `target`; the map draws its cell in
+the theme's `target` style. What can be done is read from the loaded
+mods' actions by their tags (`view.actions_with`, section 9.3): `strike`
+for a blow and `shot` for a shot. Each is bound twice, quick and
+precise (D-079): `attack` (`f`) takes the first blow that can be made at
+the target with the action's defaults, and `attack_precise` (shift+f)
+lists the blows, greyed with their reasons where they cannot be made,
+and asks for every parameter: the target, filled in with the one
+selected; the part, from the parts the character sees on the target; the
+effort. `shoot` (`s`) and `aim` (shift+s) do the same with shots: the
+place aimed at is filled in with where the character believes the
+target is, the line drawn to it, and an empty weapon's shot is refused
+with the action's own reason. `reload` (`r`) and `throw` (`t`) name
+those actions bare, as `step` is named, and `stop` (`z`) cancels the
+character's newest action, which lets a held draw go. With no target,
+the quick controls ask for one. `attack_bump` and `attack_bump_ask` are
+what walking into someone runs, by the preference `bump_attack`
+(section 3.7), which the options screen sets.
+
+**Abilities** (`ui:abilities`, `mods/ui/data/abilities.json`; 08 §5;
+decision D-795) list `view.ability_uses`, one row for each use of each
+ability the character holds (`clash_sim::ability::options`), with its
+rank, cost, state (`ready`, `cooling` with the seconds left, `dormant`,
+`unavailable`) and the quick slot it is on, greyed with its reason where
+it cannot be used; and `view.ability_modes`, each mode on or off. Enter
+on a use closes the screen and uses it with `act` (`{ "first": "[it]" }`):
+its parameters are asked for, but for those its grant supplies, and the
+command is `use_ability`. Enter on a mode submits `set_mode`. The
+screen's context is `abilities`, in which a number key puts the use
+selected on that quick slot: the preferences `slot_1` to `slot_9`, kept
+between runs with the player's other choices; in play the same key
+(`slot_1` to `slot_9`) uses the ability on it, with the target given to
+one that takes a `target`. An action is put on a key by rebinding.
+
+**The map** (`ui:map`; decision D-796) is a `map_view` zoomed out by
+three over the view model, which holds only what the party has seen and
+remembers: the character where it is, and the journal's markers pinned
+with the theme mark `marker` where the character last perceived their
+targets, which the application gives the view from the character's
+journal. Beside it are the sites the character knows by name
+(`view.known_sites`: those whose anchor its map memory holds, each with
+which way and how far) and the objectives with which way and how far
+their markers are. The direction keys move the view six cells at a
+time and << and > change storey. The region map and the chart are not
+built.
+
+**Talking** (`ui:talk`, `mods/ui/data/talk.json`) is opened by the
+control `talk` (shift+t) about the target, or from the context menu
+about the creature clicked. Until the simulation offers what a character
+could say, it says why nothing can be (decision D-799).
+
+**The context menu** (`ui:context_menu`, the role `context_menu`) is
+what the second button opens over the map with the place clicked: for a
+creature, Attack and Shoot (the first blow or shot that can be made at
+it) and Talk; and anywhere, Go there (`go_to`), Use what is near
+(`ui:interact`) and Look around.
 
 **Look mode** (`ui:look`) is a free cursor over the map, the line of
 what the party knows of the place under it, and a side panel: whether
@@ -2130,9 +2265,17 @@ fills with its reserves as bars and its attributes, as it fills
 `ui:play.bars` (`mods/core_ui/data/bars.json`), and `ui:condition.extra`.
 Everything it reads is the character's own.
 
-**Keys** (`ui:help`) lists the controls of the `play` context with
-every key bound to each, from the keymap in force (`app.keys('play')`),
-so that a key the player binds shows as it is.
+**Keys** (`ui:help`) lists every control the loaded mods define, bound
+or not, in order of what it is called, with every key the keymap in
+force gives it in play and what it does (`app.controls('play')`), so
+that a key the player binds shows as it is and a mod's controls appear
+with no screen written (decision D-797). `app.keys(context)` still lists
+the names a context binds, for a screen that wants them.
+
+The **item** popup (`ui:item`) also throws the thing (Throw...): the
+action `throw` with the thing as `what` and the target as `target`,
+whichever the loaded mod's action accepts; the `core` mod's throws only
+what is made for throwing and refuses anything else with its reason.
 
 **Fitting** shows an assembly (16 §11): its slots, what is in each, what
 could go in each from what is at hand, and what the whole offers and draws
@@ -2195,16 +2338,18 @@ it for, the parameters it is opened with, and its slots:
 | `ui:inventory` | | | `ui:inventory.extra` | What is held, worn and carried |
 | `ui:item` | | `item`, `hold`, `name` | | What can be done with one thing |
 | `ui:condition` | | | `ui:condition.pools`, `ui:condition.attributes`, `ui:condition.extra` | The body, wounds, reserves and attributes |
-| `ui:help` | | | | The keys of play |
-| `ui:abilities`, `ui:map` | | | | Empty and titled until built |
-| `ui:context_menu` | `context_menu` | `place` | | What the second button opens; empty until built |
+| `ui:help` | | | | The keys of play and every control |
+| `ui:abilities` | | | | The uses and modes of the character's abilities, and the quick slots |
+| `ui:map` | | | | What the character knows of the place, with the journal's markers and the sites it knows |
+| `ui:talk` | | `who` | | Talking to someone: why nothing can be said yet |
+| `ui:context_menu` | `context_menu` | `place` | | What can be done with the place or creature clicked |
 | `ui:confirm` | `confirm` | `text`, `yes`, `no` | | A question |
 | `ui:pick_list` | `picker.list` | `options`, `title` | | One of a list |
 | `ui:pick_entity`, `ui:pick_cell` | `picker.entity`, `picker.cell` | `title` | | A cursor over the map |
 | `ui:pick_direction` | `picker.direction` | `title`, `value` | | One key |
 | `ui:pick_number`, `ui:pick_text` | `picker.number`, `picker.text` | `title` | | A number, a line |
 | `ui:pick_multi` | `picker.multi` | `title`, `options`, `min`, `max` | | Several of a list |
-| `ui:reaction` | `decision.reaction` | `who`, `options`, `time_left`, `time_total` | | The reaction prompt |
+| `ui:reaction` | `decision.reaction` | `who`, `what`, `options`, `time_left`, `time_total` | | The reaction prompt: what is happening, the reactions with whether each would be too late, the time left as a bar |
 | `ui:choice` | `decision.choice` | `who`, `prompt`, `options` | | The choice prompt |
 | `ui:gallery`, `ui:gallery_more` | | `who` (the second) | `ui:gallery.extra`, `ui:gallery_more.extra` | Every widget, for looking at and testing |
 
@@ -2286,7 +2431,16 @@ what it holds, and the headless script: sections 3.1 and 3.3. The roles
 section 3.4. The saves, their ids, summaries and
 states, and the saving policies: section 3.6. The preference `bump` and
 the controls `bump`, `bump_ask` and `interact`, what each is given and
-the property `offers_near` they read: section 3.7.
+the property `offers_near` they read: section 3.7. The preference
+`bump_attack` and the controls `attack_bump` and `attack_bump_ask`:
+section 3.7. The properties `actions_with`, `ability_uses`,
+`ability_modes` and `known_sites`, `app.target` and `app.controls`, the
+`act` effect's `first` and `with`, the fields an entry of a list of
+actions may carry, and the commands `use_ability` and `set_mode`:
+sections 3.2, 9.3 and 10.4. The fighting controls, the quick slots
+(the preferences `slot_1` to `slot_9`), the theme mark `marker` and
+style `target`: sections 6.5 and 10.7. The shows of combat and powers
+are the `core_ui` mod's (`mods/core_ui/data/shows.json`).
 
 **Widgets**: section 10.3. **UI effects**: section 10.5.
 **Binding names**: section 10.4. **Navigation names**, and the theme
@@ -2363,6 +2517,27 @@ one the player must read about, so the linter's warning of invariant V5
 is not given. The words of a line come from the reader helpers the host
 answers, and the bundled shows name a destroyed block a wall, since an
 event says nothing of what was destroyed that the reader may know.
+Which actions the fighting controls offer is said by two tags, `strike`
+and `shot`, written in the `ui` mod's controls; `reload` and `throw` are
+named bare, and `target` is the name of the parameter `with` and
+`actions_with` fill with the creature. The order in which
+`actions_with` lists them, and so which blow the quick key strikes, is
+the engine's (decision D-791): a mod cannot rank its own attacks.
+Whether an action could start is judged without its footing, the slots
+other actions hold and its hooks. The parts offered for a blow are
+those on the outside of the target's body as it is, while the character
+perceives it: no previews of odds or harm (07 §13) are shown, and a
+part's appearance (15 §8.4) is not consulted. Quick slots hold
+abilities only, and the keys `1` to `9` only those; an action is put on
+a key by rebinding. The map is a map view zoomed out by a fixed three:
+the region map and the chart (section 6.2) are not built, and a pin is
+drawn only where a marker falls inside the view. Talking says only
+that nothing can be said until the simulation offers `talk_options`.
+The context menu's offers are written out in the screen, not listed
+from what the place offers. A held phase (a bow drawn, a charge) runs
+to its `max` in one pass, since the loop advances the simulation as far
+as it can while the character is busy; `stop` lets it go only between
+passes.
 
 ## 14. Invariants
 

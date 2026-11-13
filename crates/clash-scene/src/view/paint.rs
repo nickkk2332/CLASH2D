@@ -136,6 +136,12 @@ pub struct WorldView {
     line: bool,
     /// What playback draws over the views this frame.
     fx: ViewFx,
+    /// The cell of the selected target, drawn in the theme's `target`
+    /// style.
+    marked: Option<Location>,
+    /// Where the journal's markers are: each drawn with the theme mark
+    /// `marker`.
+    pins: Vec<Location>,
 }
 
 /// The cells strictly between two cells of one storey, along the
@@ -176,7 +182,33 @@ impl WorldView {
             look_down: LOOK_DOWN_DEFAULT,
             line: false,
             fx: ViewFx::default(),
+            marked: None,
+            pins: Vec::new(),
         }
+    }
+
+    /// Marks the cell of the selected target, or none (12 §9.2): map
+    /// views draw it in the theme's `target` style.
+    pub fn set_marked(&mut self, at: Option<Location>) {
+        self.marked = at;
+    }
+
+    /// The cell of the selected target, if one is marked.
+    pub fn marked(&self) -> Option<Location> {
+        self.marked
+    }
+
+    /// Puts pins where the journal's markers are (14 §13), in place of
+    /// those before: map views draw each with the theme mark `marker`.
+    /// They are the character's own markers, which follow what it last
+    /// perceived of their targets; nothing here reads the world.
+    pub fn set_pins(&mut self, pins: Vec<Location>) {
+        self.pins = pins;
+    }
+
+    /// The pins on show.
+    pub fn pins(&self) -> &[Location] {
+        &self.pins
     }
 
     /// What playback draws over the views of the world.
@@ -379,6 +411,15 @@ impl WorldView {
                 .then_some((area.x + col, area.y + row))
         };
         self.paint_heard(canvas, &place);
+        self.paint_pins(canvas, &place);
+        if let Some(marked) = self.marked.filter(|at| at.grid == self.camera.grid())
+            && let Some((x, y)) = place(marked.cell)
+        {
+            let style = self.glyphs.target();
+            canvas.edit(x, y, |cell| {
+                *cell = FrameCell::new(cell.ch, style.over(cell.style()));
+            });
+        }
         let between = |x: f32, y: f32, z: i32| -> Option<(f32, f32)> {
             let col = (x - first_x as f32) / zoom as f32;
             let row = (y - first_y as f32) / zoom as f32;
@@ -573,6 +614,25 @@ impl WorldView {
                     ..base
                 };
                 *cell = resolve_part(part, &GlyphInputs::default(), beneath);
+            });
+        }
+    }
+
+    /// Draws the pins of the journal's markers.
+    fn paint_pins(&self, canvas: &mut Canvas<'_>, place: &dyn Fn(CellPos) -> Option<(i32, i32)>) {
+        let grid = self.camera.grid();
+        let mark = self.glyphs.marks().marker;
+        let base = self.glyphs.base();
+        for pin in self.pins.iter().filter(|pin| pin.grid == grid) {
+            let Some((x, y)) = place(pin.cell) else {
+                continue;
+            };
+            canvas.edit(x, y, |cell| {
+                let beneath = crate::CellStyle {
+                    bg: cell.bg,
+                    ..base
+                };
+                *cell = resolve_part(mark, &GlyphInputs::default(), beneath);
             });
         }
     }

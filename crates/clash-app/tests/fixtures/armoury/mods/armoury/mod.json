@@ -1,0 +1,9 @@
+{
+  "id": "armoury",
+  "name": "Armoury",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "Test fixture: games in the test town with the player armed or gifted, for the application's tests of shooting and powers.",
+  "authors": ["CLASH2D contributors"],
+  "requires": ["core"]
+}

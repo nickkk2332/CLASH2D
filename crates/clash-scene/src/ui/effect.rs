@@ -14,7 +14,7 @@
 //! | `confirm` | `"text"`, or `{ "text", "yes", "no" }` | Asks; the rest of the list runs only on yes |
 //! | `pick` | `{ "from", "item", "into", "title" }` | Opens a picker; the rest of the list runs with the choice as `it` |
 //! | `answer` | value | Closes a screen opened by `confirm` or `pick`, giving its answer |
-//! | `act` | `{ "action", "params", "pick", "from" }` | Submits an action for the active character, asking for its parameters if told to |
+//! | `act` | `{ "action", "params", "pick", "from", "with" }` | Submits an action for the active character, asking for its parameters if told to; the action may be picked from a list (`{ "pick": "…" }`) or be the first available entry of one (`{ "first": "…" }`) |
 //! | `command` | `"name"`, or `{ "name", "args" }` | Submits a simulation command |
 //! | `run` | `"rule"`, or `{ "rule", "args" }` | Runs a `ui_callable` rule through the `Ui` command |
 //! | `app` | `"service"`, or `{ "service": { args } }` | An engine service: see [`AppService`] |
@@ -148,6 +148,16 @@ pub struct CommandEffect {
     /// For `act` with `"needed"` or `"all"`: for a parameter by name, an
     /// expression giving the values it may be chosen from.
     pub from: BTreeMap<String, Binding>,
+    /// For `act` whose action is written `{ "first": "…" }`: `choose`
+    /// gives the list, and the first entry that is available is taken
+    /// without asking (12 §9.3).
+    pub take_first: bool,
+    /// For `act` with `"needed"` or `"all"`: values for parameters by
+    /// name, settled before any is asked for. With `"needed"` one given
+    /// a value is not asked for; with `"all"` its picker is filled in
+    /// with it. A value that comes to null is as if not given, and a
+    /// name the action has no parameter of is passed over.
+    pub with: Args,
 }
 
 impl CommandEffect {
@@ -161,6 +171,8 @@ impl CommandEffect {
             choose: None,
             pickers: BTreeMap::new(),
             from: BTreeMap::new(),
+            take_first: false,
+            with: Args::new(),
         }
     }
 }
@@ -310,6 +322,15 @@ pub struct CameraEffect {
     /// Turns the line a section view cuts along.
     #[serde(default)]
     pub turn: bool,
+    /// Selects the next (`1`) or the previous (`-1`) creature the party
+    /// perceives as the target, nearest first from the followed
+    /// character on its storey: what `app.target` reads and the map
+    /// marks. `0` leaves it.
+    #[serde(default)]
+    pub target: i32,
+    /// Drops the selected target.
+    #[serde(default)]
+    pub untarget: bool,
 }
 
 /// What a `camera` written as a word means. A word that is neither is
@@ -330,7 +351,7 @@ impl CameraEffect {
     }
 }
 
-string_or_object!(CameraEffect, "`\"release\"`, `\"turn\"`, or an object with `move`, `storey`, `zoom`, `cycle`, `release` and `turn`",
+string_or_object!(CameraEffect, "`\"release\"`, `\"turn\"`, or an object with `move`, `storey`, `zoom`, `cycle`, `release`, `turn`, `target` and `untarget`",
     (text, site) => camera_word(text));
 
 /// `picker`: works on the list a picker is building for a list
@@ -480,17 +501,23 @@ impl<'de> Deserialize<'de> for ActParams {
     }
 }
 
-/// `{ "pick": "…" }`: the action is chosen from a list.
+/// `{ "pick": "…" }`: the action is chosen from a list; `{ "first":
+/// "…" }`: the first available entry of a list is taken.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ActionPick {
-    pick: Binding,
+    #[serde(default)]
+    pick: Option<Binding>,
+    #[serde(default)]
+    first: Option<Binding>,
 }
 
-/// The action of an `act`: its id, or a list to pick it from.
+/// The action of an `act`: its id, a list to pick it from, or a list to
+/// take the first available entry of.
 enum ActionSource {
     Named(String),
     Picked(Binding),
+    First(Binding),
 }
 
 impl<'de> Deserialize<'de> for ActionSource {
@@ -500,15 +527,21 @@ impl<'de> Deserialize<'de> for ActionSource {
             type Value = ActionSource;
             fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.write_str(
-                    "an action's id, or an object with `pick`, an expression giving the actions to choose from",
+                    "an action's id, or an object with `pick` or `first`, an expression giving the actions to choose from",
                 )
             }
             fn visit_str<E: de::Error>(self, text: &str) -> Result<ActionSource, E> {
                 Ok(ActionSource::Named(text.to_owned()))
             }
             fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<ActionSource, A::Error> {
-                ActionPick::deserialize(MapAccessDeserializer::new(map))
-                    .map(|body| ActionSource::Picked(body.pick))
+                let body = ActionPick::deserialize(MapAccessDeserializer::new(map))?;
+                match (body.pick, body.first) {
+                    (Some(pick), None) => Ok(ActionSource::Picked(pick)),
+                    (None, Some(first)) => Ok(ActionSource::First(first)),
+                    _ => Err(de::Error::custom(
+                        "an action chosen from a list is written with one of `pick` or `first`",
+                    )),
+                }
             }
         }
         deserializer.deserialize_any(SourceVisitor)
@@ -525,6 +558,8 @@ struct ActBody {
     pick: BTreeMap<String, String>,
     #[serde(default)]
     from: BTreeMap<String, Binding>,
+    #[serde(default)]
+    with: Args,
 }
 
 #[derive(Deserialize)]
@@ -647,15 +682,18 @@ impl<'de> Deserialize<'de> for UiEffect {
                             Some(ActParams::Ask(collect)) => (Args::new(), collect),
                         };
                         if collect == Collect::Given
-                            && !(body.pick.is_empty() && body.from.is_empty())
+                            && !(body.pick.is_empty()
+                                && body.from.is_empty()
+                                && body.with.is_empty())
                         {
                             return Err(de::Error::custom(
-                                "`pick` and `from` say how parameters are asked for, and this `act` asks for none: give `params` as `needed` or `all`",
+                                "`pick` and `from` say how parameters are asked for, as `with` gives them, and this `act` asks for none: give `params` as `needed` or `all`",
                             ));
                         }
-                        let (name, choose) = match body.action {
-                            ActionSource::Named(name) => (name, None),
-                            ActionSource::Picked(from) => (String::new(), Some(from)),
+                        let (name, choose, take_first) = match body.action {
+                            ActionSource::Named(name) => (name, None, false),
+                            ActionSource::Picked(from) => (String::new(), Some(from), false),
+                            ActionSource::First(from) => (String::new(), Some(from), true),
                         };
                         UiEffect::Submit(CommandEffect {
                             kind: CommandKind::Act,
@@ -665,6 +703,8 @@ impl<'de> Deserialize<'de> for UiEffect {
                             choose,
                             pickers: body.pick,
                             from: body.from,
+                            take_first,
+                            with: body.with,
                         })
                     }
                     "command" => {
@@ -775,6 +815,7 @@ impl UiEffects {
                 UiEffect::Answer(value) => compile_value(value, bx),
                 UiEffect::Submit(command) => {
                     compile_args(&mut command.args, bx);
+                    compile_args(&mut command.with, bx);
                     let list = Type::list(Type::Any).nullable();
                     if let Some(choose) = &mut command.choose {
                         choose.compile_expr(bx, &list);

@@ -53,6 +53,24 @@ const KIND_LOC: &str = "loc";
 
 /// The command a reaction is answered with (03 §4.4).
 pub const COMMAND_REACT: &str = "react";
+/// The command an ability's use is made with (08 §5): `ability`, its
+/// id; `action`, the grant's action; `params`, a map of the parameters
+/// the player gave.
+pub const COMMAND_USE_ABILITY: &str = "use_ability";
+
+/// The field of an entry of a list of actions that says whether it can
+/// be done now: an entry with `false` is refused with its [`FIELD_WHY`].
+pub const FIELD_AVAILABLE: &str = "available";
+/// The field of an entry of a list of actions that says why it cannot
+/// be done now.
+pub const FIELD_WHY: &str = "why";
+/// The field of an entry of a list of actions that names the ability
+/// whose grant starts it: the command is then [`COMMAND_USE_ABILITY`].
+pub const FIELD_ABILITY: &str = "ability";
+/// The field of an entry of a list of actions that names the parameters
+/// something else supplies (an ability's grant): they are neither asked
+/// for nor sent.
+pub const FIELD_GIVEN: &str = "given";
 
 /// What a host is asked when a picker needs the things a character
 /// could choose for a parameter (12 §9.3).
@@ -68,6 +86,9 @@ pub struct ParamAsk<'a> {
     pub ty: &'a Type,
     /// The picker that is asking: `entity`, `list`, `multi` and so on.
     pub picker: &'a str,
+    /// The roles and parameters settled before this one, by name, with
+    /// their values: what a part's picker reads the target from.
+    pub settled: &'a [(String, ExprValue)],
 }
 
 /// One thing asked for: a role after the first, or a parameter.
@@ -144,6 +165,17 @@ pub(crate) struct Collecting {
     pub(crate) rest: Vec<UiEffect>,
     /// The camera as it was before a map picker took the cursor.
     pub(crate) camera: Option<Camera>,
+    /// The values the effect's `with` gave, by parameter name.
+    pub(crate) given: BTreeMap<String, ExprValue>,
+    /// The entries of the list the action is being picked from, as the
+    /// expression gave them.
+    pub(crate) entries: Vec<ExprValue>,
+    /// The ability whose grant starts the action, if one does: the
+    /// command is then `use_ability`.
+    pub(crate) ability: Option<ExprValue>,
+    /// The parameters the ability's grant supplies: neither asked for
+    /// nor sent.
+    pub(crate) omit: Vec<String>,
 }
 
 /// What the machine asks while an expression of an action runs: `self`
@@ -297,6 +329,46 @@ fn options_value(options: &[(String, ExprValue)], chosen: &[ExprValue]) -> ExprV
     }))
 }
 
+/// The options a list of actions is offered with: as
+/// [`options_value`], and with every other field of an entry that is a
+/// map (`available`, `why`, ...), for the picker to show.
+fn entries_value(options: &[(String, ExprValue)], entries: &[ExprValue]) -> ExprValue {
+    ExprValue::list(options.iter().zip(entries).map(|((label, value), entry)| {
+        let mut fields: BTreeMap<String, ExprValue> = entry
+            .as_map()
+            .map(|map| {
+                map.iter()
+                    .map(|(name, value)| (name.to_string(), value.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        fields.insert("label".to_owned(), ExprValue::text(label));
+        fields.insert("value".to_owned(), value.clone());
+        fields.insert("chosen".to_owned(), ExprValue::Bool(false));
+        ExprValue::map(fields)
+    }))
+}
+
+/// A field of an entry that is a map.
+fn field<'a>(entry: &'a ExprValue, name: &str) -> Option<&'a ExprValue> {
+    entry.as_map().and_then(|map| map.get(name))
+}
+
+/// Whether an entry of a list of actions can be done now: unless it
+/// says `available` is false.
+fn entry_available(entry: &ExprValue) -> bool {
+    field(entry, FIELD_AVAILABLE).and_then(ExprValue::as_bool) != Some(false)
+}
+
+/// Why an entry of a list of actions cannot be done now: its `why`, or
+/// a sentence that says so.
+fn entry_why(entry: &ExprValue, label: &str) -> String {
+    field(entry, FIELD_WHY)
+        .and_then(ExprValue::as_str)
+        .filter(|why| !why.is_empty())
+        .map_or_else(|| format!("{label} cannot be done now"), str::to_owned)
+}
+
 impl<H: SceneHost> Scene<H> {
     /// The loaded definitions, to read an action from while the scene
     /// is changed.
@@ -397,6 +469,17 @@ where
             Collect::Given => Collect::Needed,
             asked => asked,
         };
+        // What `with` gives, worked out where the effect ran.
+        let given: BTreeMap<String, ExprValue> = if command.with.is_empty() {
+            BTreeMap::new()
+        } else {
+            self.eval(origin, it.as_ref(), |reader, scope| {
+                reader.args(&command.with, scope)
+            })
+            .into_iter()
+            .filter(|(_, value)| !value.is_null())
+            .collect()
+        };
         self.collecting = Some(Collecting {
             action: String::new(),
             def: None,
@@ -416,22 +499,49 @@ where
             it: it.clone(),
             rest,
             camera: None,
+            given,
+            entries: Vec::new(),
+            ability: None,
+            omit: Vec::new(),
         });
         let Some(choose) = &command.choose else {
             self.start_collecting(&command.name, out);
             return;
         };
         // Which action: the list picker, over what the expression gives.
-        let options = self.eval(origin, it.as_ref(), |reader, scope| {
+        let (options, entries) = self.eval(origin, it.as_ref(), |reader, scope| {
             let listed = reader.bound(choose, scope);
             let entries = listed.as_list().unwrap_or(&[]).to_vec();
             let options: Vec<(String, ExprValue)> = entries
                 .iter()
                 .map(|entry| option_of(entry, |value| reader.name_of(value)))
                 .collect();
-            options
+            (options, entries)
         });
-        let with = BTreeMap::from([("options".to_owned(), options_value(&options, &[]))]);
+        if command.take_first {
+            // The first that can be done now, without asking.
+            match entries.iter().position(entry_available) {
+                Some(at) => {
+                    let entry = entries[at].clone();
+                    self.take_entry(&entry);
+                    let name = options[at].1.clone();
+                    self.start_named(&name, out);
+                }
+                None => {
+                    self.collecting = None;
+                    let reason = match (entries.first(), options.first()) {
+                        (Some(entry), Some((label, _))) => entry_why(entry, label),
+                        _ => "There is nothing to do.".to_owned(),
+                    };
+                    out.push(failed(reason));
+                }
+            }
+            return;
+        }
+        let with = BTreeMap::from([("options".to_owned(), entries_value(&options, &entries))]);
+        if let Some(collecting) = &mut self.collecting {
+            collecting.entries = entries;
+        }
         match self.open_role_with(ROLE_PICK_LIST, with, Some(Pending::bare(Wait::Action))) {
             Ok(id) => out.push(UiOutcome::Opened(id)),
             Err(reason) => {
@@ -472,6 +582,10 @@ where
             it: None,
             rest: Vec::new(),
             camera: None,
+            given: BTreeMap::new(),
+            entries: Vec::new(),
+            ability: None,
+            omit: Vec::new(),
         });
         if self.action_id(action, None).is_some() {
             self.start_collecting(action, out);
@@ -491,7 +605,55 @@ where
         if let Some(closed) = self.pop_screen() {
             out.push(UiOutcome::Closed(closed.id().to_owned()));
         }
-        let name = match &answer {
+        // The entry chosen: one that cannot be done now is refused with
+        // its reason, and one an ability's grant starts is used so.
+        let entry = self.collecting.as_ref().and_then(|collecting| {
+            collecting
+                .entries
+                .iter()
+                .find(|entry| field(entry, "value").unwrap_or(entry) == &answer)
+                .cloned()
+        });
+        if let Some(entry) = &entry {
+            if !entry_available(entry) {
+                self.collecting = None;
+                let label =
+                    field(entry, "label").map_or_else(|| answer.to_string(), ToString::to_string);
+                out.push(UiOutcome::Failed {
+                    effect: "act",
+                    reason: entry_why(entry, &label),
+                });
+                return;
+            }
+            self.take_entry(entry);
+        }
+        self.start_named(&answer, out);
+    }
+
+    /// Notes what an entry of a list of actions says of how it is done:
+    /// the ability whose grant starts it and the parameters the grant
+    /// supplies.
+    fn take_entry(&mut self, entry: &ExprValue) {
+        let Some(collecting) = &mut self.collecting else {
+            return;
+        };
+        collecting.ability = field(entry, FIELD_ABILITY)
+            .filter(|ability| !ability.is_null())
+            .cloned();
+        collecting.omit = field(entry, FIELD_GIVEN)
+            .and_then(ExprValue::as_list)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|name| name.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+
+    /// Starts on the action a list gave: by its id or its name.
+    fn start_named(&mut self, answer: &ExprValue, out: &mut Vec<UiOutcome>) {
+        let name = match answer {
             ExprValue::Str(name) => Some(name.to_string()),
             ExprValue::Id(id) => self
                 .loaded()
@@ -606,19 +768,31 @@ where
                 .param
                 .and_then(|index| def.params().get(index))
                 .and_then(|param| param.default.as_ref());
+            // What the ability's grant supplies is neither asked for nor
+            // sent.
+            if collecting.omit.contains(&ask.name) {
+                let Some(collecting) = &mut self.collecting else {
+                    return;
+                };
+                collecting.settled[collecting.next] = false;
+                collecting.next += 1;
+                continue;
+            }
             let (actor, locals) = (collecting.actor.clone(), collecting.locals.clone());
-            let prefill = match default {
-                Some(default) => {
+            let given = collecting.given.get(&ask.name).cloned();
+            let prefill = match (&given, default) {
+                (Some(value), _) => value.clone(),
+                (None, Some(default)) => {
                     self.eval_action(&defs, &actor, &locals, |eval| default.value(eval))
                 }
-                None => ExprValue::Null,
+                (None, None) => ExprValue::Null,
             };
             let Some(collecting) = &mut self.collecting else {
                 return;
             };
             let asked = match collecting.mode {
                 Collect::All => true,
-                _ => default.is_none(),
+                _ => default.is_none() && given.is_none(),
             };
             if !asked {
                 // From its default. One that comes to null here is left
@@ -662,6 +836,12 @@ where
         let named = collecting.pickers.get(&ask.name).cloned();
         let from = collecting.from.get(&ask.name).cloned();
         let locals = collecting.locals.clone();
+        let settled: Vec<(String, ExprValue)> = collecting
+            .asks
+            .iter()
+            .take(collecting.next)
+            .map(|before| (before.name.clone(), collecting.locals[before.slot].clone()))
+            .collect();
         let picker = named.unwrap_or_else(|| {
             let by_type = picker_of(&ask.ty, ask.list.is_some(), &registry);
             // A number or a text that the effect lists the values of is
@@ -698,6 +878,7 @@ where
                 param: &ask.name,
                 ty: ask.entry_type(),
                 picker: &picker,
+                settled: &settled,
             }),
         };
         let mut options: Vec<(String, ExprValue)> = Vec::new();
@@ -1005,6 +1186,19 @@ where
             }
         }
         let command = match collecting.target {
+            Target::Act if collecting.ability.is_some() => UiCommand {
+                kind: CommandKind::Command,
+                name: COMMAND_USE_ABILITY.to_owned(),
+                args: BTreeMap::from([
+                    (
+                        "ability".to_owned(),
+                        collecting.ability.clone().unwrap_or_default(),
+                    ),
+                    ("action".to_owned(), ExprValue::text(&collecting.action)),
+                    ("params".to_owned(), ExprValue::map(params)),
+                ]),
+                collect: Collect::Given,
+            },
             Target::Act => UiCommand {
                 kind: CommandKind::Act,
                 name: collecting.action,

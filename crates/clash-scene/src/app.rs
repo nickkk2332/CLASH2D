@@ -32,6 +32,7 @@ use clash_expr::{
     Handle, KindId, KindSpec, PropertyId, PropertySpec, Registry, Type, Value as ExprValue,
 };
 
+use crate::control::ControlDef;
 use crate::defs::UiDefs;
 use crate::input::KeymapDef;
 use crate::ui::{AppService, KIND_APP, KIND_APP_ENTRY, from_var};
@@ -221,6 +222,8 @@ enum AppProp {
     Setup,
     Templates,
     Keys,
+    Controls,
+    Target,
     Size,
     CanSave,
     CanLoad,
@@ -280,6 +283,11 @@ pub fn register_expr(registry: &mut Registry) {
         PropertySpec::new(app, "keys", Type::list(Type::map(Type::Str)))
             .param("context", Type::Str, "A context of the keymap: `play`, `menu`, `targeting`.")
             .doc("What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2)."),
+        PropertySpec::new(app, "controls", Type::list(Type::map(Type::Str)))
+            .optional_param("context", Type::Str, "A context of the keymap whose keys are listed: left out, `play`.")
+            .doc("Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; and `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty."),
+        PropertySpec::new(app, "target", Type::Any)
+            .doc("The creature selected as the target in play (the `camera` effect's `target`), while the party perceives it; null when none is or it is no longer perceived. Read of it only what may be read of anyone the party perceives."),
         PropertySpec::new(app, "size", Type::list(Type::Int))
             .doc("The grid, as `[columns, rows]`."),
         PropertySpec::new(app, "can_save", Type::Bool)
@@ -330,6 +338,8 @@ impl AppIds {
         add(app, "setup", AppProp::Setup);
         add(app, "templates", AppProp::Templates);
         add(app, "keys", AppProp::Keys);
+        add(app, "controls", AppProp::Controls);
+        add(app, "target", AppProp::Target);
         add(app, "size", AppProp::Size);
         add(app, "can_save", AppProp::CanSave);
         add(app, "can_load", AppProp::CanLoad);
@@ -364,6 +374,8 @@ pub(crate) struct AppReader<'a> {
     pub(crate) keymap_ns: &'a str,
     /// The definitions, for what the controls are called.
     pub(crate) ui: &'a UiDefs,
+    /// The selected target, as the host gives it, or null.
+    pub(crate) target: ExprValue,
 }
 
 /// The code of `app.templates` among the lists entries are read from.
@@ -430,6 +442,43 @@ impl AppReader<'_> {
         }))
     }
 
+    /// `app.controls(context)`: every control, with the keys the keymap
+    /// in force gives it in a context.
+    fn controls(&self, context: &str) -> ExprValue {
+        let bound = self.keymap.contexts.get(context);
+        let mut rows: Vec<(String, String, String, String)> = Vec::new();
+        for id in self.ui.ids::<ControlDef>() {
+            let Some(control) = self.ui.get::<ControlDef>(id) else {
+                continue;
+            };
+            let bare = id.rsplit(':').next().unwrap_or(id);
+            let keys: Vec<String> = bound
+                .map(|bound| {
+                    bound
+                        .iter()
+                        .filter(|(_, name)| {
+                            self.ui
+                                .resolve::<ControlDef>(name, self.keymap_ns)
+                                .is_some_and(|found| found == *id)
+                        })
+                        .map(|(key, _)| key.to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let label = control.name.clone().unwrap_or_else(|| bare.to_owned());
+            rows.push((label, id.clone(), control.doc.clone(), keys.join(", ")));
+        }
+        rows.sort();
+        ExprValue::list(rows.into_iter().map(|(label, id, doc, keys)| {
+            ExprValue::map([
+                ("id", ExprValue::text(id)),
+                ("label", ExprValue::text(label)),
+                ("doc", ExprValue::text(doc)),
+                ("keys", ExprValue::text(keys)),
+            ])
+        }))
+    }
+
     /// A preference's value: what the player set, or else nothing.
     fn pref(&self, id: &ExprValue) -> ExprValue {
         let name = match id {
@@ -474,6 +523,10 @@ impl AppReader<'_> {
                 .first()
                 .and_then(ExprValue::as_str)
                 .map_or_else(|| ExprValue::list([]), |context| self.keys(context)),
+            AppProp::Controls => {
+                self.controls(args.first().and_then(ExprValue::as_str).unwrap_or("play"))
+            }
+            AppProp::Target => self.target.clone(),
             AppProp::Size => ExprValue::list([
                 ExprValue::Int(i64::from(self.size.0)),
                 ExprValue::Int(i64::from(self.size.1)),
@@ -531,6 +584,7 @@ mod tests {
             [
                 "can_load",
                 "can_save",
+                "controls",
                 "creation",
                 "keys",
                 "mods",
@@ -542,6 +596,7 @@ mod tests {
                 "scenarios",
                 "setup",
                 "size",
+                "target",
                 "templates"
             ]
         );

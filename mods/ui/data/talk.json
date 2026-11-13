@@ -1,0 +1,16 @@
+[
+  { "//": "Talking (15 §11): a stub until the simulation offers what a character could say. The control `talk` (shift+t) opens `ui:talk` about the target, or the creature clicked; the screen says why nothing can be said yet. When the social layer lands, the screen lists `view.talk_options(who)` and each row says it with the action `say`; what is said in reply is in the log by playback.",
+    "type": "screen", "id": "talk", "title": "Talk",
+    "params": { "who": "any" },
+    "popup": { "width": 52, "place": "centre", "dim": true },
+    "layout": { "frame": "{if is_null($who) then 'Talk' else 'Talk to ' + the($who)}", "rows": [
+      { "if": "is_null($who)", "text": "Nobody is chosen to talk to: select someone with Tab, or click them with the second button." },
+      { "text": "<dim>Nothing can be said yet: the simulation offers no `talk_options` in this build, so there is nothing to choose from.</>" },
+      { "height": 1, "spacer": {} },
+      { "button": { "id": "close", "label": "Back", "on_activate": [ { "close": {} } ] } } ] },
+    "keys": { "back": [ { "close": {} } ] } },
+
+  { "type": "control", "id": "talk", "name": "Talk",
+    "doc": "Talk to the target.",
+    "do": { "open": { "screen": "talk", "with": { "who": "app.target" } } } }
+]

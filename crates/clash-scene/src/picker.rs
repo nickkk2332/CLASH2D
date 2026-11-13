@@ -38,7 +38,7 @@ use crate::control::{Ask, Collecting};
 use crate::frame::Rect;
 use crate::scene::{Scene, SceneHost, UiCommand, UiOutcome};
 use crate::ui::{CameraEffect, UiEffects, ViewKind};
-use crate::view::SpriteId;
+use crate::view::{SpriteId, SpriteKind};
 
 /// The control a click on a map view runs where the view has no
 /// `on_pick` of its own (12 §9.4).
@@ -354,6 +354,52 @@ impl<H: SceneHost> Scene<H> {
         if effect.turn {
             camera.set_section_axis(camera.section_axis().turned());
         }
+        if effect.untarget {
+            self.target = None;
+        }
+        if effect.target != 0 {
+            let (grid, subject) = (camera.grid(), camera.subject());
+            let followed = self.playback.followed();
+            // The creatures the party perceives on the followed
+            // character's storey, nearest first: never what it does not.
+            let mut creatures: Vec<(i64, i32, i32, SpriteId)> = world
+                .model()
+                .sprites()
+                .filter(|(id, sprite)| {
+                    sprite.loc.grid == grid
+                        && sprite.loc.cell.z == subject.z
+                        && sprite.kind == SpriteKind::Creature
+                        && !sprite.suspected
+                        && Some(*id) != followed
+                })
+                .map(|(id, sprite)| {
+                    let cell = sprite.loc.cell;
+                    let (dx, dy) = (
+                        i64::from(cell.x) - i64::from(subject.x),
+                        i64::from(cell.y) - i64::from(subject.y),
+                    );
+                    (dx * dx + dy * dy, cell.y, cell.x, id)
+                })
+                .collect();
+            creatures.sort();
+            if creatures.is_empty() {
+                self.target = None;
+                self.stale = true;
+                return Err("nobody is in sight to choose".to_owned());
+            }
+            let count = creatures.len() as i64;
+            let step = i64::from(effect.target.signum());
+            let next = match creatures.iter().position(|c| Some(c.3) == self.target) {
+                Some(index) => (index as i64 + step).rem_euclid(count),
+                None if step > 0 => 0,
+                None => count - 1,
+            };
+            self.target = Some(creatures[next as usize].3);
+        }
+        let Some(world) = &mut self.world else {
+            return Err("the scene has no view of the world".to_owned());
+        };
+        let camera = world.camera_mut();
         if effect.cycle != 0 {
             let (grid, storey, subject) = (camera.grid(), camera.storey(), camera.subject());
             let at = camera.centre();

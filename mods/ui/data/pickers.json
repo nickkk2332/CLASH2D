@@ -125,13 +125,14 @@
     "keys": { "done": [ { "picker": "done" } ],
               "back": [ { "close": {} } ] } },
 
-  { "//": "The reaction prompt: what a decision of the kind `reaction` opens (the role `decision.reaction`). `options` is a list of maps with `label`, `value`, the option's number, and `late`, whether it would come too late. Choosing one answers with its number; Esc and the last button answer with nothing, which lets it happen.",
+  { "//": "The reaction prompt: what a decision of the kind `reaction` opens (the role `decision.reaction`). `what` says what is happening as the character perceives it (who does what); `options` is a list of maps with `label`, `value`, the option's number, and `late`, whether it would come too late; the bar is the time left of the window, in the character's own time. Choosing one answers with its number; Esc and the last button answer with nothing, which lets it happen. A reaction that must be told something opens a picker first.",
     "type": "screen", "id": "reaction",
     "title": "React",
-    "params": { "who": "any", "options": "list<any>", "time_left": "real?", "time_total": "real?" },
+    "params": { "who": "any", "options": "list<any>", "time_left": "real?", "time_total": "real?", "what": "string?" },
     "popup": { "width": 46, "place": "centre", "dim": true },
     "layout": { "frame": "React", "rows": [
-      { "text": "{cap(name($who))} can react." },
+      { "if": "($what ?? '') != ''", "text": "<warn>{$what}</>" },
+      { "text": "{cap(name($who))} can react, with {$time_left ?? 0:.1} s to spare." },
       { "bar": { "label": "Time ", "value": "$time_left ?? 0", "max": "$time_total ?? 1", "style": "warn" } },
       { "height": 5,
         "list": { "id": "options", "rows": "$options",

@@ -218,6 +218,15 @@ fn a_blow_noticed_in_time_asks_and_a_reaction_chosen_answers() {
     until_prompt(&mut run);
     assert!(asked(&run), "the simulation waits on the reaction");
     let asked_at = now(&run);
+    // What is happening, as the character perceives it, the reactions
+    // with their reasons and the time left.
+    let prompt = run.text();
+    assert!(prompt.contains("Brute: Punch"), "{prompt}");
+    assert!(prompt.contains("Let it happen"), "{prompt}");
+    clash_scene::assert_golden(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/reaction_prompt.frame"),
+        run.frame(),
+    );
 
     // The first reaction offered, chosen from the list.
     script(&mut run, "enter\n");

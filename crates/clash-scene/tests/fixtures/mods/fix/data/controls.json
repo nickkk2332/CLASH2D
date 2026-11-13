@@ -25,9 +25,9 @@
     "type": "control", "id": "rebind_strike", "name": "Strike with G",
     "do": { "app": { "rebind": { "context": "'play'", "key": "'g'", "name": "'strike'" } } } },
 
-  { "//": "The keys for them, added to the bundled keymap's play context.",
+  { "//": "The keys for them, added to the bundled keymap's play context. `throw` and `attack` are named qualified: the bundled mod has controls of those names, which a bare name in its keymap means first.",
     "type": "keymap", "id": "ui:default", "patch": true,
-    "play": { "f": "strike", "shift+f": "strike_precise", "t": "throw", "shift+a": "attack", "s": "fix:shout",
+    "play": { "f": "strike", "shift+f": "strike_precise", "t": "fix:throw", "shift+a": "fix:attack", "s": "fix:shout",
               "f5": "rebind_strike" } },
 
   { "//": "A bar for the play screen's slot: content adds its own reserves.",
