@@ -1245,6 +1245,31 @@ impl Cond {
         }
     }
 
+    /// Every expression the condition is made of, compiled, in the order
+    /// written, through `all`, `any` and `not`; and whether any part of
+    /// it is a query (`exists`), whose reads are not listed. What a
+    /// reactive condition watches is worked out from these (05 §7.5).
+    pub fn parts(&self) -> (Vec<&Compiled>, bool) {
+        let mut codes = Vec::new();
+        let mut queries = false;
+        self.gather(&mut codes, &mut queries);
+        (codes, queries)
+    }
+
+    fn gather<'a>(&'a self, codes: &mut Vec<&'a Compiled>, queries: &mut bool) {
+        match &self.kind {
+            CondKind::Constant(_) => {}
+            CondKind::Code { compiled, .. } => codes.extend(compiled.as_ref()),
+            CondKind::All(parts) | CondKind::Any(parts) => {
+                for part in parts {
+                    part.gather(codes, queries);
+                }
+            }
+            CondKind::Not(inner) => inner.gather(codes, queries),
+            CondKind::Exists(..) => *queries = true,
+        }
+    }
+
     /// Whether the condition holds, asked once against a host, with a
     /// [`Runner`] made for the occasion. For tools and tests.
     pub fn holds_on<H: Host + ?Sized>(&self, defs: &Defs, host: &mut H) -> bool {

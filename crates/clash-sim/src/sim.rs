@@ -34,7 +34,7 @@ pub const SAVE_KIND: [u8; 4] = *b"CSIM";
 
 /// The version of the layout [`Sim::save`] writes. Raise it whenever a
 /// state type gains, loses or reorders a field.
-pub const SAVE_VERSION: u32 = 14;
+pub const SAVE_VERSION: u32 = 15;
 
 /// The whole simulation: a pure state machine that takes commands,
 /// advances time and emits events (01 §1, 03 §4.1).
@@ -143,6 +143,12 @@ pub struct Sim {
     pub(crate) intervenes: Option<crate::action::IntervenesFn>,
     /// The shots in flight (07 §11; [`ranged`](crate::combat::ranged)).
     pub(crate) ranged: crate::combat::ranged::RangedState,
+    /// The game being played, if one is (13 §3): saved, and hashed when
+    /// there is one ([`scenario`](crate::scenario)).
+    pub(crate) scenario: crate::scenario::ScenarioState,
+    /// Not state: what the scenarios' objectives watch, from the
+    /// definitions.
+    pub(crate) scenario_rt: Arc<crate::scenario::Tables>,
 }
 
 /// Why saved state could not be loaded.
@@ -231,6 +237,7 @@ struct SavedRef<'a> {
     abilities: &'a crate::ability::AbilityIndex,
     ai: &'a crate::ai::AiState,
     ranged: &'a crate::combat::ranged::RangedState,
+    scenario: &'a crate::scenario::ScenarioState,
     social: &'a crate::social::SocialState,
 }
 
@@ -259,6 +266,7 @@ struct Saved {
     abilities: crate::ability::AbilityIndex,
     ai: crate::ai::AiState,
     ranged: crate::combat::ranged::RangedState,
+    scenario: crate::scenario::ScenarioState,
     social: crate::social::SocialState,
 }
 
@@ -295,6 +303,7 @@ impl Sim {
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
         let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
         let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
+        let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
             defs,
@@ -332,6 +341,8 @@ impl Sim {
             strike_depth: 0,
             intervenes: None,
             ranged: crate::combat::ranged::RangedState::default(),
+            scenario: crate::scenario::ScenarioState::default(),
+            scenario_rt,
         };
         sim.bind_runtime();
         sim
@@ -741,6 +752,9 @@ impl Sim {
         if !self.ranged.is_pristine() {
             self.ranged.state_hash(&mut kernel);
         }
+        // Nothing when no game is being played: a simulation that was
+        // never begun from a scenario hashes as before.
+        self.scenario.state_hash(&mut kernel);
         self.social.state_hash(&mut kernel);
         let kernel = kernel.finish();
         let total = Hash128::of(&[
@@ -800,6 +814,7 @@ impl Sim {
                 abilities: &self.abilities,
                 ai: &self.ai,
                 ranged: &self.ranged,
+                scenario: &self.scenario,
                 social: &self.social,
             },
         )
@@ -854,6 +869,7 @@ impl Sim {
         let perception_defs = Arc::new(PerceptionDefs::new(&defs, cosmos.defs()));
         let ability_rt = crate::ability::Runtime::new(&defs, exprs.registry());
         let ai_defs = Arc::new(crate::ai::AiDefs::new(&defs));
+        let scenario_rt = crate::scenario::Tables::for_defs(&defs, defs.expr_registry());
         let mut sim = Sim {
             life,
             defs,
@@ -891,6 +907,8 @@ impl Sim {
             strike_depth: 0,
             intervenes: None,
             ranged: saved.ranged,
+            scenario: saved.scenario,
+            scenario_rt,
         };
         sim.bind_runtime();
         Ok(sim)
@@ -902,6 +920,7 @@ impl Sim {
     fn bind_runtime(&mut self) {
         self.bind_rules();
         crate::interaction::bind(self);
+        crate::scenario::bind(self);
         crate::social::bind(self);
         // Recurring global rules have a timer from the start (05 §9.4).
         self.start_recurring_rules();

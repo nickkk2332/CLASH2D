@@ -134,6 +134,23 @@ pub enum Command {
         /// On, or off.
         on: bool,
     },
+    /// Changes a setting (04 §10). Refused for a setting the scenario
+    /// being played locks (`setting.locked`), and for a value its
+    /// `setting` definition does not take (`setting.bad_value`). Raises
+    /// `setting_changed`.
+    Setting {
+        /// The setting's key: a qualified id, or an engine setting's
+        /// name.
+        key: String,
+        /// Its new value.
+        value: clash_core::Value,
+    },
+    /// Begins a game from a scenario (13 §4, §12), in a simulation whose
+    /// world was made for it: places the party, applies the scenario's
+    /// settings and the answers to its options, puts its rules in force,
+    /// runs `start.do` and raises `scenario_started`
+    /// ([`scenario::begin`](crate::scenario::begin)).
+    BeginScenario(crate::scenario::BeginScenario),
 }
 
 /// What a tool or a test may do to the simulation directly. These are
@@ -343,6 +360,8 @@ impl Sim {
                 mode,
                 on,
             } => self.command_set_mode(entity, ability, &mode, on),
+            Command::Setting { key, value } => crate::scenario::setting_command(self, &key, value),
+            Command::BeginScenario(begin) => crate::scenario::begin(self, begin),
         }
     }
 

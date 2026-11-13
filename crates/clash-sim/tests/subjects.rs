@@ -485,7 +485,8 @@ fn an_entity_answers_for_itself() {
     // `tests/interactions.rs`, those of traits in `tests/traits.rs`,
     // those of defences in `tests/reactions.rs`, those of abilities in
     // `tests/abilities.rs`, those of minds in `tests/ai.rs`, those of
-    // ranged combat in `tests/ranged.rs`, and those of the social layer in
+    // ranged combat in `tests/ranged.rs`, those of scenarios in
+    // `tests/scenario.rs`, and those of the social layer in
     // `tests/social.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
@@ -496,6 +497,7 @@ fn an_entity_answers_for_itself() {
         .chain(clash_sim::ability::properties().iter())
         .chain(clash_sim::ai::properties().iter())
         .chain(clash_sim::combat::ranged::properties().iter())
+        .chain(clash_sim::scenario::journal::properties().iter())
         .chain(clash_sim::social::properties().iter())
         .map(|property| property.name)
         .collect();

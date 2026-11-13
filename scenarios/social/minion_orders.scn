@@ -30,4 +30,4 @@ order from=@e:1 to=@e:2 action=core:step with="{'dir': 'east'}"
 advance 2s
 expect event order_refused reason="'social.not_obeyed'"
 assert "@e:2.loc.x == 13"
-expect hash ec1821e10bf282f7a8507cb104e5991b
+expect hash eb86b079805017567b3f1357809a55b3

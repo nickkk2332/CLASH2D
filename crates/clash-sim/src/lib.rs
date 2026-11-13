@@ -87,6 +87,7 @@ pub mod reason;
 pub mod registry;
 pub mod reshape;
 pub mod rule;
+pub mod scenario;
 mod sim;
 pub mod social;
 pub mod stats;
@@ -159,4 +160,5 @@ pub fn register_defs(types: &mut clash_data::DefTypes) {
     // registered, and so do some of the engine's verbs.
     types.add_registry_step(life::events::registry_step);
     combat::register_defs(types);
+    scenario::register_defs(types);
 }

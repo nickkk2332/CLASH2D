@@ -86,7 +86,7 @@ fn a_person_walks_through_an_open_door_is_stopped_by_a_shut_one_and_falls_in_the
     let mut run = start("playing");
     press(&mut run, &["enter"]);
     assert!(run.type_text("Ada"));
-    press(&mut run, &["tab", "tab", "enter"]);
+    press(&mut run, &["tab", "tab", "down", "down", "enter"]);
     assert!(run.game().playing());
 
     // Made from the template: its name, a body, a mind awake, and the
@@ -175,7 +175,12 @@ fn a_person_walks_through_an_open_door_is_stopped_by_a_shut_one_and_falls_in_the
         &["escape", "down", "down", "down", "enter", "enter"],
     );
     assert!(!run.game().playing());
-    press(&mut run, &["enter", "tab", "tab", "down", "enter"]);
+    press(
+        &mut run,
+        &[
+            "enter", "tab", "tab", "down", "down", "down", "down", "enter",
+        ],
+    );
     assert!(run.game().playing());
     let (_, begin, _) = player(&run);
     press(&mut run, &["j", "j", "j", "l", "l"]);
@@ -214,7 +219,7 @@ fn a_person_walks_through_an_open_door_is_stopped_by_a_shut_one_and_falls_in_the
 fn a_click_on_the_map_walks_there_with_go_to_and_playback_follows() {
     use clash_scene::{InputEvent, Mods, MouseButton, MouseEvent, MouseKind};
     let mut run = start("click");
-    press(&mut run, &["enter", "tab", "tab", "enter"]);
+    press(&mut run, &["enter", "tab", "tab", "down", "down", "enter"]);
     let (who, begin, began) = player(&run);
     // The character is drawn in the middle of the map view: column 26,
     // row 8 of the play screen. Three cells east along the street.

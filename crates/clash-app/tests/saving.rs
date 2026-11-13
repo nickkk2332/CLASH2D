@@ -113,7 +113,7 @@ fn saved_left_and_carried_on_it_is_the_same_game() {
     // Ada, in the town; into the house across the street.
     script(
         &mut run,
-        "enter\ntype Ada\ntab\ntab\nenter\nk\nk\nk\nk\nwait 60\n",
+        "enter\ntype Ada\ntab\ntab\ndown\ndown\nenter\nk\nk\nk\nk\nwait 60\n",
     );
     settle(&mut run);
     assert!(run.game().scene().app().can_save());
@@ -204,7 +204,7 @@ fn a_save_made_with_a_mod_that_is_gone_says_so() {
     let data = data_dir("save-mods");
     let profile = with_extra_mod(&data);
     let mut run = boot(&data, profile.to_str().unwrap());
-    script(&mut run, "enter\ntype Ada\ntab\ntab\nenter\n");
+    script(&mut run, "enter\ntype Ada\ntab\ntab\ndown\ndown\nenter\n");
     // A crate of the extra mod beside the character.
     let beside = run
         .game()
@@ -261,7 +261,7 @@ fn a_save_made_with_a_mod_that_is_gone_says_so() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// A mod in the data directory with two starts of the town, one that
+/// A mod in the data directory with two scenarios in the town, one that
 /// cannot be saved and one that has a single save, and a profile that
 /// loads it with the bundled ones.
 fn with_policies(data: &Path) -> PathBuf {
@@ -273,12 +273,16 @@ fn with_policies(data: &Path) -> PathBuf {
     )
     .unwrap();
     std::fs::write(
-        root.join("data/starts.json"),
-        r#"[ { "type": "start", "id": "a_sitting", "name": "One sitting", "realm": "core:open_town",
-               "at": [9, 17], "template": "core:person", "saving": "none" },
-             { "type": "start", "id": "b_one_life", "name": "One life", "realm": "core:open_town",
-               "at": [9, 17], "template": "core:person", "saving": "single",
-               "senses": ["core:human_sight"] } ]"#,
+        root.join("data/scenarios.json"),
+        r#"[ { "type": "scenario", "id": "a_sitting", "name": "One sitting",
+               "worlds": [ { "realm": "core:open_town" } ],
+               "start": { "characters": [ { "template": "core:person" } ], "at": [ { "cell": [9, 17] } ] },
+               "saving": { "policy": "none" } },
+             { "type": "scenario", "id": "b_one_life", "name": "One life",
+               "worlds": [ { "realm": "core:open_town" } ],
+               "start": { "characters": [ { "template": "core:person", "senses": ["core:human_sight"] } ],
+                          "at": [ { "cell": [9, 17] } ] },
+               "saving": { "policy": "single" } } ]"#,
     )
     .unwrap();
     let default = std::fs::read_to_string(repo().join("profiles/default.json")).unwrap();
@@ -294,7 +298,7 @@ fn with_policies(data: &Path) -> PathBuf {
 }
 
 #[test]
-fn a_start_says_how_its_game_is_saved() {
+fn a_scenario_says_how_its_game_is_saved() {
     let data = data_dir("save-policy");
     let profile = with_policies(&data);
     let mut run = boot(&data, profile.to_str().unwrap());
@@ -302,7 +306,7 @@ fn a_start_says_how_its_game_is_saved() {
     // One sitting: no saving by hand, and nothing saved on leaving.
     script(
         &mut run,
-        "enter\ntype Ada\ntab\ntab\ndown\ndown\ndown\nenter\n",
+        "enter\ntype Ada\ntab\ntab\ndown\ndown\ndown\ndown\ndown\nenter\n",
     );
     assert_eq!(
         run.game().with_session(|session| session.saving.clone()),
@@ -320,7 +324,10 @@ fn a_start_says_how_its_game_is_saved() {
     // leaving, under the character's name. Its character sees and does
     // not hear: the start names its senses.
     // The new-game screen keeps the name given before.
-    script(&mut run, "enter\ntab\ntab\ndown\ndown\ndown\ndown\nenter\n");
+    script(
+        &mut run,
+        "enter\ntab\ntab\ndown\ndown\ndown\ndown\ndown\ndown\nenter\n",
+    );
     assert_eq!(
         run.game().with_session(|session| session.saving.clone()),
         Some("single".to_owned())

@@ -31,4 +31,4 @@ assert "(@e:1.wielding('firearm').rounds ?? 0) == 0"
 assert "len(@e:2.wounds) > 0"
 as @e:1 do { "shoot": { "at": "offset(self.loc, 20, 0, 0).occupants[0]", "store": "self.wielding('firearm')" } }
 expect event fault
-expect hash 7ad2cbd94e5ba74d9b1f933b9664ec7c
+expect hash 52ce76e4d73171df7070261601ce9b55

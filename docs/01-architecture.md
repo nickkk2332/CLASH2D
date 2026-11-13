@@ -536,4 +536,4 @@ Provisional choices. Adding a dependency requires an entry in
 | Parallel generation | `rayon` |
 | Tests and benches | `proptest`, `criterion` |
 | Terminal | `crossterm` |
-| Window | `winit`, `wgpu`, `fontdue` (frontend crate only) |
+| Window | `winit`, `softbuffer`, `fontdue` (frontend crate only; decision D-830); `wgpu` only if drawing ever moves to the graphics card |

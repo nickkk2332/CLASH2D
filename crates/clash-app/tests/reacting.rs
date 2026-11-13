@@ -83,7 +83,10 @@ fn tool(run: &mut Headless, command: Command) {
 fn begin(name: &str) -> (Headless, PathBuf, EntityId, EntityId) {
     let data = data_dir(name);
     let mut run = boot(&data);
-    script(&mut run, "enter\ntab\ntab\ndown\nenter\nwait 5\n");
+    script(
+        &mut run,
+        "enter\ntab\ntab\ndown\ndown\ndown\ndown\nenter\nwait 5\n",
+    );
     let (hero, _) = player(&run);
     let mut placed = None;
     for (key, dx, dy) in [("l", 1, 0), ("h", -1, 0), ("j", 0, 1), ("k", 0, -1)] {
