@@ -732,7 +732,10 @@ the application; message kinds, lines for greetings, warnings and calls
 for help, and the rules `heed_help` and `pass_reports_to_the_watch` in
 `mods/core/data/social`. Both "Done when" items are tests. Stubbed:
 exchanges (joint actions whose phases say lines, not yet written), the `talk` interaction, capabilities told
-of, languages as definitions.
+of, languages as definitions. The application's third pass (D-799)
+offers `talk_options` on `ui:talk` and says the one chosen with the
+action `say`, with the rules `offer_greeting`, `offer_warning` and
+`greet_back` in `mods/core/data/talk.json`.
 
 ### S9 — Party perception
 
@@ -1108,7 +1111,25 @@ fake host over the real registry and the fake application's real
 creation session, with golden frames (`clash-scene` test `screens`):
 from the title through creation into play, each choice kind, a
 refused selection, each screen, and the way to each from play and
-back. Stubbed: the vital state, a pool's thresholds and the list of an
+back. Third pass (decisions D-790 to D-799): `ui:abilities` lists
+`view.ability_uses` and `view.ability_modes`, uses an ability with its
+parameters asked for but those its grant supplies, switches a mode, and
+puts a use on a quick slot (the preferences `slot_1` to `slot_9`, the
+keys 1 to 9 in play); `ui:map` draws what the character knows zoomed
+out with the journal's markers pinned, the sites it knows by name
+(`view.known_sites`) and the objectives; `ui:help` lists every control,
+bound or not (`app.controls`); `ui:context_menu` offers attack, shoot,
+talk, go there, use and look; `ui:talk` lists what can be said
+(`app.talk`, which the service `talk` gathers) and says one with the
+`core` mod's action `say`; the reaction prompt shows `what` is happening; the pick list greys
+an action that cannot be done with its reason; the fighting controls
+are in `fighting.json`; the item popup throws. The `core_ui` mod plays
+blows, powers and speech back. Tested in `clash-scene` (`controls`, `screens`)
+and the application's tests; the golden frames `help`,
+`inventory_item`, `reaction_prompt`, `play_first`, `play_status`, the
+pickers' and the playback's changed for the status column's line of
+keys, the keys screen, the Throw button and the prompt's line of what
+is happening. Stubbed: the vital state, a pool's thresholds and the list of an
 entity's pools and attributes, which the simulation does not register
 (D-665); the result's body as a figure and a tree of parts, traits, a
 part browser for `assemble` and a text's suggestions; the application's
@@ -1117,9 +1138,9 @@ game binary does not give yet: until it lists the templates, the
 creation screen in the game has nothing to begin a character from;
 the actions the inventory names, which no mod
 defines yet; an item named by its definition, which waits for the
-reader; abilities, map, journal, case file, codex, save and load
-screens, trade, fitting, make, build, work, device, know-how, the
-summary and the helm. Decisions D-660 to D-669.
+reader; the case file, codex, trade, fitting, make, build, work,
+device, know-how and the helm; the region map and the chart.
+Decisions D-660 to D-669, D-790 to D-799.
 
 ### U10 — Cutscenes
 
@@ -1193,9 +1214,36 @@ stops the game, removes a `single` game's save and shows the role
 frames `errand_intro`, `errand_journal`, `errand_summary` and `setup`;
 `new_game` changed to list the scenarios. Not built: the window
 frontend and frontend choice, switching profiles or reloading mods
-while running, reaction windows (T5) and `Ui` commands from screens,
-saving at intervals under `single`, markers drawn on the map, a
-benchmark of the loop.
+while running, and `Ui` commands from screens, saving at intervals
+under `single`, a benchmark of the loop.
+
+Third pass (decisions D-790 to D-799): everything the bundled content
+offers is reachable from the keyboard. Tab selects a target among the
+creatures the party perceives (`app.target`, marked on the map); `f`
+and shift+f strike it, quick and precise, from `view.actions_with` (the
+simulation's additive `clash_sim::offer`: what could start, with the
+reason where not); the precise blow asks for the part from the parts
+seen on the target; walking into someone strikes or asks by the
+preference `bump_attack`; `s` and shift+s shoot (the place aimed at
+filled in with where the target is believed to be, the line drawn), `r`
+reloads, `t` throws, `z` stops; the reaction prompt says what is
+happening; `use_ability` and `set_mode` reach the simulation as
+`UseAbility` and `SetMode`; the application answers a picker for a part
+and pins the journal's markers on the view; talking gathers what can
+be said on a copy of the simulation (the service `talk`) and says it
+with `say`, and the one greeted greets back in the log. Tested in
+`tests/fighting.rs`, `shooting.rs`, `powers.rs`, `play_screens.rs`,
+`talking.rs` and `reacting.rs`, over the bundled profile and the fixture `armoury` (a
+game with a pistol and one with every power), with the new golden
+frames `target_selected`, `struck`, `attack_choose`, `attack_part`,
+`bump_ask`, `context_menu`, `empty_weapon`, `aim_choose`, `aim_cell`,
+`abilities`, `abilities_cooling`, `errand_map`, `help_controls`,
+`talk_options`, `talk_reply` and `reaction_prompt`; `first_play`, `inside_house`,
+`wall`, `door_opened`, `through_door`, `door_locked`, `carried_on`,
+`errand_intro` and `errand_summary` changed for the status column's new
+line of keys. Stubbed: previews of a blow (07 §13), since
+`strike_preview` reads the target as it is and a screen may not call
+it; the region map.
 
 ### Z1 — Benchmarks and budget gate
 

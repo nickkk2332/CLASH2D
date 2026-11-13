@@ -112,7 +112,7 @@ use crate::app::{App, STATE_CURRENT, Shared};
 use crate::boot::{self, Loaded};
 use crate::creation::Creation;
 use crate::host::GameHost;
-use crate::interact;
+use crate::interact::{self, BUMP_NEVER};
 use crate::perception::{self, PREF_OMNISCIENT};
 use crate::prefs::PrefStore;
 use crate::saves::{FileSaves, SaveBackend};
@@ -264,6 +264,7 @@ impl Game {
             started: false,
             warnings: Vec::new(),
             said: Vec::new(),
+            talk: clash_expr::Value::Null,
             loaded,
         }));
 
@@ -469,6 +470,9 @@ impl Game {
             }
             _ => {}
         }
+        if bare(id) == interact::PREF_BUMP_ATTACK {
+            self.sync_bump_pref();
+        }
         if let Some(session) = self.shared.borrow_mut().session.as_mut() {
             session.stale_view = true;
         }
@@ -541,21 +545,65 @@ impl Game {
         }
     }
 
+    /// A step toward someone the character sees there: they are
+    /// attacked, asked about, or the step's refusal is told, as
+    /// [`crate::interact`] says. `reason` is what the step was refused
+    /// with.
+    fn bump_creature(&mut self, dir: &str, target: EntityId, reason: &str) {
+        let offer = {
+            let shared = self.shared.borrow();
+            let Some(session) = shared.session.as_ref() else {
+                return;
+            };
+            interact::creature_value(&session.sim, session.player, target, dir)
+        };
+        let hostile = offer
+            .as_map()
+            .and_then(|map| map.get("hostile"))
+            .and_then(ExprValue::as_bool)
+            .unwrap_or(false);
+        let mode = self.pref_text(interact::PREF_BUMP_ATTACK);
+        let control = match mode.as_deref() {
+            Some(interact::BUMP_ALWAYS) => interact::CONTROL_ATTACK_BUMP,
+            Some(interact::BUMP_ASK) => interact::CONTROL_ATTACK_BUMP_ASK,
+            _ if hostile => interact::CONTROL_ATTACK_BUMP,
+            _ => interact::CONTROL_ATTACK_BUMP_ASK,
+        };
+        match self.control_effects(control) {
+            Some(effects) => {
+                let outcomes = self.scene.run(&effects, Some(offer));
+                self.follow_up(&outcomes);
+            }
+            None => self.say(LOG_REFUSAL, reason),
+        }
+    }
+
+    /// Tells the game whether walking into someone is a bump, by the
+    /// preference `bump_attack` (12 §3.7).
+    fn sync_bump_pref(&mut self) {
+        let creatures = self.pref_text(interact::PREF_BUMP_ATTACK).as_deref() != Some(BUMP_NEVER);
+        if let Some(session) = self.shared.borrow_mut().session.as_mut() {
+            session.bump_creatures = creatures;
+        }
+    }
+
     /// Acts on what running effects came to. See the
     /// [module](self) documentation.
     fn follow_up(&mut self, outcomes: &[UiOutcome]) {
         for outcome in outcomes {
             match outcome {
                 UiOutcome::Refused { reason, .. } => {
-                    let bumped = self
+                    let (bumped, into) = self
                         .shared
                         .borrow_mut()
                         .session
                         .as_mut()
-                        .and_then(|session| session.bumped.take());
-                    match bumped {
-                        Some(dir) => self.bump(&dir, reason),
-                        None => self.say(LOG_REFUSAL, reason),
+                        .map(|session| (session.bumped.take(), session.bumped_into.take()))
+                        .unwrap_or_default();
+                    match (bumped, into) {
+                        (_, Some((dir, target))) => self.bump_creature(&dir, target, reason),
+                        (Some(dir), None) => self.bump(&dir, reason),
+                        (None, None) => self.say(LOG_REFUSAL, reason),
                     }
                 }
                 UiOutcome::Failed { effect, reason } => {
@@ -830,6 +878,8 @@ impl Game {
             session.shown = true;
             session.stale_view = true;
         }
+        self.scene.set_target(None);
+        self.sync_bump_pref();
     }
 
     /// Ends the game being played: what was still to be played is
@@ -990,6 +1040,7 @@ impl Game {
                     self.scene.theme(),
                     &mut session.percepts,
                 );
+                session.pins = Some(journal_pins(&session.sim, session.player));
             }
             batch
         };
@@ -1040,6 +1091,9 @@ impl Game {
             let Some(view) = self.scene.world_mut() else {
                 return;
             };
+            if let Some(pins) = session.pins.take() {
+                view.set_pins(pins);
+            }
             if omniscient {
                 if !session.omniscient {
                     // Nothing seen before is mixed with truth.
@@ -1128,6 +1182,20 @@ impl Game {
         front.present(&self.frame);
         !(closed || self.scene.quit_requested() || self.scene.top().is_none())
     }
+}
+
+/// Where the journal's markers are (14 §13): the `marker` of each row of
+/// the character's journal that has one, as the character last
+/// perceived its target.
+fn journal_pins(sim: &clash_sim::Sim, player: EntityId) -> Vec<clash_world::Location> {
+    clash_sim::scenario::journal::journal(sim, player)
+        .iter()
+        .filter_map(|row| row.as_map()?.get("marker").cloned())
+        .filter_map(|marker| match sim.subject_of(&marker)? {
+            clash_sim::Subject::Loc(at) => Some(at),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Whether an input event acts on what is on screen, other than a key:

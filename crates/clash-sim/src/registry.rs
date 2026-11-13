@@ -403,6 +403,8 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     properties.extend(crate::combat::grip::properties());
     properties.extend(crate::combat::takedown::properties());
     properties.extend(crate::social::props::properties());
+    // Last, so that adding them moved no other property's id.
+    properties.extend(crate::offer::properties());
     properties.extend(crate::agent::properties());
     properties
 }

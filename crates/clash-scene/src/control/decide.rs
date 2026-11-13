@@ -68,6 +68,10 @@ pub enum DecisionAsk {
         /// How long the window was open for, for the bar that shows
         /// what is left.
         time_total: f64,
+        /// What is happening, as the character perceives it: who does
+        /// what, in the reader's words (`The brute: Punch`). Empty if
+        /// the host cannot say.
+        what: String,
     },
     /// One of several options, put by a rule's `ask` effect.
     Choice {
@@ -145,6 +149,7 @@ where
                 options,
                 time_left,
                 time_total,
+                what,
                 ..
             } => {
                 let rows = options.iter().enumerate().map(|(index, option)| {
@@ -165,6 +170,7 @@ where
                     ("options".to_owned(), ExprValue::list(rows)),
                     ("time_left".to_owned(), real(*time_left)),
                     ("time_total".to_owned(), real(*time_total)),
+                    ("what".to_owned(), ExprValue::text(what)),
                 ]);
                 self.open_role_with(ROLE_DECISION_REACTION, with, asked)
                     .map(Some)

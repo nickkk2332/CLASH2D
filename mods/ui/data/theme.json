@@ -66,7 +66,7 @@
     "font": { "file": "assets/font.ttf", "size": 16 }
   },
 
-  { "//": "What each key means, by context. A screen names its context; a key its context does not name is looked up in `menu`. `menu` holds the names the toolkit navigates by. `play` is the play screen's: its names are controls (controls.json). `targeting` is that of look mode and of the pickers that move a cursor or take a direction: there the direction keys keep their names and the screens say what they do.",
+  { "//": "What each key means, by context. A screen names its context; a key its context does not name is looked up in `menu`. `menu` holds the names the toolkit navigates by. `play` is the play screen's: its names are controls (controls.json, fighting.json, abilities.json, talk.json). `targeting` is that of look mode, the map and the pickers that move a cursor or take a direction: there the direction keys keep their names and the screens say what they do. `abilities` is the abilities screen's: the number keys put the ability selected on a quick slot.",
     "type": "keymap", "id": "default",
     "menu": {
       "up": "prev", "down": "next", "left": "left", "right": "right",
@@ -87,7 +87,17 @@
       "i": "inventory", "c": "condition", "a": "abilities", "m": "map", "shift+j": "journal",
       "shift+m": "make", "shift+k": "know_how",
       "o": "options", "?": "help", "f1": "help",
-      "escape": "pause", "f12": "omniscient"
+      "escape": "pause", "f12": "omniscient",
+      "tab": "next_target", "shift+tab": "prev_target",
+      "f": "attack", "shift+f": "attack_precise",
+      "s": "shoot", "shift+s": "aim", "r": "reload", "t": "throw", "z": "stop", "v": "grapple",
+      "shift+t": "talk",
+      "1": "slot_1", "2": "slot_2", "3": "slot_3", "4": "slot_4", "5": "slot_5",
+      "6": "slot_6", "7": "slot_7", "8": "slot_8", "9": "slot_9"
+    },
+    "abilities": {
+      "1": "bind_1", "2": "bind_2", "3": "bind_3", "4": "bind_4", "5": "bind_5",
+      "6": "bind_6", "7": "bind_7", "8": "bind_8", "9": "bind_9"
     },
     "targeting": {
       "h": "west", "j": "south", "k": "north", "l": "east",

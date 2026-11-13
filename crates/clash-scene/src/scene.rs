@@ -510,6 +510,9 @@ pub struct Scene<H: SceneHost = NoHost> {
     /// The qualified id of the preference that says which animations
     /// play.
     pub(crate) pref_effects: Option<String>,
+    /// The creature selected as the target (12 §9.2): what `app.target`
+    /// reads while the party still perceives it.
+    pub(crate) target: Option<SpriteId>,
 }
 
 impl<H: SceneHost + fmt::Debug> fmt::Debug for Scene<H> {
@@ -744,7 +747,23 @@ impl<H: SceneHost> Scene<H> {
             shows: Shows::new(),
             pref_speed: None,
             pref_effects: None,
+            target: None,
         }
+    }
+
+    /// The creature selected as the target with the `camera` effect's
+    /// `target`, while the party perceives it: in the view model, not
+    /// only suspected. `None` otherwise.
+    pub fn target(&self) -> Option<SpriteId> {
+        let id = self.target?;
+        let sprite = self.world.as_ref()?.model().sprite(id)?;
+        (!sprite.suspected).then_some(id)
+    }
+
+    /// Selects a creature as the target, or none.
+    pub fn set_target(&mut self, target: Option<SpriteId>) {
+        self.target = target;
+        self.stale = true;
     }
 
     /// Says which `keymap` definition the keymap in force is, by its
@@ -1211,11 +1230,24 @@ impl<H: SceneHost> Scene<H> {
             warnings,
             keymap,
             keymap_ns,
+            target,
+            world,
             ..
         } = self;
         let ui = ui.as_ref()?;
         let (view, party) = (host.view(), host.party());
+        // What `app.target` reads: the selected creature while the
+        // party perceives it.
+        let target_value = target
+            .filter(|id| {
+                world
+                    .as_ref()
+                    .and_then(|world| world.model().sprite(*id))
+                    .is_some_and(|sprite| !sprite.suspected)
+            })
+            .map_or(ExprValue::Null, |id| host.sprite_value(id));
         let app = app_ids.as_ref().map(|ids| AppReader {
+            target: target_value,
             ids,
             state: &**app,
             registry: ui.defs().exprs().registry(),
@@ -1268,6 +1300,14 @@ impl<H: SceneHost> Scene<H> {
         if self.stale {
             // The simulation may have moved what the cursor is over.
             self.push_status();
+        }
+        // The selected target is marked where the party perceives it.
+        let marked = self.target().and_then(|id| {
+            let world = self.world.as_ref()?;
+            Some(world.model().sprite(id)?.loc)
+        });
+        if let Some(world) = &mut self.world {
+            world.set_marked(marked);
         }
         self.refresh();
         frame.clear(FrameCell::blank(self.theme.base()));

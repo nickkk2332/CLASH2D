@@ -82,6 +82,7 @@ pub mod life;
 pub mod mass;
 pub mod mind;
 pub mod movement;
+pub mod offer;
 pub mod perception;
 mod props;
 pub mod query;

@@ -21,4 +21,4 @@ expect event strike_landed
 expect event dosed substance=core:nightshade route=inject
 assert "@e:1.pool.toxin > 23"
 assert "@e:0.held('grasp')[0].coating['core:nightshade'] < 0.00000151"
-expect hash 03e674ae9db759eefb8007642cbe4571
+expect hash d12235ab62ff5e2502ad485f0c3b6dbb

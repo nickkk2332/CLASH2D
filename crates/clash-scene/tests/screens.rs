@@ -827,18 +827,20 @@ fn look_mode_says_what_the_cell_holds_as_the_party_perceives_it() {
 fn the_keys_of_play_are_listed_from_the_keymap_in_force() {
     let mut run = Run::new();
     run.press(&["?"]);
+    assert!(run.row_with("Inventory").contains('i'));
+    // The walking controls come last, by what they are called.
+    run.press(&["end"]);
     assert_eq!(run.top(), "ui:help");
     assert!(
         run.row_with("Walk north").contains("k, up"),
         "{}",
         run.text()
     );
-    assert!(run.row_with("Inventory").contains('i'));
     assert_golden(golden("help"), run.shown());
     run.press(&["escape"]);
     // A key the player binds shows as it is bound.
     run.scene.rebind("play", "w", "north").unwrap();
-    run.press(&["f1"]);
+    run.press(&["f1", "end"]);
     assert_eq!(run.top(), "ui:help");
     let north = run.row_with("Walk north");
     assert!(north.contains('k') && north.contains('w'), "{}", run.text());

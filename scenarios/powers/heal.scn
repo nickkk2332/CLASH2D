@@ -13,4 +13,4 @@ expect event ability_used ability=core:heal
 advance 1200ms
 expect event wound_closed
 assert "@e:0.pool.reserve < 80"
-expect hash 199ff17ff48ff2bc2c7aa96a154f8030
+expect hash 50e58b438b3ae79d5c3ef24a1fd55367

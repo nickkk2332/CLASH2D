@@ -501,7 +501,8 @@ fn an_entity_answers_for_itself() {
     // `tests/scenario.rs`, those of grips and takedowns in
     // `tests/grips.rs`, those of recipes and substances in
     // `tests/making.rs`, those of the social layer in
-    // `tests/social.rs`, and those of residents in `tests/agents.rs`.
+    // `tests/social.rs`, those of what a character could do in
+    // `tests/offer.rs`, and those of residents in `tests/agents.rs`.
     let of_items: Vec<&str> = clash_sim::item::properties()
         .iter()
         .chain(clash_sim::recipe::properties().iter())
@@ -517,6 +518,7 @@ fn an_entity_answers_for_itself() {
         .chain(clash_sim::combat::grip::properties().iter())
         .chain(clash_sim::combat::takedown::properties().iter())
         .chain(clash_sim::social::properties().iter())
+        .chain(clash_sim::offer::properties().iter())
         .chain(clash_sim::agent::properties().iter())
         .map(|property| property.name)
         .collect();

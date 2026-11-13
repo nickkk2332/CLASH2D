@@ -6,18 +6,18 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | Kind | What it refers to | Properties |
 |------|-------------------|-----------:|
 | [`ability`](#ability) | An ability an entity holds (08 §3.2), reached as `self.ability('id')`; `ability` in what an ability works out about itself. | 9 |
-| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 14 |
+| [`app`](#app) | Things outside the simulation: saves, profiles, mods, scenarios, preferences and the grid (12 §10.4). | 17 |
 | [`app_entry`](#app-entry) | One entry of a list `app` offers: a save, a profile, a mod or a scenario. | 4 |
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 18 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 151 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 147 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
 | [`part`](#part) | A part of a body (06 §6). | 22 |
 | [`pools`](#pools) | The pools of one entity, reached as `entity.pool` (06 §4.2). | 4 |
-| [`realm`](#realm) | One contiguous space with its own rules (02 §4). | 11 |
+| [`realm`](#realm) | One contiguous space with its own rules (02 §4). | 6 |
 | [`site`](#site) | A named place with identity, spanning one or more tracts (02 §8.4). | 8 |
 | [`tracks`](#tracks) | The tracks of one entity, reached as `entity.track` (06 §4.3). | 2 |
 | [`tract`](#tract) | A tract of a realm, loaded or not: what the engine knows of it is its record (02 §9.1). | 10 |
@@ -54,6 +54,8 @@ Things outside the simulation: saves, profiles, mods, scenarios, preferences and
 
 - `app.can_load -> bool` · safe for belief: Whether the scenario's saving policy allows loading now.
 - `app.can_save -> bool` · safe for belief: Whether the scenario's saving policy allows saving now (13 §9.2).
+- `app.controls(context?: string) -> list<map<string>>` · safe for belief: Every control the loaded mods define, in order of what it is called, bound or not (12 §9.2): one map for each, with `id`, its qualified id; `label`, its `name`, or else its bare id; `doc`, what it does, or empty; and `keys`, every key the keymap in force gives it in the context, as a keymap writes them, joined by commas, or empty.
+  - `context` (string, optional): A context of the keymap whose keys are listed: left out, `play`.
 - `app.creation -> any` · safe for belief: The character being made (06 §10.3); null when none is.
 - `app.keys(context: string) -> list<map<string>>` · safe for belief: What the keymap in force binds in a context: one map for each name a key there is given, in order of what it is called, with `name`; `label`, what the control of that name is called, or else the name; `doc`, what it does, or empty; and `keys`, every key given that name, as a keymap writes them, joined by commas (12 §9.2).
   - `context` (string): A context of the keymap: `play`, `menu`, `targeting`.
@@ -67,6 +69,8 @@ Things outside the simulation: saves, profiles, mods, scenarios, preferences and
 - `app.scenarios -> list<app_entry>` · safe for belief: The game scenarios the loaded mods define (13).
 - `app.setup -> any` · safe for belief: The game being set up on the new-game screens (13 §12): the scenario chosen, its places, the options it asks about and how its seed is chosen; null when none is.
 - `app.size -> list<int>` · safe for belief: The grid, as `[columns, rows]`.
+- `app.talk -> any` · safe for belief: What the character played could say to someone, as the service `talk` last gathered it (15 §11): a map with `to`, the one talked to; `options`, each a map with `id`, `text`, `kind` and `lines` (the message kind and the table of lines it is said with, null where it says nothing) and `says`, whether it says something; and `why`, the reason nothing can be said, or empty. Null when nothing was gathered.
+- `app.target -> any` · safe for belief: The creature selected as the target in play (the `camera` effect's `target`), while the party perceives it; null when none is or it is no longer perceived. Read of it only what may be read of anyone the party perceives.
 - `app.templates -> list<app_entry>` · safe for belief: The templates a character may be made from, each by its qualified `id` and its `name` (06 §10.3).
 
 <a id="app-entry"></a>
@@ -166,7 +170,12 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.ability(ability: id<ability>) -> ability?` · same owner: The instance of an ability the entity holds (08 §3.2), to read its rank, state, parameters and cooldowns; null if it does not hold it.
   Changed by `ability_granted`, `ability_revoked`.
   - `ability` (id<ability>): The ability: its id, or its qualified id as text.
-- `entity.agent_doing -> string?`: For an agent out of the world (09 §10.1): what it is doing. Null for anyone in the world, and for anyone who is no resident.
+- `entity.ability_modes -> list<map<any>>`: Every mode of every ability the entity holds (08 §5.4): one row for each, with `ability`, `id`, `name` (the ability's), `mode` (the mode's id), `label` (what the mode is called), `rank`, `on`, `available` and `why`. Read of the character itself in a mind context.
+- `entity.ability_uses(ability?: any) -> list<map<any>>`: Every use of every ability the entity holds (08 §5.1, `ability::options`), or of the one named, for an abilities screen: one row for each grant, with `value` (the action's id), `ability` (the ability's id), `label`, `id` (the ability's qualified id), `name`, `action_name`, `rank`, `state` (`ready`, `cooling`, `dormant`, `suppressed` or `unavailable`), `cost` (a text: `25 stamina`), `cooldown` (seconds of its own time left), `given` (the names of the parameters the grant supplies), `available` and `why`. Read of the character itself in a mind context.
+  - `ability` (any, optional): An ability: its id, or its qualified id as text.
+- `entity.actions_with(tag: string, target?: any) -> list<map<any>>`: What the entity could start of the actions that carry a tag, as it believes (12 §10.7): one row for each, those that could start first, then those that strike with something held, then those that take fewer slots, then by qualified id, with `value` (the action's id), `label` and `name` (what a reader calls it), `id` (its qualified id as a text), `available` (whether it could start now) and `why` (the refusal's sentence where it could not, else empty). With `target`, that is given to an action that has a parameter or role named `target`; its `requires` is judged once every parameter without a default is given. Read of the character itself in a mind context.
+  - `tag` (string): The tag the actions carry: the `ui` mod asks for `strike`, `shot`, `grip`, `takedown`.
+  - `target` (any, optional): Who the actions are aimed at, if anyone.
 - `entity.altitude -> real?`: How high the entity stands above the base of its cell, in metres. Null if it is not at a cell itself.
   Changed by `entity_relocated`.
 - `entity.attr -> attrs` · same owner: The entity's attributes: follow with a definition's id, as in `self.attr.<id>`.
@@ -265,7 +274,7 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `entity_relocated`.
 - `entity.holds_substance(substance: id<substance>) -> real`: How much of a substance one member of an item holds, in cubic metres.
   - `substance` (id<substance>): The substance.
-- `entity.home -> loc`: Where this character's mind belongs: for a resident of a settlement, its home (06 §12.2); else where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.
+- `entity.home -> loc`: Where this character's mind belongs: where it first thought, or what `set_home` said; for one that has not thought, where it is. Null only for one that is nowhere.
 - `entity.hostile(x: entity) -> bool`: Whether this character's mind holds `x` hostile (09 §3.4): by a stance it took, or, once it has perceived `x`, by a tag `x` presents that its mind's `hostile_to` names. Relations (15 §9) will take its place.
   Changed by `detected`, `perceived`.
   - `x` (entity): Whom it is asked about.
@@ -290,6 +299,7 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.know_how -> list<string>`: The qualified ids of what the entity's mind knows, in order of id.
   Changed by `know_how_gained`, `know_how_lost`.
 - `entity.know_how_list -> list<map<any>>`: Every piece of know-how there is, as the entity stands to it, for the know-how screen (12 §10.7): one map each, in order of id: `id`, `name`, `group`, `known`, `ready` (known, or all it needs is known), `makes` (the names of the recipes that need it) and `needs` (the names of what it needs).
+- `entity.known_sites -> list<map<any>>`: The sites whose anchor the entity's map memory holds (15 §13), on its grid, nearest first: each with `name`, `at` (the anchor) and `where` (`12 m north-east`). Only directly controlled characters keep a map memory. Read of the character itself in a mind context.
 - `entity.knows(x: entity) -> bool`: Whether this mind has a track of what it perceives `x` as (15 §7.2). False for what it has never perceived.
   Changed by `detected`, `lost_track`.
   - `x` (entity): Whom or what it is asked about.
@@ -371,19 +381,12 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   Changed by `memory_added`, `memory_forgotten`.
   - `x` (entity): Whom it is asked about.
   - `event` (string): The event type, or `''` for any.
-- `entity.resident -> bool`: Whether it stands for a resident of a settlement (06 §12.2): made from a request generation handed over, the same person each time it is made.
-- `entity.resident_home -> loc?`: Its home as a resident: the cell generation asked for it at. Null if it is no resident.
 - `entity.role_in(group: string) -> string?`: Its role in a group (15 §9.2), or null if it has none or is not a member.
   Changed by `group_joined`, `group_left`, `role_changed`.
   - `group` (string): The group's key or id.
 - `entity.room -> real?`: The room left in one member of an item for substances, in cubic metres. Null for what holds none.
 - `entity.rounds -> int`: How many rounds an item can fire before it is empty (07 §11.5): the members of the rounds in its feed. Zero for one with none.
   Changed by `item_taken`, `item_dropped`, `item_merged`, `item_split`, `entity_relocated`, `entity_removed`.
-- `entity.routine -> string?`: The qualified id of the routine it keeps (09 §10.2): the one `set_routine` gave it, else the one its mind names. Null if none.
-- `entity.routine_away -> bool?`: Whether it is further from `routine_place` than the part of the day's `within` allows: not yet where its routine has it be. Null where `routine_place` is.
-- `entity.routine_doing -> string?`: What its routine has it doing now: the `doing` of the part of the day it is at (09 §10.2). Null if it keeps no routine.
-- `entity.routine_place -> loc?`: Where its routine has it be now (09 §10.2): its own spot at the first place the part of the day names (on a `beat`, the one it has come to), or its home if none answers. Null if it keeps no routine, or if that place is in a tract that is not loaded, where it cannot walk.
-- `entity.routine_places -> list<loc>`: Every place the part of the day its routine is at names, each its own spot, in order (for `pick: all`, every site it answers, nearest its home first): a beat between them. Only those in loaded tracts.
 - `entity.scale -> real?`: The body's overall size factor. Null for something with no body.
 - `entity.seen_how(x: entity) -> string?`: How this mind last knew of `x`: the qualified id of the kind of signal it perceived it by, or `told`, `inferred` or `carried` (15 §7.1). Null if it never has.
   - `x` (entity): Whom or what it is asked about.
@@ -577,15 +580,10 @@ One contiguous space with its own rules (02 §4).
 
 - `realm.clock_rate -> real?` · settable: The rate of the realm's clock against universal time (03 §3.4). Setting it changes the rate and emits `clock_rate_changed`; a realm always has a clock, so null is refused.
   Changed by `clock_rate_changed`.
-- `realm.day -> int?` · safe for belief: The day it is in the realm, counted from 1 on the day its clock began (09 §14.2).
-- `realm.day_length -> real?` · safe for belief: How long a day of the realm is, in seconds of its clock: its sky's day (09 §14.2).
-- `realm.day_part -> string?` · safe for belief: The name of the part of the day it is in the realm, by the calendar the realm names (09 §14.2). Null for a realm with no calendar, or a calendar with no parts.
 - `realm.def -> id<realm>?`: The realm's definition.
 - `realm.grid -> int?`: The id of the realm's base grid.
 - `realm.kind -> string` · safe for belief: The name of the kind of subject this is: `entity`, `loc`, `element`, `area`, `site`, `tract`, `realm` or `global`.
 - `realm.local_time -> real?`: The local time of the realm's clock, in seconds.
-- `realm.season -> string?` · safe for belief: The name of the season it is in the realm, by its calendar's year and seasons (09 §14.2). Null for a realm with no calendar, no year or no seasons.
-- `realm.time_of_day -> real?` · safe for belief: The time of day in the realm, in seconds since midnight by its day (09 §14.2): its sky's length of day and the time its clock starts at, its clock running at the realm's rate.
 - `realm.timer(name: string) -> real?`: The local time, in seconds, that the timer of this name belonging to it has left (05 §10.4); null if it has none of that name. A timer away with its owner keeps what it had left.
   - `name` (string): The timer's name.
 
