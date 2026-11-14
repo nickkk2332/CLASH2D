@@ -25,6 +25,23 @@ the Wayland or X11 libraries at run time (the [README](../README.md#quick-start)
 lists them). `-- --help` lists the options. Saves and preferences are
 kept in the user's data directory (`~/.local/share/clash2d` on Linux).
 
+## Measured
+
+On the machine the beta was built on (four shared cores, release build):
+
+| What | Figure |
+|------|--------|
+| The program, `target/release/clash` | 65 MB; 51 MB stripped; 17 MB compressed |
+| The bundled mods | 1.2 MB in 127 files; 0.3 MB compressed |
+| Start to the title screen | 0.05 to 0.2 s |
+| A step in the populated market town | about 15 to 30 ms |
+| A minute's wait in the market square, by day | about 0.8 s |
+| An hour's wait in the market town | about 6 s by day, about 1 s at night |
+| A frame drawn by the window frontend | 4 to 10 ms |
+
+The bundled games keep at most 50 characters in full detail at once
+(`sim.max_hot_minds`); everyone you can see is always among them.
+
 ## Highlights
 
 **The world.** Cells of 1 m on storeys of 3 m, made of materials that
