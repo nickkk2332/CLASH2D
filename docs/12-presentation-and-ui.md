@@ -1464,9 +1464,12 @@ is asked what the acting character believes could be chosen
 either, an entity picker offers what the view model holds on the viewed
 grid, nearest first, never the acting character, and a list picker is
 empty. Nothing is offered that the party does not perceive. An entity
-picker with nothing to offer and nothing filled in is not opened: the
-command is abandoned with "Nobody is in sight to choose." (decision
-D-904). The application answers for a parameter of
+picker with nothing to offer and nothing filled in, for a parameter the
+command's `with` named and gave as null (a target it meant to give and
+had none of, as the attack commands give the target cycle's), is not
+opened: the command is abandoned with "Nobody is in sight to choose."
+(decision D-904). For an ability's use, or a parameter not named, the
+cursor starts on the actor, who may be chosen (a touch that heals). The application answers for a parameter of
 the kind `part` (07 §4.2, decision D-794): the parts on the outside of
 the creature settled before it, while the character perceives it, each
 by its name in the body, after a first row, `wherever it lands`, that
