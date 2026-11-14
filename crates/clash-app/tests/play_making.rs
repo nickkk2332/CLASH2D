@@ -2,7 +2,7 @@
 //! from the title in the market town, as a player makes them: a bandage
 //! made at the workshop's bench and a wound dressed with it; nightshade
 //! gathered in the healer's garden, its extract made, a blade coated and
-//! someone cut with it. `docs/playtest-beta.md`, the fifth round.
+//! someone cut with it. `docs/playtest-beta.md`, the sixth round.
 
 mod session;
 mod town;

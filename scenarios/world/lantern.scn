@@ -1,0 +1,33 @@
+# A lantern lights whoever holds it (decision D-960; 15 §3.3; 02 §8.3):
+# taken up, an area of no size anchored to its bearer carries its
+# light, and goes where the bearer goes; put down, the light leaves
+# him; taken up by someone else, it goes with them.
+use default seed=7
+gen core:testland size=1
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 4, 0, 0)" } }
+remove @spot
+control @e:1 delegated
+control @e:2 delegated
+as @e:1 do { "create_item": { "def": "core:lantern", "at": "self.loc" } }
+assert "len(@e:1.loc.areas) == 0"
+as @e:1 do { "for_each": { "entities": { "at": "self.loc", "def": "core:lantern", "limit": 1 } }, "as": "lantern", "do": [ { "take": { "who": "self", "what": "$lantern" } } ] }
+expect event item_taken
+assert "len(@e:1.held('grasp')) == 1"
+assert "len(@e:1.loc.areas) == 1"
+assert "@e:1.loc.areas[0].has_tag('carried_light')"
+# The light goes where its bearer goes.
+move @e:1 @c:12,10,0
+assert "len(@e:1.loc.areas) == 1"
+assert "len(@c:10,10,0.areas) == 0"
+# Put down, it lights nobody.
+as @e:1 do { "drop": { "what": "self.held('grasp')[0]" } }
+expect event item_dropped
+assert "len(@e:1.loc.areas) == 0"
+# Taken up by the other, it lights them.
+move @e:2 @c:13,10,0
+as @e:2 do { "for_each": { "entities": { "around": "self.loc", "radius": 2, "def": "core:lantern", "limit": 1 } }, "as": "lantern", "do": [ { "take": { "who": "self", "what": "$lantern" } } ] }
+assert "len(@e:2.loc.areas) == 1"
+assert "len(@e:1.loc.areas) == 0"
+expect hash 58e6bc4a95014b25118340a0c87a4c6d

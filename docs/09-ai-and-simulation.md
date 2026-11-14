@@ -308,7 +308,20 @@ in the mind context with `$about` bound (D-693).
 
 A step that fails raises `step_failed`, the method is given up and the
 next is tried; with none left the goal fails with `ai.no_method`, raises
-`goal_failed` and is set aside for its `retry_after`. A step that moves
+`goal_failed` and is set aside for its `retry_after`. A step whose
+action cannot be started for a reason waiting will not change (decision
+D-961) fails the goal itself, not only the method: the goal raises
+`goal_failed` with the action's own refusal and is set aside for its
+`retry_after`, and the mind chooses again at once (section 3.3), so that
+it does not stand trying what it cannot do, or fall back on a method
+that only waits for it to become possible. Those reasons are the
+engine's `engine:action_channel_lacking` (too few slots of a channel
+enabled at all: a limb missing, bound or broken),
+`engine:action_not_aimed`, `engine:action_parameter_missing` and
+`engine:action_list_length` (`ai::LASTING_REFUSALS`). A `choose` step
+fails so only if every action it tried was refused so; a refusal that
+waiting may change (out of reach, slots busy, a `requires` that does
+not hold) fails the method as before. A step that moves
 toward an entity starts again toward where the mind now believes it is
 when that is more than `within`, or 1.5 m, from where the step was
 going. At most `ai.max_steps_per_thought` steps that take no time run in
@@ -1532,6 +1545,11 @@ own; `realm.clock` gives the same as a fraction of the day.
   (a property), `threat`, `standing` and the rest of section 6; the
   queries `visible`, `heard`, `allies`, `threats`; `retry_after` is
   built, `wake_clarity` is a field of `mind`.
+- Gap (decision D-961): which refusals fail a goal rather than a method
+  is the engine's list, `ai::LASTING_REFUSALS`; a mod cannot mark one of
+  its own `reason` definitions, or a `requires` that will not come to
+  hold, as lasting. A goal that should give up on such a refusal says
+  so with its own `fail`.
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
 sites, `locals`, `stock(what)`, `population(kind)`, `holder`; on regions,

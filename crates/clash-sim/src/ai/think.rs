@@ -37,7 +37,12 @@
 //! starts an action or a wait, the same ones the player could ask for
 //! (invariant N2), and the mind goes on when it ends. A step that fails
 //! raises `step_failed`, the method is given up and the next one is
-//! tried; when none is left the goal fails.
+//! tried; when none is left the goal fails. A step whose action cannot
+//! be started for a reason waiting will not change ([`lasting`]: too few
+//! limbs of a channel to use at all, an action that cannot take its
+//! target or its parameters) fails the goal itself: it is set aside for
+//! its `retry_after`, and the mind chooses again at once, so that it
+//! does not stand trying what it cannot do (decision D-961).
 
 use std::sync::Arc;
 
@@ -91,6 +96,24 @@ pub const DEFAULT_LOOK_S: f64 = 2.0;
 /// How far from where it stands a step that moves counts as there
 /// already, in metres, beyond its `within`.
 pub const ARRIVED_SLACK_M: f64 = 0.5;
+
+/// The codes of the refusals that waiting will not change: the actor
+/// has too few slots of a channel enabled at all (a limb missing, bound
+/// or broken), or the action cannot take its target or the parameters
+/// it was given. A step refused for one of these fails its goal
+/// (decision D-961).
+pub const LASTING_REFUSALS: &[&str] = &[
+    crate::action::reason::CHANNEL_LACKING.code,
+    crate::action::reason::NOT_AIMED.code,
+    crate::action::reason::PARAMETER_MISSING.code,
+    crate::action::reason::LIST_LENGTH.code,
+];
+
+/// Whether a step's refusal is one that waiting will not change
+/// ([`LASTING_REFUSALS`]).
+pub fn lasting(reason: &Reason) -> bool {
+    LASTING_REFUSALS.contains(&reason.code.as_str())
+}
 
 /// The domain the seed of a mind's own stream is drawn from.
 const MIND_STREAM: clash_core::HashDomain = clash_core::HashDomain::new("ai.mind");
@@ -1408,6 +1431,15 @@ fn pursue(sim: &mut Sim, mind: EntityId) -> bool {
                     .get(mind)
                     .and_then(|state| state.held.clone());
                 if let Some(held) = held {
+                    if lasting(&reason) {
+                        // Trying again, by this method or another of the
+                        // goal, would meet the same refusal: the goal is
+                        // set aside and the mind chooses again.
+                        step_failed(sim, mind, &held, reason.clone());
+                        fail_goal(sim, mind, held.goal, reason);
+                        prompt(sim, mind);
+                        return true;
+                    }
                     step_failed(sim, mind, &held, reason);
                 }
             }
@@ -2093,7 +2125,11 @@ fn choose_action(sim: &mut Sim, mind: EntityId, purpose: &str, target: Option<Va
     let Some(registry) = defs.try_registry::<ActionDef>() else {
         return Begun::Failed(no_option(purpose));
     };
+    // The last refusal that waiting might change, and the last that it
+    // will not: the step fails for good only if every action refused
+    // it for good.
     let mut last: Option<Reason> = None;
+    let mut last_lasting: Option<Reason> = None;
     for (id, def) in registry.iter() {
         if !def.tags.contains(tag) {
             continue;
@@ -2106,6 +2142,7 @@ fn choose_action(sim: &mut Sim, mind: EntityId, purpose: &str, target: Option<Va
             params.push(("target".to_owned(), target.to_stored()));
         }
         match start(sim, mind, StepKind::Choose, id, &params) {
+            Begun::Failed(reason) if lasting(&reason) => last_lasting = Some(reason),
             Begun::Failed(reason) => last = Some(reason),
             other => {
                 events::option_chosen(sim, mind, purpose, registry.name(id));
@@ -2113,7 +2150,7 @@ fn choose_action(sim: &mut Sim, mind: EntityId, purpose: &str, target: Option<Va
             }
         }
     }
-    Begun::Failed(last.unwrap_or_else(|| no_option(purpose)))
+    Begun::Failed(last.or(last_lasting).unwrap_or_else(|| no_option(purpose)))
 }
 
 fn no_option(purpose: &str) -> Reason {

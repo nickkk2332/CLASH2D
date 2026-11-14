@@ -1,4 +1,4 @@
-//! What the market town's sessions of the fifth round share
+//! What the market town's sessions of the sixth round share
 //! (`play_making.rs`, `play_pistol.rs`, `play_disguise.rs`): the game
 //! begun in the square, the town's furniture found by name, and reads of
 //! what characters hold and believe for the sessions' assertions (they
@@ -289,10 +289,9 @@ pub fn use_offer_at(run: &mut Headless, name: &str, at: Option<Location>) -> boo
     started
 }
 
-/// [`use_offer_at`] without waiting for it to be done. (The sessions'
-/// `use_near` counts what lies loose and what can be done as one list,
-/// and presses Enter in the first when something lies loose: a fault of
-/// that helper, `docs/playtest-beta.md`, the fifth round.)
+/// [`use_offer_at`] without waiting for it to be done. It finds the row
+/// by the list's own order, so it reaches a row scrolled out of view
+/// (`docs/playtest-beta.md`, the sixth round).
 pub fn start_offer_at(run: &mut Headless, name: &str, at: Option<Location>) -> bool {
     let index = run
         .game()

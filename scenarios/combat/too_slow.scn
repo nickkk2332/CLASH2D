@@ -26,4 +26,4 @@ advance 1s
 expect event window_closed
 expect event strike_landed
 assert "len(@e:2.wounds) > 0"
-expect hash fdf49b9275d9fc2d09087e093fbc2574
+expect hash 406b67a74012ddd442c3132ed3cf5baa

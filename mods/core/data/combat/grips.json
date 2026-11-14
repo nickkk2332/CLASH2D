@@ -127,9 +127,9 @@
           { "if": "self.gripped_by != null and (contest('grapple', self.attr.strength ?? 10, self.gripped_by.attr.strength ?? 10) ?? -1) >= 0",
             "then": [ { "release_grip": { "who": "self" } } ] } ] } ] },
 
-  { "//": "Laying hands on someone held hostile once they are within reach (09 §3.2): a grab, which holds them where they are. A guard who holds someone strikes them with the other hand (`confront`).",
+  { "//": "Laying hands on someone held hostile once they are within reach (09 §3.2): a grab, which holds them where they are. A guard who holds someone strikes them with the other hand (`confront`). With no arm to grab with the grab is refused for a reason waiting will not change, and the goal is set aside for its `retry_after` while the mind does something else (decision D-961).",
     "type": "goal", "id": "apprehend",
-    "doc": "Laying hands on someone held hostile who is in sight and within reach: a grab, which keeps them from getting away. Once they are held, other goals go on.",
+    "doc": "Laying hands on someone held hostile who is in sight and within reach: a grab (`grab`), which keeps them from getting away. Once they are held, other goals go on. With no arm that can grab, given up for a while.",
     "about": { "track": {
       "where": "self.hostile(it) and (self.last_seen(it) ?? 99) < 3 and (dist(self, self.believed_loc(it)) ?? 99) < 2",
       "best": "0 - (dist(self, self.believed_loc(it)) ?? 99)" } },
@@ -137,7 +137,7 @@
     "commit": 0.3,
     "interrupts": true,
     "methods": [
-      { "steps": [ { "choose": { "purpose": "grip", "target": "$about" } } ] },
+      { "steps": [ { "do": { "action": "core:grab", "with": { "target": "$about" } } } ] },
       { "steps": [ { "look": { "at": "$about", "time": "1 s" } } ] } ] },
 
   { "//": "Guards lay hands on whoever they go for, once they are close enough.",

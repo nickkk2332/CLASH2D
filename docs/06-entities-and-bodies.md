@@ -1977,6 +1977,9 @@ decided by the hook `passage_requested`: a handler sets its field `yields`
 to true. Only a single cell mover swaps with a single cell creature; two
 or more in the way refuse the step. Members of a formation yield to each
 other (09 §5.5). Shoving and forcing past are actions content defines.
+In the bundled content the dead and the senseless yield
+(`core:step_over_the_fallen`, decision D-964): changing places with them
+is stepping over them, so a body does not seal a doorway.
 
 **Paths.** A path is planned from what the mover believes (01 R11) and
 kept with the mover; each step of it is checked against truth when it is

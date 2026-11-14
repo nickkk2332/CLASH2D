@@ -54,5 +54,11 @@
     "phases": [
       { "id": "shift", "time": "600 ms",
         "on_exit": [ { "set_posture": { "who": "self", "posture": { "expr": "$posture" } } } ] }
-    ] }
+    ] },
+
+  { "//": "Stepping over the fallen (06 §11): one creature that blocks movement holds its cell against a mover unless it yields, and someone lying dead or senseless cannot stand aside. They yield: the mover and the body change places, which is stepping over them, so that a body in a doorway does not seal it (decision D-964).",
+    "type": "eoc", "id": "step_over_the_fallen", "on": "passage_requested",
+    "if": "(target.vital ?? 'awake') != 'awake'",
+    "doc": "Whoever lies dead or senseless in a cell someone steps into yields it: the two change places (`passage_requested`).",
+    "do": [ { "modify": { "event.yields": true } } ] }
 ]

@@ -27,4 +27,4 @@ advance 41s
 expect event recipe_completed recipe=core:arrows
 assert "offset(@e:0.loc, 3, 0, 0).fixture.device == null and len(offset(@e:0.loc, 13, 0, 0).fixture.device.held('stowed')) == 2"
 assert "offset(@e:0.loc, 1, 0, 0).fixture.device.held('stowed')[0].count == 4"
-expect hash 5909b7b06b95c9b63be70d1a6df2071a
+expect hash 655916bf30c70ac0498d9ba6e259c18e

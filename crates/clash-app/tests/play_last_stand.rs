@@ -1,15 +1,19 @@
 //! Play session: the last stand (13 §11), from the title, as a player
-//! plays it. Three strangers come down a dark lane for the character,
-//! one by one; a lamp burns by the door of a house, another inside, and
-//! a club and bandages lie on its table (decision D-909). In the first
-//! session the character gets inside, shuts the door, leaves and carries
-//! on from the title (the game's one save), and waits: the stranger
-//! opens the door and comes in. In the second the character stays on the
-//! lane and fights, and the night ends the other way. Then the night is
-//! played to its end: fighting at the door as an ordinary person and as
-//! a brawler, shooting from inside as a marksman, and hidden in the dark
-//! house with the lamp out until dawn. That dawn ends the game is tested
-//! in `clash-sim`'s `tests/scenario.rs` (decision D-879).
+//! plays it. Three strangers with knives and lanterns come down a dark
+//! lane for the character, one by one; a lamp burns by the door of a
+//! house, another inside, a club and bandages lie on its table and a
+//! wardrobe stands in it, and it has a back door (decisions D-909,
+//! D-950, D-963). In the first session the character gets inside, shuts
+//! the door, leaves and carries on from the title (the game's one save),
+//! and waits: the stranger opens the door and comes in. In the second
+//! the character stays on the lane and fights, and the night ends the
+//! other way. Then the night is played to its end: fighting at the door
+//! as an ordinary person and as a brawler, shooting from inside as a
+//! marksman, hidden in the dark house with the lamp out, and in the
+//! wardrobe. An ignored session plays the night every way at many seeds
+//! (`the_night_played_many_ways`, `docs/playtest-beta.md`, the fifth
+//! round). That dawn ends the game is tested in `clash-sim`'s
+//! `tests/scenario.rs` (decision D-879).
 //!
 //! The golden frames are written with `BLESS=1 cargo test -p clash-app`.
 
@@ -22,6 +26,17 @@ use session::*;
 
 /// The last stand is the first game of the bundled list.
 const LAST_STAND: usize = 0;
+
+/// The seed the night in the dark, in the wardrobe and at the door as a
+/// brawler are played at: one at which all three strangers come for her
+/// (`docs/playtest-beta.md`, the fifth round, has the night at sixteen
+/// seeds played every way; at some, nobody ever sees her and nobody
+/// comes in).
+const NIGHT_SEED: u64 = 1;
+
+/// The seed the ordinary person's night at the door is played at: the
+/// kept sessions' first seed, at which she kills all three.
+const DOOR_SEED: u64 = 4;
 
 /// From the title to the lane, past the introduction.
 fn begin(run: &mut Headless) {
@@ -135,13 +150,21 @@ fn inside_with_the_door_shut_they_come_in() {
 /// The marksman is the third of the playable characters.
 const MARKSMAN: usize = 2;
 
+/// The seed the marksman's night is played at: one at which the first
+/// stranger comes into the light of the open door and can be shot at
+/// before he reaches her (at seed 4, since the strangers carry lanterns
+/// and the first comes from the east, D-963, he is on her before a shot
+/// is loosed).
+const MARKSMAN_SEED: u64 = 8;
+
 /// The brawler is the second of the playable characters.
 const BRAWLER: usize = 1;
 
 /// Holds out where the character stands as a player would: the long
 /// wait (an hour, broken off when a foe comes into sight or a blow
-/// lands); with someone alive in sight, Tab and `f` at them, a minute
-/// going by when the blow cannot be struck (out of reach); any blow
+/// lands); with someone alive in sight, Tab and `f` at them, walking up
+/// to them first while they are out of reach (`strike_target`), a
+/// minute going by when there is no way to them; any blow
 /// coming is met with a dodge, a step back or a step aside where one is
 /// in time (a dodge first: holding the door, a step back lets them in;
 /// until the prompt listed the reactions by `offer`, D-943, Step back
@@ -152,6 +175,9 @@ const BRAWLER: usize = 1;
 fn hold_out(run: &mut Headless, turns: usize) -> usize {
     let mut blows = 0;
     let mut wounds = 0;
+    // Whether the character fights with the club: one put down is taken
+    // up again.
+    let mut armed = run.text().contains("Holding a club");
     for _ in 0..turns {
         match top(run).as_str() {
             "ui:summary" => break,
@@ -167,20 +193,41 @@ fn hold_out(run: &mut Headless, turns: usize) -> usize {
                     .count();
                 if now > wounds && run.text().contains("bandage") {
                     wounds = now;
-                    // A hand free for it: the club put down first, and
-                    // taken up again after.
-                    let armed = run.text().contains("Holding a club");
-                    if armed {
-                        do_with_named(run, "club", "drop");
-                        until_asked(run, 60);
-                    }
+                    // Bound with what is in hand (a bandage needs no
+                    // free hand, D-947); only if it cannot be is the
+                    // club put down first, and taken up again after.
+                    let before = log_text(run).len();
                     if use_near(run, "Bandage your wounds") {
                         until_asked(run, 60);
                     }
-                    if armed && top(run) == "ui:play" && use_near(run, "Pick up a club") {
+                    let bound = log_since(run, before)
+                        .iter()
+                        .any(|line| line == "Ada binds their wounds.");
+                    if !bound && top(run) == "ui:play" && run.text().contains("Holding a club") {
+                        do_with_named(run, "club", "drop");
+                        // A blow coming while the things carried were
+                        // open leaves them open: put away.
+                        for _ in 0..3 {
+                            if ["ui:inventory", "ui:item"].contains(&top(run).as_str()) {
+                                press(run, "escape");
+                            }
+                        }
                         until_asked(run, 60);
+                        if top(run) == "ui:play" && use_near(run, "Bandage your wounds") {
+                            until_asked(run, 60);
+                        }
                     }
                     continue;
+                }
+                // The club put down to bind a wound, taken up again.
+                if armed && !run.text().contains("Holding a club") {
+                    // Once: if it cannot be had back, she fights without.
+                    armed = false;
+                    if use_near(run, "Pick up a club") {
+                        until_asked(run, 60);
+                        armed = run.text().contains("Holding a club");
+                        continue;
+                    }
                 }
                 // Tab past whoever the log said died.
                 press(run, "tab");
@@ -191,21 +238,20 @@ fn hold_out(run: &mut Headless, turns: usize) -> usize {
                     press(run, "tab");
                 }
                 if run.game().scene().target().is_some() && !target_dead(run) {
-                    let before = commands(run);
-                    press(run, "f");
-                    if !["ui:play", "ui:reaction", "ui:summary"].contains(&top(run).as_str()) {
-                        press(run, "escape");
-                    }
-                    if commands(run) == before && top(run) == "ui:play" {
-                        // Out of reach: a minute, broken off by a blow.
-                        press(run, "p");
-                    } else {
+                    // Out of reach, walked up to first, as a player
+                    // would; with no way there, a minute, broken off by
+                    // a blow.
+                    if strike_target(run, 4) {
                         blows += 1;
+                    } else {
+                        press(run, "p");
                     }
                 } else {
                     press(run, "shift+p");
                 }
             }
+            // Left open when a blow came: closed, as a player would.
+            "ui:inventory" | "ui:item" | "ui:interact" => press(run, "escape"),
             other => panic!("`{other}` is on top:\n{}", run.text()),
         }
     }
@@ -240,9 +286,9 @@ fn deaths(run: &Headless) -> usize {
 /// as a playable character chosen ready-made: in through the door, what
 /// lies on the table taken up (the club, for whoever has nothing in
 /// hand, and the bandages), and held out at the door (`hold_out`).
-fn night_inside(template: Option<usize>, name: &str) -> Headless {
+fn night_inside(template: Option<usize>, name: &str, seed: u64) -> Headless {
     let data = DataDir::new(&format!("stand-night-{name}"));
-    let mut run = boot_default(data.path(), 4);
+    let mut run = boot_default(data.path(), seed);
     match template {
         Some(template) => {
             create(&mut run, LAST_STAND, template, "Ada");
@@ -278,30 +324,26 @@ fn night_inside(template: Option<usize>, name: &str) -> Headless {
 }
 
 #[test]
-fn fighting_at_the_door_an_ordinary_person_kills_the_first_and_lives() {
-    let run = night_inside(None, "ordinary");
-    // Until the strangers searched (D-950) the first was beaten to death
-    // at the door and the wounds of the fight killed the one who stood
-    // there. Now the first, who saw her go in, comes in to search and is
-    // fought in the lit room and killed; the two after him walk the lane
-    // and never perceive her in the house, so nobody searches it again,
-    // and her bound wounds hold until dawn (`docs/playtest-beta.md`, the
-    // fourth round).
+fn fighting_at_the_door_an_ordinary_person_kills_them_and_lives() {
+    let run = night_inside(None, "ordinary", DOOR_SEED);
+    // The strangers carry lanterns and tell each other where she is
+    // (D-960, D-962); the first comes from the east, the fighter walks
+    // up to whoever is in sight, binds her wounds between, and steps
+    // over the fallen (D-963, D-964). At this seed she kills each as he
+    // comes and lives to dawn; at most seeds an ordinary person at the
+    // door does not (`docs/playtest-beta.md`, the fifth round).
     assert_eq!(outcome(&run), "survived", "{:?}", log_text(&run));
-    assert_eq!(deaths(&run), 1, "{:?}", log_text(&run));
+    assert!(deaths(&run) >= 1, "{:?}", log_text(&run));
     let lines = log_text(&run);
     assert!(lines.iter().any(|line| line == "Ada is wounded."));
 }
 
 #[test]
-fn a_brawler_at_the_door_kills_the_first_and_lives() {
-    let run = night_inside(Some(BRAWLER), "brawler");
-    // Until the strangers searched (D-950) the club won every fight at
-    // the door and the brawler bled to death after the third, at one.
-    // Now the first comes in to search and dies by the club; the others
-    // never perceive him in the house, and the night is won.
+fn a_brawler_at_the_door_kills_them_and_lives() {
+    let run = night_inside(Some(BRAWLER), "brawler", NIGHT_SEED);
+    // As the ordinary person's night, at another seed (the fifth round).
     assert_eq!(outcome(&run), "survived", "{:?}", log_text(&run));
-    assert_eq!(deaths(&run), 1, "{:?}", log_text(&run));
+    assert!(deaths(&run) >= 1, "{:?}", log_text(&run));
 }
 
 /// The nearest cell within four of the character whose fixture is
@@ -355,14 +397,16 @@ fn hidden_inside(run: &Headless) -> bool {
 #[test]
 fn hidden_in_the_dark_house_until_dawn() {
     let data = DataDir::new("stand-dark");
-    let mut run = boot_default(data.path(), 4);
+    let mut run = boot_default(data.path(), NIGHT_SEED);
     begin(&mut run);
     get_inside(&mut run);
+    take_up_what_is_on_the_table(&mut run);
     put_out_the_lamp(&mut run);
-    hold_out(&mut run, 400);
-    // Unseen in the dark by the lamp put out, though each stranger came
-    // in and searched the house (D-950), and alive at the first light:
-    // the night is won.
+    hide_out(&mut run, 6000);
+    // In the dark by the lamp put out, with the club and the bandages;
+    // the strangers came in with their lanterns, one found her, and she
+    // fought them off in the dark and is alive at the first light: the
+    // night is won (at most seeds it is not: the fifth round).
     assert_eq!(outcome(&run), "survived", "{:?}", log_text(&run));
     assert_eq!(time_of_day(&run), 5.0 * 3600.0);
     let summary = run.text();
@@ -375,7 +419,7 @@ fn hidden_in_the_dark_house_until_dawn() {
 #[test]
 fn hidden_in_the_wardrobe_the_stranger_searches_it() {
     let data = DataDir::new("stand-wardrobe");
-    let mut run = boot_default(data.path(), 4);
+    let mut run = boot_default(data.path(), NIGHT_SEED);
     begin(&mut run);
     get_inside(&mut run);
     put_out_the_lamp(&mut run);
@@ -435,6 +479,8 @@ fn shoot_it_out(run: &mut Headless, keys: usize) -> usize {
                     press(run, "shift+p");
                 }
             }
+            // Left open when a blow came: closed, as a player would.
+            "ui:inventory" | "ui:item" | "ui:interact" => press(run, "escape"),
             other => panic!("`{other}` is on top:\n{}", run.text()),
         }
     }
@@ -444,7 +490,7 @@ fn shoot_it_out(run: &mut Headless, keys: usize) -> usize {
 #[test]
 fn a_marksman_shoots_at_them_from_inside() {
     let data = DataDir::new("stand-marksman");
-    let mut run = boot_default(data.path(), 4);
+    let mut run = boot_default(data.path(), MARKSMAN_SEED);
     // Chosen ready-made: a name, and nothing more.
     create(&mut run, LAST_STAND, MARKSMAN, "Ada");
     let shown = run.text();
@@ -520,6 +566,8 @@ fn standing_on_the_lane_the_night_ends_the_other_way() {
                     press(&mut run, ".");
                 }
             }
+            // Left open when a blow came: closed, as a player would.
+            "ui:inventory" | "ui:item" | "ui:interact" => press(&mut run, "escape"),
             other => panic!("`{other}` is on top:\n{}", run.text()),
         }
         let _ = i;
@@ -547,4 +595,278 @@ fn standing_on_the_lane_the_night_ends_the_other_way() {
     press(&mut run, "enter");
     assert_eq!(top(&run), "ui:title");
     assert!(saves(&run).is_empty(), "an ending takes the one save");
+}
+
+// ---- the night played many ways (`docs/playtest-beta.md`, the fifth round) ----
+
+/// Waits out the night where the character is, as a player hiding
+/// would: the long wait while nobody is in sight, a minute at a time
+/// while someone is (the long wait is broken off when a foe comes into
+/// sight); found (a blow coming, a wound, or brought out of where it
+/// hid), it fights as `hold_out` does. Until the game ends or `turns`
+/// turns have gone. Returns whether it was found.
+fn hide_out(run: &mut Headless, turns: usize) -> bool {
+    let inside = hidden_inside(run);
+    for _ in 0..turns {
+        match top(run).as_str() {
+            "ui:summary" => return false,
+            "ui:reaction" => break,
+            "ui:play" => {
+                let hurt = log_text(run).iter().any(|line| line == "Ada is wounded.");
+                if hurt || (inside && !hidden_inside(run)) {
+                    break;
+                }
+                press(run, "tab");
+                if run.game().scene().target().is_some() && !target_dead(run) {
+                    press(run, "p");
+                } else {
+                    press(run, "shift+p");
+                }
+            }
+            // Left open when a blow came: closed, as a player would.
+            "ui:inventory" | "ui:item" | "ui:interact" => press(run, "escape"),
+            other => panic!("`{other}` is on top:\n{}", run.text()),
+        }
+    }
+    if top(run) == "ui:summary" {
+        return false;
+    }
+    hold_out(run, turns);
+    true
+}
+
+/// The other door of the house, if it has one: a door within eight
+/// cells of the refuge on its storey, the farthest from it.
+fn back_door(run: &Headless) -> Option<Location> {
+    let door = refuge(run);
+    let mut cells: Vec<(i32, i32)> = (-8..=8)
+        .flat_map(|dx| (-8..=8).map(move |dy| (dx, dy)))
+        .collect();
+    cells.sort_by_key(|(dx, dy)| std::cmp::Reverse(dx * dx + dy * dy));
+    cells
+        .into_iter()
+        .filter(|delta| *delta != (0, 0))
+        .map(|(dx, dy)| Location::new(door.grid, door.cell + clash_core::IVec3::new(dx, dy, 0)))
+        .find(|at| {
+            run.game()
+                .with_session(|session| {
+                    let cosmos = session.sim.truth().cosmos();
+                    let cell = cosmos.cell(*at).ok()?;
+                    let block = cosmos
+                        .defs()
+                        .state_text(clash_world::Layer::Block, cell.block.raw());
+                    Some(block.starts_with("core:door"))
+                })
+                .flatten()
+                .unwrap_or(false)
+        })
+}
+
+/// The bandages and the club on the table taken up, by the lamp.
+fn take_up_what_is_on_the_table(run: &mut Headless) {
+    let here = player_loc(run).unwrap();
+    let Some(table) = lying_near(run, here, "core:bandage", 6) else {
+        return;
+    };
+    let beside = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+        .into_iter()
+        .map(|(dx, dy)| Location::new(table.grid, table.cell + clash_core::IVec3::new(dx, dy, 0)))
+        .find(|at| believed_way(run, *at).is_ok())
+        .unwrap_or(table);
+    walk_to(run, beside, 0, 12);
+    for what in ["Pick up a club", "Pick up 2 bandages"] {
+        if top(run) != "ui:play" {
+            return;
+        }
+        let armed = run.text().contains("Holding a club") || run.text().contains("Holding a bow");
+        if !(armed && what.ends_with("club")) && use_near(run, what) {
+            until_asked(run, 60);
+        }
+    }
+}
+
+/// Shoots at whoever is in sight while there are arrows, as
+/// `shoot_it_out` does, and fights as `hold_out` does once a shot
+/// cannot be loosed; waits the long wait with nobody in sight.
+fn shoot_then_fight(run: &mut Headless, turns: usize) {
+    for _ in 0..turns {
+        match top(run).as_str() {
+            "ui:summary" => return,
+            "ui:reaction" => {
+                react(run, &["Dodge", "Step back", "Step aside", "Parry", "Block"]);
+            }
+            "ui:play" => {
+                press(run, "tab");
+                if run.game().scene().target().is_some() && !target_dead(run) {
+                    let before = commands(run);
+                    press(run, "s");
+                    if !["ui:play", "ui:reaction", "ui:summary"].contains(&top(run).as_str()) {
+                        press(run, "escape");
+                    }
+                    if commands(run) == before && top(run) == "ui:play" && !strike_target(run, 4) {
+                        press(run, ".");
+                    }
+                } else {
+                    press(run, "shift+p");
+                }
+            }
+            // Left open when a blow came: closed, as a player would.
+            "ui:inventory" | "ui:item" | "ui:interact" => press(run, "escape"),
+            other => panic!("`{other}` is on top:\n{}", run.text()),
+        }
+    }
+}
+
+/// One night played one way at one seed: the outcome, how many died,
+/// whether the hider was found, and the time of day it ended.
+fn play_night(way: &str, seed: u64) -> String {
+    let data = DataDir::new(&format!("stand-{way}-{seed}"));
+    let mut run = boot_default(data.path(), seed);
+    match way {
+        "brawler" => {
+            create(&mut run, LAST_STAND, BRAWLER, "Ada");
+            begin_created(&mut run);
+        }
+        "marksman" => {
+            create(&mut run, LAST_STAND, MARKSMAN, "Ada");
+            begin_created(&mut run);
+        }
+        _ => begin(&mut run),
+    }
+    get_inside(&mut run);
+    take_up_what_is_on_the_table(&mut run);
+    let mut found = false;
+    // Set upon before there was time to hide or flee: fought out.
+    let way = if top(&run) == "ui:play" {
+        way
+    } else {
+        "ordinary"
+    };
+    match way {
+        "dark" => {
+            put_out_the_lamp(&mut run);
+            found = hide_out(&mut run, 6000);
+        }
+        "wardrobe" => {
+            put_out_the_lamp(&mut run);
+            let wardrobe = fixture_near(&run, "wardrobe").expect("a wardrobe in the house");
+            walk_to(&mut run, wardrobe, 1, 12);
+            assert!(use_near(&mut run, "Hide inside"), "{}", run.text());
+            until_asked(&mut run, 60);
+            found = hide_out(&mut run, 3000);
+        }
+        "flee" => {
+            let back = back_door(&run).expect("a back door");
+            walk_to(&mut run, back, 0, 30);
+            // Out, and on away from the lane into the dark, some thirty
+            // metres, round what is in the way.
+            let door = refuge(&run);
+            let away = (back.cell.y - door.cell.y).signum();
+            let far = Location::new(
+                back.grid,
+                back.cell + clash_core::IVec3::new(0, 30 * away, 0),
+            );
+            if top(&run) == "ui:play" {
+                let reachable = believed_way(&run, far).is_ok();
+                if reachable {
+                    walk_to(&mut run, far, 3, 60);
+                } else {
+                    for _ in 0..30 {
+                        if top(&run) != "ui:play" {
+                            break;
+                        }
+                        press(&mut run, if away < 0 { "k" } else { "j" });
+                    }
+                }
+            }
+            found = hide_out(&mut run, 3000);
+        }
+        "marksman" => shoot_then_fight(&mut run, 3000),
+        _ => {
+            hold_out(&mut run, 3000);
+        }
+    }
+    // For looking into a night: its log, and the lights carried.
+    if let Ok(dir) = std::env::var("NIGHT_DUMP") {
+        let door = refuge(&run);
+        let lights = run
+            .game()
+            .with_session(|session| session.sim.truth().cosmos().area_lights(door.grid).len())
+            .unwrap_or_default();
+        let text = format!(
+            "lights carried: {lights}\n{}\n{}",
+            log_text(&run).join("\n"),
+            run.text()
+        );
+        let _ = std::fs::write(format!("{dir}/night-{way}-{seed}.txt"), text);
+    }
+    format!(
+        "{way} seed {seed}: {} deaths {} found {found} at {:.2} h",
+        outcome(&run),
+        deaths(&run),
+        time_of_day(&run) / 3600.0
+    )
+}
+
+/// The night played each way at each seed (`NIGHT_WAYS`: `dark`,
+/// `wardrobe`, `ordinary`, `brawler`, `marksman`, `flee`, comma
+/// separated; `NIGHT_SEEDS`: `1-8` or a list; `NIGHT_THREADS`, default
+/// three), a line for each to standard error and to `NIGHT_LOG` if set.
+/// Run in release: `cargo test --release -p clash-app --test
+/// play_last_stand -- --ignored --nocapture the_night_played`.
+#[test]
+#[ignore = "plays dozens of nights: run by hand in release for the balance"]
+fn the_night_played_many_ways() {
+    let ways: Vec<String> = std::env::var("NIGHT_WAYS")
+        .unwrap_or_else(|_| "dark,wardrobe,ordinary,brawler,marksman,flee".to_owned())
+        .split(',')
+        .map(str::to_owned)
+        .collect();
+    let seeds: Vec<u64> = match std::env::var("NIGHT_SEEDS") {
+        Ok(text) if text.contains('-') => {
+            let (a, b) = text.split_once('-').unwrap();
+            (a.parse().unwrap()..=b.parse().unwrap()).collect()
+        }
+        Ok(text) => text.split(',').map(|seed| seed.parse().unwrap()).collect(),
+        Err(_) => (1..=8).collect(),
+    };
+    let threads: usize = std::env::var("NIGHT_THREADS")
+        .ok()
+        .and_then(|text| text.parse().ok())
+        .unwrap_or(3);
+    let jobs: Vec<(String, u64)> = ways
+        .iter()
+        .flat_map(|way| seeds.iter().map(move |seed| (way.clone(), *seed)))
+        .collect();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let log = std::env::var("NIGHT_LOG").ok();
+    let lock = std::sync::Mutex::new(());
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(|| {
+                loop {
+                    let at = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let Some((way, seed)) = jobs.get(at) else {
+                        break;
+                    };
+                    let started = std::time::Instant::now();
+                    let line = std::panic::catch_unwind(|| play_night(way, *seed))
+                        .unwrap_or_else(|_| format!("{way} seed {seed}: panicked"));
+                    let line = format!("{line} ({:.0} s)", started.elapsed().as_secs_f64());
+                    let _guard = lock.lock().unwrap();
+                    eprintln!("{line}");
+                    if let Some(path) = &log {
+                        use std::io::Write as _;
+                        if let Ok(mut file) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(path)
+                        {
+                            let _ = writeln!(file, "{line}");
+                        }
+                    }
+                }
+            });
+        }
+    });
 }

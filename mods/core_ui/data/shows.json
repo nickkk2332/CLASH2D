@@ -9,7 +9,7 @@
     "if": "is_null(target)",
     "anim": "chip", "at": "here",
     "log": "{the(self)} {verb(self, 'strike')} something.", "importance": "minor", "sound": "blow" },
-  { "//": "A shot fired and a weapon reloaded (07 §11): without these lines a pistol emptied in a fight said nothing until a round struck someone, and reloading nothing at all (the fifth play-testing, decision D-973). A shot heard and not seen is told as heard.",
+  { "//": "A shot fired and a weapon reloaded (07 §11): without these lines a pistol emptied in a fight said nothing until a round struck someone, and reloading nothing at all (the sixth play-testing, decision D-973). A shot heard and not seen is told as heard.",
     "type": "show", "id": "shot_fired", "on": "projectile_fired",
     "if": "event.projectile != ''",
     "change": [],

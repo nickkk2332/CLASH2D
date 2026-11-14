@@ -5,7 +5,7 @@
 //! there in it; the watch, told of a hooded stranger, comes for whoever
 //! wears the hood; a wardrobe in a house by the square, and the cloak
 //! taken off inside it and left there; and out again, past a watchman,
-//! who lets her by. `docs/playtest-beta.md`, the fifth round.
+//! who lets her by. `docs/playtest-beta.md`, the sixth round.
 
 mod session;
 mod town;

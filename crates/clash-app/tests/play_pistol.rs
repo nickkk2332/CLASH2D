@@ -4,7 +4,7 @@
 //! someone in the square shot at until the pistol is empty, the watch
 //! coming for the one who shoots; the empty pistol refused with its
 //! reason, reloaded from the backpack with `r`, and fired again.
-//! `docs/playtest-beta.md`, the fifth round.
+//! `docs/playtest-beta.md`, the sixth round.
 
 mod session;
 mod town;
