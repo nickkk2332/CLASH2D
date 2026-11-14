@@ -8,7 +8,7 @@
 //!
 //! - each member's own ticket (`Ticket::player`) shrinks to the tracts
 //!   its senses reach, hot, with no warm margin and no unloading margin
-//!   ([`Ticket::tight`]): the tracts beyond fall to cold, which is to
+//!   ([`Ticket::tight`](clash_world::Ticket::tight)): the tracts beyond fall to cold, which is to
 //!   say they unload, their residents stored as agents following their
 //!   routines on the cold schedule (09 §10.6), and come back where
 //!   their routines put them when the tracts load again;
