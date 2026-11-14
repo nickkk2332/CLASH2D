@@ -602,7 +602,7 @@ fn sweeper<'a>(
 /// what is inside it, keeping the nearest so far; the search stops at
 /// the first block whose nearest cell is farther than the farthest kept.
 /// The same as gathering everyone in reach and keeping the nearest
-/// ([`nearest_in_range_reference`], performance 2), without looking at
+/// (`nearest_in_range_reference`, performance 2), without looking at
 /// the furniture of the rest of the range.
 fn nearest_in_range(
     sim: &Sim,
@@ -1320,14 +1320,15 @@ mod tests {
                 );
                 // A sense that notices creatures alone: the nearest of
                 // them, the goods passed over.
-                let mut creatures: Vec<EntityId> = signal::candidates_reference(&sim, observer, at, range)
-                    .into_iter()
-                    .filter(|id| {
-                        sim.entities
-                            .get(*id)
-                            .is_some_and(|entity| entity.presence().kind == OccupantKind::Creature)
-                    })
-                    .collect();
+                let mut creatures: Vec<EntityId> =
+                    signal::candidates_reference(&sim, observer, at, range)
+                        .into_iter()
+                        .filter(|id| {
+                            sim.entities.get(*id).is_some_and(|entity| {
+                                entity.presence().kind == OccupantKind::Creature
+                            })
+                        })
+                        .collect();
                 creatures.sort_by_key(|id| (distance(*id), *id));
                 creatures.truncate(*max);
                 creatures.sort_unstable();

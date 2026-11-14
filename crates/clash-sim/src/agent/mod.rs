@@ -244,7 +244,12 @@ pub fn current_entry<'s>(
     let reckoned = calendar::reckoned(day, local);
     // While a mind's thought reads it again and again, the part found
     // once is the part (D-922).
-    let key = (core::ptr::from_ref(def) as usize, whom.realm, whom.seed, reckoned);
+    let key = (
+        core::ptr::from_ref(def) as usize,
+        whom.realm,
+        whom.seed,
+        reckoned,
+    );
     let part = match sim.ai.stances.part(key) {
         Some(part) => part,
         None => {

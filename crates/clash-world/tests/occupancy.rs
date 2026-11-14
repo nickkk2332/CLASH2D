@@ -621,12 +621,18 @@ fn the_nearest_found_a_band_at_a_time_are_the_nearest_of_all() {
     let mut w = world();
     let mut seed: u64 = 0x5eed;
     let mut next = |below: i32| -> i32 {
-        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         ((seed >> 33) % below as u64) as i32
     };
     let mut slot = 0_u32;
     for _ in 0..900 {
-        let at = w.at(next(3 * TRACT_XY) - TRACT_XY, next(2 * TRACT_XY - 4), next(4) - 1);
+        let at = w.at(
+            next(3 * TRACT_XY) - TRACT_XY,
+            next(2 * TRACT_XY - 4),
+            next(4) - 1,
+        );
         let size = if next(10) == 0 {
             Footprint::new(1 + next(3) as u8, 1 + next(3) as u8, 1 + next(2) as u8)
         } else {
@@ -641,7 +647,11 @@ fn the_nearest_found_a_band_at_a_time_are_the_nearest_of_all() {
     let topology = *w.cosmos.topology(w.grid).unwrap();
     let mut split = false;
     for ask in 0..60 {
-        let here = w.at(next(3 * TRACT_XY) - TRACT_XY, next(2 * TRACT_XY - 4), next(3) - 1);
+        let here = w.at(
+            next(3 * TRACT_XY) - TRACT_XY,
+            next(2 * TRACT_XY - 4),
+            next(3) - 1,
+        );
         let centre = wrapped(here.cell);
         let radius = Real::from_i64(i64::from(next(60) + 1));
         let filter = if ask % 3 == 0 {
@@ -654,7 +664,8 @@ fn the_nearest_found_a_band_at_a_time_are_the_nearest_of_all() {
             let anchor = w.cosmos.occupant(id).unwrap().loc.cell;
             (distance_sq_cells(topology.delta(centre, anchor)), id)
         };
-        let mut every: Vec<(i64, EntityId)> = found.iter().map(|occupied| key(occupied.id)).collect();
+        let mut every: Vec<(i64, EntityId)> =
+            found.iter().map(|occupied| key(occupied.id)).collect();
         every.sort();
         every.dedup();
         for keep in [1_usize, 5, 32] {
@@ -683,7 +694,10 @@ fn the_nearest_found_a_band_at_a_time_are_the_nearest_of_all() {
             split |= blocks > 12;
             let mut expected = every.clone();
             expected.truncate(keep);
-            assert_eq!(kept, expected, "the nearest {keep} of {here:?} within {radius}");
+            assert_eq!(
+                kept, expected,
+                "the nearest {keep} of {here:?} within {radius}"
+            );
         }
     }
     assert!(split, "no chunk was looked at a band at a time");

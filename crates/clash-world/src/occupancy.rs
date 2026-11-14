@@ -1042,8 +1042,8 @@ impl Cosmos {
                         let after = u32::from(CellIdx::new(0, to as u32, lz as u32).raw())
                             + crate::dims::CHUNK_XY as u32;
                         let start = entries.partition_point(|entry| entry.cell.raw() < first);
-                        let end = entries
-                            .partition_point(|entry| u32::from(entry.cell.raw()) < after);
+                        let end =
+                            entries.partition_point(|entry| u32::from(entry.cell.raw()) < after);
                         if start < end {
                             let z = (chunk_z << CHUNK_Z_BITS) | lz;
                             let least = least_of(

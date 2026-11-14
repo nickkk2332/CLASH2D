@@ -866,7 +866,6 @@ pub(super) fn view_of_reference(
     Some(out)
 }
 
-
 /// The entities standing in cells of a view, by id: all but those given
 /// no signature of the kinds that see.
 fn entities_in(sim: &Sim, view: &[Location]) -> Vec<SeenEntity> {
