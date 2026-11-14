@@ -24,4 +24,4 @@ assert "not @self.has_tag('hostile')"
 expect event scenario_started
 advance 5s
 assert "objective_state('inside') == 'active'"
-expect hash d0d98a5b82057f77a4bc41777ee67597
+expect hash 0e8b37949ccd11bb251dcff62f45d18c

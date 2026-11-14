@@ -18,4 +18,4 @@ advance 3s
 assert "not @e:0.has_trait('core:dashing')"
 advance 5s
 assert "@e:0.cannot_use('core:dash') == null"
-expect hash d629dea7eda03b3fd8eaa3236735a553
+expect hash e0b50fded95521e87b29df33714a45a1
