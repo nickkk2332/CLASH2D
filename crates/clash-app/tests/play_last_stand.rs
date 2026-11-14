@@ -142,8 +142,11 @@ const BRAWLER: usize = 1;
 /// wait (an hour, broken off when a foe comes into sight or a blow
 /// lands); with someone alive in sight, Tab and `f` at them, a minute
 /// going by when the blow cannot be struck (out of reach); any blow
-/// coming is met with a step back, a dodge or a step aside where one is
-/// in time; wounds are bound with a bandage in hand, the club put down
+/// coming is met with a dodge, a step back or a step aside where one is
+/// in time (a dodge first: holding the door, a step back lets them in;
+/// until the prompt listed the reactions by `offer`, D-943, Step back
+/// was off the end of its list, and a dodge was what was chosen); wounds
+/// are bound with a bandage in hand, the club put down
 /// for it. Until the game ends or `turns` turns have gone. Returns the
 /// blows started.
 fn hold_out(run: &mut Headless, turns: usize) -> usize {
@@ -153,7 +156,7 @@ fn hold_out(run: &mut Headless, turns: usize) -> usize {
         match top(run).as_str() {
             "ui:summary" => break,
             "ui:reaction" => {
-                react(run, &["Step back", "Dodge", "Step aside", "Parry", "Block"]);
+                react(run, &["Dodge", "Step back", "Step aside", "Parry", "Block"]);
             }
             "ui:play" => {
                 // Wounded since the last bandage, as the log says: one
@@ -350,7 +353,7 @@ fn shoot_it_out(run: &mut Headless, keys: usize) -> usize {
         match top(run).as_str() {
             "ui:summary" => break,
             "ui:reaction" => {
-                react(run, &["Step back", "Dodge", "Step aside", "Parry", "Block"]);
+                react(run, &["Dodge", "Step back", "Step aside", "Parry", "Block"]);
             }
             "ui:play" => {
                 press(run, "tab");

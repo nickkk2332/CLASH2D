@@ -1305,7 +1305,8 @@ D-940 to D-942; `mods/core/data/social/offences.json`, in the rule group
 - The first time a mind puts a striker to such a blow it **remembers**
   it, as `core:unprovoked_blow` naming the persona; a member of the
   watch **reports** it to the watch (`report_to_group`), every member
-  being told at once; one of the townsfolk not played by anyone
+  being told at once; one of the townsfolk not played by anyone that
+  took fright (its caution not outweighed by its duty: not a brawler)
   **shouts for the watch**: a report (`core:report`, said at strength 8)
   that whoever hears it is told, and that a watchman passes to the
   watch (`core:pass_reports_to_the_watch`). Calling for help and running
@@ -1316,10 +1317,11 @@ D-940 to D-942; `mods/core/data/social/offences.json`, in the rule group
   it (`core:recognise_an_offender`, on `perceived` with `detection`); so
   does whoever is told while it already perceives them
   (`core:told_of_an_offender`, on `memory_added`).
-- **Turning**: someone not played by anyone, struck by someone it does
-  not perceive, turns to where the blow came from
-  (`core:turn_to_a_blow`). The blow itself stays unattributed: a blow
-  nobody made out the striker of has no consequence.
+- A blow nobody made out the striker of has no consequence: struck
+  from behind by someone unseen, the one struck knows it was struck and
+  not by whom. (Turning to where the blow came from was tried and left
+  out: in the last stand's dark it let the strangers see whoever struck
+  them and block every blow after, which changed the night's balance.)
 
 ## 13. What the player perceives
 

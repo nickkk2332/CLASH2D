@@ -392,8 +392,10 @@ Now (D-940, D-941), all as content:
   `touch` (half a metre: only whoever it lands on), given by every
   bundled mind, and the event signal `blow_felt`. It makes out who
   struck it only if it perceives them by another sense: struck from
-  behind by someone unseen, it turns to where the blow came from
-  (`core:turn_to_a_blow`) and blames nobody.
+  behind by someone unseen, it blames nobody. (Turning round to where
+  the blow came from was tried and left out: in the last stand's dark
+  it let the strangers see whoever struck them and block every blow
+  after, and the night could no longer be won at the door.)
 - **Whoever perceives a blow** and makes out the striker, against itself
   or against someone it neither holds hostile nor fears, takes against
   the striker by its own mind's weights (`core:take_against`): the
@@ -420,7 +422,7 @@ Now (D-940, D-941), all as content:
 |---------|------|-------|-------|
 | The market fight | `play_market.rs` (`a_fight_in_the_square_and_the_watch_answers`, no longer ignored) | Begun in the square at seed 4; Tab to someone not of the watch, up to them, `f` until a blow lands; the watch watched for; then to the nearest wardrobe in a house by the square, in, three minutes waited | Tab had moved to the watchman, who was struck: he held Ada hostile at once and went for her (`The watchman strikes Ada.`, `Ada is wounded.`); three of the townsfolk round the square shouted for the watch (`The person shouts: "Watch! Over here!"`, `The shopkeeper shouts …`); all four other watchmen knew of the blow. She got upstairs into the wardrobe; the watchman lost her, looked where he had last seen her and went back to his post. Escaped. Passes on either outcome, caught or hidden (D-942). 67 s in a debug build |
 | A blow struck without cause | `scenarios/social/unprovoked_blow.scn` | A townsperson struck by a character a player plays, before a watchman and another townsperson; a watchman fifty metres off | The one struck and the witness fear her (0.70); the watchman holds her hostile (0.90) and takes up `confront`; the shout is heard; the far watchman is told, and holds her hostile the moment he sees her |
-| A blow nobody saw | `scenarios/social/unseen_blow.scn` | Struck from behind, standing still, nobody else about | Felt, the one struck turned round; no fear, no memory naming her, the watch told nothing |
+| A blow nobody saw | `scenarios/social/unseen_blow.scn` | Struck from behind, standing still, nobody else about | Felt; no fear, no memory naming her, the watch told nothing |
 | A disguised blow | `scenarios/social/disguised_blow.scn` | Tess in Vic's face strikes someone before a watchman | Both remember Vic; the far watchman is told of Vic; Tess, her face her own again, walks up to him unknown; Vic is held hostile the moment he is seen (scene S15) |
 | A bandage with both hands full | `scenarios/making/bandage_hands_full.scn` | A club in one hand, two bandages in the other, a cut | `Bandage your wounds` offered and the wound closed; one bandage used, one left (both were used before) |
 
@@ -443,6 +445,27 @@ were not taught to search the house (known issue 1 below).
 | `Footsteps, somewhere close.` filled the log | Every step heard and not seen | A show's `heard.quiet` (D-945): footsteps are told once, and again after twenty seconds without any; the `!` marks each |
 | A variable set just before `fail_objective` read as unset in `on_failed` | The errand failed as "Night has fallen" when the parcel was left behind | Not the scenario runtime, which reads it set: the errand wrote `"'left'"`, which a text field takes as written, quotes and all, so `== 'left'` was false. The loader warns of quoted text (`W0679`, D-946); the errand writes `left` |
 | Binding a wound "needed a free hand" | The brawler at the door bled to death with bandages on the table | It never did (16 §3.3: `held` is anything carried); the brawler held two clubs and had no hand to take the bandages up. One binding used up both bandages of a stack: now one (D-947) |
+
+### What changed in the earlier sessions
+
+- **Golden frames blessed again**, each for a change looked at:
+  `struck` and `empty_weapon` (someone struck or shot now shouts for the
+  watch, and the one shot steps away, afraid), `reaction_prompt` (the
+  reactions listed by `offer`: Block, with no shield, last, which brings
+  Step back into the list's view), `play_errand_delivered` (footsteps
+  told once, not `(x2)`).
+- **The last stand's sessions** answered a blow with the first of Step
+  back, Dodge, Step aside, Parry and Block that the prompt showed; Step
+  back was off the end of its list, so a dodge was what was played.
+  Listed by `offer`, Step back came into view, and stepping back from
+  the door let the strangers in: the night at the door was lost before
+  the first stranger died. The sessions now ask for a dodge first, which
+  is what they played; their outcomes are as before.
+- **The quarrel in the square** (`a_word_a_blow_the_watch_and_a_wardrobe`)
+  no longer waits half a minute beside the watchman struck: he answers
+  now. It runs for the wardrobe as the market fight does.
+- **Hearing behind a wall** (`perceiving.rs`): a step heard within
+  twenty seconds of the one before is marked and not told.
 
 ### Known issues that remain
 

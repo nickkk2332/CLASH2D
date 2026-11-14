@@ -131,33 +131,16 @@ fn a_word_a_blow_the_watch_and_a_wardrobe() {
         "{struck:?}"
     );
 
-    // Half a minute, then upstairs to the nearest wardrobe, and in.
-    for _ in 0..30 {
-        answer(&mut run);
-        press(&mut run, ".");
+    // Since the third round the one struck answers (D-941): upstairs to
+    // the nearest wardrobe at once, and in; caught on the way, or hidden
+    // three minutes with nobody looking in.
+    let ada = player(&run);
+    let (was_caught, hidden) = flee_to_a_wardrobe(&mut run, ada);
+    eprintln!("caught {was_caught}, hidden {hidden}");
+    assert!(was_caught || hidden, "{}", run.text());
+    if hidden && !was_caught {
+        assert_eq!(top(&run), "ui:play");
     }
-    let at = player_loc(&run).unwrap();
-    let wardrobe = *near(&run, at, "wardrobe", 30)
-        .first()
-        .expect("a wardrobe in a house by the square");
-    walk_to(&mut run, wardrobe, 1, 120);
-    answer(&mut run);
-    assert!(use_near(&mut run, "Hide"), "{}", run.text());
-    until_asked(&mut run, 60);
-    let hidden = run
-        .game()
-        .with_session(|session| {
-            let record = session.sim.truth().entities().get(session.player)?;
-            Some(matches!(record.place(), clash_sim::Place::In(_)))
-        })
-        .flatten();
-    assert_eq!(hidden, Some(true), "inside the wardrobe: {}", run.text());
-    // Three minutes in the wardrobe: nobody came looking.
-    for _ in 0..3 {
-        answer(&mut run);
-        press(&mut run, "p");
-    }
-    assert_eq!(top(&run), "ui:play");
 }
 
 /// What a property of an entity reads as text, or empty (the session's
@@ -239,6 +222,59 @@ fn knows_of_a_blow(run: &Headless, who: EntityId) -> bool {
         &[Value::from("core:unprovoked_blow")],
     )
     .is_null()
+}
+
+/// Runs for the nearest wardrobe in a house by the square, answering
+/// blows on the way, gets in, and waits three minutes, hidden or not.
+/// Returns whether the character was caught (held, or down) on the way
+/// or while waiting, and whether it got in.
+fn flee_to_a_wardrobe(run: &mut Headless, ada: EntityId) -> (bool, bool) {
+    let at = player_loc(run).unwrap();
+    let wardrobe = *near(run, at, "wardrobe", 30)
+        .first()
+        .expect("a wardrobe in a house by the square");
+    let mut was_caught = false;
+    for _ in 0..80 {
+        if caught(run, ada) {
+            was_caught = true;
+            break;
+        }
+        answer(run);
+        let Some(here) = player_loc(run) else { break };
+        let delta = wardrobe.cell - here.cell;
+        if delta.x.abs().max(delta.y.abs()) <= 1 && delta.z == 0 {
+            break;
+        }
+        if walk_to(run, wardrobe, 1, 4) == 0 && top(run) == "ui:play" {
+            press(run, ".");
+        }
+    }
+    let mut hidden = false;
+    if !was_caught {
+        answer(run);
+        if top(run) == "ui:play" && use_near(run, "Hide") {
+            until_asked(run, 60);
+            hidden = run
+                .game()
+                .with_session(|session| {
+                    let record = session.sim.truth().entities().get(session.player)?;
+                    Some(matches!(record.place(), clash_sim::Place::In(_)))
+                })
+                .flatten()
+                .unwrap_or(false);
+        }
+        // Three minutes, hidden or not.
+        for _ in 0..3 {
+            answer(run);
+            if caught(run, ada) {
+                was_caught = true;
+                break;
+            }
+            press(run, "p");
+        }
+        was_caught = was_caught || caught(run, ada);
+    }
+    (was_caught, hidden)
 }
 
 /// The market fight (the third round; the consequences stream, D-940 to
@@ -343,51 +379,7 @@ fn a_fight_in_the_square_and_the_watch_answers() {
     );
 
     // Flee: up to the nearest wardrobe in a house by the square, and in.
-    let at = player_loc(&run).unwrap();
-    let wardrobe = *near(&run, at, "wardrobe", 30)
-        .first()
-        .expect("a wardrobe in a house by the square");
-    let mut was_caught = false;
-    for _ in 0..80 {
-        if caught(&run, ada) {
-            was_caught = true;
-            break;
-        }
-        answer(&mut run);
-        let Some(here) = player_loc(&run) else { break };
-        let delta = wardrobe.cell - here.cell;
-        if delta.x.abs().max(delta.y.abs()) <= 1 && delta.z == 0 {
-            break;
-        }
-        if walk_to(&mut run, wardrobe, 1, 4) == 0 && top(&run) == "ui:play" {
-            press(&mut run, ".");
-        }
-    }
-    let mut hidden = false;
-    if !was_caught {
-        answer(&mut run);
-        if top(&run) == "ui:play" && use_near(&mut run, "Hide") {
-            until_asked(&mut run, 60);
-            hidden = run
-                .game()
-                .with_session(|session| {
-                    let record = session.sim.truth().entities().get(session.player)?;
-                    Some(matches!(record.place(), clash_sim::Place::In(_)))
-                })
-                .flatten()
-                .unwrap_or(false);
-        }
-        // Three minutes, hidden or not.
-        for _ in 0..3 {
-            answer(&mut run);
-            if caught(&run, ada) {
-                was_caught = true;
-                break;
-            }
-            press(&mut run, "p");
-        }
-        was_caught = was_caught || caught(&run, ada);
-    }
+    let (was_caught, hidden) = flee_to_a_wardrobe(&mut run, ada);
     let after = log_since(&run, before);
     let hunting: Vec<String> = watch
         .iter()

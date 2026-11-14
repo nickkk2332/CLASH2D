@@ -390,8 +390,8 @@ what each person saw:
 
 - **The one you strike** feels it and, if they saw who did it, is
   afraid of you, or, if they are of the watch, holds you hostile and
-  fights back. Struck from behind by someone they never saw, they turn
-  round, but do not know it was you.
+  fights back. Struck from behind by someone they never saw, they do
+  not know it was you.
 - **Whoever sees or hears it** and makes you out, and does not already
   hold your victim an enemy, takes against you: townsfolk are afraid of
   you and keep away, shouting for the watch ("Watch! Over here!"); a

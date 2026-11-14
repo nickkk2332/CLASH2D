@@ -10,11 +10,11 @@
         "else": [ { "set_relation": { "who": "self", "toward": "$toward", "kind": "core:fearful",
                                       "value": "max(self.rel('core:fearful', $toward) ?? 0, self.weight('caution') ?? 0)" } } ] } ] },
 
-  { "//": "A blow seen, heard or felt: the one who struck is taken against, unless the one struck is someone the witness itself holds hostile or fears (a blow against a foe is no offence to it), or the striker itself (what a blow jars back into the hand that struck it, 07 §6.3). The first time it puts this striker to such a blow it remembers it as `core:unprovoked_blow`; a member of the watch reports it to the watch, whose every member is told at once (15 §9.2); one of the townsfolk not played by anyone shouts for the watch, a report heard by whoever is in earshot, which a watchman who hears it passes to the watch (`core:pass_reports_to_the_watch`). Calling for help and running are its mind's goals (`flee_danger`).",
+  { "//": "A blow seen, heard or felt: the one who struck is taken against, unless the one struck is someone the witness itself holds hostile or fears (a blow against a foe is no offence to it), or the striker itself (what a blow jars back into the hand that struck it, 07 §6.3). The first time it puts this striker to such a blow it remembers it as `core:unprovoked_blow`; a member of the watch reports it to the watch, whose every member is told at once (15 §9.2); one of the townsfolk not played by anyone, and afraid (its caution not outweighed by its duty), shouts for the watch, a report heard by whoever is in earshot, which a watchman who hears it passes to the watch (`core:pass_reports_to_the_watch`). Calling for help and running are its mind's goals (`flee_danger`).",
     "type": "eoc", "id": "answer_a_blow", "on": "perceived", "group": "social_life",
     "filter": { "event": "hit_landed" },
     "if": "not is_null(event.about_actor) and event.about_actor != self and (event.signal == 'core:touch' or is_null(about) or (about != event.about_actor and not (self.hostile(about) or self.fears(about))))",
-    "doc": "Someone who perceives a blow and makes out who struck it, against itself or against someone else it neither holds hostile nor fears (the jar of a blow into the striker's own fist is no offence), takes against the striker (`core:take_against`); the first time, it remembers the striker for it (`core:unprovoked_blow`), and tells its group: the watch by reporting to it, the townsfolk by shouting for the watch.",
+    "doc": "Someone who perceives a blow and makes out who struck it, against itself or against someone else it neither holds hostile nor fears (the jar of a blow into the striker's own fist is no offence), takes against the striker (`core:take_against`); the first time, it remembers the striker for it (`core:unprovoked_blow`), and tells its group: the watch by reporting to it, the townsfolk who fear the striker by shouting for the watch.",
     "do": [
       { "run": { "eoc": "core:take_against", "with": { "toward": "event.about_actor ?? self" } } },
       { "if": "not self.remembers_actor(event.about_actor ?? self, 'core:unprovoked_blow')",
@@ -24,7 +24,7 @@
           { "if": "self.in_group('core:watch')",
             "then": [ { "report_to_group": { "who": "self", "group": "core:watch",
                                              "event": "core:unprovoked_blow", "about": "event.about_actor ?? self" } } ],
-            "else": [ { "if": "self.in_group('core:townsfolk') and self.control != 'direct'",
+            "else": [ { "if": "self.in_group('core:townsfolk') and self.control != 'direct' and (self.weight('caution') ?? 0) >= (self.weight('duty') ?? 0)",
                         "then": [ { "say": { "who": "self", "kind": "core:report", "about": "event.about_actor ?? self",
                                              "event": "core:unprovoked_blow", "line": "core:alarm_calls",
                                              "strength": 8 } } ] } ] } ] } ] },
@@ -43,12 +43,6 @@
                                           "where": "it != self and perceives(self, it) and self.remembers_actor(it, 'core:unprovoked_blow') and not self.hostile(it) and not self.fears(it)" } },
               "as": "striker",
               "do": [ { "run": { "eoc": "core:take_against", "with": { "toward": "$striker" } } } ] } ] },
-
-  { "//": "Someone struck by a hand it did not see turns to where the blow came from, as anyone would; what it sees then is what it makes of the next one.",
-    "type": "eoc", "id": "turn_to_a_blow", "on": "hit_landed", "group": "social_life",
-    "if": "not is_null(actor) and actor != self and self.control != 'direct' and self.in_world and not perceives(self, actor)",
-    "doc": "Someone not played by anyone, struck by someone it does not perceive, turns to face where the blow came from.",
-    "do": [ { "face": { "who": "self", "toward": "actor" } } ] },
 
   { "type": "lines", "id": "alarm_calls",
     "lines": [

@@ -22,7 +22,7 @@ chars
 |│The person is wounded.                              ││                        │|
 |│The person staggers.                                ││                        │|
 |│Ada strikes the person.                             ││Tab target f hit s shoot│|
-|│                                                    ││x look  i things  c body│|
+|│The person shouts: "Watch! Over here!"              ││x look  i things  c body│|
 |│                                                    ││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|
 fg

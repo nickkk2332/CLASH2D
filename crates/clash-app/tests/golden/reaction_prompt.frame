@@ -11,11 +11,11 @@ chars
 |.................│The person: Punch                           │                │|
 |.................│Person can react, with 0.1 s to spare.      │                │|
 |.................│Time  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│                │|
-|..............   │Block (too late)                           █│                │|
-|"""Y""""         │Dodge (too late)                           █│                │|
-|"""              │Parry (too late)                           █│                │|
-|                 │Raise shield (too late)                    █│                │|
-|                 │Step aside (too late)                      ││                │|
+|..............   │Dodge (too late)                           █│                │|
+|"""Y""""         │Parry (too late)                           █│                │|
+|"""              │Raise shield (too late)                    █│                │|
+|                 │Step aside (too late)                      █│                │|
+|                 │Step back (too late)                       ││                │|
 |                 │[ Let it happen ]                           │                │|
 |                 └────────────────────────────────────────────┘                │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|

@@ -20,9 +20,9 @@ chars
 |        #         #"",...,#                           │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
 |│of the town.                                       │││                        │|
-|│Footsteps, somewhere close. (x2)                   █││                        │|
+|│Footsteps, somewhere close.                        █││                        │|
 |│Saved as “half way” (half-way).                    █││Tab target f hit s shoot│|
-|│Footsteps, somewhere close. (x10)                  █││x look  i things  c body│|
+|│Footsteps, somewhere close.                        █││x look  i things  c body│|
 |│The game has ended: delivered.                     █││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|
 fg
@@ -45,9 +45,9 @@ fg
 |000000002000000000gssmlll57000000000000000000000000000b000000000000000000000000b|
 |bbeeebbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb000000000000000000000000b|
 |b000000000000000000000000000000000000000000000000000bbb000000000000000000000000b|
-|b000000000000000000000000000bbbbb00000000000000000000bb000000000000000000000000b|
+|b0000000000000000000000000000000000000000000000000000bb000000000000000000000000b|
 |b0000000000000000000000000000000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbb|
-|b000000000000000000000000000bbbbbb0000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbb|
+|b0000000000000000000000000000000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbb|
 |b0000000000000000000000000000000000000000000000000000bbbbbbbbbbbbbbbbbb00000000b|
 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
 bg
