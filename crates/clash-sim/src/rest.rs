@@ -1,8 +1,8 @@
 //! Levels while the party rests (03 §11, 09 §9.5; decision D-932).
 //!
 //! While every character the player controls waits out a long wait (a
-//! wait with at least `sim.rest_from` of its own time left) or lies
-//! unconscious, and the setting `sim.rest_levels` is on, what is far
+//! wait with at least `sim.rest_from` of its own time left when the
+//! party begins to rest, and until it is over) or lies unconscious, and the setting `sim.rest_levels` is on, what is far
 //! from the party is simulated with less detail, and nothing the party
 //! perceives changes:
 //!
@@ -153,14 +153,19 @@ pub fn is_resting(sim: &Sim) -> bool {
         .any(|(_, ticket)| ticket.reason == TicketReason::Player && ticket.tight)
 }
 
-/// Whether a member of the party rests: it waits a wait with at least
-/// `sim.rest_from` left, or its mind is stopped.
-pub fn member_rests(sim: &Sim, member: EntityId) -> bool {
+/// Whether a member of the party rests: its mind is stopped, or it
+/// waits a wait with at least `sim.rest_from` left; once the party
+/// rests (`already`), any wait it is still in, so that the levels come
+/// back when the wait ends and not `sim.rest_from` before.
+pub fn member_rests(sim: &Sim, member: EntityId, already: bool) -> bool {
     if matches!(
         sim.vital(member),
         Some(VitalState::Unconscious | VitalState::Dead)
     ) {
         return true;
+    }
+    if already {
+        return sim.is_waiting(member);
     }
     let from = seconds(sim, REST_FROM_SETTING).unwrap_or(DEFAULT_REST_FROM);
     sim.wait_left(member).is_some_and(|left| left >= from)
@@ -206,9 +211,10 @@ impl Sim {
         if players.is_empty() || (!on && players.iter().all(|(_, _, _, tight)| !tight)) {
             return;
         }
+        let already = players.iter().any(|(_, _, _, tight)| *tight);
         let resting = on
             && players.iter().all(|(_, entity, _, _)| {
-                self.entities.location(*entity).is_some() && member_rests(self, *entity)
+                self.entities.location(*entity).is_some() && member_rests(self, *entity, already)
             });
         for (id, entity, radius, tight) in players {
             let (want_radius, want_tight) = if resting {

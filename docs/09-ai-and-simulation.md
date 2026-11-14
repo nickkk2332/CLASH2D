@@ -1608,16 +1608,17 @@ an hour, as `shift+p` waits it) and the minute's waits:
 
 | | Without resting levels, cap 50 | With them |
 |---|---|---|
-| An hour's wait in the square by day | 63.4 s | 10.2 s (13.0 s with a warm step of 5 s; 37 s while 50 stayed hot out of sight) |
-| An hour's wait at night | 12.9 s | 2.8 s |
+| An hour's wait in the square by day | 63.4 s | 6.1 s (10.2 s while the levels came back with five minutes still to wait, 13.0 s with a warm step of 5 s besides, 37 s while 50 stayed hot out of sight) |
+| An hour's wait at night | 12.9 s | 1.2 s (2.8 s with the levels back five minutes early) |
 | A minute's wait by day | 0.79 s | the same (a minute is under `sim.rest_from`) |
 | A minute's wait at night, sleepers blind (D-930) | 0.44 s | the same |
 
 At cap 150 and without resting levels the hour by day took 130 s. Half
 way through a resting hour the town has 204 of its 565 people in the
 world (the 25 tracts round the square), 2 hot (those in the player's
-view) and 202 warm; the rest are agents. The hour by day is still over
-its target of 5 s: what is left is those two hundred warm characters
+view) and 202 warm; the rest are agents. The hour by day is just over
+its target of 5 s (within the benchmark's margin): what is left is
+those two hundred warm characters
 in the five tracts across that sight needs, which think when their
 intervals come round and plan and walk their routes in bulk (widening
 the warm step from 5 to 15 s took a fifth off), and loading the 264

@@ -1453,7 +1453,8 @@ for the neighbourhood. Any interruption restores them.
 As built (decision D-932, `clash_sim::rest`): the party **rests** while
 every character with a ticket of its own (`Ticket::player`) is in the
 world and either waits a wait with at least `sim.rest_from` (300 s) of
-its own time left, or has a mind that is not awake. While it rests and
+its own time left (once the party rests, any wait until it is over),
+or has a mind that is not awake. While it rests and
 the setting `sim.rest_levels` is on (the engine's default is off; the
 bundled game scenarios switch it on in their `settings`):
 
