@@ -26,7 +26,7 @@
         "expires": "5 h",
         "on_failed": [
           { "message": { "to": "taker",
-                         "text": "{if is_null(global.var.parcel.loc) then 'The parcel is gone.' else if global.var.errand_lost == 'given' then 'The parcel is in other hands now.' else if global.var.errand_lost == 'left' then 'You left the parcel behind.' else 'Night has fallen, and the town hall has shut.'} The errand has failed." } } ] } ],
+                         "text": "{if is_null(global.var.parcel.loc) then 'The parcel is gone.' else if global.var.parcel.outermost != global.var.courier and not is_null(global.var.parcel.outermost.mind_def) then 'The parcel is in other hands now.' else if global.var.parcel.outermost != global.var.courier then 'You left the parcel behind.' else 'Night has fallen, and the town hall has shut.'} The errand has failed." } } ] } ],
     "ends": [
       { "on": "objective_changed", "filter": { "id": "deliver", "state": "done" }, "as": "delivered" },
       { "on": "objective_changed", "filter": { "id": "deliver", "state": "failed" }, "as": "failed" } ],

@@ -192,7 +192,7 @@ the market fight and the morning of a day of routines were played on it
 
 | Session | Test | Plays | Takes (debug) |
 |---------|------|-------|---------------|
-| The errand, failed | `play_errand.rs` | The parcel dropped from the inventory on the north street, and the minutes waited with `p`: ten minutes on, `You left the parcel behind. The errand has failed.`, the ending `failed` and `[-]` in the summary | ~20 min (the populated town) |
+| The errand, failed | `play_errand.rs` | The parcel dropped from the inventory on the north street, and the minutes waited with `p`: ten minutes on, `You left the parcel behind. The errand has failed.`, the ending `failed` and `[-]` in the summary | ~11 min (the populated town, after performance 2) |
 | An adept, made | `play_powers.rs` | The town from the title, F2, the adept, the powers choice: the three given at first put back, Force push and Stone wall taken; Begin; the abilities screen lists those two and no others; a stone wall raised across the street | ~1 s |
 | The quick attack | `fighting.rs` | `f` at someone six cells away: `That is out of reach.`, nothing struck, Smash greyed and last in the precise list; `f` with nobody in sight: `Nobody is in sight to choose.` | seconds |
 | A marksman, inside | `play_last_stand.rs` | Chosen ready-made (the bow); `r` with a bow (`There is nothing in hand to load.`: each shot nocks from the quiver); inside, the door opened onto the lit porch; the long wait broken off by a stranger in sight, Tab and `s`, a dodge or a step back at each blow: twelve arrows into the first stranger, who dies at the door | ~1 min |
@@ -232,6 +232,7 @@ In commits `8dd05c9` (the known issues, D-900 to D-908) and `88fa0cc`
 | Nobody's death, nobody's knock-out and no wound was told | A stranger died at the door and the character went on striking the body; blows "stopped" on the forearm cut it, and the character bled to death without a word | Lines for falling senseless, coming to, dying and being wounded, and for what is done with something held: eating, drinking, binding wounds (D-910) |
 | An interaction out of reach named itself by id | `Bandage your wounds  east: that is out of reach for \`core:apply_bandage\`` | `that is out of reach` (D-864's rule) |
 | The last stand was decided by darkness and numbers | See below | Tuned as content (D-909) |
+| The errand's parcel left on a street did not fail it | The session's first runs on the merge: the parcel dropped at two, the clock at a quarter past, the errand still open | The rules compared the parcel's site with the hall's with `!=`; on a street the site is null and a comparison with null is false (05 §4.4). They now take a null site as away from the hall (D-900). Then the failure was told as `Night has fallen, and the town hall has shut.`: the line now reads what has become of the parcel, not the variable the timer had just set (D-900; known issue 11) |
 
 ### The last stand's balance
 
@@ -293,7 +294,7 @@ Worst first.
    release build (performance 2's own figure, against a target of 1 s),
    several times that in a debug build, so a day of routines watched
    from the square cannot be a session in the suite, and the errand's
-   failure session takes some twenty minutes in a debug build.
+   failure session takes some eleven minutes in a debug build.
 3. **Part of what this round set out to play was not played**, for the
    cost of the town and of time: a bandage *made* (the recipe; one was
    bound on in the last stand), a blade coated with poison and someone
@@ -325,6 +326,11 @@ Worst first.
 10. **`Footsteps, somewhere close.`** is the commonest line in a town's
    log: every step heard and not seen writes it (folded when it
    repeats).
+11. **A global variable set just before `fail_objective` read as unset
+   in the objective's `on_failed`** (for modders): the errand's timer
+   set `errand_lost` to `left` and failed the objective in one effect,
+   and `on_failed` chose the nightfall line. The errand no longer
+   depends on it (D-900); why it happens was not found.
 
 ### Responsiveness, measured again
 
