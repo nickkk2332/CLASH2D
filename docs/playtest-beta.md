@@ -593,3 +593,102 @@ scripted fighter, unable to reach them, never saw the night end.
    source of nightshade or a vial of it, so a poisoned blade cannot be
    made in play, and no item a player can wear presents another
    persona.
+
+## The fifth round
+
+Played from `7283bb1` on the build branch (stream "content and
+sessions"): the four sessions the third and fourth rounds left
+unplayed, after the two things that kept two of them from being played
+at all were put in the world as content: nightshade to make a poison
+from (D-970), and a hooded cloak a player can wear as a disguise
+(D-971). Decisions D-970 to D-973. Every session is played from the
+title in the market town at seed 4, begun in the square, by keys alone;
+the walks across town go by the square, the believed way being searched
+no further than 20,000 cells.
+
+### Sessions
+
+| Session | Test | Plays | Found |
+|---------|------|-------|-------|
+| A bandage made, a wound dressed | `play_making.rs` (`a_bandage_made_at_the_workshop_bench_dresses_a_wound`) | To the workshop by the streets (153 keys); `e`, Take out at a rack of stuff: four strips of cloth and five sticks in hand; at the bench, `M`, Bandage (by hand, five seconds); the sticks put down, `g`, the two bandages picked up; back to the square, someone struck, the watch comes and strikes back (`Ada is wounded.`); `e`, Bandage your wounds, the blows let come: broken off once (known issue 11), then `Ada binds their wounds.`, the wound closed, one bandage left | Made with both hands full, the bandages were put down at her feet and the log said only `Ada finishes the work.`; the inventory read `4 strip of cloths x4  in hand` (both fixed, D-972). About two minutes in a debug build |
+| A poisoned blade | `play_making.rs` (`nightshade_gathered_pressed_and_a_coated_blade_drops_someone`) | A knife from the workshop's chest (Open, Take out, the club put down); to the healer's house by way of the square; the herbal from her shelf and Read (`Ada reads the herbal.`); two nightshade from the bed grown with it; her cupboard opened; `M`, Nightshade extract by hand (twenty seconds): `Ada finishes the work: what it gave is in the vial.`; the vial taken out of the cupboard, what came out before it (a pot of salve, bandages, herbs, a vial of sleeping draught) put down one by one; Coat a blade: `Ada coats a blade.`, ten millilitres on the knife; out of the door, the first person in sight cut once: `The person is wounded.`, `The person falls senseless.` | The extract went first into the healer's vial of sleeping draught, ten millilitres of it into the draught's last ten of room, and the line said nothing of where it went (fixed, D-972); four millilitres on a blade could never have dropped anyone (D-970). With ten, one cut through the skin put 60 of `toxin` in, past the 50 that knocks out, and some was left on the blade. About three minutes |
+| The pistol in a fight | `play_pistol.rs` | The market town, F2, the marksman, the weapon changed to the pistol and spare rounds; begun in the square, `Holding a pistol`, twelve rounds in it, twelve in the backpack; Tab: the watchman at his post; `s`: refused, `There is no loaded weapon in hand, or nowhere to aim.`, a step back; `s` twelve times (`Ada shoots.`, `Something strikes the watchman.`), the townsfolk shouting for the watch, the watchman striking back, then falling senseless; empty: `s` refused with the same sentence; `r`: `Ada reloads.`, twelve rounds from the backpack; and fired again | The game begins her in the cell of the watchman whose post is the middle of the square, and Tab chooses him first: every `s` started a shot that faulted at its last phase, `Fault: shoot declined (ranged.no_aim) ...`, and the pistol never fired (fixed: a target in one's own cell is nowhere to aim, refused in words, D-973). Shots and the reload said nothing in the log (fixed, D-973). Seven seconds |
+| A disguise | `play_disguise.rs` | The knife and two strips of cloth at the workshop; at the bench, `M`, Hooded cloak (a minute): `what it gave is in the workbench.`; Take out at the bench; `i`, the cloak, Wear: `hooded cloak  worn`; back to the square, a townsperson struck until a blow lands; the watch watched for; up to the nearest wardrobe in a house by the square, Hide inside; `i`, Take off and Drop, inside; three minutes; Get out; Tab to a watchman, up to him, ten seconds beside him | The one struck took her for the hooded stranger, a persona made for her when she put the hood on, and remembered the blow as the stranger's; the watch was told and held the hooded stranger hostile, every watchman that held her hostile taking her for the hood. Out of the wardrobe without it, the watchman she walked up to perceived her as herself, held nothing against her, remembered nothing of her, and walked on. Nothing to fix. About three minutes |
+
+The disguise is tested in the simulation by the test script
+`social/hooded_blow` too: struck in the hood before a watchman, the far
+watchman is told of the hood, lets her by without it, and knows the
+same hood again when she puts it back on out of his sight.
+
+### What was found and fixed
+
+| Found | How a player met it | Fixed |
+|-------|---------------------|-------|
+| No source of nightshade | Nothing to press the extract from; no poisoned blade could be made | One of the healer's herb beds grows it; her cupboard keeps a vial of the extract half the time (D-970) |
+| A coated blade could never drop anyone | Four millilitres a coat put at most 3.2 ml in over any number of cuts: 38 of the 50 `toxin` that knocks out | `Coat a blade` puts on ten: the first cut through the skin drops someone (D-970) |
+| No item presented another persona | No disguise could be worn | The hooded cloak, made at a workbench or found in a wardrobe; one engine addition, `entity.personas` (D-971) |
+| What was made by hand with full hands was put down unsaid | `Ada finishes the work.`, and the bandages at her feet | `recipe_completed`'s `left`: `their hands are full, and what it gave lies at their feet.` (D-972) |
+| A made liquid went into a vessel that held something else | The extract poured into the healer's sleeping draught | A recipe's substance goes only into what holds nothing else; `filled` names it: `what it gave is in the vial.` (D-972) |
+| A stack was named twice and its plural put on the wrong word | `4 strip of cloths x4  in hand` | `4 strips of cloth  in hand` (D-972) |
+| A shot at someone in one's own cell faulted | `Fault: shoot declined (ranged.no_aim) in action core:shoot at phases.fire.do[0]`, twelve times, and no shot | Every shot and throw requires its aim not to be one's own cell, and says `... or nowhere to aim.` (D-973) |
+| Shooting and reloading said nothing | A pistol emptied in a fight: only `Something strikes the watchman.` for the shots that hit | `Ada shoots.` (heard: `A shot, somewhere close.`), `Ada reloads.` (D-973) |
+
+### What changed in the earlier sessions
+
+- **The golden frame `empty_weapon`** (`shooting.rs`) was blessed again,
+  for a change looked at: its log now begins `Ada shoots.` where it had
+  `The person shouts: "Watch! Over here!"`, the shot told (D-973);
+  nothing else in it changed.
+- **Every test script's hash** was blessed again, only for the
+  definitions added and changed (nightshade's bed and vial, the cloak
+  and its rules, the shows, the shots' `requires`); the new script
+  `social/hooded_blow` plays the disguise in the simulation.
+- The earlier sessions pass unchanged on this round's changes.
+
+### Known issues that remain
+
+1. **The log tells a blow's consequences before the blow.** `The person
+   is wounded.`, `The person falls senseless.`, `Ada strikes the
+   person.`: a line whose show plays an animation is written when the
+   animation ends. Seen in every fight of this round.
+2. **A projectile is "something".** `Something strikes the watchman.`
+   for a pistol's round, as for an arrow.
+3. **Text has no pronouns**: `Ada binds their wounds.` (15 §8.3, pronoun
+   sets not built).
+4. **The market town begins the player in a watchman's cell**, the
+   middle of the square where he stands at his post: where a game
+   scenario places its party is not checked against who stands there.
+   Tab chooses him first; a shot at him is now refused in words.
+5. **Take out takes what a container holds in the order it was put
+   there**, as much as the hands hold, and a player cannot choose: to get
+   the vial out of the healer's cupboard the salve, the bandages, the
+   herbs and the sleeping draught came out first and were put down one
+   by one. The inventory's Take out reaches only what one carries.
+6. **With things lying loose about the character, `e`'s second list is
+   short**: four things at her feet put Take out below the popup's edge,
+   reached by Tab and scrolling.
+7. **A hood destroyed while worn** leaves its wearer presenting the
+   hooded stranger: nothing raises `item_removed` (06 §9.2, D-971).
+8. **The poison is strong**: one cut through the skin drops someone,
+   and by the substance's numbers three more would kill (D-970); a cut
+   that does not reach the skin (a coat sleeve) puts nothing in. Not
+   played beyond the first cut.
+9. **A stranger in a hood is described as anyone is** (`the person`):
+   there are no features to describe a hood by (15 §8.4).
+10. **The sessions' helper `use_near` presses Enter in the wrong list**
+   when something lies loose within a step: it counts the list of what
+   lies loose and the list of what can be done as one, and the focus is
+   in the first. With a pot of salve at her feet, Take out at the
+   healer's cupboard picked the pot up again, eight times (a fault of
+   the helper, not of the game). The new sessions find a row by the
+   list's own order (`town::use_offer`), which also reaches a row
+   scrolled out of view. `use_near` is left as it is, for the stream
+   that keeps the sessions' fighting: a session that puts a club down
+   and then binds a wound with it may be picking the club up again.
+11. **Binding a wound in a fight was broken off once, unsaid.** With the
+   watchman striking at her and every blow let come, the first `Bandage
+   your wounds` ended without binding anything and with nothing in the
+   log but `The watchman misses Ada.`; the second, a moment later, bound
+   the wound. Whether a foe coming into sight again (`core:stop_for_a_foe`
+   interrupts what a played character is doing) or the blow broke it
+   off was not looked into.
