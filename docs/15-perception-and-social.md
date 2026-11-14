@@ -924,8 +924,28 @@ As built (decisions D-760, D-761), in `clash_sim::social`:
   strength), presenting what `of` presents; `learn_name { who, of }`
   (the reader lens, §13).
 - **Properties** of an entity read of itself: `persona` and
-  `presenting` (string), `persona_of(x)` (string?), `knows_name(x)`
+  `presenting` (string), `personas` (list<string>: its own, its true
+  one first, then those made for it in the order they were made, so
+  that a rule may take up the one `create_persona` has just made, the
+  last: decision D-971), `persona_of(x)` (string?), `knows_name(x)`
   (bool).
+- **A disguise worn** is content (D-971): rules on `item_worn` and
+  `item_removed` (06 §9.2) make the wearer present a persona and drop
+  it. The bundled `core:hooded_cloak` (`mods/core/data/making/
+  disguise.json`; made at a workbench from two strips of cloth, or
+  found in a wardrobe) does it so: put on, its wearer presents a persona
+  made for them the first time they wear it (`create_persona`, named
+  `hooded stranger`, tagged `hooded`, quality 0.8) and kept on the cloak
+  (the entity variable `core:hood`), so that the same hood is known
+  again; taken off or dropped, they present their own again. Whoever
+  witnesses what the wearer does remembers and takes against the
+  hooded stranger (§12's rules, D-941), and does not know the wearer
+  once the hood is off; whoever watches the hood go on or come off goes
+  on knowing who is under it, by the rule above. A wearer the cloak's
+  persona is not one of their own is given one of their own, so two
+  people in the same cloak are two strangers. A stranger in a hood is
+  described as anyone is (the template it looks like, `the person`):
+  there are no features to describe a hood by (§8.4).
 - **Not built**: features and descriptions (§8.4): there is no
   `appearance_feature` type yet, a stranger is described by the name of
   the template it looks like, and `suspects` and the merging of a
@@ -1503,7 +1523,7 @@ subject), `members`, `suspects`.
 
 **Functions and properties**: `perceives`, `could_perceive`, `light(loc)`;
 on minds, the properties of section 7.2 and `rel`, `in_group`, `role_in`,
-`persona`, `presenting`, `facing`.
+`persona`, `presenting`, `personas`, `facing`.
 
 **Reachable only from Rust** so far: adding a moving source of light.
 The light at a cell is the function `light(at)` and the property
@@ -1568,7 +1588,7 @@ the arguments, subjects and fields stated there:
   `dissolve_group`, `set_group_relation`, `report_to_group` (§9);
   `order`, `cancel_order` (§10); `say` (§11).
 - Properties of `entity`, read of the mind itself: `persona`,
-  `presenting`, `persona_of`, `knows_name`, `rel`, `stance_to`,
+  `presenting`, `personas`, `persona_of`, `knows_name`, `rel`, `stance_to`,
   `in_group`, `role_in`, `standing_orders`, `remembers_actor`,
   `memory_confidence`, `memory_source`, `told_of`. Function:
   `intervenes(a, b)`.

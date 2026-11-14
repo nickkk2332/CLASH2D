@@ -70,7 +70,8 @@
     "entries": [ { "item": "coat", "count": [1, 2], "chance": 0.9 },
                  { "item": "shirt", "count": [1, 3], "chance": 0.9 },
                  { "item": "backpack", "chance": 0.4 },
-                 { "item": "helmet", "chance": 0.05 } ] },
+                 { "item": "helmet", "chance": 0.05 },
+                 { "item": "hooded_cloak", "chance": 0.15 } ] },
 
   { "//": "What a family keeps put away.",
     "type": "content_table", "id": "valuables", "each": true,

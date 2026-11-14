@@ -422,6 +422,43 @@ fn a_change_of_face_in_view_is_seen() {
     assert_eq!(refused.code, social::reason::NOT_OWN_PERSONA);
 }
 
+/// `personas` (D-971): an entity's own, its true one first, then those
+/// made for it in the order they were made, so that a rule can take up
+/// the one it has just made; someone else's is never among them.
+#[test]
+fn an_entitys_own_personas_list_the_newest_last_for_a_rule_to_take_up() {
+    let mut sim = city(6);
+    let masked = person(&mut sim, "Mara", &[], street(4));
+    let other = person(&mut sim, "Wil", &[], street(2));
+    let theirs = social::create_persona(&mut sim, other, social::PersonaSpec::default()).unwrap();
+    let personas = |sim: &Sim| {
+        sim.property_named(Subject::Entity(masked), "personas", &[])
+            .to_string()
+    };
+    assert_eq!(personas(&sim), format!("[{}]", PersonaId::true_of(masked)));
+    // A rule makes a persona and takes up the newest of its own.
+    for _ in 0..2 {
+        run_as(
+            &mut sim,
+            masked,
+            r#"[ { "create_persona": { "who": "self", "tags": ["hooded"] } },
+                 { "assume_persona": { "who": "self", "persona": { "expr": "last(self.personas)" } } } ]"#,
+        );
+    }
+    let own = social::own_personas(&sim, masked);
+    assert_eq!(own.len(), 3, "{own:?}");
+    assert_eq!(own[0], PersonaId::true_of(masked));
+    assert!(own[1] < own[2] && !own.contains(&theirs));
+    assert_eq!(
+        personas(&sim),
+        format!("[{}, {}, {}]", own[0], own[1], own[2])
+    );
+    assert_eq!(social::presenting(&sim, masked), own[2]);
+    // Copying someone else's adds nothing of one's own.
+    social::copy_persona(&mut sim, masked, other, None).unwrap();
+    assert_eq!(social::own_personas(&sim, masked), own);
+}
+
 #[test]
 fn the_reader_lens_names_the_known_and_describes_strangers() {
     let FrameJob {
@@ -951,6 +988,13 @@ fn every_property_of_the_social_layer_answers() {
         read(&sim, witness, trickster, "self.knows_name(x)"),
         Value::Bool(false)
     );
+    // Its own: the trickster's copy of the victim's face is not one.
+    assert_eq!(
+        read(&sim, trickster, trickster, "self.personas"),
+        Value::list([Value::from(
+            PersonaId::true_of(trickster).to_string().as_str()
+        )])
+    );
     // Relations and groups.
     assert_eq!(
         read(&sim, witness, guard, "self.rel('loyal', x)"),
@@ -1041,6 +1085,7 @@ fn every_property_of_the_social_layer_answers() {
     let read_here = [
         "persona",
         "presenting",
+        "personas",
         "persona_of",
         "knows_name",
         "rel",

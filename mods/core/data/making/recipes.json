@@ -16,6 +16,15 @@
     "work": "10 s",
     "outputs": [ { "item": "torch" } ] },
 
+  { "//": "A disguise (`disguise.json`): two strips of cloth cut and sewn into a cloak with a deep hood.",
+    "type": "recipe", "id": "hooded_cloak", "name": "Hooded cloak",
+    "description": "Cut and sew cloth into a long cloak with a deep hood.",
+    "at": ["workbench"],
+    "inputs": [ { "item": "cloth", "count": 2 } ],
+    "tools": [ { "quality": "cutting", "level": 1 } ],
+    "work": "1 min",
+    "outputs": [ { "item": "hooded_cloak" } ] },
+
   { "type": "recipe", "id": "club", "name": "Club",
     "description": "Cut a log down to a club.",
     "at": ["workbench"],

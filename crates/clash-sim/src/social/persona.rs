@@ -190,6 +190,21 @@ pub fn persona_name(sim: &Sim, persona: PersonaId) -> Option<String> {
     None
 }
 
+/// An entity's own personas (15 §8.3): its true one, then those made for
+/// it, in the order they were made (each is given the next number of
+/// the simulation's life, so the order of their ids).
+pub fn own_personas(sim: &Sim, entity: EntityId) -> Vec<PersonaId> {
+    std::iter::once(PersonaId::true_of(entity))
+        .chain(
+            sim.social
+                .personas
+                .range(PersonaId::made(entity, 1)..)
+                .map(|(persona, _)| *persona)
+                .take_while(|persona| persona.entity() == entity),
+        )
+        .collect()
+}
+
 /// The persona a mind takes another persona for, by the links it holds:
 /// one it has seen through, followed to what it knows it to be.
 fn resolved(sim: &Sim, mind_id: EntityId, persona: PersonaId) -> PersonaId {

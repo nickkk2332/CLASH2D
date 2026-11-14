@@ -39,4 +39,4 @@ assert "@e:6.remembers_actor(@e:2, 'core:unprovoked_blow') and @e:6.told_of('cor
 move @e:2 @c:58,60,0
 advance 2s
 assert "@e:6.perceives(@e:2) and @e:6.hostile(@e:2)"
-expect hash 8ec3ee4aba86ac9ba2ecd81c7419f0b1
+expect hash adeb88c6c9fac27e05f038c3808efa3c
