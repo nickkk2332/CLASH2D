@@ -534,8 +534,13 @@ pub(super) fn sweep(sim: &mut Sim, observer: EntityId, sense: SenseId, bonus: Re
         field_sweep(sim, observer, sense, eye, threshold);
         return;
     }
+    // What the sense notices (D-923): every kind, for a party member.
+    let kinds = match &def.notices {
+        Some(kinds) if !party::is_member(sim, observer) => clash_world::OccupantKinds::of(kinds),
+        _ => clash_world::OccupantKinds::ALL,
+    };
     let mut targets = match threshold {
-        Some(_) => nearest_in_range(sim, observer, eye, def.range.get()),
+        Some(_) => nearest_in_range(sim, observer, eye, def.range.get(), kinds),
         None => Vec::new(),
     };
     let tracked = sim
@@ -591,13 +596,118 @@ fn sweeper<'a>(
 }
 
 /// The nearest `perception.max_candidates` of everyone within a sense's
-/// range (and what they hold), by distance and then id, in one
-/// pass and with nothing put in order but the few kept (D-897): who
-/// stands in reach is gathered once each, with what is inside them, the
-/// nearest `perception.max_candidates` are picked by distance and then
-/// id, and those are put in order of id. The same as gathering them all
-/// in order and keeping the nearest (performance 2).
-fn nearest_in_range(sim: &Sim, observer: EntityId, eye: Spot, range: Real) -> Vec<EntityId> {
+/// range (and what they hold), by distance and then id, in order of id
+/// (D-897, D-920): who stands in reach is looked at a block of the
+/// occupant index at a time, the nearest blocks first, each once with
+/// what is inside it, keeping the nearest so far; the search stops at
+/// the first block whose nearest cell is farther than the farthest kept.
+/// The same as gathering everyone in reach and keeping the nearest
+/// (`nearest_in_range_reference`, performance 2), without looking at
+/// the furniture of the rest of the range.
+fn nearest_in_range(
+    sim: &Sim,
+    observer: EntityId,
+    eye: Spot,
+    range: Real,
+    kinds: clash_world::OccupantKinds,
+) -> Vec<EntityId> {
+    let max = sim
+        .setting_int(MAX_CANDIDATES_SETTING, DEFAULT_MAX_CANDIDATES)
+        .max(1) as usize;
+    let distance = |id: EntityId| {
+        sim.entities
+            .location(id)
+            .and_then(|loc| sim.cosmos.delta(eye.loc, loc))
+            .map_or(i64::MAX, clash_world::distance_sq_cells)
+    };
+    // Each once: who has been met, in order. A search meets few, so a
+    // sorted list costs less than a mark for every slot there is.
+    let mut met: Vec<EntityId> = Vec::new();
+    let mut mark = |id: EntityId| match met.binary_search(&id) {
+        Ok(_) => false,
+        Err(at) => {
+            met.insert(at, id);
+            true
+        }
+    };
+    // The nearest so far, the farthest of them on top.
+    let mut kept: std::collections::BinaryHeap<(i64, EntityId)> =
+        std::collections::BinaryHeap::with_capacity(max + 1);
+    let keep = |kept: &mut std::collections::BinaryHeap<(i64, EntityId)>, id: EntityId| {
+        let key = (distance(id), id);
+        if kept.len() < max {
+            kept.push(key);
+        } else if kept.peek().is_some_and(|farthest| key < *farthest) {
+            kept.pop();
+            kept.push(key);
+        }
+    };
+    let mut held: Vec<EntityId> = Vec::new();
+    // What is inside something is noticed by its own kind.
+    let noticed = |id: EntityId| {
+        kinds == clash_world::OccupantKinds::ALL
+            || sim
+                .entities
+                .get(id)
+                .is_some_and(|entity| kinds.has(entity.presence().kind))
+    };
+    let searched = sim.cosmos.occupant_ids_within_nearest_first(
+        eye.loc,
+        range,
+        &OccupantFilter::ANY.of_kinds(kinds).except(observer),
+        |least, ids| {
+            // Nothing in this block, nor in any after it, is nearer than
+            // the farthest kept.
+            if kept.len() >= max && kept.peek().is_some_and(|farthest| least > farthest.0) {
+                return false;
+            }
+            for &(cell, id) in ids {
+                // Farther than the farthest kept: it can be kept only if
+                // a cell of it nearer is in reach, met in its own turn.
+                if kept.len() >= max && kept.peek().is_some_and(|farthest| cell > farthest.0) {
+                    continue;
+                }
+                if id == observer || !mark(id) {
+                    continue;
+                }
+                keep(&mut kept, id);
+                // What it holds stands where it does.
+                held.clear();
+                held.extend(sim.entities.contents_deep(id));
+                let mut at = 0;
+                while at < held.len() {
+                    let inside = held[at];
+                    if inside != observer && mark(inside) {
+                        if noticed(inside) {
+                            keep(&mut kept, inside);
+                        }
+                        held.extend(sim.entities.contents_deep(inside));
+                    }
+                    at += 1;
+                }
+            }
+            true
+        },
+    );
+    if searched.is_err() {
+        return Vec::new();
+    }
+    let mut ids: Vec<EntityId> = kept.into_iter().map(|(_, id)| id).collect();
+    ids.sort_unstable();
+    ids
+}
+
+/// [`nearest_in_range`] as performance 2 left it: everyone in reach
+/// gathered in one unordered pass, each once, with what they hold, and
+/// the nearest picked without sorting the rest. What the search nearest
+/// first is tested against.
+#[cfg(test)]
+fn nearest_in_range_reference(
+    sim: &Sim,
+    observer: EntityId,
+    eye: Spot,
+    range: Real,
+) -> Vec<EntityId> {
     let max = sim
         .setting_int(MAX_CANDIDATES_SETTING, DEFAULT_MAX_CANDIDATES)
         .max(1) as usize;
@@ -1157,6 +1267,23 @@ mod tests {
             let holder = crowd[draw.next(crowd.len() as u64) as usize];
             let _ = sim.relocate(one, Place::In(holder), clash_world::Cause::DEBUG);
         }
+        // Goods lying about and carried (D-923: what a sense notices).
+        let item = |sim: &mut Sim, place: Place| {
+            let id = sim.truth().entities().next_id().unwrap();
+            let spec = EntitySpec::new(OccupantKind::Item)
+                .with_presence(Presence::new(OccupantKind::Item));
+            sim.submit(Command::Debug(DebugCommand::CreateEntity { spec, place }))
+                .unwrap();
+            id
+        };
+        for _ in 0..40 {
+            let at = street(draw.next(64) as i32 - 8, draw.next(5) as i32 - 2);
+            item(&mut sim, Place::at(at));
+        }
+        for _ in 0..8 {
+            let holder = crowd[draw.next(crowd.len() as u64) as usize];
+            item(&mut sim, Place::In(holder));
+        }
         for (max, &observer) in [12_usize, 40].iter().cycle().zip(&crowd) {
             sim.set_setting(MAX_CANDIDATES_SETTING, *max as i64);
             let at = sim.entities.location(observer).unwrap();
@@ -1179,13 +1306,108 @@ mod tests {
                 all.truncate(*max);
                 all.sort_unstable();
                 assert_eq!(near, all, "{observer} at {range}");
-                // Looked for nearest first, the same.
+                // Gathered in one pass (performance 2), and looked for a
+                // block at a time nearest first (performance 3): the same.
                 assert_eq!(
-                    nearest_in_range(&sim, observer, eye, range),
+                    nearest_in_range_reference(&sim, observer, eye, range),
                     near,
                     "{observer} at {range}"
                 );
+                assert_eq!(
+                    nearest_in_range(&sim, observer, eye, range, clash_world::OccupantKinds::ALL),
+                    near,
+                    "{observer} at {range}"
+                );
+                // A sense that notices creatures alone: the nearest of
+                // them, the goods passed over.
+                let mut creatures: Vec<EntityId> =
+                    signal::candidates_reference(&sim, observer, at, range)
+                        .into_iter()
+                        .filter(|id| {
+                            sim.entities.get(*id).is_some_and(|entity| {
+                                entity.presence().kind == OccupantKind::Creature
+                            })
+                        })
+                        .collect();
+                creatures.sort_by_key(|id| (distance(*id), *id));
+                creatures.truncate(*max);
+                creatures.sort_unstable();
+                assert_eq!(
+                    nearest_in_range(
+                        &sim,
+                        observer,
+                        eye,
+                        range,
+                        clash_world::OccupantKinds::of(&[OccupantKind::Creature])
+                    ),
+                    creatures,
+                    "{observer} at {range}, creatures"
+                );
             }
         }
+    }
+
+    #[test]
+    fn a_view_kept_is_the_view_worked_out_afresh() {
+        // Performance 3 (D-921): a member's view kept from its last sweep,
+        // used while the eye, the cells and the light are as they were,
+        // against the view worked out afresh, as the member stands, turns,
+        // moves and the street is built on about it.
+        let mut sim = city();
+        let mut draw = Draw(13);
+        let sight = sim
+            .perception_defs()
+            .sense_named("core:human_sight")
+            .unwrap();
+        let wall = sim
+            .truth()
+            .cosmos()
+            .defs()
+            .block_state("core:wall", None)
+            .unwrap()
+            .raw();
+        let me = person(&mut sim, Place::at(street(20, 0)));
+        super::super::attach_sense(&mut sim, me, sight).unwrap();
+        let mut cache = super::super::party::ViewCache::default();
+        let mut kept = 0;
+        for round in 0..40_u32 {
+            match draw.next(6) {
+                // Turn.
+                0 => {
+                    let facing = Real::from(draw.next(360) as u16);
+                    super::super::set_facing(&mut sim, me, facing).unwrap();
+                }
+                // A wall put up somewhere along the street.
+                1 => {
+                    let at = street(draw.next(48) as i32, draw.next(3) as i32 - 1);
+                    let _ = sim.submit(Command::Debug(DebugCommand::SetElement {
+                        loc: at,
+                        layer: Layer::Block,
+                        state: wall,
+                    }));
+                }
+                // A step along the street.
+                2 => {
+                    let at = street(draw.next(48) as i32, 0);
+                    let _ = sim.relocate(me, Place::at(at), clash_world::Cause::DEBUG);
+                }
+                // Time passes, nothing else.
+                _ => {
+                    let by = Dur::from_millis(250 * (draw.next(4) as i64 + 1));
+                    let until = sim.now() + by;
+                    sim.advance(crate::AdvanceLimit::Until(until));
+                }
+            }
+            let before = sim.truth().cosmos().cell_epoch();
+            let fresh = super::super::party::view_of_reference(&sim, me, sight);
+            let cached = super::super::party::view_of(&sim, me, sight, &mut cache);
+            assert_eq!(cached, fresh, "round {round}");
+            // Asked again with nothing changed, the kept view.
+            let again = super::super::party::view_of(&sim, me, sight, &mut cache);
+            assert_eq!(again, fresh, "round {round}, again");
+            assert_eq!(sim.truth().cosmos().cell_epoch(), before);
+            kept += 1;
+        }
+        assert_eq!(kept, 40);
     }
 }

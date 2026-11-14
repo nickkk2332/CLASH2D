@@ -329,6 +329,54 @@ pub(super) struct PartyState {
     /// How each delivered event was perceived, by the event's hash,
     /// newest last. Output: not hashed.
     tags: VecDeque<(Hash128, PartyPerception)>,
+    /// What each member's views were last worked out from (D-921).
+    /// Derived: not saved, hashed or compared, and empty in a copy.
+    #[serde(skip)]
+    view_cache: ViewCache,
+}
+
+/// What a member's view was last worked out from, for each member and
+/// sense, so that one standing still while no cell of the world changes
+/// does not cast its field of view again, nor look at each cell of it
+/// again while the light over it is as it was (D-921). Derived data: a
+/// copy starts empty, it is neither saved nor hashed, and two are always
+/// equal, so that it never tells two simulations apart.
+#[derive(Default)]
+pub(super) struct ViewCache(BTreeMap<(EntityId, SenseId), CachedView>);
+
+impl Clone for ViewCache {
+    fn clone(&self) -> ViewCache {
+        ViewCache::default()
+    }
+}
+
+impl PartialEq for ViewCache {
+    fn eq(&self, _: &ViewCache) -> bool {
+        true
+    }
+}
+
+impl core::fmt::Debug for ViewCache {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "ViewCache({} views)", self.0.len())
+    }
+}
+
+/// One member's view as last worked out, with what it was worked out
+/// from. The field of view holds while the cells have not changed
+/// ([`clash_world::Cosmos::cell_epoch`]) and the eye has not moved; the
+/// view itself while, besides, the facing, threshold and fields are as
+/// they were and the light filled over it reads the same, cell by cell.
+struct CachedView {
+    epoch: u64,
+    eye: signal::Spot,
+    fov: FovSet,
+    facing: Real,
+    threshold: Real,
+    any_fields: bool,
+    bounds: CellBox,
+    light: Vec<Real>,
+    view: Vec<(Location, Remembered)>,
 }
 
 impl StateHash for PartyState {
@@ -381,7 +429,10 @@ pub(super) fn after_sweep(sim: &mut Sim, member: EntityId, sense: SenseId) {
     if !is_member(sim, member) {
         return;
     }
-    let Some(view) = view_of(sim, member, sense) else {
+    let mut cache = core::mem::take(&mut sim.perception.party.view_cache);
+    let view = view_of(sim, member, sense, &mut cache);
+    sim.perception.party.view_cache = cache;
+    let Some(view) = view else {
         return;
     };
     let max_slabs = sim.setting_int(MAP_SLABS_SETTING, DEFAULT_MAP_SLABS).max(1) as usize;
@@ -461,8 +512,243 @@ fn union(views: &BTreeMap<EntityId, Vec<Location>>) -> Vec<Location> {
 
 /// The cells a member's sense sees now, with what is in each: those in
 /// its field of view within the sense's range and arc where a creature
-/// standing in the cell would be seen by the light there.
-fn view_of(sim: &Sim, member: EntityId, sense: SenseId) -> Option<Vec<(Location, Remembered)>> {
+/// standing in the cell would be seen by the light there. What `cache`
+/// kept of the member's last view is used where it still holds
+/// (D-921): the same as worked out afresh (`view_of_reference`).
+pub(super) fn view_of(
+    sim: &Sim,
+    member: EntityId,
+    sense: SenseId,
+    cache: &mut ViewCache,
+) -> Option<Vec<(Location, Remembered)>> {
+    let defs = &sim.perception_defs;
+    let def = defs.sense(sense)?;
+    let kind_id = defs.sense_kind(sense)?;
+    let kind = defs.kind(kind_id)?;
+    let eye = signal::eye_of(sim, member)?;
+    let threshold = sim
+        .components
+        .senses
+        .get(member)?
+        .slot(sense)?
+        .threshold()?;
+    let facing = sim.components.senses.get(member)?.facing();
+    let epoch = sim.cosmos.cell_epoch();
+    let any_fields = sim.cosmos.field_state().tracts().next().is_some();
+    // The field of view holds while no cell has changed and the eye has
+    // not moved.
+    let kept = cache
+        .0
+        .remove(&(member, sense))
+        .filter(|kept| kept.epoch == epoch && kept.eye == eye);
+    let (fov, kept) = match kept {
+        Some(mut kept) => (core::mem::take(&mut kept.fov), Some(kept)),
+        None => {
+            let mut fov = FovSet::new();
+            sim.cosmos
+                .field_of_view(eye.loc, eye.alt_mm, def.range.get(), &mut fov)
+                .ok()?;
+            (fov, None)
+        }
+    };
+    let (low, high) = fov.storeys()?;
+    let (low, high) = (low.max(-PARTY_VIEW_DOWN), high.min(PARTY_VIEW_UP));
+    if low > high {
+        return Some(Vec::new());
+    }
+    let reach = def
+        .range
+        .get()
+        .ceil()
+        .to_i32()
+        .min(clash_world::query::FOV_MAX_REACH);
+    let origin = eye.loc.cell;
+    let bounds = CellBox::new(
+        CellPos::new(origin.x - reach, origin.y - reach, origin.z + low),
+        CellPos::new(origin.x + reach, origin.y + reach, origin.z + high),
+    );
+    let time = SkyTime::now(&sim.cosmos, &sim.timeline, eye.loc.grid).ok()?;
+    let mut light = Vec::new();
+    sim.cosmos
+        .fill_light(eye.loc.grid, bounds, time, &[], &mut light)
+        .ok()?;
+    // The view holds as well while what else it was worked out from is
+    // as it was and the light reads the same in every cell of it.
+    let now = sim.now();
+    let same = kept.as_ref().is_some_and(|kept| {
+        kept.facing == facing
+            && kept.threshold == threshold
+            && kept.any_fields == any_fields
+            && kept.bounds == bounds
+            && kept.light == light
+    });
+    let view = match kept {
+        Some(kept) if same => kept
+            .view
+            .into_iter()
+            .map(|(loc, seen)| (loc, Remembered { at: now, ..seen }))
+            .collect(),
+        _ => cells_in_view(
+            sim,
+            Looking {
+                kind,
+                def,
+                eye,
+                threshold,
+                facing,
+                any_fields,
+                low,
+                high,
+                bounds,
+            },
+            &fov,
+            &light,
+        )?,
+    };
+    cache.0.insert(
+        (member, sense),
+        CachedView {
+            epoch,
+            eye,
+            fov,
+            facing,
+            threshold,
+            any_fields,
+            bounds,
+            light,
+            view: view.clone(),
+        },
+    );
+    Some(view)
+}
+
+/// What [`view_of`] works out once for the look at each cell of a view.
+struct Looking<'a> {
+    kind: &'a super::defs::KindInfo,
+    def: &'a super::defs::SenseDef,
+    eye: signal::Spot,
+    threshold: Real,
+    facing: Real,
+    any_fields: bool,
+    low: i32,
+    high: i32,
+    bounds: CellBox,
+}
+
+/// The cells of a field of view a member's sense sees, with what is in
+/// each: [`view_of`]'s look at each cell, given the light filled over
+/// the bounds.
+fn cells_in_view(
+    sim: &Sim,
+    looking: Looking<'_>,
+    fov: &FovSet,
+    light: &[Real],
+) -> Option<Vec<(Location, Remembered)>> {
+    let Looking {
+        kind,
+        def,
+        eye,
+        threshold,
+        facing,
+        any_fields,
+        low,
+        high,
+        bounds,
+    } = looking;
+    let reach = def
+        .range
+        .get()
+        .ceil()
+        .to_i32()
+        .min(clash_world::query::FOV_MAX_REACH);
+    let origin = eye.loc.cell;
+    let side = (2 * reach + 1) as usize;
+    let strength = if kind.standing > Real::ZERO {
+        kind.standing
+    } else {
+        Real::ONE
+    };
+    let topology = *sim.cosmos.topology(eye.loc.grid).ok()?;
+    let mut out = Vec::new();
+    // The storeys a member keeps alone: the air of the open sky above
+    // is not walked through.
+    for offset in fov.offsets_between(low, high) {
+        if offset.z < low || offset.z > high {
+            continue;
+        }
+        let raw = origin.offset(offset);
+        let index = ((raw.z - bounds.min.z) as usize * side + (raw.y - bounds.min.y) as usize)
+            * side
+            + (raw.x - bounds.min.x) as usize;
+        let level = light.get(index).copied().unwrap_or(Real::ZERO);
+        let lit = if kind.uses_light { level } else { Real::ONE };
+        let distance = distance_m(offset);
+        if strength * lit / signal::spread(distance, kind.falloff) < threshold {
+            continue;
+        }
+        let direction = if offset.x == 0 && offset.y == 0 {
+            None
+        } else {
+            let radians = Real::from(offset.x).atan2(-Real::from(offset.y));
+            Some(super::senses::normalize_deg(
+                radians * Real::of(180.0) / Real::of(core::f64::consts::PI),
+            ))
+        };
+        if !super::senses::within_arc(facing, def.arc, direction) {
+            continue;
+        }
+        let Ok(cell) = topology.normalize(raw) else {
+            continue;
+        };
+        let loc = Location::new(eye.loc.grid, cell);
+        let Ok(states) = sim.cosmos.cell(loc) else {
+            continue;
+        };
+        let field = if any_fields {
+            sim.cosmos.fields_at(loc).ok().and_then(|fields| {
+                fields
+                    .into_iter()
+                    .max_by_key(|(id, level)| (*level, core::cmp::Reverse(*id)))
+            })
+        } else {
+            None
+        };
+        let decal = sim
+            .cosmos
+            .decals(loc)
+            .ok()
+            .and_then(|decals| decals.iter().max_by_key(|decal| decal.amount))
+            .map(|decal| (decal.kind, decal.amount));
+        out.push((
+            loc,
+            Remembered {
+                floor: states.floor,
+                block: states.block,
+                fixture: states.fixture,
+                field,
+                decal,
+                open_sky: sim
+                    .cosmos
+                    .static_light(loc)
+                    .is_ok_and(|light| light.sky_steps == 0),
+                light: (level.clamp(Real::ZERO, Real::ONE) * LIGHT_STEPS)
+                    .round()
+                    .to_i32() as u8,
+                at: sim.now(),
+            },
+        ));
+    }
+    Some(out)
+}
+
+/// [`view_of`] as it was before D-921: every view worked out afresh.
+/// What the one that keeps its last view is tested against.
+#[cfg(test)]
+pub(super) fn view_of_reference(
+    sim: &Sim,
+    member: EntityId,
+    sense: SenseId,
+) -> Option<Vec<(Location, Remembered)>> {
     let defs = &sim.perception_defs;
     let def = defs.sense(sense)?;
     let kind_id = defs.sense_kind(sense)?;
@@ -831,4 +1117,9 @@ pub fn party_view(sim: &Sim) -> Vec<Location> {
 /// A member is no longer of the party: its view is forgotten.
 pub(super) fn left(sim: &mut Sim, entity: EntityId) {
     sim.perception.party.views.remove(&entity);
+    sim.perception
+        .party
+        .view_cache
+        .0
+        .retain(|(member, _), _| *member != entity);
 }

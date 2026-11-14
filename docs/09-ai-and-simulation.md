@@ -751,8 +751,8 @@ player. Only characters with minds have levels; a directly controlled
 character has none and is never warm.
 
 **Who is warm.** Of the minds in the world, those ranked beyond
-`sim.max_hot_minds` (default 150). A mind's tract does not make it
-warm: one in a warm tract is ranked as any other, nearest first, and so
+`sim.max_hot_minds` (default 150; measured, a minute's wait in the
+market town keeps to its budget from 50 down, D-927). A mind's tract does not make it warm: one in a warm tract is ranked as any other, nearest first, and so
 is among the first stepped down, while its perception is a warm
 observer's there whatever its level (15 §14). One **stepper** (03 §10)
 on universal time works levels out every `WARM_STEP` (1 s) while
@@ -1507,15 +1507,19 @@ Targets, unmeasured but where a figure is given: those rows are in
 | The same hour with the town unloaded, its residents agents (section 10.6) | no target yet (measured: 7 ms of real time) |
 | A player's step in the bundled town: one simulated second in the square from 09:00, its residents loaded round the player | under 100 ms (measured: see below) |
 | A minute's wait in the bundled town, in the square from 09:00 | under 1 s (measured: see below) |
+| A minute's wait in the bundled town at night, in the square from 23:00 | under 1 s (measured: see below) |
 
 The town's first two rows are the ignored test
 `timing_the_whole_town_for_one_simulated_hour` in
 `crates/clash-save/tests/town_life.rs`, run with `cargo test --release
 -p clash-save --test town_life timing -- --ignored --nocapture`. The
-other two are the benchmarks `town.step_in_market` (the mean of a
-simulated minute taken a second at a time) and `town.minute_wait` of
-`cargo xtask bench`; `town.step_walking` times the step with the player
-walking across the town, with no row. Measured on four shared cores:
+other three are the benchmarks `town.step_in_market` (the mean of a
+simulated minute taken a second at a time), `town.minute_wait` and
+`town.minute_wait_night` (the player taken out of the town while the day
+passes and brought back to the square at eleven at night, when most of
+it is asleep) of `cargo xtask bench`; `town.step_walking` times the step
+with the player walking across the town, with no row. Measured on four
+shared cores:
 
 | | Before levels | With the cap and the rest of performance 2 |
 |---|---|---|
@@ -1524,13 +1528,50 @@ walking across the town, with no row. Measured on four shared cores:
 | A minute's wait | 14.05 s | 2.2 to 2.6 s |
 
 With the cap (section 9.4) 150 of the 565 are hot and the rest warm.
-What a step still costs is, in order: the sweeps of the 150 hot
-characters and the party's own (a sweep looks at the nearest
-`perception.max_candidates` of everyone in a 60 m range, items and
-furniture included); minds thinking, chiefly paths for those going
-about near their homes; and the actions of the hot. A minute's wait is
-over its target by that much: it is the cost of 150 characters in full,
-which the cap sets.
+What a step cost after performance 2 was, in order: the sweeps of the
+150 hot characters and the party's own (a sweep looked at everyone in a
+60 m range, items and furniture included, to keep the nearest
+`perception.max_candidates`); minds thinking, chiefly paths for those
+going about near their homes, and how they stand toward everyone they
+know of; and the actions of the hot.
+
+Performance 3 (D-920 to D-928) made sight and thinking cheaper with every
+result as it was: a sweep finds its candidates nearest first and stops
+at the first part of the index farther than the farthest it keeps; a
+party member standing still keeps its field of view and its view while
+nothing about them changes; while a mind weighs its goals, how it stands
+toward others and which part of its day its routine has it in are worked
+out once; a relation lookup reads the groups of both minds once for all
+the kinds it reads; and an entity's clock is read without the rest of
+the ambient conditions. Counted in instructions, a minute's wait in the
+square by day fell by a fifth (the sweeps by a third, the party's sweep
+by half); in time, on a shared machine, by a tenth to a quarter.
+Measured with each cap given to the game scenario, the best of two to
+five runs, before and after:
+
+| `sim.max_hot_minds` | A minute's wait by day | At night | A step in the square |
+|---|---|---|---|
+| 150 | 2.15 s, 1.89 s | 0.65 s, 0.60 s | 36.3 ms, 32.1 ms |
+| 100 | 1.64 s, 1.42 s | 0.55 s, 0.46 s | 27.3 ms, 24.1 ms |
+| 80 | 1.37 s, 1.26 s | 0.48 s, 0.47 s | 21.9 ms, 19.8 ms |
+| 60 | 1.28 s, 1.03 s | 0.39 s, 0.28 s | 20.6 ms, 16.9 ms |
+| 50 | 1.05 s, 0.81 s | 0.30 s, 0.20 s | 18.2 ms, 15.7 ms |
+| 40 | 0.94 s, 0.81 s | 0.31 s, 0.18 s | 16.1 ms, 14.1 ms |
+
+A minute's wait at night is within its target at every cap. By day it is
+within it from a cap of 50 down (at 50, 0.81 to 1.03 s over five runs; at
+60 never under 1.03 s). The bundled game scenarios do not set it yet
+(D-927): given 50, two play sessions of the application see another game
+(the walk to the bakery's wood is stopped short; the errand's last frame
+shows another line of the log), and those sessions are the play-testing
+stream's. Below about 60 the cost is that of the warm characters, who
+think by the same goals as the hot and plan the paths they walk in bulk,
+and it falls little with the cap. Whoever the player sees is hot at any
+cap (D-891), so the market seen from the square is the same. What is
+still slow is in the model: paths, which are a fifth of a minute's wait
+and mostly the warm going about near their homes, and the goals of five
+hundred minds weighed at their intervals; a path planned to see whether
+a way is there is planned again when the walk sets out (D-928).
 
 ## 20. Open questions
 

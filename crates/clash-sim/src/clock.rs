@@ -104,8 +104,10 @@ impl Sim {
     /// highest-priority area covering it that has a clock, and of equals
     /// the one made first, else its realm's (03 §3.4).
     pub fn location_clock(&self, loc: Location) -> ClockId {
-        match self.cosmos.ambient(loc) {
-            Ok(ambient) => ambient.clock,
+        // The clock alone: what the ambient conditions there say of it
+        // (D-928).
+        match self.cosmos.clock_at(loc) {
+            Ok(clock) => clock,
             // A cell outside its grid: the realm's clock, if there is a
             // realm, and universal time if not.
             Err(_) => self

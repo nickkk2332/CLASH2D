@@ -241,7 +241,24 @@ pub fn current_entry<'s>(
 ) -> Option<(usize, &'s RoutineEntry, Dur)> {
     let day = calendar::realm_day(sim, whom.realm);
     let local = calendar::local_now(sim, whom.realm)?;
-    let (at, began) = routine::entry_at(def, day, calendar::reckoned(day, local), whom.seed)?;
+    let reckoned = calendar::reckoned(day, local);
+    // While a mind's thought reads it again and again, the part found
+    // once is the part (D-922).
+    let key = (
+        core::ptr::from_ref(def) as usize,
+        whom.realm,
+        whom.seed,
+        reckoned,
+    );
+    let part = match sim.ai.stances.part(key) {
+        Some(part) => part,
+        None => {
+            let part = routine::entry_at(def, day, reckoned, whom.seed);
+            sim.ai.stances.put_part(key, part);
+            part
+        }
+    };
+    let (at, began) = part?;
     Some((at, def.day.get(at)?, began))
 }
 
