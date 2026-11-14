@@ -1,0 +1,58 @@
+[
+  { "//": "What people of this mod do about a blow struck without cause (15 §12, 13 §8.2): an offence is content. Everything here starts from a percept, `perceived` with a blow it carried (`hit_landed`: seen, heard, or felt by the one it landed on, `perceptions/event_signals.json`), and reads only what the one who perceived it believes: whom it took the striker for (`event.about_actor`, the persona it saw, so a disguised striker is remembered as the disguise), and how it regards the one struck. (`event.about_actor ?? self` below only satisfies the linter: the condition has made sure it is someone else.) A blow nobody made out the striker of has no consequence. The rules are in the group `social_life`: the setting `core:social_life` false switches them off with the rest.",
+    "type": "eoc", "id": "take_against", "subjects": { "self": "entity" },
+    "params": { "toward": "entity" },
+    "doc": "How `self` comes to regard someone it saw or felt strike without cause, by its own mind's weights: held hostile, as much as its `duty`, where its duty outweighs its `caution` (the watch, a brawler); otherwise feared, as much as its caution (townsfolk, a dog). A relation it already holds more strongly is kept. Whom it takes `toward` for is whom it holds it toward (15 §9.1).",
+    "do": [
+      { "if": "(self.weight('duty') ?? 0) > (self.weight('caution') ?? 0)",
+        "then": [ { "set_relation": { "who": "self", "toward": "$toward", "kind": "core:hostile",
+                                      "value": "max(self.rel('core:hostile', $toward) ?? 0, self.weight('duty') ?? 0)" } } ],
+        "else": [ { "set_relation": { "who": "self", "toward": "$toward", "kind": "core:fearful",
+                                      "value": "max(self.rel('core:fearful', $toward) ?? 0, self.weight('caution') ?? 0)" } } ] } ] },
+
+  { "//": "A blow seen, heard or felt: the one who struck is taken against, unless the one struck is someone the witness itself holds hostile or fears (a blow against a foe is no offence to it), or the striker itself (what a blow jars back into the hand that struck it, 07 §6.3). The first time it puts this striker to such a blow it remembers it as `core:unprovoked_blow`; a member of the watch reports it to the watch, whose every member is told at once (15 §9.2); one of the townsfolk not played by anyone shouts for the watch, a report heard by whoever is in earshot, which a watchman who hears it passes to the watch (`core:pass_reports_to_the_watch`). Calling for help and running are its mind's goals (`flee_danger`).",
+    "type": "eoc", "id": "answer_a_blow", "on": "perceived", "group": "social_life",
+    "filter": { "event": "hit_landed" },
+    "if": "not is_null(event.about_actor) and event.about_actor != self and (event.signal == 'core:touch' or is_null(about) or (about != event.about_actor and not (self.hostile(about) or self.fears(about))))",
+    "doc": "Someone who perceives a blow and makes out who struck it, against itself or against someone else it neither holds hostile nor fears (the jar of a blow into the striker's own fist is no offence), takes against the striker (`core:take_against`); the first time, it remembers the striker for it (`core:unprovoked_blow`), and tells its group: the watch by reporting to it, the townsfolk by shouting for the watch.",
+    "do": [
+      { "run": { "eoc": "core:take_against", "with": { "toward": "event.about_actor ?? self" } } },
+      { "if": "not self.remembers_actor(event.about_actor ?? self, 'core:unprovoked_blow')",
+        "then": [
+          { "remember": { "who": "self", "event": "core:unprovoked_blow", "at": "event.where",
+                          "salience": 0.9, "actor": "event.about_actor ?? self" } },
+          { "if": "self.in_group('core:watch')",
+            "then": [ { "report_to_group": { "who": "self", "group": "core:watch",
+                                             "event": "core:unprovoked_blow", "about": "event.about_actor ?? self" } } ],
+            "else": [ { "if": "self.in_group('core:townsfolk') and self.control != 'direct'",
+                        "then": [ { "say": { "who": "self", "kind": "core:report", "about": "event.about_actor ?? self",
+                                             "event": "core:unprovoked_blow", "line": "core:alarm_calls",
+                                             "strength": 8 } } ] } ] } ] } ] },
+
+  { "//": "Group knowledge is consulted on recognising someone (15 §9.2): a watchman told that a persona struck someone without cause takes against it when he next comes to perceive it. So does anyone who heard it shouted.",
+    "type": "eoc", "id": "recognise_an_offender", "on": "perceived", "group": "social_life",
+    "filter": { "percept": "detection" },
+    "if": "not is_null(about) and self.memory_confidence('core:unprovoked_blow') != null and self.remembers_actor(about, 'core:unprovoked_blow') and not self.hostile(about) and not self.fears(about)",
+    "doc": "Someone who comes to perceive a persona it remembers, seen or told, as having struck without cause (`core:unprovoked_blow`) takes against it (`core:take_against`).",
+    "do": [ { "run": { "eoc": "core:take_against", "with": { "toward": "about" } } } ] },
+
+  { "type": "eoc", "id": "told_of_an_offender", "on": "memory_added", "group": "social_life",
+    "filter": { "event": "core:unprovoked_blow" },
+    "doc": "Someone told of a blow struck without cause takes against the striker at once if it already perceives them: the same as recognising them (`core:recognise_an_offender`), for whoever is in sight when the news comes.",
+    "do": [ { "for_each": { "entities": { "around": "self", "radius": 60, "tag": "person",
+                                          "where": "it != self and perceives(self, it) and self.remembers_actor(it, 'core:unprovoked_blow') and not self.hostile(it) and not self.fears(it)" } },
+              "as": "striker",
+              "do": [ { "run": { "eoc": "core:take_against", "with": { "toward": "$striker" } } } ] } ] },
+
+  { "//": "Someone struck by a hand it did not see turns to where the blow came from, as anyone would; what it sees then is what it makes of the next one.",
+    "type": "eoc", "id": "turn_to_a_blow", "on": "hit_landed", "group": "social_life",
+    "if": "not is_null(actor) and actor != self and self.control != 'direct' and self.in_world and not perceives(self, actor)",
+    "doc": "Someone not played by anyone, struck by someone it does not perceive, turns to face where the blow came from.",
+    "do": [ { "face": { "who": "self", "toward": "actor" } } ] },
+
+  { "type": "lines", "id": "alarm_calls",
+    "lines": [
+      { "text": "{cap(the(self))} {verb(self, 'shout')}: \"Watch! Over here!\"", "weight": 2 },
+      { "text": "{cap(the(self))} {verb(self, 'shout')} for the watch." } ],
+    "doc": "Shouting for the watch after seeing someone struck." }
+]

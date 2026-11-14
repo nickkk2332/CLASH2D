@@ -1,0 +1,45 @@
+# disguised_blow (the consequences stream, D-940 to D-942; scene S15;
+# 15 §8.3, §9.2): Tess, wearing Vic's face, strikes a townsperson in
+# front of a watchman. The one struck and the watchman take against the
+# face they saw, and the watchman reports it to the watch: a watchman
+# far off who saw nothing is told of Vic. Out of everyone's sight Tess
+# drops the face; the far watchman sees her and lets her be, and holds
+# the real Vic hostile the moment he sees him. The world's record still
+# names Tess.
+use default seed=5
+gen core:testland size=2
+spawn creature as=w
+session @w @c:30,30,0
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:watch_guard", "at": "offset(self.loc, 4, 2, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 40, -8, 0)" } }
+as @spot do { "spawn": { "template": "core:watch_guard", "at": "offset(self.loc, 50, 50, 0)" } }
+remove @spot
+# Tess (@e:2) takes on Vic's (@e:5) face before anyone has seen her.
+copy_persona who=@e:2 of=@e:5
+control @e:2 direct
+advance 2s
+assert "@e:3.persona_of(@e:2) == @e:5.persona and @e:4.persona_of(@e:2) == @e:5.persona"
+start_action @e:2 core:punch "{ 'target': @e:3 }"
+wait @e:2 1s
+advance 600ms
+expect event hit_landed actor=@e:2
+control @e:2 delegated
+advance 1s
+assert "@e:3.fears(@e:2) and @e:4.hostile(@e:2)"
+assert "@e:3.remembers_actor(@e:5, 'core:unprovoked_blow') and @e:4.remembers_actor(@e:5, 'core:unprovoked_blow')"
+assert "@e:6.remembers_actor(@e:5, 'core:unprovoked_blow') and not @e:6.hostile(@e:5)"
+# Out of sight of everyone, the face comes off, and Tess walks up to the
+# far watchman: he does not know her.
+move @e:2 @c:20,40,0
+drop_persona who=@e:2
+move @e:2 @c:58,60,0
+advance 2s
+assert "@e:6.perceives(@e:2) and @e:6.persona_of(@e:2) == @e:2.persona and not @e:6.hostile(@e:2)"
+# Vic comes by: him he holds hostile.
+move @e:5 @c:60,58,0
+advance 2s
+assert "@e:6.perceives(@e:5) and @e:6.hostile(@e:5)"
+expect hash e3effaafc374ecd2d6b82c14a470bcea

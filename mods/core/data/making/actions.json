@@ -50,13 +50,15 @@
     "fail_text": "It is empty.",
     "do": [ { "dose": { "who": "self", "from": "target", "route": "ingest", "amount": "250 ml" } } ] },
 
-  { "//": "Binds the wounds that bleed: each open wound is closed (06 §7.3), and the bandage is used up.",
+  { "//": "Binds the wounds that bleed: each open wound is closed (06 §7.3), and one bandage is used up, the rest of a stack kept. It reaches a bandage carried anywhere on the one who binds (`held`, 16 §3.3): a free hand is not needed (D-947).",
     "type": "interaction", "id": "apply_bandage", "name": "Bandage your wounds", "target": "entity",
     "reach": "held", "time": "4 s", "noise": 0.1,
     "if": "len(self.wounds) > 0",
     "fail_text": "You have no wound to bind.",
     "do": [ { "for_each": "self.wounds", "as": "wound",
               "do": [ { "if": "$wound.state == 'open'", "then": [ { "close_wound": "$wound" } ] } ] },
+            { "if": "(target.count ?? 1) > 1",
+              "then": [ { "split": { "item": "target", "count": "(target.count ?? 2) - 1" } } ] },
             { "destroy_item": { "item": "target" } } ] },
 
   { "//": "Rubs ten millilitres of salve into the skin: what it does is the substance's, and the hurt parts mend a little.",

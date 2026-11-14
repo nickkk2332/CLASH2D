@@ -513,6 +513,9 @@ pub struct Scene<H: SceneHost = NoHost> {
     /// The creature selected as the target (12 §9.2): what `app.target`
     /// reads while the party still perceives it.
     pub(crate) target: Option<SpriteId>,
+    /// For each show whose `heard` asks for a quiet, when something it
+    /// is about was last heard (12 §7.4, decision D-945).
+    pub(crate) heard_last: BTreeMap<crate::playback::ShowId, clash_core::Tick>,
 }
 
 impl<H: SceneHost + fmt::Debug> fmt::Debug for Scene<H> {
@@ -748,16 +751,18 @@ impl<H: SceneHost> Scene<H> {
             pref_speed: None,
             pref_effects: None,
             target: None,
+            heard_last: BTreeMap::new(),
         }
     }
 
     /// The creature selected as the target with the `camera` effect's
-    /// `target`, while the party perceives it: in the view model, not
-    /// only suspected. `None` otherwise.
+    /// `target`, while the party perceives it as one: in the view model,
+    /// not only suspected, and not a body the party sees lying dead,
+    /// which is drawn as a thing (decision D-944). `None` otherwise.
     pub fn target(&self) -> Option<SpriteId> {
         let id = self.target?;
         let sprite = self.world.as_ref()?.model().sprite(id)?;
-        (!sprite.suspected).then_some(id)
+        (!sprite.suspected && sprite.kind == crate::view::SpriteKind::Creature).then_some(id)
     }
 
     /// Selects a creature as the target, or none.

@@ -65,6 +65,20 @@ const SCENARIOS: &str = r#"[
     "worlds": [ { "realm": "test_city" } ],
     "start": { "characters": [ { "template": "person" } ], "at": [ { "cell": [5, 5] } ] } },
 
+  { "type": "variable", "id": "why", "scope": "global", "value": "string" },
+  { "type": "variable", "id": "told", "scope": "global", "value": "string" },
+  { "type": "eoc", "id": "give_up_later",
+    "do": [ { "after": "1 s", "name": "give_up", "owner": "global",
+              "do": [ { "set": { "global.var.why": "left" } },
+                      { "fail_objective": "hold" } ] } ] },
+  { "type": "scenario", "id": "delta", "name": "Delta",
+    "worlds": [ { "realm": "testland", "seed": 5 } ],
+    "start": { "characters": [ { "template": "person" } ], "at": [ { "cell": [12, 10] } ],
+               "do": [ { "run": "core:give_up_later" } ] },
+    "objectives": [
+      { "id": "hold", "text": "Hold on.",
+        "on_failed": [ { "set": { "global.var.told": { "expr": "global.var.why ?? 'unset'" } } } ] } ] },
+
   { "type": "mission", "id": "errand", "name": "Errand for {$who}",
     "params": { "who": "string", "count": "int" },
     "objectives": [
@@ -707,4 +721,22 @@ fn a_timer_set_in_a_scenarios_start_runs_when_it_falls_due_after_a_load_too() {
         assert_eq!(sim.rule_fault_count(), 0, "the timer was found");
     }
     assert_eq!(loaded.state_hash(), sim.state_hash());
+}
+
+#[test]
+fn a_variable_set_just_before_an_objective_fails_is_read_in_its_on_failed() {
+    // The second play-testing's known issue 11: the errand's timer set
+    // `errand_lost` and failed the objective in one effect list, and
+    // `on_failed` did not find it `'left'`. The variable is read, set:
+    // the errand had written `"'left'"`, which a text-typed place takes
+    // as it is written, quotes and all (05 §7.1), and which the loader
+    // now warns of (W0679, decision D-946).
+    let defs = defs();
+    let (mut sim, _) = begun(&defs, "core:delta", 5, 0, Vec::new());
+    run(&mut sim, Dur::from_secs(2));
+    assert_eq!(
+        objective_state(&sim, None, "hold"),
+        Some(ObjectiveState::Failed)
+    );
+    assert_eq!(var(&sim, "core:told"), clash_expr::Value::from("left"));
 }

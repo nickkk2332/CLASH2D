@@ -161,6 +161,9 @@ expr_codes! {
     QUERY_TOO_LARGE = "E0678", Error, "compile", None,
         "A query covers more cells than a query may.",
         "A spatial query's extent is capped by `rules.max_query_cells`, 1,048,576 cells unless set (05 §11, §13.2). This one's size is known when the mod loads, and it is larger than that. A radius covers a box of cells round its centre, a storey counting three metres. Narrow it with a smaller radius, a `box` or `in_area`.";
+    QUOTED_TEXT = "W0679", Warning, "compile", None,
+        "A text is written in quotes where what is written is the text itself.",
+        "Where a field, an argument or an assignment wants text (a `string`), a JSON string is the text as it is written, not an expression (05 §7.1): `\"'left'\"` is the six characters `'left'`, quotes and all, and is never equal to the text `'left'` an expression compares it with. Write the text bare, `\"left\"`; to work the text out, write an expression as `{ \"expr\": \"…\" }`.";
 
     UNKNOWN_EFFECT = "E0681", Error, "compile", None,
         "An effect names nothing that can be done.",

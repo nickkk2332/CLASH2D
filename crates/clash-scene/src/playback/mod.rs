@@ -382,6 +382,7 @@ impl<H: SceneHost> Scene<H> {
             prefs,
             warnings,
             pref_effects,
+            heard_last,
             ..
         } = self;
         let empty = ViewModel::new();
@@ -428,12 +429,20 @@ impl<H: SceneHost> Scene<H> {
                 }
                 matched.push((show, def));
             }
-            // The lines: what was seen, or what was heard.
+            // The lines: what was seen, or what was heard; what is heard
+            // again before a quiet is not told again (D-945).
             for (show, def) in &matched {
                 let text = if seen {
                     def.log.as_ref()
                 } else {
-                    def.heard.as_ref().and_then(|heard| heard.log.as_ref())
+                    let heard = def.heard.as_ref();
+                    if let Some(quiet) = heard.and_then(|heard| heard.quiet) {
+                        let last = heard_last.insert(show.id, event.tick);
+                        if last.is_some_and(|last| event.tick.since(last) < quiet.dur()) {
+                            continue;
+                        }
+                    }
+                    heard.and_then(|heard| heard.log.as_ref())
                 };
                 let (Some(text), Some(values)) = (text, values.as_ref()) else {
                     continue;

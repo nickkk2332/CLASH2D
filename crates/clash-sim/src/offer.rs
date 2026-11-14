@@ -129,6 +129,49 @@ pub fn could_start(
             ));
         }
     }
+    let actor_value = sim.subject_value(Subject::Entity(actor));
+    let (locals, missing) = locals_for(sim, actor, def, given);
+    if !missing {
+        let bound = Bound {
+            subjects: vec![actor_value.clone()],
+            locals: locals.clone(),
+            fields: Vec::new(),
+        };
+        let mut host = sim.host(bound);
+        if !def.requires.holds_on(&defs, &mut host) {
+            let sentence = def.fail_text.as_ref().map(|text| {
+                let bound = Bound {
+                    subjects: vec![actor_value.clone()],
+                    locals: locals.clone(),
+                    fields: Vec::new(),
+                };
+                let mut host = sim.host_for_reader(bound, actor);
+                capitalised(&text.render_on(&defs, &mut host))
+            });
+            let mut reason = sim.refusal(
+                &why::REQUIRES,
+                actor,
+                &[("action", action.clone())],
+                sentence,
+            );
+            reason.code = why::REQUIRES.code.to_owned();
+            return Err(reason);
+        }
+    }
+    attacks_and_slots(sim, actor, id, def, &refuse)
+}
+
+/// The locals an action would start with for an actor, in slot order,
+/// as a menu works them out before anything is chosen (see
+/// [`could_start`]), and whether one the action needs from its caller
+/// is missing.
+fn locals_for(
+    sim: &Sim,
+    actor: EntityId,
+    def: &ActionDef,
+    given: &[(&str, Value)],
+) -> (Vec<Value>, bool) {
+    let defs = Arc::clone(sim.defs());
     let value_of = |name: &str| {
         given
             .iter()
@@ -137,8 +180,6 @@ pub fn could_start(
             .filter(|value| !value.is_null())
     };
     let actor_value = sim.subject_value(Subject::Entity(actor));
-    // The locals, in slot order; whether one the action needs from its
-    // caller is missing.
     let mut locals: Vec<Value> = Vec::with_capacity(def.locals().len());
     let mut missing = false;
     for local in def.locals() {
@@ -180,28 +221,45 @@ pub fn could_start(
         };
         locals.push(value);
     }
-    if !missing {
-        let bound = Bound {
-            subjects: vec![actor_value.clone()],
-            locals: locals.clone(),
-            fields: Vec::new(),
-        };
-        let mut host = sim.host(bound);
-        if !def.requires.holds_on(&defs, &mut host) {
-            let sentence = def.fail_text.as_ref().map(|text| {
-                let bound = Bound {
-                    subjects: vec![actor_value.clone()],
-                    locals: locals.clone(),
-                    fields: Vec::new(),
-                };
-                let mut host = sim.host_for_reader(bound, actor);
-                capitalised(&text.render_on(&defs, &mut host))
-            });
-            let mut reason = sim.refusal(&why::REQUIRES, actor, &[("action", action)], sentence);
-            reason.code = why::REQUIRES.code.to_owned();
-            return Err(reason);
-        }
-    }
+    (locals, missing)
+}
+
+/// Where an action is offered among those it is listed with (`offer`,
+/// decision D-943), for an actor with the locals it would start with:
+/// its expression read as `requires` is, 0 where it is null or not a
+/// finite number.
+pub(crate) fn offer_of(sim: &Sim, actor: EntityId, def: &ActionDef, locals: &[Value]) -> Real {
+    let bound = Bound {
+        subjects: vec![sim.subject_value(Subject::Entity(actor))],
+        locals: locals.to_vec(),
+        fields: Vec::new(),
+    };
+    let mut host = sim.host(bound);
+    def.offer
+        .eval_on(sim.defs(), &mut host)
+        .filter(|value| value.is_finite())
+        .unwrap_or(Real::ZERO)
+}
+
+/// How [`could_start`] words a refusal of an action: a reason, with the
+/// values it is told.
+type Refuse<'a> = dyn Fn(&why::Reason, &[(&str, Value)]) -> Reason + 'a;
+
+/// Where a row of [`actions_with`] is listed: whether it could not
+/// start, whether it is aimed elsewhere, its `offer` (higher first),
+/// whether it strikes with nothing held, and the slots it takes.
+type RowOrder = (bool, bool, core::cmp::Reverse<Real>, bool, u32);
+
+/// The last of [`could_start`]: every attack finds what it strikes with,
+/// and the actor has the slots the action uses.
+fn attacks_and_slots(
+    sim: &Sim,
+    actor: EntityId,
+    id: ActionDefId,
+    def: &ActionDef,
+    refuse: &Refuse<'_>,
+) -> Result<(), Reason> {
+    let defs = Arc::clone(sim.defs());
     let name = run::action_name(&defs, id);
     for attack in def.attacks.iter() {
         if let Err(reason) =
@@ -307,8 +365,9 @@ fn row(fields: Vec<(&str, Value)>) -> Value {
 }
 
 /// `entity.actions_with(tag, target?)`: one row for each action that
-/// carries the tag (what could start first, then what strikes with
-/// something held, then fewer slots, then by qualified id: D-791), with
+/// carries the tag (what could start first, then what is offered higher
+/// by its `offer` (D-943), then what strikes with something held, then
+/// fewer slots, then by qualified id: D-791), with
 /// whether the entity could start it now (given `target` for an action
 /// that has a parameter of that name) and why not. With a target, an
 /// action that has no parameter or role of that name cannot be done at
@@ -319,7 +378,7 @@ pub fn actions_with(sim: &Sim, actor: EntityId, tag: &str, target: &Value) -> Ve
     else {
         return Vec::new();
     };
-    let mut rows: Vec<((bool, bool, bool, u32), Value)> = Vec::new();
+    let mut rows: Vec<(RowOrder, Value)> = Vec::new();
     for (id, def) in registry.iter() {
         if !def.tags.contains(tag) {
             continue;
@@ -341,6 +400,17 @@ pub fn actions_with(sim: &Sim, actor: EntityId, tag: &str, target: &Value) -> Ve
         // With a target, what cannot be aimed at them cannot be done at
         // them: a blow at a place is not a blow at someone (D-904).
         let aimed_elsewhere = !target.is_null() && !takes_target;
+        // What suits what the actor holds comes before what does not
+        // (`offer`, D-943): with no arrow left the bow's refusal, not
+        // the pistol's.
+        let offer = {
+            let mut given: Vec<(&str, Value)> = Vec::new();
+            if !target.is_null() && takes_target {
+                given.push((TARGET_PARAM, target.clone()));
+            }
+            let (locals, _) = locals_for(sim, actor, def, &given);
+            offer_of(sim, actor, def, &locals)
+        };
         let verdict = if aimed_elsewhere {
             Err(sim.refusal(
                 &why::NOT_AIMED,
@@ -367,7 +437,13 @@ pub fn actions_with(sim: &Sim, actor: EntityId, tag: &str, target: &Value) -> Ve
             })
             .sum();
         rows.push((
-            (verdict.is_err(), aimed_elsewhere, !held, slots),
+            (
+                verdict.is_err(),
+                aimed_elsewhere,
+                core::cmp::Reverse(offer),
+                !held,
+                slots,
+            ),
             row(vec![
                 ("value", action_value(sim, id)),
                 ("label", Value::from(label.as_str())),

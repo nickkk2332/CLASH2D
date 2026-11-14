@@ -51,7 +51,7 @@
           { "if": "self.site == global.var.errand_to",
             "else": [
               { "if": "not is_null(self.outermost.mind_def)",
-                "then": [ { "set": { "global.var.errand_lost": "'given'" } },
+                "then": [ { "set": { "global.var.errand_lost": "given" } },
                           { "fail_objective": "deliver" } ],
                 "else": [ { "run": "core:errand_parcel_left" } ] } ] } ] } ] },
 
@@ -65,7 +65,7 @@
     "do": [
       { "after": "10 min", "name": "errand_left", "owner": "global",
         "do": [ { "if": "global.var.parcel.outermost != global.var.courier and (is_null(global.var.parcel.site) or global.var.parcel.site != global.var.errand_to)",
-                  "then": [ { "set": { "global.var.errand_lost": "'left'" } },
+                  "then": [ { "set": { "global.var.errand_lost": "left" } },
                             { "fail_objective": "deliver" } ] } ] } ] },
 
   { "type": "item", "id": "parcel", "name": "parcel",

@@ -493,6 +493,11 @@ Every mistake the loader finds is a diagnostic with a stable code, the file, lin
 
 *warning, compile stage.* The compiler can see that an operation such as `1 / 0` cannot succeed. It is left as written, gives null and warns each time it runs (05 §4.5).
 
+<a id="w0679"></a>
+## W0679 — A text is written in quotes where what is written is the text itself.
+
+*warning, compile stage.* Where a field, an argument or an assignment wants text (a `string`), a JSON string is the text as it is written, not an expression (05 §7.1): `"'left'"` is the six characters `'left'`, quotes and all, and is never equal to the text `'left'` an expression compares it with. Write the text bare, `"left"`; to work the text out, write an expression as `{ "expr": "…" }`.
+
 <a id="w0690"></a>
 ## W0690 — While running, a query was refused.
 

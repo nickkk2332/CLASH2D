@@ -62,11 +62,12 @@ fn items() -> String {
 }
 
 /// `mods/core`'s world, perception, living things, movement, items,
-/// fighting and minds, with one more file.
+/// fighting, minds and social life (since D-941 what a townsperson makes
+/// of a blow it sees is the social rules'), with one more file.
 fn try_load(extra: &str) -> Result<Arc<Defs>, String> {
     let types = common::types();
     let mut files = core_files("world");
-    for dir in ["perception", "life", "combat", "ai"] {
+    for dir in ["perception", "life", "combat", "ai", "social"] {
         files.extend(core_files(dir));
     }
     files.push((

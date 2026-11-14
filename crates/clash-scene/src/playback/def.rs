@@ -122,6 +122,13 @@ pub struct HeardDef {
     /// `heard` mark.
     #[serde(default)]
     pub marker: Option<char>,
+    /// How long nothing this show is about must have been heard before
+    /// its line is written again (12 §7.4, decision D-945): footsteps
+    /// heard while someone walks about are told once, and again only
+    /// after a quiet. The marker is put each time. Left out, every one
+    /// is told.
+    #[serde(default)]
+    pub quiet: Option<Time>,
 }
 
 /// A `show` definition (12 §7.3): how an event appears when it is
@@ -415,7 +422,12 @@ impl Def for ShowDef {
                 self.shake
             ));
         }
-        for (time, name) in [(self.time, "time"), (self.min_time, "min_time")] {
+        let quiet = self.heard.as_ref().and_then(|heard| heard.quiet);
+        for (time, name) in [
+            (self.time, "time"),
+            (self.min_time, "min_time"),
+            (quiet, "heard.quiet"),
+        ] {
             if time.is_some_and(|time| time.dur().0 < 0) {
                 cx.error(format!("`{name}` cannot be negative"));
             }

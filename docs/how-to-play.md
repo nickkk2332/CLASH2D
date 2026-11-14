@@ -102,7 +102,8 @@ sound came from. Common symbols:
 
 **The log**, under the map, says what happened that your character
 perceived: what they saw, and what they only heard ("Footsteps,
-somewhere close."). It also says why something you tried could not be
+somewhere close.", once, and again after a quiet; the `!` marks show
+each step). It also says why something you tried could not be
 done.
 
 **The status column** has your name, the target you chose, your
@@ -323,8 +324,8 @@ below 60% you fall, below 40% you die. **Pain** rises with every hurt:
 above 90% you fall. An arm too badly hurt to hold drops what it held.
 Someone who has fallen is not dead, and can still bleed to death.
 
-A bandage, from `e` while you hold it, closes every open wound and is
-used up. Salve mends a little. Bread, ale and water are eaten and drunk
+A bandage, from `e` while you carry it, closes every open wound and is
+used up (one of a stack); your hands may both be full. Salve mends a little. Bread, ale and water are eaten and drunk
 the same way.
 
 **Food.** What you eat keeps you going for about a day and a half.
@@ -377,8 +378,38 @@ In a window, the second mouse button on someone offers Attack, Shoot
 and Talk, beside Go there, Use what is near and Look around.
 
 What you hold matters. A knife or a club can parry; a buckler blocks.
-The workshop's chest keeps knives and clubs, and the racks of the
-guardhouse's armoury clubs, bucklers, bows and arrows.
+The reaction prompt lists first what suits what is in your hands: Parry
+with a blade or a club, Block with a buckler, and with empty hands
+Dodge and Step back, Block on the bare forearm last (it stops a blade
+by being cut). The workshop's chest keeps knives and clubs, and the
+racks of the guardhouse's armoury clubs, bucklers, bows and arrows.
+Someone who has died is no longer a target: Tab passes over the body.
+
+**When you strike someone without cause.** The town answers it, by
+what each person saw:
+
+- **The one you strike** feels it and, if they saw who did it, is
+  afraid of you, or, if they are of the watch, holds you hostile and
+  fights back. Struck from behind by someone they never saw, they turn
+  round, but do not know it was you.
+- **Whoever sees or hears it** and makes you out, and does not already
+  hold your victim an enemy, takes against you: townsfolk are afraid of
+  you and keep away, shouting for the watch ("Watch! Over here!"); a
+  watchman holds you hostile, comes for you, lays hands on you and
+  strikes you, and reports you to the watch.
+- **The watch** knows at once what any watchman was told, wherever its
+  members are, and any watchman holds you hostile the first time he
+  sees you after. So do townsfolk who heard the shout keep away.
+- **They remember the face they saw.** Disguised, you are remembered as
+  the disguise: the watch goes after whoever wears that face, and not
+  you once you take it off out of sight.
+- **It wears off.** Fear fades within the hour, the watch's anger over
+  an hour or two. Get out of sight and hide where nobody saw you go (a
+  watchman does not look inside a wardrobe), and they give up the
+  search. A blow nobody saw you strike has no consequence.
+
+Hitting back at someone who attacked you, or striking someone a
+watchman already holds hostile, is no offence to him.
 
 ## Powers
 
@@ -445,14 +476,11 @@ what is true.
   first. Once they lose you they remember where you were.
 - **Hiding inside.** In a wardrobe you cannot be seen at all, though
   sound still leaves.
-- **Memory.** Townsfolk run from danger close by and keep away from
-  anyone they saw hurt someone. Those who think as watchmen do (the
-  strangers of Last stand are such) go after anyone they hold hostile or
-  saw hurt someone; once they lose them they go to where they last
-  believed them to be, look round, and give up. People tell each other
-  what they saw, at a little less certainty each time. (In this beta
-  the town's watch does not yet come for you when it is your character
-  who strikes: see the release notes' known issues.)
+- **Memory.** Townsfolk run from danger close by. Those who think as
+  watchmen do go after anyone they hold hostile; once they lose them
+  they go to where they last believed them to be, look round, and give
+  up. People tell each other what they saw, at a little less certainty
+  each time.
 
 Your character works the same way: the map shows what they have seen,
 and someone you cannot see is not drawn.

@@ -802,7 +802,18 @@ fn compile_written(
         Written::Text(text) => {
             let wanted = expected.non_null();
             if *wanted == Type::Str {
-                // The text itself (05 §7.1), however long.
+                // The text itself (05 §7.1), however long; written in
+                // quotes, as an expression would write it, it keeps them,
+                // which is never what was meant (decision D-946).
+                if quoted(text) {
+                    cx.error_at(
+                        codes::QUOTED_TEXT,
+                        site,
+                        format!(
+                            "this text is written as it is, quotes and all: `{text}`; write it without them, or as `{{ \"expr\": \"{text}\" }}` to work it out"
+                        ),
+                    );
+                }
                 return Some(Ready::Constant(Value::text(text.as_str())));
             }
             if matches!(wanted, Type::Id(_)) {
@@ -824,6 +835,15 @@ fn compile_written(
         }
         Written::Source(source) => compile_source(source, site, cx, scope, expected),
     }
+}
+
+/// Whether a text taken as written is wrapped in a pair of the quotes
+/// an expression writes a text in: `'left'`.
+fn quoted(text: &str) -> bool {
+    let trimmed = text.trim();
+    trimmed.len() >= 2
+        && ((trimmed.starts_with('\'') && trimmed.ends_with('\''))
+            || (trimmed.starts_with('"') && trimmed.ends_with('"')))
 }
 
 fn compile_code(

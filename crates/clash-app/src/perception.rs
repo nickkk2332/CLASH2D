@@ -29,9 +29,10 @@
 //! **Who is drawn.** The party's own members, always, where they are
 //! (12 §10.4: the party's own are known in full), with their own look;
 //! and whatever stands in a cell in view and gives off something a sense
-//! of light could see: a creature with the glyph of its templates, an
-//! item with its definition's, anything else as the theme's `suspected`
-//! mark. A thing that leaves view leaves the picture.
+//! of light could see: a creature with the glyph of its templates (a
+//! body that lies dead as a thing, which the target cycle passes over:
+//! D-944), an item with its definition's, anything else as the theme's
+//! `suspected` mark. A thing that leaves view leaves the picture.
 //!
 //! **What was only heard** reaches the picture through playback: an
 //! event tagged heard puts its show's marker and line where it seemed to
@@ -192,6 +193,12 @@ pub fn part_of(look: &GlyphDef, theme: &Theme) -> GlyphPart {
             ..GlyphPart::default()
         },
     }
+}
+
+/// Whether a creature in the party's view lies dead: what anyone who
+/// sees the body sees of it (decision D-944).
+fn lies_dead(sim: &Sim, entity: clash_core::EntityId) -> bool {
+    sim.vital(entity) == Some(clash_sim::mind::VitalState::Dead)
 }
 
 /// The sprite a thing is drawn as: with its own look if it has one,
@@ -373,10 +380,11 @@ pub fn look(
                 continue;
             }
             let look = look_of(sim, occupied.id).map(|look| part_of(&look, theme));
-            sprites.insert(
-                id,
-                sprite(loc, occupied.kind == OccupantKind::Creature, look),
-            );
+            // A body the party sees lying dead is seen as a body: drawn
+            // as a thing, and passed over by the target cycle (decision
+            // D-944).
+            let creature = occupied.kind == OccupantKind::Creature && !lies_dead(sim, occupied.id);
+            sprites.insert(id, sprite(loc, creature, look));
             percepts.ever.insert(occupied.id);
         }
     }

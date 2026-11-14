@@ -13,7 +13,7 @@
     "think": "500 ms",
     "wake_clarity": 50,
     "go_action": "go_to",
-    "senses": ["human_sight", "human_hearing"] },
+    "senses": ["human_sight", "human_hearing", "touch"] },
 
   { "//": "Calls a dog to a cell close by, bound to the ability for a while: it thinks as a `hound` and takes its summoner's stances (09 §3.4). When the time runs out, or the summoner dies, or the ability is lost, it is gone.",
     "type": "action", "id": "summon_hound", "name": "Summon hound",

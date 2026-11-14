@@ -11,5 +11,9 @@
       "materials": { "glass": 0.5 },
       "tags": { "mineral": 0.8, "earth": 0.9, "metal": 0.7, "organic": 0.5 }
     },
-    "doc": "Sound: passes obstacles with loss by their materials, falls off with the square of the distance, and arrives after distance over the speed of sound." }
+    "doc": "Sound: passes obstacles with loss by their materials, falls off with the square of the distance, and arrives after distance over the speed of sound." },
+  { "//": "What is felt on the body: a blow that lands on someone is felt by them where they stand (`blow_felt`). Nothing gives it off standing still, and it tells nothing of who did it: the one who struck is made out only by someone who perceives them with another sense (15 §6).",
+    "type": "signal_kind", "id": "touch", "model": "line", "falloff": 1,
+    "standing": 0, "contained": 1,
+    "doc": "What is felt on the body: reaches no further than where it lands, and does not tell who did it." }
 ]

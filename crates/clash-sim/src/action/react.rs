@@ -37,7 +37,8 @@
 //!
 //! # Options
 //!
-//! [`Sim::reaction_options`] lists, in order of definition, every action
+//! [`Sim::reaction_options`] lists, by the actions' `offer` (higher
+//! first, decision D-943) and then in order of definition, every action
 //! that may answer a window for an entity, each with whether its `ready`
 //! phase would begin before the window is expected to close and, if it
 //! cannot start now, why. The time to `ready` is the phases' durations
@@ -254,8 +255,9 @@ impl Sim {
         Ok(started)
     }
 
-    /// The reactions that may answer a window for an entity, in order of
-    /// definition (03 §7.3): see the [module documentation](self).
+    /// The reactions that may answer a window for an entity, by their
+    /// `offer`, higher first, and equals in order of definition (03 §7.3,
+    /// decision D-943): see the [module documentation](self).
     /// Changes nothing. Empty for a window that is not open or that the
     /// entity has not noticed.
     pub fn reaction_options(&mut self, entity: EntityId, window: WindowId) -> Vec<ReactionOption> {
@@ -277,6 +279,11 @@ impl Sim {
             }
             let streams = self.rng.clone();
             let prepared = self.prepare_reaction(entity, window, id, &Vec::new());
+            // Where it is offered (D-943): by what it would start with,
+            // and 0 for one that cannot start.
+            let offer = prepared.as_ref().map_or(Real::ZERO, |prepared| {
+                crate::offer::offer_of(self, entity, def, prepared.locals())
+            });
             let (in_time, refused) = match prepared {
                 Ok(prepared) => {
                     let ready = self.time_to_ready(entity, def, prepared.locals());
@@ -307,14 +314,19 @@ impl Sim {
                     text.render_on(&defs, &mut host)
                 },
             );
-            out.push(ReactionOption {
-                action: id,
-                label,
-                in_time,
-                refused,
-            });
+            out.push((
+                core::cmp::Reverse(offer),
+                ReactionOption {
+                    action: id,
+                    label,
+                    in_time,
+                    refused,
+                },
+            ));
         }
-        out
+        // Higher `offer` first; equals in order of definition.
+        out.sort_by_key(|(offer, _)| *offer);
+        out.into_iter().map(|(_, option)| option).collect()
     }
 
     /// How long, in the reactor's own time, before a reaction that

@@ -140,3 +140,58 @@ fn a_suppressed_ability_says_so_in_its_uses_and_its_modes() {
     assert_eq!(field(&modes[0], "available"), Value::Bool(false));
     assert_eq!(field(&modes[0], "why"), Value::from("Knack is suppressed."));
 }
+
+const SHOTS: &str = r#"[
+  { "type": "action", "id": "a_pistol_shot", "name": "Pistol shot", "tags": ["shot"],
+    "requires": "false", "fail_text": "There is no loaded pistol in hand.",
+    "offer": "if self.has_tag('pistoleer') then 1 else 0",
+    "phases": [ { "id": "go", "time": "100 ms" } ] },
+  { "type": "action", "id": "b_arrow", "name": "Arrow", "tags": ["shot"],
+    "requires": "false", "fail_text": "There is no arrow to nock.",
+    "offer": "if self.has_tag('archer') then 1 else 0",
+    "phases": [ { "id": "go", "time": "100 ms" } ] },
+  { "type": "action", "id": "c_stone", "name": "Stone", "tags": ["shot"],
+    "phases": [ { "id": "go", "time": "100 ms" } ] }
+]"#;
+
+#[test]
+fn what_suits_what_the_character_holds_is_listed_first() {
+    // Decision D-943: among the actions of a tag, what could start comes
+    // first, then the higher `offer`, then the order before. A quick key
+    // takes the first, and with none that could start, says the first's
+    // reason: the weapon in hand's, not the first defined.
+    let mut sim = common::sim_over(common::life_defs(SHOTS), 1);
+    let me = common::spawn(&mut sim, common::creature(), common::on(5, 5));
+    let archer = common::spawn(
+        &mut sim,
+        common::creature().with_tag("archer"),
+        common::on(7, 5),
+    );
+    let ids = |sim: &Sim, who| -> Vec<Value> {
+        rows(sim, who, "actions_with", &[Value::from("shot")])
+            .iter()
+            .map(|row| field(row, "id"))
+            .collect()
+    };
+    assert_eq!(
+        ids(&sim, me),
+        [
+            Value::from("core:c_stone"),
+            Value::from("core:a_pistol_shot"),
+            Value::from("core:b_arrow")
+        ]
+    );
+    assert_eq!(
+        ids(&sim, archer),
+        [
+            Value::from("core:c_stone"),
+            Value::from("core:b_arrow"),
+            Value::from("core:a_pistol_shot")
+        ]
+    );
+    let listed = rows(&sim, archer, "actions_with", &[Value::from("shot")]);
+    assert_eq!(
+        field(&listed[1], "why"),
+        Value::from("There is no arrow to nock.")
+    );
+}

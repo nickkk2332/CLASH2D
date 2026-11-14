@@ -598,6 +598,19 @@ built. What stands in for them in the beta (D-693, D-694):
 The bundled minds of `mods/core/data/ai/` (`townsperson`, `guard`, `dog`)
 are written with these, and say in their documentation how each behaves.
 
+Since decision D-941 the town's people (`townsperson`, `shopkeeper` and
+the trades that copy it, `watchman`) take no stance from a blow they
+perceive: what a blow struck without cause makes them hold toward the
+striker is a relation that rules of content form, by each mind's own
+weights and only for a blow against someone it holds no foe (15 §12),
+and that fades. A `stance` taken by `hostile_after` or `fear_after` is
+unconditional and does not fade, so a watchman who held hostile whoever
+he saw strike anyone went for a fellow watchman at work; the brawler, the
+guard and the dogs keep theirs, as their documentation says. The
+watchman also lays hands on whoever it goes for (`apprehend`, 07 §12).
+Every bundled mind names the sense `touch` beside sight and hearing, so
+that a blow on its own body is felt (15 §3.2).
+
 ## 7. Working
 
 ### 7.1 Taking jobs

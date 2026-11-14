@@ -453,6 +453,16 @@ What counts as an offence is content: a rule that listens for deaths,
 thefts, destruction, trespass, and decides that this one matters to
 someone. When it does, it opens a case.
 
+As built (decisions D-940 to D-942), before cases: the bundled rules of
+15 §12 treat a blow struck without cause, perceived by the one struck
+or by a witness, as such an offence. Each who perceived it takes
+against the striker as it took them to be, remembers it
+(`core:unprovoked_blow`), and tells its group: the watch is told by a
+member's report, the townsfolk shout for it. A watchman holds hostile
+whoever he recognises from that knowledge. Cases, evidence and
+accusation (§8.3 to §8.5) are not built: what the watch knows is what
+its members were told.
+
 ### 8.3 Cases
 
 ```rust

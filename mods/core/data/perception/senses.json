@@ -7,5 +7,10 @@
   { "type": "sense", "id": "human_hearing", "signal": "sound",
     "range": 40, "arc": 360, "threshold": 0.001,
     "gain": 4.0, "decay": 0.25, "interval": "500 ms",
-    "doc": "Hearing: forty metres all round." }
+    "doc": "Hearing: forty metres all round." },
+  { "//": "Touch: feeling what lands on one's own body. It reaches no further than half a metre, one's own place, so a blow is felt only by whoever it lands on; and since nothing gives off touch standing still it finds nothing by sweeping, and sweeps once an hour.",
+    "type": "sense", "id": "touch", "signal": "touch",
+    "range": 0.5, "arc": 360, "threshold": 0.1,
+    "interval": "1 h", "notices": [],
+    "doc": "Touch: what lands on one's own body is felt." }
 ]

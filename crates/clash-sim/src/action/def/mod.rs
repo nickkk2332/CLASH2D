@@ -131,6 +131,10 @@ fn unit_tempo() -> Expr<Number> {
     Expr::literal(1)
 }
 
+fn no_offer() -> Expr<Number> {
+    Expr::literal(0)
+}
+
 /// An action (03 §6): a small state machine of phases that a character
 /// runs, occupying channels while it does.
 ///
@@ -164,7 +168,7 @@ fn unit_tempo() -> Expr<Number> {
 ///
 /// | Field | Reads | Pure |
 /// |-------|-------|------|
-/// | `requires`, `fail_text`, a parameter's `check`, `name` | Belief: the mind context of the actor | Yes |
+/// | `requires`, `fail_text`, `offer`, a parameter's `check`, `name` | Belief: the mind context of the actor | Yes |
 /// | A parameter's `default` | Belief | No |
 /// | `requires_at_start`, `tempo`, a phase's `time`, `max`, `until`, its tick's `every`, the conditions of `next`, a window's `for` | Truth | No |
 /// | A variable's `default` | Nothing: a constant | Yes |
@@ -211,6 +215,16 @@ pub struct ActionDef {
     /// once ([`reason::START_CONDITION`](super::reason::START_CONDITION)).
     #[serde(default)]
     pub requires_at_start: Cond,
+    /// Where a menu offers the action among others it is listed with
+    /// (decision D-943): the reactions a prompt lists for a window
+    /// (03 §7.3), and the actions of a tag a quick key takes the first
+    /// of (`actions_with`, 12 §10.7), higher first, equals in the order
+    /// they were. A number in the same scope as `requires`, so that it
+    /// reads what the actor itself holds and believes: a reaction that
+    /// suits what is in hand, a shot from the weapon in hand. Left out,
+    /// 0.
+    #[serde(default = "no_offer")]
+    pub offer: Expr<Number>,
     /// What phase durations are divided by: evaluated against truth at
     /// the start of each phase that is not `fixed`. Left out, it is 1.
     #[serde(default = "unit_tempo")]
@@ -475,6 +489,7 @@ impl ActionDef {
             requires: Cond::constant(false),
             fail_text: None,
             requires_at_start: Cond::default(),
+            offer: no_offer(),
             tempo: unit_tempo(),
             foreground: true,
             footing: true,
@@ -1010,6 +1025,7 @@ impl Def for ActionDef {
         cx.compile(&mut self.name, &actor);
         cx.compile(&mut self.requires, &previewed);
         cx.compile(&mut self.fail_text, &previewed);
+        cx.compile(&mut self.offer, &previewed);
         cx.compile(&mut self.requires_at_start, &truth);
         cx.compile(&mut self.tempo, &truth);
         let aimed = truth.clone().expecting(format!("{ENTITY_KIND}?"));

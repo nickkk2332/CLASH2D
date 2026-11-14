@@ -290,9 +290,10 @@ fn fighting_at_the_door_an_ordinary_person_kills_the_first_and_falls() {
 #[test]
 fn a_brawler_at_the_door_kills_all_three_and_bleeds_to_death() {
     let run = night_inside(Some(BRAWLER), "brawler");
-    // The club wins every fight; nothing binds the wounds (a hand is
-    // needed for it, and both hold something) and the night is lost
-    // after the third, at one in the morning.
+    // The club wins every fight; nothing binds the wounds (the bandages
+    // are never taken up: both hands hold a club, his own and the
+    // table's; a bandage carried binds with both hands full, D-947) and
+    // the night is lost after the third, at one in the morning.
     assert_eq!(deaths(&run), 3, "{:?}", log_text(&run));
     assert_eq!(outcome(&run), "lost", "{:?}", log_text(&run));
     assert!(time_of_day(&run) < 2.0 * 3600.0);
@@ -411,6 +412,21 @@ fn a_marksman_shoots_at_them_from_inside() {
         "{lines:?}"
     );
     assert!(deaths(&run) >= 1, "{lines:?}");
+    // With a bow in hand the quick shot says the bow's reason, never the
+    // pistol's (D-943).
+    assert!(
+        !lines
+            .iter()
+            .any(|line| line == "There is no loaded weapon in hand, or nowhere to aim."),
+        "{lines:?}"
+    );
+    // Tab passes over the dead (D-944).
+    if top(&run) == "ui:play" {
+        for _ in 0..4 {
+            press(&mut run, "tab");
+            assert!(!target_dead(&run), "Tab chose the dead: {}", run.text());
+        }
+    }
 }
 
 #[test]

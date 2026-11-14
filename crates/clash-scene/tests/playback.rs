@@ -1042,3 +1042,36 @@ fn the_check_finds_a_picture_that_drifted() {
     // An importance is ordered: a log can keep only what matters.
     assert!(Importance::Minor < Importance::Major);
 }
+
+/// A show that says what is heard of a wall breaking, again only after
+/// twenty seconds in which none was heard.
+const CREAK: &str = r#"[
+  { "type": "show", "id": "creak", "on": "element_destroyed",
+    "change": [],
+    "heard": { "log": "A creak.", "quiet": "20 s" } }
+]"#;
+
+#[test]
+fn what_is_heard_again_before_a_quiet_is_marked_and_not_told() {
+    // Decision D-945: a show's `heard.quiet`.
+    let mut run = Run::with(&[("creak", CREAK)]);
+    run.host.read_as(Some(run.host.entity(MARA)));
+    let second = 1_000_000;
+    // Heard at once, a second later, and a second after that: told
+    // once; then thirty seconds of quiet, and it is told again.
+    for (tick, x) in [(T, 11), (T + second, 12), (T + 2 * second, 13)] {
+        run.scene
+            .push_events([broken(tick, (x, 3), Some(STRANGER))]);
+        run.until_idle();
+        assert!(run.model().heard().count() > 0, "marked each time");
+    }
+    run.scene
+        .push_events([broken(T + 32 * second, (12, 4), Some(STRANGER))]);
+    run.until_idle();
+    let creaks = run
+        .lines()
+        .iter()
+        .filter(|line| line.starts_with("A creak."))
+        .count();
+    assert_eq!(creaks, 2, "{:?}", run.lines());
+}

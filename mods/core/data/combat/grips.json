@@ -142,5 +142,8 @@
 
   { "//": "Guards lay hands on whoever they go for, once they are close enough.",
     "type": "mind", "id": "guard", "patch": true, "optional": true,
+    "extend": { "goals": ["apprehend"] } },
+  { "//": "So does the town's watch.",
+    "type": "mind", "id": "watchman", "patch": true, "optional": true,
     "extend": { "goals": ["apprehend"] } }
 ]
