@@ -30,7 +30,7 @@ offered), and choose what to play from the list:
 
 | Game | What it is | When you die |
 |------|------------|--------------|
-| **Last stand** | Ten at night, a house on a country lane, and three strangers with knives who mean you harm: one on the lane already, the next at half past eleven, the last at one. Get inside and hold out until dawn, at five. A club, two bandages and a lamp are in the house. | The game ends, and its one save (written when you leave, resumed with Continue) goes with it. |
+| **Last stand** | Ten at night, a house on a country lane, and three strangers with knives and lanterns who mean you harm: the first coming down the lane from the east already, the next at half past eleven, the last at one. Get inside and hold out until dawn, at five. A club, two bandages, a lamp and a wardrobe are in the house, and a back door. Fight at the door, hide in the dark or in the wardrobe, or slip out the back: each can win and each can lose. | The game ends, and its one save (written when you leave, resumed with Continue) goes with it. |
 | **The errand** | Two in the afternoon. Take the parcel in your hands to the town hall in the middle of the market town before nightfall; you have five hours. Keep it with you: handed to someone else, or left lying for ten minutes, it is lost, and so is the errand. | The game ends. Save and load as you like. |
 | **The town** | A grid of streets with every door open. Nothing to do but walk. | The game ends. |
 | **The market town** | The sandbox: a generated town and its people, no goals, no end. Begin on the north street or in the town square. | You carry on as a newcomer, made fresh where you first began; your body stays where it fell. |
@@ -557,14 +557,20 @@ which way and how far each one is.
 - In Last stand it is dark and you see little beyond the lamp by the
   house's door, a few steps north-east (the journal, `J`, says which
   way); get in and shut it. Footsteps you hear show as `!` where they
-  seemed to be, and the lamps show as a yellow `!` too. The lamp inside
-  lets you find the club and the bandages on the table, and lets them
-  see you: switch it off (`e`) to hide. One who saw you go in, or
-  hears you inside, searches the house, the wardrobe first; the door
-  he leaves open lets the porch lamp's light in. They find you
+  seemed to be, and the lamps show as a yellow `!` too. The strangers
+  carry lanterns: you see them coming from far off, and they see
+  whatever their lantern lights, a step or two round them. The lamp
+  inside lets you find the club and the bandages on the table, and lets
+  them see you: switch it off (`e`) to hide. One who saw you go in, or
+  hears you inside, searches the house, the wardrobe first, and tells
+  the others: whoever comes after him searches it too. In the dark a
+  searcher whose lantern does not reach you passes you by; in the
+  wardrobe he opens, you are found. The back door leads out into the
+  dark fields; a stranger who sees you go follows you. They find you
   more easily as the sky lightens before dawn.
 - Blocking a knife with your forearm stops the blow and cuts the arm:
   the log says when you are wounded. Stepping back or dodging costs
-  nothing when it works. Binding wounds takes a free hand.
+  nothing when it works. Binding wounds needs a bandage in hand, and
+  nothing more.
 - The same seed gives the same town. If a game went badly, try it again
   knowing where things are.

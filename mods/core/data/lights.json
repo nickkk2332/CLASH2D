@@ -1,0 +1,51 @@
+[
+  { "//": "Lights a person carries (15 §3.3; 02 §8.3; decision D-960): a lantern in hand lights the ground round whoever holds it, as an area of no size anchored to them that carries a light, the way the power `shadow` carries darkness. The light goes where its bearer goes, and stays with the lantern: put down, stowed, put away or taken by someone else, it leaves the one who had it and goes with whoever has it in hand now. How bright it burns is the functions below, for a mod or a game to change.",
+    "type": "item", "id": "lantern", "name": "lantern",
+    "material": "steel", "mass": "1 kg", "volume": 0.003, "length": "0.3 m",
+    "grip": { "arm": 1 },
+    "tags": ["lantern", "light_source"],
+    "glyph": { "ch": "*", "fg": "yellow" } },
+
+  { "type": "function", "id": "lantern_light",
+    "returns": "real",
+    "value": "0.3",
+    "doc": "How bright a lantern in hand burns, on the scale where full daylight is 1: what it gives the cell of whoever holds it. A cell `d` metres off is given this over `1 + d²` (15 §3.3), so a person standing two metres from the bearer is lit at a fifth of it." },
+
+  { "type": "function", "id": "lantern_reach",
+    "returns": "real",
+    "value": "6",
+    "doc": "How far a lantern's light reaches, in metres." },
+
+  { "type": "variable", "id": "lit_for", "scope": "entity", "value": "entity",
+    "doc": "Whom a lantern is lighting now: the one who has it in hand, round whom its light is (`core:lantern_taken_up`); unset while it lights nobody." },
+
+  { "type": "eoc", "id": "lantern_taken_up", "on": "item_taken",
+    "if": "self.has_tag('lantern') and event.hold == 'grasp' and (is_null(self.var.lit_for) or self.var.lit_for != holder)",
+    "doc": "A lantern taken into someone's hand lights the ground round them: an area of no size, anchored to them and tagged `carried_light`, carrying the lantern's light (`lantern_light`, `lantern_reach`). Whoever it lit before, if anyone, loses it first.",
+    "do": [
+      { "run": { "eoc": "lantern_put_out", "with": { "lantern": "self" } } },
+      { "create_area": { "radius": 0, "anchor": "holder", "tags": ["carried_light"],
+                         "light": "lantern_light()", "light_radius": "lantern_reach()" } },
+      { "set": { "self.var.lit_for": "holder" } } ] },
+
+  { "type": "eoc", "id": "lantern_stowed", "on": "item_taken",
+    "if": "self.has_tag('lantern') and event.hold != 'grasp'",
+    "doc": "A lantern stowed, put inside something or fixed somewhere lights nobody.",
+    "do": [ { "run": { "eoc": "lantern_put_out", "with": { "lantern": "self" } } } ] },
+
+  { "type": "eoc", "id": "lantern_dropped", "on": "item_dropped",
+    "if": "self.has_tag('lantern')",
+    "doc": "A lantern put down or let fall lights nobody: its light leaves whoever held it.",
+    "do": [ { "run": { "eoc": "lantern_put_out", "with": { "lantern": "self" } } } ] },
+
+  { "type": "eoc", "id": "lantern_put_out",
+    "params": { "lantern": "entity" },
+    "doc": "The light a lantern gave whoever it lit is taken from them: one area tagged `carried_light` where they stand, which is anchored to them. Nothing if it lit nobody.",
+    "do": [
+      { "if": "not is_null($lantern.var.lit_for)",
+        "then": [
+          { "for_each": { "areas": { "at": "$lantern.var.lit_for.loc ?? $lantern.loc", "where": "it.has_tag('carried_light')", "limit": 1 } },
+            "as": "glow",
+            "do": [ { "remove_area": { "area": "$glow" } } ] },
+          { "unset": [ "$lantern.var.lit_for" ] } ] } ] }
+]

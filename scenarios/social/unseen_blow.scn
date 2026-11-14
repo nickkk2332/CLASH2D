@@ -28,4 +28,4 @@ assert "@e:3.memory_confidence('hit_landed') != null"
 assert "not @e:3.fears(@e:2) and not @e:3.hostile(@e:2) and (@e:3.rel('core:fearful', @e:2) ?? 0) == 0"
 assert "not @e:3.remembers_actor(@e:2, 'hit_landed') and not @e:3.remembers_actor(@e:2, 'core:unprovoked_blow')"
 assert "@e:3.memory_confidence('core:unprovoked_blow') == null and @e:4.memory_confidence('core:unprovoked_blow') == null"
-expect hash 74b4a42a8a3569ee4e7ffcd3a18d3903
+expect hash b954ab12193be1312a9459ef28cadf1e
