@@ -611,6 +611,98 @@ fn wrapped(cell: CellPos) -> CellPos {
     CellPos::new(cell.x.rem_euclid(ROUND), cell.y, cell.z)
 }
 
+#[test]
+fn the_nearest_found_a_band_at_a_time_are_the_nearest_of_all() {
+    // D-920: chunks crowded past `NEAREST_SPLIT_FROM` are looked at a
+    // band of rows of one storey at a time. A crowd packed into a few
+    // tracts either side of the seam, some filling several cells: the
+    // nearest few, found stopping at the first block farther than the
+    // farthest kept, are the nearest few of everyone in reach.
+    let mut w = world();
+    let mut seed: u64 = 0x5eed;
+    let mut next = |below: i32| -> i32 {
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        ((seed >> 33) % below as u64) as i32
+    };
+    let mut slot = 0_u32;
+    for _ in 0..900 {
+        let at = w.at(
+            next(3 * TRACT_XY) - TRACT_XY,
+            next(2 * TRACT_XY - 4),
+            next(4) - 1,
+        );
+        let size = if next(10) == 0 {
+            Footprint::new(1 + next(3) as u8, 1 + next(3) as u8, 1 + next(2) as u8)
+        } else {
+            Footprint::SINGLE
+        };
+        let occupant = Occupant::new(EntityId::new(slot, 0), OccupantKind::ALL[next(4) as usize]);
+        if w.ctx().place(occupant, at, size, Cause::DEBUG).is_ok() {
+            slot += 1;
+        }
+    }
+    assert!(slot > 600, "{slot} placed");
+    let topology = *w.cosmos.topology(w.grid).unwrap();
+    let mut split = false;
+    for ask in 0..60 {
+        let here = w.at(
+            next(3 * TRACT_XY) - TRACT_XY,
+            next(2 * TRACT_XY - 4),
+            next(3) - 1,
+        );
+        let centre = wrapped(here.cell);
+        let radius = Real::from_i64(i64::from(next(60) + 1));
+        let filter = if ask % 3 == 0 {
+            OccupantFilter::ANY.of_kind(OccupantKind::Creature)
+        } else {
+            OccupantFilter::ANY
+        };
+        let found = w.cosmos.occupants_within(here, radius, &filter).unwrap();
+        let key = |id: EntityId| {
+            let anchor = w.cosmos.occupant(id).unwrap().loc.cell;
+            (distance_sq_cells(topology.delta(centre, anchor)), id)
+        };
+        let mut every: Vec<(i64, EntityId)> =
+            found.iter().map(|occupied| key(occupied.id)).collect();
+        every.sort();
+        every.dedup();
+        for keep in [1_usize, 5, 32] {
+            let mut kept: Vec<(i64, EntityId)> = Vec::new();
+            let mut blocks = 0;
+            w.cosmos
+                .occupant_ids_within_nearest_first(here, radius, &filter, |least, ids| {
+                    if kept.len() == keep && kept.last().is_some_and(|last| least > last.0) {
+                        return false;
+                    }
+                    blocks += 1;
+                    for (cell, id) in ids {
+                        if kept.len() == keep && kept.last().is_some_and(|last| *cell > last.0) {
+                            continue;
+                        }
+                        let one = key(*id);
+                        if !kept.contains(&one) {
+                            kept.push(one);
+                            kept.sort();
+                            kept.truncate(keep);
+                        }
+                    }
+                    true
+                })
+                .unwrap();
+            split |= blocks > 12;
+            let mut expected = every.clone();
+            expected.truncate(keep);
+            assert_eq!(
+                kept, expected,
+                "the nearest {keep} of {here:?} within {radius}"
+            );
+        }
+    }
+    assert!(split, "no chunk was looked at a band at a time");
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
@@ -746,6 +838,69 @@ proptest! {
                 Real::from_i64(distance_sq_cells(offset)) <= radius * radius
             };
             prop_assert_eq!(pairs(&found), listed(&near));
+
+            // Within a radius, the nearest blocks first (D-920): every
+            // occupant once for each cell in reach, the blocks in order
+            // of their least distance.
+            let mut blocks: Vec<(i64, Vec<(i64, EntityId)>)> = Vec::new();
+            w.cosmos
+                .occupant_ids_within_nearest_first(loc, radius, &filter, |least, ids| {
+                    blocks.push((least, ids.to_vec()));
+                    true
+                })
+                .unwrap();
+            prop_assert!(blocks.windows(2).all(|pair| pair[0].0 <= pair[1].0));
+            // Each cell's distance, never nearer than its block's least.
+            for (least, ids) in &blocks {
+                for (distance, id) in ids {
+                    prop_assert!(distance >= least);
+                    let cells = &known[id].cells;
+                    let met = cells.iter().any(|cell| {
+                        distance_sq_cells(topology.delta(wrapped(here), *cell)) == *distance
+                    });
+                    prop_assert!(met, "{} is at none of its cells", distance);
+                }
+            }
+            let mut all: Vec<EntityId> =
+                blocks.iter().flat_map(|(_, ids)| ids.iter().map(|(_, id)| *id)).collect();
+            all.sort();
+            let mut expected: Vec<EntityId> = listed(&near).into_iter().map(|(_, id)| id).collect();
+            expected.sort();
+            prop_assert_eq!(all, expected);
+            // The nearest few by where each stands, stopping at the first
+            // block farther than the farthest kept: the same as all of
+            // them put in order.
+            let key = |id: EntityId| {
+                let anchor = w.cosmos.occupant(id).unwrap().loc.cell;
+                (distance_sq_cells(topology.delta(wrapped(here), anchor)), id)
+            };
+            for keep in [1_usize, 3, 8] {
+                let mut kept: Vec<(i64, EntityId)> = Vec::new();
+                w.cosmos
+                    .occupant_ids_within_nearest_first(loc, radius, &filter, |least, ids| {
+                        if kept.len() == keep && kept.last().is_some_and(|last| least > last.0) {
+                            return false;
+                        }
+                        for (cell, id) in ids {
+                            if kept.len() == keep && kept.last().is_some_and(|last| *cell > last.0) {
+                                continue;
+                            }
+                            let one = key(*id);
+                            if !kept.contains(&one) {
+                                kept.push(one);
+                                kept.sort();
+                                kept.truncate(keep);
+                            }
+                        }
+                        true
+                    })
+                    .unwrap();
+                let mut every: Vec<(i64, EntityId)> = found.iter().map(|occupied| key(occupied.id)).collect();
+                every.sort();
+                every.dedup();
+                every.truncate(keep);
+                prop_assert_eq!(kept, every, "the nearest {}", keep);
+            }
 
             // Along a line: the cells in the order the line reaches them,
             // and by id within a cell.

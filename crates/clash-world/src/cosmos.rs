@@ -323,6 +323,26 @@ impl<'a> GridView<'a> {
         self.defs
     }
 
+    /// The clock of a cell: the clock [`ambient`](Self::ambient) gives
+    /// it, worked out without the rest of its ambient conditions (the
+    /// grid's, or that of the highest-priority area covering the cell
+    /// that has one, of equals the one made first; D-928). The cell must
+    /// be inside the grid.
+    pub fn clock_at(&self, cell: CellPos) -> Result<ClockId, WorldError> {
+        let cell = self.normalize(cell)?;
+        let mut clock: Option<(i32, ClockId)> = None;
+        if !self.areas.is_empty() {
+            for area in self.areas.at(&self.slot.topology, self.id, cell) {
+                if let Some(own) = area.clock
+                    && clock.is_none_or(|(best, _)| area.priority > best)
+                {
+                    clock = Some((area.priority, own));
+                }
+            }
+        }
+        Ok(clock.map_or(self.slot.clock, |(_, own)| own))
+    }
+
     /// The ambient conditions of a cell: its stratum's, with what the
     /// areas that cover it change. Where areas overlap, the one with the
     /// highest priority applies, and of equals the one made first:
@@ -439,6 +459,16 @@ impl Cosmos {
     /// The count of the times cells could have changed (D-731): if it
     /// reads the same twice, no cell of any grid changed in between.
     pub(crate) fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    /// The count of the times the cells of any grid could have changed
+    /// (D-731), for caches outside the world (D-921): while it reads the
+    /// same, no cell of any grid has changed, and no tract has been
+    /// loaded or let go. It is not state, never saved or hashed: a cache
+    /// keeps it beside what it keeps and compares it only within one
+    /// cosmos, starting empty in any copy of it.
+    pub fn cell_epoch(&self) -> u64 {
         self.epoch
     }
 
@@ -676,6 +706,12 @@ impl Cosmos {
     /// The cell must be inside its grid; its tract need not be loaded.
     pub fn ambient(&self, loc: Location) -> Result<Ambient, WorldError> {
         self.grid(loc.grid)?.ambient(loc.cell)
+    }
+
+    /// The clock of a cell, as [`ambient`](Self::ambient) gives it, worked
+    /// out alone (D-928).
+    pub fn clock_at(&self, loc: Location) -> Result<ClockId, WorldError> {
+        self.grid(loc.grid)?.clock_at(loc.cell)
     }
 
     /// The column of a loaded tract, to change. Crate-private: cells

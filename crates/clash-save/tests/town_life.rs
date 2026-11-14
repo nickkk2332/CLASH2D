@@ -916,3 +916,51 @@ fn the_towns_residents_are_made_as_its_tracts_load() {
         assert!(made.contains(what), "{what} among {made:?}");
     }
 }
+
+#[test]
+fn in_the_market_at_the_bundled_cap_everyone_the_player_sees_is_hot() {
+    // Performance 3, step 4: the market town begins with the attention
+    // cap its scenario gives it (`sim.max_hot_minds`, else the default).
+    // Whoever the player sees in the square on a market morning is
+    // stepped in full, whatever the cap, and the cap is kept but for them
+    // (09 §9.3, D-891).
+    let mut town = Town::begin(7, 1);
+    let cap = town
+        .sim()
+        .settings()
+        .get(clash_sim::ai::warm::MAX_HOT_SETTING)
+        .and_then(clash_core::Value::as_int)
+        .unwrap_or(clash_sim::ai::warm::DEFAULT_MAX_HOT);
+    for _ in 0..10 {
+        town.ok("advance 1s");
+        let sim = town.sim();
+        let me = sim
+            .truth()
+            .entities()
+            .iter()
+            .find(|record| record.control() == clash_sim::Control::Direct)
+            .map(clash_sim::KernelEntity::id)
+            .expect("the player");
+        let seen: Vec<EntityId> = clash_sim::perception::snapshot(sim, me)
+            .entities
+            .iter()
+            .map(|seen| seen.entity)
+            .filter(|entity| clash_sim::ai::mind_def_of(sim, *entity).is_some())
+            .collect();
+        assert!(!seen.is_empty(), "the player sees people in the square");
+        for entity in &seen {
+            assert!(
+                !clash_sim::ai::warm::is_warm(sim, *entity),
+                "{entity} is in view and warm"
+            );
+        }
+        let levels = clash_sim::ai::warm::census(sim);
+        assert!(
+            levels.hot <= (cap as usize).max(seen.len()) + seen.len(),
+            "{} hot at a cap of {cap} with {} in view",
+            levels.hot,
+            seen.len()
+        );
+        assert!(levels.warm > 0, "the town is larger than the cap");
+    }
+}

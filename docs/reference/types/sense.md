@@ -19,4 +19,17 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `function` (id of a [`body_function`](body_function.md), or `null`; optional): The body function it works by. An owner with a body whose capacity of it is zero receives nothing through it; an owner with no body is not asked.
 - `planes` (`true` or `false`; optional): Whether it receives from every plane, not only those its owner is on (15 §5.3).
 - `scrutiny` (number; optional): How hard it looks through a disguise (15 §8.2). Kept for `identity_check`.
+- `notices` (list of one of `"creature"`, `"item"`, `"device"`, `"other"` ([`OccupantKind`](#occupantkind)), or `null`; optional): The kinds of thing a sweep of it considers in range: `creature`, `item`, `device`, `other`. Left out, every kind, as before (D-923); a sense given only `creature` passes over the furniture and goods about it when it picks the nearest `perception.max_candidates`. What it already holds awareness of is brought up to date whatever its kind, and a party member's sweep considers every kind.
 - `doc` (string; optional): What it is, for the reference.
+
+<a id="occupantkind"></a>
+### `OccupantKind`
+
+What kind of thing an occupant is. The world gives the kinds no behaviour: they exist so that a query can ask for one.
+
+One of:
+
+- `"creature"`: Something with a body that acts.
+- `"item"`: A thing lying in the world.
+- `"device"`: The entity behind an interactive element (02 §5.5).
+- `"other"`: Anything else.

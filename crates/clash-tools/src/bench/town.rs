@@ -8,6 +8,7 @@
 //! | `town.step_in_market` | One simulated second (a player's step) with the player standing in the square, over a simulated minute |
 //! | `town.step_walking` | The same with the player walking across the town |
 //! | `town.minute_wait` | A minute's wait in the square, in one call |
+//! | `town.minute_wait_night` | The same at eleven at night, most of the town asleep |
 //!
 //! Each is timed once: a town takes seconds to begin, and a minute of it
 //! is many steps. The figure is the mean of the minute's steps; the
@@ -200,9 +201,77 @@ pub(super) fn minute_wait(_kit: &mut super::cases::Kit) -> Result<Measured, Stri
     let mut town = Town::begin(SQUARE)?;
     town.run(&format!("advance {SETTLE_S}s"))?;
     let started = Instant::now();
-    town.run(&format!("advance {STEPS}s"))?;
+    wait_a_minute(&mut town)?;
     let took = started.elapsed().as_nanos() as f64;
     Ok(Measured::new(took, town.census()?))
+}
+
+/// A minute's wait in the square at night (performance 3): the town
+/// begun as by day, the player taken out into the fields while the day
+/// passes (the town unloaded, its residents agents), and brought back to
+/// where it began at `NIGHT_S` past midnight, when most are asleep.
+pub(super) fn minute_wait_night(_kit: &mut super::cases::Kit) -> Result<Measured, String> {
+    let mut town = Town::begin(SQUARE)?;
+    let sim = town.sim()?;
+    let start = sim
+        .truth()
+        .location(player(sim)?)
+        .ok_or("the player is not in the world")?;
+    let away = clash_world::Location::new(start.grid, clash_world::CellPos::new(AWAY.0, AWAY.1, 0));
+    town.run(&format!("session @self {}", cell(away)))?;
+    town.run("detach_sense @self core:human_sight")?;
+    town.run("detach_sense @self core:human_hearing")?;
+    let now = town.time_of_day()?;
+    town.run(&format!("advance {}s", (NIGHT_S - now).rem_euclid(DAY_S)))?;
+    town.run(&format!("session @self {}", cell(start)))?;
+    town.run("attach_sense @self core:human_sight")?;
+    town.run("attach_sense @self core:human_hearing")?;
+    town.run(&format!("advance {SETTLE_S}s"))?;
+    let started = Instant::now();
+    wait_a_minute(&mut town)?;
+    let took = started.elapsed().as_nanos() as f64;
+    Ok(Measured::new(took, town.census()?))
+}
+
+/// The minute timed by the waits, kept out of line so that a profiler
+/// can be told to count it alone (`valgrind --tool=callgrind
+/// --toggle-collect='*town::wait_a_minute*'`).
+#[inline(never)]
+fn wait_a_minute(town: &mut Town) -> Result<(), String> {
+    town.run(&format!("advance {STEPS}s"))
+}
+
+/// The time of day of the night wait: eleven in the evening, in seconds
+/// past midnight.
+const NIGHT_S: i64 = 23 * 3600;
+
+/// Seconds in the town's day.
+const DAY_S: i64 = 86_400;
+
+/// A cell of open country far from the town, where it unloads.
+const AWAY: (i32, i32) = (600, 600);
+
+/// The text of a cell, for the console: `@c:x,y,z`.
+fn cell(loc: clash_world::Location) -> String {
+    format!("@c:{},{},{}", loc.cell.x, loc.cell.y, loc.cell.z)
+}
+
+impl Town {
+    /// The time of day where the player is, in whole seconds.
+    fn time_of_day(&mut self) -> Result<i64, String> {
+        let out = self
+            .session
+            .run_line(
+                &self.table,
+                &mut self.host,
+                "eval \"@self.loc.realm.time_of_day\"",
+            )
+            .map_err(|error| format!("the time of day: {error}"))?;
+        out.subject
+            .and_then(|value| value.as_number())
+            .map(|seconds| seconds.get() as i64)
+            .ok_or_else(|| "the time of day is not a number".to_owned())
+    }
 }
 
 /// The character the player plays.

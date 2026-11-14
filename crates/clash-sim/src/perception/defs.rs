@@ -296,6 +296,15 @@ pub struct SenseDef {
     /// `identity_check`.
     #[serde(default)]
     pub scrutiny: Real,
+    /// The kinds of thing a sweep of it considers in range: `creature`,
+    /// `item`, `device`, `other`. Left out, every kind, as before
+    /// (D-923); a sense given only `creature` passes over the furniture
+    /// and goods about it when it picks the nearest
+    /// `perception.max_candidates`. What it already holds awareness of
+    /// is brought up to date whatever its kind, and a party member's
+    /// sweep considers every kind.
+    #[serde(default)]
+    pub notices: Option<Vec<clash_world::OccupantKind>>,
     /// What it is, for the reference.
     #[serde(default)]
     pub doc: String,

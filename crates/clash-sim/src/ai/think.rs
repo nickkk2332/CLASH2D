@@ -194,10 +194,24 @@ fn pure_holds(sim: &Sim, cond: &Cond, me: &Value) -> bool {
 /// `sides_with`) or that presents a tag its mind's `hostile_to` names;
 /// else feared toward one it holds a kind flagged `avoids` toward, or
 /// that presents a tag of `fear_of`. `None` for neither.
+///
+/// While a mind's goals are weighed, or the conditions of its steps read,
+/// an answer once worked out is kept and given again (D-922): the
+/// simulation is only read meanwhile, so it is the same answer.
 pub fn stance_toward(sim: &Sim, mind: EntityId, other: EntityId) -> Option<Stance> {
     if mind == other {
         return None;
     }
+    if let Some(kept) = sim.ai.stances.get(mind, other) {
+        return kept;
+    }
+    let stance = stance_now(sim, mind, other);
+    sim.ai.stances.put(mind, other, stance);
+    stance
+}
+
+/// [`stance_toward`] worked out.
+fn stance_now(sim: &Sim, mind: EntityId, other: EntityId) -> Option<Stance> {
     let persona = belief::persona_of(sim, mind, other);
     if let Some(stance) = sim
         .components
@@ -884,9 +898,13 @@ pub(super) fn think(sim: &mut Sim, mind: EntityId) {
     let Some(state) = sim.components.mind_state.get(mind).cloned() else {
         return;
     };
+    // While goals are weighed the simulation is only read: how the mind
+    // stands toward others is worked out once (D-922).
+    sim.ai.stances.begin();
     let mut ev = Eval::new(sim, mind, state.rng.clone());
     let (choice, status) = choose(&mut ev, mind, &state, def, now);
     let (rng, warnings) = (ev.rng, ev.warnings);
+    sim.ai.stances.end();
     if let Some(state) = sim.components.mind_state.get_mut(mind) {
         state.rng = rng;
     }
@@ -1598,9 +1616,11 @@ fn with_eval<T>(sim: &mut Sim, mind: EntityId, work: impl FnOnce(&mut Eval<'_>) 
         .get(mind)
         .map(|state| state.rng.clone())
         .unwrap_or_else(|| Rng::from_seed(0));
+    sim.ai.stances.begin();
     let mut ev = Eval::new(sim, mind, rng);
     let out = work(&mut ev);
     let (rng, warnings) = (ev.rng, ev.warnings);
+    sim.ai.stances.end();
     if let Some(state) = sim.components.mind_state.get_mut(mind) {
         state.rng = rng;
     }

@@ -554,7 +554,9 @@ fn an_area_with_a_clock_is_where_time_runs_differently() {
     let inside = at(31, 31, 0);
     let outside = at(36, 30, 0);
     assert_eq!(w.cosmos.ambient(inside).unwrap().clock, clock);
+    assert_eq!(w.cosmos.clock_at(inside).unwrap(), clock);
     assert_eq!(w.cosmos.ambient(outside).unwrap().clock, realm_clock);
+    assert_eq!(w.cosmos.clock_at(outside).unwrap(), realm_clock);
     // Entering and leaving say which clock, so that whoever schedules
     // for the occupant can move it across.
     let id = w.place(1, outside, Footprint::SINGLE);
@@ -570,8 +572,10 @@ fn an_area_with_a_clock_is_where_time_runs_differently() {
     let slow = w.ctx().create_area(spec, Cause::DEBUG).unwrap();
     let slow_clock = w.cosmos.area(slow).unwrap().clock.unwrap();
     assert_eq!(w.cosmos.ambient(inside).unwrap().clock, clock);
+    assert_eq!(w.cosmos.clock_at(inside).unwrap(), clock);
     w.cosmos.set_area_priority(slow, 200).unwrap();
     assert_eq!(w.cosmos.ambient(inside).unwrap().clock, slow_clock);
+    assert_eq!(w.cosmos.clock_at(inside).unwrap(), slow_clock);
 
     // The rate can be changed, and the clock given up or taken on.
     w.ctx()
@@ -582,6 +586,7 @@ fn an_area_with_a_clock_is_where_time_runs_differently() {
     assert!(!w.timeline.has_clock(slow_clock));
     assert_eq!(w.cosmos.area(slow).unwrap().clock, None);
     assert_eq!(w.cosmos.ambient(inside).unwrap().clock, clock);
+    assert_eq!(w.cosmos.clock_at(inside).unwrap(), clock);
     w.ctx()
         .set_area_clock_rate(slow, Some(Real::of(3.0)))
         .unwrap();
@@ -596,6 +601,7 @@ fn an_area_with_a_clock_is_where_time_runs_differently() {
     assert!(!w.timeline.has_clock(clock));
     w.ctx().remove_area(slow, Cause::DEBUG).unwrap();
     assert_eq!(w.cosmos.ambient(inside).unwrap().clock, realm_clock);
+    assert_eq!(w.cosmos.clock_at(inside).unwrap(), realm_clock);
 }
 
 #[test]
