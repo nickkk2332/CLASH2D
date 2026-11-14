@@ -1505,6 +1505,17 @@ has from its items always equals what a recomputation from what it holds
 gives (invariant B3), and a record never names something that is not
 there (B6).
 
+**What is worn and who one looks like.** Wearing something changes
+nothing of who its wearer presents as by itself: a disguise is content,
+rules on `item_worn` and `item_removed` that make the wearer present a
+persona and drop it (15 §8.3). The bundled hooded cloak
+(`core:hooded_cloak`, decision D-971) is one: put on, its wearer
+presents a stranger in a hood, made for them the first time they wear
+it and known again whenever they wear it again; taken off or dropped,
+they present themselves again. A worn item destroyed where it is worn
+raises no `item_removed`, so a rule that wants the persona dropped then
+listens for that too; the bundled cloak does not yet.
+
 **Containers.** A thing goes into a container if the container has
 `holds` (an item's, or a device's by its definition, 16 §4.3), it
 carries one of the tags `accepts` lists (if any), and the

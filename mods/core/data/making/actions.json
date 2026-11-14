@@ -70,14 +70,14 @@
             { "for_each": "self.parts", "as": "part",
               "do": [ { "heal_part": { "part": "$part", "share": 0.1 } } ] } ] },
 
-  { "//": "Puts four millilitres of what the vial holds on each blade in hand.",
+  { "//": "Puts ten millilitres of what the vial holds on each blade in hand: half a vial of nightshade extract, enough that the first cut through the skin drops someone (16 §9.5; decision D-970). With four, as first written, no number of cuts ever could.",
     "type": "interaction", "id": "coat_blade", "name": "Coat a blade", "target": "entity",
     "reach": "held", "time": "3 s", "noise": 0.1,
     "if": "target.fill > 0 and len(self.held('grasp')) > 1",
     "fail_text": "You need a blade in the other hand, and something in the vial.",
     "do": [ { "for_each": "self.held('grasp')", "as": "thing",
               "do": [ { "if": "$thing.has_tag('blade')",
-                        "then": [ { "coat": { "surface": "$thing", "from": "target", "amount": "4 ml" } } ] } ] } ] },
+                        "then": [ { "coat": { "surface": "$thing", "from": "target", "amount": "10 ml" } } ] } ] } ] },
 
   { "type": "interaction", "id": "read", "name": "Read", "target": "entity",
     "reach": "held", "time": "10 s", "noise": 0.0,

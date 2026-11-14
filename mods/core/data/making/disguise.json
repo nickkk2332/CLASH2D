@@ -1,0 +1,28 @@
+[
+  { "//": "A disguise one can wear (15 §8.3, 06 §9.2; decision D-971): a long cloak with a deep hood, cut and sewn from cloth at a workbench (`recipes.json`) or found in a wardrobe (`tables/tables.json`). Worn, it hides the face: its wearer presents a persona of the hood's, a stranger in a hood, whom whoever sees them takes them for, and remembers in their place; taken off, they present themselves again. The persona is made for the wearer the first time they put the hood on and kept on the cloak, so the same hood is known again when it is worn again. Whoever watches the hood go on knows who is under it (15 §8.3: a disguise is put on out of sight). Nothing here is the engine's: a mod may make a mask, a uniform or a stolen face the same way. Values are illustrative.",
+    "type": "item", "id": "hooded_cloak", "name": "hooded cloak",
+    "description": "A long cloak of dark cloth with a deep hood that hides the face.",
+    "material": "cloth", "mass": "1.2 kg", "volume": 0.004, "length": "1.4 m",
+    "grip": { "arm": 1 },
+    "wear": { "parts": ["head", "torso", "arm"], "layer": 4, "thickness": "2 mm", "coverage": 0.8 },
+    "color": ["dark_gray", "brown"],
+    "tags": ["clothing", "hood"],
+    "glyph": { "ch": "[", "fg": "own" } },
+
+  { "type": "variable", "id": "hood", "scope": "entity", "value": "string",
+    "doc": "The persona a hood (`core:hood_up`) gives whoever wears it, as text: kept on the hood, and made again for a wearer it is not one of their own." },
+
+  { "type": "eoc", "id": "hood_up", "on": "item_worn",
+    "if": "self.has_tag('hood')",
+    "doc": "Something tagged `hood` was put on (`core:hooded_cloak`): its wearer presents the hood's persona, a stranger in a hood. The persona is made the first time this wearer puts this hood on (`create_persona`, the newest of `holder.personas`) and kept on it (`hood`), so the same hood is known again.",
+    "do": [
+      { "if": "not ((self.var.hood ?? '') in holder.personas)",
+        "then": [ { "create_persona": { "who": "holder", "name": "hooded stranger", "tags": ["hooded"], "quality": 0.8 } },
+                  { "set": { "self.var.hood": { "expr": "last(holder.personas)" } } } ] },
+      { "assume_persona": { "who": "holder", "persona": { "expr": "self.var.hood ?? holder.persona" } } } ] },
+
+  { "type": "eoc", "id": "hood_down", "on": "item_removed",
+    "if": "self.has_tag('hood') and holder.presenting == (self.var.hood ?? '')",
+    "doc": "A hood came off (`core:hood_up`), taken off or dropped: its wearer presents their own persona again.",
+    "do": [ { "drop_persona": { "who": "holder" } } ] }
+]

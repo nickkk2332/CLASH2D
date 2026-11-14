@@ -42,4 +42,4 @@ assert "@e:6.perceives(@e:2) and @e:6.persona_of(@e:2) == @e:2.persona and not @
 move @e:5 @c:60,58,0
 advance 2s
 assert "@e:6.perceives(@e:5) and @e:6.hostile(@e:5)"
-expect hash 054e84f837631868cf93249a274d0897
+expect hash 8e54e179e2151abd7750a9d7bda1b7de

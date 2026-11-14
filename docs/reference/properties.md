@@ -11,7 +11,7 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 18 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 158 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 159 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
@@ -374,6 +374,7 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
 - `entity.persona -> string`: Its true persona, as text (`7v1/0`) (15 §8.1).
 - `entity.persona_of(x: entity) -> string?`: The persona this mind takes `x` for, as text (15 §8.2): what `x` presents, unless this mind has seen through it. Null for something that is not an entity.
   - `x` (entity): Whom it is asked about.
+- `entity.personas -> list<string>`: Its own personas, as text: its true one first, then those made for it (`create_persona`) in the order they were made, so that a rule may take up the one it has just made: a hood, a cover identity (15 §8.3, decision D-971). Someone else's it copied is not among them.
 - `entity.pool -> pools` · same owner: The entity's pools: follow with a definition's id, as in `self.pool.<id>`.
 - `entity.posture -> id<posture>?`: The posture the entity is in (06 §11.1). Null in none.
   Changed by `posture_changed`.

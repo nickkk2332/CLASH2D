@@ -9,7 +9,7 @@
       { "fill": 1, "cols": [
         { "fill": 3, "frame": "Carried",
           "list": { "id": "things", "rows": "view.carried", "selected": "row",
-                    "item": "{if it.holder == view then '' else '  '}{name(it)}{if (it.count ?? 1) > 1 then ' x' + str(it.count) else ''}  <dim>{if it.hold == 'grasp' then 'in hand' else if it.hold == 'worn' then 'worn' else if it.hold == 'stowed' or it.hold == 'inside' then 'in ' + name(it.holder) else if it.hold == 'fixed' then 'fitted to ' + name(it.holder) else ''}{if is_null(it.capacity_mass) then '' else ', ' + str(round((it.carried_mass ?? 0) * 10) / 10) + ' of ' + str(it.capacity_mass) + ' kg'}</>",
+                    "item": "{if it.holder == view then '' else '  '}{name(it)}  <dim>{if it.hold == 'grasp' then 'in hand' else if it.hold == 'worn' then 'worn' else if it.hold == 'stowed' or it.hold == 'inside' then 'in ' + name(it.holder) else if it.hold == 'fixed' then 'fitted to ' + name(it.holder) else ''}{if is_null(it.capacity_mass) then '' else ', ' + str(round((it.carried_mass ?? 0) * 10) / 10) + ' of ' + str(it.capacity_mass) + ' kg'}</>",
                     "empty": "Nothing.",
                     "tip": "Enter: what to do with it.",
                     "on_activate": [

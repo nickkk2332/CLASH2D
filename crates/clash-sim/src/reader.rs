@@ -160,7 +160,10 @@ fn sibilant_form(word: &str) -> String {
     format!("{word}s")
 }
 
-/// More than one of something: `arrow` gives `arrows`.
+/// More than one of something: `arrow` gives `arrows`. A name of the
+/// form "this of that" takes the plural of its first part: `strip of
+/// cloth` gives `strips of cloth`, not `strip of cloths` (decision
+/// D-972).
 ///
 /// ```
 /// use clash_sim::reader::plural;
@@ -170,8 +173,16 @@ fn sibilant_form(word: &str) -> String {
 /// assert_eq!(plural("body"), "bodies");
 /// assert_eq!(plural("key"), "keys");
 /// assert_eq!(plural("man"), "men");
+/// assert_eq!(plural("strip of cloth"), "strips of cloth");
+/// assert_eq!(plural("bunch of herbs"), "bunches of herbs");
+/// assert_eq!(plural("pot of healing salve"), "pots of healing salve");
 /// ```
 pub fn plural(word: &str) -> String {
+    if let Some((head, rest)) = word.split_once(" of ")
+        && !head.is_empty()
+    {
+        return format!("{} of {rest}", plural(head));
+    }
     match word {
         "man" => "men".to_owned(),
         "woman" => "women".to_owned(),

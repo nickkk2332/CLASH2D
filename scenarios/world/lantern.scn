@@ -30,4 +30,4 @@ move @e:2 @c:13,10,0
 as @e:2 do { "for_each": { "entities": { "around": "self.loc", "radius": 2, "def": "core:lantern", "limit": 1 } }, "as": "lantern", "do": [ { "take": { "who": "self", "what": "$lantern" } } ] }
 assert "len(@e:2.loc.areas) == 1"
 assert "len(@e:1.loc.areas) == 0"
-expect hash 61542a5ea134c02b3c51306d130a8cf3
+expect hash 58e6bc4a95014b25118340a0c87a4c6d

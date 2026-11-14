@@ -88,6 +88,21 @@ pub fn properties() -> Vec<PropertyDef> {
         ),
         p(
             "entity",
+            "personas",
+            "list<string>",
+            "Its own personas, as text: its true one first, then those made for it (`create_persona`) in the order they were made, so that a rule may take up the one it has just made: a hood, a cover identity (15 §8.3, decision D-971). Someone else's it copied is not among them.",
+            |sim, subject, _| {
+                mind_of(sim, subject).map_or(Value::Null, |id| {
+                    Value::list(
+                        persona::own_personas(sim, id)
+                            .into_iter()
+                            .map(|persona| text(persona.to_string())),
+                    )
+                })
+            },
+        ),
+        p(
+            "entity",
             "presenting",
             "string",
             "The persona it presents now, as text: its true one, one it made, or someone else's it copied (15 §8.1).",

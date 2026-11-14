@@ -1,0 +1,57 @@
+# hooded_blow (decision D-971; 15 §8.3, §9.2; 06 §9.2): Tess puts on a
+# hooded cloak before anyone has seen her, and strikes a townsperson in
+# front of a watchman. The one struck and the watchman take against the
+# hooded stranger they saw, not Tess, and the watchman reports it to the
+# watch: a watchman far off who saw nothing is told of the hood. Out of
+# everyone's sight she takes the cloak off; the far watchman sees her and
+# lets her be. Far off again, she puts it back on: the same hood is
+# known again, and he holds her hostile the moment he sees her in it.
+use default seed=5
+gen core:testland size=2
+spawn creature as=w
+session @w @c:30,30,0
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:watch_guard", "at": "offset(self.loc, 4, 2, 0)" } }
+as @spot do { "spawn": { "template": "core:watch_guard", "at": "offset(self.loc, 50, 50, 0)" } }
+remove @spot
+# Tess (@e:2) puts the hood on before anyone has seen her: she presents a
+# persona made for her, the newest of her own.
+as @e:2 do { "create_item": { "def": "core:hooded_cloak", "in": "self" } }
+as @e:2 do { "for_each": { "contents": { "of": "self", "where": "it.has_tag('hood')" } }, "as": "cloak", "do": [ { "wear": { "who": "self", "what": "$cloak" } } ] }
+expect event item_worn
+assert "len(@e:2.personas) == 2 and @e:2.presenting == @e:2.personas[1]"
+control @e:2 direct
+advance 2s
+assert "@e:3.persona_of(@e:2) == @e:2.personas[1] and @e:4.persona_of(@e:2) == @e:2.personas[1]"
+start_action @e:2 core:punch "{ 'target': @e:3 }"
+wait @e:2 1s
+advance 600ms
+expect event hit_landed actor=@e:2
+control @e:2 delegated
+advance 1s
+# They take against the hood, and remember it; the far watchman is told.
+assert "@e:3.fears(@e:2) and @e:4.hostile(@e:2)"
+assert "@e:3.remembers_actor(@e:2, 'core:unprovoked_blow') and @e:4.remembers_actor(@e:2, 'core:unprovoked_blow')"
+assert "@e:5.remembers_actor(@e:2, 'core:unprovoked_blow') and not @e:5.hostile(@e:2)"
+# Out of sight of everyone, the cloak comes off: she is herself again.
+move @e:2 @c:20,40,0
+as @e:2 do { "for_each": { "contents": { "of": "self", "where": "it.has_tag('hood')" } }, "as": "cloak", "do": [ { "remove": { "what": "$cloak" } } ] }
+expect event item_removed
+assert "@e:2.presenting == @e:2.persona and len(@e:2.personas) == 2"
+# She walks up to the far watchman: he does not know her.
+move @e:2 @c:58,60,0
+advance 2s
+assert "@e:5.perceives(@e:2) and @e:5.persona_of(@e:2) == @e:2.persona and not @e:5.hostile(@e:2)"
+assert "not @e:5.remembers_actor(@e:2, 'core:unprovoked_blow')"
+# Far off and out of his sight, the hood goes on again: the same one.
+move @e:2 @c:120,10,0
+advance 5s
+assert "not @e:5.perceives(@e:2)"
+as @e:2 do { "for_each": { "contents": { "of": "self", "where": "it.has_tag('hood')" } }, "as": "cloak", "do": [ { "wear": { "who": "self", "what": "$cloak" } } ] }
+assert "len(@e:2.personas) == 2 and @e:2.presenting == @e:2.personas[1]"
+move @e:2 @c:58,60,0
+advance 2s
+assert "@e:5.perceives(@e:2) and @e:5.persona_of(@e:2) == @e:2.personas[1] and @e:5.hostile(@e:2)"
+expect hash c40df8210df3a4a86d39581caf3e8081

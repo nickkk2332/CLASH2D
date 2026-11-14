@@ -35,7 +35,7 @@
       { "height": 1, "tooltip": { "value": "Up and Down scroll, Esc goes back." } } ] },
     "keys": { "back": [ { "close": {} } ] } },
 
-  { "//": "Work as it goes (16 §8.2), for the party's own: begun, stopped short with why, and done with where what it gave is. A long piece of work is played out in one press of a key, so these lines are how a player learns what came of it.",
+  { "//": "Work as it goes (16 §8.2), for the party's own: begun, stopped short with why, and done with where what it gave is: in the station, in hand, in the container a substance it gave was poured into (`filled`), or left lying where the work was done for want of a free hand or of room (`left`, decision D-972). A long piece of work is played out in one press of a key, so these lines are how a player learns what came of it.",
     "type": "show", "id": "work_started", "on": "recipe_started",
     "if": "self in party()",
     "change": [],
@@ -47,7 +47,7 @@
   { "type": "show", "id": "work_done", "on": "recipe_completed",
     "if": "self in party()",
     "change": [],
-    "log": "{if event.spoiled then 'The work came to nothing.' else cap(the(self)) + ' ' + verb(self, 'finish') + ' the work' + (if is_null(station) then '.' else ': what it gave is in ' + the(station) + '.')}", "importance": "normal" },
+    "log": "{if event.spoiled then 'The work came to nothing.' else cap(the(self)) + ' ' + verb(self, 'finish') + ' the work' + (if event.left > 0 then (if is_null(station) then ': ' + their(self) + ' hands are full, and what it gave lies at ' + their(self) + ' feet.' else ': there is no room in ' + the(station) + ', and what it gave lies by it.') else if not is_null(filled) then ': what it gave is in ' + the(filled) + '.' else if is_null(station) then '.' else ': what it gave is in ' + the(station) + '.')}", "importance": "normal" },
 
   { "//": "The keys in play that open the two screens above. The default keymap (theme.json) binds them to shift+m and shift+k; a profile's keymap, or the player through Options, may give each another key.",
     "type": "control", "id": "make", "name": "Make something",

@@ -309,13 +309,16 @@ bundled world offers:
 | Racks, stalls, workbenches | Take out, Put in |
 | Wardrobes | Hide inside, and Get out; Search (opens it, and brings out whoever hides inside) |
 | Ovens, hearths, stills | Stoke (put the wood you hold in), Light, Put out |
-| What you hold | Eat, Drink, Bandage your wounds, Rub on salve, Coat a blade, Read |
+| What you hold | Eat, Drink, Bandage your wounds, Rub on salve, Coat a blade (a vial in one hand, a blade in the other), Read |
 | What lies loose (on a table, a desk, the street) | Pick up |
 
 What a container holds is decided the first time anyone opens it:
-pantry cupboards hold flour and herbs, wardrobes clothes, chests
-valuables, the healer's house salves and bandages, the workshop's chest
-knives and clubs, the racks of the guardhouse's armoury clubs,
+pantry cupboards hold flour and herbs, wardrobes clothes (now and then
+a hooded cloak), chests valuables, the healer's house salves, bandages,
+vials and now and then a vial of nightshade (and nightshade grows in one
+of the beds of her garden), the workshop's racks cloth, sticks and
+feathers, its chest knives and clubs, the racks of the guardhouse's
+armoury clubs,
 bucklers, bows and arrows (the armoury door is locked: its key lies on
 the sergeant's desk). **`g` or `,` picks up** what lies at your feet or
 within a step, on a table, a desk or the street; with more than one
@@ -390,7 +393,10 @@ that).
 that can be made; `S` (Shift+S) chooses the shot, the place aimed at and
 the height, with the line drawn to it. `r` reloads the weapon in hand
 from what you carry, `t` throws what is in your hand, and `z` stops what
-you are doing. An empty weapon says so.
+you are doing. Each shot is told in the log (`Ada shoots.`; one you only
+hear, `A shot, somewhere close.`), and so is a reload. An empty weapon
+says so, and so does a target too close to aim at: someone standing in
+your own cell. Step back first.
 
 **Holds and takedowns.** `v` lists the holds, throws and takedowns you
 could try on the target, greyed with the reason where you cannot: grab,
@@ -424,7 +430,16 @@ what each person saw:
   sees you after. So do townsfolk who heard the shout keep away.
 - **They remember the face they saw.** Disguised, you are remembered as
   the disguise: the watch goes after whoever wears that face, and not
-  you once you take it off out of sight.
+  you once you take it off out of sight. A **hooded cloak** is such a
+  disguise: wear it (`i`, Enter on it, Wear) and everyone who sees you
+  takes you for a stranger in a hood, and remembers what you do as the
+  hooded stranger's. Take it off where nobody sees you (inside a
+  wardrobe will do, and leave it there) and you are yourself again: a
+  watchman hunting the hooded stranger lets you walk past him. Put it
+  back on and the same hood is known again. Whoever watches you put it
+  on knows who is under it. Cut and sew one from two
+  strips of cloth at a workbench with a knife at hand (`M`), or find
+  one in a wardrobe.
 - **It wears off.** Fear fades within the hour, the watch's anger over
   an hour or two. Get out of sight and hide where nobody saw you go (a
   watchman does not look inside a wardrobe), and they give up the
@@ -466,16 +481,33 @@ gives, and greys out what you cannot make now with the reason (missing
 inputs, missing tools, a cold oven, know-how you lack). Enter starts the
 work; it goes on until it is done or you do something else, and work
 left half done stays where it was. A lit still or a herb bed keeps
-working with nobody at it.
+working with nobody at it. What is made by hand goes into your hands;
+with both full it is put at your feet, and the log says so. What is made
+at a bench, an oven or a still is put in it: take it out with `e`. A
+liquid is poured into an empty vial, mug or skin at hand (or one that
+holds the same), never into one that holds something else.
 
 The bundled recipes: bandages from cloth and torches from a stick and
 cloth, by hand; clubs from a log and arrows from sticks and feathers, at
 a workbench with a knife; bread from flour and water at an oven or a
 hearth; mending a blade at a workbench with something to hammer with;
 distilling ale in a still; herbs grown in a herb bed with water about
-it; and, for those who know herbalism, healing salve at a workbench,
-nightshade extract by hand and a sleeping draught at a hearth. An oven,
-a hearth or a still must be stoked with wood and lit first.
+it; a hooded cloak from two strips of cloth at a workbench with a knife
+(a disguise, under Fighting); and, for those who know herbalism,
+healing salve at a workbench, nightshade extract by hand and a sleeping
+draught at a hearth. An oven, a hearth or a still must be stoked with
+wood and lit first.
+
+**Poison.** Nightshade grows in one of the herb beds in the healer's
+garden, in front of her house: `e` beside it, Take out. Read the herbal
+on her shelf to learn herbalism, have a knife at hand, and an empty vial
+(her cupboard keeps vials, and sometimes a vial of nightshade extract
+ready made), and `M` presses two plants into twenty millilitres of
+extract. With the vial in one hand and a blade in the other, `e`, Coat
+a blade puts half of it on the blade. A cut that breaks the skin puts
+the poison in the blood, and a single one drops someone senseless; more
+can kill. Every blow wipes some off. Swallowed, it does the same; on the
+skin, almost nothing.
 
 `K` lists know-how: what you know, what each lets you make, and what
 you could learn next. Reading a book that teaches something (the
@@ -570,7 +602,7 @@ which way and how far each one is.
   more easily as the sky lightens before dawn.
 - Blocking a knife with your forearm stops the blow and cuts the arm:
   the log says when you are wounded. Stepping back or dodging costs
-  nothing when it works. Binding wounds needs a bandage in hand, and
-  nothing more.
+  nothing when it works. Binding wounds needs only a bandage you carry
+  (no free hand), and takes four seconds.
 - The same seed gives the same town. If a game went badly, try it again
   knowing where things are.
