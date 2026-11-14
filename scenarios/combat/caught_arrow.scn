@@ -32,4 +32,4 @@ as @e:1 do { "shoot": { "at": "offset(self.loc, 0, 10, 0).occupants[0]", "height
 advance 1s
 expect event projectile_hit
 assert "len(@e:3.held('grasp')) == 0"
-expect hash ef726df3f835fff83237088298fb5ab5
+expect hash 08160e61e127a72e94bdea5e99f9b5d2

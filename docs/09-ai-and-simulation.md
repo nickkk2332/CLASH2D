@@ -1600,9 +1600,10 @@ and mostly the warm going about near their homes, and the goals of five
 hundred minds weighed at their intervals; a path planned to see whether
 a way is there is planned again when the walk sets out (D-928).
 
-Smooth play (D-930 to D-935), measured on four shared cores with the
-bundled games' settings (`sim.max_hot_minds` 50, the levels of a resting
-party on, a warm step of 15 s while resting), the benchmarks
+Smooth play (D-930 to D-935), measured on four shared cores with
+`sim.max_hot_minds` at 50 (the bundled games but `town_life` set it,
+D-934), the levels of a resting party on and a warm step of 15 s while
+resting, the benchmarks
 `town.hour_wait` and `town.hour_wait_night` (the player's own wait of
 an hour, as `shift+p` waits it) and the minute's waits:
 
