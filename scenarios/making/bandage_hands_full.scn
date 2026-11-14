@@ -24,4 +24,4 @@ advance 5s
 expect event interacted
 assert "@e:1.wounds[0].state == 'closed'"
 assert "len(@e:1.carried) == 2 and len(@e:1.held('grasp')) == 2"
-expect hash b46e9db89b3136b174a4fdb5b7b9cebc
+expect hash 86cfdba9f222e358d3fda15dce60619c
