@@ -314,6 +314,48 @@ pub fn walk_up_to_target(run: &mut Headless, max_keys: usize) -> bool {
     false
 }
 
+/// The quick attack (`f`) at the target, as a player fights: a foe out
+/// of reach is walked up to first, a step at a time along the way the
+/// character believes leads there, at most `max_steps` keys, and struck
+/// once beside it. A choice the attack asks for is put away. Returns
+/// whether a blow was started (or a prompt came up that the session must
+/// answer); false when nothing could be struck, or no way leads to the
+/// foe.
+pub fn strike_target(run: &mut Headless, max_steps: usize) -> bool {
+    let quick = |run: &mut Headless| {
+        let before = commands(run);
+        press(run, "f");
+        if !["ui:play", "ui:reaction", "ui:summary"].contains(&top(run).as_str()) {
+            press(run, "escape");
+        }
+        commands(run) != before || top(run) != "ui:play"
+    };
+    if quick(run) {
+        return true;
+    }
+    // Out of reach: up to them, if the character knows a way there.
+    let Some(to) = target_loc(run) else {
+        return false;
+    };
+    let reachable = believed_way(run, to).is_ok()
+        || StepKind::ALL[..8].iter().any(|kind| {
+            believed_way(run, Location::new(to.grid, to.cell + kind.delta())).is_ok()
+        });
+    if !reachable {
+        return false;
+    }
+    let before = player_loc(run);
+    walk_up_to_target(run, max_steps);
+    if top(run) != "ui:play" {
+        return true;
+    }
+    if quick(run) {
+        return true;
+    }
+    // Steps were taken toward them even if no blow was struck yet.
+    player_loc(run) != before
+}
+
 /// Where a thing of a definition (`core:club`) lies loose within some
 /// cells of a place, if one does: what a player sees lying about.
 pub fn lying_near(run: &Headless, at: Location, def: &str, radius: i32) -> Option<Location> {
