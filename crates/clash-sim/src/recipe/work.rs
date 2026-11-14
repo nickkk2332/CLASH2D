@@ -264,28 +264,63 @@ pub fn check(
     let plan = supply::plan(sim, id, recipe, &items)?;
     // Room for what it pours out.
     // What its inputs are drawn from leaves room in it.
-    let drawn = plan
-        .draws
-        .iter()
-        .fold(Real::ZERO, |sum, (_, _, volume)| sum + *volume);
-    let mut room = items
-        .iter()
-        .filter_map(|item| substance::room_in(sim, *item))
-        .fold(drawn, |sum, room| sum + room);
+    // Room is counted only in what holds nothing else once the inputs
+    // are drawn: what is made is not poured into another's mixture.
+    let mut claimed = Real::ZERO;
     for output in &recipe.outputs {
-        if output.substance.is_some() {
+        if let Some(made) = output.substance {
             let wanted = output.amount.map_or(Real::ZERO, |amount| amount.get());
-            if wanted > room {
+            let room = items
+                .iter()
+                .map(|item| room_for(sim, *item, made.id(), &plan.draws))
+                .fold(Real::ZERO, |sum, room| sum + room);
+            if claimed + wanted > room {
                 return Err(Reason::new(
                     codes::NO_ROOM,
-                    "there is nothing at hand with room to take what it gives",
+                    "there is nothing at hand with room to take what it gives that holds nothing else",
                 )
                 .with("recipe", name.as_str()));
             }
-            room -= wanted;
+            claimed += wanted;
         }
     }
     Ok(Starting::Begin(plan))
+}
+
+/// The room a container at hand has for a substance a recipe gives
+/// (16 §8.6, decision D-972): none if, once what the recipe draws from
+/// it is taken out, it still holds another substance, so that what is
+/// made is never poured into something else (an extract into a
+/// draught); else its room, with what is drawn from it.
+fn room_for(
+    sim: &Sim,
+    item: EntityId,
+    made: crate::substance::SubstanceId,
+    draws: &[(EntityId, crate::substance::SubstanceId, Real)],
+) -> Real {
+    let Some(room) = substance::room_in(sim, item) else {
+        return Real::ZERO;
+    };
+    let mut drawn = Real::ZERO;
+    for (held, volume) in substance::held(sim, item) {
+        let taken = draws
+            .iter()
+            .filter(|(from, what, _)| *from == item && *what == held)
+            .fold(Real::ZERO, |sum, (_, _, volume)| sum + *volume);
+        drawn += taken;
+        if held != made && volume > taken {
+            return Real::ZERO;
+        }
+    }
+    room + drawn
+}
+
+/// Whether a container holds nothing but a substance, or nothing at
+/// all: what a recipe's substance may be poured into (D-972).
+fn holds_only(sim: &Sim, item: EntityId, made: crate::substance::SubstanceId) -> bool {
+    substance::held(sim, item)
+        .iter()
+        .all(|(held, volume)| *held == made || *volume <= Real::ZERO)
 }
 
 /// Whether the action a process's worker works it by is still running.
@@ -775,11 +810,17 @@ pub(crate) fn complete(sim: &mut Sim, holder: EntityId, cause: Cause) {
             Err(reason) => sim.fault(reason),
         }
     }
-    if !spoiled {
-        give_outputs(sim, &process, holder, cause);
+    let (left, filled) = if spoiled {
+        (0, None)
+    } else {
+        give_outputs(sim, &process, holder, cause)
+    };
+    let mut completed = payload(RECIPE_COMPLETED, actor, process.station, &name)
+        .with("spoiled", spoiled)
+        .with("left", i64::from(left));
+    if let Some(filled) = filled {
+        completed = completed.subject("filled", Subject::Entity(filled));
     }
-    let completed =
-        payload(RECIPE_COMPLETED, actor, process.station, &name).with("spoiled", spoiled);
     let _ = sim.raise(Where::Entity(actor), cause, completed);
     if let (Some(worker), Some(action)) = (process.worker, process.action)
         && sim
@@ -798,15 +839,24 @@ pub(crate) fn complete(sim: &mut Sim, holder: EntityId, cause: Cause) {
 }
 
 /// Makes what a recipe gives: its items, its substances, what it mends,
-/// and its `result`.
-fn give_outputs(sim: &mut Sim, process: &Process, holder: EntityId, cause: Cause) {
+/// and its `result`. Returns how many of the things made were left lying
+/// where the work was done, not taken into a hand or put in the station,
+/// and the first container a substance it gave went into.
+fn give_outputs(
+    sim: &mut Sim,
+    process: &Process,
+    holder: EntityId,
+    cause: Cause,
+) -> (u32, Option<EntityId>) {
     let defs = std::sync::Arc::clone(&sim.defs);
     let Some(recipe) = defs
         .try_registry::<RecipeDef>()
         .and_then(|registry| registry.try_get(process.recipe))
     else {
-        return;
+        return (0, None);
     };
+    let mut lying = 0;
+    let mut filled = None;
     let here = place_of(sim, process.worker, process.station.map(Target::Entity))
         .or_else(|| sim.entities.location(holder));
     for output in &recipe.outputs {
@@ -819,7 +869,7 @@ fn give_outputs(sim: &mut Sim, process: &Process, holder: EntityId, cause: Cause
             continue;
         }
         if let Some(item) = output.item {
-            make_item(sim, item.id(), output.count.max(1), process, here, cause);
+            lying += make_item(sim, item.id(), output.count.max(1), process, here, cause);
         }
         if let (Some(substance), Some(amount)) = (output.substance, output.amount) {
             let items = supply::at_hand(sim, process.worker, process.station, here);
@@ -828,13 +878,19 @@ fn give_outputs(sim: &mut Sim, process: &Process, holder: EntityId, cause: Cause
                 if left <= Real::ZERO {
                     break;
                 }
-                if substance::room_in(sim, container).is_none_or(|room| room <= Real::ZERO) {
+                if substance::room_in(sim, container).is_none_or(|room| room <= Real::ZERO)
+                    || !holds_only(sim, container, substance.id())
+                {
                     continue;
                 }
                 let went = substance::put(sim, container, &[(substance.id(), left)]);
-                left -= went
+                let volume = went
                     .iter()
                     .fold(Real::ZERO, |sum, (_, volume)| sum + *volume);
+                if volume > Real::ZERO && filled.is_none() {
+                    filled = Some(container);
+                }
+                left -= volume;
             }
         }
     }
@@ -855,11 +911,13 @@ fn give_outputs(sim: &mut Sim, process: &Process, holder: EntityId, cause: Cause
             cause,
         );
     }
+    (lying, filled)
 }
 
 /// Makes an output item: into the station's holds where it fits, else
 /// where the station stands; by hand into the worker's grasp where it
-/// can take it, else where the worker stands.
+/// can take it, else where the worker stands. Returns how many of the
+/// entities made were left where they were made.
 fn make_item(
     sim: &mut Sim,
     def: crate::item::ItemId,
@@ -867,10 +925,11 @@ fn make_item(
     process: &Process,
     here: Option<Location>,
     cause: Cause,
-) {
+) -> u32 {
     let Some(here) = here else {
-        return;
+        return 0;
     };
+    let mut left = 0;
     let stacks = sim
         .defs
         .try_registry::<crate::item::ItemDef>()
@@ -883,19 +942,19 @@ fn make_item(
             Ok(made) => made,
             Err(reason) => {
                 sim.fault(reason);
-                return;
+                return left;
             }
         };
-        match (process.station, process.worker) {
-            (Some(station), _) => {
-                let _ = crate::item::put_in(sim, made, station, cause);
-            }
-            (None, Some(worker)) => {
-                let _ = crate::item::take(sim, worker, made, cause);
-            }
-            _ => {}
+        let kept = match (process.station, process.worker) {
+            (Some(station), _) => crate::item::put_in(sim, made, station, cause).is_ok(),
+            (None, Some(worker)) => crate::item::take(sim, worker, made, cause).is_ok(),
+            _ => false,
+        };
+        if !kept {
+            left += 1;
         }
     }
+    left
 }
 
 // ---- Machines ------------------------------------------------------------------

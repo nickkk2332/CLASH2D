@@ -1734,14 +1734,15 @@ Fields:
 <a id="recipe-completed"></a>
 ## `recipe_completed`
 
-A recipe's work is done (16 §8.2): its outputs are made, what it mends is mended and its `result` has run, unless it was spoiled.
+A recipe's work is done (16 §8.2): its outputs are made, what it mends is mended and its `result` has run, unless it was spoiled. `filled` is the first container a substance it gave went into, if one did (decision D-972).
 
-Subjects, in delivery order: `self` (entity), `station` (entity).
+Subjects, in delivery order: `self` (entity), `station` (entity), `filled` (entity).
 
 Fields:
 
 - `recipe` (string): The recipe's qualified id.
 - `spoiled` (bool): Whether it came to nothing.
+- `left` (int): How many of the things it made (a stack counting once) were left lying where the work was done: by hand, for want of a free hand to take them; at a station, for want of room in it (decision D-972).
 
 <a id="recipe-stalled"></a>
 ## `recipe_stalled`

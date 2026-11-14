@@ -54,4 +54,4 @@ assert "len(@e:2.personas) == 2 and @e:2.presenting == @e:2.personas[1]"
 move @e:2 @c:58,60,0
 advance 2s
 assert "@e:5.perceives(@e:2) and @e:5.persona_of(@e:2) == @e:2.personas[1] and @e:5.hostile(@e:2)"
-expect hash 771dba4cfd16da5a3a8b6d1b3f9defc0
+expect hash 44061d7d8ead1010f36cef03a2a0eef5

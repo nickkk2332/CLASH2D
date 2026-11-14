@@ -940,8 +940,11 @@ As built (decisions D-760, D-761), in `clash_sim::social`:
   again; taken off or dropped, they present their own again. Whoever
   witnesses what the wearer does remembers and takes against the
   hooded stranger (§12's rules, D-941), and does not know the wearer
-  once the hood is off; whoever watches the hood go on or come off goes
-  on knowing who is under it, by the rule above. A wearer the cloak's
+  once the hood is off. By the rule above, whoever watches the hood go
+  on knows who is under it, for good; whoever watches it come off goes
+  on taking the wearer for the hooded stranger while it watches, and
+  takes them for themselves the next time it comes upon them. A wearer
+  the cloak's
   persona is not one of their own is given one of their own, so two
   people in the same cloak are two strangers. A stranger in a hood is
   described as anyone is (the template it looks like, `the person`):

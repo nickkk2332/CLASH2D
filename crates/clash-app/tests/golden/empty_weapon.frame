@@ -19,9 +19,9 @@ chars
 |                                                      │                        │|
 |                                                      │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
-|│The person shouts: "Watch! Over here!"             │││                        │|
+|│Ada shoots.                                        │││                        │|
 |│Something strikes the person.                      │││                        │|
-|│The person is wounded.                             █││Tab target f hit s shoot│|
+|│The person is wounded.                             │││Tab target f hit s shoot│|
 |│There is no loaded weapon in hand, or nowhere to   █││x look  i things  c body│|
 |│aim.                                               █││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|
@@ -46,7 +46,7 @@ fg
 |eejjjeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000e|
 |e000000000000000000000000000000000000000000000000000eee000000000000000000000000e|
 |e000000000000000000000000000000000000000000000000000eee000000000000000000000000e|
-|e0000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeee|
+|e000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeee|
 |e0000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeee|
 |e0000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeee00000000e|
 |eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|

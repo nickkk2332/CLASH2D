@@ -170,4 +170,4 @@ advance 500ms
 move @w @c:31,12,0
 advance 500ms
 assert "not perceives(@e:3, @w) and not perceives(@d, @w) and perceives(@a, @w)"
-expect hash 406e89b816730000ccb40354c2da86cd
+expect hash 25efad23bb2b745adcdba034729919dc

@@ -808,6 +808,96 @@ fn a_person_makes_a_bandage_and_binds_a_wound_with_it() {
     assert!(!named(&events, "wound_closed").is_empty());
 }
 
+/// D-972: what is made by hand with both hands full is left at the
+/// worker's feet, and `recipe_completed` says how many were (`left`); a
+/// liquid a recipe gives goes only into a vessel that holds nothing
+/// else, which it names (`filled`), and with no such vessel at hand the
+/// recipe cannot be begun.
+#[test]
+fn what_is_made_is_left_with_full_hands_and_a_liquid_goes_only_into_a_clean_vessel() {
+    let (mut sim, ada, _) = city(57);
+    let left_of = |events: &[SimEvent]| {
+        named(events, "recipe_completed")
+            .first()
+            .and_then(|event| event.body.field("left"))
+            .and_then(|field| field.plain().and_then(clash_core::Value::as_int))
+    };
+    // Two bandages from a strip of cloth, both hands full.
+    give(&mut sim, ada, "core:cloth", 2);
+    give(&mut sim, ada, "core:knife", 1);
+    act(
+        &mut sim,
+        ada,
+        "make",
+        vec![("recipe".to_owned(), text("core:bandage"))],
+    );
+    run_for(&mut sim, 6 * SECOND);
+    let events = sim.drain_events();
+    no_faults(&events);
+    assert_eq!(left_of(&events), Some(1));
+    let at = sim.truth().location(ada).unwrap();
+    assert!(
+        sim.truth().entities().iter().any(|entity| {
+            entity.tags.contains("bandage") && sim.truth().location(entity.id()) == Some(at)
+        }),
+        "the bandages lie at her feet"
+    );
+
+    // The extract: herbalism, a knife and two nightshade in hand, and on
+    // a rack near only a vial of sleeping draught, most of it poured
+    // away, with room in it for the extract and more.
+    let dropped = sim.truth().contents(ada).to_vec();
+    for thing in dropped {
+        clash_sim::item::drop(&mut sim, thing, Cause::DEBUG).unwrap();
+    }
+    give(&mut sim, ada, "core:knife", 1);
+    give(&mut sim, ada, "core:nightshade_plant", 2);
+    recipe::know_how::teach(&mut sim, ada, know_how("herbalism"), "test", Cause::DEBUG).unwrap();
+    put_fixture(&mut sim, cell(20, 1), "rack");
+    let draught = make(&mut sim, "core:sleeping_draught", 1, Place::at(cell(20, 1)));
+    clash_sim::substance::pour(
+        &mut sim,
+        draught,
+        clash_sim::substance::PourTo::Cell(cell(20, 1)),
+        Some(Real::of(4.0e-5)),
+        Cause::DEBUG,
+    )
+    .unwrap();
+    assert!(clash_sim::substance::room_in(&sim, draught).unwrap() > Real::of(2.0e-5));
+    device::put_inside(&mut sim, draught, cell(20, 1), Layer::Fixture, Cause::DEBUG).unwrap();
+    let refused =
+        recipe::work::check(&sim, Some(ada), recipe_id("nightshade_extract"), None).unwrap_err();
+    assert_eq!(refused.code, "recipe.no_room");
+    // An empty vial beside it: the extract goes there, and is named.
+    let vial = make(&mut sim, "core:vial", 1, Place::at(cell(20, 1)));
+    device::put_inside(&mut sim, vial, cell(20, 1), Layer::Fixture, Cause::DEBUG).unwrap();
+    assert!(recipe::work::check(&sim, Some(ada), recipe_id("nightshade_extract"), None).is_ok());
+    act(
+        &mut sim,
+        ada,
+        "make",
+        vec![("recipe".to_owned(), text("core:nightshade_extract"))],
+    );
+    run_for(&mut sim, 21 * SECOND);
+    let events = sim.drain_events();
+    no_faults(&events);
+    let done = named(&events, "recipe_completed");
+    assert_eq!(done.len(), 1);
+    assert_eq!(done[0].subject("filled"), Some(Subject::Entity(vial)));
+    let nightshade = DEFS
+        .lookup::<clash_sim::substance::SubstanceDef>("core:nightshade")
+        .unwrap();
+    let sleeping = DEFS
+        .lookup::<clash_sim::substance::SubstanceDef>("core:sleeping_draught")
+        .unwrap();
+    assert!(clash_sim::substance::amount_of(&sim, vial, nightshade) > Real::ZERO);
+    assert_eq!(
+        clash_sim::substance::amount_of(&sim, draught, nightshade),
+        Real::ZERO
+    );
+    assert!(clash_sim::substance::amount_of(&sim, draught, sleeping) > Real::ZERO);
+}
+
 #[test]
 fn eating_bread_restores_nourishment() {
     let (mut sim, ada, _) = city(56);

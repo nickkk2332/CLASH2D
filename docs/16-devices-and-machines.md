@@ -914,7 +914,10 @@ there (`recipe.busy`); its know-how is known or provided
 resumes work under way where it would be kept, its inputs, tools and
 what it mends are at hand (`recipe.missing_input`,
 `recipe.missing_tool`, `recipe.nothing_to_mend`) and there is room in
-containers at hand for the substances it gives (`recipe.no_room`).
+containers at hand for the substances it gives (`recipe.no_room`): in
+containers that, once its inputs are drawn, hold nothing or nothing but
+that substance, so that what is made is never poured into another's
+mixture (decision D-972).
 `work::start` does what it says against truth, promotes the station,
 raises the hook `recipe_starting`, uses up the inputs of a new start and
 raises `recipe_started`.
@@ -951,7 +954,8 @@ to date at the old rate and the wake-up scheduled again at the new
 handlers may set `spoiled` or cancel; unless spoiled, the outputs are
 made (into the station's holds where they fit, else where it stands; by
 hand into the worker's grasp where it can take them, else where it
-stands; substances into containers at hand with room), what it mends is
+stands; substances into containers at hand with room that hold nothing
+else), what it mends is
 repaired and `result` runs; `recipe_completed` follows, the worker's
 held action is let go, and a machine may start its next recipe.
 
@@ -985,7 +989,7 @@ at a station it lies in; a device's `provides` in its mode now.
 | `recipe_started` | the same | `recipe`; `resumed` (`bool`); `work` (`real`, seconds at rate 1) | It began, its inputs used up, or resumed |
 | `recipe_stalled` | the same | `recipe`; `why` (`string`): `stopped`, `station`, `supply`, `condition`, `worker` or `cancelled` | It stopped advancing |
 | `recipe_completing` (hook) | the same | `recipe`; `spoiled` (`bool`, mutable) | Its work is done, before its outputs. A handler may spoil it |
-| `recipe_completed` | the same | `recipe`; `spoiled` (`bool`) | Its outputs are made |
+| `recipe_completed` | the same, and `filled?` (the first container a substance it gave went into, D-972) | `recipe`; `spoiled` (`bool`); `left` (`int`: how many of the things made, a stack counting once, were left lying where the work was done for want of a free hand or of room at the station, D-972) | Its outputs are made |
 | `know_how_gained` | `self` | `know_how` (`string`); `how` (`string`): `template`, `taught`, `read`, or what a rule said | A mind came to know something |
 | `know_how_lost` | `self` | `know_how`; `how` (`unlearned`) | A mind no longer knows it |
 
