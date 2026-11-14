@@ -110,6 +110,7 @@ Options rebinds them. [How to play](docs/how-to-play.md) has them all.
 | `x` | Look around |
 | `e` | Use something within a step: doors, windows, wardrobes, chests, what you hold (eat, drink, bandage); pick up what lies there |
 | `g` or `,` | Pick up what lies at your feet or within a step (it asks which if there is more than one) |
+| `Shift+C` | Crouch to move quietly, or stand again |
 | Tab, Shift+Tab | Choose a target among those in sight |
 | `f`; `F` | Strike the target; choose the blow, the part and how hard |
 | `s`; `S` | Shoot or throw at the target; aim |

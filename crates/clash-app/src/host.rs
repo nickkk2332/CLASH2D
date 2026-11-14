@@ -145,6 +145,22 @@ fn seconds(dur: Dur) -> f64 {
     dur.as_micros() as f64 / MICROS_PER_SECOND
 }
 
+/// A text a screen gave for a parameter that takes a definition, as
+/// that definition: a screen's expression does not know the parameter's
+/// type when it is compiled, so `'core:crouched'` stays text there, and
+/// is resolved here as 05 §9 resolves a text where an id is wanted.
+/// `None` where the parameter takes no definition, the value is not
+/// text, or it names nothing: the value is then given as it is, and the
+/// simulation refuses it with its reason.
+fn as_definition(session: &Session, ty: &clash_expr::Type, value: &Value) -> Option<Value> {
+    let clash_expr::Type::Id(def_type) = ty.non_null() else {
+        return None;
+    };
+    let text = value.as_str()?;
+    let found = session.sim.exprs().registry().def_ref(*def_type, text)?;
+    Some(Value::Id(found))
+}
+
 /// An argument of a command as a whole number, if it is one.
 fn int_arg(command: &UiCommand, name: &str) -> Option<i64> {
     command.args.get(name).and_then(Value::as_int)
@@ -205,10 +221,17 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
                     command.name
                 )
             })?;
+            let def = session.sim.defs().registry::<ActionDef>().get(action);
             let params = command
                 .args
                 .iter()
-                .map(|(name, value)| (name.clone(), value.to_stored()))
+                .map(|(name, value)| {
+                    let value = def
+                        .param(name)
+                        .and_then(|param| as_definition(session, param.ty(), value))
+                        .unwrap_or_else(|| value.clone());
+                    (name.clone(), value.to_stored())
+                })
                 .collect();
             Ok(Command::Act {
                 entity: player,

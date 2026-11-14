@@ -143,6 +143,7 @@ controls, read from the data.
 | `x` | Look around | Opens Look. |
 | `e` | Use something near | List what can be done with the things within a step, and do one. |
 | `g`, `,` | Pick up | Pick up what lies at your feet or within reach; with more than one thing there, choose which. |
+| `Shift+C` | Crouch or stand | Crouch to move quietly, or stand up again. |
 | `i` | Inventory | Opens Inventory. |
 | `c` | Condition | Opens Condition. |
 | `a` | Abilities | Opens Abilities. |
@@ -268,7 +269,8 @@ close by: a footstep within about three metres in the open, less
 through a wall. Whatever a sleeper hears wakes it, and it lies awake,
 looking about, for a minute before it drops off again. To pass a
 sleeper unseen, keep your distance or a wall between you; steps taken
-crouched or prone are a quarter as loud. The unconscious and the dead
+crouched (`Shift+C`, and again to stand) or prone are a quarter as
+loud. The unconscious and the dead
 perceive nothing at all, and neither do you while your character lies
 unconscious: the map shows only what it remembers.
 
