@@ -176,7 +176,13 @@ D-652):
    applies to the present: a key pressed while something is being
    played jumps playback to its end before it is used (section 7.1),
    and the loop does the same for a press of a mouse button and for
-   pasted text.
+   pasted text. A key pressed while the player's character is in a
+   wait it was told to make (`p`, `shift+p`), the simulation is being
+   advanced through it and the play screen is on top breaks the wait
+   off and does nothing else: the loop submits the simulation's own
+   `Interrupt` command (03 §4.4), so that a replay breaks it off at the
+   same moment, playback jumps to the present, and the character is
+   asked at once (decision D-931).
 2. **Follow-up.** A refused command and an effect that could not be run
    each get a line in the log. An `app` service that failed also opens
    the screen of the role `error` with the reason as its parameter
@@ -207,7 +213,11 @@ D-652):
    what refused and the definition and path of the effect, where the
    fault's reason has them (decision D-874). Every line of the log begins
    with a capital letter, made so as it is added (decision D-866). The scene is advanced by the
-   real time elapsed and plays what falls due.
+   real time elapsed and plays what falls due. Whenever simulation
+   time moved in the pass, the screens' bindings are evaluated again,
+   even if nothing was reported, so that what they show of the present
+   (the clock of the status column) moves on pass by pass through a
+   long wait.
 5. **The present.** Once playback has caught up, the view model is
    given what the party perceives that no event said (section 3.5):
    cells that came into view or left it, and who is in view. In a
@@ -234,7 +244,7 @@ action is `Act` with `start` for the player's character, the action by
 its qualified id (a bare name means the first action of that name in
 order of qualified id) and its parameters as the scene assembled them;
 the command `wait { dur }` is `Wait`, `cancel { action, abandon? }` is
-`Cancel`, `clear_plan` is `ClearPlan`, and `choose { entity, choice,
+`Cancel`, `clear_plan` is `ClearPlan`, `interrupt` is `Interrupt`, and `choose { entity, choice,
 option }`, which the choice prompt submits, is `Choose`. `react {
 entity, window, action, params }` and `pass { entity, window }`, which
 the reaction prompt submits, are `React` and `Pass` (03 §7.3); the

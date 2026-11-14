@@ -601,6 +601,14 @@ As built (decision D-365):
   `ability.cost_short`, …: 08 §12) before anything changed; a use
   refused after a handler of `ability_using` ran is taken and raises
   `ability_refused`. `UseAbility` answers a free decision.
+- `Interrupt { entity }` (decision D-931) is the effect `interrupt_plan`
+  as a command: the entity's plan is emptied, the wait it is in ended,
+  and it is asked what it does (a `Free` request for one under direct
+  control, `decision_needed` for anyone else); an action that is running
+  runs on. It is refused as `ClearPlan` is, with
+  `command.not_controlled`. The application gives it when the player
+  presses a key during a long wait (12 §3.2), so that the input log
+  replays the wait broken off where it was.
 - A `CommandError` holds a `Reason` (14 §5): a stable code, a sentence and
   the values involved. A refused command leaves the state exactly as it
   was and is not logged.

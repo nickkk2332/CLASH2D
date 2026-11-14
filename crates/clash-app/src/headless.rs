@@ -106,6 +106,28 @@ impl Headless {
         self.running
     }
 
+    /// One pass of the loop with whatever input is waiting, advancing
+    /// the simulation only until `until`, as the terminal's loop does
+    /// with its slice of a frame (12 §3.2): a pass whose time is up
+    /// before it begins makes one call of `advance`, so that a long
+    /// wait is carried over many passes. Returns whether the game goes
+    /// on.
+    pub fn pass_until(&mut self, until: std::time::Instant) -> bool {
+        if self.running {
+            self.running = self
+                .game
+                .pass(&mut self.front, HEADLESS_STEP_S, Some(until));
+        }
+        self.running
+    }
+
+    /// Delivers input, then one pass that advances the simulation only
+    /// until `until` ([`Headless::pass_until`]).
+    pub fn input_until(&mut self, event: InputEvent, until: std::time::Instant) -> bool {
+        self.front.script([event]);
+        self.pass_until(until)
+    }
+
     /// Delivers input, then one pass.
     pub fn input(&mut self, event: InputEvent) -> bool {
         self.front.script([event]);

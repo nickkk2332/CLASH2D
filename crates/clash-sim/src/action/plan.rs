@@ -407,6 +407,58 @@ impl Sim {
         self.cancel_action(entity, action, abandon, cause)
     }
 
+    /// The `Interrupt` command (D-931): `interrupt_plan` for an entity
+    /// under direct or delegated control.
+    pub(crate) fn command_interrupt(&mut self, entity: EntityId) -> Result<(), Reason> {
+        self.controlled(entity)?;
+        let cause = Cause {
+            actor: Some(entity),
+            instigator: Some(entity),
+            kind: CauseKind::Action,
+        };
+        self.interrupt_plan(entity, cause)
+    }
+
+    /// Breaks off what an entity planned and the wait it is in, and asks
+    /// whoever decides for it what it does next (03 §5.3): its plan is
+    /// emptied, its wait ended (decision D-871), and a directly
+    /// controlled entity is asked with a `Free` request, anyone else by
+    /// `decision_needed`. An action that is running runs on.
+    pub fn interrupt_plan(&mut self, who: EntityId, cause: Cause) -> Result<(), Reason> {
+        self.known(who)?;
+        self.clear_plan(who, None, cause);
+        // A wait is broken off too: what interrupts a plan interrupts
+        // waiting for an hour (decision D-871).
+        self.end_wait(who);
+        let control = self
+            .entities
+            .get(who)
+            .map_or(Control::None, |record| record.control());
+        let why = FreeReason::Interrupted(cause);
+        if control == Control::Direct {
+            if !self.decisions.has_free(who) {
+                self.request_decision(who, DecisionKind::Free { why }, cause)?;
+            }
+        } else {
+            self.emit(
+                Where::Entity(who),
+                cause,
+                EventBody::Act(ActEvent::DecisionNeeded {
+                    entity: who,
+                    control,
+                    why,
+                }),
+            );
+        }
+        Ok(())
+    }
+
+    /// Whether an entity is in a wait it was told to make (`Wait`, the
+    /// `wait` effect), not idling because nothing decided for it.
+    pub fn is_waiting(&self, entity: EntityId) -> bool {
+        self.actions.wait_of(entity).is_some_and(|wait| !wait.idle)
+    }
+
     /// The `ClearPlan` command.
     pub(crate) fn command_clear_plan(&mut self, entity: EntityId) -> Result<(), Reason> {
         self.controlled(entity)?;

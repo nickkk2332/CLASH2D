@@ -91,6 +91,9 @@ pub const COMMAND_WAIT: &str = "wait";
 pub const COMMAND_CANCEL: &str = "cancel";
 /// The command that empties the character's plan.
 pub const COMMAND_CLEAR_PLAN: &str = "clear_plan";
+/// The command that breaks off the character's wait and plan and asks it
+/// what it does (`Interrupt`, D-931).
+pub const COMMAND_INTERRUPT: &str = "interrupt";
 /// The command that answers a choice.
 pub const COMMAND_CHOOSE: &str = clash_scene::control::COMMAND_CHOOSE;
 /// The command that answers a window with a reaction.
@@ -252,6 +255,7 @@ fn build(session: &Session, command: &UiCommand) -> Result<Command, String> {
                 })
             }
             COMMAND_CLEAR_PLAN => Ok(Command::ClearPlan { entity: player }),
+            COMMAND_INTERRUPT => Ok(Command::Interrupt { entity: player }),
             COMMAND_USE_ABILITY => {
                 let sim = &session.sim;
                 let ability = command
