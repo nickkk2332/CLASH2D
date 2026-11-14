@@ -1481,8 +1481,12 @@ middle of a wait loads into the same levels. Nothing the party
 perceives changes: every tract within reach of its senses stays loaded
 and hot. A wait of less than `sim.rest_from`, a minute's (`p`), is
 waited at full detail, so a run of short waits does not unload and load
-the country round the party each time. `low_attention` actions are not
-built.
+the country round the party each time. A creature that is no resident
+(09 §10.6) and stands in a tract that goes cold is shelved where it
+stands (02 §9.5), not stepped as an agent, so a game in which something
+comes from afar while the party waits, the bundled `last_stand`, keeps
+the levels off (D-933). Not built: a resting party's ticket reaching as
+far as such creatures, and `low_attention` actions.
 
 ## 12. What presentation is given
 

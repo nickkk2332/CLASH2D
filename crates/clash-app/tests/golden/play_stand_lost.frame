@@ -11,7 +11,7 @@ chars
 |                       ....!...                       │                        │|
 |          ┌ Last stand ──────────────────────────────────────────────┐         │|
 |          │Lost.                                                     │         │|
-|          │Played for 0:00:47.                                       │         │|
+|          │Played for 0:00:43.                                       │         │|
 |          │[ ] Get inside the house.                                 │         │|
 |          │[ ] Hold out until dawn.                                  │         │|
 |          │                                                          │         │|
@@ -19,9 +19,9 @@ chars
 |          └──────────────────────────────────────────────────────────┘         │|
 |                                                      │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
-|│Ada is wounded.                                    │││                        │|
 |│Ada staggers.                                      │││                        │|
-|│The person strikes Ada.                            │││Tab target f hit s shoot│|
+|│The person strikes Ada.                            │││                        │|
+|│Nobody is in sight to choose.                      │││Tab target f hit s shoot│|
 |│Unconscious, and cannot act until they come to     │││x look  i things  c body│|
 |│The game has ended: lost.                          █││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|
