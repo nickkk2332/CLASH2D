@@ -39,14 +39,11 @@ pub fn reading_of(sim: &Sim, signal: &Signal, observer: EntityId, sense: SenseId
         return None;
     }
     let eye = signal::eye_of(sim, observer)?;
-    if !senses::sense_works(sim, observer, def.function) {
+    if !senses::sense_on(sim, observer, def) {
         return None;
     }
     let slot = sim.components.senses.get(observer)?.slot(sense)?;
-    let threshold = match slot.threshold() {
-        Some(threshold) => threshold,
-        None => senses::threshold_of(sim, observer, sense)?,
-    };
+    let threshold = senses::threshold_now(sim, observer, sense, def, slot)?;
     if !def.planes
         && let Some(about) = signal.about
     {
@@ -73,8 +70,14 @@ pub fn reading_of(sim: &Sim, signal: &Signal, observer: EntityId, sense: SenseId
 /// one sense of an observer whose eye is at `eye` at or over its
 /// threshold (over the warm factor times it, for a warm observer), with
 /// nothing in its way: [`signal::bound_at`], the most of it that could
-/// arrive, against the threshold [`reading_of`] would use. Never false
-/// for a signal [`receive`] would take from there (D-894).
+/// arrive, against the threshold [`reading_of`] would use; for a
+/// message that `involved` the listener, the ordinary threshold however
+/// warm it is (D-934). Never false for a signal [`receive`] would take
+/// from there (D-894).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one listener weighed against a signal, with what was worked out once for all"
+)]
 pub(super) fn could_receive(
     sim: &Sim,
     kind: &super::defs::KindInfo,
@@ -83,6 +86,7 @@ pub(super) fn could_receive(
     observer: EntityId,
     sense: SenseId,
     eye: Spot,
+    involved: bool,
 ) -> bool {
     let Some(slot) = sim
         .components
@@ -92,9 +96,18 @@ pub(super) fn could_receive(
     else {
         return false;
     };
-    let Some(threshold) = slot
-        .threshold()
-        .or_else(|| senses::threshold_of(sim, observer, sense))
+    // One whose state stops the sense (D-930) is not waited for.
+    if sim
+        .perception_defs
+        .sense(sense)
+        .is_some_and(|def| senses::stopped(sim, observer, &def.stopped_by))
+    {
+        return false;
+    }
+    let Some(threshold) = sim
+        .perception_defs
+        .sense(sense)
+        .and_then(|def| senses::threshold_now(sim, observer, sense, def, slot))
     else {
         return false;
     };
@@ -109,7 +122,21 @@ pub(super) fn could_receive(
     }
     let clarity = most / threshold.max(MIN_THRESHOLD);
     let warm = crate::ai::warm::is_warm(sim, observer) || detect::is_warm(sim, eye.loc);
-    clarity >= if warm { warm_factor(sim) } else { Real::ONE }
+    clarity
+        >= if warm && !involved {
+            warm_factor(sim)
+        } else {
+            Real::ONE
+        }
+}
+
+/// Whether a signal carries a message that involves an observer
+/// (D-934): heard at the ordinary threshold however warm it is.
+pub(super) fn involving(sim: &Sim, signal: &Signal, observer: EntityId) -> bool {
+    signal
+        .message
+        .as_ref()
+        .is_some_and(|message| crate::social::speech::involves(sim, message, observer))
 }
 
 /// A signal reached an observer's sense (15 §6). If it is received at or
@@ -125,10 +152,17 @@ pub(super) fn receive(sim: &mut Sim, signal: &Signal, observer: EntityId, sense:
     if clarity < Real::ONE {
         return false;
     }
-    let warm = crate::ai::warm::is_warm(sim, observer)
+    let stepped_warm = crate::ai::warm::is_warm(sim, observer);
+    let warm = stepped_warm
         || signal::eye_of(sim, observer).is_some_and(|eye| detect::is_warm(sim, eye.loc));
-    if warm && clarity < warm_factor(sim) {
+    // A message that involves the listener is heard at its ordinary
+    // threshold, and promotes one stepped warm (D-934).
+    let involved = warm && involving(sim, signal, observer);
+    if warm && !involved && clarity < warm_factor(sim) {
         return false;
+    }
+    if involved && stepped_warm {
+        crate::ai::warm::promote(sim, observer, crate::ai::warm::Why::Involved);
     }
     let defs = Arc::clone(&sim.perception_defs);
     let identifies = defs.kind(signal.kind).is_some_and(|kind| kind.identifies);

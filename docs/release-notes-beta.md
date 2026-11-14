@@ -156,10 +156,11 @@ play, and what trying the game headless on the build branch showed.
 - **A single save is written only when the game is left.** Last stand
   keeps one save; it is not written at intervals, so a crash loses the
   night.
-- **The market town is slow to wait in.** With every resident about, a
-  minute waited in the square takes about 1.9 seconds of real time
-  (release build), an hour about two minutes: the errand's five hours
-  are long to wait out. Elsewhere an hour takes seconds.
+- **The market town is still not quick to wait in by day.** A minute
+  waited in the square takes under a second of real time (release
+  build), and an hour about six seconds by day and one at night: the
+  country beyond your sight and hearing is simulated coarsely while you
+  wait, and any key stops a wait. The target is five seconds an hour.
 - **The window was not seen on a real screen** before the beta: it is
   tested headless, image by image. If it misbehaves, `--terminal` plays
   the same game. Changing the theme in play does not change the

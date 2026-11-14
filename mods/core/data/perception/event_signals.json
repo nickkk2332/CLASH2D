@@ -27,6 +27,6 @@
     "signal": "sound", "strength": "0.4 * event.volume", "salience": 0.4, "about": "self",
     "doc": "Someone says something (a mind's `say` step): an ordinary voice carries about as far as a dozen footsteps." },
   { "type": "event_signal", "id": "footsteps", "event": "entity_relocated",
-    "signal": "sound", "strength": 0.2, "if": "here != null", "about": "self",
-    "doc": "Someone or something moves from cell to cell. Movement definitions that say how loud they are (06 §11) will give off their own." }
+    "signal": "sound", "strength": "if self.has_tag('soft_steps') then 0.05 else 0.2", "if": "here != null", "about": "self",
+    "doc": "Someone or something moves from cell to cell: a quarter as loud for one treading softly (the tag `soft_steps`, which crouching and lying prone give), which is how one sneaks past a sleeper (D-930). Movement definitions that say how loud they are (06 §11) will give off their own." }
 ]

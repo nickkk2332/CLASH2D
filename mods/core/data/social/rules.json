@@ -22,6 +22,28 @@
     "do": [ { "remember": { "who": "self", "event": "core:help_called", "at": "event.where",
                             "salience": 0.9, "actor": "speaker" } } ] },
 
+  { "type": "eoc", "id": "heed_alarm", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:alarm" },
+    "if": "self.in_group('core:watch')",
+    "doc": "A member of the watch who hears someone shout for the watch remembers it as a call for help (`core:help_called`), where it came from, as `core:heed_help` does.",
+    "do": [ { "remember": { "who": "self", "event": "core:help_called", "at": "event.where",
+                            "salience": 0.9, "actor": "speaker" } } ] },
+
+  { "type": "eoc", "id": "pass_alarms_to_the_watch", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:alarm" },
+    "if": "event.report and self.in_group('core:watch') and not is_null(about)",
+    "doc": "A member of the watch who hears someone shout for the watch about someone adds what it was told of them to the watch's knowledge, as `core:pass_reports_to_the_watch` does for a report.",
+    "do": [ { "report_to_group": { "who": "self", "group": "core:watch", "about": "about" } } ] },
+
+  { "//": "Calls for help are passed on, once: one of the townsfolk who hears one and is not played by anyone shouts for the watch (an alarm, which is not passed on again), so that a call reaches a watchman at twice the reach of a voice, and no further (D-948).",
+    "type": "eoc", "id": "pass_on_a_call", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:help" },
+    "if": "self.in_group('core:townsfolk') and not self.in_group('core:watch') and self.control != 'direct' and now() - self.var.called_out_at > 30",
+    "doc": "One of the townsfolk not played by anyone who hears a call for help, and has not called out in the last half minute, shouts for the watch: an alarm, which the watch answers and the townsfolk do not pass on.",
+    "do": [ { "set": { "self.var.called_out_at": "now()" } },
+            { "say": { "who": "self", "kind": "core:alarm", "line": "core:alarm_calls",
+                       "event": "core:unprovoked_blow" } } ] },
+
   { "//": "A guard told what someone saw passes it to the watch, so that every guard knows it (15 §9.2).",
     "type": "eoc", "id": "pass_reports_to_the_watch", "on": "message_heard", "group": "social_life",
     "filter": { "kind": "core:report" },

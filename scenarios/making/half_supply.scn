@@ -20,4 +20,4 @@ expect event recipe_completed recipe=core:distil
 assert "@c:18,22,0.fixture.device.making == null"
 assert "@c:18,22,0.fixture.device.held('stowed')[0].holds_substance('core:ale') > 0.0000999"
 assert "@c:18,22,0.fixture.device.store('fuel') > 7.59 and @c:18,22,0.fixture.device.store('fuel') < 7.61"
-expect hash a5e5c12b92d5aeb128dceefff1445e23
+expect hash 09f51b3699f774403c18b68b753ba775

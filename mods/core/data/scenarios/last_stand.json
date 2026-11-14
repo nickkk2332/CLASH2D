@@ -4,6 +4,7 @@
     "doc": "A house on the lane at night, and strangers on the road. Hold out until dawn.",
     "intro": "It is ten at night. Three strangers are coming down the lane, one by one, and they mean you harm. Get into the house and hold out until dawn, at five.",
     "tags": ["survival"],
+    "settings": { "sim.max_hot_minds": 50, "sim.rest_levels": false },
     "worlds": [ { "realm": "countryside", "seed": "ask" } ],
     "start": {
       "characters": [ { "template": "person", "create": false, "pick": true } ],

@@ -73,6 +73,20 @@ row = "A minute's wait in the bundled town at night, in the square from 23:00"
 limit = "1 s"
 margin = 0.25
 
+[[budget]]
+bench = "town.hour_wait"
+spec = "09 §19"
+row = "An hour's wait in the bundled town, in the square from 09:00, as the bundled game waits it"
+limit = "5 s"
+margin = 0.25
+
+[[budget]]
+bench = "town.hour_wait_night"
+spec = "09 §19"
+row = "An hour's wait in the bundled town at night, in the square from 23:00, as the bundled game waits it"
+limit = "5 s"
+margin = 0.25
+
 # ---- 15 §17, perception and light ---------------------------------------
 
 [[budget]]

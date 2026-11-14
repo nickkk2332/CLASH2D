@@ -1,0 +1,23 @@
+# long_wait (D-932; 03 §11, 09 §9.4, §10.6): a twenty-minute wait in
+# the square of the market town, with the levels the bundled game sets
+# while the party rests. While the player waits a long wait, the tracts
+# beyond the reach of its senses fall to cold: the far corner of the
+# town is unloaded and its people are agents, following their routines;
+# within sight of the square the stall keepers keep their stalls as
+# before. The script's save-and-load mode saves and loads in the middle
+# of the wait. When the wait is over the town loads again round the
+# square, and the people of the far corner are where their routines put
+# them at twenty-five past nine: at work.
+use default seed=7
+begin core:town_life place=1
+advance 5s
+assert "core:doing_near(@c:2140,1120,0, 30, 'at_home') > 0"
+assert "core:doing_near(@self.loc, 60, 'keeping_stall') > 0"
+as @self do { "wait": { "who": "self", "time": 1200 } }
+advance 600s
+assert "core:doing_near(@c:2140,1120,0, 30, 'working') + core:doing_near(@c:2140,1120,0, 30, 'at_home') == 0"
+assert "core:doing_near(@self.loc, 60, 'keeping_stall') > 0"
+advance 600s
+assert "@self.loc.realm.time_of_day == 33605"
+assert "core:doing_near(@c:2140,1120,0, 30, 'working') > 0"
+expect hash ba7c05a9c59380bb36a31864338b1979

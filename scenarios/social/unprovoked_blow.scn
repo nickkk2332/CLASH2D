@@ -3,7 +3,7 @@
 # without cause in daylight, in front of a watchman and another
 # townsperson. The one struck feels it (`blow_felt`) and, seeing who did
 # it, is afraid of her; the townsperson who saw it is afraid of her too
-# and shouts for the watch; the watchman holds her hostile and goes for
+# and shouts for the watch (an alarm); the watchman holds her hostile and goes for
 # her, and reports her to the watch (`core:answer_a_blow`), so that a
 # watchman fifty metres off, who saw nothing, knows of her and holds her
 # hostile once he comes to see her (`core:recognise_an_offender`).
@@ -26,7 +26,7 @@ start_action @e:2 core:punch "{ 'target': @e:3 }"
 wait @e:2 1s
 advance 600ms
 expect event hit_landed actor=@e:2
-expect event message_heard kind=core:report
+expect event message_heard kind=core:alarm
 # The striker is handed to her own mind, so that time can pass without
 # asking the player how to answer the watchman's blows.
 control @e:2 delegated
@@ -39,4 +39,4 @@ assert "@e:6.remembers_actor(@e:2, 'core:unprovoked_blow') and @e:6.told_of('cor
 move @e:2 @c:58,60,0
 advance 2s
 assert "@e:6.perceives(@e:2) and @e:6.hostile(@e:2)"
-expect hash 404a45f69a181f30761e78d8c44aad55
+expect hash 1c18024f7b6f74e9e431e6da83d794ac

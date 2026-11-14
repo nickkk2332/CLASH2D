@@ -20,4 +20,4 @@ expect event message_heard kind=core:help within=10s
 advance 10s
 expect event goal_adopted goal=core:answer_call within=20s
 assert "core:pursuing_near(@c:2010,996,0, 30, 'core:confront') >= 3"
-expect hash 2716e49a707cd3f5943c6f4df75f0bac
+expect hash c0722d82764dfefeb88144afced9c0e3

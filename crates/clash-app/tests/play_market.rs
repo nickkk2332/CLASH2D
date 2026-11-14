@@ -309,13 +309,15 @@ fn a_fight_in_the_square_and_the_watch_answers() {
     let victim = victim.expect("someone in the square");
     assert!(walk_up_to_target(&mut run, 40), "{}", run.text());
 
-    // Blows until one lands, or a minute's worth of keys.
+    // Blows until one lands, or a minute's worth of keys; someone who
+    // gets away is let go, and whoever is next in sight taken instead.
     let before = log_len(&run);
     let mut hurt = false;
     for _ in 0..60 {
         answer(&mut run);
-        if !walk_up_to_target(&mut run, 6) {
-            break;
+        if !walk_up_to_target(&mut run, 12) {
+            press(&mut run, "tab");
+            continue;
         }
         press(&mut run, "f");
         if !["ui:play", "ui:reaction"].contains(&top(&run).as_str()) {

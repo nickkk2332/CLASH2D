@@ -91,6 +91,7 @@ pub mod reason;
 pub mod recipe;
 pub mod registry;
 pub mod reshape;
+pub mod rest;
 pub mod rule;
 pub mod scenario;
 mod sim;

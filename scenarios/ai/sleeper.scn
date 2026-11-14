@@ -1,0 +1,173 @@
+# sleeper (D-930; 06 §8.4, 15 §4): who perceives nothing, and sneaking
+# past a sleeper. Four observers in a row in the open: one asleep (the
+# bundled trait `asleep`), one awake, one dead and one unconscious (a
+# sleeping draught). A sneak, crouched, walks past them all two metres off: its steps
+# are under what a sleeper hears, so the sleeper, who sees nothing,
+# never perceives it. Then a walker, upright, walks the same way: its
+# first step close by wakes the sleeper (`core:woken_by_a_noise`), who
+# perceives it. The unconscious and the dead perceive neither; the
+# awake one hears both.
+use default seed=7
+gen core:testland size=1
+# Someone holds the tract hot, so that everyone in it sweeps.
+spawn creature as=p
+session @p @c:16,28,0
+spawn creature at @c:4,10,0 as=s
+attach_sense @s core:human_sight
+attach_sense @s core:human_hearing
+as @s do { "add_trait": { "to": "self", "trait": "core:asleep" } }
+spawn item at @c:28,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+remove @spot
+spawn creature at @c:20,10,0 as=d
+attach_sense @d core:human_sight
+attach_sense @d core:human_hearing
+as @d do { "create_mind": { "in": "self" } }
+as @d do { "die": { "who": "self" } }
+spawn creature at @c:12,10,0 as=a
+attach_sense @a core:human_sight
+attach_sense @a core:human_hearing
+advance 2s
+assert "@e:3.vital == 'awake'"
+as @e:3 do { "pool_add": { "who": "self", "pool": "core:sedation", "amount": 90 } }
+assert "@e:3.vital == 'unconscious' and @d.vital == 'dead'"
+move @e:3 @c:28,10,0
+advance 2s
+# The sneak, crouched, two metres south of the row of observers, a
+# step every half second.
+spawn creature at @c:0,12,0 as=q
+as @q do { "set_posture": { "who": "self", "posture": "core:crouched" } }
+advance 1s
+move @q @c:1,12,0
+advance 500ms
+move @q @c:2,12,0
+advance 500ms
+move @q @c:3,12,0
+advance 500ms
+move @q @c:4,12,0
+advance 500ms
+move @q @c:5,12,0
+advance 500ms
+move @q @c:6,12,0
+advance 500ms
+move @q @c:7,12,0
+advance 500ms
+move @q @c:8,12,0
+advance 500ms
+assert "@s.has_trait('core:asleep') and not perceives(@s, @q)"
+move @q @c:9,12,0
+advance 500ms
+move @q @c:10,12,0
+advance 500ms
+move @q @c:11,12,0
+advance 500ms
+move @q @c:12,12,0
+advance 500ms
+move @q @c:13,12,0
+advance 500ms
+move @q @c:14,12,0
+advance 500ms
+move @q @c:15,12,0
+advance 500ms
+move @q @c:16,12,0
+advance 500ms
+move @q @c:17,12,0
+advance 500ms
+move @q @c:18,12,0
+advance 500ms
+move @q @c:19,12,0
+advance 500ms
+move @q @c:20,12,0
+advance 500ms
+move @q @c:21,12,0
+advance 500ms
+move @q @c:22,12,0
+advance 500ms
+move @q @c:23,12,0
+advance 500ms
+move @q @c:24,12,0
+advance 500ms
+move @q @c:25,12,0
+advance 500ms
+move @q @c:26,12,0
+advance 500ms
+move @q @c:27,12,0
+advance 500ms
+move @q @c:28,12,0
+advance 500ms
+move @q @c:29,12,0
+advance 500ms
+move @q @c:30,12,0
+advance 500ms
+move @q @c:31,12,0
+advance 500ms
+assert "@s.has_trait('core:asleep') and not perceives(@s, @q)"
+assert "not perceives(@e:3, @q) and not perceives(@d, @q) and perceives(@a, @q)"
+# The walker, upright, the same way.
+spawn creature at @c:0,12,0 as=w
+advance 1s
+move @w @c:1,12,0
+advance 500ms
+move @w @c:2,12,0
+advance 500ms
+move @w @c:3,12,0
+advance 500ms
+move @w @c:4,12,0
+advance 500ms
+assert "not @s.has_trait('core:asleep') and @s.has_trait('core:woken') and perceives(@s, @w)"
+move @w @c:5,12,0
+advance 500ms
+move @w @c:6,12,0
+advance 500ms
+move @w @c:7,12,0
+advance 500ms
+move @w @c:8,12,0
+advance 500ms
+move @w @c:9,12,0
+advance 500ms
+move @w @c:10,12,0
+advance 500ms
+move @w @c:11,12,0
+advance 500ms
+move @w @c:12,12,0
+advance 500ms
+move @w @c:13,12,0
+advance 500ms
+move @w @c:14,12,0
+advance 500ms
+move @w @c:15,12,0
+advance 500ms
+move @w @c:16,12,0
+advance 500ms
+move @w @c:17,12,0
+advance 500ms
+move @w @c:18,12,0
+advance 500ms
+move @w @c:19,12,0
+advance 500ms
+move @w @c:20,12,0
+advance 500ms
+move @w @c:21,12,0
+advance 500ms
+move @w @c:22,12,0
+advance 500ms
+move @w @c:23,12,0
+advance 500ms
+move @w @c:24,12,0
+advance 500ms
+move @w @c:25,12,0
+advance 500ms
+move @w @c:26,12,0
+advance 500ms
+move @w @c:27,12,0
+advance 500ms
+move @w @c:28,12,0
+advance 500ms
+move @w @c:29,12,0
+advance 500ms
+move @w @c:30,12,0
+advance 500ms
+move @w @c:31,12,0
+advance 500ms
+assert "not perceives(@e:3, @w) and not perceives(@d, @w) and perceives(@a, @w)"
+expect hash 3f5e89a87d5d095e3d2d06712c72e9e9

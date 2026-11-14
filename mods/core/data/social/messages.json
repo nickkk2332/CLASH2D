@@ -9,8 +9,11 @@
     "doc": "A greeting, said in passing." },
   { "type": "message_kind", "id": "warn", "name": "warning", "strength": 3,
     "doc": "A warning, said loudly: stop, stay back." },
-  { "type": "message_kind", "id": "help", "name": "call for help", "strength": 8,
-    "doc": "A shout for help: the watch answers it (`core:heed_help`)." },
+  { "type": "message_kind", "id": "help", "name": "call for help", "strength": 8, "calls": true,
+    "doc": "A shout for help: the watch answers it (`core:heed_help`). A call: whoever is simulated warm hears it as if hot, and is brought to full detail by it (D-934)." },
+  { "type": "message_kind", "id": "alarm", "name": "alarm", "carries": "report", "belief": 0.5,
+    "strength": 8, "calls": true,
+    "doc": "Shouting for the watch: what one saw, or that someone called for help, said loud enough to carry to the edge of hearing. A call (D-934) that carries a report: whoever hears it is told what the shouter saw of the blow it shouts about. The watch answers it as a call for help (`core:heed_alarm`) and passes what it tells on to the watch (`core:pass_alarms_to_the_watch`); the townsfolk do not shout it on (D-948)." },
   { "type": "message_kind", "id": "threaten", "name": "threat", "strength": 2,
     "doc": "A threat." }
 ]

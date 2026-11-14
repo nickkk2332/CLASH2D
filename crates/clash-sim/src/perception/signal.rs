@@ -712,7 +712,17 @@ pub fn emit_signal(sim: &mut Sim, signal: Signal) -> Result<Emitted, Reason> {
             // against the listener's threshold once, as it is given off.
             // One that could not hear it from where it stands is not
             // waited for.
-            if !percept::could_receive(sim, kind, signal.strength, source, observer, sense, eye) {
+            let involved = percept::involving(sim, &signal, observer);
+            if !percept::could_receive(
+                sim,
+                kind,
+                signal.strength,
+                source,
+                observer,
+                sense,
+                eye,
+                involved,
+            ) {
                 continue;
             }
             launch(sim, &signal, observer, sense, clock, speed, distance);

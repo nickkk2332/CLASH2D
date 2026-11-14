@@ -23,4 +23,4 @@ advance 2s
 move @e:1 @c:17,12,0
 expect event ability_restored ability=core:shield
 assert "@e:1.ability('core:shield').state == 'active' and not @e:1.ability('core:shield').mode_on('raised')"
-expect hash a596555dde209282be57a62c0f1e10a2
+expect hash facc8a9d7a5dc50e97588f42512d064a

@@ -10,7 +10,7 @@
         "else": [ { "set_relation": { "who": "self", "toward": "$toward", "kind": "core:fearful",
                                       "value": "max(self.rel('core:fearful', $toward) ?? 0, self.weight('caution') ?? 0)" } } ] } ] },
 
-  { "//": "A blow seen, heard or felt: the one who struck is taken against, unless the one struck is someone the witness itself holds hostile or fears (a blow against a foe is no offence to it), or the striker itself (what a blow jars back into the hand that struck it, 07 §6.3). The first time it puts this striker to such a blow it remembers it as `core:unprovoked_blow`; a member of the watch reports it to the watch, whose every member is told at once (15 §9.2); one of the townsfolk not played by anyone, and afraid (its caution not outweighed by its duty), shouts for the watch, a report heard by whoever is in earshot, which a watchman who hears it passes to the watch (`core:pass_reports_to_the_watch`). Calling for help and running are its mind's goals (`flee_danger`).",
+  { "//": "A blow seen, heard or felt: the one who struck is taken against, unless the one struck is someone the witness itself holds hostile or fears (a blow against a foe is no offence to it), or the striker itself (what a blow jars back into the hand that struck it, 07 §6.3). The first time it puts this striker to such a blow it remembers it as `core:unprovoked_blow`; a member of the watch reports it to the watch, whose every member is told at once (15 §9.2); one of the townsfolk not played by anyone, and afraid (its caution not outweighed by its duty), shouts for the watch, an alarm (`core:alarm`, a call that carries a report) heard by whoever is in earshot, however far from attention (D-934), which a watchman who hears it answers and passes to the watch (`core:heed_alarm`, `core:pass_alarms_to_the_watch`). Calling for help and running are its mind's goals (`flee_danger`).",
     "type": "eoc", "id": "answer_a_blow", "on": "perceived", "group": "social_life",
     "filter": { "event": "hit_landed" },
     "if": "not is_null(event.about_actor) and event.about_actor != self and (event.signal == 'core:touch' or is_null(about) or (about != event.about_actor and not (self.hostile(about) or self.fears(about))))",
@@ -25,7 +25,8 @@
             "then": [ { "report_to_group": { "who": "self", "group": "core:watch",
                                              "event": "core:unprovoked_blow", "about": "event.about_actor ?? self" } } ],
             "else": [ { "if": "self.in_group('core:townsfolk') and self.control != 'direct' and (self.weight('caution') ?? 0) >= (self.weight('duty') ?? 0)",
-                        "then": [ { "say": { "who": "self", "kind": "core:report", "about": "event.about_actor ?? self",
+                        "then": [ { "set": { "self.var.called_out_at": "now()" } },
+                                  { "say": { "who": "self", "kind": "core:alarm", "about": "event.about_actor ?? self",
                                              "event": "core:unprovoked_blow", "line": "core:alarm_calls",
                                              "strength": 8 } } ] } ] } ] } ] },
 

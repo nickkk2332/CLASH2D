@@ -1340,6 +1340,21 @@ D-650). These are refused with a reason and change nothing:
 | `not_dead` | `revive` of one that is not dead | `entity` |
 | `same_entity` | An entity named as its own driver or as where its own mind goes | `entity` |
 
+**What a stopped mind perceives** (D-930). A vital state stops no sense
+by itself: each sense says which states stop it (its `stopped_by`,
+15 §4), vital states of its owner's mind and tags its owner carries.
+The bundled senses are stopped by `unconscious` and `dead`, and sight
+by the tag `asleep` too, so the dead and the unconscious perceive
+nothing and a sleeper hears but does not see. Being asleep is not a
+vital state: a sleeper's mind is awake and decides as ever; in the
+bundled content the trait `asleep` (given by the rule
+`core:fall_asleep` to a mind that takes up the `sleep` goal) carries
+the tag.
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.vital` | `string?` | `awake`, `unconscious` or `dead`; null for an entity with no mind. Not safe for belief. Changed by `entity_died`, `entity_revived`, `entity_unconscious`, `entity_woke` and `mind_transferred` |
+
 Not built: beliefs, relations and senses moving with a mind (15); the
 `mind` definition type (09); where abilities come from after a transfer
 (08 §3.4).

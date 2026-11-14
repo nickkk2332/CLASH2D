@@ -1,0 +1,12 @@
+[
+  { "//": "Sleep (06 §8.4, 15 §4; D-930). The engine has no idea of sleep: a sleeper is whoever carries the tag `asleep`, which this trait gives. The bundled senses say what it does: `human_sight` is stopped by it, and `human_hearing` works on with a threshold twenty times its waking one, so only a sound that loud at the ear is heard, and whatever is heard wakes the sleeper (`rules/sleep.json`). A sneak whose steps stay under it passes unseen.",
+    "type": "trait", "id": "asleep", "name": "Asleep",
+    "description": "Eyes shut, breathing slow.",
+    "tags": ["asleep"] },
+
+  { "//": "Just woken: for a minute a sleeper lies awake, seeing and hearing as ever, before it drops off again (`rules/sleep.json`).",
+    "type": "trait", "id": "woken", "name": "Woken",
+    "description": "Roused, and listening.",
+    "duration": "1 min", "stacking": "refresh",
+    "tags": ["woken"] }
+]

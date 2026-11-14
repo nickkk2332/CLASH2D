@@ -446,6 +446,18 @@ were not taught to search the house (known issue 1 below).
 | A variable set just before `fail_objective` read as unset in `on_failed` | The errand failed as "Night has fallen" when the parcel was left behind | Not the scenario runtime, which reads it set: the errand wrote `"'left'"`, which a text field takes as written, quotes and all, so `== 'left'` was false. The loader warns of quoted text (`W0679`, D-946); the errand writes `left` |
 | Binding a wound "needed a free hand" | The brawler at the door bled to death with bandages on the table | It never did (16 §3.3: `held` is anything carried); the brawler held two clubs and had no hand to take the bandages up. One binding used up both bandages of a stack: now one (D-947) |
 
+### The watch at the cap of 50
+
+Smooth play set the bundled games' attention cap to 50 hot minds but for
+the market town, where the watch then answered no brawl: the watchmen
+39 to 43 m off were warm, the call for help was given beyond hearing's
+40 m, and warm characters do not see blows. A call is now passed on once
+(D-948): one of the townsfolk who hears it shouts for the watch, an
+alarm the watch answers and the townsfolk do not pass on again. With it
+the brawl of `town_life.rs` at 50 draws a watchman who arrives and goes
+for the brawlers (without the relay, at 50, none comes), and
+`town_life` runs at 50 like the other bundled games.
+
 ### What changed in the earlier sessions
 
 - **Golden frames blessed again**, each for a change looked at:
@@ -483,7 +495,7 @@ Worst first.
    §8.3 to §8.5).
 4. **Part of what was to be played was not**: a bandage made, a poisoned
    blade, the pistol in a fight, a disguise in the application.
-5. **Waiting among the town's people is over its budget at the bundled
-   cap** (the second round's issue 2, unchanged: the "smooth play"
-   stream's).
+5. **A call for help reaches twice a voice's reach and no further**: a
+   brawl far from any watchman, with nobody between to pass the call
+   on, is still answered by nobody.
 6. **Residents do not eat** (D-906).

@@ -522,6 +522,9 @@ fn an_entity_answers_for_itself() {
         .chain(clash_sim::social::properties().iter())
         .chain(clash_sim::offer::properties().iter())
         .chain(clash_sim::agent::properties().iter())
+        // `entity.vital` is read awake, unconscious and dead by the test
+        // script `scenarios/ai/sleeper.scn`.
+        .chain(clash_sim::mind::properties().iter())
         .map(|property| property.name)
         .collect();
     for property in engine_properties() {

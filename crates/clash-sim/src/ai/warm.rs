@@ -254,9 +254,16 @@ impl Levels {
 
 // ---- reading ---------------------------------------------------------------
 
-/// The cap in force.
+/// The cap in force: `sim.max_hot_minds`, and no more than
+/// `sim.rest_max_hot_minds` while the party rests (D-932).
 pub fn max_hot(sim: &Sim) -> usize {
-    usize::try_from(sim.setting_int(MAX_HOT_SETTING, DEFAULT_MAX_HOT).max(0)).unwrap_or(usize::MAX)
+    let cap = usize::try_from(sim.setting_int(MAX_HOT_SETTING, DEFAULT_MAX_HOT).max(0))
+        .unwrap_or(usize::MAX);
+    if crate::rest::is_resting(sim) {
+        cap.min(crate::rest::rest_max_hot(sim))
+    } else {
+        cap
+    }
 }
 
 /// Whether a character is stepped warm.
@@ -304,12 +311,14 @@ fn schedule(sim: &mut Sim) {
     if sim.ai.levels.stepper.is_some() {
         return;
     }
+    // Wider while the party rests (D-932).
+    let step = crate::rest::warm_step(sim);
     if let Ok(id) = sim.schedule_on(
         ClockId::UNIVERSAL,
-        WARM_STEP,
+        step,
         Wake::new(WakeDomain::Stepper, 0, WAKE_WARM),
     ) {
-        sim.ai.levels.stepper = Some((sim.now() + WARM_STEP, id));
+        sim.ai.levels.stepper = Some((sim.now() + step, id));
     }
 }
 
