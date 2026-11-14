@@ -672,6 +672,76 @@ pub fn offers_near(sim: &Sim, user: EntityId) -> Vec<(Target, Vec<Offer>)> {
         .collect()
 }
 
+/// The furthest, in metres, [`places_offering`] looks from where it is
+/// asked: a house and the rooms about it, never a town.
+pub const MAX_PLACES_RADIUS_M: f64 = 16.0;
+
+/// The elements within `radius_m` metres of `at` (as `dist` measures,
+/// a storey counting three), blocks and fixtures, whose definition lists
+/// the interaction, nearest `at` first and then in order of cell
+/// (storey, row, column), a cell's block before its fixture, leaving out
+/// those whose cell is in `except` (09 §4.1, the function `places`).
+/// What elements stand where, and what their definitions offer, is
+/// static geometry (09 §3.4), so any mind may know it; an element whose
+/// definition is tagged `hidden` is not listed, nor are cells that are
+/// not loaded. The radius is held to [`MAX_PLACES_RADIUS_M`].
+pub fn places_offering(
+    sim: &Sim,
+    at: Location,
+    radius_m: Real,
+    interaction: InteractionId,
+    except: &[Location],
+) -> Vec<(Location, Layer)> {
+    let radius = radius_m.min(Real::of(MAX_PLACES_RADIUS_M));
+    if !radius.is_finite() || radius < Real::ZERO {
+        return Vec::new();
+    }
+    let reach = radius.floor().to_i32();
+    let storeys = (radius / clash_world::dims::STOREY_M).floor().to_i32();
+    let world = sim.cosmos.defs();
+    let mut found: Vec<(Real, Location, Layer)> = Vec::new();
+    for dz in -storeys..=storeys {
+        for dy in -reach..=reach {
+            for dx in -reach..=reach {
+                let cell = CellPos::new(at.cell.x + dx, at.cell.y + dy, at.cell.z + dz);
+                let Ok(loc) = sim.cosmos.normalize(Location::new(at.grid, cell)) else {
+                    continue;
+                };
+                let Some(distance) = sim.cosmos.delta(at, loc).map(clash_world::distance_m) else {
+                    continue;
+                };
+                if distance > radius || except.contains(&loc) {
+                    continue;
+                }
+                let offering = [Layer::Block, Layer::Fixture].into_iter().find(|layer| {
+                    let Some(state) = belief::element(sim, loc, *layer) else {
+                        return false;
+                    };
+                    let hidden = world.element(*layer, state).is_some_and(|element| {
+                        element
+                            .tags
+                            .iter()
+                            .any(|tag| tag == crate::perception::paths::HIDDEN_TAG)
+                    });
+                    !hidden && listed(sim, Target::Element(loc, *layer)).contains(&interaction)
+                });
+                if let Some(layer) = offering {
+                    found.push((distance, loc, layer));
+                }
+            }
+        }
+    }
+    found.sort_by(|(a, a_at, _), (b, b_at, _)| {
+        a.cmp(b).then_with(|| {
+            (a_at.cell.z, a_at.cell.y, a_at.cell.x).cmp(&(b_at.cell.z, b_at.cell.y, b_at.cell.x))
+        })
+    });
+    found
+        .into_iter()
+        .map(|(_, loc, layer)| (loc, layer))
+        .collect()
+}
+
 /// Where a target is from its user, in a word: `here`, `held`, one of
 /// the eight compass directions on the user's storey, or `up` or
 /// `down`; empty where it cannot be said.

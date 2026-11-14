@@ -27,7 +27,7 @@
       "closed": {},
       "open": { "remove_flags": ["opaque"], "glyph": { "ch": "[" } }
     },
-    "interactions": ["open", "close", "store", "retrieve", "hide_inside", "get_out"],
+    "interactions": ["open", "close", "store", "retrieve", "hide_inside", "get_out", "search"],
     "device": "wardrobe",
     "glyph": { "ch": "Θ", "fg": "material" } },
 

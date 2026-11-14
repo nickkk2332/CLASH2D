@@ -1,0 +1,24 @@
+# A searcher finds someone hidden in a wardrobe (decision D-950; 09
+# §4.1; scene S13). Someone it holds hostile was last known by the
+# wardrobe and cannot be seen: the `guard` mind takes up
+# `search_hiding_places`, walks to the wardrobe (the one place about
+# there that offers `core:search`), searches it and brings out whoever
+# hides in it. What it was told is all it goes on: nothing tells it
+# that anyone is inside.
+use default seed=7
+gen core:test_city size=1
+spawn creature as=w
+session @w @c:641,660,0
+set @c:652,641,0 fixture core:wardrobe
+spawn creature at @c:651,641,0 as=h
+as @h do { "interact": { "who": "self", "target": "offset(self.loc, 1, 0, 0).fixture", "interaction": "core:hide_inside" } }
+assert "@h.container != null"
+as @c:640,641,0 do { "spawn": { "template": "core:person", "also": ["core:guard"], "at": "self" } }
+set_stance who=@e:3v0 of=@h stance=hostile
+add_track who=@e:3v0 of=@h at=@c:651,641,0 how=told confidence=0.8
+advance 5s
+assert "@e:3v0.goal == 'core:search_hiding_places'"
+advance 20s
+expect event interacted
+assert "@h.container == null"
+expect hash fcbe0d11bc5f6d5af31fab16064f7c0d

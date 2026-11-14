@@ -1711,14 +1711,27 @@ fn begin(sim: &mut Sim, mind: EntityId, step: &Step, held: &Held, about: &Value)
             let params = with_eval(sim, mind, |ev| {
                 act.params
                     .iter()
-                    .map(|(name, expr)| {
-                        (
-                            name.clone(),
-                            ev.value(expr, ev.with_about(about)).to_stored(),
-                        )
-                    })
-                    .collect::<Vec<(String, Stored)>>()
+                    .map(|(name, expr)| (name.clone(), ev.value(expr, ev.with_about(about))))
+                    .collect::<Vec<(String, Value)>>()
             });
+            // A step's parameters are compiled without knowing the
+            // action's, so `'core:search'` stays text: it is resolved
+            // where the parameter takes a definition, as 05 §9 resolves
+            // a text where an id is wanted (decision D-952).
+            let def = sim
+                .defs
+                .try_registry::<ActionDef>()
+                .and_then(|registry| registry.try_get(act.action.id()));
+            let params = params
+                .into_iter()
+                .map(|(name, value)| {
+                    let value = def
+                        .and_then(|def| def.param(&name))
+                        .and_then(|param| as_definition(sim, param.ty(), &value))
+                        .unwrap_or(value);
+                    (name, value.to_stored())
+                })
+                .collect::<Vec<(String, Stored)>>();
             start(sim, mind, kind, act.action.id(), &params)
         }
         StepKind::Choose => {
@@ -2022,6 +2035,19 @@ pub(super) fn take_back(sim: &mut Sim, mind: EntityId, id: crate::later::ActionI
     {
         pending.action = Some(id);
     }
+}
+
+/// A text given for a parameter that takes a definition (`id<T>`), as
+/// that definition; `None` where the parameter takes none, the value is
+/// not text, or it names nothing, and the value is given as it is, for
+/// the action to refuse with its reason.
+fn as_definition(sim: &Sim, ty: &clash_expr::Type, value: &Value) -> Option<Value> {
+    let clash_expr::Type::Id(def_type) = ty.non_null() else {
+        return None;
+    };
+    let text = value.as_str()?;
+    let found = sim.exprs.registry().def_ref(*def_type, text)?;
+    Some(Value::Id(found))
 }
 
 /// Starts an action as a step.

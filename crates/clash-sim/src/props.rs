@@ -1634,6 +1634,49 @@ pub(crate) fn functions() -> Vec<FunctionDef> {
         .optional("dz", "int", "Storeys up. Zero if left out.")
         .safe(),
         f(
+            "places",
+            "list<element>",
+            GROUP_SPACE,
+            "The elements, blocks and fixtures, within `radius` metres of a cell (as `dist` measures, a storey counting three; at most 16) whose definition lists an interaction, nearest the cell first and then by cell (storey, row, column), leaving out those whose cell is in `except`: where a searcher goes to look (09 §4.1). Which elements stand where and what their definitions offer is static geometry (09 §3.4), known to every mind, so it is safe for belief; an element tagged `hidden` is not listed, nor is a cell that is not loaded. Not what state anything is in or what it holds. Empty for an interaction that is not loaded.",
+            |sim, args| {
+                let Some(Subject::Loc(at) | Subject::Element(at, _)) =
+                    args.first().and_then(|at| sim.subject_of(at))
+                else {
+                    return Value::list(std::iter::empty());
+                };
+                let radius = args.get(1).and_then(Value::as_number).unwrap_or(Real::ZERO);
+                let Some(interaction) = args
+                    .get(2)
+                    .and_then(Value::as_str)
+                    .and_then(|name| crate::interaction::lookup(sim, name))
+                else {
+                    return Value::list(std::iter::empty());
+                };
+                let except: Vec<Location> = args
+                    .get(3)
+                    .and_then(Value::as_list)
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|value| match sim.subject_of(value) {
+                                Some(Subject::Loc(loc) | Subject::Element(loc, _)) => Some(loc),
+                                _ => None,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Value::list(
+                    crate::interaction::places_offering(sim, at, radius, interaction, &except)
+                        .into_iter()
+                        .map(|(loc, layer)| sim.subject_value(Subject::Element(loc, layer))),
+                )
+            },
+        )
+        .arg("at", "any", "The cell to look about, or an element (its cell). Null gives an empty list.")
+        .arg("radius", "real", "How far from it, in metres.")
+        .arg("interaction", "string", "The qualified id of the interaction (`core:search`).")
+        .optional("except", "list<any>", "Cells, or elements by their cell, to leave out: those already searched.")
+        .safe(),
+        f(
             "los",
             "bool?",
             GROUP_SPACE,

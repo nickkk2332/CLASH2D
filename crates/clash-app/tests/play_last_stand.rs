@@ -273,45 +273,47 @@ fn night_inside(template: Option<usize>, name: &str) -> Headless {
             until_asked(&mut run, 60);
         }
     }
-    hold_out(&mut run, 1500);
+    hold_out(&mut run, 3000);
     run
 }
 
 #[test]
-fn fighting_at_the_door_an_ordinary_person_kills_the_first_and_falls() {
+fn fighting_at_the_door_an_ordinary_person_kills_the_first_and_lives() {
     let run = night_inside(None, "ordinary");
-    // One stranger at a time: the first is beaten to death at the door,
-    // and the wounds of the fight (blows stopped on the forearms cut
-    // them) kill the one who stood there.
-    assert_eq!(outcome(&run), "lost", "{:?}", log_text(&run));
+    // Until the strangers searched (D-950) the first was beaten to death
+    // at the door and the wounds of the fight killed the one who stood
+    // there. Now the first, who saw her go in, comes in to search and is
+    // fought in the lit room and killed; the two after him walk the lane
+    // and never perceive her in the house, so nobody searches it again,
+    // and her bound wounds hold until dawn (`docs/playtest-beta.md`, the
+    // fourth round).
+    assert_eq!(outcome(&run), "survived", "{:?}", log_text(&run));
     assert_eq!(deaths(&run), 1, "{:?}", log_text(&run));
     let lines = log_text(&run);
     assert!(lines.iter().any(|line| line == "Ada is wounded."));
-    assert!(lines.iter().any(|line| line == "Ada falls senseless."));
 }
 
 #[test]
-fn a_brawler_at_the_door_kills_all_three_and_bleeds_to_death() {
+fn a_brawler_at_the_door_kills_the_first_and_lives() {
     let run = night_inside(Some(BRAWLER), "brawler");
-    // The club wins every fight; nothing binds the wounds (the bandages
-    // are never taken up: both hands hold a club, his own and the
-    // table's; a bandage carried binds with both hands full, D-947) and
-    // the night is lost after the third, at one in the morning.
-    assert_eq!(deaths(&run), 3, "{:?}", log_text(&run));
-    assert_eq!(outcome(&run), "lost", "{:?}", log_text(&run));
-    assert!(time_of_day(&run) < 2.0 * 3600.0);
+    // Until the strangers searched (D-950) the club won every fight at
+    // the door and the brawler bled to death after the third, at one.
+    // Now the first comes in to search and dies by the club; the others
+    // never perceive him in the house, and the night is won.
+    assert_eq!(outcome(&run), "survived", "{:?}", log_text(&run));
+    assert_eq!(deaths(&run), 1, "{:?}", log_text(&run));
 }
 
-#[test]
-fn hidden_in_the_dark_house_until_dawn() {
-    let data = DataDir::new("stand-dark");
-    let mut run = boot_default(data.path(), 4);
-    begin(&mut run);
-    get_inside(&mut run);
-    // The lamp in the room put out: the house dark again.
-    let here = player_loc(&run).unwrap();
-    let lamp = (-4..=4)
+/// The nearest cell within four of the character whose fixture is
+/// named by a word (`lamp`, `wardrobe`): what a player sees in the room.
+fn fixture_near(run: &Headless, word: &str) -> Option<Location> {
+    let here = player_loc(run).unwrap();
+    let mut cells: Vec<(i32, i32)> = (-4..=4)
         .flat_map(|dx| (-4..=4).map(move |dy| (dx, dy)))
+        .collect();
+    cells.sort_by_key(|(dx, dy)| dx.abs().max(dy.abs()));
+    cells
+        .into_iter()
         .map(|(dx, dy)| Location::new(here.grid, here.cell + clash_core::IVec3::new(dx, dy, 0)))
         .find(|at| {
             run.game()
@@ -321,23 +323,83 @@ fn hidden_in_the_dark_house_until_dawn() {
                     let fixture = cosmos
                         .defs()
                         .state_text(clash_world::Layer::Fixture, cell.fixture.raw());
-                    Some(fixture.contains("lamp"))
+                    Some(fixture.contains(word))
                 })
                 .flatten()
                 .unwrap_or(false)
         })
-        .expect("a lamp in the room");
-    walk_to(&mut run, lamp, 1, 12);
-    assert!(use_near(&mut run, "Switch"), "{}", run.text());
-    until_asked(&mut run, 60);
+}
+
+/// The lamp in the room put out: the house dark again.
+fn put_out_the_lamp(run: &mut Headless) {
+    let lamp = fixture_near(run, "lamp").expect("a lamp in the room");
+    walk_to(run, lamp, 1, 12);
+    assert!(use_near(run, "Switch"), "{}", run.text());
+    until_asked(run, 60);
+}
+
+/// Whether the character is inside something (a wardrobe).
+fn hidden_inside(run: &Headless) -> bool {
+    run.game()
+        .with_session(|session| {
+            session
+                .sim
+                .truth()
+                .entity(session.player)
+                .map(|entity| matches!(entity.place(), clash_sim::Place::In(_)))
+        })
+        .flatten()
+        .unwrap_or(false)
+}
+
+#[test]
+fn hidden_in_the_dark_house_until_dawn() {
+    let data = DataDir::new("stand-dark");
+    let mut run = boot_default(data.path(), 4);
+    begin(&mut run);
+    get_inside(&mut run);
+    put_out_the_lamp(&mut run);
     hold_out(&mut run, 400);
-    // Unseen, unfound, and alive at the first light: the night is won.
+    // Unseen in the dark by the lamp put out, though each stranger came
+    // in and searched the house (D-950), and alive at the first light:
+    // the night is won.
     assert_eq!(outcome(&run), "survived", "{:?}", log_text(&run));
     assert_eq!(time_of_day(&run), 5.0 * 3600.0);
     let summary = run.text();
     assert!(
         summary.contains("Survived.") && summary.contains("[x] Hold out until dawn."),
         "{summary}"
+    );
+}
+
+#[test]
+fn hidden_in_the_wardrobe_the_stranger_searches_it() {
+    let data = DataDir::new("stand-wardrobe");
+    let mut run = boot_default(data.path(), 4);
+    begin(&mut run);
+    get_inside(&mut run);
+    put_out_the_lamp(&mut run);
+    // The wardrobe further in the room (D-950), and in.
+    let wardrobe = fixture_near(&run, "wardrobe").expect("a wardrobe in the house");
+    walk_to(&mut run, wardrobe, 1, 12);
+    assert!(use_near(&mut run, "Hide inside"), "{}", run.text());
+    until_asked(&mut run, 60);
+    assert!(hidden_inside(&run), "{}", run.text());
+    // Waiting inside: the stranger comes believing her in the house,
+    // searches the wardrobe and brings her out (D-950).
+    for _ in 0..60 {
+        if !hidden_inside(&run) || top(&run) != "ui:play" {
+            break;
+        }
+        press(&mut run, "p");
+    }
+    assert!(!hidden_inside(&run), "never found: {:?}", log_text(&run));
+    assert!(time_of_day(&run) > 20.0 * 3600.0, "found before dawn");
+    hold_out(&mut run, 400);
+    let lines = log_text(&run);
+    assert!(
+        lines.iter().any(|line| line.starts_with("The person")),
+        "{lines:?}"
     );
 }
 

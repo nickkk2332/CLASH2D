@@ -132,8 +132,10 @@ play, and what trying the game headless on the build branch showed.
   Lockers exist as definitions; wardrobes are the places to hide.
 - **Last stand is dark,** but for a lamp by the door and one in the
   room: what is not lit is heard (`!`), not seen. The strangers come
-  one by one; whoever stays on the lane dies quickly, and whoever hides
-  in the dark house with the lamp out lives to see dawn.
+  one by one; whoever stays on the lane dies quickly. One who saw you
+  go into the house, or hears you in it, searches it: its rooms, as
+  far as the light lets him see, and the wardrobe, which he opens. In
+  the dark house with the lamps out a still hider is not found.
 - **Residents do not eat.** Going hungry, weak and starving is for the
   character you play.
 
@@ -148,8 +150,7 @@ play, and what trying the game headless on the build branch showed.
   was told it knows at once, everywhere (15 §9.2), and it forgets you
   after an hour or so; townsfolk who heard of you keep away from you.
 - **A watchman does not look inside a wardrobe**: hiding where no one
-  saw you go works. In Last stand the strangers do not search the
-  house either.
+  saw you go works in the town. The last stand's strangers do search.
 
 **Saving and running**
 

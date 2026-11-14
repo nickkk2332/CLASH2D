@@ -103,6 +103,35 @@
           { "look": { "at": "$about", "time": "1 s" } } ] }
     ] },
 
+  { "type": "goal", "id": "search_hiding_places",
+    "doc": "Searching a house for someone held hostile who is believed to be in it and cannot be seen (decision D-950): to each place about where they were last believed to be that a person could hide in (whatever offers `core:search`, within six metres: wardrobes, lockers), the nearest first, each searched (opened and felt inside: whoever hides there is brought out) and stood at a while, looking and listening; then to where they were believed to be, a look round, and giving up until they are perceived again. Walking the rooms between, the searcher sees whoever is in the open as the light lets it, and hears whoever moves. Only while the belief is fresh: lost from sight, or told of, between three seconds and four minutes ago. How long it stands at each place is its own, two to four seconds.",
+    "about": { "track": {
+      "where": "self.hostile(it) and (self.last_seen(it) ?? 999) >= 3 and (self.last_seen(it) ?? 999) < 240 and len(places(self.believed_loc(it), 6, 'core:search')) > 0",
+      "best": "self.confidence(it) ?? 0" } },
+    "score": "self.weight('duty') * 3",
+    "commit": 0.2,
+    "interrupts": true,
+    "retry_after": "60 s",
+    "methods": [
+      { "if": "len(places(self.believed_loc($about), 6, 'core:search', self.var.searched ?? [])) > 0",
+        "steps": [
+          { "set": { "var": "core:search_spot", "value": "first(places(self.believed_loc($about), 6, 'core:search', self.var.searched ?? []))" } },
+          { "set": { "var": "core:searched", "value": "(self.var.searched ?? []) + [self.var.search_spot]" } },
+          { "go": { "to": "self.var.search_spot", "within": 1 } },
+          { "do": { "action": "core:interact", "with": { "target": "self.var.search_spot", "interaction": "'core:search'" } } },
+          { "look": { "at": "self.var.search_spot", "time": "rand(2, 4)" } } ] },
+      { "steps": [
+          { "set": { "var": "core:searched", "value": "[]" } },
+          { "go": { "to": "self.believed_loc($about)", "within": 1 } },
+          { "look": { "time": "3 s" } },
+          { "settle": true } ] }
+    ] },
+
+  { "type": "variable", "id": "searched", "scope": "entity", "value": "list<element>",
+    "doc": "The places a searcher has searched since it began looking for someone (`core:search_hiding_places`): passed over until the search ends." },
+  { "type": "variable", "id": "search_spot", "scope": "entity", "value": "element",
+    "doc": "The place a searcher is searching now (`core:search_hiding_places`)." },
+
   { "type": "goal", "id": "search_lost",
     "doc": "Looking for someone held hostile who has been lost from sight: to where they were last believed to be, a look round, then giving up until they are perceived again.",
     "about": { "track": {

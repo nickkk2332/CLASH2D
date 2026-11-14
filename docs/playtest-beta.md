@@ -499,3 +499,97 @@ Worst first.
    brawl far from any watchman, with nobody between to pass the call
    on, is still answered by nobody.
 6. **Residents do not eat** (D-906).
+
+## The fourth round
+
+Played from `d3d1395` on the build branch (stream "final polish"):
+the third round's first known issue, the last stand's strangers who
+never searched the house. Decisions D-950 and D-951. The four sessions
+not yet played (a bandage made, the poisoned blade, the pistol in a
+fight, a disguise worn), the final release notes and their
+measurements were not started in this round: they are known issue 4
+below.
+
+### How the strangers search
+
+As content (D-950): one new function, `places`, tells a mind where the
+places a person could hide in are about a cell (static geometry, safe
+for belief); the interaction `core:search` opens such a place and brings
+out whoever hides in it; the `guard` mind's goal
+`core:search_hiding_places` goes to each place within six metres of
+where its quarry is believed to be, nearest first, searches it, and
+stands two to four seconds looking and listening, then looks round and
+gives up, all while the belief is fresh (four minutes). Walking the
+rooms it sees whoever stands in the open as far as the light lets it,
+and hears whoever moves. The last stand puts a wardrobe in the house
+for one to hide in. A stranger searches only a house he believes the
+character to be in from what he perceived: seen going in, or heard
+inside. Found in the first play of it: a method's `do` step gave the
+interaction's id as text, which the action refused (D-951).
+
+### Played
+
+Each night played from the title to its end (or 600 keys) as an
+ordinary person, with the room's lamp put out first; "found" is when a
+stranger brought her out of the wardrobe or saw her. Seeds 1 to 3 and 6
+build the same house (a hut of one room), seed 4 the kept sessions'.
+
+| Played as | Seed 1 | Seed 2 | Seed 3 | Seed 4 |
+|-----------|--------|--------|--------|--------|
+| Hidden in the dark by the lamp put out | survived | survived | survived | survived (`hidden_in_the_dark_house_until_dawn`) |
+| Hidden in the wardrobe | found, still fighting at 600 keys | found, lost | found, missed, lost again in the dark: survived | found (`hidden_in_the_wardrobe_the_stranger_searches_it`) |
+| At the door, an ordinary person (kept session) | | | | survived, the first stranger killed |
+| At the door, a brawler (kept session) | | | | survived, the first stranger killed |
+
+Before the search, a careful fight at the door (wounds bound as soon as
+there was a bandage in hand) won two nights of four as an ordinary
+person and one of four as a brawler (seeds 1, 2, 3 and 6), and hiding in
+the dark won every one.
+
+What decides it now: the first stranger, on the lit lane at ten, sees
+her go in and searches the hut: the wardrobe is the first place he
+searches, and whoever hides in it is found, every time. With the
+room's lamp out the hut is dark: no light at all with the door shut,
+and with the door he opens the porch lamp gives under a hundredth of
+daylight in the corner by the lamp and up to a fifth by the door. In
+that corner a still hider is not seen even from the wardrobe, two
+steps off, and is not found. The two after him never perceive her in
+the house, so they never search it, and walk the lane until dawn. The
+night was not tuned to the aim of this round: hiding in the dark still
+wins as surely as before, and the fight at the door got easier at seed
+4 (known issue 1).
+
+Tried and left out: telling each stranger as he came that she was in
+the house (a told track at the door, D-950). The first then searched
+before she had hidden and found the wardrobe first every time, the
+dark hid her from all three just the same, and at the door the
+strangers stood in the light outside, unable to see her, while the
+scripted fighter, unable to reach them, never saw the night end.
+
+### Known issues that remain
+
+1. **Hiding in the dark still wins the last stand surely, and the fight
+   at the door is easier than before.** A searcher sees only by light,
+   and the strangers carry none; only the first stranger, who sees her
+   go in, ever searches. Content could give them a light to search by
+   (an area of light anchored to each, as the bundled `shadow` anchors
+   darkness) or a way to learn she is inside; either changes the fight
+   at the door too, and was not played.
+2. **A stranger with both arms disabled lingers.** In a fight at the
+   door at seed 4 the first stranger, both arms useless, held
+   `apprehend` (which needs two arms) for hours beside the character,
+   and each long wait was broken off by him at once (seen in a probe of
+   the fight, not in the kept sessions).
+3. **The play sessions' fighter does not walk up to a foe out of
+   reach**: it waits, and the wait is broken off by the foe in sight.
+   The kept door sessions now play 3000 keys to reach dawn.
+4. **Not started in this round**: the four sessions of the brief (a
+   bandage made at the workshop's bench and a wound dressed; a blade
+   coated with poison and someone cut with it; the pistol fired,
+   emptied and reloaded in a fight; a disguise worn and a witness who
+   remembers it), the final release notes with the release build's
+   measurements, and the check of the README and how-to-play against
+   the game. Found while looking at them: the bundled world has no
+   source of nightshade or a vial of it, so a poisoned blade cannot be
+   made in play, and no item a player can wear presents another
+   persona.
