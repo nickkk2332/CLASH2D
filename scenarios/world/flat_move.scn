@@ -20,4 +20,4 @@ remove @stone
 expect event entity_removed
 move @walker @c:200,6,0
 expect reason world.not_loaded
-expect hash c313372be33f1d0685488f14cac1e7b0
+expect hash 4d4b11fb480a68838e64ea32f8110c63

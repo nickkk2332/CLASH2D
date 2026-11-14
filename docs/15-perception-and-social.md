@@ -1543,7 +1543,7 @@ build. Each row with a figure is in `budgets.toml`.
 | Light of an 80 × 50 view after one edit that light cares about | under 1 ms (measured: 0.5 ms in a street of the test city, a wall put up and taken down) |
 | One observer-target evaluation, including line of sight at 30 m | under 2 µs (measured: 0.6 µs, from 3 µs: the four heights of `exposed` walked together, D-732) |
 | Emitting a signal to 50 observers in range | under 100 µs (measured: 21 µs to send a delayed one, 0.5 ms for all fifty to receive it with their events, from 1.1 ms) |
-| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 9.9 to 11.4 ms in the best of each of several runs, for fifty walking in one street, all in range of each other, with sight and hearing and footsteps; 15 to 23 ms before D-894, 22 to 32 ms before D-731 to D-733) |
+| One simulated second of perception for 300 hot characters in a crowd | under 4 ms (measured: 9.9 to 11.4 ms in the best of each of several runs, for fifty walking in one street, all in range of each other, with sight and hearing and footsteps; 15 to 23 ms before D-894, 22 to 32 ms before D-731 to D-733; 13.7 to 14 ms on a busier machine after performance 3, 14 to 14.2 ms before it in the same runs) |
 | Memory per mind, typical | under 4 KB |
 
 The ignored test `timing_of_perception_in_a_city_block` of
@@ -1571,6 +1571,21 @@ of a step there (09 §19). A party member's sweep, its view of 60 m,
 map memory and frame, takes 0.9 ms again from where it stands, and
 8.5 ms the first time, with the light cache and map memory cold (9 ms
 and more before).
+
+Performance 3 (D-920, D-921, D-923 to D-925), every result as it was: a
+sweep finds its candidates nearest first, a band of cells at a time, and
+stops at the first band farther than the farthest it keeps, so it no
+longer looks at the furniture of the rest of its range; a party member
+standing still keeps its field of view while no cell changes and its
+view while the light over it reads the same. In the market square by
+day the sweeps of a minute's wait cost a third fewer instructions and
+the party's own half; a party member's sweep again from where it stands
+takes 0.2 ms (0.9 ms before) and the first 6.7 ms (8.5 ms). The crowd of
+fifty is as it was (13.7 to 14 ms, against 14 to 14.2 ms in the same
+runs before): its cost is in what is received, not in finding who is
+there. Who cannot see and sweeps that change nothing are section 5.2;
+`notices` (section 4) lets content keep a sense's candidates to the
+kinds that matter to it.
 
 ## 18. Open questions
 

@@ -7,7 +7,7 @@ For a walkthrough, start with the [modding guide](../modding-guide.md). The spec
 
 | Page | What it lists | Items |
 |------|---------------|------:|
-| [types](types/README.md) | Definition types: each field with its value, unit, default, whether it is required and what it refers to; the keys every definition carries | 76 types, 1333 fields |
+| [types](types/README.md) | Definition types: each field with its value, unit, default, whether it is required and what it refers to; the keys every definition carries | 76 types, 1334 fields |
 | [values](values.md) | How each kind of field value is written: quantities, references, tags, texts, expressions, conditions, effects |  |
 | [units](units.md) | The units a quantity may be written in | 30 |
 | [properties](properties.md) | Kinds of subject and their properties, by kind | 18 kinds, 325 properties |
