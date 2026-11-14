@@ -506,9 +506,17 @@ pub fn walk_to(run: &mut Headless, to: Location, near: i32, max_keys: usize) -> 
         pressed += 1;
         // Walking into someone in the way asks whether to strike them:
         // no, and the way is looked for round the cell they stand in.
+        // Bumping into the same cell again while walking round it means
+        // there is no way round (a doorway): wait a second for them to
+        // move on, as a player would, rather than press keys that take
+        // no time at all.
         if top(run) == "ui:confirm" {
             press(run, "escape");
             if let Some(cell) = cell_toward(at.cell, key) {
+                if round.iter().any(|(stood, _)| *stood == cell) {
+                    press(run, ".");
+                }
+                round.retain(|(stood, _)| *stood != cell);
                 round.push((cell, pressed + ROUND_FOR));
             }
         }

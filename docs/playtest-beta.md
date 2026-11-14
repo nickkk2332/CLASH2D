@@ -212,6 +212,8 @@ golden frames that moved are named with the fixes below.
 | The watch, by script | (probes, not kept) | A watchman struck in the square by a rowdy; and by the player's character made delegated, with the same punches | Both answer: the watchman takes up `confront`. Only the player's own blows go unanswered |
 | A day of routines, its morning | `play_market.rs` (`a_morning_and_a_noon_in_the_square`, ignored as slow) | Begun at nine in the square with the stalls kept; Shift+P three times, to noon | Too slow for the suite in a debug build: three hours among 150 hot minds had not finished after 33 minutes of real time on a loaded machine (stopped there). The quarrel and the armoury sessions pass on the merge. The routines themselves are checked by the test script `scenarios/town/routine_day.scn`, which watches from outside the town |
 | The last stand, again | `play_last_stand.rs` | All six sessions on the merged build | Pass unchanged: 320 s in a debug build |
+| Bread, at the cap of 50 (performance 3) | `play_crafting.rs` | The bakery session with the bundled games' cap of 50 hot minds (D-911) | The walk to the wood met someone standing just inside the bakery's door, with no way round, and pressed its 300 keys within one minute of the clock. The sessions' walk now waits a second behind someone it cannot go round; the session passes (72 s in a debug build) |
+| The errand, at the cap of 50 | `play_errand.rs` | Both errand sessions with the cap | The parcel left behind fails the errand as before; delivered, the walk heard footsteps five times rather than twelve, so the last frame's log no longer scrolls and shows the errand's first line: re-blessed. The delivered session took 39 s in a debug build, the failed one under four minutes |
 | The errand, delivered, again | `play_errand.rs` | The first round's session on the merged build | Passes in about three minutes in a debug build. Its golden frame `play_errand_delivered`, blessed for performance 2's route, was blessed again: a resident caught mid-step under the summary is now played out before the ending (D-908), so the frame holds no moving sprite; nothing else in it changed |
 
 ### What was found and fixed
@@ -289,12 +291,12 @@ Worst first.
    stream's to find. The market fight with the watch answering, fleeing and being
    caught cannot be played until it is found; its session is kept,
    ignored, to show it (`a_fight_in_the_square_and_the_watch_answers`).
-2. **Waiting among the town's people is still slow** after performance
-   2: a minute's wait in the square is 2.2 to 2.6 s of real time in a
-   release build (performance 2's own figure, against a target of 1 s),
-   several times that in a debug build, so a day of routines watched
-   from the square cannot be a session in the suite, and the errand's
-   failure session takes some eleven minutes in a debug build.
+2. **Waiting among the town's people is within its budget only in a
+   release build.** With performance 3 and the bundled games' cap of 50
+   hot minds (D-927, D-911), a minute's wait in the square takes 0.77 to
+   0.79 s in release (2.2 to 2.6 s after performance 2 at 150), an hour
+   about 47 s. A debug build is ten times slower, so a day of routines
+   watched from the square is still no session for the suite.
 3. **Part of what this round set out to play was not played**, for the
    cost of the town and of time: a bandage *made* (the recipe; one was
    bound on in the last stand), a blade coated with poison and someone
@@ -351,5 +353,10 @@ load, not for this round's changes, which touch nothing on these paths.
 | An hour in the last stand (Shift+P) | broken off at once on the lane by the stranger in sight; not measured inside | about 4 s |
 
 The debug build the sessions run in is ten to twenty times slower: the
-market town's sessions take minutes (above). Waiting in the populated
-town remains the first known issue, for performance 2.
+market town's sessions take minutes (above).
+
+After performance 3, with the bundled games' cap of 50 hot minds, on
+the stream's merge (`clash-tools bench`, release, the town at seed 7
+from the square, two runs on a quiet machine): a minute's wait by day
+773 and 786 ms (budget 1 s), at night 202 and 178 ms, a step in the
+square 13.4 ms (budget 100 ms): each within its budget.

@@ -4,6 +4,7 @@
     "doc": "A generated town and its people. Its doors are shut. Live there.",
     "intro": "Morning in the market town. Nobody is waiting for you and nothing needs doing: walk the streets, try the doors, meet the people who live here.",
     "tags": ["sandbox"],
+    "settings": { "sim.max_hot_minds": 50 },
     "worlds": [ { "realm": "town", "seed": "ask" } ],
     "start": {
       "characters": [ { "template": "person", "create": true } ],
