@@ -364,3 +364,138 @@ town (held back after, D-911), on the stream's merge (`clash-tools bench`, relea
 from the square, two runs on a quiet machine): a minute's wait by day
 773 and 786 ms (budget 1 s), at night 202 and 178 ms, a step in the
 square 13.4 ms (budget 100 ms): each within its budget.
+
+## The third round
+
+Played from `510128b` on the build branch (stream "consequences"): why
+the town did not answer the player's blows, found and fixed as content,
+the market fight played to its end, and the smaller issues of both
+rounds closed. Decisions D-940 to D-947.
+
+### Why the watch ignored the player
+
+Nothing singled out the player. The one a blow lands on never perceived
+it: the bundled `blow_seen` and `blow_heard` are signals *about* the one
+struck, and a signal is not given to what it is about (15 §3.2), so a
+watchman's `hostile_after` never fired for a blow on himself, whoever
+struck it. Played with the second round's market fight instrumented,
+the townsfolk round the square perceived each blow with the player made
+out as its actor and came to fear her, and the watchman struck had no
+percept of it at all. The test scripts' watch answered a rowdy because
+it saw the rowdies strike *each other*; in a probe the one struck held
+his striker hostile only because he saw the jar of the punch into her
+own fist, a `hit_landed` about her.
+
+Now (D-940, D-941), all as content:
+
+- **The one struck feels the blow**: the signal kind and the sense
+  `touch` (half a metre: only whoever it lands on), given by every
+  bundled mind, and the event signal `blow_felt`. It makes out who
+  struck it only if it perceives them by another sense: struck from
+  behind by someone unseen, it blames nobody. (Turning round to where
+  the blow came from was tried and left out: in the last stand's dark
+  it let the strangers see whoever struck them and block every blow
+  after, and the night could no longer be won at the door.)
+- **Whoever perceives a blow** and makes out the striker, against itself
+  or against someone it neither holds hostile nor fears, takes against
+  the striker by its own mind's weights (`core:take_against`): the
+  watch, whose duty outweighs its caution, holds them hostile; the
+  townsfolk fear them. Toward the persona it saw, so a disguised striker
+  is remembered as the disguise. A relation fades, and a friendship
+  stronger than it outweighs it, so a watchman who sees another subdue
+  someone does not turn on him (the minds' unconditional `hostile_after`
+  had that fault; the town's minds no longer take a stance from a blow).
+- **The first time**, it remembers the striker for it
+  (`core:unprovoked_blow`): a watchman reports it to the watch, whose
+  every member is told at once (15 §9.2); one of the townsfolk shouts
+  for the watch (`Watch! Over here!`), a report any watchman who hears
+  passes on. Running and calling for help remain their goals.
+- **The watch answers by its goals**: whoever recognises a persona it
+  remembers so, seen or told, takes against it; a watchman goes for
+  them, lays hands on them (`apprehend`, now the watchman's too) and
+  strikes them; lost, he looks where he last believed them to be, and
+  gives up.
+
+### Sessions and test scripts
+
+| Session | Test | Plays | Found |
+|---------|------|-------|-------|
+| The market fight | `play_market.rs` (`a_fight_in_the_square_and_the_watch_answers`, no longer ignored) | Begun in the square at seed 4; Tab to someone not of the watch, up to them, `f` until a blow lands; the watch watched for; then to the nearest wardrobe in a house by the square, in, three minutes waited | Tab had moved to the watchman, who was struck: he held Ada hostile at once and went for her (`The watchman strikes Ada.`, `Ada is wounded.`); three of the townsfolk round the square shouted for the watch (`The person shouts: "Watch! Over here!"`, `The shopkeeper shouts …`); all four other watchmen knew of the blow. She got upstairs into the wardrobe; the watchman lost her, looked where he had last seen her and went back to his post. Escaped. Passes on either outcome, caught or hidden (D-942). 67 s in a debug build |
+| A blow struck without cause | `scenarios/social/unprovoked_blow.scn` | A townsperson struck by a character a player plays, before a watchman and another townsperson; a watchman fifty metres off | The one struck and the witness fear her (0.70); the watchman holds her hostile (0.90) and takes up `confront`; the shout is heard; the far watchman is told, and holds her hostile the moment he sees her |
+| A blow nobody saw | `scenarios/social/unseen_blow.scn` | Struck from behind, standing still, nobody else about | Felt; no fear, no memory naming her, the watch told nothing |
+| A disguised blow | `scenarios/social/disguised_blow.scn` | Tess in Vic's face strikes someone before a watchman | Both remember Vic; the far watchman is told of Vic; Tess, her face her own again, walks up to him unknown; Vic is held hostile the moment he is seen (scene S15) |
+| A bandage with both hands full | `scenarios/making/bandage_hands_full.scn` | A club in one hand, two bandages in the other, a cut | `Bandage your wounds` offered and the wound closed; one bandage used, one left (both were used before) |
+
+Not played, for want of time: a bandage *made* at a bench and put on, a
+blade coated with poison and someone cut with it, the pistol fired,
+emptied and reloaded in a fight, and a disguise worn by the player in
+the application (the test script above plays it in the simulation;
+`core` offers no item that gives a persona). The last stand's strangers
+were not taught to search the house (known issue 1 below).
+
+### What was found and fixed
+
+| Found | How a player met it | Fixed |
+|-------|---------------------|-------|
+| The one struck never perceived the blow | Struck by the player, the watchman walked on (the second round's issue 1) | Touch, `blow_felt`, and the rules of 15 §12 (D-940, D-941) |
+| A watchman took a stance against whoever he saw strike anyone, for good | Not met in play; in the test scripts watchmen confronting a brawl could go for each other | Relations by the mind's weights, outweighed by friendship (D-941) |
+| Block came first in the reaction prompt with nothing in hand | Blocking every knife blow on the forearm, bleeding from blows the log called stopped | An action's `offer` (D-943): Parry first with a blade or club in hand, Block first with a shield, last on the bare forearm (after Dodge and Step back) |
+| With no arrow left the quick shot said the pistol's reason | `s` after the quiver ran out: "There is no loaded weapon in hand" | The same `offer`: the shot that suits what is in hand comes first, and says why it cannot (D-943) |
+| Tab selected the dead | A stranger dead at the door, struck again and again | A body seen lying dead is drawn as a thing; the target cycle passes over it, and a target that dies is no longer the target (D-944) |
+| `Footsteps, somewhere close.` filled the log | Every step heard and not seen | A show's `heard.quiet` (D-945): footsteps are told once, and again after twenty seconds without any; the `!` marks each |
+| A variable set just before `fail_objective` read as unset in `on_failed` | The errand failed as "Night has fallen" when the parcel was left behind | Not the scenario runtime, which reads it set: the errand wrote `"'left'"`, which a text field takes as written, quotes and all, so `== 'left'` was false. The loader warns of quoted text (`W0679`, D-946); the errand writes `left` |
+| Binding a wound "needed a free hand" | The brawler at the door bled to death with bandages on the table | It never did (16 §3.3: `held` is anything carried); the brawler held two clubs and had no hand to take the bandages up. One binding used up both bandages of a stack: now one (D-947) |
+
+### The watch at the cap of 50
+
+Smooth play set the bundled games' attention cap to 50 hot minds but for
+the market town, where the watch then answered no brawl: the watchmen
+39 to 43 m off were warm, the call for help was given beyond hearing's
+40 m, and warm characters do not see blows. A call is now passed on once
+(D-948): one of the townsfolk who hears it shouts for the watch, an
+alarm the watch answers and the townsfolk do not pass on again. With it
+the brawl of `town_life.rs` at 50 draws a watchman who arrives and goes
+for the brawlers (without the relay, at 50, none comes), and
+`town_life` runs at 50 like the other bundled games.
+
+### What changed in the earlier sessions
+
+- **Golden frames blessed again**, each for a change looked at:
+  `struck` and `empty_weapon` (someone struck or shot now shouts for the
+  watch, and the one shot steps away, afraid), `reaction_prompt` (the
+  reactions listed by `offer`: Block, with no shield, last, which brings
+  Step back into the list's view), `play_errand_delivered` (footsteps
+  told once, not `(x2)`).
+- **The last stand's sessions** answered a blow with the first of Step
+  back, Dodge, Step aside, Parry and Block that the prompt showed; Step
+  back was off the end of its list, so a dodge was what was played.
+  Listed by `offer`, Step back came into view, and stepping back from
+  the door let the strangers in: the night at the door was lost before
+  the first stranger died. The sessions now ask for a dodge first, which
+  is what they played; their outcomes are as before.
+- **The quarrel in the square** (`a_word_a_blow_the_watch_and_a_wardrobe`)
+  no longer waits half a minute beside the watchman struck: he answers
+  now. It runs for the wardrobe as the market fight does.
+- **Hearing behind a wall** (`perceiving.rs`): a step heard within
+  twenty seconds of the one before is marked and not told.
+
+### Known issues that remain
+
+Worst first.
+
+1. **Hiding still wins the last stand surely.** The strangers do not
+   search a house they believe someone is in: no method looks in rooms
+   or opens wardrobes. Not built in this round.
+2. **A watchman does not look inside a wardrobe**, in the town either:
+   hiding unseen ends a pursuit. The market fight may also end with the
+   player caught, by the seed; it was not played to that end.
+3. **What the town knows is told everywhere at once** (15 §9.2's
+   simplification): a watchman across town holds the striker hostile
+   the first time he sees them. No cases, evidence or accusation (13
+   §8.3 to §8.5).
+4. **Part of what was to be played was not**: a bandage made, a poisoned
+   blade, the pistol in a fight, a disguise in the application.
+5. **A call for help reaches twice a voice's reach and no further**: a
+   brawl far from any watchman, with nobody between to pass the call
+   on, is still answered by nobody.
+6. **Residents do not eat** (D-906).

@@ -57,6 +57,7 @@ What a `show` does when its event was only heard (12 §5): a marker where it see
 
 - `log` ([text](../values.md#texts), or `null`; optional): The line written to the log, a template in the event's scope.
 - `marker` (one character, or `null`; optional): The character the marker is drawn with. Left out, the theme's `heard` mark.
+- `quiet` ([time](../units.md#time) in `s`, or `null`; optional): How long nothing this show is about must have been heard before its line is written again (12 §7.4, decision D-945): footsteps heard while someone walks about are told once, and again only after a quiet. The marker is put each time. Left out, every one is told.
 
 <a id="importance"></a>
 ### `Importance`

@@ -1546,3 +1546,33 @@ fn defs_with_compiled_fields_are_shared_across_threads() {
         assert_eq!(handle.join().unwrap(), Some(Real::of(expected)));
     }
 }
+
+#[test]
+fn a_text_written_in_quotes_where_text_is_taken_as_written_is_warned_of() {
+    // Decision D-946: `"'left'"` where a string is wanted is the six
+    // characters `'left'`, quotes and all; the loader says so.
+    let outcome =
+        load_one(r#"[ { "type": "trap", "id": "pit", "energy": 1, "label": "'deadly'" } ]"#);
+    let quoted = only(&outcome, "W0679");
+    assert_eq!(quoted.path, "label");
+    assert!(
+        quoted.message.contains("quotes and all"),
+        "{}",
+        quoted.message
+    );
+    let defs = outcome.defs.expect("a warning breaks nothing");
+    let pit = defs.lookup::<TrapDef>("core:pit").unwrap();
+    assert_eq!(
+        defs.get::<TrapDef>(pit)
+            .label
+            .as_ref()
+            .and_then(|label| label.constant()),
+        Some(&Value::text("'deadly'"))
+    );
+    // Bare, or worked out, it is not; nor are quotes inside a text.
+    clean(load_one(
+        r#"[ { "type": "trap", "id": "a", "energy": 1, "label": "deadly" },
+             { "type": "trap", "id": "b", "energy": 1, "label": { "expr": "'deadly'" } },
+             { "type": "trap", "id": "c", "energy": 1, "label": "it's 'here'" } ]"#,
+    ));
+}

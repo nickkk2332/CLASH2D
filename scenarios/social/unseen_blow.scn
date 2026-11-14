@@ -1,0 +1,31 @@
+# unseen_blow (the consequences stream, D-940 to D-942; 15 §6): a blow
+# nobody saw has no consequence. Someone a player plays strikes a
+# townsperson from behind, standing still where it neither sees nor
+# hears her, with nobody else about. The one struck feels the blow,
+# but did not make out who struck it: it is not afraid of her,
+# remembers no blow of hers, tells nobody, and the watch knows nothing.
+use default seed=5
+gen core:testland size=2
+spawn creature as=w
+session @w @c:30,30,0
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 1, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:watch_guard", "at": "offset(self.loc, 50, 50, 0)" } }
+remove @spot
+control @e:2 direct
+face who=@e:3 toward=0
+set_awareness who=@e:3 of=@e:2 sense=human_sight level=0
+set_awareness who=@e:3 of=@e:2 sense=human_hearing level=0
+assert "not @e:3.perceives(@e:2) and not @e:4.perceives(@e:2)"
+start_action @e:2 core:punch "{ 'target': @e:3 }"
+wait @e:2 1s
+advance 600ms
+expect event hit_landed actor=@e:2
+control @e:2 delegated
+advance 2s
+assert "@e:3.memory_confidence('hit_landed') != null"
+assert "not @e:3.fears(@e:2) and not @e:3.hostile(@e:2) and (@e:3.rel('core:fearful', @e:2) ?? 0) == 0"
+assert "not @e:3.remembers_actor(@e:2, 'hit_landed') and not @e:3.remembers_actor(@e:2, 'core:unprovoked_blow')"
+assert "@e:3.memory_confidence('core:unprovoked_blow') == null and @e:4.memory_confidence('core:unprovoked_blow') == null"
+expect hash b91e59ab0568865005466d6eb2b2843f

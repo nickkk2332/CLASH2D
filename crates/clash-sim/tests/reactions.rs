@@ -1264,3 +1264,49 @@ fn documents_state_every_window_event_verb_and_defence_field() {
     assert!(seven.contains("| `defence_resolving` (hook)"));
     assert!(three.contains("`React`") && three.contains("`Pass`"));
 }
+
+/// The bundled reactions a defender may answer with, by label, in the
+/// order a prompt lists them.
+fn offered(sim: &mut Sim, ada: EntityId, bram: EntityId) -> Vec<String> {
+    swing(sim, ada, bram, 0.4, 1.0);
+    run_for(sim, 250 * MS);
+    let window = window_of(sim, ada);
+    sim.reaction_options(bram, window)
+        .into_iter()
+        .filter(|option| option.refused.is_none())
+        .map(|option| option.label)
+        .filter(|label| ["Parry", "Block", "Dodge", "Step back"].contains(&label.as_str()))
+        .collect()
+}
+
+#[test]
+fn reactions_are_offered_in_an_order_that_suits_what_is_in_hand() {
+    // Decision D-943: each reaction's `offer`. With a knife in hand, the
+    // parry first; the bare forearm's block last.
+    let (mut sim, ada, bram) = duel(&DEFS, 5);
+    assert_eq!(
+        offered(&mut sim, ada, bram),
+        ["Parry", "Dodge", "Step back", "Block"]
+    );
+
+    // With nothing in hand, no parry, and the block on the forearm is
+    // still offered, after ducking and stepping back: it stops a blade
+    // by being cut.
+    let (mut sim, ada, bram) = duel(&DEFS, 5);
+    let knife = knife_of(&sim, bram).expect("Bram holds a knife");
+    debug(&mut sim, DebugCommand::RemoveEntity { entity: knife });
+    assert_eq!(
+        offered(&mut sim, ada, bram),
+        ["Dodge", "Step back", "Block"]
+    );
+
+    // With a buckler, the block first.
+    let (mut sim, ada, bram) = duel(&DEFS, 5);
+    let knife = knife_of(&sim, bram).expect("Bram holds a knife");
+    debug(&mut sim, DebugCommand::RemoveEntity { entity: knife });
+    arm(&mut sim, bram, "core:buckler");
+    assert_eq!(
+        offered(&mut sim, ada, bram),
+        ["Block", "Dodge", "Step back"]
+    );
+}

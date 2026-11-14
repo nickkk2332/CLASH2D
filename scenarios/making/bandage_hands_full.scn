@@ -1,0 +1,27 @@
+# bandage_hands_full (the consequences stream, D-947; 16 §3.3): binding
+# a wound needs no free hand. The bundled `apply_bandage` reaches what is
+# `held`, which is whatever is inside the one who does it, at any depth:
+# someone with a club in one hand and bandages in the other is offered
+# "Bandage your wounds", and the wound that bled is closed. (In the
+# second play-testing the brawler never bound his: holding his own club
+# and the table's, he had no hand to take the bandages up with.)
+use default seed=5
+gen core:testland size=1
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+remove @spot
+control @e:1 delegated
+as @e:1 do { "create_item": { "def": "core:club", "at": "self.loc" } }
+as @e:1 do { "for_each": { "entities": { "at": "self.loc", "def": "core:club", "limit": 1 } }, "as": "c", "do": [ { "take": { "who": "self", "what": "$c" } } ] }
+as @e:1 do { "create_item": { "def": "core:bandage", "count": 2, "at": "self.loc" } }
+as @e:1 do { "for_each": { "entities": { "at": "self.loc", "def": "core:bandage", "limit": 1 } }, "as": "b", "do": [ { "take": { "who": "self", "what": "$b" } } ] }
+assert "len(@e:1.held('grasp')) == 2"
+as @e:1 do { "hit": { "target": "self", "kind": "core:cut", "energy": 300, "intensity": 15000000, "area": 0.00002, "span": 0.9 } }
+assert "len(@e:1.wounds) == 1 and @e:1.wounds[0].state == 'open'"
+assert "@e:1.offers_near[0].name == 'Bandage your wounds' and @e:1.offers_near[0].available and @e:1.offers_near[0].where == 'held'"
+start_action @e:1 core:interact "{ 'target': @e:1.offers_near[0].target, 'interaction': @e:1.offers_near[0].interaction }"
+advance 5s
+expect event interacted
+assert "@e:1.wounds[0].state == 'closed'"
+assert "len(@e:1.carried) == 2 and len(@e:1.held('grasp')) == 2"
+expect hash b46e9db89b3136b174a4fdb5b7b9cebc

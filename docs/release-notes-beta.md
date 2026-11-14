@@ -139,17 +139,17 @@ play, and what trying the game headless on the build branch showed.
 
 **Fighting**
 
-- **Blocking a blade with your forearm stops the blow and cuts the
-  arm,** and Block comes first among the reactions offered. The log
-  says `… is wounded.`, not where; `c` shows your wounds.
-- **Binding wounds takes a free hand:** put down what you hold first
-  (the inventory's Drop).
-- **With no arrow left, `s` gives the pistol's reason** ("There is no
-  loaded weapon in hand"), not the bow's.
-- **Tab can select someone who has died;** the log says who died.
-- **The watch does not answer your blows.** Strike someone in the
-  market square and no watchman comes for you, though the watch goes
-  for anyone else it sees hurt someone.
+- **Blocking a blade with your bare forearm stops the blow and cuts
+  the arm.** It is offered last now, after Dodge and Step back (Block
+  comes first with a shield in hand, Parry with a blade or a club). The
+  log says `… is wounded.`, not where; `c` shows your wounds.
+- **The town's answer to a blow is fear and the watch, nothing more:**
+  there are no cases, accusations or wanted posters yet. What the watch
+  was told it knows at once, everywhere (15 §9.2), and it forgets you
+  after an hour or so; townsfolk who heard of you keep away from you.
+- **A watchman does not look inside a wardrobe**: hiding where no one
+  saw you go works. In Last stand the strangers do not search the
+  house either.
 
 **Saving and running**
 
@@ -161,8 +161,6 @@ play, and what trying the game headless on the build branch showed.
   build), and an hour about six seconds by day and one at night: the
   country beyond your sight and hearing is simulated coarsely while you
   wait, and any key stops a wait. The target is five seconds an hour.
-- **The log fills with `Footsteps, somewhere close.`** in the town:
-  every step heard and not seen writes it.
 - **The window was not seen on a real screen** before the beta: it is
   tested headless, image by image. If it misbehaves, `--terminal` plays
   the same game. Changing the theme in play does not change the
@@ -173,7 +171,7 @@ play, and what trying the game headless on the build branch showed.
 
 ## Play-testing
 
-Two rounds of play from the title, recorded in
+Three rounds of play from the title, recorded in
 [Play-testing the beta](playtest-beta.md): every game played to an
 ending, as a player plays it, with what each round found and fixed.
 Among the fixes: the last stand can be won and lost, by hiding in the
@@ -181,4 +179,6 @@ dark house or by fighting at its door; the errand can be lost (the
 parcel given away, left behind or destroyed, or night falling);
 hunger matters; an unconscious character no longer freezes the game;
 the log says who is wounded, falls senseless or dies; the quick attack
-says when its target is out of reach.
+says when its target is out of reach. A third round made the town answer
+a blow: the one struck and whoever saw it fear you or hold you hostile,
+the townsfolk shout for the watch, and the watch comes.

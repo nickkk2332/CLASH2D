@@ -20,4 +20,4 @@ assert "core:doing_near(@self.loc, 60, 'keeping_stall') > 0"
 advance 600s
 assert "@self.loc.realm.time_of_day == 33605"
 assert "core:doing_near(@c:2140,1120,0, 30, 'working') > 0"
-expect hash bd8d3036ff8299df578922bb759da4f7
+expect hash bc90e447e52d5b4d69b8bb0110f3a791

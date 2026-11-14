@@ -704,7 +704,10 @@ In detail:
   may be null.
 - Where `T` is a string, a JSON string is that text; where `T` is an id,
   it is an id, resolved when mods load like any reference, and one that
-  names nothing is an error with the closest id.
+  names nothing is an error with the closest id. A text written in the
+  quotes an expression would write it in (`"'left'"`) keeps them, which
+  is never what was meant: the loader warns of it (`W0679`, decision
+  D-946). Write it bare, or as `{ "expr": "…" }` to work it out.
 - Where `T` is a number, a JSON string that is a quantity of 04 §7.1
   (`"250 ms"`, `"5 m/s"`, `"-5 C"`) is that quantity in SI units, so
   compound units and offsets may be written in such a field although the

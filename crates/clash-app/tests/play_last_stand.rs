@@ -142,8 +142,11 @@ const BRAWLER: usize = 1;
 /// wait (an hour, broken off when a foe comes into sight or a blow
 /// lands); with someone alive in sight, Tab and `f` at them, a minute
 /// going by when the blow cannot be struck (out of reach); any blow
-/// coming is met with a step back, a dodge or a step aside where one is
-/// in time; wounds are bound with a bandage in hand, the club put down
+/// coming is met with a dodge, a step back or a step aside where one is
+/// in time (a dodge first: holding the door, a step back lets them in;
+/// until the prompt listed the reactions by `offer`, D-943, Step back
+/// was off the end of its list, and a dodge was what was chosen); wounds
+/// are bound with a bandage in hand, the club put down
 /// for it. Until the game ends or `turns` turns have gone. Returns the
 /// blows started.
 fn hold_out(run: &mut Headless, turns: usize) -> usize {
@@ -153,7 +156,7 @@ fn hold_out(run: &mut Headless, turns: usize) -> usize {
         match top(run).as_str() {
             "ui:summary" => break,
             "ui:reaction" => {
-                react(run, &["Step back", "Dodge", "Step aside", "Parry", "Block"]);
+                react(run, &["Dodge", "Step back", "Step aside", "Parry", "Block"]);
             }
             "ui:play" => {
                 // Wounded since the last bandage, as the log says: one
@@ -290,9 +293,10 @@ fn fighting_at_the_door_an_ordinary_person_kills_the_first_and_falls() {
 #[test]
 fn a_brawler_at_the_door_kills_all_three_and_bleeds_to_death() {
     let run = night_inside(Some(BRAWLER), "brawler");
-    // The club wins every fight; nothing binds the wounds (a hand is
-    // needed for it, and both hold something) and the night is lost
-    // after the third, at one in the morning.
+    // The club wins every fight; nothing binds the wounds (the bandages
+    // are never taken up: both hands hold a club, his own and the
+    // table's; a bandage carried binds with both hands full, D-947) and
+    // the night is lost after the third, at one in the morning.
     assert_eq!(deaths(&run), 3, "{:?}", log_text(&run));
     assert_eq!(outcome(&run), "lost", "{:?}", log_text(&run));
     assert!(time_of_day(&run) < 2.0 * 3600.0);
@@ -349,7 +353,7 @@ fn shoot_it_out(run: &mut Headless, keys: usize) -> usize {
         match top(run).as_str() {
             "ui:summary" => break,
             "ui:reaction" => {
-                react(run, &["Step back", "Dodge", "Step aside", "Parry", "Block"]);
+                react(run, &["Dodge", "Step back", "Step aside", "Parry", "Block"]);
             }
             "ui:play" => {
                 press(run, "tab");
@@ -411,6 +415,21 @@ fn a_marksman_shoots_at_them_from_inside() {
         "{lines:?}"
     );
     assert!(deaths(&run) >= 1, "{lines:?}");
+    // With a bow in hand the quick shot says the bow's reason, never the
+    // pistol's (D-943).
+    assert!(
+        !lines
+            .iter()
+            .any(|line| line == "There is no loaded weapon in hand, or nowhere to aim."),
+        "{lines:?}"
+    );
+    // Tab passes over the dead (D-944).
+    if top(&run) == "ui:play" {
+        for _ in 0..4 {
+            press(&mut run, "tab");
+            assert!(!target_dead(&run), "Tab chose the dead: {}", run.text());
+        }
+    }
 }
 
 #[test]

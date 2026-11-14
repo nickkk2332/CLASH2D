@@ -1,7 +1,7 @@
 [
-  { "//": "What is only heard of someone moving (12 §7.3, 15 §13): the bundled `step` show draws a step that is seen, and this one says what a step that is only heard sounds like, with a marker where it seemed to come from. Seen, it changes nothing and writes nothing. Several shows may match one event and all apply.",
+  { "//": "What is only heard of someone moving (12 §7.3, 15 §13): the bundled `step` show draws a step that is seen, and this one says what a step that is only heard sounds like, with a marker where it seemed to come from. Seen, it changes nothing and writes nothing. Heard again before twenty seconds have passed with no footsteps heard, it puts its marker and writes no line (`quiet`, D-945): the log says once that someone is walking about. Several shows may match one event and all apply.",
     "type": "show", "id": "footsteps_heard", "on": "entity_relocated",
     "change": [],
-    "heard": { "log": "Footsteps, somewhere close.", "marker": "!" },
+    "heard": { "log": "Footsteps, somewhere close.", "marker": "!", "quiet": "20 s" },
     "importance": "minor" }
 ]

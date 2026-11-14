@@ -1,7 +1,7 @@
 [
   { "//": "The people of the bundled town (09 §3.1; package I10): a shopkeeper, a watchman, a brawler and a house dog, beside the `townsperson` of `ai/minds.json`. Each says in its `doc` how it behaves, so that a player can learn it and rely on it (09 §1). Their days are their routines (`routines/town.json`); what they do when something happens is their goals. None reads anything that singles out the player.",
     "type": "mind", "id": "shopkeeper",
-    "doc": "A shopkeeper. Keeps the shop by day and lives over it, now and then taking a turn round the market at noon. Goes to look at a noise heard and not seen. Calls for help and runs from danger seen or heard close by, and keeps away from anyone it saw hurt someone. Opens doors on its way.",
+    "doc": "A shopkeeper. Keeps the shop by day and lives over it, now and then taking a turn round the market at noon. Goes to look at a noise heard and not seen. Calls for help and runs from danger seen or heard close by. Keeps away from anyone it saw strike someone without cause, or who struck it, and shouts for the watch (`social/offences.json`); keeps away too from anyone it hears of so. Opens doors on its way.",
     "goals": ["flee_danger", "flee_feared", "investigate_noise", "keep_routine", "go_about"],
     "weights": { "caution": 0.8, "curiosity": 0.3 },
     "think": "1 s",
@@ -9,13 +9,12 @@
     "go_action": "go_to",
     "interact_action": "interact",
     "routine": "shopkeeping",
-    "senses": ["human_sight", "human_hearing"],
+    "senses": ["human_sight", "human_hearing", "touch"],
     "fear_of": ["monster"],
-    "fear_after": ["hit_landed", "wound_inflicted"],
     "hazards": [ { "events": ["release_started", "collapse_started"], "radius": 4, "cost": 20 } ] },
 
   { "type": "mind", "id": "watchman",
-    "doc": "A watchman of the town. By day walks a beat between the town's civic places, a while at each; in the evening stands at the post; sleeps after midnight. Answers a call for help it hears by going to where it came from. Goes for anyone it holds hostile while it can see them, and for anyone it saw hurt someone: up to them and at them with its fists; once it has lost them, goes to where they were last believed to be, looks round, and goes back to its round. Opens doors on its way.",
+    "doc": "A watchman of the town. By day walks a beat between the town's civic places, a while at each; in the evening stands at the post; sleeps after midnight. Answers a call for help it hears by going to where it came from. Holds hostile anyone it saw strike someone without cause, or who struck it, and reports them to the watch; and anyone the watch was told of so, once it sees them (`social/offences.json`: its duty outweighs its caution). Goes for anyone it holds hostile while it can see them: up to them, lays hands on them and strikes them; once it has lost them, goes to where they were last believed to be, looks round, and goes back to its round. Opens doors on its way.",
     "goals": ["confront", "search_lost", "answer_call", "investigate_noise", "keep_routine"],
     "weights": { "duty": 0.9, "curiosity": 0.6, "caution": 0.2 },
     "think": "1 s",
@@ -23,9 +22,8 @@
     "go_action": "go_to",
     "interact_action": "interact",
     "routine": "watch_shift",
-    "senses": ["human_sight", "human_hearing"],
-    "hostile_to": ["outlaw"],
-    "hostile_after": ["hit_landed", "wound_inflicted"] },
+    "senses": ["human_sight", "human_hearing", "touch"],
+    "hostile_to": ["outlaw"] },
 
   { "type": "mind", "id": "brawler",
     "doc": "A drinker who is quick to fight. Sleeps late and spends the evening at the tavern (the market square where the town has none). Fights anyone it sees hurt someone and anyone who hurts it, and while drinking now and then picks a fight with someone standing close by. Does not run. Opens doors on its way.",
@@ -36,7 +34,7 @@
     "go_action": "go_to",
     "interact_action": "interact",
     "routine": "carousing",
-    "senses": ["human_sight", "human_hearing"],
+    "senses": ["human_sight", "human_hearing", "touch"],
     "hostile_after": ["hit_landed", "wound_inflicted"] },
 
   { "type": "mind", "id": "house_dog",
@@ -46,6 +44,6 @@
     "think": "800 ms",
     "wake_clarity": 50,
     "go_action": "go_to",
-    "senses": ["human_sight", "human_hearing"],
+    "senses": ["human_sight", "human_hearing", "touch"],
     "fear_after": ["hit_landed", "wound_inflicted"] }
 ]

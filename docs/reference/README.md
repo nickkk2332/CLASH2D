@@ -7,7 +7,7 @@ For a walkthrough, start with the [modding guide](../modding-guide.md). The spec
 
 | Page | What it lists | Items |
 |------|---------------|------:|
-| [types](types/README.md) | Definition types: each field with its value, unit, default, whether it is required and what it refers to; the keys every definition carries | 76 types, 1338 fields |
+| [types](types/README.md) | Definition types: each field with its value, unit, default, whether it is required and what it refers to; the keys every definition carries | 76 types, 1340 fields |
 | [values](values.md) | How each kind of field value is written: quantities, references, tags, texts, expressions, conditions, effects |  |
 | [units](units.md) | The units a quantity may be written in | 30 |
 | [properties](properties.md) | Kinds of subject and their properties, by kind | 18 kinds, 326 properties |
@@ -19,7 +19,7 @@ For a walkthrough, start with the [modding guide](../modding-guide.md). The spec
 | [queries](queries.md) | Kinds of query: arguments and results | 5 |
 | [settings](settings.md) | The engine's settings, with their defaults | 32 |
 | [reasons](reasons.md) | Reasons the engine refuses or reports with | 259 |
-| [diagnostics](diagnostics.md) | Diagnostic codes of the loader, the expression compiler and the console | 176 |
+| [diagnostics](diagnostics.md) | Diagnostic codes of the loader, the expression compiler and the console | 177 |
 | [modding-guide](../modding-guide.md) | The modding guide: making a mod, step by step |  |
 
 The reference is checked: a test fails if anything registered has no documentation, and another if these pages differ from what the command writes. A package that registers something runs the command and commits the pages it changes.

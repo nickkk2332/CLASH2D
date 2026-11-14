@@ -3,7 +3,8 @@
 //! answers a stranger; a blow; and a wardrobe upstairs in a house by
 //! the square to hide in. (Struck, the watchman of the square walked on,
 //! and nobody came looking while she hid: `docs/playtest-beta.md`, the
-//! second round.) And the guardhouse's armoury: its key from the
+//! second round; since the third the town answers a blow: the market
+//! fight.) And the guardhouse's armoury: its key from the
 //! sergeant's desk, the locked door opened with it by walking into it,
 //! and a weapon taken from a rack.
 //!
@@ -130,33 +131,16 @@ fn a_word_a_blow_the_watch_and_a_wardrobe() {
         "{struck:?}"
     );
 
-    // Half a minute, then upstairs to the nearest wardrobe, and in.
-    for _ in 0..30 {
-        answer(&mut run);
-        press(&mut run, ".");
+    // Since the third round the one struck answers (D-941): upstairs to
+    // the nearest wardrobe at once, and in; caught on the way, or hidden
+    // three minutes with nobody looking in.
+    let ada = player(&run);
+    let (was_caught, hidden) = flee_to_a_wardrobe(&mut run, ada);
+    eprintln!("caught {was_caught}, hidden {hidden}");
+    assert!(was_caught || hidden, "{}", run.text());
+    if hidden && !was_caught {
+        assert_eq!(top(&run), "ui:play");
     }
-    let at = player_loc(&run).unwrap();
-    let wardrobe = *near(&run, at, "wardrobe", 30)
-        .first()
-        .expect("a wardrobe in a house by the square");
-    walk_to(&mut run, wardrobe, 1, 120);
-    answer(&mut run);
-    assert!(use_near(&mut run, "Hide"), "{}", run.text());
-    until_asked(&mut run, 60);
-    let hidden = run
-        .game()
-        .with_session(|session| {
-            let record = session.sim.truth().entities().get(session.player)?;
-            Some(matches!(record.place(), clash_sim::Place::In(_)))
-        })
-        .flatten();
-    assert_eq!(hidden, Some(true), "inside the wardrobe: {}", run.text());
-    // Three minutes in the wardrobe: nobody came looking.
-    for _ in 0..3 {
-        answer(&mut run);
-        press(&mut run, "p");
-    }
-    assert_eq!(top(&run), "ui:play");
 }
 
 /// What a property of an entity reads as text, or empty (the session's
@@ -211,14 +195,97 @@ fn about(run: &Headless, who: EntityId, property: &str, of: EntityId) -> bool {
         .unwrap_or(false)
 }
 
-/// The market fight: someone in the square struck until a blow lands,
-/// and the watch, which holds hostile whoever it sees hurt someone, comes
-/// for the one who struck. It does not (the second round's known issue
-/// 2): a watchman struck by a rowdy, or by the same character delegated,
-/// answers in a test script, but struck by the player's character he
-/// walks on. Kept, ignored, until the AI stream finds why.
+/// A property of a character read from truth for the session's
+/// assertions, with its arguments.
+fn property(run: &Headless, who: EntityId, name: &str, args: &[Value]) -> Value {
+    run.game()
+        .with_session(|session| {
+            session
+                .sim
+                .property_named(clash_sim::Subject::Entity(who), name, args)
+        })
+        .unwrap_or(Value::Null)
+}
+
+/// Whether the character is caught: held by someone, or down.
+fn caught(run: &Headless, ada: EntityId) -> bool {
+    !property(run, ada, "gripped_by", &[]).is_null()
+        || property(run, ada, "helpless", &[]).as_bool() == Some(true)
+}
+
+/// Whether a mind remembers a blow struck without cause, seen or told.
+fn knows_of_a_blow(run: &Headless, who: EntityId) -> bool {
+    !property(
+        run,
+        who,
+        "memory_confidence",
+        &[Value::from("core:unprovoked_blow")],
+    )
+    .is_null()
+}
+
+/// Runs for the nearest wardrobe in a house by the square, answering
+/// blows on the way, gets in, and waits three minutes, hidden or not.
+/// Returns whether the character was caught (held, or down) on the way
+/// or while waiting, and whether it got in.
+fn flee_to_a_wardrobe(run: &mut Headless, ada: EntityId) -> (bool, bool) {
+    let at = player_loc(run).unwrap();
+    let wardrobe = *near(run, at, "wardrobe", 30)
+        .first()
+        .expect("a wardrobe in a house by the square");
+    let mut was_caught = false;
+    for _ in 0..80 {
+        if caught(run, ada) {
+            was_caught = true;
+            break;
+        }
+        answer(run);
+        let Some(here) = player_loc(run) else { break };
+        let delta = wardrobe.cell - here.cell;
+        if delta.x.abs().max(delta.y.abs()) <= 1 && delta.z == 0 {
+            break;
+        }
+        if walk_to(run, wardrobe, 1, 4) == 0 && top(run) == "ui:play" {
+            press(run, ".");
+        }
+    }
+    let mut hidden = false;
+    if !was_caught {
+        answer(run);
+        if top(run) == "ui:play" && use_near(run, "Hide") {
+            until_asked(run, 60);
+            hidden = run
+                .game()
+                .with_session(|session| {
+                    let record = session.sim.truth().entities().get(session.player)?;
+                    Some(matches!(record.place(), clash_sim::Place::In(_)))
+                })
+                .flatten()
+                .unwrap_or(false);
+        }
+        // Three minutes, hidden or not.
+        for _ in 0..3 {
+            answer(run);
+            if caught(run, ada) {
+                was_caught = true;
+                break;
+            }
+            press(run, "p");
+        }
+        was_caught = was_caught || caught(run, ada);
+    }
+    (was_caught, hidden)
+}
+
+/// The market fight (the third round; the consequences stream, D-940 to
+/// D-942): someone in the square struck by the player's character until
+/// a blow lands. The one struck feels it and takes against her, whoever
+/// saw it does too, a townsperson shouts for the watch and a watchman
+/// who saw it reports her to the watch, which comes for her. She runs for
+/// a house by the square and hides in a wardrobe upstairs: caught on the
+/// way, or not found. (The second round's known issue 1: before, the one
+/// struck never perceived the blow on himself, and the watch never came.)
 #[test]
-#[ignore = "known issue: struck by the player, the watch does not answer (docs/playtest-beta.md, the second round, issue 2)"]
 fn a_fight_in_the_square_and_the_watch_answers() {
     let data = DataDir::new("market-fight");
     let mut run = boot_default(data.path(), 4);
@@ -240,16 +307,17 @@ fn a_fight_in_the_square_and_the_watch_answers() {
         press(&mut run, ".");
     }
     let victim = victim.expect("someone in the square");
-    eprintln!("struck: {}", text_of(&run, victim, "mind_def"));
     assert!(walk_up_to_target(&mut run, 40), "{}", run.text());
 
-    // Blows until one lands, or a minute's worth of keys.
+    // Blows until one lands, or a minute's worth of keys; someone who
+    // gets away is let go, and whoever is next in sight taken instead.
     let before = log_len(&run);
     let mut hurt = false;
     for _ in 0..60 {
         answer(&mut run);
-        if !walk_up_to_target(&mut run, 6) {
-            break;
+        if !walk_up_to_target(&mut run, 12) {
+            press(&mut run, "tab");
+            continue;
         }
         press(&mut run, "f");
         if !["ui:play", "ui:reaction"].contains(&top(&run).as_str()) {
@@ -265,39 +333,79 @@ fn a_fight_in_the_square_and_the_watch_answers() {
     }
     let fight = log_since(&run, before);
     assert!(hurt, "no blow landed: {fight:?}");
-    if let Some(sprite) = run.game().scene().target() {
-        let struck = EntityId::from_bits(sprite.raw());
-        eprintln!(
-            "struck {}: perceives her {}, hostile {}, goal {:?}",
-            text_of(&run, struck, "mind_def"),
-            about(&run, struck, "perceives", ada),
-            about(&run, struck, "hostile", ada),
-            text_of(&run, struck, "goal"),
-        );
-    }
+    let struck = run
+        .game()
+        .scene()
+        .target()
+        .map_or(victim, |sprite| EntityId::from_bits(sprite.raw()));
+    eprintln!(
+        "struck {}: fears her {}, hostile {}, goal {:?}",
+        text_of(&run, struck, "mind_def"),
+        about(&run, struck, "fears", ada),
+        about(&run, struck, "hostile", ada),
+        text_of(&run, struck, "goal"),
+    );
+    // The one struck saw who struck him: afraid of her, or, of the
+    // watch, holding her hostile.
+    assert!(
+        about(&run, struck, "fears", ada) || about(&run, struck, "hostile", ada),
+        "the one struck makes nothing of it: {fight:?}"
+    );
 
-    // Then the character stands and waits: the watch is told, or sees,
-    // and comes for the one who struck.
+    // The watch is told, or sees, and holds her hostile.
     let watch = minds_named(&run, "watch");
     assert!(!watch.is_empty(), "the town has a watch");
     let mut answered = false;
-    for _ in 0..180 {
+    for _ in 0..90 {
         answer(&mut run);
-        press(&mut run, ".");
         answered = watch.iter().any(|guard| holds_hostile(&run, *guard, ada));
-        if answered || top(&run) != "ui:play" {
+        if answered {
             break;
         }
+        press(&mut run, ".");
     }
     let after = log_since(&run, before);
     for guard in &watch {
         eprintln!(
-            "watchman {guard}: perceives her {}, goal {:?}",
+            "watchman {guard}: hostile {}, perceives her {}, knows of the blow {}, goal {:?}",
+            holds_hostile(&run, *guard, ada),
             about(&run, *guard, "perceives", ada),
+            knows_of_a_blow(&run, *guard),
             text_of(&run, *guard, "goal")
         );
     }
     assert!(answered, "the watch never came: {after:?}");
+    assert!(
+        watch.iter().any(|guard| knows_of_a_blow(&run, *guard)),
+        "the watch knows nothing of it"
+    );
+
+    // Flee: up to the nearest wardrobe in a house by the square, and in.
+    let (was_caught, hidden) = flee_to_a_wardrobe(&mut run, ada);
+    let after = log_since(&run, before);
+    let hunting: Vec<String> = watch
+        .iter()
+        .filter(|guard| holds_hostile(&run, **guard, ada))
+        .map(|guard| text_of(&run, *guard, "goal"))
+        .collect();
+    eprintln!(
+        "caught {was_caught}, hidden {hidden}; the watch still against her: {hunting:?}; log {after:?}"
+    );
+    // Caught on the way or found, or hidden and not found: either way the
+    // town answered. Hidden and not caught, no watchman sees her.
+    assert!(
+        was_caught || hidden,
+        "neither caught nor hidden: {}",
+        run.text()
+    );
+    if hidden && !was_caught {
+        assert!(
+            !watch.iter().any(|guard| {
+                holds_hostile(&run, *guard, ada) && about(&run, *guard, "perceives", ada)
+            }),
+            "hidden, yet a watchman sees her"
+        );
+    }
 }
 
 /// How many of the town's people a routine has doing something now.

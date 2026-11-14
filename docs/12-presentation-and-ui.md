@@ -1163,6 +1163,12 @@ a category and an importance (decision D-604).
   importance, is not added again: the line before counts one more and
   takes the newer tick, and is shown with the count after it, dimmed:
   `Debris crashes down. (x3)`.
+- A show's `heard` may ask for a `quiet` (decision D-945): a time
+  during which nothing it is about must have been heard before its line
+  is written again. Its marker is put each time. The bundled footsteps
+  (`ui:footsteps_heard`) ask for twenty seconds: someone walking about
+  out of sight is told once, and again after a quiet, not at every
+  step.
 - The log keeps its newest 2000 lines.
 - The `log` widget wraps lines at spaces to its width, a column less
   when a scrollbar is drawn; shows only the categories its `filter`
@@ -1445,9 +1451,13 @@ it is not available, says so (`engine:action_not_aimed`), and comes
 after those that take a target, so that the quick blow at someone out of
 reach is refused with why ("That is out of reach.") rather than turned
 on the world (decision D-904). Those that could start come first, then
-those that strike with something held, then those that take fewer
-slots, then by qualified id: the quick blow is the lightest that can be
-made. Nothing closes the distance by itself: a blow out of reach is
+those whose `offer` (an action's field, a number in the scope of its
+`requires`, default 0) is higher, then those that strike with something
+held, then those that take fewer slots, then by qualified id: the quick
+blow is the lightest that can be made, and with none that can, the
+quick key says why the first cannot: the one that suits what is in
+hand, so that a bow with no arrow left says so, and not that no pistol
+is loaded (decision D-943). Nothing closes the distance by itself: a blow out of reach is
 refused, and walking up is the player's to do.
 
 **Which picker.** The `act` effect's `pick` names the picker for a
@@ -2267,7 +2277,9 @@ The status column names the target, while there is one
 D-794). Tab and shift+Tab (`next_target`, `prev_target`) select the
 next or the previous creature the character sees as the target, nearest
 first, with the `camera` effect's `target`; the map draws its cell in
-the theme's `target` style. What can be done is read from the loaded
+the theme's `target` style. A body the party sees lying dead is drawn as
+a thing, not a creature: the target cycle passes over it, and a target
+that dies is no longer the target (decision D-944). What can be done is read from the loaded
 mods' actions by their tags (`view.actions_with`, section 9.3): `strike`
 for a blow and `shot` for a shot. Each is bound twice, quick and
 precise (D-079): `attack` (`f`) takes the first blow that can be made at
@@ -2705,7 +2717,8 @@ the stances its `id<trait>` parameter could be chosen from; `reload` and `throw`
 named bare, and `target` is the name of the parameter `with` and
 `actions_with` fill with the creature. The order in which
 `actions_with` lists them, and so which blow the quick key strikes, is
-the engine's (decision D-791): a mod cannot rank its own attacks.
+the engine's (decision D-791), but for each action's `offer`, which
+ranks it among those that could start alike (decision D-943).
 Whether an action could start is judged without its footing, the slots
 other actions hold and its hooks. The parts offered for a blow are
 those on the outside of the target's body as it is, while the character

@@ -62,11 +62,12 @@ fn items() -> String {
 }
 
 /// `mods/core`'s world, perception, living things, movement, items,
-/// fighting and minds, with one more file.
+/// fighting, minds and social life (since D-941 what a townsperson makes
+/// of a blow it sees is the social rules'), with one more file.
 fn try_load(extra: &str) -> Result<Arc<Defs>, String> {
     let types = common::types();
     let mut files = core_files("world");
-    for dir in ["perception", "life", "combat", "ai"] {
+    for dir in ["perception", "life", "combat", "ai", "social"] {
         files.extend(core_files(dir));
     }
     files.push((
@@ -632,8 +633,15 @@ fn a_townsperson_who_sees_a_fight_calls_out_and_flees() {
             .any(|goal| goal == "core:flee_danger" || goal == "core:flee_feared"),
         "{goals:?}"
     );
+    // It calls out: aloud by its mind's goal (`said`), or, having seen
+    // a blow struck without cause, by shouting for the watch, an alarm
+    // whoever is near hears (D-941, D-948), which puts off its goal's
+    // own call for half a minute.
+    let shouted = events.iter().any(|event| {
+        event.name() == "message_heard" && common::entity_of(event, "speaker") == Some(ada)
+    });
     assert!(
-        !named(&events, "said", ada).is_empty(),
+        !named(&events, "said", ada).is_empty() || shouted,
         "it did not call out"
     );
     assert_eq!(

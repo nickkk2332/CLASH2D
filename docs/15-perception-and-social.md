@@ -175,6 +175,15 @@ As built (decision D-612):
   subject it is about stands, or else from the first of its subjects
   that is somewhere, and carries the event's type and the actor of its
   cause.
+- **What happens to oneself** is not seen or heard through a signal
+  about oneself, since a signal is not given to what it is about.
+  Whoever a blow lands on perceives it only through a signal that is
+  about nothing, or about someone else, and reaches it: the bundled
+  `blow_felt` (decision D-940) is a signal of the kind `touch`, about
+  nothing, from where the one struck stands, which the sense `touch`
+  (half a metre) receives, so that the one struck alone feels it. It
+  makes out who struck it as any percept does: only if it perceives
+  them through some sense already.
 - `signals` on actions and phases and `noise` on movement wait for the
   packages that run actions and movement, which call `emit_signal`.
 
@@ -1290,6 +1299,53 @@ The pattern for making characters respond to the world:
 Attached to a trait or template, a rule like this applies to every character
 that has it. Characters built from several templates accumulate reactions
 from each. Stories come from their interference.
+
+As built, the bundled answer to a blow struck without cause (decisions
+D-940 to D-942; `mods/core/data/social/offences.json`, in the rule group
+`social_life`) is written this way, and names nothing the engine knows:
+
+- **The one struck** feels the blow (`blow_felt`, §3.2) and, if it
+  perceives who struck it, takes against them; so does **a witness**
+  who sees or hears a blow and makes out who struck it, against someone
+  it neither holds hostile nor fears (`core:answer_a_blow`, on
+  `perceived` with `hit_landed`). The jar of a blow back into the
+  striker's own hand is no offence.
+- **Taking against** someone (`core:take_against`) is a relation by the
+  mind's own weights: `hostile` as much as its `duty` where that
+  outweighs its `caution` (the watch), else `fearful` as much as its
+  caution (the townsfolk). Held toward the persona it took the striker
+  for, so a disguised striker is held to account as the disguise. The
+  AI reads it as a stance (09 §6.6): the watch goes for them, the
+  townsfolk keep away. A friendship stronger than the new hostility
+  outweighs it: a watchman who sees another strike someone does not
+  turn on him.
+- The first time a mind puts a striker to such a blow it **remembers**
+  it, as `core:unprovoked_blow` naming the persona; a member of the
+  watch **reports** it to the watch (`report_to_group`), every member
+  being told at once; one of the townsfolk not played by anyone that
+  took fright (its caution not outweighed by its duty: not a brawler)
+  **shouts for the watch**: an alarm (`core:alarm`, said at strength 8,
+  a call that carries a report) that whoever hears it is told, and that
+  a watchman answers and passes to the watch
+  (`core:pass_alarms_to_the_watch`). Calling for help and running
+  remain its mind's goals (`flee_danger`), which a watchman who hears
+  answers (`answer_call`).
+- **Passing a call on** (decision D-948): one of the townsfolk who hears
+  a call for help (`core:help`) shouts for the watch in turn, at most
+  once in half a minute, as an `alarm` (`calls`, carrying a report),
+  which the watch answers as a call (`core:heed_alarm`) and the
+  townsfolk do not pass on: a call reaches twice a voice's reach. The
+  townsfolk's own shout at a blow is an alarm too.
+- **Recognising** (§9.2): whoever comes to perceive a persona it
+  remembers, seen or told, as having struck without cause takes against
+  it (`core:recognise_an_offender`, on `perceived` with `detection`); so
+  does whoever is told while it already perceives them
+  (`core:told_of_an_offender`, on `memory_added`).
+- A blow nobody made out the striker of has no consequence: struck
+  from behind by someone unseen, the one struck knows it was struck and
+  not by whom. (Turning to where the blow came from was tried and left
+  out: in the last stand's dark it let the strangers see whoever struck
+  them and block every blow after, which changed the night's balance.)
 
 ## 13. What the player perceives
 

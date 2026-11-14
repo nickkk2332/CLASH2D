@@ -1,0 +1,42 @@
+# unprovoked_blow (the consequences stream, D-940 to D-942; 15 §3.2, §6,
+# §9, §11, §12; 13 §8.2): someone a player plays strikes a townsperson
+# without cause in daylight, in front of a watchman and another
+# townsperson. The one struck feels it (`blow_felt`) and, seeing who did
+# it, is afraid of her; the townsperson who saw it is afraid of her too
+# and shouts for the watch (an alarm); the watchman holds her hostile and goes for
+# her, and reports her to the watch (`core:answer_a_blow`), so that a
+# watchman fifty metres off, who saw nothing, knows of her and holds her
+# hostile once he comes to see her (`core:recognise_an_offender`).
+use default seed=5
+gen core:testland size=2
+spawn creature as=w
+session @w @c:30,30,0
+spawn item at @c:10,10,0 as=spot
+as @spot do { "spawn": { "template": "core:person", "at": "self.loc" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 1, 0, 0)" } }
+as @spot do { "spawn": { "template": "core:watch_guard", "at": "offset(self.loc, 4, 2, 0)" } }
+as @spot do { "spawn": { "template": "core:person", "at": "offset(self.loc, 0, 4, 0)" } }
+as @spot do { "spawn": { "template": "core:watch_guard", "at": "offset(self.loc, 50, 50, 0)" } }
+remove @spot
+control @e:2 direct
+advance 2s
+assert "@e:3.perceives(@e:2) and @e:4.perceives(@e:2) and @e:5.perceives(@e:2) and not @e:6.perceives(@e:2)"
+assert "not @e:3.fears(@e:2) and not @e:4.hostile(@e:2) and not @e:5.fears(@e:2)"
+start_action @e:2 core:punch "{ 'target': @e:3 }"
+wait @e:2 1s
+advance 600ms
+expect event hit_landed actor=@e:2
+expect event message_heard kind=core:alarm
+# The striker is handed to her own mind, so that time can pass without
+# asking the player how to answer the watchman's blows.
+control @e:2 delegated
+advance 1s
+assert "@e:3.fears(@e:2) and @e:3.rel('core:fearful', @e:2) > 0.6"
+assert "@e:5.fears(@e:2) and @e:5.remembers_actor(@e:2, 'core:unprovoked_blow')"
+assert "@e:4.hostile(@e:2) and @e:4.rel('core:hostile', @e:2) > 0.8 and @e:4.goal == 'core:confront'"
+assert "@e:6.remembers_actor(@e:2, 'core:unprovoked_blow') and @e:6.told_of('core:unprovoked_blow') and not @e:6.hostile(@e:2)"
+# The far watchman comes to see her.
+move @e:2 @c:58,60,0
+advance 2s
+assert "@e:6.perceives(@e:2) and @e:6.hostile(@e:2)"
+expect hash fa283f2396d9a4ee23645622fad9404f

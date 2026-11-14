@@ -10,5 +10,11 @@
     "range": 40, "arc": 360, "threshold": "if self.has_tag('asleep') then 0.02 else 0.001",
     "gain": 4.0, "decay": 0.25, "interval": "500 ms",
     "stopped_by": { "vital": ["unconscious", "dead"] },
-    "doc": "Hearing: forty metres all round; asleep, only what is loud at the ear. Nothing is heard unconscious or dead (D-930)." }
+    "doc": "Hearing: forty metres all round; asleep, only what is loud at the ear. Nothing is heard unconscious or dead (D-930)." },
+  { "//": "Touch: feeling what lands on one's own body. It reaches no further than half a metre, one's own place, so a blow is felt only by whoever it lands on; and since nothing gives off touch standing still it finds nothing by sweeping, and sweeps once an hour. A sleeper feels a blow; the unconscious and the dead feel nothing (D-930).",
+    "type": "sense", "id": "touch", "signal": "touch",
+    "range": 0.5, "arc": 360, "threshold": 0.1,
+    "interval": "1 h", "notices": [],
+    "stopped_by": { "vital": ["unconscious", "dead"] },
+    "doc": "Touch: what lands on one's own body is felt. Nothing is felt unconscious or dead." }
 ]

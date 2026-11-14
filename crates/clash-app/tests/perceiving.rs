@@ -240,13 +240,14 @@ fn someone_moving_behind_a_wall_is_heard_not_seen() {
     let markers: Vec<CellPos> = model.heard().map(|marker| marker.loc.cell).collect();
     assert_eq!(markers, [next.cell], "a marker where it was heard");
     assert!(!drawn(&run, someone), "heard is not seen");
+    // Heard within twenty seconds of being put there, the step is marked
+    // and not told again (decision D-945): the last line is still the
+    // footsteps heard then. That it is told again after a quiet is
+    // `clash-scene`'s test of the show's `quiet`.
     let log = run.game().scene().log().lines();
     let last = log.last().unwrap();
     assert_eq!(last.text.plain(), "Footsteps, somewhere close.");
-    assert!(
-        log.len() == lines + 1 || last.count > 1,
-        "one more line, or the same line once more, for what was heard"
-    );
+    assert_eq!(log.len(), lines, "no line within the quiet");
     // The marker is shown for a while and then goes.
     for _ in 0..120 {
         run.pass();

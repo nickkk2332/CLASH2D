@@ -17,6 +17,7 @@
     "reaction_to": ["strike"], "uses": { "arm": 1 }, "ready": "guard",
     "requires": "self.wielding_surface('flat') != null",
     "fail_text": "There is nothing in hand to parry with.",
+    "offer": "if self.wielding_surface('flat') != null then 1 else 0",
     "tags": ["defence"],
     "phases": [
       { "id": "set",     "time": "80 ms" },
@@ -32,9 +33,10 @@
       "holds": "(self.attr.strength ?? 10) * 60",
       "brace": 0.3 } },
 
-  { "//": "Taking a blow on a shield, or on the forearm where there is none: less is turned aside than by a parry, and what is not lands on the shield or the arm.",
+  { "//": "Taking a blow on a shield, or on the forearm where there is none: less is turned aside than by a parry, and what is not lands on the shield or the arm. With a shield in hand it is offered first; with none it is offered last (`offer`, D-943), after ducking and stepping back: a bare forearm stops a blade by being cut.",
     "type": "action", "id": "block", "name": "Block",
     "reaction_to": ["strike"], "uses": { "arm": 1 }, "ready": "guard",
+    "offer": "if self.wielding('shield') != null then 2 else -1",
     "tags": ["defence"],
     "phases": [
       { "id": "set",     "time": "60 ms" },

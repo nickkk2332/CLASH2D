@@ -1255,9 +1255,13 @@ As built (decision D-711), in `clash_sim::action::react`:
   phase. The reactor then turns to face the window's source, a
   `Reaction` decision it was asked for the window is answered, and the
   candidate is marked `reacted`.
-- **Options.** `Sim::reaction_options(entity, window)` lists, in order
-  of definition, every action whose `reaction_to` lists the kind and
-  that may answer for the entity (named, or `on_behalf`). Each is a
+- **Options.** `Sim::reaction_options(entity, window)` lists every
+  action whose `reaction_to` lists the kind and that may answer for the
+  entity (named, or `on_behalf`), by each action's `offer` (a number in
+  the scope of `requires`, default 0, higher first; 0 for one that
+  cannot start) and, among equals, in order of definition (decision
+  D-943): the order a prompt shows them in, which the bundled reactions
+  make suit what is in hand. Each is a
   `ReactionOption { action, label, in_time, refused }`: its `name`
   rendered for the entity, or its id; whether its `ready` phase would
   begin before the deadline, worked out from the phases' durations
