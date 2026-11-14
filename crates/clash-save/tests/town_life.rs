@@ -920,16 +920,17 @@ fn the_towns_residents_are_made_as_its_tracts_load() {
 #[test]
 fn in_the_market_at_the_bundled_cap_everyone_the_player_sees_is_hot() {
     // Performance 3, step 4: the market town begins with the attention
-    // cap its scenario sets (`sim.max_hot_minds`). Whoever the player
-    // sees in the square on a market morning is stepped in full, whatever
-    // the cap, and the cap is kept but for them (09 §9.3, D-891).
+    // cap its scenario gives it (`sim.max_hot_minds`, else the default).
+    // Whoever the player sees in the square on a market morning is
+    // stepped in full, whatever the cap, and the cap is kept but for them
+    // (09 §9.3, D-891).
     let mut town = Town::begin(7, 1);
     let cap = town
         .sim()
         .settings()
         .get(clash_sim::ai::warm::MAX_HOT_SETTING)
         .and_then(clash_core::Value::as_int)
-        .expect("the scenario sets the cap");
+        .unwrap_or(clash_sim::ai::warm::DEFAULT_MAX_HOT);
     for _ in 0..10 {
         town.ok("advance 1s");
         let sim = town.sim();

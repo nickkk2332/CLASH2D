@@ -4,7 +4,6 @@
     "doc": "Take a parcel across the market town to its town hall before nightfall.",
     "intro": "A clerk at the town hall is waiting for this parcel, and the hall shuts at nightfall. It is two in the afternoon. The journal (J) shows the way.",
     "tags": ["errand"],
-    "settings": { "sim.max_hot_minds": 50 },
     "worlds": [ { "realm": "town", "seed": "ask" } ],
     "start": {
       "characters": [ { "template": "person", "create": false, "pick": true } ],

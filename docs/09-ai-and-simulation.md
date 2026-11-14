@@ -751,8 +751,8 @@ player. Only characters with minds have levels; a directly controlled
 character has none and is never warm.
 
 **Who is warm.** Of the minds in the world, those ranked beyond
-`sim.max_hot_minds` (default 150; the bundled game scenarios set 50,
-D-927). A mind's tract does not make it warm: one in a warm tract is ranked as any other, nearest first, and so
+`sim.max_hot_minds` (default 150; measured, a minute's wait in the
+market town keeps to its budget from 50 down, D-927). A mind's tract does not make it warm: one in a warm tract is ranked as any other, nearest first, and so
 is among the first stepped down, while its perception is a warm
 observer's there whatever its level (15 §14). One **stepper** (03 §10)
 on universal time works levels out every `WARM_STEP` (1 s) while
@@ -1560,8 +1560,11 @@ five runs, before and after:
 
 A minute's wait at night is within its target at every cap. By day it is
 within it from a cap of 50 down (at 50, 0.81 to 1.03 s over five runs; at
-60 never under 1.03 s), and the bundled game scenarios now set 50
-(D-927): below about 60 the cost is that of the warm characters, who
+60 never under 1.03 s). The bundled game scenarios do not set it yet
+(D-927): given 50, two play sessions of the application see another game
+(the walk to the bakery's wood is stopped short; the errand's last frame
+shows another line of the log), and those sessions are the play-testing
+stream's. Below about 60 the cost is that of the warm characters, who
 think by the same goals as the hot and plan the paths they walk in bulk,
 and it falls little with the cap. Whoever the player sees is hot at any
 cap (D-891), so the market seen from the square is the same. What is
