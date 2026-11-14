@@ -132,7 +132,5 @@ r #333333 bright_black
 s #005900 bright_black
 t #191919 bright_black
 u #1b1b1b bright_black
-v #e5e5e5 white
-sprites 1
-@ x=26.000 y=7.000 scale=1.000 alpha=1.000 layer=2 fg=v
+sprites 0
 fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none

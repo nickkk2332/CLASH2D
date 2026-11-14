@@ -452,6 +452,11 @@ impl Compiler<'_, '_> {
         if let Some(value) = arg.constant() {
             return literal_type(value);
         }
+        // A value source over a query: what it makes of its results,
+        // so that `$porch.x` reads a property of the cell (D-905).
+        if let Some(ty) = arg.result_type() {
+            return ty;
+        }
         if let Written::Source(source) = arg.written()
             && let ValueSource::Call { function, .. } = &**source
         {

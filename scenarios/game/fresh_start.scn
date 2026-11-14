@@ -3,11 +3,13 @@
 # states, with its setup applied (13 §4). `core:last_stand` asks for
 # its seed, which `use` gives; its realm's clock is set to ten at night
 # before anything is in the world; the character is placed in front of
-# the house on the lane; `start.do` brings three strangers, tags them
-# hostile, marks the nearest door of the house (two cells east of the
-# old fixed offset, which was a wall) and lights a lamp beside it; both
-# objectives are shown. The same answers give the same state hash,
-# which the runner checks four ways and the golden hash below pins.
+# the house on the lane; `start.do` marks the nearest door of the house
+# (two cells east of the old fixed offset, which was a wall), lights a
+# lamp beside it and another inside, leaves a club and two bandages on
+# the table, and brings the first of three strangers, tagged hostile;
+# the others come later (decision D-909); both objectives are shown.
+# The same answers give the same state hash, which the runner checks
+# four ways and the golden hash below pins.
 use default seed=7
 begin core:last_stand place=0
 assert "scenario_id() == 'core:last_stand'"
@@ -16,9 +18,10 @@ assert "@self.loc.x == 17 and @self.loc.y == 45"
 assert "party()[0] == @self"
 assert "objective_state('inside') == 'active' and objective_state('dawn') == 'active'"
 assert "len(@self.objectives) == 2 and @self.objectives[0].where == 'north-east, 3 m'"
-assert "@e:1.has_tag('hostile') and @e:2.has_tag('hostile') and @e:3.has_tag('hostile')"
+assert "str(@e:1.def) == 'core:club' and str(@e:2.def) == 'core:bandage'"
+assert "@e:3.has_tag('hostile') and @e:3.has_tag('person')"
 assert "not @self.has_tag('hostile')"
 expect event scenario_started
 advance 5s
 assert "objective_state('inside') == 'active'"
-expect hash 30a2f8b8293cb91a91d360178cb1e00e
+expect hash 9fe422558cfd7c0950991f03a6fdcc9e

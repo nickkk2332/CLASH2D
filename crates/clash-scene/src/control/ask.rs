@@ -31,6 +31,10 @@ use crate::view::Camera;
 pub const PICKER_ROLE_PREFIX: &str = "picker.";
 /// The picker for an entity: a cursor over the map.
 pub const PICKER_ENTITY: &str = "entity";
+/// Why an entity picker was not opened: nobody the party perceives
+/// could be chosen and nothing was filled in (decision D-904). The same
+/// words the target cycle says.
+pub const NOBODY_TO_CHOOSE: &str = "Nobody is in sight to choose.";
 /// The picker for a cell: a cursor over the map.
 pub const PICKER_CELL: &str = "cell";
 /// The picker for a list of cells, built one step at a time.
@@ -167,6 +171,10 @@ pub(crate) struct Collecting {
     pub(crate) camera: Option<Camera>,
     /// The values the effect's `with` gave, by parameter name.
     pub(crate) given: BTreeMap<String, ExprValue>,
+    /// The parameters the effect's `with` named whose value came to
+    /// null: a target the command meant to give and had none of
+    /// (decision D-904).
+    pub(crate) named_null: Vec<String>,
     /// The entries of the list the action is being picked from, as the
     /// expression gave them.
     pub(crate) entries: Vec<ExprValue>,
@@ -470,16 +478,27 @@ where
             asked => asked,
         };
         // What `with` gives, worked out where the effect ran.
-        let given: BTreeMap<String, ExprValue> = if command.with.is_empty() {
-            BTreeMap::new()
-        } else {
-            self.eval(origin, it.as_ref(), |reader, scope| {
-                reader.args(&command.with, scope)
-            })
-            .into_iter()
-            .filter(|(_, value)| !value.is_null())
-            .collect()
-        };
+        let (named_null, given): (Vec<String>, BTreeMap<String, ExprValue>) =
+            if command.with.is_empty() {
+                (Vec::new(), BTreeMap::new())
+            } else {
+                let all: Vec<(String, ExprValue)> = self
+                    .eval(origin, it.as_ref(), |reader, scope| {
+                        reader.args(&command.with, scope)
+                    })
+                    .into_iter()
+                    .collect();
+                let named_null = all
+                    .iter()
+                    .filter(|(_, value)| value.is_null())
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                let given = all
+                    .into_iter()
+                    .filter(|(_, value)| !value.is_null())
+                    .collect();
+                (named_null, given)
+            };
         self.collecting = Some(Collecting {
             action: String::new(),
             def: None,
@@ -500,6 +519,7 @@ where
             rest,
             camera: None,
             given,
+            named_null,
             entries: Vec::new(),
             ability: None,
             omit: Vec::new(),
@@ -583,6 +603,7 @@ where
             rest: Vec::new(),
             camera: None,
             given: BTreeMap::new(),
+            named_null: Vec::new(),
             entries: Vec::new(),
             ability: None,
             omit: Vec::new(),
@@ -807,9 +828,14 @@ where
                 Ok(id) => out.push(UiOutcome::Opened(id)),
                 Err(reason) => {
                     let command = self.abandon_command().unwrap_or_default();
+                    let reason = if reason == NOBODY_TO_CHOOSE {
+                        reason
+                    } else {
+                        format!("`{command}` cannot be asked for `{}`: {reason}", ask.name)
+                    };
                     out.push(UiOutcome::Failed {
                         effect: "act",
-                        reason: format!("`{command}` cannot be asked for `{}`: {reason}", ask.name),
+                        reason,
                     });
                 }
             }
@@ -1016,6 +1042,28 @@ where
                 }
                 world.show_line(true);
             }
+        }
+        // An entity picker for a target the command named and had none
+        // of (`with` gave it as null: the target cycle's, with nobody
+        // selected), with nobody the party perceives to choose from and
+        // nothing filled in, is not opened: it would offer the character
+        // only itself (decision D-904). Asked for with nothing named, or
+        // for an ability's use (a power may be aimed at its user, as a
+        // touch that heals is), the cursor starts on the actor.
+        let named_nobody = self.collecting.as_ref().is_some_and(|collecting| {
+            collecting.ability.is_none() && collecting.named_null.contains(&ask.name)
+        });
+        if has_map
+            && picker == PICKER_ENTITY
+            && named_nobody
+            && listed.is_none()
+            && candidates.is_empty()
+            && prefill.is_null()
+        {
+            self.pending.pop();
+            let _ = self.pop_screen();
+            self.restore_camera(saved);
+            return Err(NOBODY_TO_CHOOSE.to_owned());
         }
         if let Some(collecting) = &mut self.collecting {
             collecting.list = chosen;

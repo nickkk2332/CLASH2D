@@ -7,11 +7,11 @@ chars
 |                                                      │Pain   █████████████████│|
 |                                                      │Time 22:00              │|
 |                                                      │                        │|
-|                       " ###X##                       │                        │|
-|                       ....!... !                     │                        │|
+|                       " ###X###                      │                        │|
+|                       ....!...                       │                        │|
 |          ┌ Last stand ──────────────────────────────────────────────┐         │|
 |          │Lost.                                                     │         │|
-|          │Played for 0:00:36.                                       │         │|
+|          │Played for 0:00:47.                                       │         │|
 |          │[ ] Get inside the house.                                 │         │|
 |          │[ ] Hold out until dawn.                                  │         │|
 |          │                                                          │         │|
@@ -19,10 +19,10 @@ chars
 |          └──────────────────────────────────────────────────────────┘         │|
 |                                                      │                        │|
 |┌ Log ───────────────────────────────────────────────┐│                        │|
+|│Ada is wounded.                                    │││                        │|
 |│Ada staggers.                                      │││                        │|
-|│The person strikes Ada.                            │││                        │|
-|│Ada staggers.                                      │││Tab target f hit s shoot│|
-|│The person strikes Ada.                            │││x look  i things  c body│|
+|│The person strikes Ada.                            │││Tab target f hit s shoot│|
+|│Unconscious, and cannot act until they come to     │││x look  i things  c body│|
 |│The game has ended: lost.                          █││? keys  Esc menu        │|
 |└────────────────────────────────────────────────────┘└────────────────────────┘|
 fg
@@ -32,16 +32,16 @@ fg
 |00000000000000000000000000000000000000000000000000000020000000444444444444444442|
 |00000000000000000000000000000000000000000000000000000022222000000000000000000002|
 |00000000000000000000000000000000000000000000000000000020000000000000000000000002|
-|000000000000000000000005078a07b0000000000000000000000020000000000000000000000002|
-|00000000000000000000000cdefgfed0000000000000000000000020000000000000000000000002|
-|0000000000iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii0000000002|
-|0000000000ikkkkkllllllllllllllllllllllllllllllllllllllllllllllllllllli0000000002|
-|0000000000illlllllllllllllllllllllllllllllllllllllllllllllllllllllllli0000000002|
-|0000000000illlllllllllllllllllllllllllllllllllllllllllllllllllllllllli0000000002|
-|0000000000illlllllllllllllllllllllllllllllllllllllllllllllllllllllllli0000000002|
-|0000000000illlllllllllllllllllllllllllllllllllllllllllllllllllllllllli0000000002|
-|0000000000ijjjjjjjjjjjjjjjjjjjjjllllllllllllllllllllllllllllllllllllli0000000002|
-|0000000000iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii0000000002|
+|000000000000000000000005079a0cde000000000000000000000020000000000000000000000002|
+|00000000000000000000000fghijihg0000000000000000000000020000000000000000000000002|
+|0000000000kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0000000002|
+|0000000000kmmmmmnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
+|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
+|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
+|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
+|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
+|0000000000klllllllllllllllllllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
+|0000000000kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0000000002|
 |00000000000000000000000000000000000000000000000000000020000000000000000000000002|
 |22333222222222222222222222222222222222222222222222222220000000000000000000000002|
 |20000000000000000000000000000000000000000000000000002220000000000000000000000002|
@@ -57,16 +57,16 @@ bg
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
-|11111111111111111111111616999661111111111111111111111111111111111111111111111111|
-|111111111111111111111116669h9661111111111111111111111111111111111111111111111111|
-|1111111111jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
-|1111111111jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
-|1111111111jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
-|1111111111jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
-|1111111111jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
-|1111111111jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
-|1111111111jiiiiiiiiiiiiiiiiiiiiijjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
-|1111111111jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj1111111111|
+|111111111111111111111116188b8666111111111111111111111111111111111111111111111111|
+|111111111111111111111116668b8661111111111111111111111111111111111111111111111111|
+|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
+|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
+|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
+|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
+|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
+|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
+|1111111111lkkkkkkkkkkkkkkkkkkkkkllllllllllllllllllllllllllllllllllllll1111111111|
+|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
@@ -108,20 +108,22 @@ palette
 4 #460a11 bright_black
 5 #060a06 bright_black
 6 #010101 black
-7 #0a0907 bright_black
-8 #0d0c0a bright_black
-9 #020202 black
-a #100e0d bright_black
-b #080707 bright_black
-c #060606 bright_black
-d #070707 bright_black
-e #080808 bright_black
-f #0d0d0d bright_black
-g #2d2d20 bright_black
-h #030303 black
-i #e0b040 yellow
-j #101010 black
-k #5090d0 bright_blue
-l #c8c8c8 white
+7 #0d0c0a bright_black
+8 #020202 black
+9 #110f0d bright_black
+a #14110f bright_black
+b #030303 black
+c #0b0a09 bright_black
+d #090807 bright_black
+e #080706 bright_black
+f #060606 bright_black
+g #070707 bright_black
+h #080808 bright_black
+i #0d0d0d bright_black
+j #2d2d20 bright_black
+k #e0b040 yellow
+l #101010 black
+m #5090d0 bright_blue
+n #c8c8c8 white
 sprites 0
 fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none

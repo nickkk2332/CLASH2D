@@ -593,9 +593,19 @@ fn things_are_picked_up_worn_stowed_taken_out_given_and_dropped() {
         item_popup(&mut run, "knife");
         down_to(&mut run, "give");
         script(&mut run, "enter\n");
-        assert_eq!(top(&run), "ui:pick_entity", "{}", run.text());
-        script(&mut run, "enter\nwait 60\n");
-        settle(&mut run);
+        if top(&run) == "ui:pick_entity" {
+            script(&mut run, "enter\nwait 60\n");
+            settle(&mut run);
+        } else {
+            // Only heard, behind her: the picker is not opened on her
+            // alone, and says why (D-904); another try.
+            assert_eq!(
+                log(&run).last().map(|(_, line)| line.as_str()),
+                Some("Nobody is in sight to choose."),
+                "{}",
+                run.text()
+            );
+        }
         // A refusal leaves the popup open; either way, back to play.
         for _ in 0..3 {
             if top(&run) != "ui:play" {

@@ -832,6 +832,79 @@ fn eating_bread_restores_nourishment() {
     );
 }
 
+fn tagged(sim: &Sim, who: EntityId, tag: &str) -> bool {
+    sim.truth().entity(who).unwrap().tags.contains(tag)
+}
+
+#[test]
+fn going_without_food_makes_one_hungry_then_weak_then_starving_and_eating_ends_it() {
+    // Decision D-906: `core`'s hunger, as traits and one rule, for a
+    // character someone plays.
+    let (mut sim, ada, bram) = city(57);
+    let control = |sim: &mut Sim, control: Control| {
+        debug(
+            sim,
+            DebugCommand::SetControl {
+                entity: ada,
+                control,
+            },
+        );
+    };
+    control(&mut sim, Control::Direct);
+    let id = DEFS
+        .lookup::<clash_sim::stats::AttributeDef>("core:strength")
+        .unwrap();
+    let strength = |sim: &Sim| {
+        sim.components()
+            .get::<Stats>(ada)
+            .and_then(|stats| stats.attr(id))
+    };
+    let fed_strength = strength(&sim);
+    let spend = |sim: &mut Sim, who: EntityId, amount: f64| {
+        sim.pool_spend(who, pool("nourishment"), Real::of(amount), Cause::DEBUG)
+            .unwrap();
+        sim.pump();
+    };
+    // From 70 to 24: below a quarter, hungry.
+    spend(&mut sim, ada, 46.0);
+    assert!(tagged(&sim, ada, "hungry") && !tagged(&sim, ada, "weak"));
+    assert!(strength(&sim) < fed_strength, "{:?}", strength(&sim));
+    // Nobody plays Bram: his meals are not modelled.
+    spend(&mut sim, bram, 46.0);
+    assert!(!tagged(&sim, bram, "hungry"));
+    // To 9: below a tenth, weak.
+    spend(&mut sim, ada, 15.0);
+    assert!(tagged(&sim, ada, "weak") && !tagged(&sim, ada, "starving"));
+    // To nothing: starving, and the blood goes faster than it is made.
+    spend(&mut sim, ada, 9.0);
+    assert!(tagged(&sim, ada, "starving"));
+    let blood = level(&sim, ada, "blood");
+    control(&mut sim, Control::Delegated);
+    run_for(&mut sim, 3600 * SECOND);
+    assert!(
+        level(&sim, ada, "blood") < blood - Real::of(0.05),
+        "{} then {}",
+        blood,
+        level(&sim, ada, "blood")
+    );
+    // A loaf: forty, past every threshold, and no hunger left.
+    control(&mut sim, Control::Direct);
+    let loaf = give(&mut sim, ada, "core:loaf", 1);
+    let params = vec![("what".to_owned(), entity_value(&sim, loaf))];
+    act(&mut sim, ada, "eat", params);
+    let until = Tick(sim.now().as_micros() + 3 * SECOND + 1);
+    while let Advance::Yielded = sim.advance(AdvanceLimit::Until(until)) {}
+    let events = sim.drain_events();
+    no_faults(&events);
+    assert!(
+        level(&sim, ada, "nourishment") > Real::of(39.0),
+        "{}",
+        level(&sim, ada, "nourishment")
+    );
+    assert!(!tagged(&sim, ada, "hungry"));
+    assert_eq!(strength(&sim), fed_strength);
+}
+
 // ---- Saving and replay ------------------------------------------------------
 
 #[test]

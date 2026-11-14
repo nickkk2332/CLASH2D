@@ -25,6 +25,15 @@ const TOWN: usize = 2;
 /// Begins in the test town and puts someone called Brute two cells east
 /// of the character, then lets them be seen.
 fn begin_with_brute(name: &str) -> (Headless, std::path::PathBuf, EntityId, EntityId) {
+    begin_with_brute_at(name, 2)
+}
+
+/// Begins in the test town and puts Brute some cells east of the
+/// character, then lets them be seen.
+fn begin_with_brute_at(
+    name: &str,
+    east: i32,
+) -> (Headless, std::path::PathBuf, EntityId, EntityId) {
     let data = data_dir(name);
     let mut run = boot_default(&data);
     begin(&mut run, TOWN, "Ada");
@@ -40,7 +49,10 @@ fn begin_with_brute(name: &str) -> (Headless, std::path::PathBuf, EntityId, Enti
         &mut run,
         Command::Debug(DebugCommand::Spawn {
             spec,
-            place: Place::at(Location::new(at.grid, at.cell.offset(IVec3::new(2, 0, 0)))),
+            place: Place::at(Location::new(
+                at.grid,
+                at.cell.offset(IVec3::new(east, 0, 0)),
+            )),
         }),
     );
     tool(
@@ -115,8 +127,14 @@ fn the_precise_blow_asks_for_the_blow_the_part_and_the_effort() {
     );
     assert_golden(golden("attack_choose"), run.frame());
 
-    // Choosing a greyed one is refused with its reason.
-    script(&mut run, "down\ndown\ndown\nenter\n");
+    // Smash is not a blow at someone: it comes last, greyed (D-904).
+    assert!(
+        listed.contains("Smash: Smash is not aimed at someone."),
+        "{listed}"
+    );
+    // Choosing a greyed one is refused with its reason: Slash, after
+    // Kick and Punch.
+    script(&mut run, "down\ndown\nenter\n");
     assert_eq!(top(&run), "ui:play");
     assert_eq!(
         log(&run).last().map(|(_, line)| line.as_str()),
@@ -201,6 +219,56 @@ fn the_second_button_offers_what_can_be_done_with_someone() {
     );
     assert_eq!(last_act(&run).0, "core:kick");
     assert_eq!(top(&run), "ui:play");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[test]
+fn the_quick_blow_out_of_reach_says_why_and_strikes_nothing_else() {
+    // Decision D-904: a blow at a place is not a blow at the target.
+    let (mut run, data, _, brute) = begin_with_brute_at("fight-far", 6);
+    script(&mut run, "tab\n");
+    assert_eq!(target_of(&run), Some(brute));
+    let before = commands(&run);
+    script(&mut run, "f\n");
+    assert_eq!(
+        top(&run),
+        "ui:play",
+        "nothing is asked for:\n{}",
+        run.text()
+    );
+    assert_eq!(commands(&run), before, "no blow was started");
+    assert_eq!(
+        log(&run).last().map(|(_, line)| line.as_str()),
+        Some("That is out of reach.")
+    );
+    // The blows at someone are listed before Smash, which says why it
+    // cannot be done at them.
+    script(&mut run, "shift+f\n");
+    assert_eq!(top(&run), "ui:pick_list");
+    let listed = run.text();
+    assert!(
+        listed.contains("Smash: Smash is not aimed at someone."),
+        "{listed}"
+    );
+    script(&mut run, "escape\n");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[test]
+fn the_quick_blow_with_nobody_in_sight_says_so() {
+    let data = data_dir("fight-alone");
+    let mut run = boot_default(&data);
+    begin(&mut run, TOWN, "Ada");
+    settle(&mut run);
+    let before = commands(&run);
+    script(&mut run, "f\n");
+    // No picker opens on the character itself.
+    assert_eq!(top(&run), "ui:play", "{}", run.text());
+    assert_eq!(commands(&run), before);
+    assert_eq!(
+        log(&run).last().map(|(_, line)| line.as_str()),
+        Some("Nobody is in sight to choose.")
+    );
     let _ = std::fs::remove_dir_all(&data);
 }
 

@@ -442,6 +442,9 @@ impl<'r, H: RuleHost + ?Sized> Exec<'r, H> {
             .iter()
             .rev()
             .find_map(|frame| frame.rule.map(|(id, _)| id));
+        // The host is told what is running, as before a write, so that
+        // it can say whose doing the fault was.
+        self.tell_writing();
         self.host.fault(RuleFault {
             code,
             message: message.into(),

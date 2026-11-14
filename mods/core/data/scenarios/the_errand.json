@@ -1,8 +1,8 @@
 [
-  { "//": "A parcel to take across the market town to its town hall before nightfall (13 §5). `start.do` makes the parcel in the character's hands and chooses the town hall among the town's sites, keeping both in variables that the objective reads. The objective is done when the parcel is at the town hall's site, fails if the parcel is lost (destroyed, or out of the world), and fails when five hours have passed: the errand begins at two in the afternoon and night falls at seven. Its marker is the town hall's door, which the character was told of. The player chooses who they are among the playable templates, ready-made (13 §4.2), or is an ordinary person.",
+  { "//": "A parcel to take across the market town to its town hall before nightfall (13 §5). `start.do` makes the parcel in the character's hands and chooses the town hall among the town's sites, keeping both, and who carries the parcel, in variables that the objective and the rules below read. The objective is done when the parcel is at the town hall's site. It fails, each time with a line that says why (`on_failed`, by `errand_lost`): when the parcel is lost (destroyed, or out of the world); when someone else takes it away from the hall (it was given away: `errand_parcel_taken`); when it is left behind, dropped or put somewhere away from the hall, for ten minutes (`errand_parcel_dropped`, a timer the courier's taking it back cancels); and when five hours have passed: the errand begins at two in the afternoon and night falls at seven, which the long waits reach. Its marker is the town hall's door, which the character was told of. The player chooses who they are among the playable templates, ready-made (13 §4.2), or is an ordinary person.",
     "type": "scenario", "id": "the_errand", "name": "The errand",
     "doc": "Take a parcel across the market town to its town hall before nightfall.",
-    "intro": "A clerk at the town hall is waiting for this parcel, and the hall shuts at nightfall. It is two in the afternoon. The journal (J) shows the way.",
+    "intro": "A clerk at the town hall is waiting for this parcel, and the hall shuts at nightfall. It is two in the afternoon. Keep the parcel with you. The journal (J) shows the way.",
     "tags": ["errand"],
     "worlds": [ { "realm": "town", "seed": "ask" } ],
     "start": {
@@ -11,17 +11,22 @@
       "time": { "day": 1, "at": "14:00" },
       "do": [
         { "create_item": { "def": "parcel", "at": "self.loc" } },
-        { "let": { "parcel": { "first": { "entities": { "at": "self.loc", "def": "core:parcel" } } },
-                   "hall": { "first": { "sites": { "where": "it.name == 'Town hall'" } } } } },
-        { "take": { "who": "self", "what": "$parcel" } },
-        { "set": { "global.var.parcel": "$parcel", "global.var.errand_to": "$hall" } },
+        { "for_each": { "entities": { "at": "self.loc", "def": "core:parcel", "limit": 1 } },
+          "as": "parcel",
+          "do": [ { "take": { "who": "self", "what": "$parcel" } },
+                  { "set": { "global.var.parcel": "$parcel", "global.var.courier": "self" } } ] },
+        { "let": { "hall": { "first": { "sites": { "where": "it.name == 'Town hall'" } } } } },
+        { "set": { "global.var.errand_to": "$hall" } },
         { "message": { "text": "You have the parcel. The town hall is in the middle of the town.", "to": "self" } } ] },
     "objectives": [
       { "id": "deliver", "text": "Take the parcel to the town hall before nightfall.",
         "done": "global.var.parcel.site == global.var.errand_to",
         "failed": "is_null(global.var.parcel.loc)",
         "marker": { "site": "global.var.errand_to" },
-        "expires": "5 h" } ],
+        "expires": "5 h",
+        "on_failed": [
+          { "message": { "to": "taker",
+                         "text": "{if is_null(global.var.parcel.loc) then 'The parcel is gone.' else if global.var.parcel.outermost != global.var.courier and not is_null(global.var.parcel.outermost.mind_def) then 'The parcel is in other hands now.' else if global.var.parcel.outermost != global.var.courier then 'You left the parcel behind.' else 'Night has fallen, and the town hall has shut.'} The errand has failed." } } ] } ],
     "ends": [
       { "on": "objective_changed", "filter": { "id": "deliver", "state": "done" }, "as": "delivered" },
       { "on": "objective_changed", "filter": { "id": "deliver", "state": "failed" }, "as": "failed" } ],
@@ -31,6 +36,37 @@
     "doc": "The parcel of the errand (`core:the_errand`)." },
   { "type": "variable", "id": "errand_to", "scope": "global", "value": "site", "belief_safe": true,
     "doc": "Where the parcel of the errand is to go (`core:the_errand`)." },
+  { "type": "variable", "id": "courier", "scope": "global", "value": "entity", "belief_safe": true,
+    "doc": "Who carries the parcel of the errand (`core:the_errand`): the character the player plays." },
+  { "type": "variable", "id": "errand_lost", "scope": "global", "value": "string", "belief_safe": true,
+    "doc": "How the parcel of the errand was lost, once it was (`core:the_errand`): `given` to someone else, or `left` behind. Null while it was not." },
+
+  { "type": "eoc", "id": "errand_parcel_taken", "on": "item_taken",
+    "if": "not is_null(global.var.parcel) and self == global.var.parcel",
+    "doc": "The errand's parcel was taken into a hold (`core:the_errand`). Back with the courier, wherever it is on them: the timer of its being left behind is cancelled. In the hands of someone else (anyone who thinks by a mind) away from the town hall: the errand has failed, as given away. Put in something that is no one (a cupboard, a chest) away from the hall: it is left behind, as when dropped.",
+    "do": [
+      { "if": "self.outermost == global.var.courier",
+        "then": [ { "cancel_timer": { "name": "errand_left", "owner": "global" } } ],
+        "else": [
+          { "if": "self.site == global.var.errand_to",
+            "else": [
+              { "if": "not is_null(self.outermost.mind_def)",
+                "then": [ { "set": { "global.var.errand_lost": "'given'" } },
+                          { "fail_objective": "deliver" } ],
+                "else": [ { "run": "core:errand_parcel_left" } ] } ] } ] } ] },
+
+  { "type": "eoc", "id": "errand_parcel_dropped", "on": "item_dropped",
+    "if": "not is_null(global.var.parcel) and self == global.var.parcel and (is_null(self.site) or self.site != global.var.errand_to)",
+    "doc": "The errand's parcel was dropped away from the town hall (`core:the_errand`): it is left behind.",
+    "do": [ { "run": "core:errand_parcel_left" } ] },
+
+  { "type": "eoc", "id": "errand_parcel_left",
+    "doc": "The errand's parcel was left behind (`core:the_errand`): if, ten minutes on, the courier has not taken it back and it is not at the town hall, the errand has failed. A later leaving starts the ten minutes again.",
+    "do": [
+      { "after": "10 min", "name": "errand_left", "owner": "global",
+        "do": [ { "if": "global.var.parcel.outermost != global.var.courier and (is_null(global.var.parcel.site) or global.var.parcel.site != global.var.errand_to)",
+                  "then": [ { "set": { "global.var.errand_lost": "'left'" } },
+                            { "fail_objective": "deliver" } ] } ] } ] },
 
   { "type": "item", "id": "parcel", "name": "parcel",
     "material": "leather", "mass": "1.5 kg", "volume": 0.004, "length": "0.3 m",

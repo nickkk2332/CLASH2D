@@ -197,7 +197,7 @@ whole of what a modder writes and reads; section 17 lists it by kind.
 | `hostile_after`, `fear_after` | list of event types | Whoever the mind makes out as the actor of such an event it perceives is held hostile or feared from then on |
 | `crowd_cost` | metres, default 3 | What a step into a cell where it saw someone in the last five seconds costs it more (section 5.3) |
 | `hazards` | list of `{ events, radius = 2, cost = 10, below = 0.05 }` | Wherever it remembers one of `events` with salience at least `below`, steps within `radius` metres cost `cost` metres more |
-| `senses` | list of `sense` ids | Given to its character when the mind first thinks, if it has no senses: a character made without any perceives with these. A directly controlled character never thinks, and is given senses by whoever made it |
+| `senses` | list of `sense` ids | Given to its character when the mind's state is first made, if it has no senses: when it first thinks, or before that when it is given a stance, a goal or a home (decision D-901). A character made without any perceives with these. A directly controlled character never thinks, and is given senses by whoever made it |
 | `reactions` | list of `action` ids | The reactions it answers a window its character noticed with, in order of preference (section 6.3). Default none: it answers nothing |
 | `doc` | text | What it is |
 
@@ -1561,10 +1561,16 @@ five runs, before and after:
 A minute's wait at night is within its target at every cap. By day it is
 within it from a cap of 50 down (at 50, 0.81 to 1.03 s over five runs; at
 60 never under 1.03 s). The bundled game scenarios do not set it yet
-(D-927): given 50, two play sessions of the application see another game
-(the walk to the bakery's wood is stopped short; the errand's last frame
-shows another line of the log), and those sessions are the play-testing
-stream's. Below about 60 the cost is that of the warm characters, who
+(D-927, D-911): given 50, a minute's wait in the square took 0.77 to
+0.79 s, a minute at night 0.18 to 0.20 s and a step 13.4 ms in release
+(two runs, on the play-testing stream's merge), but the watch 40 m from
+a brawl in the market no longer took up the call for help
+(`a_brawl_in_the_market_draws_the_watch_which_arrives_and_acts`),
+probably because the watchmen were warm and a warm listener hears only
+at four times its threshold (D-894). The play sessions' walk now waits
+behind a person it cannot go round, which the walk to the bakery's wood
+needed at 50; on the errand fewer footsteps were heard at 50, so its
+last frame would show another line of the log. Below about 60 the cost is that of the warm characters, who
 think by the same goals as the hot and plan the paths they walk in bulk,
 and it falls little with the cap. Whoever the player sees is hot at any
 cap (D-891), so the market seen from the square is the same. What is

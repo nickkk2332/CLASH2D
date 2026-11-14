@@ -244,6 +244,150 @@ pub fn commands(run: &Headless) -> usize {
         .unwrap_or_default()
 }
 
+/// How many times the simulation was told to start an action whose
+/// qualified id is the one given, by `Act`.
+pub fn acts_of(run: &Headless, action: &str) -> usize {
+    run.game()
+        .with_session(|session| {
+            let actions = session
+                .sim
+                .defs()
+                .try_registry::<clash_sim::action::ActionDef>()?;
+            let count = session
+                .sim
+                .input_log()
+                .entries()
+                .iter()
+                .filter(|entry| match &entry.command {
+                    clash_sim::Command::Act { action: id, .. } => actions.name(*id) == action,
+                    _ => false,
+                })
+                .count();
+            Some(count)
+        })
+        .flatten()
+        .unwrap_or_default()
+}
+
+/// Where the character perceives its target to be: the target's sprite
+/// in the picture the player is shown.
+pub fn target_loc(run: &Headless) -> Option<Location> {
+    let scene = run.game().scene();
+    let id = scene.target()?;
+    scene.world()?.model().sprite(id).map(|sprite| sprite.loc)
+}
+
+/// Tab until someone is in sight and selected, a second going by
+/// between tries, at most `tries` times. Returns whether someone is.
+pub fn tab_until_someone(run: &mut Headless, tries: usize) -> bool {
+    for _ in 0..tries {
+        press(run, "tab");
+        if run.game().scene().target().is_some() {
+            return true;
+        }
+        press(run, ".");
+    }
+    false
+}
+
+/// Walks up to the target, following where the character sees it, a
+/// step at a time, until it stands beside it or `max_keys` keys have
+/// been pressed. Returns whether it is beside the target.
+pub fn walk_up_to_target(run: &mut Headless, max_keys: usize) -> bool {
+    for _ in 0..max_keys {
+        // Lost from sight: Tab again for whoever is in sight now.
+        if target_loc(run).is_none() {
+            press(run, "tab");
+        }
+        let (Some(at), Some(to)) = (player_loc(run), target_loc(run)) else {
+            press(run, ".");
+            continue;
+        };
+        let delta = to.cell - at.cell;
+        if delta.x.abs().max(delta.y.abs()) <= 1 && delta.z == 0 {
+            return true;
+        }
+        if walk_to(run, to, 1, 1) == 0 || top(run) != "ui:play" {
+            press(run, ".");
+        }
+    }
+    false
+}
+
+/// Where a thing of a definition (`core:club`) lies loose within some
+/// cells of a place, if one does: what a player sees lying about.
+pub fn lying_near(run: &Headless, at: Location, def: &str, radius: i32) -> Option<Location> {
+    run.game()
+        .with_session(|session| {
+            let sim = &session.sim;
+            let items = sim.defs().try_registry::<clash_sim::item::ItemDef>()?;
+            sim.truth()
+                .entities()
+                .iter()
+                .filter(|entity| matches!(entity.place(), clash_sim::Place::At { .. }))
+                .filter(|entity| {
+                    sim.components()
+                        .get::<clash_sim::item::Item>(entity.id())
+                        .and_then(|item| item.def())
+                        .is_some_and(|id| items.name(id) == def)
+                })
+                .filter_map(|entity| sim.truth().location(entity.id()))
+                .find(|loc| {
+                    loc.grid == at.grid
+                        && loc.cell.z == at.cell.z
+                        && (loc.cell.x - at.cell.x).abs() <= radius
+                        && (loc.cell.y - at.cell.y).abs() <= radius
+                })
+        })
+        .flatten()
+}
+
+/// Whether the target the character has selected is dead, as the log
+/// told the player when it died.
+pub fn target_dead(run: &Headless) -> bool {
+    let Some(sprite) = run.game().scene().target() else {
+        return false;
+    };
+    let entity = EntityId::from_bits(sprite.raw());
+    run.game()
+        .with_session(|session| session.sim.vital(entity))
+        .flatten()
+        == Some(clash_sim::mind::VitalState::Dead)
+}
+
+/// On the reaction prompt: the first of the reactions named, in the
+/// order of preference given, that is offered and not too late; with
+/// none, the blow is let happen. Returns what was chosen.
+pub fn react(run: &mut Headless, preferred: &[&str]) -> String {
+    let text = run.text();
+    let rows: Vec<String> = text
+        .lines()
+        .skip_while(|line| !line.contains("Time  "))
+        .skip(1)
+        .take_while(|line| !line.contains("[ Let it happen ]"))
+        .filter_map(|line| {
+            let start = line.find('│')?;
+            let rest = &line[start + '│'.len_utf8()..];
+            let end = rest.find('│')?;
+            Some(rest[..end].trim().trim_end_matches('█').trim().to_owned())
+        })
+        .collect();
+    for want in preferred {
+        if let Some(index) = rows
+            .iter()
+            .position(|row| row.starts_with(want) && !row.contains("too late"))
+        {
+            for _ in 0..index {
+                press(run, "down");
+            }
+            press(run, "enter");
+            return (*want).to_owned();
+        }
+    }
+    press(run, "escape");
+    "nothing".to_owned()
+}
+
 /// The key of the default keymap that steps one way.
 pub fn key_of(kind: StepKind) -> &'static str {
     match kind {
@@ -362,9 +506,17 @@ pub fn walk_to(run: &mut Headless, to: Location, near: i32, max_keys: usize) -> 
         pressed += 1;
         // Walking into someone in the way asks whether to strike them:
         // no, and the way is looked for round the cell they stand in.
+        // Bumping into the same cell again while walking round it means
+        // there is no way round (a doorway): wait a second for them to
+        // move on, as a player would, rather than press keys that take
+        // no time at all.
         if top(run) == "ui:confirm" {
             press(run, "escape");
             if let Some(cell) = cell_toward(at.cell, key) {
+                if round.iter().any(|(stood, _)| *stood == cell) {
+                    press(run, ".");
+                }
+                round.retain(|(stood, _)| *stood != cell);
                 round.push((cell, pressed + ROUND_FOR));
             }
         }
@@ -429,6 +581,146 @@ pub fn press_button(run: &mut Headless, label: &str) {
         press(run, "down");
     }
     press(run, "enter");
+}
+
+/// The id of the widget with the focus on the screen on top.
+pub fn focus(run: &Headless) -> Option<String> {
+    run.game()
+        .scene()
+        .top()
+        .and_then(|screen| screen.focus().map(str::to_owned))
+}
+
+/// Moves down on the screen on top until the widget of that id has the
+/// focus, or panics.
+pub fn down_to(run: &mut Headless, id: &str) {
+    for _ in 0..24 {
+        if focus(run).as_deref() == Some(id) {
+            return;
+        }
+        press(run, "down");
+    }
+    panic!("`{id}` was never reached on {}:\n{}", top(run), run.text());
+}
+
+/// Presses Tab on the screen on top until the widget of that id has
+/// the focus, or panics.
+pub fn tab_to(run: &mut Headless, id: &str) {
+    for _ in 0..24 {
+        if focus(run).as_deref() == Some(id) {
+            return;
+        }
+        press(run, "tab");
+    }
+    panic!(
+        "`{id}` never came into focus on {}:\n{}",
+        top(run),
+        run.text()
+    );
+}
+
+/// From the title: the new-game screen with the name typed and the game
+/// at a place in the list selected, F2, and the template at a place in
+/// that list begun on the creation screen.
+pub fn create(run: &mut Headless, game: usize, template: usize, name: &str) {
+    assert_eq!(top(run), "ui:title");
+    script(run, "enter\n");
+    script(run, &format!("type {name}\n"));
+    script(run, "tab\ntab\n");
+    for _ in 0..game {
+        script(run, "down\n");
+    }
+    press(run, "f2");
+    assert_eq!(top(run), "ui:create", "{}", run.text());
+    for _ in 0..template {
+        press(run, "down");
+    }
+    press(run, "enter");
+}
+
+/// On the creation screen: Begin, then the setup and the introduction
+/// that follow, to play.
+pub fn begin_created(run: &mut Headless) {
+    tab_to(run, "begin");
+    press(run, "enter");
+    until_top_any(run, &["ui:setup", "ui:intro", "ui:play"], 60);
+    if top(run) == "ui:setup" {
+        press(run, "enter");
+        until_top_any(run, &["ui:intro", "ui:play"], 60);
+    }
+    if top(run) == "ui:intro" {
+        press(run, "enter");
+    }
+    settle(run);
+    assert_eq!(top(run), "ui:play", "{}", run.text());
+}
+
+/// Passes until one of the screens named is on top, or panics.
+pub fn until_top_any(run: &mut Headless, screens: &[&str], passes: u32) {
+    for _ in 0..passes {
+        if screens.contains(&top(run).as_str()) {
+            return;
+        }
+        run.pass();
+    }
+    panic!(
+        "none of {screens:?} came to the top; `{}` is there\n{}",
+        top(run),
+        run.text()
+    );
+}
+
+/// From play: the inventory, Enter on the row of what the character
+/// carries at a place in its list, and the button of that id in the
+/// thing's popup. Back in play once the action is chosen.
+pub fn do_with_carried(run: &mut Headless, row: usize, button: &str) {
+    press(run, "i");
+    assert_eq!(top(run), "ui:inventory", "{}", run.text());
+    for _ in 0..row {
+        press(run, "down");
+    }
+    press(run, "enter");
+    assert_eq!(top(run), "ui:item", "{}", run.text());
+    down_to(run, button);
+    press(run, "enter");
+    if top(run) == "ui:inventory" {
+        press(run, "escape");
+    }
+}
+
+/// From play: the inventory, and the button of that id in the popup of
+/// the first thing carried whose row begins with `name` (`club`). Back
+/// in play once the action is chosen. Returns whether there was one.
+pub fn do_with_named(run: &mut Headless, name: &str, button: &str) -> bool {
+    press(run, "i");
+    assert_eq!(top(run), "ui:inventory", "{}", run.text());
+    let rows: Vec<String> = run
+        .text()
+        .lines()
+        .skip_while(|line| !line.contains("Carried"))
+        .skip(1)
+        .take_while(|line| !line.contains('└'))
+        .filter_map(|line| {
+            let inner = line.split('│').nth(2)?;
+            Some(inner.trim().to_owned())
+        })
+        .filter(|row| !row.is_empty())
+        .collect();
+    let Some(row) = rows.iter().position(|row| row.starts_with(name)) else {
+        press(run, "escape");
+        return false;
+    };
+    for _ in 0..row {
+        press(run, "down");
+    }
+    press(run, "enter");
+    assert_eq!(top(run), "ui:item", "{}", run.text());
+    down_to(run, button);
+    press(run, "enter");
+    if top(run) == "ui:inventory" {
+        press(run, "escape");
+    }
+    true
 }
 
 /// From play: saves the game under a name through the pause menu,

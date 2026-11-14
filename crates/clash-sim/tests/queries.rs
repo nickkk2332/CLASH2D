@@ -50,6 +50,16 @@ const RULES: &str = r#"[
         "do": [ { "add_tag": { "to": "$g", "tag": "alerted" } } ] }
     ] },
 
+  { "type": "variable", "id": "east", "scope": "global", "value": "number", "default": -1, "doc": "" },
+  { "type": "variable", "id": "rank_near", "scope": "global", "value": "int", "default": -1, "doc": "" },
+
+  { "type": "eoc", "id": "typed_locals", "subjects": { "self": "entity" },
+    "doc": "A local made by `let` from a query is of the type of what it holds: `$cell.x` reads the cell's property, `$g.var.rank` the guard's variable (D-905).",
+    "do": [
+      { "let": { "cell": { "first": { "cells": { "around": "self", "radius": 1.5, "where": "it.x > self.loc.x" } } },
+                 "g": { "first": { "entities": { "around": "self", "radius": 30, "where": "it.has_tag('guard')" } } } } },
+      { "set": { "global.var.east": "$cell.x - self.loc.x", "global.var.rank_near": "$g.var.rank" } } ] },
+
   { "type": "eoc", "id": "wide", "subjects": { "self": "entity" },
     "params": { "reach": "real" },
     "doc": "A query whose size is only known when it runs.",
@@ -159,6 +169,17 @@ fn value_sources_over_queries_read_the_world() {
     assert!(tagged(&sim, far));
     assert!(tagged(&sim, other));
     assert!(!tagged(&sim, near));
+}
+
+#[test]
+fn a_local_made_from_a_query_reads_the_properties_of_what_it_holds() {
+    let (mut sim, watcher, _, _thief) = scene();
+    faults(&mut sim);
+    call(&mut sim, "core:typed_locals", watcher, &[]);
+    assert_eq!(faults(&mut sim), Vec::<String>::new());
+    // A cell east of the watcher, and the nearest guard's rank.
+    assert_eq!(global(&sim, "core:east"), Value::Int(1));
+    assert_eq!(global(&sim, "core:rank_near"), Value::Int(1));
 }
 
 #[test]
