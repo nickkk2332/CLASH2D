@@ -11,19 +11,19 @@ chars
 |  │Attack who is in the way   -            Strike someone walked into with t█│ │|
 |  │Attack, choosing how       Shift+F      Choose the blow, the target, the █│ │|
 |  │Condition                  c                                             █│ │|
+|  │Crouch or stand            Shift+C      Crouch to move quietly, or stand ││ │|
 |  │Go down                    >                                             ││ │|
 |  │Go there                   -                                             ││ │|
 |  │Go up                      <                                             ││ │|
 |  │Grab or take down          v            Choose a hold, a throw or a taked││ │|
 |  │Inventory                  i                                             ││ │|
 |  │Journal                    Shift+J                                       ││ │|
-|  │Keys                       ?, F1        Show every control and its keys i││ │|
-|┌ │Know-how                   Shift+K      List what the character knows how││ │|
+|┌ │Keys                       ?, F1        Show every control and its keys i││ │|
+|│ │Know-how                   Shift+K      List what the character knows how││ │|
 |│ │Look around                x                                             ││ │|
-|│ │Make something             Shift+M      List what can be made here, by ha││ │|
-|│ │Map                        m                                             ││t│|
-|│ │Next target                Tab          Select the nearest creature in si││y│|
-|│ │Options                    o                                             ││ │|
+|│ │Make something             Shift+M      List what can be made here, by ha││t│|
+|│ │Map                        m                                             ││y│|
+|│ │Next target                Tab          Select the nearest creature in si││ │|
 |└─└──────────────────────────────────────────────────────────────────────────┘─┘|
 fg
 |00222222222222222222222222222222222222222222222222222222222222222222222222222244|
