@@ -453,6 +453,13 @@ impl Sim {
         Ok(())
     }
 
+    /// How much of its own time is left of the wait an entity was told
+    /// to make, if it is in one (not idling).
+    pub fn wait_left(&self, entity: EntityId) -> Option<Dur> {
+        let wait = self.actions.wait_of(entity).filter(|wait| !wait.idle)?;
+        self.timeline.remaining(wait.wake?)
+    }
+
     /// Whether an entity is in a wait it was told to make (`Wait`, the
     /// `wait` effect), not idling because nothing decided for it.
     pub fn is_waiting(&self, entity: EntityId) -> bool {

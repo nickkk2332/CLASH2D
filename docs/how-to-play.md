@@ -246,6 +246,26 @@ you again.
 What happened in that time is played back on the map. Any key skips to
 the end of it. Options sets how fast it plays (0 shows it at once).
 
+**Waiting longer.** `p` waits a minute and `Shift+P` an hour. The clock
+in the status column runs on while you wait. A wait is broken off when
+your character comes to see someone it holds a foe or is hurt, and you
+can stop it yourself: any key pressed while your character waits ends
+the wait at once and asks you what to do (the key does nothing else).
+While you wait for more than five minutes the parts of the world beyond
+your sight and hearing are simulated more coarsely, so an hour passes
+in a few seconds; everything within your sight and hearing goes on as
+ever, and the people of the town are where their day has taken them
+when you walk back.
+
+**Sleepers.** Someone asleep sees nothing and hears only what is loud
+close by: a footstep within about three metres in the open, less
+through a wall. Whatever a sleeper hears wakes it, and it lies awake,
+looking about, for a minute before it drops off again. To pass a
+sleeper unseen, keep your distance or a wall between you; steps taken
+crouched or prone are a quarter as loud. The unconscious and the dead
+perceive nothing at all, and neither do you while your character lies
+unconscious: the map shows only what it remembers.
+
 **Reactions.** A blow has a wind-up before it lands. If your character
 notices it in time (an ordinary person needs about a fifth of a second),
 the game stops and asks how to answer, with a bar of the time left:

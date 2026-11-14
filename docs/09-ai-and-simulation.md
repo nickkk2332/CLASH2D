@@ -806,6 +806,14 @@ doing runs on, but an action walking a step that moves ends at its next
 phase and its path becomes the route it walks in bulk, toward the same
 place.
 
+**While the party rests** (03 §11, D-932): the tracts beyond the reach
+of the party's senses go cold, so the residents there are agents
+following their routines, and the stepper steps every
+`sim.rest_warm_step` seconds (5 in the bundled games) instead of every
+`WARM_STEP`: a warm character walks as far in a step as its clock has
+run and thinks when its interval has passed, at fewer steps. Whoever
+the party could see or hear stays in a hot tract, ranked as ever.
+
 **Not built**: bulk exchanges between opposed warm characters (a warm
 mind that would strike starts an action, so it is promoted and the fight
 is resolved in full: nothing is softened, only not made cheaper);
@@ -1515,6 +1523,8 @@ Targets, unmeasured but where a figure is given: those rows are in
 | A player's step in the bundled town: one simulated second in the square from 09:00, its residents loaded round the player | under 100 ms (measured: see below) |
 | A minute's wait in the bundled town, in the square from 09:00 | under 1 s (measured: see below) |
 | A minute's wait in the bundled town at night, in the square from 23:00 | under 1 s (measured: see below) |
+| An hour's wait in the bundled town, in the square from 09:00, as the bundled game waits it | under 5 s (measured: see below) |
+| An hour's wait in the bundled town at night, in the square from 23:00, as the bundled game waits it | under 5 s (measured: see below) |
 
 The town's first two rows are the ignored test
 `timing_the_whole_town_for_one_simulated_hour` in

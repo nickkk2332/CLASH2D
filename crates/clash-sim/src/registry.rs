@@ -983,6 +983,7 @@ pub fn engine_settings() -> Vec<SettingInfo> {
     for (name, default, doc) in ai::SETTINGS {
         settings.push(int(name, *default, doc));
     }
+    settings.extend(crate::rest::settings());
     settings.sort_by(|a, b| a.name.cmp(b.name));
     settings
 }

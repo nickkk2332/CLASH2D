@@ -244,6 +244,8 @@ impl Sim {
     /// once, as [`start_session`](Sim::start_session) does, calls it
     /// itself. When nothing has changed it costs a look at each ticket.
     pub fn reconcile_activity(&mut self) {
+        // The party's own tickets, by whether it rests (D-932).
+        self.settle_rest();
         for _ in 0..RECONCILE_ROUNDS {
             let reconciled = {
                 let mut io = TractIo::new(&self.generators, &mut *self.store);

@@ -304,12 +304,14 @@ fn schedule(sim: &mut Sim) {
     if sim.ai.levels.stepper.is_some() {
         return;
     }
+    // Wider while the party rests (D-932).
+    let step = crate::rest::warm_step(sim);
     if let Ok(id) = sim.schedule_on(
         ClockId::UNIVERSAL,
-        WARM_STEP,
+        step,
         Wake::new(WakeDomain::Stepper, 0, WAKE_WARM),
     ) {
-        sim.ai.levels.stepper = Some((sim.now() + WARM_STEP, id));
+        sim.ai.levels.stepper = Some((sim.now() + step, id));
     }
 }
 
