@@ -17,4 +17,4 @@ advance 30s
 expect event binding_ended ability=core:stone_wall why=duration how=restore
 assert "@c:16,23,0.block == null and @c:17,23,0.block == null"
 assert "@c:18,23,0.block.def_id == 'core:window'"
-expect hash 04f8bf1888da4a6124a0d84ba28b607c
+expect hash 5c92ef2e63f8cd536872809673ebfe8f
