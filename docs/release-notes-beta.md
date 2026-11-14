@@ -99,7 +99,11 @@ what lies about is picked up (`g`), and what you carry is worn, stowed,
 put in, taken out, given or dropped from the inventory.
 Recipes at workbenches, ovens, hearths and stills, by hand or left to
 run; know-how learnt from books; bread, ale, salves, bandages and
-poisons, whose substances do what they do in the body.
+poisons, whose substances do what they do in the body: nightshade grows
+in the healer's garden, and a blade coated with its extract drops
+whoever it cuts. A hooded cloak, sewn at a bench or found in a
+wardrobe, makes you a hooded stranger to whoever sees you: what you do
+in it is remembered of the hood, and taken off, you are yourself again.
 
 **Games.** Three game scenarios (the market town to live in, an errand
 against the clock, a last stand until dawn), each with its own saving
@@ -198,7 +202,7 @@ floating); no cutscenes and no sound; no hot reload of mods. The
 
 ## Play-testing
 
-Five rounds of play from the title, recorded in
+Six rounds of play from the title, recorded in
 [Play-testing the beta](playtest-beta.md): every game played to an
 ending, as a player plays it, with what each round found and fixed.
 Among the fixes: the last stand can be won and lost, by hiding in the
