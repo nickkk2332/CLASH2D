@@ -1560,14 +1560,17 @@ five runs, before and after:
 
 A minute's wait at night is within its target at every cap. By day it is
 within it from a cap of 50 down (at 50, 0.81 to 1.03 s over five runs; at
-60 never under 1.03 s). The bundled game scenarios set it to 50 (D-927,
-D-911): there a minute's wait in the square took 0.77 to 0.79 s, a
-minute at night 0.18 to 0.20 s and a step 13.4 ms in release (two runs,
-on the play-testing stream's merge). Two play sessions moved with it and
-were brought up to date: the walk to the bakery's wood met someone
-standing in the doorway, and the walk now waits behind a person it
-cannot go round; on the errand fewer footsteps were heard, so its last
-frame's log holds another line. Below about 60 the cost is that of the warm characters, who
+60 never under 1.03 s). The bundled game scenarios do not set it yet
+(D-927, D-911): given 50, a minute's wait in the square took 0.77 to
+0.79 s, a minute at night 0.18 to 0.20 s and a step 13.4 ms in release
+(two runs, on the play-testing stream's merge), but the watch 40 m from
+a brawl in the market no longer took up the call for help
+(`a_brawl_in_the_market_draws_the_watch_which_arrives_and_acts`),
+probably because the watchmen were warm and a warm listener hears only
+at four times its threshold (D-894). The play sessions' walk now waits
+behind a person it cannot go round, which the walk to the bakery's wood
+needed at 50; on the errand fewer footsteps were heard at 50, so its
+last frame would show another line of the log. Below about 60 the cost is that of the warm characters, who
 think by the same goals as the hot and plan the paths they walk in bulk,
 and it falls little with the cap. Whoever the player sees is hot at any
 cap (D-891), so the market seen from the square is the same. What is

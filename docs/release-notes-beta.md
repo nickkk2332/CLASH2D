@@ -156,11 +156,10 @@ play, and what trying the game headless on the build branch showed.
 - **A single save is written only when the game is left.** Last stand
   keeps one save; it is not written at intervals, so a crash loses the
   night.
-- **The market town takes time to wait in.** With every resident about,
-  a minute waited in the square takes about 0.8 seconds of real time
-  (release build; the bundled games keep 50 people at full detail round
-  you), an hour under a minute: the errand's five hours take about four
-  minutes to wait out. Elsewhere an hour takes seconds.
+- **The market town is slow to wait in.** With every resident about, a
+  minute waited in the square takes about 1.9 seconds of real time
+  (release build), an hour about two minutes: the errand's five hours
+  are long to wait out. Elsewhere an hour takes seconds.
 - **The log fills with `Footsteps, somewhere close.`** in the town:
   every step heard and not seen writes it.
 - **The window was not seen on a real screen** before the beta: it is

@@ -17,4 +17,4 @@ expect event mode_ended ability=core:shield mode=raised how=empty
 assert "not @e:0.has_trait('core:shielded') and not @e:0.ability('core:shield').mode_on('raised')"
 advance 5s
 assert "@e:0.pool.reserve > 9"
-expect hash 2259035ece946aab93b3acd0a16bab3a
+expect hash 291acdc363fd7d3a2febc66d792f5380
