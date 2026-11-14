@@ -25,6 +25,23 @@ the Wayland or X11 libraries at run time (the [README](../README.md#quick-start)
 lists them). `-- --help` lists the options. Saves and preferences are
 kept in the user's data directory (`~/.local/share/clash2d` on Linux).
 
+## Measured
+
+On the machine the beta was built on (four shared cores, release build):
+
+| What | Figure |
+|------|--------|
+| The program, `target/release/clash` | 65 MB; 51 MB stripped; 17 MB compressed |
+| The bundled mods | 1.2 MB in 127 files; 0.3 MB compressed |
+| Start to the title screen | 0.05 to 0.2 s |
+| A step in the populated market town | about 15 to 30 ms |
+| A minute's wait in the market square, by day | about 0.8 s |
+| An hour's wait in the market town | about 6 s by day, about 1 s at night |
+| A frame drawn by the window frontend | 4 to 10 ms |
+
+The bundled games keep at most 50 characters in full detail at once
+(`sim.max_hot_minds`); everyone you can see is always among them.
+
 ## Highlights
 
 **The world.** Cells of 1 m on storeys of 3 m, made of materials that
@@ -111,8 +128,9 @@ play, and what trying the game headless on the build branch showed.
 
 **Missing in play**
 
-- **No crouching or lying down, and no stances,** though posture
-  changes how loud and how visible a character is.
+- **Crouching but not lying down, and no stances.** `Shift+C` crouches
+  (a quarter as loud, to pass a sleeper) and stands again; there is no
+  key to lie prone, and fighting stances are not offered.
 - **A bow's draw runs to its end in one go,** so there is no moment to
   hold it or let it go with `z`.
 - **The log names your own character by name** ("Ada strikes the
@@ -130,12 +148,13 @@ play, and what trying the game headless on the build branch showed.
 
 - **No lockers in the bundled maps,** and lamps only in Last stand.
   Lockers exist as definitions; wardrobes are the places to hide.
-- **Last stand is dark,** but for a lamp by the door and one in the
-  room: what is not lit is heard (`!`), not seen. The strangers come
-  one by one; whoever stays on the lane dies quickly. One who saw you
-  go into the house, or hears you in it, searches it: its rooms, as
-  far as the light lets him see, and the wardrobe, which he opens. In
-  the dark house with the lamps out a still hider is not found.
+- **Last stand is a gamble every way.** The strangers come one by one,
+  each with a lantern; they tell each other where they lost you, and
+  search the house: its rooms as far as their light reaches, and the
+  wardrobe. Played over 32 nights each, hiding in the dark corner won
+  12, the wardrobe 12, fighting at the door 11 as an ordinary person,
+  17 as a brawler and 23 as a marksman, and slipping out the back 9.
+  The marksman has it easiest.
 - **Residents do not eat.** Going hungry, weak and starving is for the
   character you play.
 
@@ -168,11 +187,18 @@ play, and what trying the game headless on the build branch showed.
   window's font, and there is no paste.
 - **No sound.**
 
-<!-- PLAY-TESTING: the play-testing stream adds its findings here. -->
+**Not in this beta at all**
+
+One town and its surroundings, not a world to travel; no vehicles,
+mounts, boats or water to swim; no weather; no trade or money; no
+building; no machines or power networks; no incidents or plots the
+world starts by itself; no cases, trials or bounties; no flying (only
+floating); no cutscenes and no sound; no hot reload of mods. The
+[roadmap](roadmap.md#after-the-beta) says what comes after the beta.
 
 ## Play-testing
 
-Three rounds of play from the title, recorded in
+Five rounds of play from the title, recorded in
 [Play-testing the beta](playtest-beta.md): every game played to an
 ending, as a player plays it, with what each round found and fixed.
 Among the fixes: the last stand can be won and lost, by hiding in the
@@ -182,4 +208,9 @@ hunger matters; an unconscious character no longer freezes the game;
 the log says who is wounded, falls senseless or dies; the quick attack
 says when its target is out of reach. A third round made the town answer
 a blow: the one struck and whoever saw it fear you or hold you hostile,
-the townsfolk shout for the watch, and the watch comes.
+the townsfolk shout for the watch, and the watch comes. A fourth and a
+fifth made the last stand's strangers search the house with lanterns
+and tell each other where you were, balanced the night so that every
+way of playing it can be won and lost, and played what had not been
+played: a bandage made and bound, a blade poisoned, the pistol in a
+fight, a disguise.

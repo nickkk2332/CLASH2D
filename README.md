@@ -58,12 +58,12 @@ cargo run -p clash-app --release -- --terminal
 `-- --help` lists the other options (`--seed`, `--profile`, `--mods`,
 `--data`).
 
-The game is one program, `target/release/clash`, of about 60 MB (49 MB
-stripped, 16 MB compressed), and the `mods` directory beside it, under
-1 MB. The source is about 5 MB to download, compressed, without its
+The game is one program, `target/release/clash`, of about 65 MB (51 MB
+stripped, 17 MB compressed), and the `mods` directory beside it, about
+1.2 MB (0.3 MB compressed). The source is about 5 MB to download, compressed, without its
 history. A release build needs about 0.8 GB of disk and took about 15
-minutes with two build jobs. The game reaches its title screen in under
-a tenth of a second, and a new game in the market town is ready in
+minutes with two build jobs. The game reaches its title screen in a
+tenth of a second or so, and a new game in the market town is ready in
 about half a second.
 
 **Linux.** The window needs, when the game runs (not to build it), either

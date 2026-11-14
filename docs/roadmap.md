@@ -70,6 +70,7 @@ this order:
 | Kit | devices G9, G10, G13 to G16 | Gadgets, suits, money and trade: scenes S25 and S26 |
 | Inspection | tooling TL3, TL4, TL8 | Traces, the inspector and replay tools, so that any rule firing can be seen in the game |
 | Budgets | the benchmark packages of each plan | Crowds, fields and paths are still over budget (see the beta's Log) |
+| Flight and a flying hero | movement (a mode through open air, with up and down from the keyboard); abilities A9 (force at range) | A bundled "flying brick" built from parts as a showcase for modders: strength as a trait (blows are joules, so walls break), speed as a fast clock in an area anchored to the hero, a heavy landing that releases a blast scaled by the fall, and flight. Every piece but flight already exists as content |
 
 ## Open questions
 
