@@ -260,6 +260,12 @@ pub struct MessageKindDef {
     /// one who says it gives no strength. Default 1.
     #[serde(default = "one")]
     pub strength: Real,
+    /// Whether it is a call that involves whoever hears it (D-934): a
+    /// listener stepped warm hears it at its ordinary threshold, as one
+    /// it is said to does, and hearing it promotes the listener (03 §10).
+    /// Default false.
+    #[serde(default)]
+    pub calls: bool,
     /// What it is, for the reference.
     #[serde(default)]
     pub doc: String,

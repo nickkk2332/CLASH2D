@@ -777,6 +777,8 @@ character keeps its level for `DWELL` unless the cap or the first group
 makes otherwise.
 
 **Promotion between steps.** A warm character is promoted at once when
+it hears a message that involves it (said to it or its group, or of a
+kind that `calls`, heard at its ordinary threshold: 15 §14, D-934), when
 a sweep of the party's sight finds it standing in view, when its bulk
 walk takes it into a cell the party sees, when an action that starts
 names it (its actor, a parameter or a participant: 03 §10, before the
@@ -809,10 +811,12 @@ place.
 **While the party rests** (03 §11, D-932): the tracts beyond the reach
 of the party's senses go cold, so the residents there are agents
 following their routines, and the stepper steps every
-`sim.rest_warm_step` seconds (5 in the bundled games) instead of every
+`sim.rest_warm_step` seconds (15 in the bundled games) instead of every
 `WARM_STEP`: a warm character walks as far in a step as its clock has
 run and thinks when its interval has passed, at fewer steps. Whoever
-the party could see or hear stays in a hot tract, ranked as ever.
+the party could see or hear stays in a hot tract; of those, only the
+ones it sees or is involved with are kept hot, besides
+`sim.rest_max_hot_minds` (default 0) ranked as ever.
 
 **Not built**: bulk exchanges between opposed warm characters (a warm
 mind that would strike starts an action, so it is promoted and the fight
@@ -1595,6 +1599,30 @@ still slow is in the model: paths, which are a fifth of a minute's wait
 and mostly the warm going about near their homes, and the goals of five
 hundred minds weighed at their intervals; a path planned to see whether
 a way is there is planned again when the walk sets out (D-928).
+
+Smooth play (D-930 to D-935), measured on four shared cores with the
+bundled games' settings (`sim.max_hot_minds` 50, the levels of a resting
+party on, a warm step of 15 s while resting), the benchmarks
+`town.hour_wait` and `town.hour_wait_night` (the player's own wait of
+an hour, as `shift+p` waits it) and the minute's waits:
+
+| | Without resting levels, cap 50 | With them |
+|---|---|---|
+| An hour's wait in the square by day | 63.4 s | 10.2 s (13.0 s with a warm step of 5 s; 37 s while 50 stayed hot out of sight) |
+| An hour's wait at night | 12.9 s | 2.8 s |
+| A minute's wait by day | 0.79 s | the same (a minute is under `sim.rest_from`) |
+| A minute's wait at night, sleepers blind (D-930) | 0.44 s | the same |
+
+At cap 150 and without resting levels the hour by day took 130 s. Half
+way through a resting hour the town has 204 of its 565 people in the
+world (the 25 tracts round the square), 2 hot (those in the player's
+view) and 202 warm; the rest are agents. The hour by day is still over
+its target of 5 s: what is left is those two hundred warm characters
+in the five tracts across that sight needs, which think when their
+intervals come round and plan and walk their routes in bulk (widening
+the warm step from 5 to 15 s took a fifth off), and loading the 264
+tracts round the party again when the wait ends (the longest frame of
+the wait, about a tenth of a second, 12 §15).
 
 ## 20. Open questions
 

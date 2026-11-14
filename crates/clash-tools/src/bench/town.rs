@@ -248,10 +248,27 @@ pub(super) fn minute_wait_night(_kit: &mut super::cases::Kit) -> Result<Measured
 pub(super) fn hour_wait(_kit: &mut super::cases::Kit) -> Result<Measured, String> {
     let mut town = Town::begin(SQUARE)?;
     town.run(&format!("advance {SETTLE_S}s"))?;
+    timed_hour(&mut town)
+}
+
+/// An hour's wait in the square, the player's own wait made first so
+/// that the census can be taken half way through it: the time, and the
+/// census half way and at the end.
+fn timed_hour(town: &mut Town) -> Result<Measured, String> {
+    town.run(&format!(
+        "as @self do {{ \"wait\": {{ \"who\": \"self\", \"time\": {HOUR_S} }} }}"
+    ))?;
     let started = Instant::now();
-    town.run(&format!("advance {HOUR_S}s"))?;
-    let took = started.elapsed().as_nanos() as f64;
-    Ok(Measured::new(took, town.census()?))
+    town.run(&format!("advance {}s", HOUR_S / 2))?;
+    let half = started.elapsed();
+    let midway = town.census()?;
+    let resumed = Instant::now();
+    town.run(&format!("advance {}s", HOUR_S / 2))?;
+    let took = (half + resumed.elapsed()).as_nanos() as f64;
+    Ok(Measured::new(
+        took,
+        format!("half way: {midway}; at the end: {}", town.census()?),
+    ))
 }
 
 /// An hour's wait in the square at night: as [`minute_wait_night`]
@@ -273,10 +290,7 @@ pub(super) fn hour_wait_night(_kit: &mut super::cases::Kit) -> Result<Measured, 
     town.run("attach_sense @self core:human_sight")?;
     town.run("attach_sense @self core:human_hearing")?;
     town.run(&format!("advance {SETTLE_S}s"))?;
-    let started = Instant::now();
-    town.run(&format!("advance {HOUR_S}s"))?;
-    let took = started.elapsed().as_nanos() as f64;
-    Ok(Measured::new(took, town.census()?))
+    timed_hour(&mut town)
 }
 
 /// Simulated seconds in an hour's wait.

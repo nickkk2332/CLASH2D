@@ -34,5 +34,6 @@ The engine's settings, in the namespaces reserved for its subsystems (04 §10). 
 | <a id="sim-max-hot-minds"></a>`sim.max_hot_minds` | `150` | How many characters with minds are hot at once (09 §9.3); those beyond it, ranked by attention, are stepped warm. |
 | <a id="sim-rest-from"></a>`sim.rest_from` | `300` | Seconds of its own time a character's wait must still have to run for it to count as resting (03 §11). Default 300. |
 | <a id="sim-rest-levels"></a>`sim.rest_levels` | `false` | Whether, while every character the player controls rests (waits a long wait or lies unconscious), the tracts beyond the reach of its senses fall to cold and the warm step widens (03 §11, D-932). Default false; the bundled game scenarios set it. |
+| <a id="sim-rest-max-hot-minds"></a>`sim.rest_max_hot_minds` | `0` | How many characters with minds are hot while the party rests, beside those it sees or is involved with, who are hot whatever the cap (09 §9.4, D-932); never more than `sim.max_hot_minds`. Default 0. |
 | <a id="sim-rest-warm-step"></a>`sim.rest_warm_step` | `1` | Seconds between the warm stepper's steps while the party rests (03 §10, §11), from 1 to 60. Default 1. |
 | <a id="track-capabilities"></a>`track_capabilities` | `8` | The most observed capabilities one track keeps (15 §15). Default 8. |

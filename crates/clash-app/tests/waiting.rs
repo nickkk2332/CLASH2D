@@ -34,7 +34,13 @@ fn clock(run: &clash_app::headless::Headless) -> String {
         .lines()
         .find_map(|line| {
             let at = line.find("Time ")?;
-            Some(line[at..].split_whitespace().take(2).collect::<Vec<_>>().join(" "))
+            Some(
+                line[at..]
+                    .split_whitespace()
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
         })
         .unwrap_or_default()
 }
@@ -48,7 +54,10 @@ fn a_long_wait_moves_the_clock_and_any_key_breaks_it_off() {
     let (began, waits, asked) = waiting(&run);
     assert!(!waits && asked, "the character is asked what it does");
     let shown = clock(&run);
-    assert!(shown.starts_with("Time "), "the status column has a clock: {shown:?}");
+    assert!(
+        shown.starts_with("Time "),
+        "the status column has a clock: {shown:?}"
+    );
 
     // An hour's wait, the simulation advanced a slice at a time as the
     // terminal's loop does: a pass whose slice is already used advances
@@ -91,7 +100,11 @@ fn a_long_wait_moves_the_clock_and_any_key_breaks_it_off() {
     for _ in 0..5 {
         assert!(run.pass_until(Instant::now()));
     }
-    assert_eq!(waiting(&run).0, stopped_at, "time stands still while the player is asked");
+    assert_eq!(
+        waiting(&run).0,
+        stopped_at,
+        "time stands still while the player is asked"
+    );
     let _ = std::fs::remove_dir_all(&data);
 }
 

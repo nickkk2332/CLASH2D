@@ -161,7 +161,7 @@ const EFFECT_APP: &str = "app";
 
 /// How many wake-ups one call of `advance` may handle, so that a pass
 /// can stop between two calls when its slice is used.
-pub const SIM_WORK: u32 = 256;
+pub const SIM_WORK: u32 = 32;
 
 /// The most simulation time one pass advances by. A character that
 /// waits a long while, or lies unconscious, is carried through it over

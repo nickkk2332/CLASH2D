@@ -254,9 +254,16 @@ impl Levels {
 
 // ---- reading ---------------------------------------------------------------
 
-/// The cap in force.
+/// The cap in force: `sim.max_hot_minds`, and no more than
+/// `sim.rest_max_hot_minds` while the party rests (D-932).
 pub fn max_hot(sim: &Sim) -> usize {
-    usize::try_from(sim.setting_int(MAX_HOT_SETTING, DEFAULT_MAX_HOT).max(0)).unwrap_or(usize::MAX)
+    let cap = usize::try_from(sim.setting_int(MAX_HOT_SETTING, DEFAULT_MAX_HOT).max(0))
+        .unwrap_or(usize::MAX);
+    if crate::rest::is_resting(sim) {
+        cap.min(crate::rest::rest_max_hot(sim))
+    } else {
+        cap
+    }
 }
 
 /// Whether a character is stepped warm.

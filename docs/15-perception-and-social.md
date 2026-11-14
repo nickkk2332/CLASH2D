@@ -1204,7 +1204,9 @@ As built (decisions D-764, D-765), in `clash_sim::social::speech`:
   speaker's confidence a report is believed at), `trust` (a relation
   kind: scales `belief` by where the hearer's relation toward the
   speaker stands in its range), `signal` (a signal kind; left out, the
-  kind flagged `noise`) and `strength` (default 1).
+  kind flagged `noise`), `strength` (default 1) and `calls` (default
+  false: a call that involves whoever hears it, below and section 14;
+  the bundled `help` is one).
 - **`lines`**: `lines`, each `text` (a text with `self` the speaker, `to`
   and `about`, each an entity or null), `if` (a condition, default
   true) and `weight` (default 1). A line that fits is picked by weight
@@ -1380,8 +1382,16 @@ perceives only hot characters: a warm character standing in a cell a
 member sees, at the member's sweep or by its own bulk walk, is promoted
 at once (D-891).
 
+A message that **involves** a listener (D-934) is heard by it at its
+ordinary threshold however warm it is: one said to it, or to a group it
+belongs to, or of a kind that `calls` (section 11). Hearing it promotes
+a character stepped warm by the attention cap (03 §10: promotion by
+involvement), so a watchman out of the party's sight answers a call for
+help as one in sight would.
+
 A delayed signal is sent only to the listeners it could reach at or over
-their thresholds (times the warm factor, for a warm listener) from where
+their thresholds (times the warm factor, for a warm listener not
+involved by what it carries) from where
 they stand when it is given off: the most of it that could arrive, with
 nothing in its way, is weighed once against each listener's threshold,
 and no front is sent to one that could not hear it (D-894). A listener

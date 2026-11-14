@@ -197,7 +197,7 @@ D-652):
    character waits on the simulation, which is while no decision is
    asked of it and it is busy (an action, a wait, a plan) or
    unconscious, the simulation is advanced toward the character's next
-   decision with `advance(Work(256))`, `UntilDecision` in slices, until
+   decision with `advance(Work(32))`, `UntilDecision` in slices, until
    a decision is needed, nothing is left to happen, 8 ms of the frame
    have been spent or an hour of simulation time has passed in the
    pass. A character that is free, dead or out of the world is not
@@ -2759,6 +2759,7 @@ Targets, unmeasured but where a figure is given: those rows are in
 | Re-evaluate bindings of a busy screen | under 0.5 ms |
 | Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080 | under 16 ms: 60 frames per second (measured by `cargo xtask bench`: 4.2 to 9.5 ms on a shared, loaded machine for 240 × 67 cells of 8 × 16 pixels and 3,920 sprites, a third of them half clear and a tenth half as large again; 5.1 to 9.3 ms with zoom, flash and shake) |
 | Input to visible response | within one frame |
+| A frame while a long wait runs | within a frame of 16 ms (measured, the ignored test `timing_frames_through_an_hours_wait_in_the_market` of `crates/clash-app/tests/waiting.rs` in release: an hour's wait in the market in 12.4 s of real time over 1,043 passes, a pass 11.9 ms on average, 22.8 ms at the 99th percentile and 111 ms at most, 114 passes over 16 ms; the clock moved at every pass, about 290 simulated seconds a real second. With `advance(Work(256))` it was 17.7 ms on average and 336 of 658 passes over 16 ms: D-935) |
 
 ## 16. Open questions
 

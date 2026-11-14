@@ -14,7 +14,10 @@
 //!   their routines put them when the tracts load again;
 //! - the warm stepper steps every `sim.rest_warm_step` instead of every
 //!   `WARM_STEP` (03 §10): warm characters walk as far and think as
-//!   their intervals allow, less often.
+//!   their intervals allow, less often;
+//! - no more than `sim.rest_max_hot_minds` (default none) are hot
+//!   beside those the party sees or is involved with, who are hot
+//!   whatever the cap (09 §9.4).
 //!
 //! The moment one member stops resting (its wait is over or broken off,
 //! it acts, it wakes) the tickets are as they were at the next safe
@@ -55,6 +58,16 @@ pub const REST_WARM_STEP_SETTING: &str = "sim.rest_warm_step";
 /// The default of [`REST_WARM_STEP_SETTING`]: the ordinary warm step.
 pub const DEFAULT_REST_WARM_STEP: Dur = crate::ai::warm::WARM_STEP;
 
+/// The setting that caps the characters kept hot while the party rests,
+/// beside `sim.max_hot_minds`: those the party sees and those involved
+/// with it are hot whatever the cap (09 §9.4). Default
+/// [`DEFAULT_REST_MAX_HOT`].
+pub const REST_MAX_HOT_SETTING: &str = "sim.rest_max_hot_minds";
+
+/// The default of [`REST_MAX_HOT_SETTING`]: none beyond those the party
+/// sees or is involved with.
+pub const DEFAULT_REST_MAX_HOT: i64 = 0;
+
 /// The longest warm step a setting may ask for: a minute.
 pub const MAX_REST_WARM_STEP: Dur = Dur::from_secs(60);
 
@@ -76,6 +89,11 @@ pub fn settings() -> Vec<crate::registry::SettingInfo> {
             doc: "Seconds of its own time a character's wait must still have to run for it to count as resting (03 §11). Default 300.",
         },
         crate::registry::SettingInfo {
+            name: REST_MAX_HOT_SETTING,
+            default: clash_expr::Value::Int(DEFAULT_REST_MAX_HOT),
+            doc: "How many characters with minds are hot while the party rests, beside those it sees or is involved with, who are hot whatever the cap (09 §9.4, D-932); never more than `sim.max_hot_minds`. Default 0.",
+        },
+        crate::registry::SettingInfo {
             name: REST_WARM_STEP_SETTING,
             default: clash_expr::Value::Real(DEFAULT_REST_WARM_STEP.as_secs_real()),
             doc: "Seconds between the warm stepper's steps while the party rests (03 §10, §11), from 1 to 60. Default 1.",
@@ -95,7 +113,10 @@ fn seconds(sim: &Sim, key: &str) -> Option<Dur> {
 
 /// Whether levels while resting are switched on.
 pub fn enabled(sim: &Sim) -> bool {
-    matches!(sim.settings().get(REST_LEVELS_SETTING), Some(Value::Bool(true)))
+    matches!(
+        sim.settings().get(REST_LEVELS_SETTING),
+        Some(Value::Bool(true))
+    )
 }
 
 /// The warm step while the party rests.
@@ -103,6 +124,15 @@ pub fn rest_warm_step(sim: &Sim) -> Dur {
     seconds(sim, REST_WARM_STEP_SETTING)
         .unwrap_or(DEFAULT_REST_WARM_STEP)
         .clamp(crate::ai::warm::WARM_STEP, MAX_REST_WARM_STEP)
+}
+
+/// The cap on hot characters while the party rests.
+pub fn rest_max_hot(sim: &Sim) -> usize {
+    usize::try_from(
+        sim.setting_int(REST_MAX_HOT_SETTING, DEFAULT_REST_MAX_HOT)
+            .max(0),
+    )
+    .unwrap_or(usize::MAX)
 }
 
 /// The warm stepper's step now: widened while the party rests.

@@ -1455,7 +1455,7 @@ every character with a ticket of its own (`Ticket::player`) is in the
 world and either waits a wait with at least `sim.rest_from` (300 s) of
 its own time left, or has a mind that is not awake. While it rests and
 the setting `sim.rest_levels` is on (the engine's default is off; the
-bundled game scenarios switch it on, `mods/core/data/scenarios/waits.json`):
+bundled game scenarios switch it on in their `settings`):
 
 - each member's own ticket shrinks to the tracts its senses reach (the
   longest range of its senses in whole tracts, rounded up: two for the
@@ -1464,7 +1464,10 @@ bundled game scenarios switch it on, `mods/core/data/scenarios/waits.json`):
   the next reconciliation, their residents stored as agents following
   their routines (09 §10.6);
 - the warm stepper steps every `sim.rest_warm_step` seconds (1 to 60;
-  the bundled games 5) instead of every `WARM_STEP`.
+  the bundled games 15) instead of every `WARM_STEP`;
+- no more than `sim.rest_max_hot_minds` (default 0) are hot beside the
+  characters the party sees or is involved with, who are hot whatever
+  the cap (09 §9.4).
 
 Whether the party rests is worked out from state at every safe point,
 before the world reconciles, never from the wall clock. When a member
