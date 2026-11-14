@@ -750,6 +750,83 @@ fn a_guard_goes_for_a_hostile_loses_it_behind_a_door_searches_and_gives_up() {
     assert!(!clash_sim::perception::perceives(&sim, watch, outlaw));
 }
 
+/// A text field of an event, if it has one.
+fn field_text(event: &SimEvent, name: &str) -> Option<String> {
+    match event.body.field(name) {
+        Some(clash_sim::FieldValue::Plain(Stored::Str(text))) => Some(text),
+        _ => None,
+    }
+}
+
+#[test]
+fn a_guard_with_no_arm_to_grab_with_gives_up_the_grab_and_does_something_else() {
+    let mut sim = city(13);
+    let watch = spawn(&mut sim, &["core:person", "core:guard"], street(4));
+    // Both arms of the guard are of no use: nothing he does with an arm
+    // can start, and waiting will not change it.
+    let registry = sim.defs().expr_registry();
+    let channel_ty = registry.def_type_id("channel").unwrap();
+    let arm = sim
+        .defs()
+        .lookup::<clash_sim::action::ChannelDef>("core:arm")
+        .unwrap();
+    sim.call_verb(
+        "disable_channel",
+        &[
+            ("who", sim.subject_value(Subject::Entity(watch))),
+            (
+                "channel",
+                clash_expr::Value::Id(clash_expr::DefRef::new(channel_ty, arm.index() as u32)),
+            ),
+            ("count", clash_expr::Value::Int(2)),
+        ],
+        &[],
+        Cause::DEBUG,
+    )
+    .unwrap();
+    // Someone he holds hostile beside him, within reach of a grab.
+    let outlaw = creature(&mut sim, "outlaw", street(5));
+    sim.drain_events();
+    advance_by(&mut sim, 30.0);
+    let events = sim.drain_events();
+    let goals = adopted(&events, watch);
+    // He took up laying hands on them; the grab was refused for want of
+    // an arm, which failed the goal itself (D-961), not only the method:
+    // the goal is set aside, and he did something else.
+    let failed: Vec<&SimEvent> = named(&events, "goal_failed", watch)
+        .into_iter()
+        .filter(|event| field_text(event, "goal").as_deref() == Some("core:apprehend"))
+        .collect();
+    assert!(!failed.is_empty(), "{goals:?}");
+    assert!(failed.iter().all(|event| {
+        field_text(event, "code").as_deref() == Some("engine:action_channel_lacking")
+    }));
+    // Set aside for its ten seconds each time: in thirty seconds it was
+    // taken up a few times, never stood in for a minute.
+    let taken = goals.iter().filter(|goal| *goal == "core:apprehend").count();
+    assert!((1..=4).contains(&taken), "{goals:?}");
+    // He went on with the next goal, and kicked: a blow that needs no
+    // arm.
+    assert!(goals.iter().any(|goal| goal == "core:confront"), "{goals:?}");
+    let kick = sim
+        .defs()
+        .try_registry::<clash_sim::action::def::ActionDef>()
+        .unwrap()
+        .lookup("core:kick");
+    assert!(kick.is_some());
+    let kicked = events.iter().any(|event| {
+        matches!(
+            &event.body,
+            clash_sim::EventBody::Act(clash_sim::action::ActEvent::ActionStarted { actor, action, .. })
+                if *actor == watch && action == "core:kick"
+        )
+    });
+    assert!(kicked, "{goals:?}");
+    // And he stood looking at them for no more than a moment between.
+    assert_ne!(goal_of(&sim, watch).as_deref(), Some("core:apprehend"));
+    let _ = outlaw;
+}
+
 // ---- I1: navigation ---------------------------------------------------------------------
 
 /// The cheapest cost from one cell to another under some rules, found by
