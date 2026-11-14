@@ -94,7 +94,12 @@
                  { "item": "bandage", "count": [2, 4], "chance": 0.9 },
                  { "item": "herbs", "count": [1, 3], "chance": 0.8 },
                  { "item": "sleeping_draught", "chance": 0.3 },
-                 { "item": "vial", "count": [1, 2], "chance": 0.5 } ] },
+                 { "item": "vial", "count": [1, 2], "chance": 0.5 },
+                 { "item": "poison_vial", "chance": 0.5 } ] },
+
+  { "//": "A herb bed grown with nightshade, in the healer's garden: the plants a poison is pressed from (`making/recipes.json`), taken out as any bed's herbs are.",
+    "type": "content_table", "id": "nightshade_bed", "each": true,
+    "entries": [ { "item": "nightshade_plant", "count": [2, 4] } ] },
 
   { "//": "What a stall at the market has laid out: one kind of goods on each draw.",
     "type": "content_table", "id": "market_goods",

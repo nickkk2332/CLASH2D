@@ -113,7 +113,7 @@
     "areas": [ { "kind": "shop", "level": [0, 0], "box": [[0, 0], [12, 6]] } ],
     "marks": { "entrance": [6, 6, 0], "centre": [6, 3, 0] } },
 
-  { "//": "A healer's house: a shelf of books with a herbal among them, a cupboard of salves and bandages, a bench to pound herbs at, a bed for the sick, and herb beds in the garden in front.",
+  { "//": "A healer's house: a shelf of books with a herbal among them, a cupboard of salves and bandages, a bench to pound herbs at, a bed for the sick, and herb beds in the garden in front, one of them grown with nightshade (`N`).",
     "type": "map", "id": "healer_house", "tags": ["healer"],
     "size": [9, 9], "front": "south",
     "params": { "wall": { "pick": ["brick", "wood"] } },
@@ -121,6 +121,7 @@
       { "#": "wall@$wall",
         "r": { "fixture": "rack", "mark": "shelf", "items": { "table": "scholar_shelf" } },
         "q": { "fixture": "cupboard", "mark": "medicine", "items": { "table": "healer_goods" } },
+        "N": { "floor": "grass", "fixture": "herb_bed", "mark": "herbs", "items": { "table": "nightshade_bed" } },
         "~": { "floor": "roofing" } }],
     "default": { "floor": "boards" },
     "levels": {
@@ -130,7 +131,7 @@
              "#B..t.h.#",
              "#.......#",
              "####+####",
-             "gEgE,gEgg",
+             "gEgE,gNgg",
              "gggg,gggg",
              "gggg,gggg" ],
       "1": [ "~~~~~~~~~",
