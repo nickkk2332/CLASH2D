@@ -338,9 +338,9 @@ pub fn strike_target(run: &mut Headless, max_steps: usize) -> bool {
         return false;
     };
     let reachable = believed_way(run, to).is_ok()
-        || StepKind::ALL[..8].iter().any(|kind| {
-            believed_way(run, Location::new(to.grid, to.cell + kind.delta())).is_ok()
-        });
+        || StepKind::ALL[..8]
+            .iter()
+            .any(|kind| believed_way(run, Location::new(to.grid, to.cell + kind.delta())).is_ok());
     if !reachable {
         return false;
     }
@@ -800,6 +800,21 @@ pub fn use_near(run: &mut Headless, name: &str) -> bool {
     else {
         press(run, "escape");
         return false;
+    };
+    // Two lists: what lies loose (`Pick up …`), when anything does, and
+    // then what can be done. Up and Down move within a list and Tab
+    // between them, so a row of the second is reached by Tab first and
+    // counted from the second's top (pressing Down from the first list's
+    // top never leaves it, and Enter picked up what lay there instead).
+    let loose = rows
+        .iter()
+        .take_while(|row| row.starts_with("Pick up "))
+        .count();
+    let index = if index >= loose && loose > 0 {
+        press(run, "tab");
+        index - loose
+    } else {
+        index
     };
     for _ in 0..index {
         press(run, "down");

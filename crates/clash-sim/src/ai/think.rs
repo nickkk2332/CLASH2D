@@ -2150,10 +2150,7 @@ fn choose_action(sim: &mut Sim, mind: EntityId, purpose: &str, target: Option<Va
             }
         }
     }
-    Begun::Failed(
-        last.or(last_lasting)
-            .unwrap_or_else(|| no_option(purpose)),
-    )
+    Begun::Failed(last.or(last_lasting).unwrap_or_else(|| no_option(purpose)))
 }
 
 fn no_option(purpose: &str) -> Reason {

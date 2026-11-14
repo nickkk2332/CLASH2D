@@ -288,7 +288,10 @@ it may give off another or none:
   kind, may carry a source at the middle of its shape. The world counts
   them as moving sources wherever light is read, before those handed
   in. An area anchored to someone takes it along: darkness round a
-  person is an anchored area with a negative intensity.
+  person is an anchored area with a negative intensity, and a lantern
+  in someone's hand is an area of no size anchored to them with a
+  positive one, made and removed by rules on the lantern being taken up
+  and put down (`core:lantern`, decision D-960).
 - The sky's part and the fixed sources' part together are never below
   zero, and nor is the whole with moving sources added.
 

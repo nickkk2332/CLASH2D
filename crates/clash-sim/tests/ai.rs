@@ -803,11 +803,17 @@ fn a_guard_with_no_arm_to_grab_with_gives_up_the_grab_and_does_something_else() 
     }));
     // Set aside for its ten seconds each time: in thirty seconds it was
     // taken up a few times, never stood in for a minute.
-    let taken = goals.iter().filter(|goal| *goal == "core:apprehend").count();
+    let taken = goals
+        .iter()
+        .filter(|goal| *goal == "core:apprehend")
+        .count();
     assert!((1..=4).contains(&taken), "{goals:?}");
     // He went on with the next goal, and kicked: a blow that needs no
     // arm.
-    assert!(goals.iter().any(|goal| goal == "core:confront"), "{goals:?}");
+    assert!(
+        goals.iter().any(|goal| goal == "core:confront"),
+        "{goals:?}"
+    );
     let kick = sim
         .defs()
         .try_registry::<clash_sim::action::def::ActionDef>()

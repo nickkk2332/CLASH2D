@@ -593,3 +593,154 @@ scripted fighter, unable to reach them, never saw the night end.
    source of nightshade or a vial of it, so a poisoned blade cannot be
    made in play, and no item a player can wear presents another
    persona.
+
+## The fifth round
+
+Played from `7283bb1` on the build branch (stream "last stand
+balance"): the fourth round's first three known issues, and the night
+played every way at sixteen seeds. Decisions D-960 to D-964.
+
+### What the strangers carry and do
+
+As content:
+
+- **A lantern** (`core:lantern`, `mods/core/data/lights.json`, D-960): an
+  item that, taken into someone's hand, lights the ground round them:
+  an area of no size anchored to the bearer carrying a light of 0.3 (a
+  sixth of that a metre off, a sixteenth two metres off) out to six
+  metres, the way `shadow` carries darkness (02 §8.3, 08 §7.2). Put
+  down, stowed, put away or taken by someone else, the light leaves
+  whoever had it and goes with the lantern's new bearer. Each stranger
+  holds one beside his knife. The player sees them coming from far off
+  down the dark lane; they see whatever the lantern lights, a step or
+  two round them, and no further.
+- **They tell each other** (D-962): the strangers are a group,
+  `core:strangers`. One who loses the character reports where he last
+  perceived her to the group (`report_to_group`), and whoever comes
+  later is told what the group knows as he comes: a stranger at half
+  past eleven searches where the first one lost her, by the search of
+  the fourth round (`search_hiding_places`), lantern in hand. Nobody
+  knows where she is unless he perceived it or was told. (Reporting
+  also where he first saw her was tried: the 96 nights came out the
+  same.)
+- **The first comes from the east** (D-963): from 26 m down the lane,
+  not 14 m west in the porch lamp's light, so that whether he sees her
+  go in depends on the house and the lane at that seed, and how quickly
+  she is in.
+- **The house has a back door** in place of the window farthest from
+  the front door.
+- **The fallen are stepped over** (D-964): someone lying dead or
+  senseless yields the cell to whoever steps into it (`passage_requested`,
+  `core:step_over_the_fallen`): the two change places. Before, a body
+  in a doorway sealed it both ways (below).
+
+### The two faults, and two found on the way
+
+- **A stranger with both arms useless stood for hours trying to grab
+  her** (the fourth round's issue 2). `apprehend` chose among every
+  action tagged `grip`, the last of which (breaking free) is refused
+  because nothing holds him; that refusal could pass, so the method
+  failed, its fallback (look at her a second) ran, and the goal was
+  taken up again for ever. Now a step whose action is refused for a
+  reason waiting will not change (too few limbs of a channel at all,
+  an action that cannot take its target or parameters) fails its goal,
+  which is set aside for its `retry_after`, and the mind chooses again
+  at once (09 §4.1, D-961), and `apprehend` grabs with `grab`. Tested in
+  `crates/clash-sim/tests/ai.rs`
+  (`a_guard_with_no_arm_to_grab_with_gives_up_the_grab_and_does_something_else`):
+  he gives it up, a few times in thirty seconds, and kicks.
+- **The sessions' fighter did not walk up to a foe out of reach**
+  (issue 3). `strike_target` in `crates/clash-app/tests/session/`
+  strikes with `f`, and with the foe out of reach walks up to them
+  first, a step at a time along the way the character believes leads
+  there, as a player would; with no way there the session waits a
+  minute (D-963). The last stand's `hold_out` uses it.
+- **A body in a doorway sealed it both ways.** Found with the fighter
+  that walks up: a dead stranger is an occupant that still blocks
+  movement, so the next stranger could not get in (`ai.not_arrived`)
+  and she could not get out to him, and they stood three cells apart
+  from one in the morning until dawn. Played before the fix, this
+  "won" 10 of the dark's 12 winning nights and 21 of the door's 30
+  (seeds 1 to 16). Fixed as content (D-964, above).
+- **`use_near` picked up what lay on the floor instead of what it was
+  asked to do.** The list of what is near is two lists, what lies loose
+  and what can be done, and Down moves within one: with a dead
+  stranger's knife and lantern lying by her, "Bandage your wounds" was
+  never reached and Enter picked up the knife, so the sessions' fighter
+  never bound a wound once a stranger had fallen near her. It now
+  Tabs to the second list. Found with it: the fighter binds with the
+  club in hand (D-947) and takes up a club put down; screens left open
+  when a blow came are closed.
+
+### Played
+
+Each night played from the title to dawn or death by
+`the_night_played_many_ways` (`crates/clash-app/tests/play_last_stand.rs`,
+ignored; `NIGHT_WAYS`, `NIGHT_SEEDS`, in release about two minutes for
+the ninety-six nights). Every way first gets inside and takes up what
+lies on the table (the club, for whoever has nothing in hand, and the
+bandages). In the dark: the lamp put out and the long wait by it. In
+the wardrobe: the lamp put out, in, and the wait. At the door: the
+lamp left burning, `hold_out` (fight whoever is in sight, walking up to
+them, bind wounds). The marksman: shoot whoever is in sight, then
+fight. Out the back: through the back door and thirty metres on into
+the dark, and the wait. A hider who is found (a blow coming, a wound,
+brought out of the wardrobe) fights as `hold_out` does. W is survived,
+L lost, – not played to an end (the script met a screen it does not
+answer or no way to walk: seed 5 out the back, seed 14 in the dark and
+out the back).
+
+| Played as | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | Won |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| In the dark corner, lamp out | W | L | L | L | W | W | L | W | L | L | L | L | L | – | W | W | 6 of 15 |
+| In the wardrobe | L | W | L | L | W | L | L | W | L | L | L | L | L | L | W | W | 5 of 16 |
+| At the door, an ordinary person | L | W | L | W | W | L | L | L | L | L | L | L | W | L | L | W | 5 of 16 |
+| At the door, a brawler | W | L | L | L | W | L | L | L | L | L | W | W | W | L | L | W | 6 of 16 |
+| At the door, a marksman | W | L | L | W | W | L | W | W | W | W | W | W | L | L | W | W | 11 of 16 |
+| Out the back door | L | L | L | L | – | L | L | W | L | L | L | L | L | – | W | W | 3 of 14 |
+
+Each way wins and each way loses, decided by the world: the house and
+lane the seed builds, whether the first stranger saw her go in, where a
+lantern's light falls, the fight. The dark corner wins two nights in
+five, the door a third (an ordinary person or a brawler) to two thirds
+(a marksman, who shoots them as they come into the door's light). At
+seeds 5 and 16 nobody ever perceives her and the strangers walk the
+lane till dawn, every way; at most others the first stranger sees her
+go in, searches the house and tells the others where he lost her, and
+the night is a fight with each in turn. Losses come mostly within a
+few minutes of a stranger's coming: the first at ten, the second at
+half past eleven and the third at one, each told where she was.
+
+Tuned to this, each step a run of the nights: with lanterns of 0.4 and
+the first stranger 14 m west as before, he saw her go in every time and
+every way was a fight with him in the first three minutes (seeds 1 to
+8: the dark won 0 of 7, the wardrobe 0 of 7, the ordinary person at the
+door 0 of 8); with lanterns of 0.2 and the first 36 m east, he never saw
+her and nobody searched (the wardrobe won 8 of 8, the dark 6 of 7, the
+flight 1 of 7); 26 m east with 0.3 is the table (0.4 there lost the
+flight 13 of 15 and changed the rest little). Then the fallen stepped
+over and the bandaging fixed. Before this round, with no lanterns and
+the first stranger 14 m west, the dark won 7 of 8 seeds and the
+wardrobe was found every time.
+
+The kept sessions play the night at the door as an ordinary person at
+seed 4 (she kills all three), as a brawler, in the dark (found, and she
+fights them off) and in the wardrobe (found) at seed 1, and the
+marksman's at seed 8; at seed 4, before this round's tuning, every way
+lost.
+
+### Known issues that remain
+
+1. **The flight out the back wins one night in five**: a stranger who
+   sees her go follows, and the others are told where she was last
+   seen and go there with their lanterns. A player who keeps moving, or
+   goes further, was not played: the script walks thirty metres and
+   waits.
+2. **The scripted hider never moves once hidden**, so a searcher finds
+   her only by light or by the wardrobe; a player who creeps away from
+   a lantern, or out of the wardrobe once he has gone, was not played.
+3. **Binding with both hands full** worked in the session once the list
+   was reached (D-947); whether a stack of two can always be split into
+   a full hand was not looked into further.
+4. **The scripts that drive the night still stop** at a screen they do
+   not answer or a place with no way to it, three nights of ninety-six.

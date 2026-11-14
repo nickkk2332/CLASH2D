@@ -8,10 +8,10 @@ chars
 |                                                      │Time 22:00              │|
 |                                                      │                        │|
 |                       " ###X###                      │                        │|
-|                       ....!...                       │                        │|
+|                       ....!........      .           │                        │|
 |          ┌ Last stand ──────────────────────────────────────────────┐         │|
 |          │Lost.                                                     │         │|
-|          │Played for 0:00:43.                                       │         │|
+|          │Played for 0:00:54.                                       │         │|
 |          │[ ] Get inside the house.                                 │         │|
 |          │[ ] Hold out until dawn.                                  │         │|
 |          │                                                          │         │|
@@ -33,15 +33,15 @@ fg
 |00000000000000000000000000000000000000000000000000000022222000000000000000000002|
 |00000000000000000000000000000000000000000000000000000020000000000000000000000002|
 |000000000000000000000005079a0cde000000000000000000000020000000000000000000000002|
-|00000000000000000000000fghijihg0000000000000000000000020000000000000000000000002|
-|0000000000kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0000000002|
-|0000000000kmmmmmnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
-|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
-|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
-|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
-|0000000000knnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
-|0000000000klllllllllllllllllllllnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnk0000000002|
-|0000000000kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk0000000002|
+|00000000000000000000000ffghijklfffll000000k0000000000020000000000000000000000002|
+|0000000000mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm0000000002|
+|0000000000mooooopppppppppppppppppppppppppppppppppppppppppppppppppppppm0000000002|
+|0000000000mppppppppppppppppppppppppppppppppppppppppppppppppppppppppppm0000000002|
+|0000000000mppppppppppppppppppppppppppppppppppppppppppppppppppppppppppm0000000002|
+|0000000000mppppppppppppppppppppppppppppppppppppppppppppppppppppppppppm0000000002|
+|0000000000mppppppppppppppppppppppppppppppppppppppppppppppppppppppppppm0000000002|
+|0000000000mnnnnnnnnnnnnnnnnnnnnnpppppppppppppppppppppppppppppppppppppm0000000002|
+|0000000000mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm0000000002|
 |00000000000000000000000000000000000000000000000000000020000000000000000000000002|
 |22333222222222222222222222222222222222222222222222222220000000000000000000000002|
 |20000000000000000000000000000000000000000000000000002220000000000000000000000002|
@@ -58,15 +58,15 @@ bg
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |111111111111111111111116188b8666111111111111111111111111111111111111111111111111|
-|111111111111111111111116668b8661111111111111111111111111111111111111111111111111|
-|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
-|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
-|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
-|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
-|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
-|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
-|1111111111lkkkkkkkkkkkkkkkkkkkkkllllllllllllllllllllllllllllllllllllll1111111111|
-|1111111111llllllllllllllllllllllllllllllllllllllllllllllllllllllllllll1111111111|
+|111111111111111111111116668bb666666611111161111111111111111111111111111111111111|
+|1111111111nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
+|1111111111nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
+|1111111111nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
+|1111111111nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
+|1111111111nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
+|1111111111nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
+|1111111111nmmmmmmmmmmmmmmmmmmmmmnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
+|1111111111nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn1111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
 |11111111111111111111111111111111111111111111111111111111111111111111111111111111|
@@ -106,24 +106,26 @@ palette
 2 #313131 bright_black
 3 #624d1c bright_black
 4 #460a11 bright_black
-5 #060a06 bright_black
+5 #070a07 bright_black
 6 #010101 black
-7 #0d0c0a bright_black
+7 #0e0c0a bright_black
 8 #020202 black
-9 #110f0d bright_black
-a #14110f bright_black
+9 #11100e bright_black
+a #151210 bright_black
 b #030303 black
-c #0b0a09 bright_black
-d #090807 bright_black
-e #080706 bright_black
-f #060606 bright_black
-g #070707 bright_black
-h #080808 bright_black
-i #0d0d0d bright_black
-j #2d2d20 bright_black
-k #e0b040 yellow
-l #101010 black
-m #5090d0 bright_blue
-n #c8c8c8 white
+c #0c0b0a bright_black
+d #0a0908 bright_black
+e #090807 bright_black
+f #070707 bright_black
+g #090909 bright_black
+h #0e0e0e bright_black
+i #2d2d20 bright_black
+j #101010 bright_black
+k #0a0a0a bright_black
+l #080808 bright_black
+m #e0b040 yellow
+n #101010 black
+o #5090d0 bright_blue
+p #c8c8c8 white
 sprites 0
 fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none
