@@ -30,8 +30,8 @@ offered), and choose what to play from the list:
 
 | Game | What it is | When you die |
 |------|------------|--------------|
-| **Last stand** | Ten at night, a house on a country lane, three strangers who mean you harm. Get inside and hold out until dawn, eight hours on. | The game ends, and its one save (written when you leave, resumed with Continue) goes with it. |
-| **The errand** | Two in the afternoon. Take the parcel in your hands to the town hall in the middle of the market town before nightfall; you have five hours. | The game ends. Save and load as you like. |
+| **Last stand** | Ten at night, a house on a country lane, and three strangers with knives who mean you harm: one on the lane already, the next at half past eleven, the last at one. Get inside and hold out until dawn, at five. A club, two bandages and a lamp are in the house. | The game ends, and its one save (written when you leave, resumed with Continue) goes with it. |
+| **The errand** | Two in the afternoon. Take the parcel in your hands to the town hall in the middle of the market town before nightfall; you have five hours. Keep it with you: handed to someone else, or left lying for ten minutes, it is lost, and so is the errand. | The game ends. Save and load as you like. |
 | **The town** | A grid of streets with every door open. Nothing to do but walk. | The game ends. |
 | **The market town** | The sandbox: a generated town and its people, no goals, no end. Begin on the north street or in the town square. | You carry on as a newcomer, made fresh where you first began; your body stays where it fell. |
 | **The lane** | Houses between fields, their doors shut. Nothing to do but walk. | The game ends. |
@@ -105,8 +105,11 @@ perceived: what they saw, and what they only heard ("Footsteps,
 somewhere close."). It also says why something you tried could not be
 done.
 
-**The status column** has your name, your **Blood** and **Pain**, and
-what is in your hands.
+**The status column** has your name, the target you chose, your
+**Blood** and **Pain**, the reserves powers are paid from (**Stam** and
+**Rsrv**, for those who have them), **Toxin** and **Drowsy** while
+something is in your blood, **Fed** and how hungry you are once you go
+short of food, what is in your hands, and the time of day.
 
 ## Keys
 
@@ -135,6 +138,8 @@ controls, read from the data.
 | `<` | Go up |  |
 | `>` | Go down |  |
 | `.` | Wait | Let a second pass. |
+| `p` | Wait a minute | Let a minute pass, unless something breaks it off. |
+| `Shift+P` | Wait an hour | Let an hour pass, unless something breaks it off. |
 | `x` | Look around | Opens Look. |
 | `e` | Use something near | List what can be done with the things within a step, and do one. |
 | `g`, `,` | Pick up | Pick up what lies at your feet or within reach; with more than one thing there, choose which. |
@@ -241,7 +246,8 @@ character's own clock, and while it runs everyone else acts on the same
 clock: a step at walking pace takes about two thirds of a second (more
 with a heavy load), `.` waits one second, a door takes about half a
 second to open, eating takes three. When it is done the game waits for
-you again.
+you again. `p` waits a minute and Shift+P an hour; either is broken off
+when someone you hold a foe comes into sight or you are hurt.
 
 What happened in that time is played back on the map. Any key skips to
 the end of it. Options sets how fast it plays (0 shows it at once).
@@ -341,6 +347,13 @@ A bandage, from `e` while you hold it, closes every open wound and is
 used up. Salve mends a little. Bread, ale and water are eaten and drunk
 the same way.
 
+**Food.** What you eat keeps you going for about a day and a half.
+Below a quarter you are **hungry** (a little weaker), below a tenth
+**weak with hunger** (weaker and slower), and with nothing left
+**starving**: your body begins to fail, and about a day later you fall,
+and later die, unless you eat. The status column shows it once you go
+short; `c` shows how fed you are. A loaf is a good meal.
+
 ## Fighting
 
 Fights are short and ugly. There are no hit points: a blow lands on a
@@ -361,7 +374,9 @@ character sees can be chosen.
 
 **Hand to hand.** `f` strikes the target with the first blow you can
 make now: a punch or a kick with empty hands, a cut or a thrust with a
-knife, a blow with a club. With no target it asks for one. `F`
+knife, a blow with a club. With no target it asks for one among those
+in sight. A target out of reach is not struck ("That is out of
+reach."): walk up first. With nobody in sight it says so. `F`
 (Shift+F) lists every blow, greying those you cannot make with the
 reason, and asks how: the target, the part of them you aim at, and how
 hard. Walking into someone you hold hostile or fear strikes them;
@@ -455,7 +470,9 @@ what is true.
   strangers of Last stand are such) go after anyone they hold hostile or
   saw hurt someone; once they lose them they go to where they last
   believed them to be, look round, and give up. People tell each other
-  what they saw, at a little less certainty each time.
+  what they saw, at a little less certainty each time. (In this beta
+  the town's watch does not yet come for you when it is your character
+  who strikes: see the release notes' known issues.)
 
 Your character works the same way: the map shows what they have seen,
 and someone you cannot see is not drawn.
@@ -480,7 +497,9 @@ lists the others).
 ## When it ends
 
 The errand ends when the parcel reaches the town hall, or when it is
-lost or night falls. Last stand ends at dawn. The summary says how the
+lost: destroyed, in someone else's hands, or left lying (or put away)
+for ten minutes; or when night falls. The log says which. Last stand
+ends at dawn. The summary says how the
 game ended, how long it ran and how each goal stood (`[x]` done, `[-]`
 failed, `[ ]` not), and returns to the title. What happens when you die
 is in the table under [Starting a game](#starting-a-game).
@@ -501,8 +520,15 @@ which way and how far each one is.
   you; run, shut a door between you, or hide.
 - Bleeding kills slowly and surely. Bandage early: the healer's house
   keeps bandages, and a piece of cloth makes two by hand (`M`).
-- In Last stand it is dark and you see almost nothing. The house's door
-  is two steps north (the journal, `J`, says which way); get in and shut
-  it. Footsteps you hear show as `!` where they seemed to be.
+- In Last stand it is dark and you see little beyond the lamp by the
+  house's door, a few steps north-east (the journal, `J`, says which
+  way); get in and shut it. Footsteps you hear show as `!` where they
+  seemed to be, and the lamps show as a yellow `!` too. The lamp inside
+  lets you find the club and the bandages on the table, and lets them
+  see you: switch it off (`e`) to hide. They find you more easily as
+  the sky lightens before dawn.
+- Blocking a knife with your forearm stops the blow and cuts the arm:
+  the log says when you are wounded. Stepping back or dodging costs
+  nothing when it works. Binding wounds takes a free hand.
 - The same seed gives the same town. If a game went badly, try it again
   knowing where things are.

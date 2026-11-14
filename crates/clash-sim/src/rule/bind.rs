@@ -56,6 +56,13 @@ use crate::host::RULE_STREAM;
 use crate::reason::{Reason, codes};
 use crate::verb::{VerbFn, engine_verbs};
 
+/// The value of a rule's fault that names whose doing it was: the actor
+/// of what the faulting effect would have changed, as its id written
+/// out (`0v12`). Absent where nobody acted. A frontend shows its player
+/// only the faults of the party's own doing and those of nobody's
+/// (12 §3.2, decision D-902).
+pub const FAULT_ACTOR: &str = "actor";
+
 /// What the simulation sets up beside its state so that rules run: the
 /// rules of its definitions, the verbs by id, and the counts that thin
 /// reports. Not state: made with the simulation and again after a load.
@@ -397,10 +404,15 @@ impl RuleHost for SimRules<'_> {
     fn fault(&mut self, fault: RuleFault) {
         self.sim.rt.fault_count += 1;
         if let Some(count) = self.sim.rt.faults.admit(&fault) {
-            let reason = self
+            let mut reason = self
                 .rules
                 .fault_reason(&fault)
                 .with("count", i64::try_from(count).unwrap_or(i64::MAX));
+            // Whose doing it was: the actor of what the faulting effect
+            // would have changed (decision D-902).
+            if let Some(actor) = self.writes.actor {
+                reason = reason.with(FAULT_ACTOR, actor.to_string());
+            }
             self.sim.fault(reason);
         }
     }

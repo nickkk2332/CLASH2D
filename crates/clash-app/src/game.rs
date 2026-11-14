@@ -728,6 +728,13 @@ impl Game {
             }
             (session.scenario.name.clone(), lines.join("\n"), removed)
         };
+        // What brought the end about is told before the end: playback
+        // jumps to the end of what it holds, writing its lines, as a key
+        // makes it (decision D-908).
+        if !self.scene.playback_caught_up() {
+            self.scene.skip_playback();
+            self.feed_view();
+        }
         self.say(LOG_APP, &format!("The game has ended: {outcome}."));
         if let Some(id) = removed {
             self.say(LOG_APP, &format!("Its one save ({id}) is gone."));
@@ -1261,10 +1268,19 @@ fn acts_on_present(event: &InputEvent) -> bool {
 
 /// The line the application writes in the log at once for an event,
 /// beside what playback writes: a fault the engine contained, and a
-/// `message` a rule sent the player (12 §7.4).
+/// `message` a rule sent the player (12 §7.4). A fault of someone
+/// else's doing (a resident's door that would not open) is theirs, not
+/// the player's: only the party's own faults and those of nobody's
+/// doing are written (decision D-902).
 fn told(event: &SimEvent, player: EntityId) -> Option<(&'static str, String)> {
     match &event.body {
-        EventBody::Fault { reason } => Some((LOG_FAULT, fault_line(reason))),
+        EventBody::Fault { reason } => {
+            let actor = reason
+                .value(clash_sim::rule::FAULT_ACTOR)
+                .and_then(clash_core::Value::as_str);
+            let others = actor.is_some_and(|actor| actor != player.to_string());
+            (!others).then(|| (LOG_FAULT, fault_line(reason)))
+        }
         EventBody::Act(ActEvent::Message { to, text, .. }) if *to == player => {
             Some((LOG_MESSAGE, text.clone()))
         }
@@ -1328,4 +1344,31 @@ pub fn run_frontend<F: Frontend>(
     };
     drop(front);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fault(actor: Option<EntityId>) -> SimEvent {
+        let mut reason = clash_sim::Reason::new("action.verb_refused", "`open` declined");
+        if let Some(actor) = actor {
+            reason = reason.with(clash_sim::rule::FAULT_ACTOR, actor.to_string());
+        }
+        SimEvent {
+            tick: clash_core::Tick::ZERO,
+            clock: clash_time::ClockId::UNIVERSAL,
+            local: Dur::ZERO,
+            cause: clash_world::Cause::new(clash_world::CauseKind::Process),
+            body: EventBody::Fault { reason },
+        }
+    }
+
+    #[test]
+    fn the_log_takes_the_partys_own_faults_and_nobodys_but_not_others() {
+        let (player, resident) = (EntityId::new(0, 0), EntityId::new(7, 0));
+        assert!(told(&fault(Some(player)), player).is_some());
+        assert!(told(&fault(None), player).is_some());
+        assert_eq!(told(&fault(Some(resident)), player), None);
+    }
 }

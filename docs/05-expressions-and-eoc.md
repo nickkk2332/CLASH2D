@@ -1392,7 +1392,9 @@ As built (decision D-477):
 - **`let`** defines its locals in the order written, each for the rest
   of the list it is in; a later entry may read an earlier one, and a
   name defined again shadows the first. A local's type is that of its
-  value, and a local that starts as `null` may be given anything. The
+  value, a value source's included: `{ "first": { "cells": … } }` gives
+  a cell or null, so `$porch.x` reads the cell's property (decision
+  D-905). A local that starts as `null` may be given anything. The
   value is an expression, a value source of section 7.4, or one of two
   that only a `let` takes: `{ "run": … }` for what a rule returns and
   `{ "emit": … }` for what came of an event (section 10.5).

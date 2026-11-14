@@ -310,14 +310,16 @@ fn row(fields: Vec<(&str, Value)>) -> Value {
 /// carries the tag (what could start first, then what strikes with
 /// something held, then fewer slots, then by qualified id: D-791), with
 /// whether the entity could start it now (given `target` for an action
-/// that has a parameter of that name) and why not.
+/// that has a parameter of that name) and why not. With a target, an
+/// action that has no parameter or role of that name cannot be done at
+/// them, and comes after those that can (D-904).
 pub fn actions_with(sim: &Sim, actor: EntityId, tag: &str, target: &Value) -> Vec<Value> {
     let defs = Arc::clone(sim.defs());
     let (Some(tag), Some(registry)) = (defs.tags().lookup(tag), defs.try_registry::<ActionDef>())
     else {
         return Vec::new();
     };
-    let mut rows: Vec<((bool, bool, u32), Value)> = Vec::new();
+    let mut rows: Vec<((bool, bool, bool, u32), Value)> = Vec::new();
     for (id, def) in registry.iter() {
         if !def.tags.contains(tag) {
             continue;
@@ -329,19 +331,30 @@ pub fn actions_with(sim: &Sim, actor: EntityId, tag: &str, target: &Value) -> Ve
             .attacks
             .iter()
             .any(|attack| matches!(attack.with.source(), Some(WithSource::Held(_))));
-        let mut given: Vec<(&str, Value)> = Vec::new();
-        if !target.is_null()
-            && (def.param(TARGET_PARAM).is_some()
-                || def
-                    .roles()
-                    .iter()
-                    .skip(1)
-                    .any(|role| role.name.value == TARGET_PARAM))
-        {
-            given.push((TARGET_PARAM, target.clone()));
-        }
-        let verdict = could_start(sim, actor, id, &given);
+        let takes_target = def.param(TARGET_PARAM).is_some()
+            || def
+                .roles()
+                .iter()
+                .skip(1)
+                .any(|role| role.name.value == TARGET_PARAM);
         let label = action_label(sim, actor, id);
+        // With a target, what cannot be aimed at them cannot be done at
+        // them: a blow at a place is not a blow at someone (D-904).
+        let aimed_elsewhere = !target.is_null() && !takes_target;
+        let verdict = if aimed_elsewhere {
+            Err(sim.refusal(
+                &why::NOT_AIMED,
+                actor,
+                &[("action", action_value(sim, id))],
+                Some(format!("{label} is not aimed at someone.")),
+            ))
+        } else {
+            let mut given: Vec<(&str, Value)> = Vec::new();
+            if !target.is_null() {
+                given.push((TARGET_PARAM, target.clone()));
+            }
+            could_start(sim, actor, id, &given)
+        };
         let slots: u32 = def
             .roles()
             .first()
@@ -354,7 +367,7 @@ pub fn actions_with(sim: &Sim, actor: EntityId, tag: &str, target: &Value) -> Ve
             })
             .sum();
         rows.push((
-            (verdict.is_err(), !held, slots),
+            (verdict.is_err(), aimed_elsewhere, !held, slots),
             row(vec![
                 ("value", action_value(sim, id)),
                 ("label", Value::from(label.as_str())),
@@ -669,7 +682,7 @@ pub fn properties() -> Vec<PropertyDef> {
             "entity",
             "actions_with",
             "list<map<any>>",
-            "What the entity could start of the actions that carry a tag, as it believes (12 §10.7): one row for each, those that could start first, then those that strike with something held, then those that take fewer slots, then by qualified id, with `value` (the action's id), `label` and `name` (what a reader calls it), `id` (its qualified id as a text), `available` (whether it could start now) and `why` (the refusal's sentence where it could not, else empty). With `target`, that is given to an action that has a parameter or role named `target`; its `requires` is judged once every parameter without a default is given. Read of the character itself in a mind context.",
+            "What the entity could start of the actions that carry a tag, as it believes (12 §10.7): one row for each, those that could start first, then those that strike with something held, then those that take fewer slots, then by qualified id, with `value` (the action's id), `label` and `name` (what a reader calls it), `id` (its qualified id as a text), `available` (whether it could start now) and `why` (the refusal's sentence where it could not, else empty). With `target`, that is given to an action that has a parameter or role named `target`; its `requires` is judged once every parameter without a default is given. An action that has none cannot be done at the target: it is not available, says so, and comes after those that take a target. Read of the character itself in a mind context.",
             |sim, subject, args| match subject {
                 Subject::Entity(id) => {
                     let tag = args.first().and_then(Value::as_str).unwrap_or("");

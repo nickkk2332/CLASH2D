@@ -116,3 +116,62 @@ fn the_parcel_is_carried_across_town_with_a_save_on_the_way() {
     assert_eq!(top(&run), "ui:title");
     assert_eq!(saves(&run), ["half-way"]);
 }
+
+#[test]
+fn the_parcel_left_on_the_street_fails_the_errand() {
+    let data = DataDir::new("errand-left");
+    let mut run = boot_default(data.path(), 4);
+    begin(&mut run);
+    let intro = run.text();
+    assert!(intro.contains("Holding a parcel"), "{intro}");
+
+    // Dropped where she stands, from the inventory.
+    do_with_carried(&mut run, 0, "drop");
+    until_asked(&mut run, 120);
+    settle(&mut run);
+    assert_eq!(top(&run), "ui:play", "{}", run.text());
+    let parcel = global(&run, "core:parcel");
+    let carried = run
+        .game()
+        .with_session(|session| {
+            let parcel = session.sim.subject_of(&parcel)?.entity()?;
+            let entities = session.sim.truth().entities();
+            Some(entities.contents_deep(session.player).contains(&parcel))
+        })
+        .flatten();
+    assert_eq!(carried, Some(false), "the parcel lies on the street");
+
+    // Minutes go by with the long wait; ten minutes on, the errand has
+    // failed, and the game says why.
+    let began = now_s(&run);
+    for _ in 0..15 {
+        if top(&run) == "ui:summary" {
+            break;
+        }
+        press(&mut run, "p");
+    }
+    until_top(&mut run, "ui:summary", 120);
+    let lines = log_text(&run);
+    assert!(
+        lines
+            .iter()
+            .any(|line| line == "You left the parcel behind. The errand has failed."),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line == "The game has ended: failed."),
+        "{lines:?}"
+    );
+    let waited = now_s(&run) - began;
+    assert!((600.0..700.0).contains(&waited), "waited {waited} s");
+    let summary = run.text();
+    assert!(
+        summary.contains("Failed.")
+            && summary.contains("[-] Take the parcel to the town hall before nightfall."),
+        "{summary}"
+    );
+    press(&mut run, "enter");
+    assert_eq!(top(&run), "ui:title");
+}

@@ -93,6 +93,64 @@ fn animals(run: &Headless) -> usize {
         .unwrap_or_default()
 }
 
+/// The town (the test city), third in the bundled list: a game in
+/// which the player makes their character.
+const TOWN: usize = 2;
+
+#[test]
+fn an_adept_made_on_the_creation_screen_raises_a_stone_wall() {
+    let data = DataDir::new("adept-made");
+    let mut run = boot_default(data.path(), 4);
+    // The adept, first of the playable characters, made.
+    create(&mut run, TOWN, 0, "Ada");
+    let shown = run.text();
+    assert!(shown.contains("Choices"), "{shown}");
+    // The powers, the fifth choice: the three given at first put back,
+    // and Force push and Stone wall taken, three points in all.
+    tab_to(&mut run, "choices");
+    for _ in 0..4 {
+        press(&mut run, "down");
+    }
+    press(&mut run, "enter");
+    assert_eq!(top(&run), "ui:create_choice", "{}", run.text());
+    // Dash, Fire bolt and Heal out; Force push and Stone wall in.
+    for keys in [
+        &["enter"][..],
+        &["down", "down", "enter"],
+        &["down", "down", "enter"],
+        &["up", "up", "up", "enter"],
+        &["down"; 10],
+        &["enter"],
+    ] {
+        for key in keys {
+            press(&mut run, key);
+        }
+    }
+    press(&mut run, "escape");
+    assert_eq!(top(&run), "ui:create");
+    let shown = run.text();
+    assert!(shown.contains("Force push, Stone wall"), "{shown}");
+    begin_created(&mut run);
+
+    // What was chosen, and nothing else.
+    press(&mut run, "a");
+    let listed = run.text();
+    for power in ["Force push", "Stone wall"] {
+        assert!(listed.contains(power), "{power}: {listed}");
+    }
+    for power in ["Dash", "Fire bolt", "Heal"] {
+        assert!(!listed.contains(power), "{power}: {listed}");
+    }
+    press(&mut run, "escape");
+    let shown = run.text();
+    assert!(shown.contains("Stam") && shown.contains("Rsrv"), "{shown}");
+
+    // A wall across the street, two cells east.
+    let wall = use_power(&mut run, "Stone wall", false, 2);
+    assert!(!wall.iter().any(|line| line.contains("cannot")), "{wall:?}");
+    assert_ne!(run.text(), shown, "a wall stands across the street");
+}
+
 #[test]
 fn every_power_is_used_from_the_abilities_screen() {
     let data = DataDir::new("powers");

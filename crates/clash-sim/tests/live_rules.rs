@@ -305,6 +305,12 @@ fn each_kernel_verb_goes_through_the_engines_own_function() {
                 reason.value("rule"),
                 Some(&clash_core::Value::from("verbs:sideways"))
             );
+            // Whose doing it was, for a frontend to show only its
+            // party's own (D-902).
+            assert_eq!(
+                reason.value(clash_sim::rule::FAULT_ACTOR),
+                Some(&clash_core::Value::from(who.to_string().as_str()))
+            );
         }
         other => panic!("unexpected {other:?}"),
     }

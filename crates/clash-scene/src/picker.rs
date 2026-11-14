@@ -385,7 +385,7 @@ impl<H: SceneHost> Scene<H> {
             if creatures.is_empty() {
                 self.target = None;
                 self.stale = true;
-                return Err("Nobody is in sight to choose.".to_owned());
+                return Err(crate::control::ask::NOBODY_TO_CHOOSE.to_owned());
             }
             let count = creatures.len() as i64;
             let step = i64::from(effect.target.signum());

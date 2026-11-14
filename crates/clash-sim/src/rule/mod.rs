@@ -159,7 +159,7 @@ mod tree;
 mod value;
 
 pub(crate) use bind::Runtime;
-pub use bind::SimRules;
+pub use bind::{FAULT_ACTOR, SimRules};
 pub use compile::{
     ACTION_EFFECTS, CORE_EFFECTS, EMIT_CANCELLED, EMIT_REASON, EffectInfo, MAX_BLOCK_DEPTH,
 };
