@@ -1,15 +1,19 @@
 //! Play session: the last stand (13 §11), from the title, as a player
-//! plays it. Three strangers come down a dark lane for the character,
-//! one by one; a lamp burns by the door of a house, another inside, and
-//! a club and bandages lie on its table (decision D-909). In the first
-//! session the character gets inside, shuts the door, leaves and carries
-//! on from the title (the game's one save), and waits: the stranger
-//! opens the door and comes in. In the second the character stays on the
-//! lane and fights, and the night ends the other way. Then the night is
-//! played to its end: fighting at the door as an ordinary person and as
-//! a brawler, shooting from inside as a marksman, and hidden in the dark
-//! house with the lamp out until dawn. That dawn ends the game is tested
-//! in `clash-sim`'s `tests/scenario.rs` (decision D-879).
+//! plays it. Three strangers with knives and lanterns come down a dark
+//! lane for the character, one by one; a lamp burns by the door of a
+//! house, another inside, a club and bandages lie on its table and a
+//! wardrobe stands in it, and it has a back door (decisions D-909,
+//! D-950, D-963). In the first session the character gets inside, shuts
+//! the door, leaves and carries on from the title (the game's one save),
+//! and waits: the stranger opens the door and comes in. In the second
+//! the character stays on the lane and fights, and the night ends the
+//! other way. Then the night is played to its end: fighting at the door
+//! as an ordinary person and as a brawler, shooting from inside as a
+//! marksman, hidden in the dark house with the lamp out, and in the
+//! wardrobe. An ignored session plays the night every way at many seeds
+//! (`the_night_played_many_ways`, `docs/playtest-beta.md`, the fifth
+//! round). That dawn ends the game is tested in `clash-sim`'s
+//! `tests/scenario.rs` (decision D-879).
 //!
 //! The golden frames are written with `BLESS=1 cargo test -p clash-app`.
 

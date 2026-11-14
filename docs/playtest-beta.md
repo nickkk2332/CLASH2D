@@ -606,14 +606,16 @@ As content:
 
 - **A lantern** (`core:lantern`, `mods/core/data/lights.json`, D-960): an
   item that, taken into someone's hand, lights the ground round them:
-  an area of no size anchored to the bearer carrying a light of 0.3 (a
-  sixth of that a metre off, a sixteenth two metres off) out to six
-  metres, the way `shadow` carries darkness (02 §8.3, 08 §7.2). Put
+  an area of no size anchored to the bearer carrying a light of 0.3 (half
+  of that a metre off, a fifth two metres off, a tenth three metres off)
+  out to six metres, the way `shadow` carries darkness (02 §8.3, 08 §7.2). Put
   down, stowed, put away or taken by someone else, the light leaves
   whoever had it and goes with the lantern's new bearer. Each stranger
   holds one beside his knife. The player sees them coming from far off
   down the dark lane; they see whatever the lantern lights, a step or
-  two round them, and no further.
+  two round them, and no further. The test script
+  `scenarios/world/lantern.scn` checks the light taken up, carried, put
+  down and taken up by someone else.
 - **They tell each other** (D-962): the strangers are a group,
   `core:strangers`. One who loses the character reports where he last
   perceived her to the group (`report_to_group`), and whoever comes
@@ -744,3 +746,11 @@ lost.
    a full hand was not looked into further.
 4. **The scripts that drive the night still stop** at a screen they do
    not answer or a place with no way to it, three nights of ninety-six.
+5. **Of the brief's reasons to look inside a house**, the strangers act
+   on what they saw (the fourth round's search), what they heard (the
+   `guard` mind's `investigate_noise`: to where the noise was, a look
+   round with the lantern) and what another told them (D-962). A light
+   seen in the house earlier, or a door seen shut, is not built: what
+   state a lamp or a door is in is not static geometry, and what a mind
+   has noted of such things (09 §3.4, 15 §7.1) cannot yet be read in a
+   mind context.

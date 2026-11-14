@@ -1545,6 +1545,11 @@ own; `realm.clock` gives the same as a fraction of the day.
   (a property), `threat`, `standing` and the rest of section 6; the
   queries `visible`, `heard`, `allies`, `threats`; `retry_after` is
   built, `wake_clarity` is a field of `mind`.
+- Gap (decision D-961): which refusals fail a goal rather than a method
+  is the engine's list, `ai::LASTING_REFUSALS`; a mod cannot mark one of
+  its own `reason` definitions, or a `requires` that will not come to
+  hold, as lasting. A goal that should give up on such a refusal says
+  so with its own `fail`.
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
 sites, `locals`, `stock(what)`, `population(kind)`, `holder`; on regions,

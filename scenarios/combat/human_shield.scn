@@ -23,4 +23,4 @@ as @e:3 do { "start_action": { "who": "self", "action": "core:slash", "with": "{
 advance 800ms
 expect event strike_defended
 assert "len(@e:2.wounds) > 0"
-expect hash d75588da15c6230e17e560822a068f83
+expect hash 6653acaeb3cee944e1be5a5729234880

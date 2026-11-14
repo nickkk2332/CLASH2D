@@ -21,4 +21,4 @@ assert "@e:3v0.goal == 'core:search_hiding_places'"
 advance 20s
 expect event interacted
 assert "@h.container == null"
-expect hash be0bec74d0f5731f362a500a4bcd4f5d
+expect hash e9010f63e083a8ca389e653cf8fdc0a9

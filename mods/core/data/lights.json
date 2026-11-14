@@ -9,7 +9,7 @@
   { "type": "function", "id": "lantern_light",
     "returns": "real",
     "value": "0.3",
-    "doc": "How bright a lantern in hand burns, on the scale where full daylight is 1: what it gives the cell of whoever holds it. A cell `d` metres off is given this over `1 + d²` (15 §3.3), so a person standing two metres from the bearer is lit at a twelfth of it." },
+    "doc": "How bright a lantern in hand burns, on the scale where full daylight is 1: what it gives the cell of whoever holds it. A cell `d` metres off is given this over `1 + d²` (15 §3.3), so a person standing two metres from the bearer is lit at a fifth of it." },
 
   { "type": "function", "id": "lantern_reach",
     "returns": "real",

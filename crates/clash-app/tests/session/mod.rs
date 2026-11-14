@@ -318,9 +318,9 @@ pub fn walk_up_to_target(run: &mut Headless, max_keys: usize) -> bool {
 /// of reach is walked up to first, a step at a time along the way the
 /// character believes leads there, at most `max_steps` keys, and struck
 /// once beside it. A choice the attack asks for is put away. Returns
-/// whether a blow was started (or a prompt came up that the session must
-/// answer); false when nothing could be struck, or no way leads to the
-/// foe.
+/// whether anything was done: a blow started, a step taken toward the
+/// foe, or a prompt come up that the session must answer; false when
+/// nothing could be struck and no way leads to the foe.
 pub fn strike_target(run: &mut Headless, max_steps: usize) -> bool {
     let quick = |run: &mut Headless| {
         let before = commands(run);
