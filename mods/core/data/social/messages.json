@@ -9,8 +9,8 @@
     "doc": "A greeting, said in passing." },
   { "type": "message_kind", "id": "warn", "name": "warning", "strength": 3,
     "doc": "A warning, said loudly: stop, stay back." },
-  { "type": "message_kind", "id": "help", "name": "call for help", "strength": 8,
-    "doc": "A shout for help: the watch answers it (`core:heed_help`)." },
+  { "type": "message_kind", "id": "help", "name": "call for help", "strength": 8, "calls": true,
+    "doc": "A shout for help: the watch answers it (`core:heed_help`). A call: whoever is simulated warm hears it as if hot, and is brought to full detail by it (D-934)." },
   { "type": "message_kind", "id": "threaten", "name": "threat", "strength": 2,
     "doc": "A threat." }
 ]

@@ -305,9 +305,41 @@ pub struct SenseDef {
     /// sweep considers every kind.
     #[serde(default)]
     pub notices: Option<Vec<clash_world::OccupantKind>>,
+    /// The states of its owner in which it receives nothing and sweeps
+    /// nothing (D-930): vital states and tags. Left out, none: the sense
+    /// works whatever state its owner is in.
+    #[serde(default)]
+    pub stopped_by: StoppedBy,
     /// What it is, for the reference.
     #[serde(default)]
     pub doc: String,
+}
+
+/// The states of a sense's owner that stop the sense (15 §4, D-930):
+/// while its owner is in any of them, the sense receives nothing, its
+/// sweeps look at no one and what was held through it fades. Which
+/// states stop which senses is data: the engine names none.
+///
+/// ```json
+/// "stopped_by": { "vital": ["unconscious", "dead"], "tags": ["asleep"] }
+/// ```
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct StoppedBy {
+    /// Vital states of the owner's mind (06 §8.4): `awake`,
+    /// `unconscious`, `dead`. An owner with no mind is in none.
+    #[serde(default)]
+    pub vital: Vec<crate::mind::VitalState>,
+    /// Tags the owner carries, of its own or from a trait, an item or a
+    /// template: a sleeper's `asleep`.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+impl StoppedBy {
+    /// Whether it names no state.
+    pub fn is_empty(&self) -> bool {
+        self.vital.is_empty() && self.tags.is_empty()
+    }
 }
 
 impl Def for SenseDef {

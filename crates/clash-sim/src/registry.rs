@@ -406,6 +406,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     // Last, so that adding them moved no other property's id.
     properties.extend(crate::offer::properties());
     properties.extend(crate::agent::properties());
+    properties.extend(crate::mind::properties());
     properties
 }
 
@@ -982,6 +983,7 @@ pub fn engine_settings() -> Vec<SettingInfo> {
     for (name, default, doc) in ai::SETTINGS {
         settings.push(int(name, *default, doc));
     }
+    settings.extend(crate::rest::settings());
     settings.sort_by(|a, b| a.name.cmp(b.name));
     settings
 }

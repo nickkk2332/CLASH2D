@@ -161,7 +161,7 @@ const EFFECT_APP: &str = "app";
 
 /// How many wake-ups one call of `advance` may handle, so that a pass
 /// can stop between two calls when its slice is used.
-pub const SIM_WORK: u32 = 256;
+pub const SIM_WORK: u32 = 32;
 
 /// The most simulation time one pass advances by. A character that
 /// waits a long while, or lies unconscious, is carried through it over
@@ -959,6 +959,7 @@ impl Game {
         let look = self.player_look();
         let mut lines: Vec<(&str, String)> = Vec::new();
         let mut deferred: Vec<clash_sim::AppRequest> = Vec::new();
+        let moved: bool;
         let batch = {
             let mut shared = self.shared.borrow_mut();
             let shared = &mut *shared;
@@ -1035,6 +1036,10 @@ impl Game {
             if !batch.is_empty() {
                 session.stale_view = true;
             }
+            // Time passed, if nothing else did: what the screens show of
+            // the present (the clock of the status column) moves on with
+            // it, pass by pass through a long wait (D-931).
+            moved = session.sim.now() != began;
             lines.extend(batch.iter().filter_map(|event| told(event, session.player)));
             // What the party perceives as the batch ends: what the host
             // answers playback with.
@@ -1056,6 +1061,8 @@ impl Game {
         }
         if !batch.is_empty() {
             self.scene.push_events(batch);
+            self.scene.simulation_advanced();
+        } else if moved {
             self.scene.simulation_advanced();
         }
         for request in deferred {
@@ -1154,6 +1161,44 @@ impl Game {
         self.scene.simulation_advanced();
     }
 
+    /// Whether the player's character is in a wait it was told to make
+    /// (`p`, `shift+p`) and the simulation is being advanced through it,
+    /// with the play screen on top: what a key then breaks off.
+    fn waiting_on_play(&self) -> bool {
+        let on_play = self
+            .play_screen
+            .as_deref()
+            .is_some_and(|play| self.scene.top().is_some_and(|top| top.id() == play));
+        on_play
+            && self
+                .with_session(|session| {
+                    session.waits_on_simulation() && session.sim.is_waiting(session.player)
+                })
+                .unwrap_or(false)
+    }
+
+    /// Breaks off the player's character's wait if it is waiting on the
+    /// play screen ([`Game::waiting_on_play`]): the simulation's own
+    /// command `Interrupt`, so that the input log replays it, and
+    /// playback jumps to the present. Returns whether it did.
+    fn breaks_a_wait(&mut self) -> bool {
+        if !self.waiting_on_play() {
+            return false;
+        }
+        let player = self.with_session(|session| session.player);
+        let Some(entity) = player else {
+            return false;
+        };
+        if let Err(reason) = self.submit(clash_sim::Command::Interrupt { entity }) {
+            self.say(LOG_REFUSAL, &reason);
+            return false;
+        }
+        if !self.scene.playback_caught_up() {
+            self.scene.skip_playback();
+        }
+        true
+    }
+
     /// One pass of the loop: see the [module](self) documentation.
     /// `seconds` is the real time since the last pass, and `until` when
     /// this pass must stop advancing the simulation; with none it is
@@ -1164,6 +1209,12 @@ impl Game {
         let mut outcomes = Vec::new();
         for event in front.poll() {
             closed |= event == InputEvent::Close;
+            // A key pressed while the character waits on the play screen
+            // breaks the wait off and does nothing else: the character
+            // is asked at once (12 §3.2, D-931).
+            if matches!(event, InputEvent::Key(_)) && self.breaks_a_wait() {
+                continue;
+            }
             // Input applies to the present. A key jumps playback to its
             // end itself (12 §7.1); a click and pasted text do here.
             if acts_on_present(&event) && !self.scene.playback_caught_up() {

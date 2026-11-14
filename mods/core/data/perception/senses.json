@@ -3,9 +3,12 @@
     "type": "sense", "id": "human_sight", "signal": "sight",
     "range": 60, "arc": 200, "threshold": 0.02,
     "gain": 4.0, "decay": 0.5, "interval": "500 ms",
-    "doc": "Sight: sixty metres, two hundred degrees about the facing." },
-  { "type": "sense", "id": "human_hearing", "signal": "sound",
-    "range": 40, "arc": 360, "threshold": 0.001,
+    "stopped_by": { "vital": ["unconscious", "dead"], "tags": ["asleep"] },
+    "doc": "Sight: sixty metres, two hundred degrees about the facing. Nothing is seen asleep, unconscious or dead (D-930)." },
+  { "//": "Asleep, only a sound twenty times as loud at the ear is heard, and whatever is heard wakes the sleeper (`rules/sleep.json`): a footstep in the open within about three metres, a crouched one only from the next cell.",
+    "type": "sense", "id": "human_hearing", "signal": "sound",
+    "range": 40, "arc": 360, "threshold": "if self.has_tag('asleep') then 0.02 else 0.001",
     "gain": 4.0, "decay": 0.25, "interval": "500 ms",
-    "doc": "Hearing: forty metres all round." }
+    "stopped_by": { "vital": ["unconscious", "dead"] },
+    "doc": "Hearing: forty metres all round; asleep, only what is loud at the ear. Nothing is heard unconscious or dead (D-930)." }
 ]

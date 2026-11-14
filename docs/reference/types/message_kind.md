@@ -13,6 +13,7 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `trust` (id of a [`relation_kind`](relation_kind.md), or `null`; optional): For a report: a relation kind whose value, held by the hearer toward the speaker as it took them, scales `belief` by where it stands in its range. Left out, `belief` alone.
 - `signal` (id of a [`signal_kind`](signal_kind.md), or `null`; optional): The kind of signal it is said with. Left out, the kind flagged `noise` (15 §3.2).
 - `strength` (number; optional): How strong it is said, in the units of the signal kind, when the one who says it gives no strength. Default 1.
+- `calls` (`true` or `false`; optional): Whether it is a call that involves whoever hears it (D-934): a listener stepped warm hears it at its ordinary threshold, as one it is said to does, and hearing it promotes the listener (03 §10). Default false.
 - `doc` (string; optional): What it is, for the reference.
 
 <a id="carries"></a>

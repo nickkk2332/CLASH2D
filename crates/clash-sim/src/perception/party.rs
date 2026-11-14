@@ -429,9 +429,20 @@ pub(super) fn after_sweep(sim: &mut Sim, member: EntityId, sense: SenseId) {
     if !is_member(sim, member) {
         return;
     }
-    let mut cache = core::mem::take(&mut sim.perception.party.view_cache);
-    let view = view_of(sim, member, sense, &mut cache);
-    sim.perception.party.view_cache = cache;
+    // A member a state of whose stops the sense (D-930) sees nothing:
+    // its view is empty, and what it saw leaves the party's view.
+    let stopped = sim
+        .perception_defs
+        .sense(sense)
+        .is_some_and(|def| super::senses::stopped(sim, member, &def.stopped_by));
+    let view = if stopped {
+        Some(Vec::new())
+    } else {
+        let mut cache = core::mem::take(&mut sim.perception.party.view_cache);
+        let view = view_of(sim, member, sense, &mut cache);
+        sim.perception.party.view_cache = cache;
+        view
+    };
     let Some(view) = view else {
         return;
     };

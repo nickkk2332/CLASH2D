@@ -176,7 +176,13 @@ D-652):
    applies to the present: a key pressed while something is being
    played jumps playback to its end before it is used (section 7.1),
    and the loop does the same for a press of a mouse button and for
-   pasted text.
+   pasted text. A key pressed while the player's character is in a
+   wait it was told to make (`p`, `shift+p`), the simulation is being
+   advanced through it and the play screen is on top breaks the wait
+   off and does nothing else: the loop submits the simulation's own
+   `Interrupt` command (03 §4.4), so that a replay breaks it off at the
+   same moment, playback jumps to the present, and the character is
+   asked at once (decision D-931).
 2. **Follow-up.** A refused command and an effect that could not be run
    each get a line in the log. An `app` service that failed also opens
    the screen of the role `error` with the reason as its parameter
@@ -191,7 +197,7 @@ D-652):
    character waits on the simulation, which is while no decision is
    asked of it and it is busy (an action, a wait, a plan) or
    unconscious, the simulation is advanced toward the character's next
-   decision with `advance(Work(256))`, `UntilDecision` in slices, until
+   decision with `advance(Work(32))`, `UntilDecision` in slices, until
    a decision is needed, nothing is left to happen, 8 ms of the frame
    have been spent or an hour of simulation time has passed in the
    pass. A character that is free, dead or out of the world is not
@@ -211,7 +217,11 @@ D-652):
    log shows what the party perceives, and the party's own refusals and
    faults and those of nobody's doing (decision D-902). Every line of the log begins
    with a capital letter, made so as it is added (decision D-866). The scene is advanced by the
-   real time elapsed and plays what falls due.
+   real time elapsed and plays what falls due. Whenever simulation
+   time moved in the pass, the screens' bindings are evaluated again,
+   even if nothing was reported, so that what they show of the present
+   (the clock of the status column) moves on pass by pass through a
+   long wait.
 5. **The present.** Once playback has caught up, the view model is
    given what the party perceives that no event said (section 3.5):
    cells that came into view or left it, and who is in view. In a
@@ -238,7 +248,7 @@ action is `Act` with `start` for the player's character, the action by
 its qualified id (a bare name means the first action of that name in
 order of qualified id) and its parameters as the scene assembled them;
 the command `wait { dur }` is `Wait`, `cancel { action, abandon? }` is
-`Cancel`, `clear_plan` is `ClearPlan`, and `choose { entity, choice,
+`Cancel`, `clear_plan` is `ClearPlan`, `interrupt` is `Interrupt`, and `choose { entity, choice,
 option }`, which the choice prompt submits, is `Choose`. `react {
 entity, window, action, params }` and `pass { entity, window }`, which
 the reaction prompt submits, are `React` and `Pass` (03 §7.3); the
@@ -2749,6 +2759,7 @@ Targets, unmeasured but where a figure is given: those rows are in
 | Re-evaluate bindings of a busy screen | under 0.5 ms |
 | Window frontend, a frame of 20,000 glyphs and sprites drawn into the pixel buffer at 1920 × 1080 | under 16 ms: 60 frames per second (measured by `cargo xtask bench`: 4.2 to 9.5 ms on a shared, loaded machine for 240 × 67 cells of 8 × 16 pixels and 3,920 sprites, a third of them half clear and a tenth half as large again; 5.1 to 9.3 ms with zoom, flash and shake) |
 | Input to visible response | within one frame |
+| A frame while a long wait runs | within a frame of 16 ms (measured, the ignored test `timing_frames_through_an_hours_wait_in_the_market` of `crates/clash-app/tests/waiting.rs` in release: an hour's wait in the market in 12.4 s of real time over 1,043 passes, a pass 11.9 ms on average, 22.8 ms at the 99th percentile and 111 ms at most, 114 passes over 16 ms; the clock moved at every pass, about 290 simulated seconds a real second. With `advance(Work(256))` it was 17.7 ms on average and 336 of 658 passes over 16 ms: D-935) |
 
 ## 16. Open questions
 

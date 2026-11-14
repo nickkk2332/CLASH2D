@@ -201,6 +201,12 @@ pub struct Ticket {
     pub reason: TicketReason,
     /// When it lapses of itself, in universal time.
     pub expires: Option<Tick>,
+    /// Whether it keeps only what it reaches: no warm margin round a hot
+    /// ticket, and no unloading margin, so that a tract beyond its
+    /// radius goes at the next reconciliation (a resting party's,
+    /// 03 §11, D-932). Default false.
+    #[serde(default)]
+    pub tight: bool,
 }
 
 impl Ticket {
@@ -220,7 +226,14 @@ impl Ticket {
             priority: DEFAULT_PRIORITY,
             reason,
             expires: None,
+            tight: false,
         }
+    }
+
+    /// This ticket keeping only what it reaches, or with its margins.
+    pub const fn tight(mut self, tight: bool) -> Ticket {
+        self.tight = tight;
+        self
     }
 
     /// The ticket of a controlled character: hot, of the default hot
@@ -262,22 +275,29 @@ impl Ticket {
     /// radius, and for a hot ticket the warm margin beyond it.
     pub const fn reach(&self) -> i32 {
         let margin = match self.level {
-            Activity::Hot => WARM_MARGIN as i32,
-            Activity::Warm => 0,
+            Activity::Hot if !self.tight => WARM_MARGIN as i32,
+            _ => 0,
         };
         self.radius as i32 + margin
     }
 }
 
-clash_core::impl_state_hash!(Ticket {
-    realm,
-    anchor,
-    radius,
-    level,
-    priority,
-    reason,
-    expires
-});
+impl StateHash for Ticket {
+    fn state_hash(&self, hasher: &mut StateHasher) {
+        self.realm.state_hash(hasher);
+        self.anchor.state_hash(hasher);
+        self.radius.state_hash(hasher);
+        self.level.state_hash(hasher);
+        self.priority.state_hash(hasher);
+        self.reason.state_hash(hasher);
+        self.expires.state_hash(hasher);
+        // Fed only when set, so that every ticket that keeps its margins
+        // hashes as it did before tight tickets (D-932).
+        if self.tight {
+            hasher.write_u8(1);
+        }
+    }
+}
 
 /// A ticket and where its anchor was last seen.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -578,6 +598,32 @@ impl Cosmos {
         Ok(())
     }
 
+    /// Changes how far a held ticket reaches: its radius, and whether it
+    /// keeps only what it reaches ([`Ticket::tight`]). The tracts it no
+    /// longer wants go, and those it now wants come, at the next
+    /// reconciliation. Refused for an unknown ticket.
+    pub fn set_ticket_reach(
+        &mut self,
+        id: TicketId,
+        radius: u8,
+        tight: bool,
+    ) -> Result<(), WorldError> {
+        let held = self
+            .tickets
+            .tickets
+            .get_mut(&id)
+            .ok_or(WorldError::BadValue {
+                what: "a ticket",
+                why: "there is no ticket with that id",
+            })?;
+        if held.ticket.radius != radius || held.ticket.tight != tight {
+            held.ticket.radius = radius;
+            held.ticket.tight = tight;
+            self.tickets.stale = true;
+        }
+        Ok(())
+    }
+
     /// Sets the most tracts reconciliation keeps loaded: the setting
     /// `max_loaded_tracts`.
     pub fn set_max_loaded_tracts(&mut self, max: usize) {
@@ -640,7 +686,7 @@ impl Cosmos {
             let Ok(info) = self.realm_info(ticket.realm) else {
                 continue;
             };
-            let reach = ticket.reach() + extra;
+            let reach = ticket.reach() + if ticket.tight { 0 } else { extra };
             for dy in -reach..=reach {
                 for dx in -reach..=reach {
                     let Ok(tract) = tract_in(&info.topology, centre.offset(IVec2::new(dx, dy)))

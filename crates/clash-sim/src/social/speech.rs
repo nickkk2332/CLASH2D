@@ -359,6 +359,26 @@ fn line_text(sim: &Sim, message: &Message, hearer: EntityId) -> Option<String> {
     Some(line.text.render_on(&defs, &mut host))
 }
 
+/// Whether a message involves a listener (D-934): said to it or to a
+/// group it belongs to, or of a kind that `calls`. A warm listener hears
+/// such a message at its ordinary threshold, and hearing it promotes it
+/// (15 §14, 03 §10).
+pub(crate) fn involves(sim: &Sim, message: &Message, listener: EntityId) -> bool {
+    let named = message.to == Some(listener)
+        || message.to_group.as_ref().is_some_and(|key| {
+            sim.social
+                .groups
+                .get(key)
+                .is_some_and(|group| group.members.contains_key(&listener))
+        });
+    named
+        || sim
+            .defs
+            .try_registry::<MessageKindDef>()
+            .and_then(|kinds| kinds.try_get(message.kind))
+            .is_some_and(|kind| kind.calls)
+}
+
 /// Whether a message was said to a hearer: to it, to a group it belongs
 /// to, or to nobody in particular.
 fn addressed(sim: &Sim, message: &Message, hearer: EntityId) -> bool {

@@ -26,8 +26,6 @@ use super::ids::{ActionDefId, ChannelId};
 use super::run::action_def;
 use super::state::Params;
 use crate::Sim;
-use crate::decision::{DecisionKind, FreeReason};
-use crate::entity::Control;
 use crate::event::{EventBody, Where};
 use crate::kernel_verbs::{arg, bad_argument, entity_arg};
 use crate::later::ActionId;
@@ -202,30 +200,7 @@ fn clear_plan(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value,
 
 fn interrupt_plan(sim: &mut Sim, call: &VerbCall<'_>, cause: Cause) -> Result<Value, Reason> {
     let who = entity_arg(sim, call, 0, "interrupt_plan", "who")?;
-    sim.clear_plan(who, None, cause);
-    // A wait is broken off too: what interrupts a plan interrupts
-    // waiting for an hour (decision D-871).
-    sim.end_wait(who);
-    let control = sim
-        .truth()
-        .entity(who)
-        .map_or(Control::None, |record| record.control());
-    let why = FreeReason::Interrupted(cause);
-    if control == Control::Direct {
-        if !sim.decisions().has_free(who) {
-            sim.request_decision(who, DecisionKind::Free { why }, cause)?;
-        }
-    } else {
-        sim.emit(
-            Where::Entity(who),
-            cause,
-            EventBody::Act(ActEvent::DecisionNeeded {
-                entity: who,
-                control,
-                why,
-            }),
-        );
-    }
+    sim.interrupt_plan(who, cause)?;
     Ok(Value::Null)
 }
 

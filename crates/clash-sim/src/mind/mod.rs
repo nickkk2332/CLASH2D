@@ -69,6 +69,33 @@ use crate::stats::{self, PoolDef, PoolId, Seat, StatDefs, StopSide};
 
 pub use verbs::verbs;
 
+/// The properties of minds (06 §8.4): `entity.vital`.
+pub fn properties() -> Vec<crate::registry::PropertyDef> {
+    vec![
+        crate::registry::PropertyDef::new(
+            "entity",
+            "vital",
+            "string?",
+            "Whether its mind drives it: `awake`, `unconscious` or `dead` (06 §8.4); null for an entity with no mind. What senses a state stops is the senses' `stopped_by` (15 §4).",
+            |sim, subject, _| {
+                subject
+                    .entity()
+                    .and_then(|id| sim.vital(id))
+                    .map_or(clash_expr::Value::Null, |state| {
+                        clash_expr::Value::from(state.name())
+                    })
+            },
+        )
+        .changed_by(&[
+            "entity_died",
+            "entity_revived",
+            "entity_unconscious",
+            "entity_woke",
+            "mind_transferred",
+        ]),
+    ]
+}
+
 /// What a definition says a lack does to a creature with a mind
 /// (06 §8.3). The later is the worse.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]

@@ -1635,6 +1635,15 @@ impl Cosmos {
   been seen covers nothing. A body holds a ticket with a fixed anchor
   and moves it ahead of itself with `move_ticket` (section 15.1): a
   `Body` anchor is not needed. A `Subgrid` anchor comes with subgrids.
+- A **tight** ticket (`tight`, default false; decision D-932) keeps only
+  what it reaches: a hot one has no warm margin, and none of its tracts
+  is kept by the unloading margin, so a tract beyond its radius that no
+  other ticket keeps unloads at the next reconciliation. A resting
+  party's tickets are tight (03 §11). `Cosmos::set_ticket_reach(id,
+  radius, tight)` changes a held ticket's radius and tightness; what it
+  no longer wants goes, and what it now wants comes, at the next
+  reconciliation. A ticket that is not tight hashes as it did before
+  the field existed.
 - `TicketReason::Eoc` carries the rule's number, which the world gives no
   meaning.
 - `Cosmos::activity` gives a tract's level as of the last reconciliation:

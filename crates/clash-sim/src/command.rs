@@ -151,6 +151,15 @@ pub enum Command {
     /// runs `start.do` and raises `scenario_started`
     /// ([`scenario::begin`](crate::scenario::begin)).
     BeginScenario(crate::scenario::BeginScenario),
+    /// Breaks off what an entity planned and the wait it is in, and asks
+    /// it what it does (03 §5.3): the effect `interrupt_plan` as a
+    /// command, which a player gives to stop a long wait (D-931). An
+    /// action that is running runs on. Refused as `ClearPlan` is for an
+    /// entity nobody controls.
+    Interrupt {
+        /// Whose.
+        entity: EntityId,
+    },
 }
 
 /// What a tool or a test may do to the simulation directly. These are
@@ -362,6 +371,7 @@ impl Sim {
             } => self.command_set_mode(entity, ability, &mode, on),
             Command::Setting { key, value } => crate::scenario::setting_command(self, &key, value),
             Command::BeginScenario(begin) => crate::scenario::begin(self, begin),
+            Command::Interrupt { entity } => self.command_interrupt(entity),
         }
     }
 

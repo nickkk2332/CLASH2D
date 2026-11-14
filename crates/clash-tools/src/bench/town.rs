@@ -9,6 +9,8 @@
 //! | `town.step_walking` | The same with the player walking across the town |
 //! | `town.minute_wait` | A minute's wait in the square, in one call |
 //! | `town.minute_wait_night` | The same at eleven at night, most of the town asleep |
+//! | `town.hour_wait` | An hour's wait in the square by day, in one call, with the levels of a resting party (D-932) |
+//! | `town.hour_wait_night` | The same from eleven at night |
 //!
 //! Each is timed once: a town takes seconds to begin, and a minute of it
 //! is many steps. The figure is the mean of the minute's steps; the
@@ -91,9 +93,16 @@ impl Town {
             })
             .count();
         let levels = clash_sim::ai::warm::census(sim);
+        let tracts = sim.truth().cosmos().tickets().kept_count();
         Ok(format!(
-            "{residents} residents, {loaded} in the world, {} hot and {} warm",
-            levels.hot, levels.warm
+            "{residents} residents, {loaded} in the world, {} hot and {} warm; {tracts} tracts loaded{}",
+            levels.hot,
+            levels.warm,
+            if clash_sim::rest::is_resting(sim) {
+                ", the party resting"
+            } else {
+                ""
+            }
         ))
     }
 
@@ -232,6 +241,60 @@ pub(super) fn minute_wait_night(_kit: &mut super::cases::Kit) -> Result<Measured
     let took = started.elapsed().as_nanos() as f64;
     Ok(Measured::new(took, town.census()?))
 }
+
+/// An hour's wait in the square by day (smooth play, D-932): the
+/// player's character waits an hour in one call, as `shift+p` waits it,
+/// with the levels the bundled game sets while the party rests.
+pub(super) fn hour_wait(_kit: &mut super::cases::Kit) -> Result<Measured, String> {
+    let mut town = Town::begin(SQUARE)?;
+    town.run(&format!("advance {SETTLE_S}s"))?;
+    timed_hour(&mut town)
+}
+
+/// An hour's wait in the square, the player's own wait made first so
+/// that the census can be taken half way through it: the time, and the
+/// census half way and at the end.
+fn timed_hour(town: &mut Town) -> Result<Measured, String> {
+    town.run(&format!(
+        "as @self do {{ \"wait\": {{ \"who\": \"self\", \"time\": {HOUR_S} }} }}"
+    ))?;
+    let started = Instant::now();
+    town.run(&format!("advance {}s", HOUR_S / 2))?;
+    let half = started.elapsed();
+    let midway = town.census()?;
+    let resumed = Instant::now();
+    town.run(&format!("advance {}s", HOUR_S / 2))?;
+    let took = (half + resumed.elapsed()).as_nanos() as f64;
+    Ok(Measured::new(
+        took,
+        format!("half way: {midway}; at the end: {}", town.census()?),
+    ))
+}
+
+/// An hour's wait in the square at night: as [`minute_wait_night`]
+/// brings the player back to the square at eleven, then an hour.
+pub(super) fn hour_wait_night(_kit: &mut super::cases::Kit) -> Result<Measured, String> {
+    let mut town = Town::begin(SQUARE)?;
+    let sim = town.sim()?;
+    let start = sim
+        .truth()
+        .location(player(sim)?)
+        .ok_or("the player is not in the world")?;
+    let away = clash_world::Location::new(start.grid, clash_world::CellPos::new(AWAY.0, AWAY.1, 0));
+    town.run(&format!("session @self {}", cell(away)))?;
+    town.run("detach_sense @self core:human_sight")?;
+    town.run("detach_sense @self core:human_hearing")?;
+    let now = town.time_of_day()?;
+    town.run(&format!("advance {}s", (NIGHT_S - now).rem_euclid(DAY_S)))?;
+    town.run(&format!("session @self {}", cell(start)))?;
+    town.run("attach_sense @self core:human_sight")?;
+    town.run("attach_sense @self core:human_hearing")?;
+    town.run(&format!("advance {SETTLE_S}s"))?;
+    timed_hour(&mut town)
+}
+
+/// Simulated seconds in an hour's wait.
+const HOUR_S: u32 = 3600;
 
 /// The minute timed by the waits, kept out of line so that a profiler
 /// can be told to count it alone (`valgrind --tool=callgrind

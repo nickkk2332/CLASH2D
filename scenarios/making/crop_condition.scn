@@ -24,4 +24,4 @@ assert "@c:18,22,0.fixture.device.making.why == 'condition'"
 assert "@c:18,22,0.fixture.device.making.progress < 0.21"
 advance 120s
 assert "@c:18,22,0.fixture.device.making.progress < 0.21"
-expect hash 30e8fefa7dbe9791580dea28886b3bf3
+expect hash 945b4d6a924bf06d5e7e712aef8bb0c2

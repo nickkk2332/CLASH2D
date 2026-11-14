@@ -375,6 +375,7 @@ alone, as before, and nothing in the simulation reads a light's colour.
 | `planes` | Whether the sense receives from every plane (02 §8.2), not only those its owner is on. Default false. |
 | `scrutiny` | How hard it looks through a disguise; given to `identity_check` (section 8.2). Default 0. |
 | `notices` | The kinds of thing a sweep considers in range, of `creature`, `item`, `device` and `other` (what the world calls an occupant's kind). Left out, every kind. A sense given only `creature` passes over the furniture and goods about it when it picks the nearest `perception.max_candidates` (section 5.1); what is inside something it notices is noticed by its own kind; what it already holds awareness of is brought up to date whatever its kind; a party member's sweep considers every kind (D-923). |
+| `stopped_by` | The states of its owner in which the sense receives nothing: `{ "vital": [...], "tags": [...] }`, vital states of its mind (`awake`, `unconscious`, `dead`: 06 §8.4) and tags it carries, of its own or from a trait, an item or a template. Left out, none. While one holds, nothing reaches the owner through the sense (a sweep looks at no one and what was held fades, a signal is not received, a party member's view through it is empty), and from the moment none does it works again (D-930). Which states stop which senses is data: the bundled sight is stopped by `unconscious`, `dead` and the tag `asleep`, the bundled hearing by `unconscious` and `dead`. |
 | `name`, `doc` | What a reader calls it; what it is, for the reference. |
 
 Senses come from templates and traits (06). A creature may have any number.
@@ -490,18 +491,32 @@ Whatever the order observers sweep and signals arrive in, each pair's
 level depends only on that pair (invariant P4). Events of one sweep are
 raised in order of target.
 
-Who cannot perceive through a sense (performance 3, D-924): a sense
-whose `function` its owner's body cannot do, or whose `threshold` comes
-to null, receives nothing; its sweep looks at no candidates and only
+Who cannot perceive through a sense (D-930, which closes D-924's
+question): a sense whose `function` its owner's body cannot do, whose
+`threshold` comes to null, or one of whose `stopped_by` states holds of
+its owner receives nothing; its sweep looks at no candidates and only
 fades, interval by interval, what was already held through it, as an
-awake observer's awareness fades. Being asleep is no state of the
-engine's: a routine's `doing` is a word of data (09 §10.2), and the
-bundled `sleep` goal wakes for someone come into the room, so a sleeper
-sees. Neither 06 nor this document says that an unconscious or dead
-owner stops perceiving, so their senses sweep as anyone's. Content that
-wants a sleeper blind writes it into the sense's threshold (null while
-the owner's routine has it `asleep`), and its sweep then costs only the
-fading.
+awake observer's awareness fades, and a signal that reaches it is not
+received. A party member whose sense of a kind that uses light is
+stopped sees nothing: its view through the sense is empty (section 13).
+The owner's decision (D-930): the dead perceive nothing, the unconscious
+perceive nothing, and a sleeper does not see but hears, and is woken by
+a sound loud enough at its ear. All of it is data. Being asleep is no
+state of the engine's: in the bundled content a mind that takes up the
+`sleep` goal (09 §10.6) is given the trait `asleep`, which carries the
+tag `asleep`; `human_sight` is `stopped_by` it, and `human_hearing`'s
+threshold is twenty times higher while its owner carries it, so that
+only a sound that loud at the ear is heard; the rule
+`core:woken_by_a_noise` wakes whoever hears anything asleep, to lie
+awake a minute (the trait `woken`) before dropping off again. A sneak
+whose steps are quieter (the bundled footsteps are a quarter as loud
+for one carrying the tag `soft_steps`, which crouching and lying prone
+give through the trait `treading_softly`) passes a sleeper unseen.
+
+A threshold that reads its owner (not a constant) is worked out afresh
+for each signal that reaches it, not taken from the last sweep, so that
+falling asleep or waking counts at once, and an observer that does not
+sweep (a warm one, section 14) receives by what it is now (D-930).
 
 A sweep is not skipped when nothing round the observer has changed
 (D-925): what it does depends on the time since the last sweep for every
@@ -1189,7 +1204,9 @@ As built (decisions D-764, D-765), in `clash_sim::social::speech`:
   speaker's confidence a report is believed at), `trust` (a relation
   kind: scales `belief` by where the hearer's relation toward the
   speaker stands in its range), `signal` (a signal kind; left out, the
-  kind flagged `noise`) and `strength` (default 1).
+  kind flagged `noise`), `strength` (default 1) and `calls` (default
+  false: a call that involves whoever hears it, below and section 14;
+  the bundled `help` is one).
 - **`lines`**: `lines`, each `text` (a text with `self` the speaker, `to`
   and `about`, each an entity or null), `if` (a condition, default
   true) and `weight` (default 1). A line that fits is picked by weight
@@ -1365,8 +1382,16 @@ perceives only hot characters: a warm character standing in a cell a
 member sees, at the member's sweep or by its own bulk walk, is promoted
 at once (D-891).
 
+A message that **involves** a listener (D-934) is heard by it at its
+ordinary threshold however warm it is: one said to it, or to a group it
+belongs to, or of a kind that `calls` (section 11). Hearing it promotes
+a character stepped warm by the attention cap (03 §10: promotion by
+involvement), so a watchman out of the party's sight answers a call for
+help as one in sight would.
+
 A delayed signal is sent only to the listeners it could reach at or over
-their thresholds (times the warm factor, for a warm listener) from where
+their thresholds (times the warm factor, for a warm listener not
+involved by what it carries) from where
 they stand when it is given off: the most of it that could arrive, with
 nothing in its way, is weighed once against each listener's threshold,
 and no front is sent to one that could not hear it (D-894). A listener
