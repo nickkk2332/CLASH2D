@@ -771,7 +771,9 @@ from (D-970), and a hooded cloak a player can wear as a disguise
 (D-971). Decisions D-970 to D-973. Every session is played from the
 title in the market town at seed 4, begun in the square, by keys alone;
 the walks across town go by the square, the believed way being searched
-no further than 20,000 cells.
+no further than 20,000 cells. The fifth round (the last stand's balance)
+landed on the build branch before this one ended and was merged
+(`28fb682`); the four sessions were run again on the merge, and pass.
 
 ### Sessions
 
