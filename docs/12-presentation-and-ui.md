@@ -246,7 +246,11 @@ The commands the play screen submits become the simulation's own
 through the host (`clash_app::host::command_for`): an `act` of an
 action is `Act` with `start` for the player's character, the action by
 its qualified id (a bare name means the first action of that name in
-order of qualified id) and its parameters as the scene assembled them;
+order of qualified id) and its parameters as the scene assembled them,
+except that a text given for a parameter that takes a definition is
+resolved to that definition, as a text is where an id is wanted
+(05 §9; a screen's expression does not know the action's parameter
+types; decision D-936);
 the command `wait { dur }` is `Wait`, `cancel { action, abandon? }` is
 `Cancel`, `clear_plan` is `ClearPlan`, `interrupt` is `Interrupt`, and `choose { entity, choice,
 option }`, which the choice prompt submits, is `Choose`. `react {

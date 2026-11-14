@@ -32,6 +32,11 @@
   { "type": "control", "id": "wait_hour", "name": "Wait an hour",
     "doc": "Let an hour pass, unless something breaks it off.",
     "do": { "command": { "name": "wait", "args": { "dur": 3600 } } } },
+  { "//": "Crouching: softer steps (the bundled `soft_steps`), lower in sight. The action `set_posture` is left bare, as `step` is: a mod's own comes first by id. Pressed again, the character stands. The postures are named as text, compared through `str`, so that this mod loads without the one that defines them; the application resolves the text to the posture (D-936).",
+    "type": "control", "id": "crouch", "name": "Crouch or stand",
+    "doc": "Crouch to move quietly, or stand up again.",
+    "do": { "act": { "action": "set_posture",
+                     "params": { "posture": "if str(view.posture) == 'core:crouched' then 'core:standing' else 'core:crouched'" } } } },
 
   { "//": "Look mode: a free cursor over the map. Moving it by nothing starts it where the character stands.",
     "type": "control", "id": "look", "name": "Look around",
