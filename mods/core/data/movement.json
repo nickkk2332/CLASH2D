@@ -8,8 +8,14 @@
     "default": true },
 
   { "type": "posture", "id": "standing", "name": "standing", "height": 1.0 },
-  { "type": "posture", "id": "crouched", "name": "crouched", "height": 0.6, "speed": 0.5, "signature": 0.6 },
-  { "type": "posture", "id": "prone", "name": "prone", "height": 0.2, "speed": 0.15, "signature": 0.3 },
+  { "type": "posture", "id": "crouched", "name": "crouched", "height": 0.6, "speed": 0.5, "signature": 0.6,
+    "traits": ["treading_softly"] },
+  { "type": "posture", "id": "prone", "name": "prone", "height": 0.2, "speed": 0.15, "signature": 0.3,
+    "traits": ["treading_softly"] },
+  { "//": "Low down, one's steps are a quarter as loud (the bundled footsteps read the tag; D-930): how one sneaks past a sleeper.",
+    "type": "trait", "id": "treading_softly", "name": "Treading softly",
+    "description": "Low and slow, the feet set down with care.",
+    "tags": ["soft_steps"] },
 
   { "//": "One step to the cell next to the actor. `requires` is what the actor believes: it is shown before the step is asked for. The phase lasts as long as the step takes, in the actor's own time, and the step itself is taken as the phase ends, checked against the world as it then is: a door shut in the meantime refuses it, and `step_refused` says why. Someone in the air or in water steps too, so no footing is asked for.",
     "type": "action", "id": "step", "name": "Step",

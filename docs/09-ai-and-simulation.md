@@ -1003,6 +1003,13 @@ carry the armoury's key: a template cannot give items yet.
 
 `keep_routine` takes anyone who is away from its routine's place there;
 `linger`, `keep_shop`, `stand_post` and `sleep` are what the parts name.
+Taking up `sleep` puts a character to sleep (the trait `asleep`, given
+by the rule `core:fall_asleep`; D-930): it sees nothing, hears only
+what is loud at its ear, and whatever it hears wakes it
+(`core:woken_by_a_noise`); woken, it lies awake a minute (the trait
+`woken`) and drops off again if its mind still holds `sleep`
+(`core:back_to_sleep`); taking up any other goal gets it up
+(`core:get_up`).
 The townsperson's calls for help are messages of the kind `core:help`,
 which `core:heed_help` makes every member of the watch who hears one
 remember as `core:help_called`, and the watchman's `answer_call` takes

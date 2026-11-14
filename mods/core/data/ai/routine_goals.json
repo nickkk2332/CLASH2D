@@ -33,7 +33,7 @@
       { "if": "chance(0.4)", "go": { "to": "offset($about, rand_int(-2, 2), rand_int(-2, 2)) ?? $about" } } ] } ] },
 
   { "type": "goal", "id": "sleep",
-    "doc": "Asleep where one's routine has one sleep: still, for as long as the part of the day lasts. Anything that wakes a mind (a noise close by, someone come into the room) is weighed against it as ever.",
+    "doc": "Asleep where one's routine has one sleep: still, for as long as the part of the day lasts. Taking it up puts the character to sleep (`rules/sleep.json`): blind, and hearing only what is loud at its ear, which wakes it for a minute before it drops off again. Anything that wakes a mind (a noise close by, someone come into the room) is weighed against it as ever.",
     "score": "if self.routine_away ?? true then 0 else 0.3",
     "methods": [ { "steps": [ { "wait": { "time": "60 s" } } ] } ] },
 

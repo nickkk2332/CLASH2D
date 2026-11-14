@@ -39,14 +39,11 @@ pub fn reading_of(sim: &Sim, signal: &Signal, observer: EntityId, sense: SenseId
         return None;
     }
     let eye = signal::eye_of(sim, observer)?;
-    if !senses::sense_works(sim, observer, def.function) {
+    if !senses::sense_on(sim, observer, def) {
         return None;
     }
     let slot = sim.components.senses.get(observer)?.slot(sense)?;
-    let threshold = match slot.threshold() {
-        Some(threshold) => threshold,
-        None => senses::threshold_of(sim, observer, sense)?,
-    };
+    let threshold = senses::threshold_now(sim, observer, sense, def, slot)?;
     if !def.planes
         && let Some(about) = signal.about
     {
@@ -92,9 +89,18 @@ pub(super) fn could_receive(
     else {
         return false;
     };
-    let Some(threshold) = slot
-        .threshold()
-        .or_else(|| senses::threshold_of(sim, observer, sense))
+    // One whose state stops the sense (D-930) is not waited for.
+    if sim
+        .perception_defs
+        .sense(sense)
+        .is_some_and(|def| senses::stopped(sim, observer, &def.stopped_by))
+    {
+        return false;
+    }
+    let Some(threshold) = sim
+        .perception_defs
+        .sense(sense)
+        .and_then(|def| senses::threshold_now(sim, observer, sense, def, slot))
     else {
         return false;
     };

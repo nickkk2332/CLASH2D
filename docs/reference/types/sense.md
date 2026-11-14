@@ -20,6 +20,7 @@ Besides these, a definition takes the [keys every definition carries](README.md#
 - `planes` (`true` or `false`; optional): Whether it receives from every plane, not only those its owner is on (15 §5.3).
 - `scrutiny` (number; optional): How hard it looks through a disguise (15 §8.2). Kept for `identity_check`.
 - `notices` (list of one of `"creature"`, `"item"`, `"device"`, `"other"` ([`OccupantKind`](#occupantkind)), or `null`; optional): The kinds of thing a sweep of it considers in range: `creature`, `item`, `device`, `other`. Left out, every kind, as before (D-923); a sense given only `creature` passes over the furniture and goods about it when it picks the nearest `perception.max_candidates`. What it already holds awareness of is brought up to date whatever its kind, and a party member's sweep considers every kind.
+- `stopped_by` (object [`StoppedBy`](#stoppedby); optional): The states of its owner in which it receives nothing and sweeps nothing (D-930): vital states and tags. Left out, none: the sense works whatever state its owner is in.
 - `doc` (string; optional): What it is, for the reference.
 
 <a id="occupantkind"></a>
@@ -33,3 +34,22 @@ One of:
 - `"item"`: A thing lying in the world.
 - `"device"`: The entity behind an interactive element (02 §5.5).
 - `"other"`: Anything else.
+
+<a id="stoppedby"></a>
+### `StoppedBy`
+
+The states of a sense's owner that stop the sense (15 §4, D-930): while its owner is in any of them, the sense receives nothing, its sweeps look at no one and what was held through it fades. Which states stop which senses is data: the engine names none.
+
+- `vital` (list of one of `"awake"`, `"unconscious"`, `"dead"` ([`VitalState`](#vitalstate)); optional): Vital states of the owner's mind (06 §8.4): `awake`, `unconscious`, `dead`. An owner with no mind is in none.
+- `tags` (list of string; optional): Tags the owner carries, of its own or from a trait, an item or a template: a sleeper's `asleep`.
+
+<a id="vitalstate"></a>
+### `VitalState`
+
+Whether a mind drives its body (06 §8.3).
+
+One of:
+
+- `"awake"`: It does.
+- `"unconscious"`: It does not, for now.
+- `"dead"`: It does not, until something revives it.

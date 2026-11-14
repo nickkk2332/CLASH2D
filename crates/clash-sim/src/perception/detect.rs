@@ -507,7 +507,9 @@ pub(super) fn sweep(sim: &mut Sim, observer: EntityId, sense: SenseId, bonus: Re
         return;
     };
     let now = local_now(sim, observer);
-    let works = senses::sense_works(sim, observer, def.function);
+    // A sense its body cannot work, or that a state of its owner
+    // stops (D-930), receives nothing.
+    let works = senses::sense_on(sim, observer, def);
     let threshold = if works {
         senses::threshold_of(sim, observer, sense)
     } else {

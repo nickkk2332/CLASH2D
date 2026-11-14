@@ -326,6 +326,27 @@ pub(super) fn threshold_of(sim: &Sim, entity: EntityId, sense: SenseId) -> Optio
     value.as_number().filter(|threshold| threshold.is_finite())
 }
 
+/// A sense's threshold for a signal that reaches its owner now: as last
+/// worked out at a sweep, or worked out afresh where there was none; a
+/// threshold that reads anything of its owner (not a constant) is always
+/// worked out afresh, so that what changed since the last sweep (falling
+/// asleep, waking) counts at once, and an observer that does not sweep
+/// (a warm one) receives by what it is now (D-930).
+pub(super) fn threshold_now(
+    sim: &Sim,
+    entity: EntityId,
+    sense: SenseId,
+    def: &super::defs::SenseDef,
+    slot: &SenseSlot,
+) -> Option<Real> {
+    if def.threshold.constant().is_some() {
+        slot.threshold()
+            .or_else(|| threshold_of(sim, entity, sense))
+    } else {
+        threshold_of(sim, entity, sense)
+    }
+}
+
 /// Whether a sense works for its owner: it names no body function, or its
 /// owner has no body, or the body's capacity of that function is above
 /// zero.
@@ -341,6 +362,32 @@ pub(super) fn sense_works(
         Some(body) => body.function(function.id()) > Real::ZERO,
         None => true,
     }
+}
+
+/// Whether a sense receives anything for its owner now: it works by the
+/// owner's body ([`sense_works`]) and none of the states its definition
+/// is `stopped_by` holds of the owner: a vital state of its mind, a tag
+/// it carries (D-930).
+pub(crate) fn sense_on(sim: &Sim, entity: EntityId, def: &super::defs::SenseDef) -> bool {
+    sense_works(sim, entity, def.function) && !stopped(sim, entity, &def.stopped_by)
+}
+
+/// Whether an entity is in one of the states that stop a sense.
+pub(super) fn stopped(sim: &Sim, entity: EntityId, by: &super::defs::StoppedBy) -> bool {
+    if by.is_empty() {
+        return false;
+    }
+    if !by.vital.is_empty()
+        && let Some(state) = sim.vital(entity)
+        && by.vital.contains(&state)
+    {
+        return true;
+    }
+    !by.tags.is_empty()
+        && sim
+            .entities
+            .get(entity)
+            .is_some_and(|record| by.tags.iter().any(|tag| record.tags.contains(tag)))
 }
 
 /// Turns an entity to face a direction, in degrees clockwise from north.

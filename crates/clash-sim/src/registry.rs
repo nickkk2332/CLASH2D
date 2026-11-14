@@ -406,6 +406,7 @@ pub fn engine_properties() -> Vec<PropertyDef> {
     // Last, so that adding them moved no other property's id.
     properties.extend(crate::offer::properties());
     properties.extend(crate::agent::properties());
+    properties.extend(crate::mind::properties());
     properties
 }
 

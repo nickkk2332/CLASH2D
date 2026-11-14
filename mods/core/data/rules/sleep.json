@@ -1,0 +1,27 @@
+[
+  { "//": "Falling asleep and waking (D-930): the engine decides none of it. A mind that takes up the bundled `sleep` goal falls asleep (the trait `asleep`); one that takes up any other goal gets up; a sleeper that hears anything wakes, since a sleeper's hearing takes in only a sound loud at its ear (`human_hearing`'s threshold while `asleep`), and lies awake a minute (the trait `woken`) before it drops off again. A mod switches these off with the setting `core:sleep`.",
+    "type": "rule_group", "id": "sleep",
+    "enabled": "setting('core:sleep') ?? true",
+    "doc": "Falling asleep with the `sleep` goal, getting up with any other, and waking at a sound loud enough to be heard asleep. On unless the setting `core:sleep` is false." },
+
+  { "type": "eoc", "id": "fall_asleep", "on": "goal_adopted", "group": "sleep",
+    "if": "event.goal == 'core:sleep' and not self.has_trait('core:woken')",
+    "doc": "A mind that takes up the `sleep` goal falls asleep, unless it was woken in the last minute.",
+    "do": [ { "add_trait": { "to": "self", "trait": "core:asleep" } } ] },
+
+  { "type": "eoc", "id": "get_up", "on": "goal_adopted", "group": "sleep",
+    "if": "event.goal != 'core:sleep' and self.has_trait('core:asleep')",
+    "doc": "A sleeper whose mind takes up anything but sleep is awake.",
+    "do": [ { "remove_trait": { "from": "self", "trait": "core:asleep" } } ] },
+
+  { "type": "eoc", "id": "woken_by_a_noise", "on": "perceived", "group": "sleep",
+    "if": "event.signal == 'core:sound' and self.has_trait('core:asleep')",
+    "doc": "A sleeper that hears something wakes: asleep, only a sound loud at its ear is heard at all. It lies awake for a minute (the trait `woken`), seeing and hearing as ever.",
+    "do": [ { "remove_trait": { "from": "self", "trait": "core:asleep" } },
+            { "add_trait": { "to": "self", "trait": "core:woken" } } ] },
+
+  { "type": "eoc", "id": "back_to_sleep", "on": "trait_removed", "group": "sleep",
+    "if": "event.trait == 'core:woken' and event.left == 0 and self.goal == 'core:sleep'",
+    "doc": "A minute after waking, one whose mind still holds the `sleep` goal drops off again.",
+    "do": [ { "add_trait": { "to": "self", "trait": "core:asleep" } } ] }
+]

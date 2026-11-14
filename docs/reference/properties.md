@@ -11,7 +11,7 @@ A subject is a reference to something in the simulation, of a known kind; an exp
 | [`area`](#area) | A named volume with tags, variables and optionally a clock of its own (02 §8.3). | 14 |
 | [`attrs`](#attrs) | The attributes of one entity, reached as `entity.attr` (06 §4.1). | 1 |
 | [`element`](#element) | The floor, block or fixture of a cell (16 §3.5), reached as `here.floor`, `here.block` and `here.fixture`. | 18 |
-| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 157 |
+| [`entity`](#entity) | Any entity: a creature, an item, a device (06). | 158 |
 | [`functions`](#functions) | What one entity's body can do, reached as `entity.fn` (06 §6.3). | 1 |
 | [`global`](#global) | The whole simulation: where global variables live (05 §6). | 3 |
 | [`loc`](#loc) | A cell of a grid (02 §3.2). | 31 |
@@ -450,6 +450,8 @@ Any entity: a creature, an item, a device (06). A reference to one that has been
   - `trait` (id<trait>): The trait: its id, or its qualified id as text.
 - `entity.traits -> list<id<trait>>`: The traits the entity has, each once, in the order it first gained them.
   Changed by `trait_added`, `trait_removed`.
+- `entity.vital -> string?`: Whether its mind drives it: `awake`, `unconscious` or `dead` (06 §8.4); null for an entity with no mind. What senses a state stops is the senses' `stopped_by` (15 §4).
+  Changed by `entity_died`, `entity_revived`, `entity_unconscious`, `entity_woke`, `mind_transferred`.
 - `entity.volume -> real?`: The space the entity takes up, in cubic metres. Null for one with no physical component.
 - `entity.weight(name: string) -> real`: This character's mind's weight of a name (09 §3.1), with what the mind's `adjust` entries whose conditions hold add; 0 if it has none.
   - `name` (string): The weight's name, as the mind writes it.
