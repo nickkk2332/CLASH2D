@@ -701,6 +701,12 @@ out the back).
 | At the door, a marksman | W | L | L | W | W | L | W | W | W | W | W | W | L | L | W | W | 11 of 16 |
 | Out the back door | L | L | L | L | – | L | L | W | L | L | L | L | L | – | W | W | 3 of 14 |
 
+Played again at seeds 17 to 32 as a check, after the last change: the
+dark won 6 of 16, the wardrobe 7 of 16, the door 6 (an ordinary
+person), 11 (a brawler) and 12 (a marksman) of 16, out the back 6 of 13
+(three not played to an end). Over the 32 seeds: the dark 12 of 31, the
+wardrobe 12 of 32, the door 11, 17 and 23 of 32, out the back 9 of 27.
+
 Each way wins and each way loses, decided by the world: the house and
 lane the seed builds, whether the first stranger saw her go in, where a
 lantern's light falls, the fight. The dark corner wins two nights in
