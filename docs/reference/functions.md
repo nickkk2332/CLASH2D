@@ -594,6 +594,18 @@ The cell so many cells east, south and up of a cell, wrapped on wrapped axes. Nu
 - `dy` (int): Cells south.
 - `dz` (int, optional): Storeys up. Zero if left out.
 
+<a id="places"></a>
+### `places`
+
+`places(at: any, radius: real, interaction: string, except?: list<any>) -> list<element>` · safe for belief
+
+The elements, blocks and fixtures, within `radius` metres of a cell (as `dist` measures, a storey counting three; at most 16) whose definition lists an interaction, nearest the cell first and then by cell (storey, row, column), leaving out those whose cell is in `except`: where a searcher goes to look (09 §4.1). Which elements stand where and what their definitions offer is static geometry (09 §3.4), known to every mind, so it is safe for belief; an element tagged `hidden` is not listed, nor is a cell that is not loaded. Not what state anything is in or what it holds. Empty for an interaction that is not loaded.
+
+- `at` (any): The cell to look about, or an element (its cell). Null gives an empty list.
+- `radius` (real): How far from it, in metres.
+- `interaction` (string): The qualified id of the interaction (`core:search`).
+- `except` (list<any>, optional): Cells, or elements by their cell, to leave out: those already searched.
+
 ## Text for a reader
 
 <a id="a"></a>

@@ -11,7 +11,7 @@ For a walkthrough, start with the [modding guide](../modding-guide.md). The spec
 | [values](values.md) | How each kind of field value is written: quantities, references, tags, texts, expressions, conditions, effects |  |
 | [units](units.md) | The units a quantity may be written in | 30 |
 | [properties](properties.md) | Kinds of subject and their properties, by kind | 18 kinds, 326 properties |
-| [functions](functions.md) | Functions: arguments, result, whether random, whether safe in a mind context | 77 |
+| [functions](functions.md) | Functions: arguments, result, whether random, whether safe in a mind context | 78 |
 | [events](events.md) | Events: their subjects and fields | 187 |
 | [hooks](hooks.md) | Hooks: their subjects and fields, and which fields a handler may change | 32 |
 | [verbs](verbs.md) | Verbs a rule's effects call: arguments and types | 174 |

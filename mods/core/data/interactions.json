@@ -36,6 +36,14 @@
     "fail_text": "There is no getting in there now.",
     "do": [ { "put_inside": { "what": "self", "into": "target" } } ] },
 
+  { "//": "Searches a thing a person could hide in (a wardrobe, a locker): opens it if it is shut and feels about inside, so that whoever hides there is found, brought out into its cell, in the open. In the dark that is all the searcher has: what it then sees of them is perception's (decision D-950). What the strangers of the last stand do (`core:search_hiding_places`); a player may do it too.",
+    "type": "interaction", "id": "search", "name": "Search",
+    "reach": "adjacent", "time": "2 s", "noise": 0.3,
+    "do": [ { "if": "(target.state_name ?? '') == 'closed'",
+              "then": [ { "set_state": { "of": "target", "state": "open" } } ] },
+            { "for_each": "target.device.held('inside') ?? []", "as": "hider",
+              "do": [ { "take_out": { "what": "$hider" } } ] } ] },
+
   { "//": "Comes out of what one hid in, into its cell.",
     "type": "interaction", "id": "get_out", "name": "Get out",
     "reach": "same_cell", "time": "800 ms", "noise": 0.4,

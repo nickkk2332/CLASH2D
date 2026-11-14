@@ -295,7 +295,7 @@ in the mind context with `$about` bound (D-693).
 | Step | Arguments | Becomes | Ends |
 |------|-----------|---------|------|
 | `go` | `to`: a cell, or an entity, meaning where the mind believes it is; `within`: metres, default 0 | The mind's `go_action` with `to` the cell, or the nearest it believes it can stand in | Done within `within` (and half a metre) of it; fails with `ai.not_arrived` if the action ends short |
-| `do` | `action`: an action id; `with`: map of parameter name to expression | That action, missing parameters taking their defaults | When it finishes; fails with its refusal, its interruption, or `ai.cancelled` |
+| `do` | `action`: an action id; `with`: map of parameter name to expression | That action, missing parameters taking their defaults; a text given for a parameter that takes a definition is that definition (`'core:search'`, decision D-951) | When it finishes; fails with its refusal, its interruption, or `ai.cancelled` |
 | `choose` | `purpose`: an action tag; `target`: expression, optional | The first action carrying the tag, in load order, that can start, with `target` as its parameter `target` | As `do`; fails with `ai.no_option` when none can start |
 | `wait` | `time`: seconds; `until`: condition | A wait of `time`, or of the mind's interval | After the wait, or when `until` holds at a thought |
 | `look` | `at`: a cell or an entity; `time`: seconds, default 2 | Turning to face it, and a wait | After the wait |
@@ -319,6 +319,37 @@ done as a player does one, by a `do` step of the action that does
 interactions (in `mods/core`, `core:interact` with `target` and
 `interaction`); a `use` step of its own is not built, nor are `job`,
 `goal`, `follow` and `run`, which wait for jobs and queries.
+
+**Searching** (decision D-950). A search is written with the steps
+above and one function, `places(at, radius, interaction, except?)`:
+the elements (blocks and fixtures) within `radius` metres of a cell,
+at most 16, whose definition lists an interaction, nearest the cell
+first, leaving out those whose cell is in `except`. Which elements
+stand where and what their definitions offer is static geometry
+(section 3.4), so the function is safe for belief; an element tagged
+`hidden` is not listed; what state anything is in, and what it holds,
+is not told. Methods could not say where the places to search are
+without it: no query is answered in a mind context, and no property of
+a cell but its coordinates is safe for belief. A goal keeps the places
+it has searched in a variable of the character's own, and its method
+is begun again, one place at a time, until none is left:
+
+```json
+{ "if": "len(places(self.believed_loc($about), 6, 'core:search', self.var.searched ?? [])) > 0",
+  "steps": [
+    { "set": { "var": "core:search_spot", "value": "first(places(self.believed_loc($about), 6, 'core:search', self.var.searched ?? []))" } },
+    { "set": { "var": "core:searched", "value": "(self.var.searched ?? []) + [self.var.search_spot]" } },
+    { "go": { "to": "self.var.search_spot", "within": 1.5 } },
+    { "do": { "action": "core:interact", "with": { "target": "self.var.search_spot", "interaction": "'core:search'" } } },
+    { "look": { "at": "self.var.search_spot", "time": "rand(2, 4)" } } ] }
+```
+
+What is found is perception's and the world's, never a draw of the
+engine's: walking the rooms the searcher sees whoever stands in the open
+as the light and its eyes let it, and hears whoever moves; the bundled
+interaction `core:search` opens what a person could hide in and brings
+out whoever hides there. The bundled goal is `core:search_hiding_places`
+(the `guard` mind, the last stand's strangers).
 
 **Doors on the way** (decision D-781). A step of a `go`, `keep_near` or
 `keep_from` whose action's step is refused because the way is closed
@@ -1439,7 +1470,8 @@ change what an agent carries across.
 **Functions**: `weight`, `threat`, `standing`, `strength`, `severity`,
 `best_reaction`, `pick_position`, `path_cost`, `least_effort_that`,
 `price`, `threat_removed`, `harm_prevented`, `escape_margin`,
-`detection_risk`.
+`detection_risk`, `places` (built, section 4.1: where a searcher
+looks).
 
 **Settings**: `sim.max_hot_minds`, `mind.max_memories`, `mind.max_tracks`,
 `mind.max_noted`, `incident.min_stage_time`, `incident.max_chain`,

@@ -705,12 +705,14 @@ fn the_bundled_doors_windows_lamps_and_lockers_offer_what_they_should() {
         (
             Layer::Fixture,
             "steel_locker",
+            // Searched by whoever looks for someone hidden in it (D-950).
             vec![
                 "core:open",
                 "core:close",
                 "core:store",
                 "core:retrieve",
                 "core:hide_inside",
+                "core:search",
             ],
         ),
     ];

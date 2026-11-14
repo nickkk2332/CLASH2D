@@ -307,7 +307,7 @@ bundled world offers:
 | Windows | Open, Close, Break through (loudly) |
 | Chests, cupboards, wardrobes | Open, Close; Take out what is inside, into your hands; Put in what you hold |
 | Racks, stalls, workbenches | Take out, Put in |
-| Wardrobes | Hide inside, and Get out |
+| Wardrobes | Hide inside, and Get out; Search (opens it, and brings out whoever hides inside) |
 | Ovens, hearths, stills | Stoke (put the wood you hold in), Light, Put out |
 | What you hold | Eat, Drink, Bandage your wounds, Rub on salve, Coat a blade, Read |
 | What lies loose (on a table, a desk, the street) | Pick up |
@@ -497,7 +497,11 @@ what is true.
   suspect something; it takes longer to be sure, and you can slip away
   first. Once they lose you they remember where you were.
 - **Hiding inside.** In a wardrobe you cannot be seen at all, though
-  sound still leaves.
+  sound still leaves; but whoever searches it finds you. The last
+  stand's strangers search a house they saw you go into or heard you
+  in: they walk its rooms, open every wardrobe and stand a while
+  looking and listening at each, and give up after a few minutes. In the dark they
+  see you only close by, and only as far as the light reaches.
 - **Memory.** Townsfolk run from danger close by. Those who think as
   watchmen do go after anyone they hold hostile; once they lose them
   they go to where they last believed them to be, look round, and give
@@ -555,8 +559,10 @@ which way and how far each one is.
   way); get in and shut it. Footsteps you hear show as `!` where they
   seemed to be, and the lamps show as a yellow `!` too. The lamp inside
   lets you find the club and the bandages on the table, and lets them
-  see you: switch it off (`e`) to hide. They find you more easily as
-  the sky lightens before dawn.
+  see you: switch it off (`e`) to hide. One who saw you go in, or
+  hears you inside, searches the house, the wardrobe first; the door
+  he leaves open lets the porch lamp's light in. They find you
+  more easily as the sky lightens before dawn.
 - Blocking a knife with your forearm stops the blow and cuts the arm:
   the log says when you are wounded. Stepping back or dodging costs
   nothing when it works. Binding wounds takes a free hand.

@@ -15,7 +15,7 @@
 
   { "type": "mind", "id": "guard",
     "interact_action": "interact",
-    "doc": "A watchman. Walks a beat near his post. Goes to look at a noise he heard and did not see. Goes for anyone he holds hostile while he can see them, and for anyone he saw hurt someone; once he has lost them, goes to where he last believed they were, looks round, and goes back to his beat.",
+    "doc": "A watchman. Walks a beat near his post. Goes to look at a noise he heard and did not see. Goes for anyone he holds hostile while he can see them, and for anyone he saw hurt someone; once he has lost them, searches the house he lost them in, opening what a person could hide in (`search_hiding_places`, in `searching.json`), or else goes to where he last believed they were and looks round; and goes back to his beat.",
     "goals": ["confront", "search_lost", "investigate_noise", "patrol"],
     "weights": { "duty": 0.9, "curiosity": 0.6, "caution": 0.2 },
     "think": "1 s",
