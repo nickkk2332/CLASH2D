@@ -1,0 +1,65 @@
+# Builds the game for Windows, macOS and Linux in release, checks that each
+# starts, and keeps each as a download on the run's page: the program, the
+# `mods` and `profiles` it reads (found beside the program), and the
+# player's documents. Runs on every push to the beta branch, and by hand
+# from the Actions tab ("build", then "Run workflow").
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/lucid-dirac-5urdmh]
+
+jobs:
+  build:
+    strategy:
+      # One platform failing does not stop the others.
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x86_64
+            exe: clash.exe
+          - os: macos-latest
+            name: macos-arm64
+            exe: clash
+          - os: ubuntu-latest
+            name: linux-x86_64
+            exe: clash
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      # Installs the toolchain pinned in rust-toolchain.toml.
+      - name: Install the pinned toolchain
+        run: rustup show
+      - name: Build the game
+        run: cargo build -p clash-app --release
+      # The title screen, headless: the program starts, finds its mods and
+      # draws a frame.
+      - name: Check that it starts
+        run: |
+          ./target/release/${{ matrix.exe }} --help
+          echo frame | ./target/release/${{ matrix.exe }} --headless - --data "$RUNNER_TEMP/clash-data"
+      - name: Package
+        run: |
+          dir="clash2d-${{ matrix.name }}"
+          mkdir -p "$dir/docs"
+          cp "target/release/${{ matrix.exe }}" "$dir/"
+          cp -R mods profiles "$dir/"
+          cp README.md "$dir/"
+          cp docs/how-to-play.md docs/release-notes-beta.md docs/modding-guide.md "$dir/docs/"
+          if [ "$RUNNER_OS" != "Windows" ]; then
+            strip "$dir/${{ matrix.exe }}"
+            # A tarball keeps the program executable; the download's zip
+            # would not.
+            tar czf "$dir.tar.gz" "$dir"
+            rm -rf "$dir"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clash2d-${{ matrix.name }}
+          path: clash2d-${{ matrix.name }}*
+          if-no-files-found: error
