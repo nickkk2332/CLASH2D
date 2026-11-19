@@ -1,0 +1,9 @@
+{
+  "id": "core",
+  "name": "Core",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "Definitions most worlds want: common damage types, materials, atmospheres, channels and basic elements. Used by the engine's tests and tools.",
+  "authors": ["CLASH2D contributors"],
+  "requires": []
+}

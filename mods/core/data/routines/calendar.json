@@ -1,0 +1,22 @@
+[
+  { "//": "The calendar of the bundled realms (09 §14.2): names for the parts of the day and a year of four seasons. The length of the day and the hour the clock starts at are the sky's (`day_night`).",
+    "type": "calendar", "id": "common",
+    "parts": [
+      { "name": "night", "from": "00:00" },
+      { "name": "dawn", "from": "05:00" },
+      { "name": "morning", "from": "07:00" },
+      { "name": "noon", "from": "12:00" },
+      { "name": "afternoon", "from": "13:00" },
+      { "name": "dusk", "from": "18:00" },
+      { "name": "evening", "from": "19:00" },
+      { "name": "night", "from": "22:00" }
+    ],
+    "year": 360,
+    "seasons": [
+      { "name": "spring", "from": 0 },
+      { "name": "summer", "from": 90 },
+      { "name": "autumn", "from": 180 },
+      { "name": "winter", "from": 270 }
+    ],
+    "doc": "Dawn at five, morning at seven, noon, afternoon, dusk at six and evening at seven; a year of 360 days in four seasons." }
+]

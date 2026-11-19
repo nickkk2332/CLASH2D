@@ -56,13 +56,25 @@ terminal world viewer, and line by line from a file as a test script
 In the game it is available when the profile allows it. A profile for
 players may switch it off.
 
+The terminal world viewer, `clash-tools worldview [--mods <dir>] [--load
+<save>] [--script <file>]` (world-model package W11), shows one storey
+round the console's cursor as it truly is, through the scene's world view
+in omniscient mode and the terminal frontend, with a console line under
+it: the arrows or `h` `j` `k` `l` move the cursor (ten cells with shift),
+`<` and `>` change storey, `:` or Enter opens the console line, `q` or
+Escape leaves. Without a terminal, or with `--script`, it runs console
+lines from the file or from standard input and prints what each gives, so
+that a world can be looked at from a pipe:
+`printf 'use default\ngen city size=2\nframe\n' | clash-tools worldview`.
+It exits 1 if a line failed.
+
 ### 3.2 Language
 
 ```
 release at @here energy=1e9 kind=blast
 spawn town_guard at @c:120,44,0 as=g1
 as @g1 act slash target=@self effort=0.2
-eval self.pool.blood.frac
+eval self.pool.frac('blood')
 do { "add_trait": { "to": "self", "trait": "adrenaline" } }
 select entities around=@self radius=10 where="it.has_tag('guard')"
 watch dist(self, @sel)
@@ -83,6 +95,49 @@ check
 - `as <reference> <command>` runs a command with `self` bound to something
   else.
 
+The forms of a value:
+
+| Form | Written |
+|------|---------|
+| Number | An optional sign, digits, an optional fraction and an optional exponent, and directly after it an optional unit of 05 §4.7: `10`, `-3`, `0.2`, `1e9`, `400ms`, `5min`. With a fraction or an exponent it is a real. A parameter that takes a time reads a bare number as seconds. |
+| Word | An id or a keyword: letters, digits and `_`, with at most one `:` for a namespace. `town_guard`, `core:glass`, `on`. |
+| Reference | `@here`, `@self`, `@sel`, `@c:x,y,z`, `@e:17` (or `@e:17v2`, with a generation), `@kind:name` for any kind the host knows (`@site:old_mill`), and `@name`. `here`, `self`, `sel`, `c` and `e` cannot be given as names. |
+| Quoted | Between double quotes, on one line. Inside, `\"` is a double quote and `\\` a backslash; there are no other escapes. It holds an expression, or the text itself where the parameter is a text or a `string`. |
+| JSON | From `{` to the matching `}`, whatever is between them. In a file it may run over several lines. |
+| Raw | Anything else, taken as written: an unquoted expression, a file name, a hash. It ends at the first space outside round, square and curly brackets and outside the expression language's single-quoted strings, so `dist(self, @sel)` is one value. |
+
+The rest of the language:
+
+- Arguments are separated by spaces or tabs. `key=value` has nothing
+  around its `=`. A `#` where an argument could start begins a comment
+  that runs to the end of the line. A blank line does nothing.
+- An expression may name references: `"@b.wounds.count == 0"`. The
+  console resolves each one and hands the simulation the expression with
+  a local in its place (`$at0`, `$at1`, …) and the value of each local.
+- A bare word that is the name of a parameter not yet given, with a
+  positional value after it, names that parameter: `spawn town_guard at
+  @c:120,44,0` is `at=@c:120,44,0`. A value that happens to be such a
+  word is given by name.
+- The other positional values go to the parameters in order. A verb's
+  direct argument (05 §10.1) is its first parameter. A parameter that
+  takes the rest of the line, as the expression of `eval`, `watch`,
+  `assert` and `until` does, joins the positional values from its place
+  on, which is why an expression without quotes may have spaces in it.
+- `as=<name>` is accepted by every command and names what the command
+  gives back. It is not a parameter; a verb's own argument called `as` is
+  given by position or through `do`.
+- A command's name is one word or two (`map export`, `scene step`,
+  `break off`). The longer name is tried first.
+- A line is at most 65,536 bytes.
+- A line is checked against its command in full before anything runs,
+  and everything wrong with it is reported together: diagnostics `E1401`
+  onward for the syntax of a line, `E1421` onward for a line that does
+  not fit its command, `E1441` onward for test scripts. Each has the
+  place and, where the console can tell, what to write instead.
+- The **canonical form** of a line has one space between arguments,
+  numbers in their shortest form, JSON compact and a comment as `# text`.
+  Printing a parsed line and parsing it again gives the same tree.
+
 ### 3.3 What it can do
 
 | Kind | Commands |
@@ -92,6 +147,9 @@ check
 | Time | `advance`, `step`, `until`, `rewind` (section 8.3) |
 | Looking | `select`, `inspect`, `watch`, `trace`, `profile`, `view` |
 | State | `save`, `load`, `hash`, `check`, `diff` |
+| Setting up | `use` (a profile and seed), `gen` (a small world), `find` |
+| The interface | `key <chord>`, `open <screen>`, `size <cols> <rows>`, `scene step <time>`, so that a mod can test its own screens with `expect frame` |
+| Maps | `map export <name> <mod>` writes a captured map into a mod's directory |
 | Tests | `assert`, `expect` (section 7) |
 | Mods | `reload`, `lint`, `show`, `refs` |
 
@@ -99,6 +157,114 @@ Every command has help generated from its registration.
 
 Console commands that change the simulation are `Debug` commands
 (03 §4.4). They are validated, logged and replayed like any other.
+
+A registration states the command's name, its documentation, its
+parameters with their types, defaults and documentation, whether it
+changes the simulation, and which of the three hosts of section 3.1 offer
+it. `break`, `next`, `continue` and `rewind` are offered only where a
+person is typing, and `expect` only in files. `help` lists the commands
+and `help <command>` describes one.
+
+A verb whose name a built-in command already has is not registered a
+second time: the built-in keeps the name (`run` is the console's way to
+run a rule) and the verb is reached with `do`.
+
+`save <name>` and `load <name>` keep the whole state in memory under a
+name; the simulation writes no files (01 R5). `load` is refused with
+`no_such_save` for a name nothing was saved under, and `until` with
+`until_not_reached` when its `max` passes before its condition holds.
+
+A console session can be written out as a file: every line that was
+carried out, in canonical form, and every line that was refused followed
+by `expect reason` with the reason. Lines that failed and commands that
+files are not offered are left out. The file is a test script (section 7)
+and replays to the same state hash.
+
+The console itself is the same code in all three hosts. It is written
+against one interface the simulation implements, `ConsoleHost`: carry out
+a command, resolve a reference, evaluate an expression, let time pass by
+a span or until a condition, give the state hash, save to bytes and load
+from them, hand over the events and trace records since last asked, say
+why the last command was refused, present the frame as text, set the
+thread count, start from a profile and a seed, and build a small world.
+
+#### The host's commands
+
+The console's host over the real simulation (`clash_save::host::GameHost`,
+D-581) carries out `use`, `gen`, `eval`, `assert`, `advance`, `until`,
+`step`, `save`, `load`, `hash`, `hash <subsystem>`, `check`, `inspect`,
+`size`, `do`, `run` and one command for each verb, and adds the commands
+below, as registrations with help. The other built-in commands are
+refused with `console.not_built` until what they need is built.
+
+What reaches the rule runtime (decision D-687):
+
+- **A verb of the engine** is called with its arguments by name, `self`
+  bound to the `as` subject, else the active character; a word where the
+  verb wants an id names the definition (qualified, or else in `core`).
+  It prints what the verb gave, and `as=` names it if it is a subject.
+  A verb the simulation does not carry out is refused with
+  `rule.verb_unbound`.
+- **A rule used as a verb**, **`do`** and **`run`** are compiled as a
+  list of one effect against the loaded definitions
+  (`Sim::compile_effects`), in a scope that binds `self` (as above),
+  `here` (the cursor) and `global`, and run with `Sim::run_effects`. A
+  rule used as a verb is given its arguments as locals; `run <rule>
+  with={…}` gives `with` as JSON, whose texts are expressions in that
+  scope. Bare names in the effect resolve in the engine's namespace
+  only: a mod's variable is written `self.var('core:weariness')`. An
+  effect typed at the console cannot set a timer or ask a choice that
+  waits, since neither can be found again among the definitions.
+- What they change is caused by the debug cause and is not in the input
+  log: the transcript replays it, as it does `damage` and `field`
+  (D-585). Events are delivered and tickets reconciled afterwards.
+
+| Command | Does |
+|---------|------|
+| `use <profile> [seed]` | Loads a profile from the mods directory, with every definition type of the engine, and starts a simulation with an empty world |
+| `gen <kind> [size]` | Makes a realm and loads a block of `size` × `size` tracts from tract (0, 0) (at most 16 a side), held by debug tickets; puts the cursor in the middle, on the highest cell that can be stood in. `flat`, `city` and `country` name the generators `flat`, `test_city` and `standard`, and make the first realm definition in load order that names that generator; a realm definition's id is also accepted, and test scripts name one, so that a mod adding a realm on the same generator changes nothing they do. Each realm made draws from the seed plus the number of realms made before it |
+| `spawn <what> [at] [mass] [tag] [control]` | Makes an entity of a kind of occupant (`creature`, `item`, `device`, `other`) and puts it in a cell or inside an entity; the cursor's cell if `at` is left out. Gives the entity, for `as=` |
+| `move <who> <to>` | Moves an entity to a cell, or into an entity |
+| `remove <who>` | Removes an entity for good |
+| `set <at> <layer> <state>` | Sets the floor, block or fixture of a cell to an element state as data writes one (`core:wall`, `wall@brick`), or `none` |
+| `control <who> <mode>` | Sets who decides for an entity: `none`, `direct`, `delegated`. One put under direct control becomes `@self` |
+| `session <who> [at]` | Starts a session at a place that need not be loaded: loads the tracts round it, puts the entity there and holds its ticket |
+| `damage <at> <energy> [kind] [intensity] [layer]` | Sends a packet of damage to one element of a cell: the layer named, else the first there is of block, fixture and floor. The kinetic damage type and an intensity of one pascal for each joule if left out. The fields of the cell are told of the packet |
+| `field <at> <kind> [amount]` | Adds levels to a field in a cell, 255 if left out; a negative amount takes them away |
+| `look [at]` | Moves the cursor (`@here`) and says what is in its cell: elements and their damage, fields, occupants |
+| `frame` | Prints the cursor's storey from above as plain text, under a line saying where and when |
+
+`spawn`, `move`, `remove`, `set`, `control` and `session` are `Debug`
+commands of the kernel (03 §4.4), validated, logged and replayed. `damage`,
+`field` and `gen` change the world directly, with the debug cause: the
+kernel has no `Debug` command for them yet, so the input log does not hold
+them and only the console's transcript replays them (D-585).
+
+When time passes at the console and a directly controlled entity is free
+to act, nobody is at the keys: it waits until time has passed as far as
+asked, by a `Wait` command (03 §5.2), logged like any other. A choice a
+rule puts to it is not answered, and time refuses to pass with
+`console.decision_pending`.
+
+References: `@here` is the cursor, `@self` the active character, `@sel`
+what the last command named, `@c:x,y,z` a cell in the cursor's grid (or the
+first realm's), `@e:N` or `@e:NvG` an entity by slot and generation,
+`@site:name` a site by name, and `@name` whatever a command gave with
+`as=name`. An expression is evaluated against truth with `self` bound to
+the subject given, else the active character.
+
+The host's own refusals use the codes `console.no_game`,
+`console.no_world`, `console.no_cursor`, `console.no_active`,
+`console.nothing_selected`, `console.unknown_name`,
+`console.unknown_reference`, `console.not_a_place`,
+`console.not_an_entity`, `console.unknown_kind`, `console.too_large`,
+`console.not_built`, `console.rules_unbound`, `console.decision_pending`
+and `console.unknown_subsystem`, each listed with what it means and the
+values it carries in `clash_save::host::reasons::ALL`. The kernel's and
+the world's reasons are passed on as they are.
+
+`save <name>` keeps the whole game in memory as the bytes of a save file
+(01 §11.2), with the console's cursor, active character and selection.
 
 ### 3.4 Commands from mods
 
@@ -204,7 +370,9 @@ tick=4812350 kind=mind    subject=e:9          goal=flee score=0.83 was=fight re
 ```
 
 - Kinds: rules, events, actions, strikes, hits, perception, minds,
-  networks, recipes, incidents, generation, loading, clocks.
+  networks, recipes, incidents, generation, loading, clocks,
+  input, UI effects, playback (which `show` matched an event and why not)
+  and cutscene cues.
 - A trace is switched on for a kind, a subject, a place, or a combination.
 - Records go to a panel in the game, to a file as one JSON object per
   line, and to test scripts, which can assert on them.
@@ -230,6 +398,21 @@ file, `budgets.toml`, each row with its benchmark and its limit.
 `cargo xtask bench --check` runs them and fails on any over its limit by
 more than its margin. When a target is replaced by a measured figure, the
 specification's table and this file change together.
+
+| Command | Does |
+|---------|------|
+| `cargo xtask bench` | Builds the tools in release and runs every benchmark, printing each against its row |
+| `cargo xtask bench <filter>...` | Only the benchmarks whose names hold a filter, as `perception` or `light` |
+| `cargo xtask bench --check` | The same, exiting 1 when one is over its limit by more than its margin |
+| `cargo run --release -p clash-tools -- bench --list` | Names the benchmarks and the rows they measure |
+
+The benchmarks are `clash-tools bench` (D-730): each builds its scene from
+the repository's mods and keeps the best of several rounds, since noise
+only adds time. They take minutes and their figures belong to the machine,
+so they are not a step of `cargo xtask check`. A benchmark with no row is
+printed as a figure with no budget; a row that names no benchmark is an
+error, and a test checks every row of the file against the table of its
+specification. Rows without a benchmark are not in the file yet.
 
 ### 6.4 Stepping through a rule
 
@@ -262,7 +445,7 @@ use profile=test_core seed=7
 gen flat size=1
 spawn duellist at @c:10,10,0 as=a
 spawn duellist at @c:11,10,0 as=b
-as @b set_trait stance_guarded
+as @b add_trait stance_guarded
 as @a act slash target=@b
 advance 400ms
 assert "@b.wounds.count == 0"
@@ -282,21 +465,78 @@ expect hash 9c41f0aa…
 | `expect hash <value>` | The simulation's state hash is that value |
 | `expect frame <file>` | The presented frame equals the stored one (12 §12) |
 
+The details:
+
+- A script file has the extension `.scn`. Each line is a console line
+  (section 3.2); JSON left open at the end of a line goes on over the
+  following lines to its closing brace. Blank lines and comments are
+  skipped. A mistake is reported with its file, line and column.
+- A command that is refused fails the script, unless the next line is
+  `expect reason`.
+- The fields of `expect event` and `expect trace` are written
+  `field=value` and may have any names. A value is a number, a word, a
+  reference, a quoted expression that is evaluated, or JSON. A number
+  equals the same number whether whole or real; a word equals a text; a
+  field that holds an id holds its qualified id, so it is written in
+  full (`kind=core:cut`); a reference equals the subject it names. The
+  record must have every field named, and may have more.
+- `within=<time>` looks back that far from now. Without it, `expect
+  event` looks at the whole run, as `expect trace` always does.
+- A hash is 32 hexadecimal digits. `expect hash` with no value fails,
+  saying what the hash is, until `--bless` writes one in.
+- The file of `expect frame` is named relative to the script.
+- `assert` may be given `as <reference>` like any command.
+
 ### 7.2 How scripts are run
 
-`clash-tools scenario run` runs each script in four ways and requires the
-same result from all:
+`clash-tools scenario run <dir>` finds every script under a directory,
+runs them in order of path, and runs each in four ways, requiring the same
+result from all:
 
-| Mode | Checks |
-|------|--------|
-| Straight | The expectations |
-| Twice in one process | No hidden state |
-| With a save and load at several points | Rule R7 |
-| With different thread counts | Rule R1 |
+| Mode | How | Checks |
+|------|-----|--------|
+| Straight | Once, on a fresh simulation | The expectations |
+| Twice in one process | Twice more, each on a fresh simulation | No hidden state |
+| With a save and load at several points | Once for each split point: save after that command, load into a fresh simulation, go on | Rule R7 |
+| With different thread counts | Once with one thread and once with four | Rule R1 |
 
-`--bless` rewrites expected hashes and frames, and the change description
-must say why they changed. `--paranoid` also runs every invariant checker
-(section 7.3) after every command.
+"The same result" is exact. The straight run records the state hash after
+every command; every other run must pass every expectation and give the
+same hash after every command. A failure names the line, what was expected
+and what was found, and which run it was: the split point or the thread
+count. Where a run's state first differs from the straight run's is
+reported in preference to an expectation that fails later because of it.
+If the straight run fails, the other modes are not run.
+
+A **split point** is the end of a command. A script of at most eight
+commands is split after each; a longer one at eight points spread evenly
+from its first command to its last. Each split point is a run of its own,
+so that a failure can name it. The hash straight after loading must equal
+the hash before saving.
+
+`--bless` runs each script once, rewrites the hashes it expects to the
+ones found, writes one in where `expect hash` has none, and writes the
+frames it expects to their files. It changes no other byte of a script.
+A script that fails for any other reason is not blessed. The change
+description must say why a hash or a frame changed. `--paranoid` also runs
+every invariant checker (section 7.3) after every command.
+
+| Exit code | Means |
+|-----------|-------|
+| 0 | Every script passed in every mode |
+| 1 | A script failed or does not parse; or the directory cannot be read, or holds no script |
+| 2 | The command line was not understood |
+
+The scripts run against the simulation itself, through the console's host
+of `clash-save` (section 3.3). `use` finds profiles in `--mods <dir>`, else
+in the `mods` directory beside the scripts' directory or above it.
+
+A comment before a script's first command may carry a marker (D-583):
+
+| Marker | Means |
+|--------|-------|
+| `# host: fake` | The script tests the console itself and runs against the fake host of `clash_sim::console::testing` |
+| `# known failure: <why>` | The smallest script that shows a bug still to be fixed, kept under `scenarios/known_failures/`. It is expected to fail and does not fail the run; if it passes in every mode the run fails, so that the marker is taken off |
 
 Mods ship scripts beside their data (04 §3.1) and run them the same way.
 
@@ -328,6 +568,15 @@ piece: which entities, which cells, which wake-ups.
 This is how nondeterminism is found, and how a bug seen once on someone
 else's machine is seen again.
 
+As built (D-587): `clash-tools replay <from> <to>` takes two saves of one
+game. It loads the earlier, replays the commands the later one's input log
+accepted since, runs on to the later one's tick and compares the state
+with it subsystem by subsystem (`world`, `timeline`, `entities`,
+`components`, `rules`, `settings`, `rng`, `kernel`). The input log carries
+no hashes at intervals yet, so a divergence is named by subsystem at the
+end, not found at the tick where it arose; `diff` and `report` are not
+built.
+
 `clash-tools report` gathers a save, its log, the mod list with
 fingerprints and the tail of the traces into one file for sending.
 
@@ -354,15 +603,23 @@ uses (13 §9.5). Local undoing is separate (08 §7.4).
 4. Look at the result. Open the inspector on it. Trace the rule.
 5. Write a test script for it.
 
+[The modding guide](modding-guide.md) follows this loop from `init-mod`
+to a blessed test script, and is run by a test of `clash-tools` (D-807).
+Hot reload and errors over the game (step 3) wait for P8.
+
 ### 9.2 Knowing what exists
 
 | Tool | Answers |
 |------|---------|
-| The reference (`docs`) | What definition types, fields, units, events, verbs, properties, functions, reasons, diagnostics and console commands exist, with their documentation |
+| The reference (`docs`) | What definition types, fields, units, events and hooks (with their subjects, fields and which a handler may change), verbs (with their arguments), properties, functions, queries, settings, reasons, diagnostics, console commands, widgets, UI effects, binding names, screens and slots exist, with their documentation |
 | The reference browser | The same, searchable, in the game |
 | `show <type> <id>` | What a definition is after every patch, and where each value came from |
-| `refs <type> <id>` | What refers to it, and what it refers to |
-| `find <type> where=<condition>` | Which definitions match |
+| `refs <type> <id>` | What refers to it, and what it refers to: fields read as references, `copy_from`, patches, and strings read as plain text that name it (D-806) |
+| `find <type> where=<condition>` | Which definitions match. A condition is `path`, `!path` or `path<op>value` with `==`, `!=`, `<`, `<=`, `>`, `>=` or `~`; several must all hold; `*` is any type, and plain words are looked for in ids, names and documentation (D-806) |
+
+Built so far: the reference, `show`, `refs` and `find`. The reference
+browser is not built: it is a screen of the `tools` mod, which does not
+exist yet (plans/tooling TL9).
 
 ### 9.3 Knowing what a mod set does together
 
@@ -415,6 +672,11 @@ wiring and devices, with a palette made for it. Something built in play,
 by hand or by helpers, becomes a design that can be planned elsewhere
 (16 §10.3), shipped in a mod, or placed by generation.
 
+The simulation writes no files (01 R5). A captured map is kept with the
+save, under a name, and `plan_from_map` and `apply_map` accept it in that
+game at once. `map export` copies one into a mod's directory, where it is
+an ordinary map after the next reload.
+
 ## 11. Checking that incidents agree
 
 An incident's stages each have a live form and an abstract form (09 §11),
@@ -441,6 +703,14 @@ nobody watched tends to end as the ones that were watched do.
 | `save verify` | Loads it, runs every invariant checker, and compares the stored hash |
 | `save migrate` | Applies format and content migrations (04 §12) and writes the result |
 
+As built: `save inspect <file>` prints the metadata of 01 §11.2;
+`save verify <file>` loads the save with the profile it names, reads every
+tract blob in full against the save's tables of ids and compares the
+stored state hash with what loads, naming the first section or tract that
+is wrong (the invariant checkers wait for TL7); `save list <dir>` lists the
+saves of a directory with their names, as a load screen would. `save
+migrate` waits for migration entries.
+
 ## 13. Aids for players
 
 Built from the same parts, in ordinary screens, so they show only what the
@@ -456,6 +726,11 @@ character knows.
 The notes a player makes in a case file are the character's own
 variables. They are saved, and a rule may read them.
 
+As built: the journal is `ui:journal` over `entity.objectives` (13 §13,
+decision D-756), with each objective's marker given as which way and how
+far, from what the character believes. The case file and the codex are
+not built.
+
 ## 14. Logs and failures
 
 - The engine writes a structured log: time, tick, subsystem, severity,
@@ -468,7 +743,31 @@ variables. They are saved, and a rule may read them.
 
 ## 15. Modding surface
 
-**Definition type**: `console_command`.
+**Definition types**: `console_command`, `reason`.
+
+```json
+{ "type": "reason", "id": "no_fuel", "text": "{the(target)} is out of fuel.",
+  "values": { "target": "entity" }, "doc": "Raised by engines with an empty tank." }
+```
+
+A mod's own refusals carry reasons of its own. `cancel_event` names one
+(05 §10.5), and it is listed in the reference beside the engine's.
+
+| Field | Meaning |
+|-------|---------|
+| `text` | The sentence whoever asked is told: a text template (05 §4.6), pure, in which each value is read by its name. Required. |
+| `values` | The values the reason carries, by name, each with its type as 05 §3 writes types: `"values": { "target": "entity" }`. Default none. |
+| `doc` | When it is given, for the reference. |
+
+As built (decision D-478). The code of such a reason is its qualified
+id. The sentence is rendered when the reason is given, with the values
+`cancel_event` supplies; one it leaves out reads null. The reason then
+carries every value supplied, a truth value, a number or a text as it
+is, an id as its qualified id and anything else as it prints.
+
+The tools are the bundled `tools` mod (04 §3.5). A profile that lists it
+is a development profile: the console, breaks and rewind are available
+there and nowhere else.
 
 **Console commands**: section 3.3, and one for each registered verb.
 
@@ -477,6 +776,13 @@ variables. They are saved, and a rule may read them.
 `map check`, `gen plan`, `gen region`, `gen assembly`, `scenario run`,
 `replay`, `diff`, `report`, `incident compare`, `save inspect`,
 `save verify`, `save migrate`, `worldview`.
+
+**Gaps** (reachable only from Rust for now): the console's `damage`,
+`field` and `gen` are not `Debug` commands of the kernel and are not in the
+input log (D-585); `spawn` makes an entity of a kind of occupant, not from
+a template (06), and gives it no physical component; the invariant
+checkers that `check` and `save verify` should run are two built-in
+checks until TL7.
 
 **Screens** in the `debug` context: console, inspector, traces, profiler,
 reference browser, map editor. All are definitions and can be replaced or

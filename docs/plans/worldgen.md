@@ -18,14 +18,14 @@ plan's scenarios. The test generators stay, as fixtures.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| WG1 | Map format | L | W3, X4 | todo |
-| WG2 | Placing and applying maps | L | WG1, W8, W17 | todo |
-| WG3 | Ground | M | WG1 | todo |
-| WG4 | Tract definitions and realisation | M | WG2, WG3 | todo |
+| WG1 | Map format | L | W3, X4 | beta |
+| WG2 | Placing and applying maps | L | WG1, W8, W17 | beta |
+| WG3 | Ground | M | WG1 | beta |
+| WG4 | Tract definitions and realisation | M | WG2, WG3 | beta |
 | WG5 | Transforms and ruin | M | WG4, W22 | todo |
 | WG6 | World generators and realm plans | L | WG4 | todo |
-| WG7 | Region kinds and surveys | L | WG6 | todo |
-| WG8 | Settlements | L | WG7 | todo |
+| WG7 | Region kinds and surveys | L | WG6 | beta |
+| WG8 | Settlements | L | WG7 | beta |
 | WG9 | Sites and the simulation seed | M | WG8, L1, L5 | todo |
 | WG10 | Stacks and assemblies | L | WG2 | todo |
 | WG11 | Vessels, designs and wiring from maps | M | WG2, V10, G8 | todo |
@@ -79,6 +79,20 @@ Done when
 - A random function in a map draws from the placement, not the simulation
   stream, shown by an unchanged simulation hash.
 
+Built (beta), in `clash_gen::map`: the `map` and `palette` types, compiled
+maps (`MapDefs`, a build stage beside `Defs`, D-390), resolution to a
+`ResolvedMap`, turning, the checks of 10 §3.7, three maps in `mods/core`,
+and `cargo run -p clash-gen --example map_ascii`. Every "Done when" above
+has a test; with no simulation yet, the last is shown on the hash of the
+simulation's random streams. Stubbed: `region.*` in the generation context
+(waits for WG7); `gen.max_nesting` is a limit passed to the build, not a
+setting (waits for P6); spawns, items, conduits, links, fields, devices,
+berths, watched cells, variables, decals, patterns, joints, portals and
+vehicles are checked and carried in the resolved map as data with ids as
+written, for the packages that own them, and berths and watched cells are
+not yet recorded on a site (WG9); a link cannot join devices of two nested
+maps; `map show` and `map check` are WG12's.
+
 ### WG2 — Placing and applying maps
 
 **Spec** 10 §4 · **Size** L
@@ -98,6 +112,45 @@ Done when
 - Scenario `aftermath_edit`: a pending map is present when its tract loads.
 - A map on a slope is levelled, founded or followed as it asks.
 
+Built (beta), in `clash_gen::place`: `placement_box` and the overlap
+test, `PlacedMap` (a placement resolved: cells, marks, areas and spawn
+requests in world coordinates), windows of a map per tract, `order`,
+the four ways of sitting both when a tract is realised and in the world
+as it is, `apply_map` with its three modes, `place_map` and
+`apply_pending_maps` for tracts that are not loaded
+(`PendingEdit::Map` in the world, decision D-513). Every "Done when"
+above has a test in `crates/clash-gen/tests/place.rs`. Stubbed: portals
+and subgrids are not handed on (the world's types are placeholders);
+conduits, fields, links, device names and the rest stay carried in the
+placed map for the packages that own them; the simulation raises
+`map_applied` and binds the `apply_map` verb (K5); `plan_from_map` is
+WG11's; `aftermath_edit` is an integration test, since test scripts
+have no world to run in yet; an overlapping placement is dropped,
+never moved; a placement does not go round a wrapped edge; levelling
+in the world as it is makes no ramps.
+
+Furnished (stream "furnishing", decisions D-850 to D-854): a map's
+`items` (an item or a `content_table`, with `count` and `chance`) and
+its devices with settings are handed on as spawn requests of the kinds
+`item`, `table` and `device` (`PlacedMap::furnishings`), once, by the
+tract their cell is in, with a seed from the placement and the cell;
+the simulation (`clash_sim::furnish`) makes items lying in their cell,
+keeps those in a container element as its latent contents until it is
+first opened (06 §9.3), and promotes a configured device with its
+settings (16 §4.3). The `content_table` type is built
+(`clash_sim::item::table`); a map's `items` naming nothing is a load
+error at the cell spec. The town is furnished: its houses, terraces,
+shops and offices have kitchens, pantries, wardrobes and chests, and
+every market town has a bakery, a tavern, a market, a guardhouse, a
+workshop and a healer's house (`gen/trades.json`, `maps/trades.json`),
+with the making's stations in them. Tests in
+`crates/clash-gen/tests/place.rs`, `crates/clash-sim/tests/furnish.rs`
+and, against the bundled town at seed 1, `crates/clash-save/tests/furnish.rs`;
+the test script `scenarios/town/furnished.scn`. Stubbed: a map applied
+in play (`apply_map`, a pending map) hands its furnishings on in its
+`MapApplied`, which nothing in the simulation answers yet; a cell takes
+one `items`; device names and links wait for networks (G3, WG11).
+
 ### WG3 — Ground
 
 **Spec** 10 §5 · **Size** M
@@ -114,6 +167,19 @@ Done when
 - Sea fills to `sea_level` as uniform chunks.
 - Scatter respects spacing and density over many seeds.
 
+Built (beta), in `clash_gen::ground`: the `ground` type with its
+parameters, and the steps `strata`, `surface` (with ramps), `liquid`,
+`veins`, `pockets`, `caves` and `scatter` of elements and of maps; the
+rules of 10 §5.2 that keep what is generated standing (decision D-516).
+Every "Done when" above has a test in `crates/clash-gen/tests/ground.rs`.
+Stubbed: `float` is not built and a ground that uses it fails to load;
+`paths` draws nothing until surveys record paths (WG7); `liquid` with
+`to: plan` fills nothing until lakes are planned (WG6, the review
+addition "Lakes"); the surface height is the realm generator's `height`
+parameter, not a realm plan's field (WG6); a ground's parameters are
+plain defaults, and `region.*` is not offered (WG7); density with
+`apart` is capped (10 §13).
+
 ### WG4 — Tract definitions and realisation
 
 **Spec** 10 §6 · **Size** M
@@ -128,6 +194,24 @@ Done when
   shuffled and multi-threaded test as world package W8.
 - Precedence is ground, placements in order, transforms (invariant X5).
 - The budget for a settled tract is benchmarked.
+
+Built (beta), in `clash_gen::tractdef` and `clash_gen::realize`: the
+`tract` type; `GenDefs`, the build stage of maps, grounds and tract
+definitions; the generator `standard` (10 §6.2), which a realm
+definition names and which surveys regions and realises tracts in the
+order of 10 §6.1; placements kept in region records; the realm
+`core:countryside` with a ground, three tract definitions and a lane
+map in `mods/core`; `cargo run -p clash-gen --example tract_ascii`.
+The first two "Done when" items have tests in
+`crates/clash-gen/tests/standard.rs`, with golden pictures of two
+tracts that must also stand. Stubbed: transforms are a function that
+does nothing (WG5); the budget is not benchmarked (WG13); the surveyor
+gives tracts their definitions by an authored layout or a weighted
+choice, with no region kinds, sites or settlements, and writes no
+paths (WG6 to WG8: the seam is `StandardGenerator::tract_def` and
+`placements_of`, decision D-511); a tract definition's placements lie
+inside their tract; `ruin`, `bands` and `glyph` are carried; a
+record's `rot` and `variant` are not used.
 
 ### WG5 — Transforms and ruin
 
@@ -150,7 +234,11 @@ Done when
 **Spec** 10 §9 · **Size** L
 
 Build
-- The `worldgen` type; fields from noise and expressions; `kinds`.
+- The `worldgen` type; fields from noise and expressions; `kinds`. The
+  noise and the description of a noise field are already built, in
+  `clash_gen::noise` (10 §9.1, D-252): this package reads a `FieldSpec`,
+  checks it, gives it the realm's extent in tracts and a domain made from
+  the field's name, and samples it.
 - The realm plan: placing settlements and sites by rule, routes, rivers,
   holdings; stored with the realm.
 - Authored layouts; realms created on demand from chart nodes.
@@ -180,6 +268,30 @@ Done when
 - Surveys are pure (invariant X2).
 - Site counts and spacing hold over many seeds.
 
+Built (beta), in `clash_gen::region` and the `standard` generator
+(decisions D-670 to D-674), ahead of WG6: the `region_kind`,
+`path_kind` and `site` types (the last in the part generation needs);
+regions given kinds by the generator's `regions` until realm plans
+exist; tract definitions in patches by weight; paths across region
+edges at points drawn from the edge's hash, each in two stretches to
+the region's hub; the ground's `paths` step; a region kind's sites by
+count, `apart` and `near` (`road`, `centre`, `edge`); region plans kept
+by the generator, from which realisers take every lot, site and path
+within reach (the seam of D-511); a survey's record with the region's
+kind, placements, path lines and sites; `StandardGenerator::survey_report`
+for what a survey dropped, could not place, or placed too few of. Every
+"Done when" above has a test in `crates/clash-gen/tests/settlements.rs`:
+`edges_agree` is an integration test, since test scripts have no world
+to run in yet. Stubbed: planned paths, rivers and the realm plan's
+kinds and sites (WG6); `near: coast` and `near: river` fail to load;
+crossings, `max_grade` and `current` are carried, not built, so the
+review additions "Path kinds and crossings" (`road_over_water`) and
+"Watercourse current" are not built; a region kind's weights are
+numbers, not expressions over `region.*`, and its `settlements`,
+`weather` and `population` are carried; overlapping placements are
+dropped and reported, never moved; the budget is not benchmarked
+(WG13).
+
 ### WG8 — Settlements
 
 **Spec** 10 §8.4 · **Size** L
@@ -194,6 +306,27 @@ Done when
 - Every building entrance is reachable from every other by walking
   (checked with world package W18's geometry).
 - A settlement spanning two regions has continuous streets.
+
+Built (beta), in `clash_gen::settlement` (decisions D-675 to D-679): the
+`settlement` type; settlements placed by the generator's `settlements`
+until realm plans exist; the `grid` and `organic` patterns with main
+roads; blocks and rows of lots; zones by distance from the centre with
+the tags of the maps that fill their lots; maps chosen to fit each lot
+and turned to front its street; `must_have` sites, one to a tract;
+people for each lot of a zone and each site (the part of WG9 below);
+the bundled `core:town` with a market town across a region's edge, a
+village and farmsteads, five maps and the start `wold_market`; golden
+pictures of a block of the town in `crates/clash-gen/tests/golden/town.txt`
+that must stand, printed by `cargo run -p clash-gen --example
+tract_ascii -- town 1 62 30 0 3 2`. Every "Done when" above has a test
+in `crates/clash-gen/tests/settlements.rs`. Stubbed: walls and gates
+(a settlement with a `wall` fails to load; they wait for WG10's
+assemblies); the patterns `radial`, `linear` and `scatter` fail to
+load; a lot is filled by a map, never by a site chosen by tag; a
+placement's `site` is not set; `groups`, `population` and `home_mark`
+are carried for WG9; streets follow the ground while lots are levelled,
+so a door can stand a storey off its street on rolling ground; the
+budget is not benchmarked (WG13).
 
 ### WG9 — Sites and the simulation seed
 
@@ -211,6 +344,18 @@ Done when
 - Scenario `town_day`: a generated town's notable staff are at work by
   day and at home by night; its streets' anonymous population follows the
   presence table.
+
+Begun with WG8 (decisions D-677, D-678): the `site` type's `map`,
+`roles` (invariant X7 is checked at load, and has a test), `staff`,
+`name`, `tags` and `founded`; a zone's `people` and a site's `staff`
+become spawn requests naming templates in the lots and sites a tract
+realises, which the simulation answers. The bundled market town has
+six more sites with roles and no staff (D-854): `bakery` (`oven`,
+`counter`, `stores`, `bread`), `tavern` (`bar`, `hearth`, `still`,
+`stores`), `guardhouse` (`post`, `desk`, `armoury`), `workshop`
+(`bench`, `tools`), `market` (`centre`, `stall`) and `healer`
+(`shelf`, `medicine`, `bench`, `herbs`), each with `entrance`, for
+the town's life to staff. Everything else of WG9 is to do.
 - Groups own the sites the definitions say they own.
 - After a settling time, routines are out of step and at least one
   incident is known about somewhere.
@@ -283,10 +428,11 @@ Under `scenarios/worldgen/`.
 | `town_day` | WG9 | S7 | People, homes, presence, routines |
 | `tower_of_forty` | WG10 | S2 | Stacks; structure that can fall |
 | `crypt_walkable` | WG10 | S21 | Assemblies |
+| `road_over_water` | WG7 | — | Path kinds and crossings |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -298,3 +444,9 @@ small package of its own.
 | Lakes | WG3, WG6 | 10 §5.1, §9.2 | A planned lake is filled to its own level by the `liquid` step with `to: plan`, in every tract it covers, whichever is realised first. A river reaching it ends there and one leaves from the lowest point of its rim. |
 | Path kinds and crossings | WG7 | 10 §8.5 | Test script `road_over_water`: a road meeting a river is carried on bridge maps from bank to bank; meeting a steep rise it is cut or tunnelled as its crossings say; two neighbouring regions surveyed in either order agree on every crossing. |
 | Placement overlap | WG7 | 10 §4.1 | A survey never writes two placements whose boxes overlap in three dimensions unless the later map is marked `over` (invariant X10). A sewer piece that would pass through a cellar is moved or dropped, and the survey's report says which. |
+| Ruin by kind | WG5 | 10 §6, §10.2; 02 §17.2 | A never-realised tract at total flood devastation is generated from its drowned variant, and at total blast from its scorched one. Lesser devastation applies the kind's transform, scaled. |
+| Watercourse current | WG7 | 10 §8.5; 11 §4.7 | A river's path record carries its `current`, pointing downhill along its line. |
+| Site definitions for founding | WG9 | 10 §11.1 | A site definition flagged `founded` loads without a map (invariant X7 exempts it) and cannot be placed by generation. |
+| Names | WG9 | 10 §11.5 | People, settlements and sites generated from a `names` definition have the same names for the same seed in any order of exploration; `make_name` gives the same result as generation for the same seed. |
+| Order across plans | WG11 | — | WG11 depends on vehicles package V10, which is in a later milestone. WG11 is built when V10 is, not with the rest of this plan. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

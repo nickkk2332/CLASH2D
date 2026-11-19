@@ -1,0 +1,12 @@
+[
+  { "//": "A stretch of lane one tract long. It follows the ground: each cell of paving lies at its own height, and a ramp the ground put where it steps is kept.",
+    "type": "map", "id": "lane_strip", "tags": ["street"],
+    "size": [32, 4],
+    "sit": "follow",
+    "palette": [ { ",": { "floor": "asphalt", "keep": ["block"] } } ],
+    "levels": {
+      "0": [ ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,",
+             ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,",
+             ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,",
+             ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ] } }
+]

@@ -1,0 +1,52 @@
+[
+  { "type": "channel", "id": "legs" },
+  { "type": "channel", "id": "arm" },
+  { "type": "window_kind", "id": "blow" },
+
+  { "//": "What the `ui` mod's walking controls start: they name `step` bare, and this is the only one.",
+    "type": "action", "id": "step", "name": "Step",
+    "uses": { "legs": 1 },
+    "params": { "dir": "string" },
+    "phases": [ { "id": "go", "time": "500 ms" } ] },
+
+  { "//": "An action with a default for every parameter, of every kind a picker asks for. Bound twice: quick, from defaults, and precise, asking for each.",
+    "type": "action", "id": "strike", "name": "Strike",
+    "uses": { "arm": 1 },
+    "params": {
+      "target": { "type": "entity", "default": "self.seen[0] ?? self" },
+      "spot":   { "type": "cell", "default": "$target.at" },
+      "dir":    { "type": "string", "default": "north" },
+      "force":  { "type": "real", "default": 2.5 },
+      "times":  { "type": "int", "default": 3 },
+      "style":  { "type": "string", "default": "low" },
+      "with":   { "type": "item?", "default": "self.items[0]" },
+      "extra":  { "type": "list", "of": "item", "max": 2, "default": "[]" }
+    },
+    "requires": "dist(self, $target) <= 3",
+    "fail_text": "Too far to strike.",
+    "phases": [ { "id": "swing", "time": "300 ms" } ] },
+
+  { "//": "An action with parameters that have no default: `needed` must ask for the thing and the place, and takes the force from its default.",
+    "type": "action", "id": "throw", "name": "Throw",
+    "uses": { "arm": 1 },
+    "params": {
+      "what":  "item",
+      "at":    { "type": "cell", "check": "if dist(self, $at) > 4 then 'A long throw.' else null" },
+      "force": { "type": "real", "default": 1.5 }
+    },
+    "requires": "dist(self, $at) <= 6",
+    "fail_text": "Too far to throw.",
+    "phases": [ { "id": "loose", "time": "200 ms" } ] },
+
+  { "//": "Two reactions to a blow. The dodge has a parameter with a default; the parry needs to be told where.",
+    "type": "action", "id": "dodge", "name": "Dodge",
+    "uses": { "legs": 1 },
+    "reaction_to": ["blow"],
+    "params": { "dir": { "type": "string", "default": "south" } },
+    "phases": [ { "id": "slip", "time": "100 ms" } ] },
+  { "type": "action", "id": "parry", "name": "Parry",
+    "uses": { "arm": 1 },
+    "reaction_to": ["blow"],
+    "params": { "high": "bool" },
+    "phases": [ { "id": "turn", "time": "100 ms" } ] }
+]

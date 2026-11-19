@@ -1,0 +1,18 @@
+[
+  { "type": "material", "id": "glass", "density": 2500 },
+  { "type": "material", "id": "iron", "density": 7800 },
+
+  { "type": "variable", "id": "heat",
+    "scope": "entity", "value": "real", "default": 20,
+    "doc": "How hot it is." },
+
+  { "type": "variable", "id": "sealed",
+    "scope": "cell", "value": "bool", "default": false, "watch": true,
+    "doc": "Set once the vent in a cell has been closed." },
+
+  { "type": "function", "id": "fall_energy",
+    "params": { "height": "real", "mass": { "type": "real", "default": 70 } },
+    "returns": "real",
+    "value": "$mass * 9.81 * $height",
+    "doc": "The energy of a fall, in joules." }
+]

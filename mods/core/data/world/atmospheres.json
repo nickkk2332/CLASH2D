@@ -1,0 +1,9 @@
+[
+  { "type": "atmosphere", "id": "air",
+    "density": 1.225, "pressure": "101.325 kPa", "sound_speed": "343 m/s",
+    "breathable": true },
+
+  { "type": "atmosphere", "id": "thin_air",
+    "density": 0.4, "pressure": "26 kPa", "sound_speed": "300 m/s",
+    "breathable": false }
+]

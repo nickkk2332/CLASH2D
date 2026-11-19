@@ -1,0 +1,9 @@
+{
+  "id": "guardhouse",
+  "name": "Guardhouse",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "Test fixture: the market town begun at the guardhouse door, for the application's tests of picking up and of the armoury.",
+  "authors": ["CLASH2D contributors"],
+  "requires": ["core"]
+}

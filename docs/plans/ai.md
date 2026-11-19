@@ -16,18 +16,18 @@ concern the layered simulation. The two tracks meet at L2.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| I1 | Navigation | L | W18, E10 | todo |
+| I1 | Navigation | L | W18, E10 | beta |
 | I2 | Flow fields and steering | M | I1 | todo |
-| I3 | Minds and goals | L | S5, K5 | todo |
-| I4 | Methods and steps | L | I3, I1, T4 | todo |
-| I5 | Options, threat, positions, reactions | L | I4, C11, A3 | todo |
+| I3 | Minds and goals | L | S5, K5 | beta |
+| I4 | Methods and steps | L | I3, I1, T4 | beta |
+| I5 | Options, threat, positions, reactions | L | I4, C11, A3 | beta (reactions subset) |
 | I6 | Work, hauling, stations | M | I4, G8 | todo |
 | I7 | Collectives, orders, formations | M | I4, I2, S7 | todo |
-| I8 | Warm stepping and bulk exchanges | M | I4, T7, C11 | todo |
+| I8 | Warm stepping and bulk exchanges | M | I4, T7, C11 | beta |
 | I9 | Explaining | S | I5, K10 | todo |
-| I10 | Bundled minds | M | I5, I6, C12 | todo |
-| L1 | Cold records, scheduling, calendars | M | E11, K7 | todo |
-| L2 | Routines, long goals, coming and going | L | L1, I4 | todo |
+| I10 | Bundled minds | M | I5, I6, C12 | beta |
+| L1 | Cold records, scheduling, calendars | M | E11, K7 | beta |
+| L2 | Routines, long goals, coming and going | L | L1, I4 | beta |
 | L3 | Incidents | L | L2, W17 | todo |
 | L4 | Knowledge stores and spreading | M | L1, S8 | todo |
 | L5 | Populations, stocks, shipments, services | M | L1, G4, W21 | todo |
@@ -77,6 +77,15 @@ Done when
   when a collapse blocks it.
 - Budgets of 09 §19 for paths and region rebuilds are benchmarked.
 
+Beta (09 §5.4a): paths are searched cell by cell over belief, with costs
+for doors, creatures seen and remembered hazards and room for wide
+footprints; routes in use are rechecked when elements change; tested
+against brute force on random walls, `wall_falls_reroute` in
+`tests/ai.rs`, a path timed there. Stubbed: profiles beyond the mover's
+own rules, chunk regions and tract graphs, links over portals and
+subgrids, the flier's straight line, `hidden` elements beyond what
+perception already excludes, region rebuild budgets.
+
 ### I2 — Flow fields and steering
 
 **Spec** 09 §5.5, §5.6 · **Size** M
@@ -113,6 +122,14 @@ Done when
   independent of other minds' think order (invariant N8).
 - `commit` prevents flapping between two close goals.
 
+Beta (09 §3.5): `mind` and `goal` with every field listed there, the
+mind context enforced at load, `about` from tracks, memories or a place,
+`commit`, `interrupts`, `noise`, think batches with triggers, stretched
+and staggered intervals; all three "Done when" tested in `tests/ai.rs`.
+Stubbed: `routine` and `tactics` on minds, the hook `goal_scoring`,
+traits adjusting minds (an `adjust` condition stands in), the effects
+`set_goal` and `clear_goal` (verbs for now), queries for `about`.
+
 ### I4 — Methods and steps
 
 **Spec** 09 §4 · **Size** L
@@ -129,6 +146,16 @@ Done when
 - Every act of a character is an action, interaction or speech a player
   could have issued (invariant N2), shown by replaying a character's acts
   as commands and reaching the same state.
+
+Beta (09 §4.1): the `method` type; the steps `go`, `do`, `choose`,
+`wait`, `look`, `say`, `set`, `settle`, `stance`, `keep_near`,
+`keep_from`; failure, fallback methods and goals set aside; the events
+of 09 §17 that are listed as built. `patrol_and_investigate` is the
+test script `scenarios/ai/investigate.scn`, beside the guard and
+townsperson tests of `tests/ai.rs`. Interactions are done by a `do` step of the
+interaction action. Stubbed: the `use` step as a step of its own, the
+`job`, `goal`, `follow` and `run` steps (jobs, queries), paces of `go`,
+minds opening doors in their way.
 
 ### I5 — Options, threat, positions, reactions
 
@@ -149,6 +176,16 @@ Done when
   the weights for them uses those in preference to striking.
 - A character judging a disguised threat by appearance is wrong in the
   expected direction.
+
+Beta, reactions only (09 §6.6): threat read from memories and tracks,
+stances standing in for relations, fleeing by `keep_from`, fighting back
+by `choose` over action tags (the bundled guard strikes with the first
+of combat's attacks tagged `strike` that can start), investigating what was heard and not
+seen, giving up by `settle`; the bundled `townsperson`, `guard` and
+`dog` minds. Stubbed: the `tactics` type, options and their fields,
+`threat`, `standing`, `severity`, `least_effort_that`, `best_reaction`,
+`pick_position` and its helpers, the scoring helpers; none of this
+package's "Done when" is met yet.
 
 ### I6 — Work, hauling, stations
 
@@ -208,6 +245,19 @@ Done when
 - Scenario `six_hundred`: a battle wholly inside the hot radius runs with
   the cap's number hot and the rest warm, within the budgets of 09 §19.
 
+Status `beta` (performance 2; D-890 to D-899; 09 §9.4). Built: warm
+minds stepped in bulk by one universal stepper (route walked with
+`follow_path`, routine and goals at the warm step, no sweeps, only loud
+signals), the moves between levels, the attention cap with its ranking,
+dwell and promotion by involvement, by the party's sight and by a warm
+mind needing to act, the events `entity_promoted` and `entity_demoted`,
+and the town benchmarks. Tested in `crates/clash-sim/tests/levels.rs`,
+with a property test that a character's level never changes what the
+party perceives in view. Stubbed: bulk exchanges (a warm mind that would
+strike is promoted and fights in full), so the matching of bulk and
+resolved results and the scenario `six_hundred` wait; a per-realm
+stepper.
+
 ### I9 — Explaining
 
 **Spec** 09 §16 · **Size** S
@@ -234,6 +284,18 @@ Done when
   a day and through a disturbance, by scripted checks.
 - Removing `core` leaves the engine able to run minds defined otherwise.
 
+Beta (decisions D-784, D-786): in `mods/core/data/ai/`, `routines/` and
+`town/`, a townsperson keeping `townsfolk_day`, a shopkeeper, a watchman,
+a brawler, a house dog, the trades' people of the furnished town, and
+the goals of a day (`keep_routine`, `linger`, `keep_shop`, `stand_post`,
+`sleep`, `answer_call`, `pick_fight`, `follow_owner`,
+`bark_at_stranger`); the settlement's data gives them to its residents
+by role. A day and a disturbance in the town are checked in
+`crates/clash-save/tests/town_life.rs` and the test scripts
+`town/routine_day` and `town/town_disturbance`. Stubbed: tactics (none
+of the minds has any), the worker and the predator, the "twice running
+from different seeds" scripts for each mind.
+
 ## Layered simulation
 
 ### L1 — Cold records, scheduling, calendars
@@ -248,6 +310,13 @@ Done when
 - Ten thousand idle agents schedule nothing beyond their next wake-up
   (invariant N7).
 - Time of day follows the realm's clock rate.
+
+Beta (decisions D-782, D-785), in `clash_sim::agent`: `AgentState`, one
+schedule and one timeline wake-up for every cold resident, the
+`calendar` type and the realm's `time_of_day`, `day`, `day_length`,
+`day_part` and `season`; tested in `crates/clash-sim/tests/agents.rs`.
+Stubbed: population counts, site and region statistics (a town's
+residents are its population).
 
 ### L2 — Routines, long goals, coming and going
 
@@ -266,6 +335,16 @@ Done when
   is still pursuing as an agent, and resumes on loading.
 - A notable individual is in exactly one form at all times
   (invariant N4).
+
+Beta (decisions D-781, D-786, D-787): the `routine` type with places by
+role, chance, jitter, beats and travel time; routine wake-ups; a loaded
+resident's goal from its routine, its doors opened on the way; an
+unloaded one placed by its routine when its tract loads, at its place or
+on the street between; a disturbance overriding the routine through the
+mind's goals. `routine_day` holds in `crates/clash-save/tests/town_life.rs`
+and as a test script. Stubbed: cold methods and long goals,
+`pursuit_continues` (an agent's `aim` is kept and not acted on), folding
+and the regional cap, walking out of view toward an unloaded place.
 
 ### L3 — Incidents
 
@@ -380,10 +459,12 @@ Under `scenarios/ai/`.
 | `power_station_down` | L5 | S7 | Services |
 | `storm_at_sea` | L6 | S22 | Weather into vehicles |
 | `distant_battle` | L7 | S19 | Battles in both forms |
+| `parked` | I2 | — | Berths |
+| `homestead` | L5 | — | Founding a site |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -397,3 +478,8 @@ small package of its own.
 | Formations of vehicles | I7 | 09 §8; 11 §7 | A collective whose members are vehicles holds a formation behind its leader. Completed with vehicles package V7. |
 | Consistent, not clever | I10 | 09 §1 | Each bundled mind's behaviour is stated in a sentence or two in its documentation, and a test script shows it doing that twice running from different seeds, differing only where its rules draw chance. No bundled mind reads anything that singles out the player. |
 | Usual guard in bulk exchanges | I8 | 09 §9.1 | Bulk previews include the defences each side's representative members have ready. A shielded line loses fewer to a volley than an unshielded one of the same number. |
+| Holdings | L5 | 09 §13.4; 16 §5.6 | A site's stock of an account resource changes at its stated rate while unloaded; a standing payment from the site to its holder moves that share; changing the holder redirects it. Completed with devices packages G13 and G14. |
+| Region temperature and cover | L6 | 09 §14.1 | Temperature equals the mean plus the seasonal, daily and state terms at any tick, and the time it will cross a threshold is computed, not found by stepping. Snow laid over a day while a tract was unloaded is on its ground when it loads, and is gone after a thaw. |
+| Kinds of devastation; reference disasters | L7 | 09 §15; 02 §17.2 | Cold rules receive the kind. The reference earthquake, flood, wildfire, eruption, storm and falling star each run live and abstractly, and pass `incident compare` (14 §11) on casualties and devastation. |
+| Founding a site | L5 | 09 §13.5 | Test script `homestead`: a site founded over a hand-built camp has a job board its members use, is chosen by an incident that matches its tags, and after a day unloaded shows the stock its machines made, less what a shipment took. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

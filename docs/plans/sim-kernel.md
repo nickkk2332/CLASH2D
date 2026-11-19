@@ -25,36 +25,36 @@ start while the world model is being built.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| P1 | Diagnostics | M | F4 | todo |
-| P2 | Complete merge semantics | M | F4 | todo |
-| P3 | Profiles and running without mods | S | F4 | todo |
-| P4 | Typed loading and validation stages | M | P2 | todo |
-| P5 | Schemas, reference, scaffolding | M | P1, P4 | todo |
-| P6 | Settings | S | K5 | todo |
+| P1 | Diagnostics | M | F4 | done |
+| P2 | Complete merge semantics | M | F4 | done |
+| P3 | Profiles and running without mods | S | F4 | beta |
+| P4 | Typed loading and validation stages | M | P2 | beta |
+| P5 | Schemas, reference, scaffolding | M | P1, P4 | done |
+| P6 | Settings | S | K5 | beta |
 | P7 | Migration and obsoletion | M | P4, W10 | todo |
 | P8 | Hot reload | M | K7, P7 | todo |
-| X1 | Expression parser | M | F2 | todo |
-| X2 | Registry, contexts, type checking | L | X1, F4 | todo |
-| X3 | Bytecode and evaluation | M | X2 | todo |
-| X4 | Expression fields, functions, variables | M | X3, P4 | todo |
-| K1 | Simulation skeleton and kernel entities | M | W7, F3 | todo |
-| K2 | Advance, commands, input log | M | K1, W9 | todo |
-| K3 | Events and hooks | M | K2, X2 | todo |
-| K4 | Subjects, properties, variable storage | L | K1, X3 | todo |
-| K5 | Rule runtime | L | K3, K4, X4 | todo |
-| K6 | Queries and value sources | M | K5 | todo |
-| K7 | Timers, continuations, simulation saves | L | K5, W10 | todo |
-| K8 | World verbs | M | K5 | todo |
-| K9 | Messages and choices | S | K5 | todo |
-| K10 | Tracing, explain, profile, console | M | K5, W11 | todo |
-| T1 | Clock assignment | M | K1 | todo |
-| T2 | Action definitions | M | X4 | todo |
-| T3 | Action runtime | L | T2, K5 | todo |
-| T4 | Control, plans, free decisions | M | T3 | todo |
-| T5 | Windows and reactions | M | T4, T1 | todo |
-| T6 | Joint actions | M | T5 | todo |
-| T7 | Unloading and lower detail | M | T3, K7 | todo |
-| T8 | Benchmarks and budget gate | S | X3, then recurring | todo |
+| X1 | Expression parser | M | F2 | done |
+| X2 | Registry, contexts, type checking | L | X1, F4 | done |
+| X3 | Bytecode and evaluation | M | X2 | beta |
+| X4 | Expression fields, functions, variables | M | X3, P4 | beta |
+| K1 | Simulation skeleton and kernel entities | M | W7, F3 | done |
+| K2 | Advance, commands, input log | M | K1, W9 | beta |
+| K3 | Events and hooks | M | K2, X2 | beta |
+| K4 | Subjects, properties, variable storage | L | K1, X3 | beta |
+| K5 | Rule runtime | L | K3, K4, X4 | beta |
+| K6 | Queries and value sources | M | K5 | beta |
+| K7 | Timers, continuations, simulation saves | L | K5, W10 | done |
+| K8 | World verbs | M | K5 | done |
+| K9 | Messages and choices | S | K5 | beta |
+| K10 | Tracing, explain, profile, console | M | K5, W11 | beta |
+| T1 | Clock assignment | M | K1 | beta |
+| T2 | Action definitions | M | X4 | beta |
+| T3 | Action runtime | L | T2, K5 | beta |
+| T4 | Control, plans, free decisions | M | T3 | beta |
+| T5 | Windows and reactions | M | T4, T1 | beta |
+| T6 | Joint actions | M | T5 | beta |
+| T7 | Unloading and lower detail | M | T3, K7 | beta |
+| T8 | Benchmarks and budget gate | S | X3, then recurring | beta |
 
 ## Order and parallelism
 
@@ -103,6 +103,13 @@ Done when
 - Every code has an explanation, and a test fails if one is added without.
 - JSON output round-trips.
 
+As built (decision D-267). Built with F4, so there was no older error form
+to convert. A code cannot be declared without a title and an explanation:
+they are arguments of the macro that declares it, and a test checks that
+none is empty. A crate that adds a stage keeps a table of its own;
+`clash-tools explain` reads every table. The `06` group of codes is left
+for the expression packages.
+
 ### P2 — Complete merge semantics
 
 **Spec** 04 §4.3, §5, §6 · **Size** M
@@ -122,6 +129,11 @@ Done when
   and line.
 - Results are independent of file system enumeration order.
 
+As built (decisions D-262, D-264). Every value of a finished tree keeps
+the span it was last written at, which is all `show` needs; a value
+changed by `scale` or `add` is attributed to the patch that changed it.
+The disputed-field warning of the review additions is built here.
+
 ### P3 — Profiles and running without mods
 
 **Spec** 04 §3.3–3.5, §4.4, §12.3 · **Size** S
@@ -135,6 +147,16 @@ Done when
 - A dependency cycle names the mods in it.
 - Two orderings of the same profile list give the specified, different,
   patch order.
+
+As built (decisions D-264, D-265). Beta: the three items above are built
+and tested, with the engine's own definitions (`engine:none`) and the
+placeholders of lenient loading. Stubbed: the frame test of the "Total
+conversions" review addition, which needs the scene layer; what is tested
+here is that a profile listing none of the bundled mods loads only its own
+and carries its boot screen. Placeholders for ids that a save names and no
+mod defines (04 §12.3) come with package P7. A profile's `boot_screen`,
+`settings`, `screens` and `preferences` are kept as written for the crates
+that own screens and settings.
 
 ### P4 — Typed loading and validation stages
 
@@ -159,6 +181,17 @@ Done when
   in, with the feature named, and accepted with a warning from one that has.
 - A test fails if any bundled mod names an experimental feature.
 
+As built (decisions D-260, D-261, D-263, D-266). Beta: every item above is
+built and tested, with the safety limits of the review additions. The
+fixture verb is a rule's effect that the fixture type reports through
+`FinishCx::use_experimental`, which is the call a real verb will make; a
+whole type (`Def::EXPERIMENTAL`) and a field (`Gated`) can be marked too.
+Stubbed: `Text` holds its string and where it was written, and its
+templates are compiled by X4. An inline definition given an `id` of its
+own can be referred to but not yet patched from another mod. The list of
+experimental features is on `Defs` for the save format to record. A
+feature named in `mod.json` that nothing registers is not reported.
+
 ### P5 — Schemas, reference, scaffolding
 
 **Spec** 04 §13 · **Size** M
@@ -176,6 +209,15 @@ Done when
 - A test fails if a registered item has no documentation.
 - A scaffolded mod lints clean.
 
+Done (D-800 to D-807), in `crates/clash-tools`: `docs` writes the
+reference from the registries, committed in `docs/reference/`, with a
+test that fails on anything registered without documentation and one that
+fails while a committed page is out of date; `schema` (the tests validate
+the bundled mods and reject the loader's broken fixtures with a validator
+of the subset of JSON Schema the schemas use, D-803); `init-mod` and
+`new`. Beside them, `docs/modding-guide.md`, run by a test that makes its
+mod, writes its files and runs its commands (D-807).
+
 ### P6 — Settings
 
 **Spec** 04 §10 · **Size** S
@@ -188,6 +230,12 @@ Done when
 - A setting changed by command is saved, replayed from the input log, and
   visible to rules.
 - A value outside a setting's range is refused.
+
+Beta (built with scenarios, decision D-753): the `setting` type, the
+`Setting` command with `setting.locked` and `setting.bad_value`,
+`setting_changed`; tested in `crates/clash-sim/tests/scenario.rs`. Not
+built: the options screens listing settings, ranges for engine
+settings.
 
 ### P7 — Migration and obsoletion
 
@@ -236,6 +284,11 @@ Done when
   test).
 - A syntax error inside a JSON string reports the right column of the file.
 
+Built: `clash-expr` reports a span of bytes inside the source string and
+offers `offset_in_json_string` to carry it into a file; turning that into
+a file, line and column in a diagnostic is the data layer's (P1). Inline
+style tags (12 §4.3) pass through the template parser as text.
+
 ### X2 — Registry, contexts, type checking
 
 **Spec** 05 §3, §5.3, §7.3, §14 steps 2–3 · **Size** L
@@ -253,6 +306,15 @@ Done when
 - A random function in a pure context is rejected.
 - `x == 'glas'` against a material is a load error suggesting `glass`.
 
+Built with it: the mind context of 05 §7.3 (decision D-273), declared
+variables in the registry with the undeclared-variable warning that X4
+switches by `strict_vars`, places for `set` and `add` (decision D-275),
+the map type of the review addition, and a test host under
+`clash_expr::testing`. Left for others: the registry holds what makes a
+property or function stale, and the check that a reactive expression uses
+only such entries is abilities package A1; the space, time and data
+functions of 05 §4.7 are registered by the simulation (K4).
+
 ### X3 — Bytecode and evaluation
 
 **Spec** 05 §4.3–4.7, §14 steps 4–5 · **Size** M
@@ -268,6 +330,13 @@ Done when
   expressions (property test).
 - Every row of 05 §4.4 is tested.
 - Benchmarks exist for the first row of 05 §19.
+
+Beta: everything above is built except the benchmark. In its place the
+ignored test `time_per_evaluation` in `crates/clash-expr/tests/machine.rs`
+prints the time per evaluation, and the figures are written into 05 §19;
+the criterion benchmark and its gate are T8. The reader's text helpers of
+05 §4.6 and `exists` are registered with their signatures and answered by
+the host, so they do nothing until the simulation supplies them (K9, K4).
 
 ### X4 — Expression fields, functions, variables
 
@@ -286,6 +355,24 @@ Done when
 - Functions call functions; recursion past the depth limit is an error.
 - A random function cannot be used where purity is required.
 
+As built (decisions D-330 to D-336), in `clash_data::expr`. Beta: every
+item above is built and tested in `crates/clash-data/tests/expr.rs`, with
+the map variables of the review addition, the mind context, the
+conversion of the compiler's diagnostics to group `06` and of run-time
+warnings to their definition and JSON path. A definition type states the
+scope of each field in `Def::compile`; the registry is given to the
+loader with `Loader::expr_registry`; a crate adds what its own
+definitions declare with `DefTypes::add_registry_step`. Stubbed: queries,
+so a value source over a query, `{ "exists": query }` and `{ "run": … }`
+are read, kept and give null with a run-time warning (K6); `Effects`
+fields (K5); the reactive-context check (abilities A1). Which queries a
+character may make is not decided: a function whose value is a query
+counts as not safe for belief. The test script `who_did_it` and the lint
+warning for another's `.name` in a message are K9's. `function` and
+`variable` have no placeholder, so a lenient load stops at a broken one.
+The application and the tools must call `clash_data::expr::register_defs`
+beside the other crates' functions of that name.
+
 ## Kernel
 
 ### K1 — Simulation skeleton and kernel entities
@@ -303,6 +390,18 @@ Done when
   location.
 - Nothing outside `relocate` can change `place`.
 
+As built (decisions D-360 to D-363, D-366, D-367, D-369). Everything above,
+with entity creation and removal, the `Reason` type the whole simulation
+uses, saving and loading of the simulation's own state, and `reindex`,
+which rebuilds the world's occupant index after a load. The world, the
+timeline and the entity table are read through `Sim::truth()`. Action
+table, window table, rule state, channel set and plan are empty typed
+placeholders. Tests are in `crates/clash-sim/tests/kernel.rs`; that
+nothing outside `relocate` can change `place` is a privacy argument, with
+two `compile_fail` examples in `clash_sim::entity`. Not built: portal
+events, which wait for the world to have portals (W19). There is no test
+script under `scenarios/` until the runner exists (W11).
+
 ### K2 — Advance, commands, input log
 
 **Spec** 03 §4.3, §4.4, §5.2 · **Size** M
@@ -318,6 +417,34 @@ Done when
   an unchanged hash.
 - Replaying an input log reproduces the hash (invariant T6).
 - `Work(n)` returns `Yielded` and resumes exactly.
+
+As built (decisions D-364, D-365). Beta: the loop with its three limits,
+handlers by wake-up domain, the pump, commands with reasons, the input
+log, replay and the decision queue are built and tested
+(`crates/clash-sim/tests/advance.rs`), with the review addition "What
+presentation is given" except phase events, which are T3's. Replay, the
+exact resumption of `Work(n)` and saving in the middle of a session are
+property tests over random sessions. Stubbed: no world scenario exists
+to run under `advance` until the runner does (W11); a world wake-up is
+shown running under the loop by a test's own handler, and the `World`
+domain's default handler does nothing until the world has a process
+(W13). `reconcile_activity` at the safe point does nothing until tickets
+(W9) are joined. The commands are the debug commands; the rest arrive
+with their packages. Past 100,000 wake-ups at one tick `advance` reports
+and yields rather than putting the rest off to the next tick. The log
+does not carry state hashes at intervals.
+
+Joined since (decisions D-460 to D-462), tested in
+`crates/clash-sim/tests/handoffs.rs`: the `World` domain's handler calls
+the world's `handle_wake`, so a tower knocked out by debug commands comes
+down under `advance`, and a save in the middle with the world's process
+state in the blob ends in the same hash; the safe point reconciles
+tickets, shelves and restores the entities of tracts that unload and
+load, and reports spawn requests; `Sim::start_session` and the debug
+command of that name start a session at a place that is not loaded yet.
+Still stubbed: world scenarios as test scripts (W11); timers of a
+shelved entity (T7); the cosmos has no store of its own, so a test of
+saving copies it (W10).
 
 ### K3 — Events and hooks
 
@@ -336,6 +463,16 @@ Done when
 - Scenario `rule_cascade_limit`: a self-raising event is cut off, reported
   with a trace, and the simulation continues.
 
+As built (decision D-368). Beta: everything in the list is built and
+tested (`crates/clash-sim/tests/events.rs`), with handlers as Rust
+closures registered through `Sim::on` and `Sim::on_subject`, which the
+rule runtime (K5) will use for rules. Stubbed: `rule_cascade_limit` is a
+test of that name, not yet a test script, until the runner exists. Event
+types are kept by the simulation (`Sim::event_types`); K4 enters them in
+the expression registry.
+A field's value is null, a plain value or a subject. `clash-tools` must
+call `clash_sim::register_defs` for the linter to know the `event` type.
+
 ### K4 — Subjects, properties, variable storage
 
 **Spec** 05 §5, §6 · **Size** L
@@ -351,6 +488,28 @@ Done when
 - Property chains across kinds work (`self.loc.tract.devastation`).
 - Setters go through the engine's mutation paths (shown by events emitted).
 - A watched variable raises `var_changed` with old and new values.
+
+As built (decisions D-463 to D-469). Beta: the kinds `entity`, `loc`,
+`element`, `area`, `site`, `tract`, `realm` and `global` with their
+handles; `clash_sim::engine_registry()` and the loader's registry step;
+about a hundred properties and nine functions, with `exists`, each
+documented, tested in
+`crates/clash-sim/tests/subjects.rs` and stated in 05 §5.3 and §17,
+02 §23, 03 §13 and 06 §13; eight settable properties, each through the
+engine's own function; the host (`Sim::host`, `Sim::with_random`); the
+write side for the rule runtime (`Sim::assign`, `Sim::set_var`,
+`Sim::set_property`); variables on every scope the kernel serves, with
+declared defaults, types and `watch`; belief marks; the kernel's, the
+world's and mods' events as event types of the expression registry.
+`clash-tools lint` loads with the real registry, and `mods/core` holds a
+variable and three functions that use real properties. Stubbed, each
+listed as a gap in its document: a field's value, ambient temperature,
+drift and decals (02 §23); the queries over actions, channels, plans and
+windows (03 §13); properties of a definition reached through an id, and
+the scopes `region`, `subgrid`, `action`, `scenario` and `legacy`
+(05 §17); `templates` and names taken from definitions (06 §13); the
+reader's text helpers, which answer in plain forms (K9). No test script,
+until expressions can be asserted from one (K10), and no benchmark.
 
 ### K5 — Rule runtime
 
@@ -372,6 +531,35 @@ Done when
 - Each limit, when exceeded, reports and continues.
 - Scenario `rule_alarm`.
 
+As built (decisions D-470 to D-479), in `clash_sim::rule`. Beta: every
+item above is built and tested in `crates/clash-sim/tests/rules.rs`, with
+fixtures under `crates/clash-sim/tests/fixtures/rule/`, against a host
+trait, `RuleHost`, and a fake host, as the console was. Built: the `eoc`,
+`rule_group` and `reason` definition types; the `Effects` field type,
+which action definitions now use; compiled effect trees for every effect
+of 05 §10.2, §10.3 and §10.5, `queue` among them; verbs checked against
+their `VerbSpec`; rules with parameters as verbs; the interpreter with an
+explicit stack and the limits of 05 §13.2; `RuleState` (attachments, run
+records, switched groups) with save and hash; `RuleSet::deliver`, which
+runs what answers an event in the order of 05 §8.3. The review additions
+"Returning from rules", "Rule groups" and the attached half of "Rules at
+lower detail" are built; the bodies of the test scripts `rule_alarm` and
+`winter_rules` are tests of those names. The binding to `Sim` is built
+(decision D-540): the simulation is the rule host, one bus handler per
+event type a rule listens for, verbs by registry id from
+`engine_verbs()`, faults as thinned `fault` events, the save layout at
+version 5 with the action table and the stores of items; `crates/clash-sim/tests/live_rules.rs` runs `rule_alarm` and
+`winter_rules` against the real simulation from fixture mods, across a
+save and a replay, and the kernel's verbs (D-541). Waits: rules carried
+by definitions (`rules_of`) until a definition type of the simulation
+carries `rules`; timers and continuations, `after`,
+`every`, `cancel_timer` and a rule's own `every`, which are read, kept
+and report when they run (K7); queries, so `for_each` over one reports
+and a value source over one gives null (K6); the world's verbs (K8);
+`message` and `ask` (K9); tracing (K10). The two test scripts become
+`.scn` files once the simulation implements the console's host. No
+benchmark.
+
 ### K6 — Queries and value sources
 
 **Spec** 05 §7.4, §11 · **Size** M
@@ -384,6 +572,27 @@ Done when
 - Query results match a brute-force reference and have the specified order
   (property test).
 - An over-large constant query is a load error.
+
+Beta (decisions D-680 to D-683). Built: queries compiled where they are
+written by `clash_data::compile_query`, with `where`, `sort`, `limit`,
+`it`, and the value sources `count`, `collect`, `first`, `pick` (with
+`weight`), `sum`, `min`, `max` (with `of`), `{ "exists": query }` and
+`for_each` over a query; the kinds `list` and `defs`, and the
+simulation's `entities`, `cells`, `contents`, `areas` and `sites`
+(`clash_sim::query`), registered as `QuerySpec`s and answered through
+`Host::query`; the extent cap `rules.max_query_cells` at load and when
+running. `crates/clash-sim/tests/queries.rs` covers every kind and
+source, the load errors and the cap, and holds `entities` and `cells`
+to a brute-force reference (property tests). A `run` source taken by a
+`let` was built with K5 ("Returning from rules"). Stubbed: the shapes
+`line` and `cone`, the kinds `actions`, `windows` and `parts`; no query
+is answered from belief, so a mind context may write only `list` and
+`defs`. Perception landed on the build branch while this was built:
+answering `entities` from the observer's tracks (`perception::Beliefs`)
+is the next step, through the seam `QuerySpec::safe` and
+`QueryCall::observer` (D-683), with the filters that read truth of
+others (`tag`, `def`, `has`, `kind`, `plane`) refused in a mind
+context. No benchmark.
 
 ### K7 — Timers, continuations, simulation saves
 
@@ -401,6 +610,28 @@ Done when
 - `Pause` and `Elapse` behave as 03 §9 specifies across an unload.
 - A thousand owners of one recurring rule do not fire on the same tick.
 
+Done. The saving part: `clash-save` saves the whole game (the world
+through the W10 store and the simulation's own blob, with metadata) into
+one file and loads it back, invisibly (01 §11.2, D-580), and the
+scenario runner's save-and-load mode runs through it for every script.
+Timers (decisions D-684 to D-686): `after`, `every`, `cancel_timer` and
+`owner.timer(name)`, kept as `TimerRecord`s with continuations in the
+rule state (save layout 9), on the owner's clock, wake-ups of the `Rule`
+domain; a rule's own `every`, global ones from the start and attached
+ones from `attach_rule`, staggered by a positional hash of owner and
+rule; `while_unloaded` (`pause`, `elapse`, `all`, `skip`, `once`) as an
+entity leaves and re-enters the world. `crates/clash-sim/tests/timers.rs`
+holds the body of `timer_survives_save`, `Pause` and `Elapse` across
+leaving the world, a slowed area, and the thousand owners; the test
+script `scenarios/rules/timer_survives_save.scn` runs in the four modes.
+Rules carried by definitions start no `every` until a definition type of
+the simulation carries `rules`. No benchmark: the budget "save with 50
+dirty tracts" (02 §25) is measured by W23.
+The game binary saves and loads through it (12 §3.6, decision
+D-703): the pause menu's Save, the title's Continue and Load, warnings
+for a save made with other mods, the saving policy a start names;
+`crates/clash-app/tests/saving.rs`.
+
 ### K8 — World verbs
 
 **Spec** 02 §23 · **Size** M
@@ -412,6 +643,14 @@ Build
 Done when
 - Each bound verb has a test showing the world event it produces.
 - No verb mutates the world except through `WorldCtx`.
+
+As built (decision D-620), in `clash_sim::world_verbs`: seventeen verbs,
+each a call of one world function inside `Sim::world` with the cause it
+is handed, listed with their arguments in 02 §23 beside those not bound
+and why. `crates/clash-sim/tests/world_verbs.rs` calls each as the rule
+runtime does and finds its world event carrying the verb's cause; the
+refusals carry reasons and change nothing. The world gained
+`WorldEdit::set_state_bits` and `WorldEdit::destroy`.
 
 ### K9 — Messages and choices
 
@@ -425,6 +664,21 @@ Done when
   answered; the chosen option's effects run with the original subjects.
 - A choice offered to another entity takes the first available option.
 
+As built (decision D-542). Beta: both items are built and tested in
+`crates/clash-sim/tests/messages.rs` with the fixture mod `talk` under
+`crates/clash-sim/tests/fixtures/act/mods/`: `message` and `ask` are
+effects of the rule compiler, a kept choice is plain rule state that
+survives a save and a replay, `Choose` answers it, and anyone not
+directly controlled takes the first available option at once. Of the
+review addition "Text for a reader", the K9 half is built as the test
+`who_did_it`, with what a reader knows supplied by a fixture lens
+(`Sim::set_reader_lens`) and the grammar helpers in `clash_sim::reader`
+with unit tests. Stubbed: the `language` definition type (the English
+forms are built in), the lint warning for reading another's `.name` in
+a message (no such property is registered yet), and the `.scn` form of
+`who_did_it`, which waits for the simulation to implement the console's
+host.
+
 ### K10 — Tracing, explain, profile, console
 
 **Spec** 05 §15 · **Size** M
@@ -437,6 +691,14 @@ Done when
 - A trace of `rule_alarm` shows trigger, bindings, condition values,
   effects with arguments, and raised events.
 - With tracing off, the rule benchmarks are unchanged.
+
+Beta: the console part is built. The console's host evaluates expressions
+against the simulation with `self` bound (the subject given, else the
+active character), and test scripts assert expressions (`assert`,
+`until`). Effect lists (`do`, `run`, verbs) reach one function of the host,
+`GameHost::run_verb`, which carries them out through the rule runtime
+(D-687); the test scripts under `scenarios/rules/` use it. Not built:
+traces, `explain`, `profile`; both "Done when" items wait for them.
 
 ## Time and actions
 
@@ -455,6 +717,14 @@ Done when
 - An anchored entity is unaffected by the area it stands in.
 - Overlapping areas resolve by priority, then id.
 
+As built (decision D-363). Beta: clock assignment, rehoming and the three
+operations are built and tested (`crates/clash-sim/tests/clocks.rs`).
+Stubbed: `set_time_rate`, `anchor_clock` and `set_clock_rate` are kernel
+functions; their effects are bound by the rule runtime (K5). Since K4,
+an entity's `time_rate` and an area's and a realm's `clock_rate` are
+settable properties that call the first and the last. Bodies in flight
+and world processes are rehomed by the world, when it has them.
+
 ### T2 — Action definitions
 
 **Spec** 03 §6.1–6.4, §7.1, §8 · **Size** M
@@ -469,6 +739,25 @@ Done when
 - The examples in 03 §6 and §8 load, with the names they borrow from later
   documents (`strike`, `auto_part`, `perceives`, `attr`, `takedown_result`)
   stubbed in the test fixture.
+
+As built (decisions D-400 to D-407), in `clash_sim::action`. Beta: both
+items above are built and tested in `crates/clash-sim/tests/action.rs`,
+with fixtures under `crates/clash-sim/tests/fixtures/action/`. A loaded
+action is read without a lookup by name: phases by index, channels as a
+`ChannelSet`, locals in one fixed order of slots that every expression was
+compiled against. The reasons for the refusals of 03 §6 to §8 are
+constants in `clash_sim::action::reason`. `clash_sim::action::register_defs`
+registers the three types and is called by `clash-tools`. Effect lists
+are `Effects` fields of the rule runtime (K5), compiled in
+`ActionDef::effect_scope` with the action's locals. Of the review
+additions, the definition halves are built: `footing`
+with its reason, and list parameters with their bounds, element type and
+indexing. The run-time halves are T3's: refusing an actor with nothing
+under it, holding a list to its bounds when a command gives it, and
+keeping it across a save. The events, hooks, effects and queries of 03 §13
+are registered by the packages that raise and run them. The fields other
+documents add to an action (`attacks`, `defence`, `cutscene`, the `choice`
+parameter type) are not accepted yet.
 
 ### T3 — Action runtime
 
@@ -492,6 +781,30 @@ Done when
   relocates beyond a pressure wave's front before it arrives (needs W15).
 - A zero-duration phase loop ends with an error after the transition limit.
 
+As built (decisions D-543, D-545). Beta: tested in
+`crates/clash-sim/tests/acting.rs` with the fixture mod `acts` under
+`crates/clash-sim/tests/fixtures/act/mods/`: `punch_timing` for five
+tempos and clock rates, `one_arm`, `time_stop_windup`, the transition
+limit, held phases with ticks, `until` and release, cancel rules and a
+follow-up breaking off a recovery, every refusal with its reason and no
+change of state, `footing`, `requires_at_start`, both hooks, list
+parameters across a save (the review additions "Footing" and "List
+parameters"), abandoning on leaving the world, an `ask` in an action's
+list answered after a save, every action verb, and a save and a replay
+in the middle of actions. Stubbed: `speedster_outruns_blast` (needs
+W15); slots are counted per channel, so a `part` parameter does not name
+a slot; a joint action claims only its first role's slots and offers no
+roles (T6); a phase's window is raised as `window_opened` and offered to
+nobody (T5); the queries of 03 §13 are not registered as properties;
+the test scripts are tests until the simulation implements the
+console's host; no benchmark. Joined to life (decisions D-650,
+D-651): every start is checked against `Sim::life_lets_act`; the
+runtime answers `slots_lost` with `check_slots`, `entity_died` by
+abandoning and `entity_unconscious` by interrupting, asking no one, and
+`entity_woke` by asking again; the `Timer` domain hands life its timers
+before anyone else's. Tested in `crates/clash-sim/tests/acting_alive.rs`;
+the movement tests drive `core:step` and `core:go_to` through `Act`.
+
 ### T4 — Control, plans, free decisions
 
 **Spec** 03 §5 · **Size** M
@@ -506,6 +819,19 @@ Done when
 - A plan step whose `requires` fails clears the plan and requests a
   decision with the reason.
 - A delegated entity accepts orders and is never asked.
+
+As built (decisions D-544, D-545). Beta: tested in
+`crates/clash-sim/tests/acting.rs`: a character starts a two-phase action
+from one command and is asked again exactly when it ends, while a
+second, on a clock twice as fast and paced by a rule standing in for the
+AI, interleaves; `party_order`; a plan step whose `requires` fails clears
+the plan and asks with the reason; a delegated character takes orders,
+is never asked and idles while something listens for
+`decision_needed`; `Wait`; commands to an entity nobody controls are
+refused. A stopped mind is never asked, and `Act` with `enqueue` is
+refused for it as `start` is (decision D-650). Stubbed: the AI that
+answers `decision_needed` (09); plans are not handed to the cold
+simulation (T7).
 
 ### T5 — Windows and reactions
 
@@ -523,6 +849,26 @@ Done when
   available.
 - With no rule listening, nothing happens when a window is noticed.
 
+As built (decisions D-710, D-711, D-715, D-716). Beta: windows in the
+simulation's `WindowTable` (save layout 12), candidates in the order of
+03 §7.1, noticing on the candidate's clock, closing at the deadline phase
+or with the action, `react`, `ask_reaction`, `open_window`,
+`close_window`, the `Reaction` decision with each option's timing and
+refusal, `React` and `Pass`, cancelling for a reaction, the `window`
+kind and its functions; the bundled rule that asks the player. Tested in
+`crates/clash-sim/tests/reactions.rs`: `too_fast_to_notice`, a candidate
+committed to something has no reaction available and one in a phase that
+allows cancelling is cancelled to make room, with no rule listening
+nothing happens, a player is asked and the reaction chosen runs, or
+passes, who is offered a window (the review row "Who is offered a
+window", with the relation supplied by the test), a save and a load
+while a window is open, and replay. Stubbed: the `intervenes` relation
+is `Sim::set_intervenes` until S7; the test script `bodyguard` is a Rust
+test (the relation cannot be supplied from a script); minds answer
+windows by the ordered `reactions` of their definition (decision D-716),
+and the AI's `best_reaction` (09 §6.3) is not built; `too_fast_to_notice`
+is a Rust test.
+
 ### T6 — Joint actions
 
 **Spec** 03 §8 · **Size** M
@@ -535,6 +881,18 @@ Done when
   action's duration and released together.
 - Interrupting either participant ends the action for both.
 - A non-forced role produces a decision or a rule query before entry.
+
+Beta (decision D-816), built for takedowns (C8): every role claims slots
+on its own participant, a forced participant's own actions holding them
+are interrupted, the participant is locked in until the action ends and
+is then free; interrupting the actor, a slot disabled under any
+participant or any leaving the world ends it for all; joined
+participants are saved and hashed. Tested in
+`crates/clash-sim/tests/grips.rs` (both locked in and released
+together, interrupting ends it for both, save, load and replay); the
+script `takedown` covers `takedown_lock`. Stubbed: roles that are not
+forced are refused (`action.role_not_offered`): `RoleOffered`,
+`accept_role` and `decline_role` are not built.
 
 ### T7 — Unloading and lower detail
 
@@ -551,6 +909,15 @@ Done when
   before the action starts.
 - A long `low_attention` action lowers and restores tickets.
 
+Status `beta` (performance 2; D-890, D-892). Built: the warm stepper
+(one, on universal time, in the `Stepper` domain, handing the AI layer
+each warm character), warm entities finishing their running actions and
+starting none, and automatic promotion: a warm entity named by an action
+that starts (actor, parameter, participant) is promoted before it
+claims anything (`tests/levels.rs`). Stubbed: `low_attention`; abandoning
+actions and storing timers on unload stay as K4 left them (invariant T9
+holds by cancelling); a stepper per realm.
+
 ### T8 — Benchmarks and budget gate
 
 **Spec** 03 §15, 04 §18, 05 §19 · **Size** S, recurring
@@ -559,6 +926,13 @@ Build
 - A benchmark for each row of those tables as packages land; thresholds in
   the gate introduced by W23; measured figures written back into the
   documents.
+
+Status `beta` (D-730). Built: the benchmark of 05 §19's first row, a
+condition of about ten operations over a person and locals evaluated
+through the runner against the simulation, in `budgets.toml`. Stubbed:
+the other rows of 05 §19 (the ignored timing tests of
+`crates/clash-sim/tests/rules.rs` still print them) and every row of
+03 §15 and 04 §18.
 
 ## Scenario catalogue
 
@@ -577,10 +951,13 @@ Under `scenarios/kernel/`, run in all modes of the scenario runner.
 | `too_fast_to_notice` | T5 | S14, S19 | Notice latency; the gap is real |
 | `takedown_lock` | T6 | S6 | Joint action |
 | `reload_midfight` | P8 | S12 | Hot reload under load |
+| `winter_rules` | K5 | — | Rule groups |
+| `bodyguard` | T5 | — | Who is offered a window |
+| `who_did_it` | K9, X4 | — | Text for a reader |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -593,3 +970,12 @@ small package of its own.
 | Returning from rules | K5, K6 | 05 §9.5 | A rule's `return` value is taken by a `run` value source in an effect list. A rule is still refused in an expression, with a diagnostic. |
 | Rule groups | K5 | 05 §9.6 | Test script `winter_rules`: rules in a group do not run while it is off; a setting that its `enabled` reads turns it on; `set_rule_group` switches it from a rule; the state survives save and load. |
 | Who is offered a window | T5 | 03 §7.1; 15 §9.1 | Test script `bodyguard`: a blow aimed at one character opens a window for another who holds an `intervenes` relation toward them and is within `reach`, and a reaction flagged `on_behalf` is offered. A holder beyond reach is offered none. A directly controlled character within reach is offered one. Until first-playable package S7 exists the relation is supplied by a test fixture. |
+| Footing | T2 | 03 §6 | An action whose `footing` is true is refused, with a reason, for an actor with nothing under it. One without it runs. |
+| Text for a reader | K9, X4 | 05 §4.6 | Test script `who_did_it`: one event's log line reads "You…" to the one who did it, names a known person by name to a second reader, and describes a stranger by their features to a third. The grammar helpers have unit tests against the bundled `language`. Reading another's `.name` in a message is a lint warning. Until first-playable packages S5 and S6 exist, what a reader knows is supplied by a test fixture. |
+| List parameters | T2 | 03 §6.3 | A parameter of type `list` accepts between its least and greatest number of values of its element type, is indexable in the action's expressions, and survives save and load mid-action. `check` is evaluated on request and never refuses by itself. |
+| What presentation is given | K2 | 03 §12 | Every event carries the universal tick, the local time of its clock, its subjects and its cause; a decision request carries the time elapsed for that entity; phase events carry their start and scheduled end. |
+| Total conversions | P3 | 04 §14 | A profile that lists none of the bundled mods starts at its own boot screen, and a frame test shows nothing of the engine's is drawn before it. |
+| Safety limits | P4 | 04 §15 | A file over the size limit, nesting over the depth limit and a definition count over its limit each give a diagnostic and no crash. A file reference that leaves the mod's directory is refused. |
+| Rules at lower detail | K5, T7 | 05 §13.5 | Attached rules on a stored entity do not run; recurring ones follow `while_unloaded`; nothing cold raises a cell-level event. |
+| The script hook | none | 05 §16 | Reserved. No package builds it, and nothing may depend on it. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

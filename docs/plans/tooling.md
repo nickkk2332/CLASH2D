@@ -24,19 +24,19 @@ says which.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| TL1 | Console | M | W11, K10 | todo |
+| TL1 | Console | M | W11, K10 | beta |
 | TL2 | Reasons | M | K2, T3 | todo |
 | TL3 | Traces | M | K10 | todo |
 | TL4 | Inspector | L | U6b, TL3, K4 | todo |
-| TL5 | Profiler and the budgets file | M | K2, W23 | todo |
-| TL6 | Test scripts | M | TL1, U1 | todo |
+| TL5 | Profiler and the budgets file | M | K2, W23 | beta |
+| TL6 | Test scripts | M | TL1, U1 | beta |
 | TL7 | Invariant checkers | M | TL6 | todo |
 | TL8 | Replay, divergence, diff, rewind | M | K7, TL6 | todo |
-| TL9 | Mod authoring suite | M | P5, P8, U6b | todo |
+| TL9 | Mod authoring suite | M | P5, P8, U6b | beta |
 | TL10 | Map editor and capture | L | WG2, U7 | todo |
 | TL11 | Comparing incident forms | M | L3, I10 | todo |
 | TL12 | Player aids | M | SC3, SC6, A9 | todo |
-| TL13 | Save tools | S | K7, P7 | todo |
+| TL13 | Save tools | S | K7, P7 | beta |
 | TL14 | Matchup and compat reports | S | C11, P4 | todo |
 | TL15 | Stepping through a rule | S | TL1, P8 | todo |
 
@@ -47,8 +47,7 @@ they can be built.
 
 | Earliest | Packages |
 |----------|----------|
-| M1, with the world viewer | TL5 |
-| M2, with the kernel | TL1, TL2, TL3, TL13 |
+| M2, with the kernel | TL1, TL2, TL3, TL5, TL13 |
 | M2, after TL1 | TL6, then TL7, TL8 |
 | M3, with screens | TL4, TL9 |
 | M3, with combat | TL14 |
@@ -83,6 +82,32 @@ Done when
 - Every registered verb has a console command without further code.
 - A console session saved as a file replays to the same hash.
 - A command from a mod runs its rule with its parameters.
+
+Beta: built ahead of the simulation in `clash_sim::console`, against the
+trait `ConsoleHost`. Built: the language with spans, diagnostics and a
+canonical printer; `CommandSpec` and `CommandTable` with the built-in
+commands of 14 §3.3 as registrations, one command derived from each verb
+of a `clash_expr::Registry`, binding and generated help; `Session`, which
+carries out `help`, `use`, `gen`, `eval`, `assert`, `advance`, `until`,
+`hash`, `save` and `load` through the trait, keeps names and writes a
+transcript that replays; `console::testing::FakeHost`. The first two
+"Done when" items are shown against the fake host. Waits for the
+simulation: an implementation of `ConsoleHost` (every command's effect,
+`Debug` commands and the input log, the profile switch); the game overlay
+and terminal viewer hosts; the `console_command` definition type, which
+becomes a `CommandSpec` with `CommandSource::Rule`; the third "Done when"
+item.
+
+The host is built: `clash_save::host::GameHost` implements every method of
+`ConsoleHost` over a real simulation (14 §3.3, D-581): `use` from a mods
+directory, `gen`, the debug commands as `Debug` commands of the kernel,
+references, evaluation, time, save and load through the whole-game save,
+records from the kernel's events, refusals with reasons, frames, thread
+counts. The terminal viewer drives it (`clash-tools worldview`). Still
+waiting: the game overlay (the application's), the `console_command`
+type, and verbs, `do` and `run`, which reach `GameHost::run_verb` and are
+refused until the rule runtime is bound; `damage`, `field` and `gen` are
+not yet `Debug` commands (D-585).
 
 ### TL2 — Reasons
 
@@ -145,6 +170,14 @@ Done when
   by a test that reads the documents.
 - A budget exceeded by more than its margin fails the gate.
 
+Status `beta` (D-730). Built: `budgets.toml` at the root with the rows
+that have a benchmark, each checked by a test against the table of its
+specification; `clash-tools bench` and `cargo xtask bench [--check]
+[<filter>]`, which fails on a measurement over its limit by more than
+its margin; 14 §6.3 says how to run them. Stubbed: the rows that have
+no benchmark yet; the profiler's views (time by subsystem and rule,
+counts, the live budgets view).
+
 ### TL6 — Test scripts
 
 **Spec** 14 §7.1, §7.2 · **Size** M · Generalises W11's runner
@@ -157,6 +190,29 @@ Done when
 - A script that passes straight and fails under save-and-load is reported
   as such, naming the split point.
 - A mod's own scripts run from its directory.
+
+Beta: built ahead of the simulation in `clash_sim::console`. Built: the
+script format with every expectation of 14 §7.1, with line and column in
+errors; `Runner`, which runs a script in the four modes against any
+`ConsoleHost` and reports per mode with line, expected and found;
+`bless`; `run_dir` and the report; `clash-tools scenario run`, which
+checks syntax and exits 3 for want of a host; `scenarios/` with one
+script for the fake host. The first "Done when" item is shown with a fake
+host whose save deliberately forgets its timers. Waits for the
+simulation: registering its host with `clash-tools scenario run` so that
+scripts are run and blessed from the command line; `expect frame` against
+real frames (12 §12); `--paranoid`, which waits for the checkers of TL7;
+running a mod's own scripts from its directory, which needs profiles.
+
+The host is registered: `clash-tools scenario run` runs and blesses every
+script against the real simulation in the four modes, `expect frame`
+compares real frames, a script marked `# host: fake` runs against the fake
+host and one marked `# known failure:` is expected to fail (D-583), and
+exit code 3 is gone. Scripts under `scenarios/world/` cover entities moved
+by debug commands, a wall punched to rubble, a tower that collapses with
+a save and load in the fall, fire that spreads and burns out, a walk
+across the city's tracts, and `smoke_city`. Still waiting: `--paranoid`
+(TL7) and a mod's own scripts.
 
 ### TL7 — Invariant checkers
 
@@ -191,6 +247,12 @@ Done when
 - `diff` names the entity or cell that differs.
 - After `rewind` and `advance` the hash equals the original at that tick.
 
+Partly built ahead (D-587): `clash-tools replay <from> <to>` replays the
+commands between two saves of one game and names the subsystems whose
+hash differs at the end. The input log carries no hashes at intervals
+yet, so the first differing interval is not found; `diff`, `report` and
+`rewind` are not built.
+
 ### TL9 — Mod authoring suite
 
 **Spec** 14 §9.1, §9.2 · **Size** M · Extends P5 and P8
@@ -203,6 +265,12 @@ Done when
 - A broken edit leaves the game running on the old definitions with the
   diagnostic displayed.
 - `refs` finds every reference to a definition in the bundled mods.
+
+Beta: `refs` and `find` are built (D-806); references the loader reads
+as plain strings, the world's among them, are listed as named in plain
+text. Stubbed: errors over the game on a failed reload, which needs hot
+reload (P8), and the reference browser screen, which belongs to the
+`tools` mod, not yet made.
 
 ### TL10 — Map editor and capture
 
@@ -257,6 +325,12 @@ Done when
 - `save verify` fails on a save with a corrupted tract and names it.
 - `save migrate` produces a save that loads under renamed definitions.
 
+Beta: `save inspect`, `save verify` and `save list` are built over
+`clash-save`; the first "Done when" item is shown by a test that writes
+over a tract blob. Not built: `save migrate`, which waits for migration
+entries (04 §12); the invariant checkers in `save verify` (TL7); sizes by
+subsystem and counts of entities by form in `save inspect`.
+
 ### TL14 — Matchup and compat reports
 
 **Spec** 14 §9.3, §9.4 · **Size** S
@@ -286,7 +360,7 @@ Done when
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -296,3 +370,7 @@ small package of its own.
 |----------|---------|------|-----------|
 | Sheet view | TL10 | 14 §10.2 | A map made of placed maps is shown whole; a piece can be moved and turned, and opening it puts it on the canvas. May follow the rest of TL10. |
 | Stepping through a rule | TL15 | 14 §6.4 | See the package. |
+| Map and generation previews | worldgen WG12 | 14 §10.1; 10 §12 | Built with worldgen package WG12; listed here so that every section of 14 has an owner. |
+| Logs and failures | TL3 | 14 §14 | The structured log carries time, tick, subsystem, severity and fields; rule warnings are rate-limited per site; a simulated panic is caught at the top and writes a report. |
+| Reasons from mods; interface commands; reference coverage | TL1, TL2, TL9 | 14 §3.3, §9.2, §15 | A mod's `reason` is carried by its `cancel_event` and listed in the reference. A script presses a key, opens a screen and compares a frame. The reference lists every hook with what a handler may change and every verb with its arguments, and a test fails for any registered without them. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

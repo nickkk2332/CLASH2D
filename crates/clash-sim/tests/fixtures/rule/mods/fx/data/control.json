@@ -1,0 +1,141 @@
+[
+  {
+    "//": "05 §10.2: if, with and without else.",
+    "type": "eoc", "id": "branch",
+    "params": { "n": "int" },
+    "do": [
+      { "if": "$n > 2", "then": [ { "note": "big" } ], "else": [ { "note": "small" } ] },
+      { "if": "$n == 0", "then": [ { "note": "zero" } ] },
+      { "if": { "all": [ "$n > 0", { "not": "$n > 2" } ] }, "else": [ { "note": "not in between" } ] }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: first.",
+    "type": "eoc", "id": "first_of",
+    "params": { "n": "int" },
+    "do": [
+      { "first": [
+          { "if": "$n < 0", "do": [ { "note": "negative" } ] },
+          { "if": "$n < 10", "do": [ { "note": "small" } ] },
+          { "do": [ { "note": "large" } ] }
+      ] }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: switch on a text, a number and a boolean.",
+    "type": "eoc", "id": "switch_on",
+    "params": { "what": "any" },
+    "do": [
+      { "switch": "$what",
+        "cases": {
+          "ash":  [ { "note": "grey" } ],
+          "7":    [ { "note": "seven" } ],
+          "true": [ { "note": "yes" } ]
+        },
+        "default": [ { "note": "other" } ] }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: for_each over a list, written two ways.",
+    "type": "eoc", "id": "each",
+    "params": { "xs": "list<int>" },
+    "returns": "int",
+    "do": [
+      { "let": { "total": 0 } },
+      { "for_each": "$xs", "as": "x", "do": [ { "set": { "$total": "$total + $x" } } ] },
+      { "for_each": { "list": "[10, 20]" }, "as": "y", "do": [ { "add": { "$total": "$y" } } ] },
+      { "return": "$total" }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: repeat, with $i counting from zero.",
+    "type": "eoc", "id": "count_up",
+    "params": { "times": "int" },
+    "returns": "int",
+    "do": [
+      { "let": { "sum": 0 } },
+      { "repeat": "$times", "do": [ { "add": { "$sum": "$i" } } ] },
+      { "return": "$sum" }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: while.",
+    "type": "eoc", "id": "halve",
+    "params": { "n": "int" },
+    "returns": "int",
+    "do": [
+      { "let": { "steps": 0, "left": "$n" } },
+      { "while": "$left > 1",
+        "do": [ { "set": { "$left": "div($left, 2)", "$steps": "$steps + 1" } } ] },
+      { "return": "$steps" }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: weighted. Three to one, and never the entry of no weight.",
+    "type": "eoc", "id": "lottery",
+    "subjects": { "self": "entity" },
+    "do": [
+      { "weighted": [
+          { "weight": 3, "do": [ { "add": { "self.var.n": 1 } } ] },
+          { "weight": 1, "do": [ { "add": { "self.var.x": 1 } } ] },
+          { "weight": 0, "do": [ { "note": "never" } ] }
+      ] }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: as. Inside the block `self` is someone else, for this rule and for one it calls.",
+    "type": "eoc", "id": "rebind",
+    "subjects": { "self": "entity" },
+    "params": { "other": "entity" },
+    "do": [
+      { "as": { "self": "$other" },
+        "do": [ { "set": { "self.var.n": 5 } }, { "bump": { "by": 2 } } ] },
+      { "add": { "self.var.n": 1 } }
+    ]
+  },
+
+  {
+    "type": "eoc", "id": "bump",
+    "subjects": { "self": "entity" },
+    "params": { "by": "int" },
+    "doc": "Adds to the counter of whoever is `self` where it is called.",
+    "do": [ { "add": { "self.var.n": "$by" } } ]
+  },
+
+  {
+    "//": "05 §10.2: stop ends the rule from inside a branch.",
+    "type": "eoc", "id": "stops",
+    "do": [
+      { "note": "before" },
+      { "if": "true", "then": [ { "stop": {} }, { "note": "not this" } ] },
+      { "note": "nor this" }
+    ]
+  },
+
+  {
+    "//": "05 §10.2: return, from inside a branch and at the end.",
+    "type": "eoc", "id": "gives",
+    "params": { "n": "int" },
+    "returns": "int",
+    "do": [
+      { "if": "$n > 0", "then": [ { "return": "$n * 2" } ] },
+      { "return": 0 }
+    ]
+  },
+
+  {
+    "//": "05 §9.1: else runs when the condition does not hold.",
+    "type": "eoc", "id": "either",
+    "params": { "n": "int" },
+    "if": "$n > 0",
+    "do": [ { "note": "held" } ],
+    "else": [ { "note": "did not hold" } ]
+  }
+]

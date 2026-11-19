@@ -1,0 +1,111 @@
+[
+  { "//": "Colours. Each has the word text uses for it and the terminal colour shown where 24-bit colour is not available.",
+    "type": "color", "id": "bone", "rgb": "#c8c8c8", "word": "white", "fallback": "white" },
+  { "type": "color", "id": "ink", "rgb": "#101010", "word": "black", "fallback": "black" },
+  { "type": "color", "id": "ash", "rgb": "#707070", "word": "grey", "fallback": "bright_black" },
+  { "type": "color", "id": "amber", "rgb": "#e0b040", "word": "yellow", "fallback": "yellow" },
+  { "type": "color", "id": "crimson", "rgb": "#a01828", "word": "red", "fallback": "red" },
+  { "type": "color", "id": "moss", "rgb": "#609040", "word": "green", "fallback": "green" },
+  { "type": "color", "id": "sky", "rgb": "#5090d0", "word": "blue", "fallback": "bright_blue" },
+
+  { "//": "The default theme. The style names from `title` to `notice` are the ones the toolkit draws its own parts with.",
+    "type": "theme", "id": "default",
+    "colors": {
+      "text": "bone", "background": "ink", "dim": "ash",
+      "accent": "amber", "blood": "crimson", "good": "moss", "info": "sky"
+    },
+    "styles": {
+      "title": { "fg": "accent", "bold": true },
+      "border": { "fg": "dim" },
+      "border_focus": { "fg": "accent" },
+      "selected": { "fg": "ink", "bg": "accent" },
+      "selected_idle": { "fg": "accent", "underline": true },
+      "header": { "fg": "info", "bold": true },
+      "bar": { "fg": "good" },
+      "bar_empty": { "fg": "dim" },
+      "field": { "underline": true },
+      "button": { "fg": "info" },
+      "hotkey": { "fg": "accent", "bold": true },
+      "tip": { "fg": "dim", "italic": true },
+      "notice": { "fg": "accent", "bold": true },
+      "warn": { "fg": "blood", "bold": true },
+      "sfx": { "fg": "accent", "italic": true }
+    },
+    "borders": { "h": "─", "v": "│", "tl": "┌", "tr": "┐", "bl": "└", "br": "┘" },
+    "font": { "file": "assets/font.ttf", "size": 16 }
+  },
+
+  { "//": "A second theme, for the dark hours: the same names in cooler colours, with double borders. The player chooses between themes with the `theme` preference.",
+    "type": "color", "id": "frost", "rgb": "#a8b8d0", "word": "white", "fallback": "white" },
+  { "type": "color", "id": "pitch", "rgb": "#080818", "word": "black", "fallback": "black" },
+  { "type": "color", "id": "slate", "rgb": "#506080", "word": "grey", "fallback": "bright_black" },
+  { "type": "color", "id": "ice", "rgb": "#70c0e0", "word": "cyan", "fallback": "cyan" },
+  { "type": "theme", "id": "night",
+    "colors": {
+      "text": "frost", "background": "pitch", "dim": "slate",
+      "accent": "ice", "blood": "crimson", "good": "moss", "info": "sky"
+    },
+    "styles": {
+      "title": { "fg": "accent", "underline": true },
+      "border": { "fg": "dim" },
+      "border_focus": { "fg": "accent", "bold": true },
+      "selected": { "fg": "pitch", "bg": "accent" },
+      "selected_idle": { "fg": "accent", "underline": true },
+      "header": { "fg": "info", "bold": true },
+      "bar": { "fg": "accent" },
+      "bar_empty": { "fg": "dim" },
+      "field": { "underline": true },
+      "button": { "fg": "info" },
+      "hotkey": { "fg": "accent", "bold": true },
+      "tip": { "fg": "dim", "italic": true },
+      "notice": { "fg": "accent", "bold": true },
+      "warn": { "fg": "blood", "bold": true },
+      "sfx": { "fg": "accent", "italic": true }
+    },
+    "borders": { "h": "═", "v": "║", "tl": "╔", "tr": "╗", "bl": "╚", "br": "╝" },
+    "font": { "file": "assets/font.ttf", "size": 16 }
+  },
+
+  { "//": "What each key means, by context. A screen names its context; a key its context does not name is looked up in `menu`. `menu` holds the names the toolkit navigates by. `play` is the play screen's: its names are controls (controls.json, fighting.json, abilities.json, talk.json). `targeting` is that of look mode, the map and the pickers that move a cursor or take a direction: there the direction keys keep their names and the screens say what they do. `abilities` is the abilities screen's: the number keys put the ability selected on a quick slot.",
+    "type": "keymap", "id": "default",
+    "menu": {
+      "up": "prev", "down": "next", "left": "left", "right": "right",
+      "enter": "accept", "space": "toggle",
+      "escape": "back", "q": "back",
+      "tab": "focus_next", "shift+tab": "focus_prev",
+      "page_up": "page_prev", "page_down": "page_next", "home": "first", "end": "last",
+      "backspace": "erase", "delete": "delete",
+      "ctrl+d": "done",
+      "f2": "more"
+    },
+    "play": {
+      "h": "west", "j": "south", "k": "north", "l": "east",
+      "y": "north_west", "u": "north_east", "b": "south_west", "n": "south_east",
+      "left": "west", "down": "south", "up": "north", "right": "east",
+      "<": "up", ">": "down",
+      ".": "wait", "p": "wait_minute", "shift+p": "wait_hour", "x": "look", "e": "interact", "g": "pick_up", ",": "pick_up", "shift+c": "crouch",
+      "i": "inventory", "c": "condition", "a": "abilities", "m": "map", "shift+j": "journal",
+      "shift+m": "make", "shift+k": "know_how",
+      "o": "options", "?": "help", "f1": "help",
+      "escape": "pause", "f12": "omniscient",
+      "tab": "next_target", "shift+tab": "prev_target",
+      "f": "attack", "shift+f": "attack_precise",
+      "s": "shoot", "shift+s": "aim", "r": "reload", "t": "throw", "z": "stop", "v": "grapple",
+      "shift+t": "talk",
+      "1": "slot_1", "2": "slot_2", "3": "slot_3", "4": "slot_4", "5": "slot_5",
+      "6": "slot_6", "7": "slot_7", "8": "slot_8", "9": "slot_9"
+    },
+    "abilities": {
+      "1": "bind_1", "2": "bind_2", "3": "bind_3", "4": "bind_4", "5": "bind_5",
+      "6": "bind_6", "7": "bind_7", "8": "bind_8", "9": "bind_9"
+    },
+    "targeting": {
+      "h": "west", "j": "south", "k": "north", "l": "east",
+      "y": "north_west", "u": "north_east", "b": "south_west", "n": "south_east",
+      "left": "west", "down": "south", "up": "north", "right": "east",
+      "<": "up", ">": "down",
+      "tab": "next_target", "shift+tab": "prev_target",
+      "+": "zoom_in", "-": "zoom_out"
+    }
+  }
+]

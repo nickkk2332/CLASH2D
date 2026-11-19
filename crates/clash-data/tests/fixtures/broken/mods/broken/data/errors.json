@@ -1,0 +1,23 @@
+[
+  { "//": "An unknown key.",
+    "type": "material", "id": "ash", "density": 600,
+    "thougness": 2.0e4 },
+
+  { "//": "A bad unit.",
+    "type": "material", "id": "slag", "density": 2900, "toughness": 4.0e5,
+    "bearing": "30 MPA" },
+
+  { "//": "A missing reference.",
+    "type": "block", "id": "ash_drift", "material": "ashh", "height": 1.0 },
+
+  { "//": "An inheritance cycle.",
+    "type": "material", "id": "loop_a", "copy_from": "loop_b" },
+  { "type": "material", "id": "loop_b", "copy_from": "loop_a" },
+
+  { "//": "A duplicate id.",
+    "type": "material", "id": "slag", "density": 3000, "toughness": 4.0e5 },
+
+  { "//": "A type mismatch.",
+    "type": "block", "id": "ash_wall", "material": "slag", "height": 3.0,
+    "fill": "0.2" }
+]

@@ -1,0 +1,23 @@
+[
+  { "//": "What rules ask of the town's day: how many people are where their routines have them, and how many are on their way.",
+    "type": "function", "id": "doing_near",
+    "params": { "at": "loc", "radius": "real", "doing": "string" },
+    "returns": "int",
+    "value": { "count": { "entities": { "around": "$at", "radius": "$radius",
+                                        "where": "it.routine_doing == $doing" } } },
+    "doc": "How many stand within a radius of a cell, in metres, whose routines have them doing something (`asleep`, `at_market`): how busy a place is at this hour." },
+
+  { "type": "function", "id": "pursuing_near",
+    "params": { "at": "loc", "radius": "real", "goal": "string" },
+    "returns": "int",
+    "value": { "count": { "entities": { "around": "$at", "radius": "$radius",
+                                        "where": "it.goal == $goal" } } },
+    "doc": "How many stand within a radius of a cell, in metres, whose minds hold a goal, by its qualified id (`core:confront`): how many are fighting, fleeing or answering a call there." },
+
+  { "type": "function", "id": "away_near",
+    "params": { "at": "loc", "radius": "real" },
+    "returns": "int",
+    "value": { "count": { "entities": { "around": "$at", "radius": "$radius",
+                                        "where": "it.routine_away ?? false" } } },
+    "doc": "How many stand within a radius of a cell, in metres, who are away from where their routines have them: on their way somewhere." }
+]

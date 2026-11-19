@@ -1,0 +1,14 @@
+[
+  { "//": "What a person strikes with, beside the fist, the heel and the elbow their parts already have: the flat of the hand for a shove, the sole of the foot for a stamp or a push kick, the brow for a headbutt. Area is the contact in square metres; give is how far the blow is stopped over; span is how far across the target it touches. A wide, yielding surface spreads its energy and pushes; a small, hard one concentrates it (07 §3.2, §6.1).",
+    "type": "body_part", "id": "hand", "patch": true,
+    "extend": { "surfaces": [
+      { "id": "palm", "kind": "impact", "area": 1.2e-2, "give": 0.04, "span": 0.1 } ] } },
+
+  { "type": "body_part", "id": "foot", "patch": true,
+    "extend": { "surfaces": [
+      { "id": "sole", "kind": "impact", "area": 1.8e-2, "give": 0.03, "span": 0.1 } ] } },
+
+  { "type": "body_part", "id": "head", "patch": true,
+    "extend": { "surfaces": [
+      { "id": "brow", "kind": "impact", "area": 4.0e-3, "give": 0.01, "span": 0.08 } ] } }
+]

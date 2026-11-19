@@ -1,0 +1,168 @@
+[
+  {
+    "//": "05 §9.5: a rule with parameters, one of them with a default.",
+    "type": "eoc", "id": "ignite",
+    "params": {
+      "who": "entity",
+      "heat": { "type": "real", "default": 1.0, "doc": "How hot, as a factor." }
+    },
+    "doc": "Burns someone.",
+    "do": [ { "hurt": { "who": "$who", "amount": "40 * $heat", "kind": "fire" } } ]
+  },
+
+  {
+    "//": "05 §10.5: run, a rule as a verb, a run source, a computed rule.",
+    "type": "eoc", "id": "caller",
+    "subjects": { "self": "entity" },
+    "params": { "foe": "entity", "which": "id<eoc>" },
+    "do": [
+      { "let": { "secret": 7 } },
+      { "ignite": { "who": "$foe" } },
+      { "ignite": { "who": "$foe", "heat": 2 } },
+      { "run": { "eoc": "ignite", "with": { "who": "self", "heat": 0.5 } } },
+      { "run": "plain" },
+      { "let": { "doubled": { "run": { "eoc": "gives", "with": { "n": "$secret" } } } } },
+      { "set": { "self.var.n": "$doubled" } },
+      { "run": { "eoc": { "expr": "$which" }, "with": { "text": "'computed'" } } }
+    ]
+  },
+
+  { "type": "eoc", "id": "plain", "do": [ { "note": "plain ran" } ] },
+
+  {
+    "type": "eoc", "id": "say",
+    "params": { "text": "string" },
+    "do": [ { "note": { "expr": "$text" } } ]
+  },
+
+  {
+    "//": "A called rule has locals of its own: what it does to them is not seen by its caller.",
+    "type": "eoc", "id": "shadow",
+    "params": { "n": "int" },
+    "do": [ { "let": { "secret": 99 } }, { "set": { "$n": 0 } } ]
+  },
+  {
+    "type": "eoc", "id": "keeps",
+    "returns": "int",
+    "do": [
+      { "let": { "secret": 7, "n": 3 } },
+      { "shadow": { "n": "$n" } },
+      { "return": "$secret * 10 + $n" }
+    ]
+  },
+
+  {
+    "//": "A computed call is checked when it runs.",
+    "type": "eoc", "id": "blind_call",
+    "params": { "which": "any" },
+    "do": [
+      { "run": { "eoc": { "expr": "$which" }, "with": { "bogus": 1 } } },
+      { "note": "carried on" }
+    ]
+  },
+
+  {
+    "//": "05 §10.5: queue. The queued rules run when this one has finished, in order.",
+    "type": "eoc", "id": "queues",
+    "do": [
+      { "queue": "plain" },
+      { "queue": { "eoc": "say", "with": { "text": "queued" } } },
+      { "note": "first" }
+    ]
+  },
+
+  {
+    "//": "05 §9.3, §10.5: a curse is a rule attached to its victim.",
+    "type": "eoc", "id": "curse",
+    "on": "alarm_tripped", "attached": true, "as": "who",
+    "once": true,
+    "do": [ { "add": { "self.var.n": 1 } } ]
+  },
+  {
+    "type": "eoc", "id": "lay_curse",
+    "params": { "victim": "entity" },
+    "do": [ { "attach_rule": { "to": "$victim", "eoc": "curse" } } ]
+  },
+  {
+    "type": "eoc", "id": "lift_curse",
+    "params": { "victim": "entity" },
+    "do": [ { "detach_rule": { "to": "$victim", "eoc": "curse" } } ]
+  },
+  {
+    "type": "eoc", "id": "lay_wrongly",
+    "params": { "victim": "entity", "where": "loc" },
+    "do": [
+      { "attach_rule": { "to": "$victim", "eoc": "plain" } },
+      { "attach_rule": { "to": "$where", "eoc": "curse" } },
+      { "note": "carried on" }
+    ]
+  },
+
+  {
+    "//": "05 §8.1: a hook a mod defines, raised with emit, and what came of it taken by a let.",
+    "type": "event", "id": "ritual_completing",
+    "subjects": { "caster": "entity" },
+    "fields": { "power": "real", "school": "string" },
+    "hook": true, "mutable": ["power"],
+    "doc": "A ritual is about to complete. A handler may change its power."
+  },
+  {
+    "type": "event", "id": "ritual_completed",
+    "subjects": { "caster": "entity" },
+    "fields": { "power": "real" },
+    "doc": "A ritual completed."
+  },
+  {
+    "type": "reason", "id": "warded",
+    "text": "{the(caster)} is warded against {school} rituals",
+    "values": { "caster": "entity", "school": "string" },
+    "doc": "A ward turned a ritual aside."
+  },
+  {
+    "type": "eoc", "id": "ritual",
+    "subjects": { "self": "entity" },
+    "params": { "p": "real" },
+    "returns": "real",
+    "do": [
+      { "let": { "r": { "emit": { "event": "ritual_completing", "caster": "self", "power": "$p", "school": "fire" } } } },
+      { "if": "$r.cancelled",
+        "then": [ { "note": { "expr": "'refused: ' + str($r.reason)" } }, { "return": 0 } ] },
+      { "emit": { "event": "ritual_completed", "caster": "self", "power": "$r.power" } },
+      { "return": "$r.power" }
+    ]
+  },
+  {
+    "//": "A handler changes a mutable field.",
+    "type": "eoc", "id": "amplifier",
+    "on": "ritual_completing",
+    "if": "event.school == 'fire'",
+    "do": [ { "modify": { "event.power": "event.power * 2" } } ]
+  },
+  {
+    "//": "A handler cancels, with a reason of the mod's own. It runs first.",
+    "type": "eoc", "id": "ward",
+    "on": "ritual_completing", "priority": 10,
+    "if": "caster.var.tag == 'warded'",
+    "do": [
+      { "cancel_event": { "reason": "warded", "values": { "caster": "caster", "school": "event.school" } } }
+    ]
+  },
+  {
+    "//": "A handler cancels with no reason of its own.",
+    "type": "eoc", "id": "veto",
+    "on": "ritual_completing", "priority": 20,
+    "if": "caster.var.tag == 'vetoed'",
+    "do": [ { "cancel_event": {} } ]
+  },
+  {
+    "//": "05 §8.3: consume, and a rule that is skipped once the event is consumed.",
+    "type": "eoc", "id": "heard",
+    "on": "ritual_completed",
+    "do": [ { "set": { "caster.var.x": "event.power" } }, { "consume": {} } ]
+  },
+  {
+    "type": "eoc", "id": "late",
+    "on": "ritual_completed", "priority": -1, "skip_if_consumed": true,
+    "do": [ { "note": "never" } ]
+  }
+]

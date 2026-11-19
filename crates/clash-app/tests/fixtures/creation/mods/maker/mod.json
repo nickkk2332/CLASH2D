@@ -1,0 +1,9 @@
+{
+  "id": "maker",
+  "name": "Maker",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "A screen for the application's tests that drives the creation session through the service `creation` and starts a game with what it made.",
+  "authors": ["CLASH2D contributors"],
+  "requires": []
+}

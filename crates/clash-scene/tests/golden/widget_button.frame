@@ -1,0 +1,17 @@
+clash-frame 1
+size 16x1
+chars
+|[ OK ][ More ]  |
+fg
+|0000002222222222|
+bg
+|1111113333333333|
+attrs
+|................|
+palette
+0 #000000 black
+1 #e0b040 yellow
+2 #c8c8c8 white
+3 #101010 black
+sprites 0
+fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none

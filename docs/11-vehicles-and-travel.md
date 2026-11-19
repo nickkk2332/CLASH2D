@@ -91,6 +91,8 @@ pub struct Medium {
     pub sound_speed: Real,           // m/s
     pub clarity: Real,               // fraction of light passing per metre
     pub breathable: Option<AtmosphereId>,
+    pub temperature: Real,           // K (section 4.6)
+    pub drift: [Real; 3],            // m/s: how the medium itself is moving (section 4.7)
 }
 
 impl Cosmos { pub fn medium(&self, loc: Location) -> Medium; }
@@ -104,7 +106,8 @@ impl Cosmos { pub fn medium(&self, loc: Location) -> Medium; }
 | Otherwise | The stratum's atmosphere, or vacuum (02 §4.1) |
 
 Materials used as liquids carry a `fluid` block: sound speed, clarity,
-drag factor. Atmospheres carry the same.
+drag factor, and the temperature of their depths. Atmospheres carry the
+first three.
 
 ### 4.2 Pressure
 
@@ -138,7 +141,7 @@ Bodies in flight (02 §15) gain a `volume`. In any medium:
 
 ```
 buoyancy = −gravity × medium.density × volume / mass
-drag     = −½ · medium.density · drag · area · |v| · v / mass
+drag     = −½ · medium.density · drag · area · |w| · w / mass     (w = v − medium.drift)
 ```
 
 Wood floats, stone sinks, a corpse sinks slowly, and a person thrown into
@@ -154,6 +157,67 @@ Light falls with depth by the medium's clarity (15 §3.3), so deep water is
 dark. Sound travels in liquid at the medium's speed and with its own
 falloff (15 §3.1), which is why hearing reaches much further than sight
 underwater and why sonar is a sense worth having.
+
+### 4.6 Temperature
+
+Temperature is worked out when it is asked for, from things already known.
+Nothing conducts heat and nothing is stepped.
+
+| The cell | Its temperature |
+|----------|-----------------|
+| In gas, in the open | The region's temperature (09 §14.1), adjusted by its stratum (02 §4.1) |
+| In liquid | Between the region's temperature at the surface and the liquid's `deep` temperature, by depth |
+| In vacuum | The stratum's |
+| Inside a sealed volume or a sealed area (section 10) | The volume's **held** temperature |
+
+To any of these is added what the fields in the cell contribute: each
+level of a field with `warms` (02 §16). Standing by a fire is warm because
+its heat is there.
+
+**Held temperature.** A sealed volume that is open to the outside holds
+the outside temperature. Closed, it keeps what it had and moves toward the
+outside at the `leak` rate of its area kind or vehicle. A device with
+`climate` moves it toward a set point instead, while supplied:
+
+```json
+"climate": { "to": "self.config.setpoint", "rate": "0.02 K/s", "serves": 400 }
+```
+
+`serves` is the volume, in cubic metres, that the device can condition at
+that rate; a larger volume changes proportionally more slowly. A held
+temperature is a straight line between changes, with one wake-up when it
+arrives, as a store's level is (16 §5.4). A sealed suit is conditioned the
+same way by a module.
+
+Rules read `here.temperature`. What cold and heat do to a body is content:
+usually a pool (06 §4.2) whose rate depends on the temperature and on what
+is worn. Materials and fields change state by it (02 §5.4).
+
+Temperatures are kept in kelvin. Definitions may write `"-5 C"`.
+
+### 4.7 Drift
+
+The medium may itself be moving. Its **drift** at a cell is:
+
+| The cell | Drift |
+|----------|-------|
+| In gas with nothing overhead | The region's wind (09 §14.1) |
+| In a sea or a lake | The region's current |
+| In a watercourse laid by a path (10 §8.5) | The path kind's `current`, along its line and downhill |
+| Inside an area whose ambient override sets one (02 §8.3) | That: a steady flow, or a `vortex` with a speed, an inflow and a lift |
+| Under cover, indoors, in a sealed volume | None |
+
+| What | What drift does to it |
+|------|-----------------------|
+| Vehicles | As their motion models say (section 5.2) |
+| Bodies in flight | Drag is measured against the moving medium (section 4.4), so light things are carried and an arrow falls short into a headwind |
+| Fields with the `drift` rule | Their contents move with it, and fire spreads faster downwind (02 §16) |
+| Anything afloat or swimming | Carried at the drift's speed on top of its own movement, as on a moving floor (16 §9.4) |
+| Occupants in gas | Each step, a push from the force `½ · ρ · drift² · area`. Below the stagger speed of 07 §7 it does nothing, which is nearly always. In a great storm it staggers people and carries off what is light enough. |
+
+A whirlwind and a whirlpool are anchored areas with a vortex. A gust
+thrown by a power is an area with a flow that lasts a moment. A river
+carries a swimmer downstream.
 
 ## 5. Motion
 
@@ -189,6 +253,13 @@ Implemented natively and configured by data.
 | `aerostat` | Gas | Buoyant in the atmosphere. Slow. Pushed by wind. |
 | `thrust` | Anything | Force and inertia only. With `damped: false`, velocity persists when thrust stops. With `damped: true`, it decays: the convention of most space fiction. |
 | `burrow` | Solid | Moves through blocks, removing them or not, at a rate set by their material |
+
+**Lifts.** Track may run up a shaft as well as along the ground. A lift is
+a small vessel, a platform or a car, whose `rail` mode follows vertical
+track. A hoist part drives it, and a rule sends it to the storey a signal
+names (16 §7). The doors at each storey are doors. With its hoist
+destroyed it is an unsupported piece of world with people standing in it
+(02 §18), and falls.
 
 ### 5.3 The motion process
 
@@ -249,7 +320,7 @@ captain means to ram the bank. A ship heading north-east is drawn pointing
 north or east. This is the cost of
 exact, shear-free interiors, and it settles open question 3 of 02 §26.
 Views that are zoomed out far enough to show a vessel as an outline may
-draw that outline at its true heading (12 §6.2).
+draw that outline at its true heading (12 §6.1).
 
 ## 6. Systems
 
@@ -290,7 +361,8 @@ a vehicle is written in its `part` block.
 | `station` | A place to operate from (section 7) |
 | `seat` | A place to ride, with an `exposure` |
 | `sense` | A sense (15 §4) whose percepts go to whoever is at its station |
-| `drive` | Ability to travel a chart lane (section 13.4) |
+| `lane_drive` | Ability to travel a chart lane (section 13.4) |
+| `pump` | Moves liquid or gas at a rate between two of: a compartment, a store, the outside |
 | `needs_medium`, `noise` | Conditions on running, and the sound it makes |
 
 A part works in proportion to its condition and to its supply fraction
@@ -342,7 +414,7 @@ sonar console, a ballast panel, an engine room.
   station, so one helm cannot be worked by two people, and a pilot who lets
   go to fight is no longer piloting.
 - The engine supplies the verbs those actions call: `set_throttle`,
-  `set_helm`, `set_lift`, `set_mode`, `set_ballast`, `brake`, `dock`,
+  `set_helm`, `set_lift`, `set_motion_mode`, `set_ballast`, `brake`, `dock`,
   `undock`, `plot_course`.
 - A sense part reports to its station. The sonar operator hears what the
   hull's hydrophones receive.
@@ -373,6 +445,42 @@ it. Orders to the collective reach each vehicle's commander as orders do.
 
 Scene S23 is two people, one in a joint action with a horse and one with a
 motorbike, each also running an attack on a free channel.
+
+### 8.1 Driven bodies
+
+A machine that fights with limbs of its own is neither a suit nor a
+vehicle. It is a **body**: a creature made by a template (06 §10), usually
+of metal, usually with no mind, with a seat inside it.
+
+```json
+"holds": [ { "seat": { "id": "cockpit", "in_part": "torso", "exposure": 0.0,
+                       "drives": true, "uses": { "arm": 2, "leg": 2 } } } ]
+```
+
+Sitting in a seat that `drives` is a joint action between the occupant and
+the body. While it lasts the occupant is the body's driver (06 §8.2).
+
+| Question | Answer |
+|----------|--------|
+| What acts | The body, with its own parts, reach, mass and strength. It strikes, grips, throws and is struck by document 07 as any body is. Its limbs can be disabled and severed. |
+| Who decides | The driver. Commands given to the driver go to the body's actions. An AI driver scores the body's options (09 §6). |
+| What the driver's own body does | The seat's `uses` are held for as long as the action lasts. A cockpit of sticks and pedals takes hands and feet. A link that takes none leaves the driver free to act as well. |
+| What the driver perceives | The body's senses, relayed (15 §4), and whatever its own can make out from the seat |
+| Whose skill | Rules for the body may read `self.driver`. Content decides what comes from the machine and what from the one inside. |
+| What powers it | An implant set in the body (16 §11.5): a core, stores, weapons. `when_unsupplied` makes it inert. |
+| What reaches the driver | A hit that breaches the part holding the seat reaches the occupant by the seat's exposure. `unseat` throws them clear. |
+| When the driver stops | The joint action ends and the body does nothing (06 §8.2), where it stands |
+
+| Machine | Is |
+|---------|----|
+| Worn, moves as the wearer moves | A suit (16 §11.4) |
+| Has its own limbs and fights with them, someone inside deciding | A driven body |
+| Operated from stations, armed with mounted weapons | A craft or a vessel (section 3) |
+| So large it is walked around in or climbed | A vessel on legs, or a body made of cells (06 §6.6) |
+
+A mount with a rider is the same arrangement with a mind of its own in the
+way. A driven body with a mind that yields to its driver, and takes over
+when the driver is lost, is both.
 
 ## 9. Getting on, in and across
 
@@ -474,7 +582,8 @@ Each exchange step also compares pressure across the hull, for volumes
 where the difference exceeds `rated`:
 
 - The weakest hull elements of the affected compartment receive packets of
-  a `crush` damage type with intensity equal to the pressure difference.
+  the damage type the medium names for pressure (02 §23), with intensity
+  equal to the pressure difference.
 - Below an element's threshold nothing happens (02 §12.2). Above it, damage
   accumulates until the element fails and becomes an opening.
 - Bulkheads between a flooded compartment and a dry one are loaded the same
@@ -502,12 +611,14 @@ side on purpose brings it back, by the same arithmetic.
 | List | What follows |
 |------|--------------|
 | Any | Motion models read it: a listing vessel is slower and turns worse |
-| Above the definition's `list_shift` | `vessel_listing` is raised. Each step, loose items and anyone standing on an open deck are pushed toward the low side (07 §7). |
+| Above the definition's `list_shift` | `vessel_listing` is raised. Loose items and anyone standing on an open deck are carried toward the low side, as on a moving floor (16 §9.4). |
 | Above the definition's `capsize` | The vessel **capsizes**: `vessel_capsized` is raised, it loses its motion mode, every opening counts as below the waterline, and those on open decks are put in the water |
 
 The vessel is still drawn upright. Its list is shown in the helm's
 readouts and in what `look` reports, and a capsized vessel is drawn with a
-mark (12 §6.2).
+mark (12 §6.1). `right { vehicle }` sets a capsized vessel upright again.
+Content puts it on whatever could do that: a crane, a counterweight, a
+giant.
 
 ## 11. Air and space
 
@@ -518,7 +629,8 @@ buoyancy in air: envelope volume times air density against mass.
 **Space.** In vacuum strata and in encounter realms (02 §20.2):
 
 - Only `thrust` works. Gravity is whatever the stratum says, usually none.
-- Every crewed compartment is a sealed volume holding gas against vacuum.
+- Every crewed compartment is part of the vessel's sealed volume, holding
+  gas against vacuum.
   Section 10 applies with the signs reversed.
 - Ships meet, dock, board and fight at cell scale, as vessels anywhere do.
 - Leaving a realm's top edge puts the vessel on a chart (02 §19).
@@ -566,7 +678,7 @@ Vehicles are not only made from definitions:
 | `install`, `uninstall` | Adds or removes a part |
 
 A building cut loose with `detach` (02 §18.3) and fitted with thrusters, or
-held up by a levitation trait on its hull entity, is a vehicle. So is a raft
+lifted by a part that needs nothing but will, is a vehicle. So is a raft
 of lashed logs.
 
 ### 12.3 Damage
@@ -588,7 +700,7 @@ is beyond local range.
 
 ```json
 { "type": "travel_band", "id": "sea",
-  "passable": ["water"], "seen_from": ["sea", "air"], "intercepted_by": ["sea", "undersea", "air"] }
+  "seen_from": ["sea", "air"], "intercepted_by": ["sea", "undersea", "air"] }
 ```
 
 A **band** is a way of crossing the tract grid: road, overland, sea,
@@ -648,34 +760,102 @@ loaded tract. Crews in warm tracts are stepped as 03 §10.
 
 ## 15. Modding surface
 
-**Definition types**: `vehicle`, `travel_band`. The `part` block on `device`
+**Definition types**: `vehicle`, `travel_band`. `drives` and `uses` on seat
+holds. The `part` block on `device`
 (16 §4.2). Resources are defined in 16 §5. The `fluid` block on `material` and `atmosphere`. `sea_level`
-on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
+on `realm`. `sealed` and `leak` on `area_kind`. `lanes` on `chart`.
+`climate` on `device`.
 
 **Events**: `vehicle_moved`, `vehicle_collided`, `vehicle_mode_changed`,
-`part_installed`, `part_removed`, `resource_exhausted`,
-`resource_restored`, `station_taken`, `station_left`, `boarded`,
-`alighted`, `unseated`, `docked`, `undocked`, `hull_breached`,
+`station_taken`, `station_left`, `boarded`,
+`alighted`, `unseated`, `driving_started`, `driving_ended`, `docked`,
+`undocked`, `hull_breached`,
 `compartment_flooding`, `compartment_flooded`, `decompression`,
 `hull_crushing`, `vessel_sinking`, `vessel_settled`, `vessel_listing`,
 `vessel_capsized`, `liquid_level_changed`, `travel_started`,
 `travel_step`, `travel_interrupted`, `travel_arrived`, `encounter_started`.
 
-**Hooks**: `boarding`, `travel_starting`, `collision_incoming`.
+A vehicle's parts are modules (16 §11), so installing and removing them
+raises `module_installed` and `module_removed`, and running dry raises
+`store_emptied` and `network_starved` (16 §14).
+
+**Hooks**: `boarding`, `docking`, `travel_starting`, `collision_incoming`,
+`interception`.
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `boarding` | Someone takes a seat or a station | Cancel, with a reason |
+| `docking` | Two vessels are joined | Cancel, with a reason |
+| `travel_starting` | A vehicle becomes a traveler | Change the route and band; cancel |
+| `collision_incoming` | A moving vehicle strikes something | Change the energy each side takes |
+| `interception` | Two travelers who may intercept come within `travel.intercept_range` | Decide whether they meet, and at what range and bearing they are placed |
+
+**Verb arguments.** `pump { part, from, to, amount }`,
+`vent { compartment, to }`, `open_valve { part, open }`,
+`set_compartment_gas { compartment, atmosphere, pressure }`,
+`set_ballast { vehicle, fill }` (0 to 1 of its ballast volume),
+`dock { a, to }` (makes `a` the child of `to`; refused with a reason if
+they are not touching, are moving too fast past each other, or would nest
+too deep), `lash { what, to }` and `unlash`, `right { vehicle }`,
+`make_vehicle { subgrid, def, modes, hull }`. Without a `def`,
+`make_vehicle` takes the modes and hull given, or else one mode for each
+motion model its parts can drive and a drag area from its envelope.
+
+**Fields.**
+
+| On | Field | Meaning |
+|----|-------|---------|
+| `vehicle` | `form`, `footprint`, `map`, `material`, `mass`, `parts`, `modes`, `hull` | As in section 12.1 |
+| `hull` | `drag_area`, `swing`, `pivot`, `draft`, `list_shift`, `capsize`, `leak` | Sections 5.5, 6.3, 10.6, 4.6 |
+| A mode | `id`, `model`, `drive`, `steer`, `trim`, `noise` | Section 5.1 |
+| A mode | `bands` | The travel bands it offers (section 13.2) |
+| A mode | `cruise` | The share of top speed used on a journey; default 0.7 |
+| A mode | `step_up`, `stride`, `damped`, `lift_coefficient`, `track_tag` | What its model needs (section 5.2): the tag that marks track for `rail`, and so on |
+| A mode | `sea_penalty`, `list_penalty` | Expressions giving the loss of speed and turning from sea state and from list |
+| `part.station` | `plots` | Whether a course can be plotted from it |
+| `part.station` | `readouts` | The vehicle properties its operator's mind may read while at it (05 §7.3). A crew knows its own ship through its stations, and nobody else's. |
+| `atmosphere` | `stored_as` | The resource it is when held in a tank |
+
+A ballast tank is a part with a volume. In a vessel it may instead be a
+compartment flagged `ballast`, whose volume it takes. Traction is the
+`friction` of the floor's material (02 §23).
+
+A band can cross the tracts whose definitions list it (10 §6). Travelers
+on the bands in `seen_from` may notice one on this band, and those on
+`intercepted_by` may intercept it. In a lane's expressions `distance` is
+the lane's length and `vehicle` is the traveler's.
+
+**Sleeping and waking.** A sealed volume with no opening sleeps. A
+vessel's motion process wakes it when the pressure outside passes its
+rating, which is the only way an intact hull can come to harm. The
+envelope is worked out again whenever a structural element of the vessel
+changes, as an enclosed room's is (02 §8.3); `reseal` forces it. A moving
+vehicle whose tract unloads is stopped and stored where it is, unless it
+has a route, in which case it becomes a traveler.
+
+**Settings**: `exchange.step`, `exchange.orifice`, `motion.max_step`,
+`medium.liquid_fraction` (how full of a liquid field a cell must be to
+count as liquid), `travel.local_range`, `travel.intercept_range`,
+`conveyance.step`.
 
 **Effects**: the verbs of sections 7 and 12.2, and `board`, `alight`,
 `unseat`, `couple`, `uncouple`, `pump`, `vent`, `set_compartment_gas`,
 `open_valve`, `add_resource`, `drain_resource`, `end_travel`,
-`set_liquid_level`.
+`set_liquid_level`, `lash`, `unlash`, `right`.
 
 **Properties**: on vehicles, `mass`, `speed`, `heading`, `mode`,
 `top_speed`, `thrust`, `buoyancy`, `depth`, `altitude`, `range`, `list`,
 `capsized`,
+`turn_rate`, `drag`, `lift`, `stall_speed`, `has_part_with(field, value)`,
+`drive_speed(kind)`,
 `resource(id)`, `crew`, `station(id).operator`; on any location,
 `medium.phase`, `medium.pressure`, `medium.density`, `medium.breathable`,
-`compartment`, `compartment.pressure`, `compartment.flooded`.
+`temperature`, `drift`,
+`compartment`, `compartment.pressure`, `compartment.flooded`; on a body,
+`driver`; on a character, `driving`.
 
-**Queries**: `parts`, `seats`, `stations`, `compartments`, `aboard`.
+**Queries**: `fitted` (a vehicle's parts), `seats`, `stations`,
+`compartments`, `aboard`.
 
 ## 16. Invariants
 
@@ -686,7 +866,7 @@ on `realm`. `sealed` on `area_kind`. `lanes` on `chart`.
 | H3 | Gas and liquid are conserved by exchange: what leaves one side arrives on the other. |
 | H4 | Every envelope cell belongs to exactly one compartment. |
 | H5 | An occupant standing in a vessel has a location in the vessel's grid and is carried without being updated. |
-| H6 | Sealed volumes sleep when they have no opening and no pressure difference above their rating. |
+| H6 | Sealed volumes sleep when they have no opening and no pressure difference above their rating, and are woken when either changes. |
 | H7 | A journey realises no tract it passes over. |
 | H8 | Everything here survives saving and loading mid-voyage, mid-flood and mid-collision with an identical state hash. |
 

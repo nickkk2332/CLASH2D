@@ -1,0 +1,78 @@
+[
+  { "//": "Small rules that make a town feel alive without any AI, written as a modder would write them: street lamps that light at dusk, fire alarms that ring, people who rest when they are tired. They use queries and timers (05 §10.4, §11). Switch them all off with the setting `core:town_life` set to false.",
+    "type": "rule_group", "id": "town_life",
+    "enabled": "setting('core:town_life') ?? true",
+    "doc": "The rules of town life: street lamps, fire alarms, resting. On unless the setting `core:town_life` is false." },
+
+  { "type": "variable", "id": "lit", "scope": "entity", "value": "bool", "default": false,
+    "doc": "Whether a street lamp is lit." },
+  { "type": "variable", "id": "ringing", "scope": "entity", "value": "bool", "default": false,
+    "doc": "Whether a fire alarm is ringing." },
+  { "type": "variable", "id": "weariness", "scope": "entity", "value": "int", "default": 0,
+    "doc": "How many half-hours a person has been up and about since they last rested." },
+
+  { "//": "Each lamp checks the time of day where it stands every ten minutes. Its first check is staggered by the lamp and the rule, so a street lights up lamp by lamp rather than all at one tick.",
+    "type": "eoc", "id": "lamp_keeper",
+    "attached": true, "subjects": { "self": "entity" },
+    "every": "10 min", "group": "town_life",
+    "doc": "Lights a street lamp at dusk and puts it out at dawn.",
+    "do": [
+      { "let": { "hour": "(self.loc.time_of_day ?? 43200) / 3600" } },
+      { "set": { "self.var.lit": "$hour < 6 or $hour >= 19" } }
+    ] },
+  { "type": "eoc", "id": "keep_lamps",
+    "on": "entity_created", "group": "town_life",
+    "if": "self.has_tag('street_lamp')",
+    "doc": "Gives every street lamp its keeper as it is made.",
+    "do": [ { "attach_rule": { "to": "self", "eoc": "lamp_keeper" } } ] },
+
+  { "type": "event", "id": "fire_alarm_rang",
+    "subjects": { "alarm": "entity", "here": "loc" },
+    "doc": "A fire alarm noticed fire at `here` and began to ring." },
+  { "//": "Fire appearing in a cell wakes the alarms near it that stand in the same rooms. An alarm rings for two minutes after the last fire it noticed: each new fire sets its timer again, by name.",
+    "type": "eoc", "id": "fire_alarm",
+    "on": "field_appeared", "group": "town_life",
+    "if": "(here.field('core:fire') ?? 0) > 0",
+    "doc": "Rings the fire alarms near a fire and raises `core:fire_alarm_rang` for each that was quiet.",
+    "do": [
+      { "for_each": { "entities": { "around": "here", "radius": 12, "tag": "fire_alarm",
+                                    "where": "it.loc.areas == here.areas" } },
+        "as": "alarm",
+        "do": [
+          { "if": "not $alarm.var.ringing",
+            "then": [
+              { "set": { "$alarm.var.ringing": true } },
+              { "emit": { "event": "fire_alarm_rang", "alarm": "$alarm", "here": "here" } } ] },
+          { "after": "2 min", "owner": "$alarm", "name": "ringing",
+            "do": [ { "set": { "$alarm.var.ringing": false } } ] } ] }
+    ] },
+
+  { "//": "Every half-hour a person grows a little more weary; after sixteen hours up they lie down, and lying down takes weariness off twice as fast until they get up again.",
+    "type": "eoc", "id": "rest_when_tired",
+    "attached": true, "subjects": { "self": "entity" },
+    "every": "30 min", "group": "town_life",
+    "doc": "Makes a person lie down to rest when they have been up too long.",
+    "do": [
+      { "first": [
+        { "if": "self.posture == 'core:prone'",
+          "do": [
+            { "set": { "self.var.weariness": "max(0, self.var.weariness - 2)" } },
+            { "if": "self.var.weariness == 0",
+              "then": [ { "set_posture": { "who": "self", "posture": "core:standing" } } ] } ] },
+        { "if": "self.var.weariness >= 32",
+          "do": [ { "set_posture": { "who": "self", "posture": "core:prone" } } ] },
+        { "do": [ { "add": { "self.var.weariness": 1 } } ] }
+      ] }
+    ] },
+  { "type": "eoc", "id": "people_rest",
+    "on": "entity_created", "group": "town_life",
+    "if": "self.has_tag('person')",
+    "doc": "Gives every person the habit of resting when tired.",
+    "do": [ { "attach_rule": { "to": "self", "eoc": "rest_when_tired" } } ] },
+
+  { "type": "function", "id": "people_near",
+    "params": { "at": "loc", "radius": { "type": "real", "default": 5 } },
+    "returns": "int",
+    "value": { "count": { "entities": { "around": "$at", "radius": "$radius", "tag": "person" } } },
+    "doc": "How many people stand within a radius of a cell, in metres: what a rule asks to know whether a room is crowded." }
+]

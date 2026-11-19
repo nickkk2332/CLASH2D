@@ -1,0 +1,21 @@
+[
+  { "//": "Kinds of relation (15 §9.1). What each means is this mod's; the engine reads only the five flags: `opposes` and `sides_with` tell enemies from friends (09 §3.4), `avoids` marks one to keep away from (the AI's `feared`, 09 §6.6), `orders` makes an order one to obey (15 §10), `intervenes` makes the holder a candidate for windows opened against whom it is held toward (03 §7.1).",
+    "type": "relation_kind", "id": "friendly", "name": "friendly",
+    "range": [0, 1], "default": 0, "fade": 0.001, "sides_with": true,
+    "doc": "Good will: held above nothing, the one it is held toward is a friend. Fades slowly." },
+  { "type": "relation_kind", "id": "hostile", "name": "hostile",
+    "range": [0, 1], "default": 0, "fade": 0.005, "opposes": true,
+    "doc": "Ill will: held above nothing, the one it is held toward is an enemy. Fades over hours." },
+  { "type": "relation_kind", "id": "fearful", "name": "afraid",
+    "range": [0, 1], "default": 0, "fade": 0.02, "avoids": true,
+    "doc": "Fear of someone: what makes a character run rather than fight. Fades within the hour." },
+  { "type": "relation_kind", "id": "loyal", "name": "loyal", "kind": "flag",
+    "orders": true, "sides_with": true, "intervenes": true,
+    "doc": "Held by a servant toward its master: it obeys their orders, counts them a friend and steps in for them. A summoned or raised servant is made with it; lose it and it is no longer a servant." },
+  { "type": "relation_kind", "id": "employer", "name": "employed by", "kind": "flag",
+    "orders": true,
+    "doc": "Held by someone in another's pay toward whoever pays them: it does what it is told, as work, and no more." },
+  { "type": "relation_kind", "id": "guards", "name": "guards", "kind": "flag",
+    "intervenes": true,
+    "doc": "Held by a bodyguard toward whom it protects: it is offered the windows opened against them." }
+]

@@ -1,0 +1,8 @@
+{
+  "id": "bodyfix",
+  "name": "Body fixtures",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "Tissues, parts, two body plans, functions and pools for the tests of clash_sim::body. Test content: nothing in the engine names any of it.",
+  "requires": []
+}

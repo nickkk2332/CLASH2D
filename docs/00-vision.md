@@ -154,6 +154,7 @@ states which scenes it serves.
 |---|-------|-------------------|
 | S24 | **The workshop.** A survivor builds a generator, wires it to a workshop, sets a furnace and a loader running, and leaves. A day later the bars are stacked, or the fuel ran out halfway. | Devices need real supply from real sources. Resources are balanced over networks that content defines. Machines work unattended, and what they did while nobody watched is correct. What is built is made of materials and obeys the world's physics. |
 | S25 | **The suit.** A powered suit gives its wearer strength, flight and air to breathe in vacuum. A hit takes out an arm's weapon. Then the core fails. | Equipment is built from modules that share power. What a module gives lasts only while it is supplied and intact. An unpowered suit is a great weight of metal with someone inside. |
+| S26 | **The fortune.** Someone with no powers and a great deal of money orders a prototype from a factory they hold. It comes by lorry two days later, unless somebody meets the lorry first. They fit it to a suit that walks itself out of its bay when called. The wage bill is met for as long as the factory earns. | Wealth is a balance that work, purchases and wages draw on. Holding a place earns from it. Things bought are delivered through the world, not conjured. Equipment can act for itself when its owner is elsewhere. |
 
 ### Vehicles
 

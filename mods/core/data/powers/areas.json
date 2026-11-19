@@ -1,0 +1,99 @@
+[
+  { "//": "Powers made of areas (08 §7.2): a bubble of still time, a null field, a gravity well, floating and a shadow. Each is an area, a clock, an ambient override, a light or a suppression, bound to the ability that made it (08 §7.3); none is an engine feature. Nobody has them by default; the template and the trait `power_sampler` give them. Values are illustrative.",
+    "type": "area_kind", "id": "still_time",
+    "clock_rate": 0.001, "priority": 100, "tags": ["still_time"] },
+
+  { "//": "Worn while time stands still round its maker, who goes on at the realm's pace.",
+    "type": "trait", "id": "outside_time", "name": "Outside time",
+    "tags": ["outside_time"], "look": "outside_time" },
+
+  { "//": "Stopping time round oneself (08 §9.1): the maker's own clock is pinned to the realm's, and an area round them whose clock runs at a thousandth of the realm's follows them. Everyone and everything it comes over all but stops: people mid-step, bodies in flight, fire. It drains the reserve while it lasts; when the mode ends, by choice or an empty reserve, the bubble goes and everything inside goes on from where it was.",
+    "type": "ability", "id": "time_stop", "name": "Time stop",
+    "description": "Time all but stops round you while you go on. It drains your reserve.",
+    "tags": ["power", "time"], "seat": "mind",
+    "params": { "radius": "3 + ability.rank", "drain": "8" },
+    "modes": [
+      { "id": "stopped", "name": "Time stopped", "trait": "outside_time",
+        "upkeep": { "reserve": "ability.drain" }, "look": "outside_time",
+        "on_start": [
+          { "anchor_clock": { "who": "self", "to": "self.loc.realm" } },
+          { "create_area": { "radius": "ability.radius", "kind": "still_time",
+                             "anchor": "self", "bound": true, "as": "bubble" } } ],
+        "on_end": [ { "anchor_clock": { "who": "self" } } ] } ] },
+
+  { "//": "Inside one, every ability tagged `power` is suppressed (08 §6.2).",
+    "type": "area_kind", "id": "null_field",
+    "suppresses": ["power"], "priority": 10, "tags": ["null_field"] },
+
+  { "//": "A field round its maker in which powers fail: whoever it comes over loses what their powers confer and their modes end; leaving it, their powers return and their modes do not. Its maker's own powers resist their own field, by a rule on the hook `ability_suppressing`. It is not itself a `power`, so it is not suppressed by another's field.",
+    "type": "ability", "id": "null_field", "name": "Null field",
+    "description": "Powers fail near you, except your own.",
+    "tags": ["negation"], "seat": "mind",
+    "params": { "radius": "2 + ability.rank" },
+    "modes": [
+      { "id": "on", "name": "Null field", "upkeep": { "reserve": 4 },
+        "on_start": [
+          { "create_area": { "radius": "ability.radius", "kind": "null_field",
+                             "anchor": "self", "bound": true, "as": "field" } } ] } ],
+    "rules": [
+      { "on": "ability_suppressing",
+        "if": "event.source == self.ability('core:null_field').bound('field')",
+        "do": [ { "cancel_event": {} } ] } ] },
+
+  { "//": "Six times the ground's pull: a stability check is asked for what stands inside, so that what does not bear the weight gives way, and bodies in flight inside come down six times as hard.",
+    "type": "area_kind", "id": "gravity_well",
+    "gravity": 6, "priority": 20, "tags": ["gravity_well"] },
+
+  { "//": "A well of crushing gravity laid at a cell for a while, bound to the ability that made it.",
+    "type": "action", "id": "gravity_well", "name": "Gravity well",
+    "params": { "to": "cell", "radius": "real", "seconds": "real", "by": "ability" },
+    "requires": "(dist(self, $to) ?? 99) <= 20",
+    "fail_text": "That is too far.",
+    "tags": ["power"],
+    "phases": [
+      { "id": "focus", "time": "500 ms" },
+      { "id": "crush", "time": 0,
+        "do": [ { "create_area": { "at": "$to", "radius": "$radius", "kind": "gravity_well",
+                                   "ability": "$by", "for": "$seconds", "as": "well" } } ] },
+      { "id": "recover", "time": "500 ms" } ] },
+
+  { "type": "ability", "id": "gravity_well", "name": "Gravity well",
+    "description": "Gravity six times as strong over a place, for a while: what cannot bear it gives way, and what falls there falls hard.",
+    "tags": ["power", "gravity"], "seat": "mind",
+    "params": { "radius": "1 + ability.rank", "seconds": "6 + 2 * ability.rank" },
+    "grants": [
+      { "action": "gravity_well",
+        "params": { "radius": "ability.radius", "seconds": "ability.seconds", "by": "ability" },
+        "cost": { "reserve": 35 }, "cooldown": "10 s", "intent": "harm" } ] },
+
+  { "//": "Worn while floating.",
+    "type": "trait", "id": "floating", "name": "Floating",
+    "tags": ["floating"], "look": "floating" },
+
+  { "//": "No gravity in its maker's own cell, wherever they go: thrown, they fly straight and do not come down.",
+    "type": "ability", "id": "float", "name": "Float",
+    "description": "Nothing pulls you down while you float. It drains your reserve slowly.",
+    "tags": ["power", "gravity", "movement"], "seat": "mind",
+    "modes": [
+      { "id": "floating", "name": "Floating", "trait": "floating",
+        "upkeep": { "reserve": 1.5 }, "look": "floating",
+        "on_start": [
+          { "create_area": { "radius": 0, "gravity": 0, "priority": 30,
+                             "anchor": "self", "bound": true, "as": "lift" } } ] } ] },
+
+  { "//": "Worn while a shadow clings to its maker.",
+    "type": "trait", "id": "shrouded", "name": "Shrouded",
+    "tags": ["shrouded"], "look": "shrouded" },
+
+  { "//": "A darkness that goes where its maker goes: a light of negative intensity at the middle of an area anchored to them. Light never goes below none, so it puts out what light there is and no more.",
+    "type": "ability", "id": "shadow", "name": "Shadow",
+    "description": "Darkness gathers round you and follows you.",
+    "tags": ["power", "darkness"], "seat": "mind",
+    "params": { "depth": "1.5 + 0.5 * ability.rank" },
+    "modes": [
+      { "id": "shrouded", "name": "Shrouded", "trait": "shrouded",
+        "upkeep": { "reserve": 1 }, "look": "shrouded",
+        "on_start": [
+          { "create_area": { "radius": 0, "light": "0 - ability.depth",
+                             "light_radius": 6, "anchor": "self", "bound": true, "as": "shade" } } ] } ] }
+]

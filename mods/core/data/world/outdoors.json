@@ -1,0 +1,17 @@
+[
+  { "//": "What grounds scatter on their surface. A ground names these; the engine does not.",
+    "type": "fixture", "id": "tree", "material": "wood",
+    "height": 3.0, "fill": 0.3,
+    "tags": ["plant"],
+    "glyph": { "ch": "Y", "fg": "green" } },
+
+  { "type": "fixture", "id": "bush", "material": "wood",
+    "height": 1.0, "fill": 0.05,
+    "flags": ["rough"],
+    "tags": ["plant"],
+    "glyph": { "ch": "*", "fg": "green" } },
+
+  { "type": "fixture", "id": "boulder", "material": "granite",
+    "height": 1.0, "fill": 0.2,
+    "glyph": { "ch": "o", "fg": "material" } }
+]

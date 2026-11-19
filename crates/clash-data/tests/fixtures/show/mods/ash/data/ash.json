@@ -1,0 +1,5 @@
+[
+  { "type": "material", "id": "cinder", "copy_from": "base",
+    "toughness": 9.0e5,
+    "extend": { "tags": ["burnt"] } }
+]

@@ -1,0 +1,24 @@
+[
+  { "//": "Declarations that read the simulation through real subjects and properties (05 §5, §6). No rule uses them yet: they are here so that the linter checks the bundled content against the engine's own registry.",
+    "type": "variable", "id": "visits",
+    "scope": "tract", "value": "int", "default": 0,
+    "doc": "How many times someone has come to stand in the tract. Kept on the tract's record, so it is remembered while the tract is not loaded." },
+
+  { "type": "function", "id": "devastation_at",
+    "params": { "who": "entity" },
+    "returns": "int",
+    "value": "$who.loc.tract.devastation ?? 0",
+    "doc": "How devastated the tract someone stands in is, 0 to 255. Zero for someone who is not in the world." },
+
+  { "type": "function", "id": "well_trodden",
+    "params": { "who": "entity", "often": { "type": "int", "default": 10 } },
+    "returns": "bool",
+    "value": "$who.in_world and $who.loc.tract.var.visits >= $often",
+    "doc": "Whether the tract someone stands in has been visited at least so many times." },
+
+  { "type": "function", "id": "footing_under",
+    "params": { "at": "loc" },
+    "returns": "bool",
+    "value": "$at.standable and not $at.has_flag('walk_blocked')",
+    "doc": "Whether a cell can be stood in with nothing in the way." }
+]

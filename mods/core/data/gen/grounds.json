@@ -1,0 +1,14 @@
+[
+  { "//": "Grass over soil over rock, with a gentle surface: ramps where it steps, a few caves deep in the rock, and trees, bushes and boulders as thick as the tract definition asks.",
+    "type": "ground", "id": "lowland",
+    "params": { "trees": 0.0, "bushes": 0.01, "rocks": 0.004 },
+    "depth": 12,
+    "steps": [
+      { "strata": [ { "depth": 2, "block": "solid@soil", "anchor": true },
+                    { "block": "solid@granite", "anchor": true } ] },
+      { "surface": { "floor": "grass", "ramp": "ramp@soil" } },
+      { "caves": { "below": -4, "density": 0.01, "width": [1, 3] } },
+      { "scatter": { "fixture": "tree", "density": "$trees", "apart": 1 } },
+      { "scatter": { "fixture": "bush", "density": "$bushes" } },
+      { "scatter": { "fixture": "boulder", "density": "$rocks", "apart": 2 } } ] }
+]

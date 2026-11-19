@@ -1,0 +1,162 @@
+[
+  { "//": "What is made and what it is made from (16 §8): plain stuff for the bundled recipes, a few containers for drink and medicine, and a book that teaches herbalism. Values are illustrative. A container's `contains` is how much it holds of any substances; `filled` is what it holds when it is made. A loaf of `items.json` is made of bread and can be eaten.",
+    "type": "material", "id": "cloth",
+    "density": 300, "toughness": 5.0e5,
+    "resist": {
+      "impact": { "threshold": "1 MPa", "factor": 0.3 },
+      "cut":    { "threshold": "4 MPa" },
+      "pierce": { "threshold": "3 MPa" },
+      "heat":   { "threshold": "200 kPa" }
+    },
+    "flammable": true,
+    "color": "light_gray",
+    "tags": ["fibre"] },
+
+  { "type": "material", "id": "plant",
+    "density": 400, "toughness": 1.0e4,
+    "resist": {
+      "impact": { "threshold": "100 kPa" },
+      "cut":    { "threshold": "50 kPa" },
+      "pierce": { "threshold": "50 kPa" }
+    },
+    "flammable": true,
+    "color": "brown",
+    "tags": ["plant"] },
+
+  { "type": "material", "id": "flour",
+    "density": 600, "toughness": 1.0e3,
+    "resist": {
+      "impact": { "threshold": "10 kPa" },
+      "cut":    { "threshold": "10 kPa" },
+      "pierce": { "threshold": "10 kPa" }
+    },
+    "flammable": true,
+    "color": "light_gray",
+    "tags": ["food"] },
+
+  { "type": "item", "id": "cloth", "name": "strip of cloth",
+    "material": "cloth", "mass": "0.05 kg", "volume": 0.0002, "length": "0.5 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["cloth", "small"],
+    "glyph": { "ch": "~", "fg": "material" } },
+
+  { "type": "item", "id": "stick", "name": "stick",
+    "material": "wood", "mass": "0.1 kg", "volume": 0.00015, "length": "0.6 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["wood", "small"],
+    "glyph": { "ch": "-", "fg": "material" } },
+
+  { "type": "item", "id": "log", "name": "log",
+    "material": "wood", "mass": "2 kg", "volume": 0.0035, "length": "0.5 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["wood", "fuel"],
+    "glyph": { "ch": "=", "fg": "material" } },
+
+  { "type": "item", "id": "feather", "name": "feather",
+    "material": "plant", "mass": "0.002 kg", "volume": 0.00001, "length": "0.2 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["feather", "small"],
+    "glyph": { "ch": ",", "fg": "white" } },
+
+  { "type": "item", "id": "flour", "name": "bag of flour",
+    "material": "flour", "mass": "0.3 kg", "volume": 0.0005, "length": "0.2 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["food", "flour"],
+    "glyph": { "ch": "%", "fg": "white" } },
+
+  { "type": "item", "id": "herbs", "name": "bunch of herbs",
+    "material": "plant", "mass": "0.05 kg", "volume": 0.0002, "length": "0.2 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["herb", "small"],
+    "glyph": { "ch": "\"", "fg": "green" } },
+
+  { "//": "A plant whose berries are deadly: what nightshade extract is pressed from.",
+    "type": "item", "id": "nightshade_plant", "name": "nightshade",
+    "material": "plant", "mass": "0.05 kg", "volume": 0.0002, "length": "0.3 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "tags": ["herb", "poisonous", "small"],
+    "glyph": { "ch": "\"", "fg": "magenta" } },
+
+  { "//": "A strip of cloth made for a wound: applied, it closes what bleeds.",
+    "type": "item", "id": "bandage", "name": "bandage",
+    "material": "cloth", "mass": "0.03 kg", "volume": 0.0001, "length": "0.4 m",
+    "grip": { "arm": 1 }, "stack": true,
+    "interactions": ["apply_bandage"],
+    "tags": ["bandage", "medical", "small"],
+    "glyph": { "ch": "+", "fg": "white" } },
+
+  { "//": "A stick with cloth wound round its head. Lighting it is for a later package.",
+    "type": "item", "id": "torch", "name": "torch",
+    "material": "wood", "mass": "0.3 kg", "volume": 0.0004, "length": "0.6 m",
+    "grip": { "arm": 1 },
+    "surfaces": [ { "id": "head", "kind": "impact", "area": 2.0e-3, "give": 0.01, "span": 0.06 } ],
+    "tags": ["torch"],
+    "glyph": { "ch": "/", "fg": "yellow" } },
+
+  { "type": "item", "id": "mug", "name": "mug",
+    "material": "wood", "mass": "0.3 kg", "volume": 0.0006, "length": "0.12 m",
+    "grip": { "arm": 1 },
+    "contains": "400 ml",
+    "interactions": ["drink"],
+    "tags": ["vessel", "small"],
+    "glyph": { "ch": "u", "fg": "material" } },
+
+  { "type": "item", "id": "mug_of_ale", "copy_from": "mug", "name": "mug of ale",
+    "filled": { "ale": "400 ml" } },
+
+  { "type": "item", "id": "waterskin", "name": "waterskin",
+    "material": "leather", "mass": "0.2 kg", "volume": 0.0003, "length": "0.3 m",
+    "grip": { "arm": 1 },
+    "contains": "1 L",
+    "filled": { "water": "1 L" },
+    "interactions": ["drink"],
+    "tags": ["vessel"],
+    "glyph": { "ch": "&", "fg": "material" } },
+
+  { "type": "item", "id": "vial", "name": "vial",
+    "material": "glass", "mass": "0.05 kg", "volume": 0.00006, "length": "0.08 m",
+    "grip": { "arm": 1 },
+    "contains": "60 ml",
+    "interactions": ["drink", "coat_blade"],
+    "tags": ["vessel", "small"],
+    "glyph": { "ch": "!", "fg": "material" } },
+
+  { "type": "item", "id": "salve_pot", "name": "pot of salve",
+    "material": "glass", "mass": "0.1 kg", "volume": 0.0001, "length": "0.06 m",
+    "grip": { "arm": 1 },
+    "contains": "50 ml",
+    "interactions": ["apply_salve"],
+    "tags": ["vessel", "medical", "small"],
+    "glyph": { "ch": "o", "fg": "green" } },
+
+  { "type": "item", "id": "pot_of_salve", "copy_from": "salve_pot", "name": "pot of healing salve",
+    "filled": { "healing_salve": "50 ml" } },
+
+  { "type": "item", "id": "sleeping_draught", "copy_from": "vial", "name": "vial of sleeping draught",
+    "filled": { "sleeping_draught": "50 ml" } },
+
+  { "type": "item", "id": "poison_vial", "copy_from": "vial", "name": "vial of nightshade",
+    "filled": { "nightshade": "20 ml" } },
+
+  { "//": "Reading it teaches herbalism; lying on a bench, it lets whoever works there make salve as if they knew how.",
+    "type": "item", "id": "herbal", "name": "herbal",
+    "description": "A thick book of plants and what to do with them.",
+    "material": "leather", "mass": "0.8 kg", "volume": 0.0012, "length": "0.25 m",
+    "grip": { "arm": 1 },
+    "teaches": ["herbalism"],
+    "provides": ["herbalism"],
+    "interactions": ["read"],
+    "tags": ["book"],
+    "glyph": { "ch": "=", "fg": "green" } },
+
+  { "//": "A loaf is made of bread, and is eaten whole.",
+    "type": "item", "id": "loaf", "patch": true,
+    "filled": { "bread": "400 ml" },
+    "extend": { "interactions": ["eat"] } },
+
+  { "//": "Knives and clubs are tools: a knife cuts, a club knocks.",
+    "type": "item", "id": "knife", "patch": true,
+    "qualities": { "cutting": 1 } },
+  { "type": "item", "id": "club", "patch": true,
+    "qualities": { "hammering": 1 } }
+]

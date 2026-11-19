@@ -31,6 +31,7 @@ packages they depend on are done.
 | V12 | Chart lanes | S | V11 | todo |
 | V13 | Benchmarks and budget gate | S | V1, then recurring | todo |
 | V14 | Bodies made of cells | L | V6b, V3, E5, C7 | todo |
+| V15 | Driven bodies | M | V8, E7, C4, G10 | todo |
 
 ## Order and parallelism
 
@@ -40,7 +41,7 @@ packages they depend on are done.
 | 2 | V3, V5, V8 |
 | 3 | V4, V6a, V7, V10 |
 | 4 | V6b, V9, V11 |
-| 5 | V12, V14 |
+| 5 | V12, V14, V15 |
 
 ## Milestones
 
@@ -272,6 +273,30 @@ Done when
 - Scenario `the_colossus`: climb it, cut into it, be thrown off, and bring
   it down by destroying what its vital function depends on.
 
+### V15 — Driven bodies
+
+**Spec** 11 §8.1; 06 §8.2 · **Size** M · Added after the first review of
+what the design supports (decision D-201)
+
+Build
+- Seats that `drive`: the joint action, the occupant as driver, the
+  seat's `uses` held on the driver's own body.
+- Commands and AI options routed to the driven body; `self.driver` and
+  `driving`; senses relayed to the driver.
+- Hits through the part holding the seat reaching the occupant by
+  exposure; the body going still when the driver stops or is thrown out.
+
+Done when
+- Test script `in_the_cockpit`: a pilot in a metal body with no mind
+  strikes, grips and throws with its limbs by document 07; loses an arm of
+  the machine and the actions that needed it; is reached by a hit that
+  breaches the torso; is knocked out, and the machine stops where it
+  stands.
+- A seat that uses no channels leaves the driver able to act with their
+  own body at the same time; one that uses hands does not.
+- With its power store empty the body is inert by `when_unsupplied`.
+- An AI driver chooses among the body's attacks, not its own.
+
 ### V13 — Benchmarks and budget gate
 
 **Spec** 11 §17 · **Size** S, recurring
@@ -291,10 +316,15 @@ Under `scenarios/vehicles/`.
 | `voyage` | V11 | S9 | Aboard against skipped |
 | `orbit_to_luna` | V12 | S9 | Edge exit, lane, arrival |
 | `the_colossus` | V14 | S11 | A creature that is a place |
+| `in_the_cockpit` | V15 | S25 | A machine with limbs and a pilot |
+| `she_rolls` | V4 | — | List and capsizing |
+| `convoy` | V7 | — | Fleets |
+| `downstream` | V1 | — | Drift |
+| `going_up` | V6b | — | Lifts |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -306,3 +336,9 @@ small package of its own.
 | List and capsizing | V4 | 11 §10.6 | Test script `she_rolls`: flooding one side raises `list` toward that side; counter-flooding lowers it; past `list_shift` loose things slide; past `capsize` the vessel capsizes, floods and puts those on deck in the water. The grid never turns. |
 | Refused swings | V6b | 11 §5.5 | A long vessel in a channel narrower than its swing is refused the swing with a reason and keeps its quarter-turn. Forced, it swings and the contact is resolved as a collision. |
 | Fleets | V7 | 11 §7; 09 §8 | Test script `convoy`: three vehicles in a collective keep formation on their leader through a turn, and an order to the collective reaches each commander. |
+| Temperature | V1 | 11 §4.6; 02 §4.1 | `here.temperature` is the region's adjusted by stratum in the open, moves toward the liquid's deep value with depth, is the stratum's in vacuum, and adds what warming and cooling fields contribute. Nothing is scheduled to maintain it. |
+| Drift | V1 | 11 §4.7 | Test script `downstream`: a swimmer and a floating crate in a river are carried along its line at its current; an occupant in a storm-force wind is staggered and one in a breeze is not; under a roof neither is touched. |
+| Held temperature | V3 | 11 §4.6 | A closed sealed area with a supplied `climate` device reaches its set point in the time its volume and rate give, by one scheduled wake-up. Opened, it takes the outside temperature. Unpowered, it moves toward the outside at its `leak`. |
+| Lifts | V6b | 11 §5.2 | Test script `going_up`: a platform on vertical track answers a call signal, stops level with the storey, and carries those standing on it. With its hoist destroyed it falls and lands as an impact. |
+| Loading, storing and detail | V2 | 11 §14 | A parked, loaded vehicle schedules nothing. A stored one is saved with its anchor tract and returns identical. A travelling one is a traveler record, with a carrier realm only if someone is aboard. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

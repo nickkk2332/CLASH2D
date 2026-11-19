@@ -1,0 +1,6 @@
+{
+  "id": "other",
+  "name": "Another game",
+  "mods": ["other"],
+  "boot_screen": "other:front_door"
+}

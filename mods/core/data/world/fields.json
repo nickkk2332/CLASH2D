@@ -1,0 +1,67 @@
+[
+  { "//": "Fields: values from 0 to 255 in a cell that evolve by rule (02 §16). Values are illustrative. Fire feeds on what is tagged `fuel`, burns it by its heat, gives off smoke and dies down where there is nothing left to burn. The wind does not carry flames off; they spread before it.",
+    "type": "field", "id": "fire",
+    "step": "500 ms",
+    "rules": [
+      { "rule": "decay", "amount": 12 },
+      { "rule": "spread", "needs": "fuel", "chance": 0.3, "amount": 30, "from": 60 },
+      { "rule": "emit", "field": "smoke", "amount": 12 },
+      { "rule": "damage", "kind": "heat", "energy_per_level": 10, "intensity_per_level": "10 kPa" },
+      { "rule": "drift", "share": 0.0, "spread": 0.25 }
+    ],
+    "catch_up": "burn_out",
+    "light": { "intensity": 1.5, "radius": "10 m", "from": 20 },
+    "glyph": { "ch": "^", "fg": ["red", "yellow", "white"] },
+    "tags": ["light_source", "hot"] },
+
+  { "type": "field", "id": "smoke",
+    "step": "500 ms",
+    "rules": [
+      { "rule": "decay", "amount": 1 },
+      { "rule": "drift" },
+      { "rule": "diffuse", "rate": 0.2, "rise": 0.5 },
+      { "rule": "expose", "pool": "smoke", "per_level": 0.001, "route": "breath", "from": 40 }
+    ],
+    "catch_up": "disperse",
+    "opaque_from": 160,
+    "glyph": { "ch": "~", "fg": ["dark_gray", "gray"] },
+    "tags": ["gas"] },
+
+  { "type": "field", "id": "steam",
+    "step": "500 ms",
+    "rules": [
+      { "rule": "decay", "amount": 6 },
+      { "rule": "drift" },
+      { "rule": "diffuse", "rate": 0.2, "rise": 0.5 }
+    ],
+    "catch_up": "disperse",
+    "opaque_from": 200,
+    "glyph": { "ch": "~", "fg": ["light_gray", "white"] },
+    "tags": ["gas", "hot"] },
+
+  { "//": "Loose water: it falls, spreads out until it lies level, and then lies still.",
+    "type": "field", "id": "water",
+    "step": "250 ms",
+    "rules": [
+      { "rule": "flow", "rate": 0.25 }
+    ],
+    "catch_up": "settle",
+    "glyph": { "ch": "~", "fg": ["blue", "cyan"] },
+    "tags": ["liquid"] },
+
+  { "//": "One part of water puts out three of fire and leaves two of steam.",
+    "type": "field_reaction", "id": "quench",
+    "when": ["water", "fire"],
+    "uses": { "water": 1, "fire": 3 },
+    "gives": { "steam": 2 } },
+
+  { "//": "Where fire has fuel under it, it grows.",
+    "type": "field_reaction", "id": "burning",
+    "when": ["fire", { "material_tag": "fuel" }],
+    "gives": { "fire": 30 } },
+
+  { "//": "A shock that reaches water reaches whoever stands in it nearby.",
+    "type": "field_reaction", "id": "current_through_water",
+    "when": [ { "damage": "shock" }, "water" ],
+    "spreads": { "share": 0.8, "reach": 6 } }
+]

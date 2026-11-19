@@ -1,0 +1,12 @@
+[
+  { "//": "Exertion (07 §12): a pool drained by fighting, for those who have one. Every blow that lands from someone in an aggressive stance costs stamina (the pool of `traits.json`); out of breath, the stance is dropped. Someone with no stamina pool is not affected.",
+    "type": "eoc", "id": "exertion", "on": "strike_landed",
+    "if": "self.has_tag('aggressive') and self.pool.frac('stamina') != null",
+    "doc": "A blow that lands from someone in an aggressive stance costs them 5 stamina.",
+    "do": [ { "pool_add": { "who": "self", "pool": "stamina", "amount": -5 } } ] },
+
+  { "type": "eoc", "id": "winded", "on": "pool_crossed",
+    "if": "self.has_tag('aggressive') and (self.pool.frac('stamina') ?? 1) < 0.25",
+    "doc": "Someone in an aggressive stance whose stamina falls below a quarter drops the stance.",
+    "do": [ { "remove_trait": { "from": "self", "trait": "aggressive" } } ] }
+]

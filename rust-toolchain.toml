@@ -1,0 +1,7 @@
+# The pinned toolchain. Every contributor and the CI build use exactly this
+# compiler, formatter and linter, so `cargo xtask check` means the same thing
+# everywhere. Raise it in a change of its own.
+[toolchain]
+channel = "1.97.0"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

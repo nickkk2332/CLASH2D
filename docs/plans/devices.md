@@ -16,18 +16,25 @@ Vehicle package V5 depends on it.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| G1 | Interactions | M | E12, T3 | todo |
-| G2 | Device model | M | E12 | todo |
+| G1 | Interactions | M | E12, T3 | beta |
+| G2 | Device model | M | E12 | beta |
 | G3 | Resources and network balancing | L | G2, K7 | todo |
 | G4 | Conduits and ports | L | G3, W6 | todo |
 | G5 | Signals and control | M | G4, A1 | todo |
-| G6 | Recipes and work | L | G3, E8 | todo |
+| G6 | Recipes and work | L | G3, E8 | beta |
 | G7 | Movers and item conduits | M | G6, G4 | todo |
 | G8 | Construction and jobs | L | G6, W13 | todo |
 | G9 | Assemblies and gadgets | M | G3, E3, E8 | todo |
 | G10 | Suits and implants | M | G9, E5, V4 | todo |
 | G11 | Storage and catch-up | L | G6, G4, W10 | todo |
 | G12 | Benchmarks and budget gate | S | G3, then recurring | todo |
+| G13 | Accounts and standing payments | M | G3, K7, S7 | todo |
+| G14 | Trade and delivery | M | G13, G1, E8, L5, U9 | todo |
+| G15 | Assemblies that stand alone | M | G10, E6, E7, I3 | todo |
+| G16 | Structures | M | G2, G4, WG1 | todo |
+| G17 | Know-how | S | G6, E7 | done |
+| G18 | Screens for making, building and work | L | G6, G8, G5, U9, U4 | todo |
+| G19 | Substances | M | G6, G3, W16, E2, C2 | beta |
 
 ## Order and parallelism
 
@@ -37,6 +44,17 @@ Vehicle package V5 depends on it.
 | 2 | G3 |
 | 3 | G4, G6, G9 |
 | 4 | G5, G7, G8, G10, G11 |
+| 5 | G13, G15 |
+| 6 | G14 |
+| any, once their dependencies are done | G16, G17, G18, G19 |
+
+G13 to G15 were added after the first review of what the design supports
+(decisions D-198 to D-200). G14 needs the cold layer's shipments (ai
+package L5). G16 to G18 were added after the review of technology,
+factories and bases (decisions D-208 to D-214). G16 needs the map format
+(worldgen package WG1). G18 should be built as early as its dependencies
+allow: without it the rest of this plan can be reached only from the
+console.
 
 ## Milestones
 
@@ -46,6 +64,10 @@ Vehicle package V5 depends on it.
 | **M4b Power** | G3–G5 | A generator burns fuel and lights a building. Demand beyond supply sheds the low-priority loads. Cutting a cable darkens half of it. The fuel runs out and everything stops in order. A lever opens a powered door; a terminal does the same from another room. |
 | **M4c Workshop and base** | G6–G8, G11 | Craft at a bench from nearby shelves. A furnace fed by a loader runs unattended and slows on low power. Designate a room, deliver bricks, build it with a helper, stop halfway and resume. Leave for a day and return to the right number of bars. |
 | **M4d Kit** | G9, G10 | A torch dies when its cell does and lives when the cell is swapped. A suit grants strength and flight while powered, keeps its wearer alive in vacuum, loses a module to a hit, and becomes dead weight when the core fails. |
+
+| **M4e Means** | G13–G15 | Buy a rifle at a counter and be refused when the balance is short. Order a vehicle through a terminal and find it in the berth next day, or find the lorry robbed. Stop being able to pay the staff and watch them leave. Call a suit from its bay and have it walk to you, then step into it. |
+
+| **M4f A base you can run** | G16–G18 | Open the make screen at a bench and see why a recipe cannot be started. Lay out a room in build mode, be warned that its roof will not stand, fix it, and watch helpers build it. Stack firebrick in the right shape and have it become a furnace; knock one brick out and have it stop. Read a manual and find a new recipe on the list. Turn on the power overlay and see which half of the base is dark. |
 
 ## Work packages
 
@@ -66,6 +88,28 @@ Done when
   player.
 - A device's rule can `interact` with a neighbouring element.
 
+Beta (decisions D-622, D-623), in `clash_sim::interaction`: the
+`interaction` type with `target`, `reach`, `time`, `if`, `shown_if`,
+`fail_text`, `do`, `default` and `offered_by`; offers from elements,
+devices, items and `any`; `interactions_for`, `default_for`,
+`bump_default` and `offers_near`, read through the belief seam; every
+reach kind, `network` through a stub of `network:` tags; the hooks
+`interaction_reach` and `interaction_starting` and the event
+`interacted`; the verbs `interact` and `complete_interaction`; any action
+with parameters `interaction` and `target` begun through
+`action_starting`; `core:interact` in `mods/core/data/interact.json`;
+the properties of 16 §3.5.1; doors, windows, a lamp switch, a locker and
+a lockable door with its key in `mods/core`. `tests/interactions.rs`
+covers the three items above, a door opened and walked through, a lock
+and its key, hiding in a locker and a blast that spills it, and a save
+in the middle. Stubbed: the channels of `uses` (claimed only as the
+action that does it states), `tools`, `interactions` on templates, true
+networks (G3, G4), the query `interactions`. The application offers
+them in play (12 §3.7, decisions D-701, D-702): walking into a shut door
+does its default, the property `entity.offers_near` lists what is within
+a step for the `ui` mod's `interact` screen, and a refusal is told with
+its reason; `crates/clash-app/tests/interacting.rs`.
+
 ### G2 — Device model
 
 **Spec** 16 §4.1–4.3 · **Size** M
@@ -81,6 +125,18 @@ Done when
   exactly one.
 - A config change through the `set_config` verb is saved and raises
   `device_configured`.
+
+Beta (decision D-820), in `clash_sim::device` (16 §4.3 as built):
+`modes`, `config`, `stores`, `speed`, `auto`, `provides` and `recipes` on
+the `device` type, `when` on `speed`, `auto` and `provides`; the
+component keeps the mode, the settings and the stores' levels; the verbs
+`set_mode`, `set_config`, `add_resource`, `drain_resource`, the events
+`device_mode_changed` and `device_configured`, the properties `mode`,
+`config` and `store` of devices and elements. `tests/making.rs` covers
+both items above. Stubbed: ports and networks (a station draws on its
+own stores), `load` and `when_supplied` (the promotion rule gives the
+counting), the generic device screen, climate devices, containers that
+keep.
 
 ### G3 — Resources and network balancing
 
@@ -162,6 +218,18 @@ Done when
 - A machine on half supply takes twice as long.
 - A bench recipe finds inputs on a shelf within range and not beyond it.
 - A crop advances only while its condition holds.
+
+Beta (decisions D-821 to D-824), in `clash_sim::recipe` (16 §8.6): the
+`recipe` type; processes on stations and workers with one wake-up that
+follows the rate; the work action (`core:make`) and the verbs `work`,
+`start_recipe`, `cancel_recipe`; machines with `auto`; supply from holds,
+the station and racks within range; `qualities`; `emits`;
+`recipe_starting`, `recipe_completing`; conditions on the place;
+`repairs`; `recipe_options` for the make screen. Test scripts
+`bench_shelf`, `half_supply` and `crop_condition` under
+`scenarios/making/`, and `tests/making.rs`, cover the four items above.
+Stubbed: `while` on networks (stores stand in), jobs (G8), resource and
+account inputs, `noise`, the query `recipes`.
 
 ### G7 — Movers and item conduits
 
@@ -248,6 +316,184 @@ Done when
 
 **Spec** 16 §16 · **Size** S, recurring
 
+### G13 — Accounts and standing payments
+
+**Spec** 16 §5.6; 15 §9.2 · **Size** M
+
+Build
+- `account` resources and balances for characters, groups and sites, a
+  site's being its stock; saving; balances kept with agents in every form.
+- `pay`, `start_payment`, `stop_payment`; balances as straight lines; the
+  wake-up at the floor; `account_exhausted` and `payment_stopped`.
+- `worth` on items; `deposit` and `withdraw`.
+- Account amounts as recipe inputs; `payer` on jobs.
+- Reading a balance in a mind context: one's own, or a group's through a
+  role that spends.
+
+Done when
+- A payment between two holders conserves the total, and a balance equals
+  its last value plus net rate times elapsed time (invariant G11).
+- Test script `payday`: a holder with three standing payments runs out at
+  the scheduled moment, all three stop, and the events are raised once.
+- A payment that would go below the floor is refused with a reason.
+- A recipe with an account input takes it at the start and returns it if
+  cancelled before any work.
+- A rule in a mind context reading someone else's balance fails to load.
+- Ten thousand standing payments with nothing changing schedule nothing.
+
+### G14 — Trade and delivery
+
+**Spec** 16 §3.6; 09 §13.2, §13.4; 12 §10.7 · **Size** M
+
+Build
+- `trade` with item, account, payment and site entries; checking before
+  moving; `trade_agreeing`; `then`.
+- Parties: characters, groups through a spending member, sites, devices
+  acting for one.
+- `trade_offers`; the bundled rules offering a site's stock at its price;
+  the trade screen in the `ui` mod.
+- `deliver_to`: goods sent as a shipment and put down on arrival.
+- `set_site` with a holder; `site_changed_hands`.
+
+Done when
+- A trade with one entry that cannot be met moves nothing and names the
+  entry (invariant G12).
+- Test script `the_till`: buying from a site's counter moves items out of
+  its stock and the price into its balance; a seller's rule refuses a
+  persona it will not deal with.
+- Test script `mail_order`: something bought through a terminal arrives at
+  the named berth when its shipment does; with the shipment intercepted, it
+  does not, and the payment is not undone.
+- A site bought in a trade has a new holder, and a standing payment from it
+  now pays that holder.
+
+### G15 — Assemblies that stand alone
+
+**Spec** 16 §11.6 · **Size** M
+
+Build
+- `stand_alone`; `stand_up` and `stand_down` on one entity; the body's
+  parts taken from the assembly's layers; the assembly as its own bearer;
+  standing down when `while` fails.
+- Putting on a standing suit as a joint action; stepping out and leaving
+  it standing.
+
+Done when
+- Damage taken standing is on the layer when worn, and the reverse; stores
+  and modules are unchanged by standing up or down (invariant G13).
+- Test script `come_here`: a suit in its bay receives an order by a signal
+  its sense module can hear, walks to its owner and is put on; a suit with
+  no such module does not come.
+- A standing suit whose core is destroyed stands down where it is.
+- Three standing suits in a collective hold a formation and fight.
+
+### G16 — Structures
+
+**Spec** 16 §4.5 · **Size** M
+
+Build
+- `structure` on devices: maps as patterns with exact, tagged and free
+  entries; turns; several structures in order.
+- Testing on placement and on element changes inside the box, merged per
+  step; `formed`; what is missing and where.
+- Interactions on member cells reaching the device; ports and holds at
+  marked cells; `structure_formed` and `structure_broken`.
+
+Done when
+- A device is formed exactly when its box matches (invariant G14), in
+  every turn the map allows.
+- Test script `firebrick`: a furnace core placed in a half-built shell is
+  unformed and names the missing cells; the last brick forms it; a pipe
+  joins at the marked tap and a loader feeds the marked door; destroying a
+  member stops it and raises the event.
+- A thousand formed structures with nothing changing near them schedule
+  nothing.
+- A larger structure listed first gives the capacity its expression says.
+
+### G17 — Know-how
+
+**Spec** 16 §8.5 · **Size** S
+
+Build
+- The `know_how` type; the set on a mind; `teach` with prerequisites,
+  `unlearn`; `knows`; `provides` at a station and `teaches` on items;
+  know-how on templates.
+
+Done when
+- A recipe that needs know-how is unavailable with a reason until the
+  worker knows it or something at the station provides it.
+- A machine working unattended runs a recipe only with a pattern loaded.
+- `teach` is refused, with a reason, when a prerequisite is missing.
+- Know-how moves with a transferred mind and stays out of the body left
+  behind.
+
+Done (decision D-825), in `clash_sim::recipe::know_how` (16 §8.6):
+`tests/making.rs` covers the four items above. The know-how screen is
+`ui:know_how` (12 §10.7).
+
+### G19 — Substances
+
+**Spec** 16 §9.5; 02 §16; 06 §6.1, §9.1 · **Size** M · Added by the review
+of substances (decision D-223)
+
+Build
+- The `substance` type and its forms; amounts carried between field,
+  resource, material and container by volume; fields that are forms
+  exposing by the substance's routes.
+- `contains` on items, devices and body parts; mixtures; `pour`, `fill`,
+  `dose`, `coat`; `filled` on items.
+- Routes `ingest` and `inject`; coatings delivered by hits that breach the
+  outermost living layer; wiping.
+- Additives on cells of standing liquid; substances as recipe inputs and
+  outputs; `tasted`; pools that name a substance spilling it on a leak.
+
+Done when
+- A substance is conserved across forms (invariant G15): a litre poured
+  out, drained back and drawn again is a litre.
+- Test script `spiked`: a poison poured into a cup of wine is drunk with
+  it and adds to the drinker's pool by the ingest factor; the same amount
+  on the skin adds by the skin factor; an antidote lowers the pool.
+- Test script `envenomed`: a coated blade doses by injection only when its
+  hit breaches the skin, loses coating with every hit, and doses nothing
+  through armour that is not breached.
+- A well poisoned at one cell poisons what is drawn from that cell.
+- A breached pipe of a substance spills its loose field with no rule
+  written for it.
+
+Beta (decisions D-826, D-827), in `clash_sim::substance` (16 §9.5 as
+built), as far as food, drink, medicine and poison need: the
+`substance` type, `contains` and `filled` on items, mixtures by member,
+`pour`, `fill`, `dose`, `coat` and `take_in`, routes, pools and traits
+for a time, coatings delivered by breaching hits and wiped by every
+hit, `poured`, `dosed`, `tasted`. `tests/making.rs` covers the first
+item (by a cell's `loose` field), `spiked` and the breaching half of
+`envenomed`; the test script `poisoned_blade` a coated blade's cut.
+Stubbed: devices and body parts that contain, piped and still forms,
+wells, breached pipes, fields that expose by a substance's routes,
+pools that spill, the test scripts `spiked` and `envenomed`, armour
+in the way of a coated blade (not tested).
+
+### G18 — Screens for making, building and work
+
+**Spec** 12 §6.2, §10.7; 16 §4.2, §8, §10 · **Size** L
+
+Build
+- In the `ui` mod: make, build, work, device and know-how screens, and
+  the `networks`, `areas`, `jobs`, `temperature` and `light` overlays.
+- Build mode: placing recipes and designs with a ghost, the standing
+  check, marking storage, enclosing rooms, setting site roles, cancelling
+  and dismantling.
+
+Done when
+- A recipe, a device and a piece of know-how defined by a test mod appear
+  in the screens with no screen written for them.
+- The make screen shows, for a recipe that cannot be started, the same
+  reason `explain` gives.
+- Build mode warns before confirming a floor that would fall.
+- In an ordinary screen the `networks` overlay shows only conduits the
+  character has perceived; in the debug context it shows all of them.
+- Frame tests cover each screen at the smallest supported size.
+
 ## Scenario catalogue
 
 Under `scenarios/devices/`.
@@ -266,10 +512,19 @@ Under `scenarios/devices/`.
 | `the_suit` | G10 | S25 | Conferral, module damage, power loss |
 | `suit_in_vacuum` | G10 | S25 | Personal sealed volume |
 | `away_from_base` | G11 | S24 | Catch-up equals staying |
+| `payday` | G13 | S26 | Standing payments and running out |
+| `the_till` | G14 | S26 | Trade against a site's stock; refusal |
+| `mail_order` | G14 | S26 | Delivery by shipment; interception |
+| `come_here` | G15 | S26 | A suit that acts unworn |
+| `firebrick` | G16 | S24 | A machine made of cells in a shape |
+| `spiked` | G19 | — | Mixtures, ingestion, antidotes |
+| `envenomed` | G19 | — | Coatings and injection |
+| `thin_wire` | G4 | — | Junctions between capacities |
+| `walkway` | G7 | — | Moving floors |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -281,3 +536,9 @@ small package of its own.
 | Loss on conduits | G4 | 16 §6.1 | A network's loss equals the sum of `loss` times length over its conduits, is drawn ahead of every consumer while the network is active, and is zero while it is idle. |
 | Logic tables | G5 | 16 §7 | A controller's table edited in play drives its outputs as its rows say, re-evaluates when an input changes, and survives save and load. A row cannot name anything the device's definition does not expose. |
 | Moving floors | G7 | 16 §9.4 | Test script `walkway`: a creature and a crate on a supplied moving floor are carried along at its speed; unsupplied, they are not; something anchored against a push stays put. |
+| Fitting screen | G9 | 12 §10.7 | One screen shows the slots, contents, candidates and resource budget of a torch, a suit and a vehicle, with no screen written for any of them. Built when first-playable package U9 exists. |
+| Climate devices | G2 | 16 §4.2; 11 §4.6 | A heater with `climate` warms the sealed area it stands in while supplied and stops when its supply does. Needs vehicles package V3. |
+| Rates from the place | G3 | 16 §5.2 | A producer whose rate reads light gives more at noon than at dusk and nothing at night, with one rebalance at each change of the region's light and none between. Needs reactive expressions (abilities package A1). |
+| Containers that keep | G2 | 06 §9.4 | A powered cold box states what it `keeps`; unpowered, it keeps nothing. Used by first-playable addition "Ageing". |
+| Jobs at founded sites | G8 | 09 §13.5; 16 §10.2 | Jobs created in a founded site are on its board and are taken by characters who belong to it. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

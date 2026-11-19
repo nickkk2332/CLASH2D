@@ -1,0 +1,7 @@
+{
+  "id": "person",
+  "name": "Person fixture",
+  "version": "0.1.0",
+  "description": "Someone shaped like a person, for the tests of the bundled screens: a body of parts made of tissues, two pools, two attributes, a template with a choice of every kind, a small world to stand in, and parts for the screens' slots. It names things the engine never does.",
+  "requires": ["ui"]
+}

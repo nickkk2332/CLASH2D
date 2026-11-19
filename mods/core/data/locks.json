@@ -1,0 +1,29 @@
+[
+  { "//": "A key and a door it locks (16 §3.4). A lock is content: the door has a third state, and locking and unlocking it are interactions that need the key in hand, in a pocket or on a ring. A lock that answers to a rule instead (a sealed vault, a guard's say-so) is a rule on the hook `interaction_starting`.",
+    "type": "item", "id": "key", "name": "key",
+    "material": "steel", "mass": "0.02 kg", "length": "0.06 m",
+    "grip": { "arm": 1 },
+    "tags": ["key", "small"],
+    "glyph": { "ch": "-", "fg": "yellow" } },
+
+  { "type": "block", "id": "lockable_door", "copy_from": "door",
+    "states": {
+      "closed": {},
+      "open": { "add_flags": ["passable"], "remove_flags": ["opaque"], "coverage": 0.0, "glyph": { "ch": "'" } },
+      "locked": {}
+    },
+    "interactions": ["open", "close", "lock", "unlock"] },
+
+  { "type": "interaction", "id": "lock", "name": "Lock",
+    "reach": "adjacent", "time": "1 s", "noise": 0.3,
+    "if": "target.state_name == 'closed' and self.has_item('key')",
+    "fail_text": "It must be shut, and you need its key.",
+    "do": [ { "set_state": { "of": "target", "state": "locked" } } ] },
+
+  { "type": "interaction", "id": "unlock", "name": "Unlock",
+    "reach": "adjacent", "time": "1 s", "noise": 0.3,
+    "if": "target.state_name == 'locked' and self.has_item('key')",
+    "fail_text": "It is locked, and you have no key.",
+    "do": [ { "set_state": { "of": "target", "state": "closed" } } ],
+    "default": true }
+]

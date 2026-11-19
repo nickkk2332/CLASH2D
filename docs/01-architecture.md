@@ -57,31 +57,56 @@ These apply to all code in the simulation (`clash-core`, `clash-time`,
 
 ## 3. Workspace layout
 
-A Cargo workspace. Arrows mean "may depend on".
+A Cargo workspace. Arrows mean "may depend on". A crate may also name
+directly any crate its arrows reach: `clash-scene` uses `clash-core`.
 
 ```
 crates/
   clash-core            maths, ids, deterministic RNG, state hashing, errors
   clash-time      → core                 ticks, clocks, event queue, processes
-  clash-data      → core                 mod loading, JSON → typed definitions, registries, schemas
   clash-expr      → core                 expression language: parse, check, compile, evaluate
+  clash-data      → core, expr           mod loading, JSON → typed definitions, registries, schemas
   clash-world     → core, time, data     cosmos, realms, grids, fields, damage, collapse, bodies in flight
   clash-gen       → world                region survey and tract generation (mapgen)
   clash-sim       → world, gen, expr     entities, actions, combat, powers, AI, EOC runtime, cold sim
-  clash-save      → sim                  save container, versioning, migration
+  clash-save      → sim, scene           save container, versioning, migration; the console's host
   clash-scene     → sim                  presentation model, camera, UI state, cutscene director
-  clash-front-window → scene             window + GPU glyph renderer
+  clash-front-window → scene             window + glyph renderer on the processor
   clash-front-term   → scene             terminal renderer
   clash-app       → front-*, save        the game binary
-  clash-tools     → sim, save            mod linter, schema dump, headless runner, world viewer, benches
+  clash-tools     → save, front-term, front-window   mod linter, schema dump, headless runner, world viewer, benches
 mods/
   core/                                  minimal definitions the tests and tools need
 docs/
 ```
 
+An arrow carries what its target depends on: a crate may depend directly on
+any crate its arrows already reach, as `clash-gen` does on `clash-core` and
+`clash-tools`, through `clash-sim`, on `clash-data`. What stays forbidden is
+a dependency upward or sideways, on a crate the arrows do not lead to.
+
+`clash-save` reaches `clash-scene` because the console's host lives there,
+below both the application and the tools, and loads profiles with every
+definition type and draws frames through the scene's view model (D-581).
+`clash-tools` reaches `clash-front-term` for the terminal world viewer
+(D-582), and `clash-front-window`, without its window, for the benchmark
+of drawing a window's frame (D-841).
+
+`clash-tools` reaches `clash-scene` because the linter must load mods with
+every definition type the game has, and the interface's are the scene's.
+
 Definition *types* live in the crate that gives them meaning (`BlockDef` in
 `clash-world`, `ActionDef` in `clash-sim`). `clash-data` provides the loading
 framework and knows nothing about what a block or an action is.
+
+`clash-data` depends on `clash-expr` because expressions are compiled while
+mods load (04 §7.3). The loader compiles against a registry that the
+simulation fills and hands to it, so the data layer still names no kind of
+subject and no property. Every crate above reaches the expression language
+through `clash-data`, and `clash-expr` depends on nothing but `clash-core`.
+The two definition types that belong to the expression language itself,
+`function` and `variable`, live in `clash-data` with the stage that
+compiles them.
 
 ## 4. Determinism contract
 
@@ -97,8 +122,14 @@ mechanical and enforced by lints and tests.
   IEEE-exact on the supported targets (x86-64, aarch64). Anything else
   (`sin`, `pow`, `exp`, `ln`, …) goes through wrappers backed by the pure-Rust
   `libm` crate. Calling the `std` float functions directly is denied by lint.
-- `Real` never holds NaN. Constructors and division check and return an error
-  or a defined fallback.
+- `Real` never holds NaN. Where IEEE arithmetic would give NaN (`0/0`,
+  `∞ − ∞`, the square root of a negative number), the plain operators and
+  functions give zero: that is the defined fallback. `Real::new` and the
+  `try_` functions return an error instead. Infinities are allowed. `Real`
+  compares as IEEE does, so the two zeros are equal, and with no NaN the
+  order is total.
+- A `Real` survives saving and loading bit for bit. For JSON this needs
+  `serde_json` built with `float_roundtrip`, which the workspace turns on.
 - The energy range the engine must handle is about 1 J to 10^33 J. `f64`
   covers this with margin. Do not introduce a logarithmic "power level"
   representation in the engine; a derived tier for UI and AI is fine.
@@ -109,14 +140,21 @@ mechanical and enforced by lints and tests.
   `(seed, domain, coordinates, salt)` seeds a local generator. The result
   depends only on where and what, never on when or in what order.
 - *Stream* randomness for simulation: named generator streams stored in
-  simulation state and saved. Systems draw from their own stream.
+  simulation state and saved. Systems draw from their own stream. A
+  stream's seed depends only on the simulation's seed and the stream's
+  name, never on which other streams exist or when it was first used.
 - No thread-local or OS randomness anywhere in the simulation.
+- The algorithms are fixed: xoshiro256\*\* seeded through SplitMix64 for
+  the generator, rounds of the SplitMix64 mixer for the positional hash,
+  and FNV-1a for turning a domain or stream name into a number.
 
 **Ordering**
 
 - Simulation state never iterates a hash map. Use `Vec`, `BTreeMap`,
   `IndexMap`, or `LookupMap` (a hash map wrapper in `clash-core` that offers
-  lookup, insert and remove but no iteration).
+  lookup, insert and remove but no iteration). So that what it holds can
+  still be saved, hashed and now and then swept, a `LookupMap` can hand out
+  its contents sorted by key, and it serialises and hashes in that order.
 - Simultaneous events are ordered by `(tick, sequence number)`.
 - Parallelism is allowed only where the result is independent of scheduling:
   pure generation of tracts, compression, read-only queries, and two-phase
@@ -124,11 +162,29 @@ mechanical and enforced by lints and tests.
 
 **Hashing**
 
-- Every state type implements `StateHash`, feeding a stable hasher in a fixed
-  order. The simulation exposes a total hash and per-subsystem hashes so a
-  divergence can be localised.
+- Every state type implements the `StateHash` trait, feeding a stable hasher
+  in a fixed order. The result is a `Hash128`. The simulation exposes a
+  total hash and per-subsystem hashes so a divergence can be localised.
+- The hasher is fixed: MurmurHash3 (`x64_128`, seed 0) over the bytes fed
+  to it. Integers are fed little-endian at their own width, anything of
+  variable length is fed its length first, and a `Real` is fed by its exact
+  bits.
 - Golden-hash tests run scripted scenarios and compare hashes. A change that
   alters a golden hash must say why in its description.
+
+**Enforcement**
+
+- The workspace's `clippy.toml` disallows std hash maps and sets, the std
+  float functions whose results differ between platforms, `std::time` and
+  thread-local randomness. `cargo xtask check` denies warnings, so a use of
+  any of them does not pass. A crate outside the simulation (section 2)
+  that needs the wall clock carries a `clippy.toml` of its own, which
+  replaces the workspace's for that crate. Inside the simulation, only a
+  wrapper that makes a disallowed item safe may allow it, with a reason:
+  `LookupMap` is the one such place.
+- Reference vectors for the `Real` functions, the generator, the positional
+  hash and the hasher are committed as tests in `clash-core`. They are the
+  cross-platform contract: a vector is never changed to make a test pass.
 
 ## 5. Time
 
@@ -191,7 +247,7 @@ impl Sim {
     pub fn advance(&mut self, limit: AdvanceLimit) -> Advance;
     pub fn drain_events(&mut self) -> Vec<SimEvent>;
     pub fn view(&self) -> SimView<'_>;
-    pub fn state_hash(&self) -> StateHash;
+    pub fn state_hash(&self) -> Hash128;
 }
 ```
 
@@ -338,6 +394,121 @@ Full specification: document 12.
   so the cost of a save is proportional to what changed.
 - The format is versioned. Each version bump ships a migration.
 
+### 11.1 The binary encoding
+
+State is written to disk in the engine's own binary encoding,
+`clash_core::codec`. JSON remains the format of mods and of anything a
+person reads. Every state type implements serde, and the codec is a serde
+format, so one implementation serves both.
+
+The encoding does not describe itself. The bytes hold values only, and the
+type being read says what they mean:
+
+| Value | Bytes |
+|-------|-------|
+| `bool` | One byte, `0` or `1` |
+| `u8`, `i8` | One byte |
+| `u16` to `u128`, lengths, `char` | LEB128: seven bits a byte, lowest first, the top bit set on every byte but the last, in the fewest bytes |
+| `i16` to `i128` | Zig-zag (`0, -1, 1, -2` become `0, 1, 2, 3`), then LEB128 |
+| `f32`, `f64`, so `Real` | The IEEE bits, little-endian: exact |
+| Text, bytes | The length in bytes, then the bytes |
+| `Option` | A byte `0` for none; a byte `1` and the value for some |
+| Unit | Nothing |
+| Struct, tuple, array | Each field in order, with no names and no count |
+| Sequence, set | The number of items, then each item |
+| Map | The number of entries, then each key and value |
+| Enum | The variant's index as LEB128, then the variant's fields |
+
+A value has exactly one encoding, so equal values give equal bytes on every
+platform.
+
+Decoding never panics, never reserves more than a small multiple of its
+input and never does more work than its input is long (R6). Every length
+is checked against the bytes that remain, every item of a sequence or map
+must take at least one byte, nesting is limited to 128 levels, and bytes
+left over are an error. What cannot be read back safely is refused when
+writing, with a reason:
+
+- a sequence or map that does not state its length first;
+- a sequence or map with an item that takes no bytes, such as a list of
+  units;
+- a struct that leaves a field out (`skip_serializing_if`);
+- a value nested deeper than the limit.
+
+Anything that reads through serde's self-describing calls is refused when
+reading: `flatten`, untagged and internally tagged enums. State types do
+not use them.
+
+Reordering, adding or removing a field or a variant changes the bytes.
+That is what a blob's version is for.
+
+**Blobs.** Whatever is stored (a tract, a region record, the main save's
+sections) is framed as a blob:
+
+| Offset | Size | Holds |
+|--------|------|-------|
+| 0 | 4 | The magic, `C2DB` |
+| 4 | 4 | The kind: four bytes chosen by the owner of the data |
+| 8 | 4 | The version of the body's layout, `u32` little-endian |
+| 12 | 4 | The length of the body before compression, `u32` little-endian |
+| 16 | 16 | The checksum, `u128` little-endian |
+| 32 | … | The body, compressed as one LZ4 block |
+
+The checksum is the state hasher of section 4 (MurmurHash3 `x64_128`,
+seed 0) over the kind, the version as four little-endian bytes and the
+uncompressed body. It catches damage and does not resist tampering. A
+blob that is too short, has the wrong magic, the wrong kind, a body of
+the wrong length, a body that does not decompress or a checksum that does
+not match is refused, each with its own error. A reader that supports
+several versions opens the frame first, then reads the body by the
+version it found.
+
+The compressed bytes are not a contract: a later compressor may pack the
+same body differently. Bodies are compared and hashed, never blobs.
+
+### 11.2 The save file
+
+A game is saved into one file, a `redb` database (the world's
+`RedbStore`, 02 §11.5) with the extension `.c2save`, written in one
+transaction: a file holds all of one save or all of the one before it.
+`clash-save` writes and reads it (D-580). It holds:
+
+| Part | Blob kind | Holds |
+|------|-----------|-------|
+| Tract blobs, keyed by realm and tract | `TRCT` | The cells of every tract that has been loaded and changed, loaded now or not (02 §11.1) |
+| `world.*` sections | the world's | Realms and region records, areas, sites, tickets, stability and activity, the loaded tracts, the save's tables of ids (02 §11.4) |
+| `sim.state` | the kernel's | The simulation's own state: timeline and clocks, entities and components, rule state, settings, random streams, queues, the entities shelved with unloaded tracts, and the input log since it was last taken |
+| `save.tracts` | `STRC` | The realm, column and row of every tract the save holds a blob for |
+| `save.meta` | `SMET` | The metadata below |
+
+The metadata is what a load screen lists and what a loader compares with
+the definitions it has. It is read without loading the game.
+
+| Field | Holds | Filled in by |
+|-------|-------|--------------|
+| `format` | The save format's version, 1 | Saving |
+| `name`, `summary` | What a load screen shows | The saver |
+| `profile` | The id of the profile the definitions were loaded through, or empty | Saving |
+| `mods` | Each mod's id and version, in load order | Saving |
+| `fingerprint` | The definitions' content fingerprint (04 §9) | Saving |
+| `seed` | The seed the simulation was started with | The saver |
+| `tick` | The universal time of the save | Saving |
+| `experimental` | The experimental features the mods opted in to (04 §8.4) | Saving |
+| `state_hash` | The simulation's state hash when saved; `save verify` compares it with what loads | Saving |
+| `app` | Bytes of the saver's own, neither read nor hashed: the console keeps its cursor, active character, selection, frame size, profile name and seed there; the game keeps the start it began from, the character's name and who the character is (12 §3.6) | The saver |
+
+Saving follows 02 §11.4: the blobs of tracts that are not loaded are
+carried over from the simulation's own store, `Cosmos::save_world` writes
+the world and the loaded tracts that changed, the simulation's blob and
+the two save sections go in, and one commit makes it durable. Loading
+reads the world first, with placeholders for definitions the mods no
+longer supply, then the simulation over it from the same save, gives it
+the generators and a store in memory holding the save's tract blobs, and
+places every entity again. A save made with other mods loads with
+warnings that say what differs; a damaged file is an error that names
+the section or tract, never a panic. Saving and loading change nothing
+that is hashed (R7).
+
 ## 12. Testing and performance gates
 
 | Kind | Purpose |
@@ -361,9 +532,9 @@ Provisional choices. Adding a dependency requires an entry in
 | Deterministic maths | `libm` |
 | Small collections, flags | `smallvec`, `bitflags`, `indexmap`, `rustc-hash` |
 | Errors | `thiserror` |
-| Compression | `lz4_flex` (pure Rust) |
+| Compression | `lz4_flex` (pure Rust, with its default features: the block codec then contains no `unsafe`) |
 | Save storage | `redb` behind a `TractStore` trait |
 | Parallel generation | `rayon` |
 | Tests and benches | `proptest`, `criterion` |
 | Terminal | `crossterm` |
-| Window | `winit`, `wgpu`, `fontdue` (frontend crate only) |
+| Window | `winit`, `softbuffer`, `fontdue` (frontend crate only; decision D-830); `wgpu` only if drawing ever moves to the graphics card |

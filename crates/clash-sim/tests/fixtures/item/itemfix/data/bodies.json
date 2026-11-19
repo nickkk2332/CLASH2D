@@ -1,0 +1,94 @@
+[
+  { "//": "A person-shaped body and a shapeless one, made over the damage types of `mods/core`. Parts that grasp supply `arm` slots; the blob supplies only `pseudopod` ones.",
+    "type": "channel", "id": "arm", "name": "arm" },
+  { "type": "channel", "id": "leg", "name": "leg" },
+  { "type": "channel", "id": "pseudopod", "name": "pseudopod" },
+
+  { "type": "body_function", "id": "walking", "name": "Walking", "combine": "sum" },
+
+  { "type": "material", "id": "skin", "density": 1100, "toughness": "2 MJ/m3",
+    "resist": {
+      "core:impact": { "threshold": "200 kPa" },
+      "core:cut":    { "threshold": "1 MPa" },
+      "core:pierce": { "threshold": "1 MPa" } } },
+  { "type": "material", "id": "muscle", "density": 1060, "toughness": "1 MJ/m3",
+    "resist": {
+      "core:impact": { "threshold": "100 kPa" },
+      "core:cut":    { "threshold": "500 kPa" },
+      "core:pierce": { "threshold": "500 kPa" } } },
+  { "type": "material", "id": "bone", "density": 1900, "toughness": "100 MJ/m3",
+    "resist": {
+      "core:impact": { "threshold": "2 MPa" },
+      "core:cut":    { "threshold": "50 MPa" },
+      "core:pierce": { "threshold": "50 MPa" } } },
+  { "type": "material", "id": "jelly", "density": 1000, "toughness": "200 kJ/m3" },
+
+  { "type": "body_part", "id": "torso", "name": "torso",
+    "mass": "35 kg", "length": "0.6 m", "girth": "0.35 m",
+    "layers": [
+      { "material": "skin",   "thickness": "2 mm",  "weight": 0.05 },
+      { "material": "muscle", "thickness": "40 mm", "weight": 0.45 },
+      { "material": "bone",   "thickness": "15 mm", "weight": 0.50 } ],
+    "sockets": {
+      "neck":     { "count": 1, "accepts": ["head"] },
+      "shoulder": { "count": 2, "accepts": ["arm"] },
+      "hip":      { "count": 2, "accepts": ["leg"] } },
+    "tags": ["trunk"] },
+
+  { "type": "body_part", "id": "head", "name": "head",
+    "mass": "5 kg", "length": "0.25 m", "girth": "0.18 m",
+    "layers": [
+      { "material": "skin", "thickness": "2 mm", "weight": 0.1 },
+      { "material": "bone", "thickness": "7 mm", "weight": 0.9 } ] },
+
+  { "type": "body_part", "id": "arm", "name": "arm",
+    "mass": "4 kg", "length": "0.7 m", "girth": "0.09 m",
+    "layers": [
+      { "material": "skin",   "thickness": "2 mm",  "weight": 0.05 },
+      { "material": "muscle", "thickness": "30 mm", "weight": 0.50 },
+      { "material": "bone",   "thickness": "20 mm", "weight": 0.45 } ],
+    "channels": { "arm": 1 },
+    "sockets": { "wrist": { "count": 1, "accepts": ["hand"] } },
+    "tags": ["limb"] },
+
+  { "type": "body_part", "id": "hand", "name": "hand",
+    "mass": "0.5 kg", "length": "0.18 m", "girth": "0.08 m",
+    "layers": [
+      { "material": "skin",   "thickness": "1.5 mm", "weight": 0.10 },
+      { "material": "muscle", "thickness": "10 mm",  "weight": 0.50 },
+      { "material": "bone",   "thickness": "8 mm",   "weight": 0.40 } ],
+    "tags": ["limb"] },
+
+  { "type": "body_part", "id": "leg", "name": "leg",
+    "mass": "11 kg", "length": "0.9 m", "girth": "0.15 m",
+    "layers": [
+      { "material": "skin",   "thickness": "2 mm",  "weight": 0.05 },
+      { "material": "muscle", "thickness": "50 mm", "weight": 0.50 },
+      { "material": "bone",   "thickness": "25 mm", "weight": 0.45 } ],
+    "provides": { "walking": 0.5 },
+    "channels": { "leg": 1 },
+    "tags": ["limb"] },
+
+  { "type": "body_plan", "id": "humanoid", "name": "humanoid",
+    "height": "1.75 m",
+    "parts": [
+      { "id": "torso",  "part": "torso" },
+      { "id": "head",   "part": "head",  "on": "torso",  "socket": "neck" },
+      { "id": "l_arm",  "part": "arm",   "on": "torso",  "socket": "shoulder", "side": "left" },
+      { "id": "r_arm",  "part": "arm",   "on": "torso",  "socket": "shoulder", "side": "right" },
+      { "id": "l_hand", "part": "hand",  "on": "l_arm",  "socket": "wrist",    "side": "left" },
+      { "id": "r_hand", "part": "hand",  "on": "r_arm",  "socket": "wrist",    "side": "right" },
+      { "id": "l_leg",  "part": "leg",   "on": "torso",  "socket": "hip",      "side": "left" },
+      { "id": "r_leg",  "part": "leg",   "on": "torso",  "socket": "hip",      "side": "right" }
+    ] },
+
+  { "type": "body_part", "id": "blob_mass", "name": "mass",
+    "mass": "20 kg", "length": "0.8 m", "girth": "0.8 m",
+    "layers": [ { "material": "jelly", "thickness": "400 mm" } ],
+    "provides": { "walking": 1.0 },
+    "channels": { "pseudopod": 2 } },
+
+  { "type": "body_plan", "id": "blob", "name": "blob",
+    "height": "0.8 m",
+    "parts": [ { "id": "mass", "part": "blob_mass" } ] }
+]

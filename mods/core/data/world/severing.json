@@ -1,0 +1,5 @@
+[
+  { "//": "A cut that goes through every layer of a part, across at least its girth, takes the part off (06 §7.2). A blow or a thrust does not.",
+    "type": "damage_type", "id": "cut", "patch": true,
+    "severs": true }
+]

@@ -1,0 +1,109 @@
+[
+  { "type": "action", "id": "two_alike",
+    "phases": [
+      { "id": "swing", "time": "100 ms" },
+      { "id": "swing", "time": "200 ms" }
+    ] },
+
+  { "type": "action", "id": "goto_nowhere",
+    "phases": [
+      { "id": "windup", "time": "100 ms", "next": [ { "goto": "impcat" } ] },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "closes_nowhere",
+    "params": { "target": "entity" },
+    "phases": [
+      { "id": "windup", "time": "100 ms",
+        "window": { "kind": "strike", "for": ["$target"], "closes": "landing" } },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "closes_itself",
+    "phases": [
+      { "id": "windup", "time": "100 ms", "window": { "kind": "strike", "closes": "windup" } },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "closes_behind",
+    "phases": [
+      { "id": "ready", "time": "100 ms" },
+      { "id": "windup", "time": "100 ms", "window": { "kind": "strike", "closes": "ready" } },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "never_entered",
+    "phases": [
+      { "id": "windup", "time": "100 ms", "next": [ { "goto": "recover" } ] },
+      { "id": "flourish", "time": "100 ms" },
+      { "id": "recover", "time": "100 ms" }
+    ] },
+
+  { "type": "action", "id": "goes_nowhere",
+    "phases": [
+      { "id": "windup", "time": "100 ms", "next": [ { "if": "true" } ] },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "goes_two_ways",
+    "phases": [
+      { "id": "windup", "time": "100 ms", "next": [ { "goto": "impact", "finish": true } ] },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "max_unheld",
+    "phases": [ { "id": "charge", "time": "1 s", "max": "3 s" } ] },
+
+  { "type": "action", "id": "until_unheld",
+    "phases": [ { "id": "charge", "time": "1 s", "until": "true" } ] },
+
+  { "type": "action", "id": "until_untested",
+    "vars": { "power": { "type": "int", "default": 0 } },
+    "phases": [ { "id": "charge", "time": "hold", "until": "$power >= 10" } ] },
+
+  { "type": "action", "id": "no_phases",
+    "phases": [] },
+
+  { "type": "action", "id": "bad_phase_id",
+    "phases": [ { "id": "Wind Up", "time": "100 ms" } ] },
+
+  { "type": "action", "id": "negative_time",
+    "phases": [ { "id": "windup", "time": "-100 ms" } ] },
+
+  { "type": "action", "id": "no_interval",
+    "phases": [ { "id": "burn", "time": "1 s", "tick": { "every": 0 } } ] },
+
+  { "type": "action", "id": "no_tempo",
+    "tempo": 0,
+    "phases": [ { "id": "windup", "time": "100 ms" } ] },
+
+  { "type": "action", "id": "time_unknown",
+    "phases": [ { "id": "windup", "time": "soon" } ] },
+
+  { "type": "action", "id": "cancel_maybe",
+    "phases": [ { "id": "windup", "time": "100 ms", "cancel": "maybe" } ] },
+
+  { "type": "action", "id": "effects_not_a_list",
+    "phases": [ { "id": "impact", "time": 0, "do": { "strike": {} } } ] },
+
+  { "type": "action", "id": "local_unknown",
+    "vars": { "power": { "type": "int", "default": 0 } },
+    "phases": [
+      { "id": "charge", "time": "hold", "tick": { "every": "250 ms" }, "until": "$pwer >= 10" }
+    ] },
+
+  { "type": "action", "id": "aimed_at_a_part",
+    "params": { "part": "part" },
+    "phases": [
+      { "id": "windup", "time": "100 ms",
+        "window": { "kind": "strike", "for": ["$part"], "closes": "impact" } },
+      { "id": "impact", "time": 0 }
+    ] },
+
+  { "type": "action", "id": "dead_entry",
+    "phases": [
+      { "id": "windup", "time": "100 ms",
+        "next": [ { "goto": "impact" }, { "finish": true } ] },
+      { "id": "impact", "time": 0 }
+    ] }
+]

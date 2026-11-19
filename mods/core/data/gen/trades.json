@@ -1,0 +1,39 @@
+[
+  { "//": "The trades every market town has (10 §11.1): each a site on a map of `maps/trades.json`, with its named places as roles for routines to use. Who works in them is not said here: staff, residents and routines are the town's life, not its furniture.",
+    "type": "site", "id": "bakery", "name": "Bakery", "tags": ["shop", "bakery"],
+    "map": "bakery",
+    "roles": { "entrance": "mark:entrance", "oven": "mark:oven", "counter": "mark:counter",
+               "stores": "mark:stores", "bread": "mark:bread" } },
+
+  { "type": "site", "id": "tavern", "name": "Tavern", "tags": ["shop", "tavern"],
+    "map": "tavern",
+    "roles": { "entrance": "mark:entrance", "bar": "mark:bar", "hearth": "mark:hearth",
+               "still": "mark:still", "stores": "mark:stores" } },
+
+  { "type": "site", "id": "guardhouse", "name": "Guardhouse", "tags": ["civic", "watch"],
+    "map": "guardhouse",
+    "roles": { "entrance": "mark:entrance", "post": "mark:post", "desk": "mark:desk",
+               "armoury": "mark:armoury" } },
+
+  { "type": "site", "id": "workshop", "name": "Workshop", "tags": ["work", "workshop"],
+    "map": "workshop",
+    "roles": { "entrance": "mark:entrance", "bench": "mark:bench", "tools": "mark:tools" } },
+
+  { "type": "site", "id": "market", "name": "Market", "tags": ["public", "market"],
+    "map": "market",
+    "roles": { "entrance": "mark:entrance", "centre": "mark:centre", "stall": "mark:stall" } },
+
+  { "type": "site", "id": "healer", "name": "Healer's house", "tags": ["home", "healer"],
+    "map": "healer_house",
+    "roles": { "entrance": "mark:entrance", "shelf": "mark:shelf", "medicine": "mark:medicine",
+               "bench": "mark:bench", "herbs": "mark:herbs" } },
+
+  { "//": "Every market town has its trades: the bakery, the tavern and the market near the square, the guardhouse, the workshop and the healer wherever the plan puts them.",
+    "type": "settlement", "id": "town", "patch": true,
+    "extend": { "must_have": [ { "site": "market", "at": "centre" },
+                               { "site": "bakery", "at": "centre" },
+                               { "site": "tavern", "at": "centre" },
+                               { "site": "guardhouse", "at": "anywhere" },
+                               { "site": "workshop", "at": "anywhere" },
+                               { "site": "healer", "at": "anywhere" } ] } }
+]

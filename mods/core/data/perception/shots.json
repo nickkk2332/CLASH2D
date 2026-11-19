@@ -1,0 +1,14 @@
+[
+  { "//": "A shot is heard and seen where it is fired (07 §11.5; 15 §3.2): the sound as loud as the weapon's `shot.noise`, a suppressor taking most of it; the flash as bright as its `shot.flash`. Both tell whoever perceives them who fired.",
+    "type": "event_signal", "id": "shot_report", "event": "projectile_fired",
+    "signal": "sound", "strength": "event.noise", "if": "event.noise > 0",
+    "about": "self", "salience": 0.9,
+    "doc": "The report of a shot." },
+  { "type": "event_signal", "id": "muzzle_flash", "event": "projectile_fired",
+    "signal": "sight", "strength": "event.flash", "if": "event.flash > 0",
+    "about": "self", "salience": 0.6,
+    "doc": "The flash of a shot." },
+  { "type": "event_signal", "id": "shot_strikes", "event": "projectile_hit",
+    "signal": "sound", "strength": "0.5 + event.absorbed / 1000", "salience": 0.3,
+    "doc": "A shot striking something." }
+]

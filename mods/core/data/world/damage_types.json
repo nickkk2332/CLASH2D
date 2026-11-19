@@ -1,0 +1,26 @@
+[
+  { "//": "The damage types most worlds want. Thresholds are the default for anything that states none of its own.",
+    "type": "damage_type", "id": "impact", "kinetic": true,
+    "default_resist": { "threshold": "100 kPa" } },
+
+  { "type": "damage_type", "id": "cut",
+    "default_resist": { "threshold": "1 MPa" } },
+
+  { "type": "damage_type", "id": "pierce",
+    "default_resist": { "threshold": "1 MPa" } },
+
+  { "type": "damage_type", "id": "blast",
+    "default_resist": { "threshold": "50 kPa", "factor": 1.0 } },
+
+  { "type": "damage_type", "id": "heat",
+    "default_resist": { "threshold": "200 kPa" } },
+
+  { "type": "damage_type", "id": "cold",
+    "default_resist": { "threshold": "500 kPa", "factor": 0.5 } },
+
+  { "type": "damage_type", "id": "shock",
+    "default_resist": { "threshold": "1 MPa", "factor": 0.5 } },
+
+  { "type": "damage_type", "id": "corrode",
+    "default_resist": { "threshold": "100 kPa", "factor": 0.5 } }
+]

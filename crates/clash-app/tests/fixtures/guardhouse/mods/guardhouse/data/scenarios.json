@@ -1,0 +1,10 @@
+[
+  { "//": "The market town, begun at the door of its guardhouse: where the sergeant's desk keeps the key of the armoury.",
+    "type": "scenario", "id": "guardhouse", "name": "The guardhouse",
+    "doc": "The market town, at the guardhouse door.",
+    "worlds": [ { "realm": "core:town", "seed": "ask" } ],
+    "start": {
+      "characters": [ { "template": "core:person", "create": false } ],
+      "at": [ { "name": "The guardhouse", "site": { "def": "core:guardhouse" } } ],
+      "time": { "day": 1, "at": "12:00" } } }
+]

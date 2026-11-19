@@ -1,0 +1,15 @@
+[
+  { "//": "03 §6.2", "type": "channel", "id": "arm" },
+  { "type": "channel", "id": "legs", "name": "legs" },
+  { "type": "channel", "id": "voice" },
+  { "type": "channel", "id": "focus" },
+
+  { "//": "03 §7.1",
+    "type": "window_kind", "id": "strike",
+    "notice": "self.attr.reaction_time",
+    "noticed_if": "true",
+    "reach": 6 },
+
+  { "//": "Every field left out: noticed at once, by anyone, and offered to nobody it does not name.",
+    "type": "window_kind", "id": "plain" }
+]

@@ -17,13 +17,13 @@ regression tests each package adds are called test scripts here.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| SC1 | Scenario definitions and starting a game | M | WG6, K5, P6 | todo |
-| SC2 | Characters at the start | M | SC1, E9, U9, L2 | todo |
-| SC3 | Objectives and missions | M | SC1, A1, L4 | todo |
+| SC1 | Scenario definitions and starting a game | M | WG6, K5, P6 | beta |
+| SC2 | Characters at the start | M | SC1, E9, U9, L2 | beta |
+| SC3 | Objectives and missions | M | SC1, A1, L4 | beta |
 | SC4 | Plots | S | SC3 | todo |
 | SC5 | The director | M | SC1, L3 | todo |
 | SC6 | Offences, cases and findings | L | L4, S6, G1 | todo |
-| SC7 | Saving, loss of the party, endings | M | SC1, U11 | todo |
+| SC7 | Saving, loss of the party, endings | M | SC1, U11 | beta |
 | SC8 | Legacy, roster, campaigns | M | SC7 | todo |
 | SC9 | Bundled scenarios | L | SC2–SC8, WG12, I10 | todo |
 | SC10 | Benchmarks and budget gate | S | SC1, then recurring | todo |
@@ -70,6 +70,20 @@ Done when
   scenario.
 - A scenario's rules do not run in another scenario.
 
+Beta (decisions D-750 to D-754, D-758): `clash_sim::scenario` with the
+`scenario` and `setting` types, `make_world`, `Command::BeginScenario`
+and `Command::Setting`; the application's new-game flow with
+`ui:setup`, `ui:intro` and `app.setup`; the console's `begin`. Covered
+by `scenarios/game/fresh_start.scn` and `crates/clash-sim/tests/scenario.rs`
+(`the_same_answers_give_the_same_state_and_others_do_not`,
+`a_locked_setting_cannot_be_changed_in_its_scenario`,
+`a_scenarios_rules_do_not_run_in_another_scenario`). Stubbed: one world
+per scenario (several wait for charts), a realm's named entries, a site's
+roles (the anchor stands for every role), settling time and authored
+worlds (10 §9.3, §11.4), `screens` for `creation` and `play`, tags
+grouping the new-game list, a `random` seed in test scripts (the
+console's own seed stands in).
+
 ### SC2 — Characters at the start
 
 **Spec** 13 §4.2 · **Size** M
@@ -84,6 +98,20 @@ Done when
   inhabitant, with that character's body, beliefs, routine and relations
   intact.
 - A party of three starts with each member's control mode as stated.
+
+Beta (decision D-860): `playable` on templates; a scenario's character
+entry has `create` and `pick` (`true` for every playable template, or a
+list), so that each game says whether the player makes the character,
+chooses one ready-made or is given it; the application offers
+`app.templates` for the game the creation session is for and refuses
+what the game does not allow. The bundled games say: the sandbox and the
+town offer creation, the errand and the last stand a choice, the lane
+gives an ordinary person. Covered by `crates/clash-app/tests/essentials.rs`
+(`characters_are_made_chosen_or_given_as_each_game_says`, which checks
+that the creation screen offers exactly what each scenario allows, and
+the tests of a brawler chosen, an adept made and a marksman saved).
+Stubbed: `spec`, `roster`, `become` (test script `become_anyone`),
+limits by kind and tag, parties of several and their control modes.
 
 ### SC3 — Objectives and missions
 
@@ -103,6 +131,20 @@ Done when
   where the quarry is.
 - A posting about something already resolved can still be read and
   accepted, and fails or completes as its conditions say.
+
+Beta (decisions D-755, D-756): objectives with reactive `done` and
+`failed`, `parent`, `after`, `hidden`, `expires`, markers (`last_known`,
+`site`, `at`) read in the taker's mind context; the `mission` type with
+parameters, ordering, `failed` and expiry; the verbs `start_mission`,
+`complete_objective`, `fail_objective`, `add_objective` and
+`fail_mission`; the journal's `entity.objectives` and `ui:journal`.
+Covered by `crates/clash-sim/tests/scenario.rs`
+(`objectives_equal_a_fresh_evaluation_until_they_settle_then_stay`,
+the mission tests, `saved_and_loaded_in_the_middle_of_a_mission_nothing_changes`)
+and `crates/clash-app/tests/scenarios.rs`. Stubbed: postings on boards
+and `mission_from_posting` (they wait for published knowledge, 09 §12),
+markers on the map (the journal says which way and how far), the
+queries `objectives` and `missions`, `cancel_mission`.
 
 ### SC4 — Plots
 
@@ -178,6 +220,19 @@ Done when
   the character holds memories of events that, in the restored world, have
   not happened.
 
+Beta (decisions D-757, D-759): `AppRequest` gains `RestoreCheckpoint`,
+`EndScenario` and `TakeControl`, carried out by the application between
+two calls of `advance`; the saving policy comes from the scenario;
+`party_gone` with `end`, `continue` (`own`, `create`) and `restore`;
+`checkpoint`, `restore_checkpoint`, `end_scenario`, `take_control`,
+`ends` by condition or event, the hook `scenario_ending`, the summary
+screen. `permadeath_run` is `crates/clash-app/tests/scenarios.rs`
+(`permadeath_run_a_single_save_is_gone_once_the_game_ends`): the
+application removes a save, so it is an application test; `carry_on`
+is `scenarios/game/carry_on.scn`. Stubbed: memories carried by
+`restore_checkpoint` (`remembered_dawn`), `become`, `on_party_gone.when`,
+`next_scenario` and `then` (SC8), saving at intervals under `single`.
+
 ### SC8 — Legacy, roster, campaigns
 
 **Spec** 13 §10 · **Size** M
@@ -247,7 +302,7 @@ Done when
 
 ## Test script catalogue
 
-Under `scenarios/games/`.
+Under `scenarios/game/`. `permadeath_run` is an application test (`crates/clash-app/tests/scenarios.rs`): what it checks, a save removed, is the application's.
 
 | Test script | Package | Serves | What it checks |
 |-------------|---------|--------|----------------|
@@ -264,10 +319,11 @@ Under `scenarios/games/`.
 | `remembered_dawn` | SC7 | — | Restore with memories carried |
 | `second_chapter` | SC8 | S21 | Campaign carry |
 | `relived_minute` | SC11 | S10 | Experimental. World rewind with memories carried |
+| `second_look` | SC6 | — | Reopening a case |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -277,3 +333,4 @@ small package of its own.
 |----------|---------|------|-----------|
 | Distance as travel time | SC5 | 13 §7.3 | With an entry's distance given as ten minutes, incidents are placed a few streets from a party on foot and far further from one that has been flying, measured over the last hour of its own time. |
 | Reopening a case | SC6 | 13 §8.5 | Test script `second_look`: a finding gained after a case is closed runs `case_judging` again with `reopening` set; rules that no longer accept the blame reopen it and `case_reopened` is raised; `reopen_case` does the same directly. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

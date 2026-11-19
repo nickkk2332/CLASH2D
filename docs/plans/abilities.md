@@ -16,13 +16,13 @@ the rest of this plan. Build it early.
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| A1 | Reactive expressions | M | K4, X3 | todo |
-| A2 | Abilities: definition, sources, rank, parameters | L | E3, E9 | todo |
-| A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | todo |
-| A4 | Modes, upkeep, charging | M | A3 | todo |
-| A5 | Dormancy, suppression, loss | M | A2, A1 | todo |
-| A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | todo |
-| A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | todo |
+| A1 | Reactive expressions | M | K4, X3 | done |
+| A2 | Abilities: definition, sources, rank, parameters | L | E3, E9 | beta |
+| A3 | Grants, costs, cooldowns, hooks on use | M | A2, T3 | beta |
+| A4 | Modes, upkeep, charging | M | A3 | beta |
+| A5 | Dormancy, suppression, loss | M | A2, A1 | done |
+| A6 | Anchored areas and ambient overrides | M | W7, T1, S1 | done |
+| A7 | Bindings: bound traits, summons, conjuring, dispelling | M | A5, S7 | beta |
 | A8 | Snapshots, journals, restoring as generated | L | E8, W6, K7, W8 | todo |
 | A9 | Relays, appraisal, field movement, force at range, contest bias | M | S5, C7, W16 | todo |
 | A10 | Reference abilities | L | A4, A6, A7, A8, A9, C12 | todo |
@@ -64,6 +64,11 @@ Done when
   most once per pump.
 - A property registered without `changes_on` fails a test.
 
+Done (decisions D-720, D-721; 05 §7.5 as built). `changes_on` is the
+registry's `changed_by`. Watched: the `while` of abilities, and of traits
+whose condition can be watched. Device outputs (16 §7) are package G5's
+to watch. Tests: `crates/clash-sim/tests/abilities.rs`.
+
 ### A2 — Abilities: definition, sources, rank, parameters
 
 **Spec** 08 §3, §4 · **Size** L
@@ -84,6 +89,12 @@ Done when
 - A parameter read in an action changes with rank and with a modifier from
   an unrelated trait.
 
+Beta (decisions D-722, D-723, D-728; 08 §12.1). Stubbed: items, modules
+and body parts confer abilities only through the traits they give (no
+`abilities` field of their own); `ability.var.x`; `ability` bound in an
+ability's attached rules; the seat of trait-given abilities, which stay
+with the body until traits have seats.
+
 ### A3 — Grants, costs, cooldowns, hooks on use
 
 **Spec** 08 §5.1–5.3, §7.9 · **Size** M
@@ -101,6 +112,15 @@ Done when
   only.
 - A gagged character cannot use an action that needs `voice`.
 
+Beta (decisions D-724 to D-726; 08 §12.1). Built on abilities: grants with
+`params`, `cost`, `cooldown`, `at_rank`, `if`, `intent`, `value`; costs
+from pools and items, overdraw, and `from` another payer (the review
+addition, with any expression until `ability.bound(name)` exists);
+`ability_using`; `use_ability`, the commands `UseAbility` and `SetMode`;
+`ability::options` and `available` for the application and the AI.
+Stubbed: the `grants` of traits and modules are still carried, not
+offered; costs from stores (16 §5); `value` is carried for the AI layer.
+
 ### A4 — Modes, upkeep, charging
 
 **Spec** 08 §5.4, §5.5 · **Size** M
@@ -115,6 +135,14 @@ Done when
 - A mode ends at the analytically correct tick when its pool empties, with
   nothing scheduled in between.
 - Charge delivered follows time held.
+
+Beta (decision D-727; 08 §12.1). A mode ends at a wake-up of its own,
+worked out from the pool's line, rather than at the pool's crossing.
+Stubbed: channel claims (`uses` is carried; a mode's trait may disable
+slots meanwhile); a switching action supplied by the mode (a mode is a
+toggle; a windup is a grant whose action calls `start_mode`). The
+bundled powers of `mods/core/data/powers` (D-729) and the test scripts
+under `scenarios/powers/` exercise A2 to A4 in the test city.
 
 ### A5 — Dormancy, suppression, loss
 
@@ -132,6 +160,13 @@ Done when
 - Scenario `null_field`: entering a suppressing area ends a running mode;
   leaving restores the ability but not the mode.
 - A rule on `ability_suppressing` resists.
+
+Done (decision D-770; 08 §12.1). Suppression by `suppress_abilities`
+(for a time on the owner's own time, or until `restore_abilities`), by
+a trait's `suppresses` and by an area kind's `suppresses`; the hook
+`ability_suppressing`, where a cancel resists for as long as the
+suppression lasts. Tests: `crates/clash-sim/tests/abilities_world.rs`;
+the test script `scenarios/powers/null_field.scn`.
 
 ### A6 — Anchored areas and ambient overrides
 
@@ -151,6 +186,13 @@ Done when
 - An anchored area with a clock rehomes what it comes to cover.
 - Light is never negative.
 
+Done (decision D-771; 02 §8.3 and 08 §12.1 as built). Anchors, moving
+areas and radius shapes were in the world already (D-303); this package
+adds gravity, light and suppression on area kinds, lights carried by
+areas (negative for darkness), and `anchor`, `gravity`, `light` and
+`light_radius` on `create_area`. Tests:
+`crates/clash-sim/tests/abilities_world.rs`.
+
 ### A7 — Bindings: bound traits, summons, conjuring, dispelling
 
 **Spec** 08 §7.3 · **Size** M
@@ -168,6 +210,19 @@ Done when
 - Scenario `conjured_wall`: a wall placed over a street is removed and the
   street restored; a cell that was since altered is left alone.
 - `release` leaves the thing in place, unbound.
+
+Beta (decisions D-772 to D-774; 08 §12.1). Bindings of traits
+(`bind_trait`), entities (`summon`), cells (`conjure`), areas
+(`create_area` with `bound`) and rules (`bind_rule`), with durations on
+the owner's own time, `ends_on`, `on_end`, `dismiss`, `dispel`,
+`binding_ending`, `ability.bound(name)` (so costs `from` a bound
+companion work) and `bound_by`. Summoned servants obey through the AI's
+stances. Stubbed: portals (not built, 02 §19); `add_trait` and
+`attach_rule` with `bound` (use `bind_trait` and `bind_rule`); orders to
+a servant until the social layer (S7) lands; the queries `bindings` and
+`modes`. Tests: `crates/clash-sim/tests/abilities_world.rs`; test
+scripts `scenarios/powers/summon_expires.scn` and `conjured_wall.scn`;
+the bundled powers of D-774.
 
 ### A8 — Snapshots, journals, restoring as generated
 
@@ -224,7 +279,7 @@ Done when
 
 Build
 - A reference mod with at least one working ability per table of 08 §8,
-  and the four worked examples of 08 §9 exactly as written.
+  and the worked examples of 08 §9 exactly as written.
 - Data for the abilities screen; `intent` on every grant.
 
 Done when
@@ -265,10 +320,12 @@ Under `scenarios/abilities/`.
 | `planted_memory` | A10 | S15 | Belief without perception |
 | `dominated` | A10 | S16 | Driver |
 | `cheat_skill` | A10 | S20 | Template, parameters, interface part |
+| `as_planned` | A10 | — | Planned movement and imposed spaces |
+| `the_court` | A10 | — | Planned movement and imposed spaces |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -277,3 +334,7 @@ small package of its own.
 | Addition | Package | Spec | Done when |
 |----------|---------|------|-----------|
 | Field reactions in reference abilities | A10 | 02 §16; 08 §8 | The reference elemental abilities rely on field reactions (world-model package W16) for what fire, water and lightning do to each other, and define none of it themselves. |
+| Elemental reference abilities | A10 | 08 §8.4 | The reference mod includes a freezing power that lays a sheet a person can walk on over water, a quake, a wave and a gust, each built only from the mechanisms the catalogue names. |
+| Costs from something bound | A3, A7 | 08 §5.2, §7.3 | A binding made with a name is reachable as `ability.bound(name)`. An action whose cost is drawn from a bound companion spends the companion's pool, and is unavailable with a reason when the companion is gone or short. |
+| Planned movement and imposed spaces | A10 | 08 §9.5, §9.6 | Test script `as_planned`: a route of twenty-four steps is carried out in one second and cannot be changed once begun; an unsound route stops the user's clock for a second, during which they notice no window. Test script `the_court`: an imposed space replaces what was there, hits everyone inside with the pool it names and nobody without it, loses a contest to a stronger one, and when it ends the place is as it was and its owner's ability is suppressed. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

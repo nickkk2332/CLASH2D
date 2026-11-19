@@ -1,0 +1,9 @@
+[
+  { "//": "The only screen there is. Esc leaves.",
+    "type": "screen", "id": "front_door",
+    "title": "Another game",
+    "layout": { "rows": [
+      { "text": "Another game entirely." },
+      { "text": "Nothing here comes from the engine's own mods." } ] },
+    "keys": { "back": [ { "app": "quit" } ] } }
+]

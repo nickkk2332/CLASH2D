@@ -1,0 +1,45 @@
+[
+  { "//": "A plain attribute: a base and whatever modifies it.",
+    "type": "attribute", "id": "might", "name": "Might",
+    "seat": "body", "base": 10, "min": 0 },
+
+  { "//": "Derived from another attribute and from something that is not one.",
+    "type": "attribute", "id": "carry", "name": "Carrying capacity",
+    "base": "self.attr.might * 4 + self.mass * 0.25", "min": 0 },
+
+  { "//": "Derived from a derived attribute: two steps from might.",
+    "type": "attribute", "id": "burden", "name": "Burden limit",
+    "base": "self.attr.carry * 1.5 + self.attr.wits" },
+
+  { "//": "Seated in the mind, and read by nothing but burden.",
+    "type": "attribute", "id": "wits", "name": "Wits",
+    "seat": "mind", "base": 8, "min": 1, "max": 20 },
+
+  { "//": "Derived from nothing but what the host knows.",
+    "type": "attribute", "id": "heft", "name": "Heft",
+    "base": "self.mass * 0.5" },
+
+  { "//": "Drains when cut, and says so at three marks.",
+    "type": "pool", "id": "blood", "name": "Blood",
+    "max": "self.mass * 0.07", "start": "max",
+    "thresholds": [0.0, 0.4, 0.7] },
+
+  { "//": "Comes back by itself, faster for the mighty.",
+    "type": "pool", "id": "stamina", "name": "Stamina",
+    "max": "self.attr.might * 10", "start": "max * 0.5", "regen": "0.02 * max",
+    "thresholds": [1.0, 0.25] },
+
+  { "//": "Starts empty and fades.",
+    "type": "pool", "id": "dose", "name": "Dose",
+    "seat": "mind", "max": 100, "regen": -0.5,
+    "thresholds": [0.5] },
+
+  { "//": "Gained by use; what feeds it is rules.",
+    "type": "track", "id": "blades", "name": "Blades",
+    "seat": "mind", "levels": "100 * $level ^ 1.6",
+    "on_advance": [ { "message": "{cap(the(self))} handles a blade better." } ] },
+
+  { "//": "Stops at a level.",
+    "type": "track", "id": "rank", "name": "Rank",
+    "levels": "10 * $level", "max_level": 3 }
+]

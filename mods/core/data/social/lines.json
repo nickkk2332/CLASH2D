@@ -1,0 +1,21 @@
+[
+  { "//": "Things people say (15 §11): a line whose `if` holds is picked by weight when something is said, and written for each hearer as reader, so that a hearer who does not know the speaker's name hears it described (05 §4.6). `self` is the speaker, `to` whom it is said to, `about` what it is about.",
+    "type": "lines", "id": "greetings",
+    "lines": [
+      { "text": "{cap(the(self))} {verb(self, 'nod')} to {the(to)}: \"Good day.\"", "if": "to != null" },
+      { "text": "{cap(the(self))} {verb(self, 'say')}: \"Morning.\"", "weight": 2 },
+      { "text": "{cap(the(self))} {verb(self, 'raise')} a hand." } ],
+    "doc": "Greetings in passing." },
+  { "type": "lines", "id": "warnings",
+    "lines": [
+      { "text": "{cap(the(self))} {verb(self, 'shout')}: \"Stay back!\"" },
+      { "text": "{cap(the(self))} {verb(self, 'warn')} {the(to)} off.", "if": "to != null" },
+      { "text": "{cap(the(self))} {verb(self, 'shout')}: \"Watch out!\"" } ],
+    "doc": "Warnings." },
+  { "type": "lines", "id": "help_calls",
+    "lines": [
+      { "text": "{cap(the(self))} {verb(self, 'shout')}: \"Help! Watch!\"", "weight": 2 },
+      { "text": "{cap(the(self))} {verb(self, 'scream')} for help." },
+      { "text": "{cap(the(self))} {verb(self, 'cry')}: \"Help! {cap(the(about))} is after me!\"", "if": "about != null" } ],
+    "doc": "Calls for help." }
+]

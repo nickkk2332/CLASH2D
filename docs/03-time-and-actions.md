@@ -55,8 +55,8 @@ Crate `clash-time`. Depends only on `clash-core`.
 ```rust
 pub struct Tick(pub i64);      // universal time, microseconds
 pub struct Dur(pub i64);       // a span of local time on some clock, microseconds
-pub struct ClockId(u32);       // ClockId::UNIVERSAL is the root
-pub struct WakeId(u64);        // stable handle; survives rescheduling
+pub struct ClockId(u32);       // ClockId::UNIVERSAL is the root; ids are never reused
+pub struct WakeId(u64);        // stable handle; survives rescheduling; it is the sequence number
 
 pub struct Wake {
     pub domain: WakeDomain,    // who handles it: World, Action, Timer, Rule, Stepper, …
@@ -66,22 +66,37 @@ pub struct Wake {
 
 impl Timeline {
     pub fn now(&self) -> Tick;
-    pub fn local_now(&self, clock: ClockId) -> Dur;
+    pub fn local_now(&self, clock: ClockId) -> Result<Dur, TimeError>;
 
-    pub fn schedule(&mut self, clock: ClockId, after: Dur, wake: Wake) -> WakeId;
+    pub fn schedule(&mut self, clock: ClockId, after: Dur, wake: Wake) -> Result<WakeId, TimeError>;
     pub fn cancel(&mut self, id: WakeId) -> bool;
-    pub fn remaining(&self, id: WakeId) -> Option<Dur>;         // local time left
-    pub fn rehome(&mut self, id: WakeId, to: ClockId);          // keeps remaining local time
+    pub fn remaining(&self, id: WakeId) -> Option<Dur>;         // local time left, rounded up
+    pub fn rehome(&mut self, id: WakeId, to: ClockId) -> Result<(), TimeError>;   // keeps remaining local time
 
     pub fn peek(&self) -> Option<Tick>;
-    pub fn pop(&mut self, limit: Tick) -> Option<(WakeId, Wake)>;   // advances now
+    pub fn pop(&mut self, limit: Tick) -> Option<(WakeId, Wake)>;   // advances now to the wake-up's due tick
+    pub fn advance_to(&mut self, tick: Tick) -> Tick;               // advances now; never passes a queued wake-up
 
-    pub fn create_clock(&mut self, parent: ClockId, rate: Real) -> ClockId;
-    pub fn set_rate(&mut self, clock: ClockId, rate: Real);
-    pub fn reparent(&mut self, clock: ClockId, parent: ClockId);
-    pub fn destroy_clock(&mut self, clock: ClockId);            // its wake-ups rehome to the parent
+    pub fn create_clock(&mut self, parent: ClockId, rate: Real) -> Result<ClockId, TimeError>;
+    pub fn set_rate(&mut self, clock: ClockId, rate: Real) -> Result<(), TimeError>;
+    pub fn reparent(&mut self, clock: ClockId, parent: ClockId) -> Result<(), TimeError>;
+    pub fn destroy_clock(&mut self, clock: ClockId) -> Result<(), TimeError>;   // its wake-ups and child clocks go to the parent
 }
 ```
+
+The timeline never panics on what it is given. An unknown clock or wake-up,
+a rate that is negative or not finite, an attempt to change, move or destroy
+the universal clock, and a move that would put a clock under itself are
+refused with a `TimeError` that says which, and change nothing.
+
+`pop` returns `None` and leaves `now` where it is when nothing is due by the
+limit. The kernel then calls `advance_to(limit)` to finish an advance to a
+tick. An advance with no limit must not move time when the queue is empty,
+which is why `pop` does not do it.
+
+Read-only queries complete the interface: a clock's `parent`, `rate` and
+`effective_rate`; a wake-up's payload, clock and due tick, and whether it is
+parked; the clocks, and the wake-ups on a clock, in order.
 
 ### 3.2 Ordering
 
@@ -93,8 +108,9 @@ saves and rate changes.
 ### 3.3 Clocks
 
 - A clock has a parent and a rate ≥ 0. Its **effective rate** is the product
-  of rates up to the root.
-- A clock keeps its own local time, which advances at its effective rate.
+  of rates up to the root. The universal clock's rate is always 1.
+- A clock keeps its own local time, which starts at zero when the clock is
+  created and advances at its effective rate.
 - `schedule(clock, after, …)` means "when `after` more local time has passed
   on this clock". The universal due tick is
   `now + ceil(after / effective_rate)`.
@@ -102,10 +118,21 @@ saves and rate changes.
   first bring their local time up to date at the old rate, then every
   wake-up on them gets a new universal due tick from its remaining local
   time. Relative order on one clock is preserved.
+- Setting the rate a clock already has, or the parent it already has,
+  changes nothing.
 - At effective rate 0 a clock's wake-ups are **parked**: they are not in the
   queue and never fire. Raising the rate re-queues them with their remaining
-  local time intact.
-- Rounding may shift a wake-up by at most one tick per rate change.
+  local time intact. A wake-up with no local time left is due now whatever
+  the rate.
+- Destroying a clock moves its wake-ups to its parent, each keeping its
+  remaining local time, and makes its child clocks children of its parent,
+  each keeping its own rate and local time.
+- A wake-up's remaining local time is kept exactly, as a real number of
+  microseconds. Only its universal due tick is rounded, up to a whole tick,
+  and it is worked out afresh at each change. So a wake-up fires within one
+  tick of the exact moment however many times its clocks change. A clock
+  keeps the fraction of a microsecond of its local time for the same reason:
+  bringing it up to date never loses time.
 
 ### 3.4 Which clock a thing is on
 
@@ -118,6 +145,7 @@ saves and rate changes.
 | Entity with a personal clock | Its own, child of its location's clock, or of its **anchor** if it has one |
 | Body in flight, world process | The clock of its location |
 | A contained entity | As its outermost container, unless it has a personal clock |
+| An entity that is not in the world | Its personal clock if it has one, else none. Nothing can be scheduled for it (invariant T9) |
 
 When an entity, body or process moves to a location with a different clock,
 its wake-ups are rehomed. Movement goes through the single relocation
@@ -126,6 +154,32 @@ function (01 R3), which does this.
 An **anchor** pins an entity's personal clock to a chosen parent regardless
 of where the entity is. Anchoring to the realm clock is how someone keeps
 moving inside a bubble of stopped time.
+
+As built (decision D-363):
+
+- The kernel does not store which clock an entity is on. It works the
+  answer out from where the entity is, every time, and stores only which
+  wake-ups are an entity's. Whatever schedules for an entity does it
+  through `Sim::schedule_for`, so that the wake-up follows the entity from
+  clock to clock; one put on the timeline directly stays where it was put.
+- A contained entity without a personal clock is on the clock its
+  outermost container is on, which is that container's personal clock if
+  it has one. What a hasted courier carries is hasted with them.
+- An area that is made, moved, reshaped or removed over an entity rehomes
+  it exactly as a move does: the kernel follows the world's `area_entered`
+  and `area_exited`. `set_clock_rate` on an area that gains or loses its
+  clock puts whoever is inside on the clock that now applies. A change of
+  an area's priority is not reported by the world, so it takes effect for
+  an entity the next time one of those happens.
+- Anchoring an entity that has no personal clock gives it one at rate 1.
+  Taking the personal clock away (`set_time_rate` with no rate) lifts the
+  anchor too. An anchor whose clock has been destroyed counts as none.
+- An entity has **own time**: the local time that has passed for it, on
+  whatever clocks it has been on, while it was in the world. It is what
+  `DecisionRequest.elapsed` is measured in. Time spent on an area's clock
+  that was destroyed by removing the area, rather than through
+  `set_clock_rate`, is counted only up to the entity's last change of
+  clock.
 
 ### 3.5 Two kinds of fast
 
@@ -141,6 +195,51 @@ millisecond over a punch that takes someone else a third of a second.
 Nothing else is needed for scene S3: the pressure wave is on the realm
 clock, the speedster is quicker than it.
 
+### 3.6 Processes
+
+A process (01 §5.1) is plain state that the timeline wakes. Each wake it
+does some work and says what comes next.
+
+```rust
+pub struct ProcessId(u32);     // never reused within one table
+
+pub enum Next {
+    Sleep(Dur),                // wake me after this much local time on my clock
+    Done,                      // I have finished; forget me
+}
+
+impl<P> ProcessTable<P> {      // P is the owning crate's process type, usually an enum
+    pub fn new(domain: WakeDomain) -> Self;
+    pub fn spawn(&mut self, timeline: &mut Timeline, clock: ClockId, first_wake: Dur, process: P)
+        -> Result<ProcessId, TimeError>;
+    pub fn process_of(&self, wake: &Wake) -> Option<ProcessId>;   // which process a popped wake-up is for
+
+    // Run in place, when the work needs nothing that holds the table.
+    pub fn wake(&mut self, timeline: &mut Timeline, id: ProcessId, step: impl FnOnce(&mut P) -> Next)
+        -> Result<Option<Next>, TimeError>;
+
+    // Or take the state out, run it against the state that holds the table, and hand it back.
+    pub fn take(&mut self, timeline: &mut Timeline, id: ProcessId) -> Option<P>;
+    pub fn settle(&mut self, timeline: &mut Timeline, id: ProcessId, process: P, next: Next)
+        -> Result<(), TimeError>;
+
+    pub fn remove(&mut self, timeline: &mut Timeline, id: ProcessId) -> Option<P>;   // force-resolve
+    pub fn rehome(&mut self, timeline: &mut Timeline, id: ProcessId, to: ClockId) -> Result<(), TimeError>;
+}
+```
+
+- The table keeps exactly one wake-up scheduled for each process, carrying
+  the table's domain and the process's id. It is saved and hashed with the
+  rest of the state.
+- `remove` is how a process is **force-resolved** (02 §10.3): its wake-up
+  is cancelled and its state is returned, for its owner to finish at once.
+- A process runs on the clock it was spawned on until `rehome` moves it.
+  The owner rehomes the processes of a clock before destroying the clock.
+  One that is missed still wakes, because the timeline moves its wake-up to
+  the parent clock, but it cannot be put back to sleep on a clock that is
+  gone: the table reports the error and leaves it unscheduled, for the
+  owner to rehome or remove.
+
 ## 4. The simulation kernel
 
 Crate `clash-sim`. The kernel is the part of the simulation that every other
@@ -150,21 +249,76 @@ document builds on.
 
 ```rust
 pub struct Sim {
-    pub defs: Arc<Defs>,
-    pub cosmos: Cosmos,              // 02
-    pub timeline: Timeline,
-    pub entities: EntityTable,
+    defs: Arc<Defs>,
+    cosmos: Cosmos,                  // 02
+    timeline: Timeline,
+    entities: EntityTable,
     pub actions: ActionTable,
     pub windows: WindowTable,
     pub rules: RuleState,            // 05: attachments, continuations, cooldowns
-    pub settings: VarMap,            // 04 §10
+    settings: VarMap,                // 04 §10
     pub rng: RngStreams,
     events: EventQueue,              // 05 §8
     decisions: DecisionQueue,
+    requests: VecDeque<AppRequest>,  // 13 §9.1
     out: Vec<SimEvent>,              // for presentation
     log: InputLog,
 }
 ```
+
+As built (decisions D-360, D-369):
+
+- The world, the timeline and the entity table are private, because
+  changing them behind the kernel's back breaks what it keeps true. They
+  are read through `Sim::truth()`, which gives a `Truth`: the one type
+  through which ground truth is read (01 R11). Nothing a character decides
+  by may hold one. `Sim::timeline()` and `Sim::now()` read time.
+- Simulation code changes the world with `Sim::world(|ctx| ...)`, which
+  hands out the world's `WorldCtx` and, when the closure returns, passes
+  on what the world reported and brings the kernel into step with it.
+- `Sim::new(defs, seed)` makes an empty world. `Sim::from_parts(defs,
+  cosmos, timeline, seed)` takes a world that has already been made, which
+  is how a generated world is handed over.
+- The simulation also keeps which entity each of its wake-ups belongs to
+  and how many wake-ups it has handled. The handlers of wake-up domains
+  and of events are not state: they are set up with the simulation and
+  again after a load.
+- `Sim::state_hash()` is the total of `Sim::hashes()`, which gives one hash
+  for each of: the world, the timeline, the entities, actions with windows
+  and rule state, settings, the random streams, and the kernel's own
+  queues. The output waiting to be drained and the input log are records
+  of what has happened, not state that decides what will: they are saved
+  and not hashed.
+- `Sim::save()` writes everything but the definitions and the world, which
+  have stores of their own, as one blob. `Sim::load(defs, cosmos, blob)`
+  reads it back over the world it was saved with, and `Sim::reindex()`
+  then places every entity in the world's occupant index again, which the
+  world neither saves nor hashes (02 §8.1).
+
+As joined to the packages built beside it (decisions D-460 to D-462):
+
+- The simulation holds every component of every entity (06 §3) in one
+  `Components`, read with `Sim::components()`. It is saved in the blob and
+  hashed as a part of its own, `SimHashes::components`;
+  `Sim::component_hash(kind)` gives one store's hash.
+- The simulation owns what loading a tract needs besides the world: the
+  generators and a tract store (02 §9.4). Neither is state. A new
+  simulation has the generators of `clash-gen` bound to its world's
+  definitions and a store in memory; `Sim::with_io(generators, store)`
+  gives it others, and a loaded simulation is given the store it was
+  saved with. A store is anything that implements the world's
+  `TractStore` and can be copied and printed (`SimStore`).
+- The blob also carries what the world has under way: its processes and
+  the collapses they belong to (`Cosmos::processes`), because the
+  timeline that holds their wake-ups is the simulation's. `Sim::load`
+  puts it back into the cosmos it is given. It refuses a blob that holds
+  a component of an entity that does not exist.
+- The blob carries the entities shelved with unloaded tracts (section
+  4.3). They are hashed with the kernel's own queues.
+- After a load, what is not state is as a new simulation has it: the
+  default wake-up handlers and the event types of the definitions.
+  Handlers and event types registered on top, the generators and the
+  store are set up again by whoever set them up.
 
 ### 4.2 Kernel entities
 
@@ -180,7 +334,7 @@ pub struct KernelEntity {
     pub control: Control,              // None | Direct | Delegated
     pub clock: Option<ClockId>,        // personal clock
     pub anchor: Option<ClockId>,
-    pub channels: ChannelSet,          // section 6.2
+    pub channels: ChannelSlots,        // section 6.2
     pub actions: SmallVec<[ActionId; 2]>,
     pub plan: Plan,                    // section 5.3
     pub attached: Vec<EocId>,          // 05 §9.3
@@ -193,6 +347,73 @@ the world: it is cold, or saved with an unloaded tract.
 `Sim::relocate` is the only function that changes `place`. It updates the
 world's occupant index, rehomes wake-ups when the clock changes, and emits
 movement, area and portal events.
+
+As built (decisions D-361, D-362):
+
+- The kernel entity also holds a **presence**: what the world is told
+  about it (kind, planes, mass, flags, footprint). The world does not save
+  occupants, so the kernel keeps this to place the entity again after a
+  load. Document 06's `Physical` component writes it with
+  `Sim::set_presence`.
+- `tags` are strings, kept in order, not the numbers the loader interns: a
+  rule may give an entity a tag no definition carries, and a save names
+  tags by their strings.
+- `place`, `presence`, `control`, `clock` and `anchor` are read through
+  accessors and changed only by `relocate`, `set_presence`, `set_control`,
+  `set_time_rate` and `anchor_clock`. `place` is private to the module
+  that holds `relocate`, and no owned kernel entity ever leaves the crate,
+  so nothing else can change it. `vars` is changed by `Sim::set_var`
+  (05 §6), which holds a declared variable to its declaration and raises
+  `var_changed`; the field itself stays open for setting a scene up. The
+  rest (`tags`, `channels`, `actions`, `plan`, `attached`) is open to
+  whoever holds the entity mutably until its packages give it owners.
+- `actions` is a plain list. `ChannelSlots` (an entity's slots and who
+  holds each), `Plan`, the action table, the window table and the rule
+  state are empty typed placeholders that already serialise and hash. A
+  set of channel ids, which is what an action definition uses, is the
+  action module's `ChannelSet`.
+- Ids are generational. A freed slot is reused, lowest slot first, a
+  generation on. The table visits entities in id order.
+- `create_entity` makes an entity that is `Stored` and emits
+  `entity_created`; `spawn` makes one and puts it somewhere, or makes
+  nothing if it cannot be put there. `remove_entity` first puts what the
+  entity held where the entity was (what cannot stand there leaves the
+  world), then takes the entity out of the world, cancels its wake-ups,
+  destroys its personal clock, forgets any decision it was asked for, and
+  emits `entity_removed`. Its components are removed with it, before its
+  slot can be given out again.
+
+What `relocate` does, in full:
+
+- It refuses, changing nothing and with a reason, an unknown entity or
+  container, a container that is the entity itself or inside it, nesting
+  deeper than 64, and a cell the world refuses: outside the realm, or
+  with any cell of the footprint not loaded. A move to where the entity
+  already is does nothing at all.
+- Only an entity `At` a cell is in the occupant index, at that cell. What
+  is inside it is wherever it is, moves with it, and is not reported
+  separately.
+- The entity and everything inside it are put on the clocks that now
+  apply (section 3.4), each wake-up keeping its remaining local time.
+- The container it left and the container it entered have their mass
+  worked out again, and so has every container round them (06 §3.1). Each
+  of those that stands in the world has the new mass written to the
+  world's occupant record.
+- An entity that is given a place is no longer waiting for an unloaded
+  tract (section 4.3).
+- An entity that leaves the world (`Stored`, or inside something that
+  is), and everything inside it, has its wake-ups cancelled (invariant
+  T9). Whoever stores an entity takes what should survive, such as
+  timers, off the timeline first (section 9).
+- It emits `entity_relocated` after the world's own `area_exited` and
+  `area_entered`. Portal crossings wait for the world to have portals.
+- When the world moves an occupant out of the way of an edit (02 §23),
+  the kernel follows: the entity's place becomes where the world put it,
+  and `entity_relocated` is emitted after the world's
+  `occupant_displaced`.
+- After a load, `reindex` rebuilds the occupant index from the places. An
+  entity that cannot be placed where its place says leaves the world,
+  with `entity_relocated`, and is listed in what `reindex` returns.
 
 ### 4.3 Advance
 
@@ -213,14 +434,17 @@ pub enum Advance {
 
 One iteration of `advance`:
 
-1. If a decision is pending for a directly controlled entity, return
-   `NeedInput`.
-2. Pop the next wake-up within the limit. If there is none, return.
+1. If a rule has asked the application for something, return `Request`.
+2. Pop the next wake-up within the limit. While a decision is pending for
+   a directly controlled entity, only what is still due at the current
+   tick is popped. If there is none, return: `NeedInput` if a decision is
+   pending, else `Reached`.
 3. Dispatch it to its domain's handler.
 4. **Pump events.** Drain world events into the event queue, then deliver
    queued events in order to rules (05 §8). Rules may change state and emit
    more events; those join the back of the queue. Continue until the queue
-   is empty.
+   is empty. Then re-evaluate reactive expressions that have gone stale
+   (05 §7.5), and pump again if that raised anything.
 5. **Safe point.** If flagged: reconcile tickets (02 §10.2), run requested
    saves, apply a pending definition reload (04 §11).
 
@@ -229,6 +453,75 @@ Everything between two pops happens at one tick.
 If one pump delivers more than `rules.max_cascade` events (default 10,000),
 the remainder is dropped, the offending rule chain is reported with its
 trace, and the simulation carries on. Content cannot hang the engine.
+
+As built (decision D-364):
+
+- **Limits.** `UntilDecision` runs until a decision is needed or nothing
+  is left to happen, and does not move time when nothing is scheduled.
+  `Until(tick)` also moves time on to the tick. `Work(n)` handles at most
+  `n` wake-ups and returns `Yielded` if more is due, else `Reached`. A run
+  made of many `Work(n)` calls handles the same wake-ups in the same order
+  as one long call. `Reached` carries the current time.
+- **Domain handlers.** A wake-up's domain picks its handler: a plain
+  function given the simulation, the wake-up's handle and what it carried.
+  A package that schedules wake-ups adds its handler to the defaults every
+  simulation starts with; a test or a tool registers one with
+  `Sim::set_wake_handler`. The world's wake-ups (the `World` domain) go
+  through the same loop: their handler hands the wake-up to the world
+  through `Sim::world`. A wake-up whose domain has no handler is dropped
+  and reported as a fault. The `Timer` domain is shared (decision D-651):
+  every timer goes to life first (`life::handle_wake`: pools' crossings,
+  wounds' closing and healing), and only the rest to the domain's
+  handler, so a handler registered for `Timer` never takes life's away.
+- **Faults.** What the engine contains (an unhandled wake-up, a limit
+  exceeded) is reported as a `fault` event that goes straight to the
+  output and is not delivered to handlers.
+- **One tick.** If one call handles 100,000 wake-ups without time moving,
+  it reports a fault and returns `Yielded`. Putting the rest off to the
+  next tick (05 §13.2) is not built.
+- **The pump** also runs when a command is accepted, so events are never
+  left waiting between calls. A cut-off cascade's report lists the last
+  eight events delivered.
+- **The safe point** reconciles tickets with what is loaded
+  (`Sim::reconcile_activity`, 02 §10.2) and then delivers whatever that
+  reported. It follows every wake-up, and every accepted command, so that
+  a ticket follows what a command moved. The game being played is then
+  brought up to date with what was delivered (13 §5.1: its objectives,
+  missions and endings), as it is at the start of every call of
+  `advance` (decision D-755). What a rule asks of the application is
+  returned as `Advance::Request` (`AppRequest`: `Checkpoint { name }`,
+  `RestoreCheckpoint { name }`, `EndScenario { outcome }`, `TakeControl
+  { entity }`; 13 §9.1, decision D-757).
+- **The world's wake-ups.** The handler of the `World` domain hands the
+  wake-up to `WorldCtx::handle_wake` inside `Sim::world`. A stability
+  check and every step of a collapse run under `advance` like anything
+  else, and what they report comes out of `drain_events`. A process the
+  world could not carry on is reported as a fault.
+
+What the safe point does about entities (decision D-461). The world
+cannot take entities out of a tract it wants to unload (02 §9.5): it
+says so, and the simulation answers.
+
+| The world says | The simulation |
+|----------------|----------------|
+| `tract_unloading` | Takes every entity with a cell in the tract out of the world. Its place becomes `Stored`, and where it stood is kept on the **shelf** under that tract. `entity_relocated` is emitted for each; what an entity holds stays inside it |
+| `tract_loaded` | Puts back the entities shelved under the tract, each where it stood, with `entity_relocated`. One whose footprint reaches into a tract that is not loaded goes back on the shelf, under that tract |
+| A loaded tract's spawn requests | Emits `spawn_requested` for each, for the package that makes entities from definitions |
+| A tract that could not be loaded or unloaded | Reports a fault with the reason `world.tract_failed` |
+
+A shelved entity keeps its id, its components and its contents. Its
+wake-ups are cancelled as for any entity that leaves the world (T9):
+taking timers off the timeline first and catching up on return is
+section 9's, and not built. One safe point reconciles up to four times,
+so that a tract announced as going is gone before anything else runs.
+
+`Sim::start_session(entity, at, cause)` starts a session at a place that
+may not be loaded: it holds a fixed ticket over the place, reconciles,
+puts the entity there, holds the ticket of a controlled character for it
+(`Ticket::player`) and releases the fixed one. An entity's ticket covers
+nothing until the entity has been seen in the world, which is why the
+fixed ticket comes first. `Sim::hold_ticket` and `Sim::release_ticket`
+hold and release any other.
 
 ### 4.4 Commands
 
@@ -253,6 +546,82 @@ pub enum Command {
 - Every accepted command is appended to the **input log** with its tick. A
   save plus its input log replays to the same state.
 - Commands are the only way anything outside the simulation changes it.
+
+As built (decision D-365):
+
+- `Setting { key, value }` (decision D-753) changes a setting: refused
+  with `setting.locked` for one the scenario being played locks and with
+  `setting.bad_value` for a value its `setting` definition does not
+  take (04 §10); it raises `setting_changed`.
+  `BeginScenario(BeginScenario { scenario, party, place, options })`
+  (decision D-751) begins a game from a scenario in a simulation whose
+  world `scenario::make_world` made (13 §4.5).
+- `Command` and `DebugCommand` are open sets. The kernel honours the debug
+  commands: `CreateEntity { spec, place }`, `MoveEntity { entity, to }`,
+  `RemoveEntity { entity }`, `SetElement { loc, layer, state }`,
+  `SetControl { entity, control }`, `StartSession { entity, at }` and
+  `Schedule { entity, after, wake }`. `StartSession` is refused for an
+  unknown entity or a place outside its realm; once tracts have been
+  surveyed and loaded for it, a failure is a fault, not a refusal.
+  The rest of the list above arrives with the packages that can honour
+  each. A debug command is a command like any other: validated, logged
+  and replayed.
+- `Choose { entity, choice, option }` (package K9, decision D-542)
+  answers a choice put by a rule's `ask` (05 §10.6) with the position of
+  an option, from zero. It is refused with `decision.none_pending` if
+  the entity is not waiting for that choice, and with
+  `rule.choice_refused` for an option the choice does not have or may
+  not take.
+- `Act { entity, action, params, how }`, `Wait { entity, dur }`,
+  `Cancel { entity, action, abandon }` and `ClearPlan { entity }`
+  (packages T3 and T4, decisions D-543, D-544). `action` is an action
+  definition's dense id, `params` the parameters by name (stored values),
+  and `how` is `start` or `enqueue`. They address an entity under
+  `Direct` or `Delegated` control and are refused with
+  `command.not_controlled` for any other. `Act`, with `start` or
+  `enqueue`, is refused with life's reason for an entity whose mind has
+  stopped (`entity_unconscious`, `entity_dead`, `no_mind`: 06 §8.4,
+  decision D-650). `Act` with `start` is refused
+  with the reason the action cannot start (section 6.6); one that a
+  handler of `action_starting` refuses is taken, since the handlers ran,
+  and raises `action_refused`. `Cancel` with `abandon` false lets a held
+  phase go; otherwise it abandons the action where the phase allows it
+  (`engine:action_cannot_cancel`, `engine:action_cancel_only_for`), and
+  it is refused with `action.not_running` for an action that is not the
+  entity's. `Wait` is refused with `command.bad_argument` for less than
+  no time. `Act` and `Wait` answer a free decision.
+- `UseAbility { entity, ability, action, params }` and
+  `SetMode { entity, ability, mode, on }` (packages A3, A4, decision
+  D-724) use an ability the entity holds (08 §5): `ability` is an
+  ability definition's dense id, `action` the action of one of its
+  grants (`None` for its only one), `params` the action's parameters by
+  name, and `mode` a mode's id within the ability. They are refused as
+  `Act` is for an entity nobody controls or whose mind has stopped, and
+  with the ability's reason (`ability.cooling_down`,
+  `ability.cost_short`, …: 08 §12) before anything changed; a use
+  refused after a handler of `ability_using` ran is taken and raises
+  `ability_refused`. `UseAbility` answers a free decision.
+- `Interrupt { entity }` (decision D-931) is the effect `interrupt_plan`
+  as a command: the entity's plan is emptied, the wait it is in ended,
+  and it is asked what it does (a `Free` request for one under direct
+  control, `decision_needed` for anyone else); an action that is running
+  runs on. It is refused as `ClearPlan` is, with
+  `command.not_controlled`. The application gives it when the player
+  presses a key during a long wait (12 §3.2), so that the input log
+  replays the wait broken off where it was.
+- A `CommandError` holds a `Reason` (14 §5): a stable code, a sentence and
+  the values involved. A refused command leaves the state exactly as it
+  was and is not logged.
+- A log entry carries the tick and the number of wake-ups the simulation
+  had handled when the command was accepted. The two together fix the
+  command's place among the wake-ups of its tick, so a session that
+  yielded in the middle of a tick replays exactly.
+- `Sim::replay(log)` advances to each entry's place and submits its
+  command. Run on a simulation set up as the logged one was, it ends in
+  the state the session was in when its last command was accepted. An
+  entry that cannot be reached or is refused stops the replay with a
+  reason that names it. `take_input_log` starts a new log, as a save does.
+  The log does not yet carry state hashes at intervals (14 §8.1).
 
 ## 5. Control, decisions and plans
 
@@ -292,6 +661,30 @@ If several entities need decisions at the same tick, requests are returned
 one at a time in entity id order, and time does not move until each has been
 answered. `Wait` is an answer.
 
+As built (decision D-364). The kernel owns the queue and its order, and
+packages T4, T5 and K9 add what raises requests and the commands that
+answer them:
+
+- `Sim::request_decision(entity, kind, cause)` asks an entity under
+  `Direct` control and emits `decision_requested`. For any other entity it
+  asks nothing and says so, and the caller turns to the AI layer.
+  `Sim::answer_decision(entity)` takes the entity's oldest request as
+  answered; the commands that answer call it.
+- So that every request raised at one tick is there to be returned in
+  entity order, `advance` runs what is still due at the current tick
+  before it returns `NeedInput`. Time does not move.
+- `elapsed` is the entity's own time (section 3.4) since it last answered.
+- Of the kinds, `Free`, `Choice` and `Reaction` (section 7.3) exist. A
+  `Reaction` names the window by its number and carries its deadline,
+  `None` where it is not known. `PlanEmpty` carries the
+  reason a step could not be started, if that is why. An entity that
+  stops being directly controlled, or is removed, is no longer waiting
+  for anything; a choice it was asked is then settled with its first
+  option that may be taken, or forgotten if it was removed (05 §10.6).
+- `Choice { choice, prompt, options }`: `choice` is a `ChoiceId`, never
+  given twice in one simulation; `prompt` and each option's `label` are
+  rendered for the entity; each option says whether it may be taken.
+
 ### 5.3 Plans
 
 ```rust
@@ -302,7 +695,7 @@ pub struct PlanStep { action: ActionDefId, params: Params }
 `Act { how: Enqueue }` appends a step. When a foreground action ends, the
 next step whose channels are free starts automatically. If a step's
 `requires` fails when it is due, the plan is cleared and a free decision is
-requested with the reason.
+requested with the reason. A step whose channels are busy waits for them.
 
 The AI layer uses plans in the same way. Travelling along a path, repeating
 an attack, crafting for an hour and following an order are all plans.
@@ -310,6 +703,44 @@ an attack, crafting for an hour and following an order are all plans.
 Plans are interrupted by the `interrupt_plan` effect. What interrupts them (a
 new threat in view, being hurt, a noise) is decided by rules, not by the
 engine.
+
+As built (decision D-544), in `clash_sim::action::plan`:
+
+- An entity is **free** when it is in the world, no foreground action of
+  its own runs, its plan is empty and it is not waiting
+  (`Sim::is_free`). When it becomes free its plan is consulted first;
+  then it is asked. It becomes free as it comes under direct control or
+  enters the world under it (`started`), when a foreground action of its
+  own finishes or is cancelled (`finished`) or is interrupted
+  (`interrupted`), when a plan step could not start (`plan_empty`, with
+  the reason) and when a wait is over (`waited`). A background action
+  ending only consults the plan.
+- A **directly controlled** entity is asked with a `Free` request, at
+  most one at a time. **Anyone else** is not asked: `decision_needed` is
+  raised (section 13), the hook the AI layer (09) fills. If something
+  listens for it, an entity that nobody gives anything to do idles for
+  `actions.idle_wait` of its own time (1 s by default) and is asked
+  again; starting an action or a wait ends the idle. If nothing listens,
+  nobody could answer, and the entity stays free with nothing scheduled.
+  An entity that enters the world under no one's direct control is not
+  asked: whatever made it decides when it starts deciding. A delegated
+  entity takes commands and is never asked.
+- A **wait** (`Wait`, the `wait` verb) occupies an entity for a length of
+  its own time; when it is over the entity is free. A wait of no length
+  answers a decision and asks nothing more: the entity is free and
+  nothing is due.
+- **Plans.** `Act` with `enqueue` and `enqueue_action` append a step and
+  start it at once if nothing is in the way. The front step starts when
+  no foreground action of the entity runs; a step whose slots are held
+  waits for them; a step that cannot start for any other reason clears
+  the plan (`plan_cleared` with the reason) and the entity is asked with
+  `plan_empty`. A step is checked when it starts, with its defaults
+  worked out then. `ClearPlan`, `clear_plan` and `interrupt_plan` empty a
+  plan; `interrupt_plan` also ends a wait in progress and asks,
+  whatever is running, so that a rule can break off a long wait when
+  something happens (decision D-871).
+- An entity that leaves the world keeps its plan, and takes it up again
+  when it comes back; one that is removed loses it.
 
 ## 6. Actions
 
@@ -327,6 +758,9 @@ engine.
   },
   "requires": "dist(self, $target) <= 1.5",
   "tempo": "self.attr.quickness",
+  "attacks": {
+    "fist": { "with": { "part": "hand", "surface": "fist" }, "energy": 120, "push": 0.1 }
+  },
   "phases": [
     { "id": "windup", "time": "300 ms", "cancel": true,
       "window": { "kind": "strike", "for": ["$target"], "closes": "impact" } },
@@ -337,21 +771,62 @@ engine.
 }
 ```
 
-The `strike` verb belongs to document 07. Here it stands for "whatever this
-action does".
+The `attacks` block and the `strike` effect belong to document 07 (§3.1,
+§3.4): `strike` resolves the action's one attack against `$target`, and
+leaves whether it landed in `$landed`.
 
 | Field | Meaning |
 |-------|---------|
-| `uses` | Channels occupied for the whole action (section 6.2). |
-| `params` | Typed parameters. Each may have a `default`, an expression evaluated when the command omits it (section 6.3). |
-| `requires` | Condition that must hold to start. `fail_text` gives the reason shown when it does not. |
-| `tempo` | Expression dividing phase durations (section 6.5). Default 1. |
+| `name` | What the action is called, shown to players. A text. Optional. |
+| `uses` | Channels occupied for the whole action (section 6.2): an object of channel ids, each with a number of slots or `"all"`. Default none. Not allowed beside `roles`. |
+| `params` | Typed parameters, by name. Each may have a `default`, an expression evaluated when the command omits it (section 6.3). |
+| `vars` | The action's own variables, by name, each with a type and a starting value (section 6.4). |
+| `requires` | Condition that must hold to start. Default true. |
+| `fail_text` | The text shown when `requires` does not hold. Optional. |
+| `requires_at_start` | A condition tested only when the action begins, and never shown beforehand. If it fails the action is interrupted at once and says why. For things the actor cannot know in advance (01 R11): whether a victim has noticed them. Default true. |
+| `tempo` | Expression dividing phase durations (section 6.5): a number above zero. Default 1. |
 | `foreground` | Whether finishing this action can prompt a decision. Default true. A sustained aura or a conversation is background. |
-| `reaction_to` | Window kinds this action may answer (section 7). |
+| `footing` | Whether the actor must be standing on something. Default true. An action without it can be done in the air (07 §7.1). |
+| `reaction_to` | Window kinds this action may answer (section 7): a list of `window_kind` ids. Default none. |
 | `on_behalf` | Whether, as a reaction, it may answer a window aimed at someone else. Default false. |
-| `phases` | Section 6.4. |
-| `on_start`, `on_finish`, `on_cancel`, `on_interrupt` | Effect lists. |
+| `ready` | For a reaction: the id of the phase from which it counts as ready (section 7.3). Optional. |
+| `phases` | Section 6.4. A list of at least one phase. Required. |
+| `on_start`, `on_finish`, `on_cancel`, `on_interrupt`, `on_abandon` | Effect lists (section 6.6; `on_abandon` section 9). Default empty. |
 | `roles` | Present on joint actions (section 8). |
+| `tags` | Free-form tags, queryable by rules and named by a phase's `cancel`. Default none. |
+| `low_attention` | Section 11. Default false. |
+| `cutscene` | The id of a cutscene the action names (07 §10, 12 §8.1), as written: when the action begins, once its `requires_at_start` held, `cutscene_cued` is raised with every participant, a cue for the application. It decides nothing. Optional. |
+
+**What an action's expressions may name.** Every expression of an action
+binds one subject, `self`, the actor, and the action's **locals**, written
+`$name`: the window being answered (`$window`, on an action with
+`reaction_to`; null when it was not started as a reaction), then the roles,
+the parameters and the variables, each in the order written. A running
+action keeps one value for each. The names must differ from each other,
+start with a lowercase letter, hold lowercase letters, digits and `_`, and
+not be a word of the expression language. A local that is none of these is
+a load error where it is read.
+
+| Field | Reads (05 §7.3) | Pure |
+|-------|-----------------|------|
+| `requires`, `fail_text`, a parameter's `check`, `name` | Belief: the mind context of the actor | Yes |
+| A parameter's `default` | Belief | No |
+| `requires_at_start`, `tempo`, a phase's `time`, `max` and `until`, a tick's `every`, the conditions of `next`, a window's `for` | Truth | No |
+| A variable's `default` | Nothing: it is a constant | Yes |
+| Effect lists | Truth | No |
+
+`name` sees no locals: it is shown before any are chosen. `requires` is
+compiled in the mind context so that it can be previewed, and is tested
+against truth only when the action is started (05 §7.3): there a
+function compiled in its belief form reads truth, `dist(self, $target)`
+measuring to where the target is rather than where the actor believes
+it is (decision D-780).
+
+An effect list (05 §10) is compiled with the action's locals in their
+slots, so `set` and `add` change the running action's own values. What a
+list defines with `let` takes the slots after them and lasts until the
+list ends. `return` has no meaning in an action's list and is a load
+error; `stop` ends the list.
 
 ### 6.2 Channels
 
@@ -361,6 +836,12 @@ A **channel** is something an action needs exclusive use of.
 { "type": "channel", "id": "arm" }
 ```
 
+A channel has one field, `name`: a text, what the channel is called where
+a player is told of it, as in the reason an action cannot start. It is
+optional; without it the id is shown. There may be at most 256 channel
+definitions, so that a set of channels is a small fixed bitset; one more
+is a load error.
+
 An entity has a set of channel **slots**. Document 06 derives them from the
 body: two arms give two `arm` slots, a mouth gives `voice`, a mind gives
 `focus`. A creature with six arms has six. A device has whatever its
@@ -368,7 +849,8 @@ definition gives it.
 
 - `"uses": { "arm": 2, "legs": 1 }` needs two free arm slots and one legs
   slot. `{ "arm": "all" }` needs every arm slot the entity has, and at least
-  one.
+  one. A number of slots is a whole number of at least one, and a channel
+  is named once.
 - A parameter of type `part` may name which slot is used; otherwise any free
   one is taken.
 - Actions whose slots do not overlap run at the same time.
@@ -386,6 +868,33 @@ the engine side of decision D-037.
 Defaults are expressions and may call functions (05 §12), so the choice of
 target or body part can be as clever as content wants.
 
+A parameter may be a **list** of another type, with a least and a greatest
+length. A list of cells is a route:
+
+```json
+"route": { "type": "list", "of": "cell", "max": 24, "check": "route_fault(self, $route)" }
+```
+
+`check` is an expression that gives a reason when the value is not sound,
+or nothing when it is. It is advice: pickers show it as the value is built
+(12 §9.3). Whether an unsound value is refused is for `requires`, and what
+happens to someone who goes ahead anyway is for the action's own effects.
+
+A parameter is written as its type alone, `"target": "entity"`, or as an
+object:
+
+| Field | Meaning |
+|-------|---------|
+| `type` | The type of the value, as 05 §3 writes types: `entity`, `part`, `real`, `id<material>`, `entity?`. `cell` is a location, the kind `loc`. `list` is a list of what `of` says. Required. |
+| `of` | For `list`: the type of the elements. A list may also be written whole, `list<loc>`, without it. |
+| `min`, `max` | For a list: the least and the greatest number of values. `min` defaults to 0. With no `max` a list is as long as any value may be (`rules.max_value_size`). |
+| `default` | An expression of the parameter's type, in the mind context of the actor (05 §7.3). It may read the parameters, and roles, written before it: defaults are worked out in the order the parameters are written. A parameter with none must be given by the command. |
+| `check` | An expression in the mind context of the actor, pure, that may read the parameter and those before it. It gives null when the value is sound; anything else is the reason shown: a text, or the id of a `reason` definition (14 §15). |
+
+A type that is not one, a default that cannot give a value of the
+parameter's type, `of`, `min` or `max` on something that is not a list and
+a `max` below its `min` are load errors.
+
 ### 6.4 Phases
 
 ```json
@@ -398,31 +907,58 @@ target or body part can be as clever as content wants.
 
 | Field | Meaning |
 |-------|---------|
-| `time` | Duration expression, or `"hold"`. Evaluated when the phase starts. `0` runs and moves on within the same tick. |
+| `id` | The phase's name within its action: lowercase letters, digits and `_`, starting with a letter. No two phases of an action share one. Required. |
+| `time` | Duration expression, in seconds of the actor's local time, or `"hold"`. Evaluated when the phase starts. `0` runs and moves on within the same tick. It cannot be below zero. Required. |
 | `do` | Effects run when the phase starts. |
 | `on_exit` | Effects run when the phase ends normally. |
-| `tick` | Effects repeated at an interval while the phase lasts. |
-| `until`, `max` | For held phases: end when the condition is true (checked at ticks) or the maximum is reached. A `Cancel` command also ends a held phase and counts as release, not as cancellation. |
+| `tick` | Effects repeated at an interval while the phase lasts: `every`, a duration expression above zero, evaluated when the phase starts, and `do`, the effects, which may be left out for a tick that only tests `until`. |
+| `until`, `max` | For held phases: end when the condition is true (checked at ticks, so a phase with `until` has a `tick`) or the maximum, a duration expression, is reached. A `Cancel` command also ends a held phase and counts as release, not as cancellation. `Cancel` with `abandon` gives it up instead, where the phase allows `cancel`. |
 | `cancel` | Whether the actor may abandon the action during this phase. Default false. A list of action tags instead of `true` allows abandoning it only to start an action with one of those tags: a recovery that can be cut short by a follow-up and nothing else. |
-| `uninterruptible` | The `interrupt` effect cannot end the action during this phase. |
-| `fixed` | Tempo does not apply to this phase. |
-| `window` | Opens a reaction window when the phase starts (section 7). |
+| `uninterruptible` | The `interrupt` effect cannot end the action during this phase. Default false. |
+| `fixed` | Tempo does not apply to this phase. Default false. |
+| `window` | Opens a reaction window when the phase starts (section 7.1). |
 | `tags` | Free-form, queryable by rules: `vulnerable`, `telegraph`, `airborne`. |
 | `next` | Where to go afterwards: the first entry whose condition holds. Default is the following phase; after the last, the action finishes. |
+
+An entry of `next` has `if`, a condition, which may be left out for an
+entry that always holds, and says where to go: `goto` with the id of a
+phase, or `"finish": true`, which ends the action there. If no entry holds,
+the default applies: the following phase. So a branch that is not the last
+phase written ends the action with `"next": [ { "finish": true } ]`.
 
 `next` makes an action a small state machine: follow-ups that branch on
 whether a blow landed, charge-and-release, loops that repeat while a
 condition holds. More than 1,000 zero-duration transitions in one tick ends
 the action with an error.
 
+These are load errors: a `goto` that names no phase of the action; a phase
+that no path from the first phase leads to; `max` or `until` on a phase
+that is not held; `until` on a phase with no `tick`. An entry written after
+one that always holds is never tried, which is a warning.
+
 Action instances have local variables (`$name`), shared by all their phases
-and effects.
+and effects. Those that are not parameters or roles are declared in the
+action's `vars`, each as its type or as an object with `type` and
+`default`, a constant of that type:
+
+```json
+"vars": { "power": { "type": "int", "default": 0 }, "landed": "bool" }
+```
+
+A variable starts as its default when the action starts, and as null if it
+has none; its type is then "the declared type, or null". Effects assign it
+with `set` and `add` (05 §10.3). A verb that leaves results in locals of
+the action, as `strike` does (07 §3.4), needs them declared like any
+other.
 
 ### 6.5 Tempo
 
 `duration = time / tempo`, with `tempo` evaluated at the start of each
 phase. Once a phase is scheduled, a later change of tempo does not move it.
 A change of clock rate does.
+
+Tempo divides `time` and nothing else: a held phase's `max` and a tick's
+`every` are local time as written.
 
 ### 6.6 Lifecycle
 
@@ -448,6 +984,87 @@ wake-up on the actor's clock.
 Moving is an action like any other. Its effect calls relocation. A dash that
 covers many cells is one action whose effect sweeps the path; document 06
 defines it.
+
+As built (decision D-543), in `clash_sim::action::run`. A running action
+is plain state in the simulation's action table: the actor, the
+definition, one value for each local in slot order, the phase, the slots
+it holds, the wake-ups of its phase and its tick, and when the phase
+began and is due. It is saved and hashed with the simulation.
+
+- **Starting** checks, in this order, and refuses with the first reason
+  that applies, changing nothing: the actor is known and in the world
+  (`entity.stored`) and the definition is loaded (`action.unknown`);
+  life lets it act (`Sim::life_lets_act`: `entity_unconscious`,
+  `entity_dead`, `no_mind`; 06 §8.4, decision D-650), whether the start
+  is a command's, a rule's or a plan step's; a
+  parameter given is one of the action's (or a role's name) and every
+  parameter has a value of its type, from the command or from its
+  `default` worked out in order, and a list is within its bounds; a role
+  other than the first is given an entity (`engine:role_unfilled`);
+  `footing`; `requires`, with `fail_text` as the sentence; slots. A
+  default that draws at random is drawn again after a refusal: the
+  random streams are put back. A parameter's `check` is never tested.
+- **Slots.** An entity has, of each channel, the slots its body supplies
+  (06), or one of every channel if it has no body. `disable_channel`
+  takes some away. An action needs, of each channel it uses, as many
+  enabled slots as it names (`all`: every enabled slot, and at least
+  one), else `engine:action_channel_lacking`, and that many free, else
+  `engine:action_channel_busy`. Slots held by an action whose phase
+  allows `cancel` for the new action (`true`, or a list holding one of
+  its tags) count as free: starting the new action cancels that one
+  (`on_cancel`, `action_cancelled`). A plan step never cancels anything
+  to make room. Slots are counted, not named: a `part` parameter does
+  not choose one yet.
+- `action_starting` is raised only if something listens for it, after
+  the checks. A handler may change `params`, which are held to their
+  types again, or cancel; a refusal from here on is raised as
+  `action_refused`, with `engine:action_vetoed` when the handler gave no
+  reason of its own. Then the slots are claimed, a wait of the actor is
+  ended, `action_started` is raised, `requires_at_start` is tested
+  against truth (failing, the action is interrupted at once with
+  `engine:action_start_condition`), `on_start` runs and the first phase
+  is entered.
+- **Entering a phase** works out its duration (its `time` over the
+  tempo unless `fixed`, or a held phase's `max`), raises `phase_timing`
+  if something listens, schedules one wake-up on the actor's clock,
+  raises `phase_entered` with the duration and due tick and
+  `window_opened` for a phase with a window, runs `do`, and schedules
+  the first tick. A phase of no length ends at once, in the same tick. A
+  tempo of zero or below, a duration below zero and an interval of zero
+  or below are faults (`action.bad_time`): the tempo counts as 1, the
+  duration as none, the tick does not repeat. Entering more than
+  `rules.max_transitions` phases in one tick interrupts the action with
+  `engine:action_transition_limit`.
+- **A tick** runs its effects and then tests `until`; holding, the phase
+  ends. **Leaving a phase** runs `on_exit`, raises `phase_exited` and
+  goes where the first entry of `next` that holds says, else to the
+  following phase, else out of the action.
+- **Ending.** Finishing runs `on_finish`; cancelling `on_cancel`;
+  interrupting `on_interrupt`; abandoning `on_abandon`. Then the slots
+  are released, the wake-ups cancelled, and the event raised. `interrupt`
+  passes over a phase that is `uninterruptible`; `cancel_action` and
+  `Cancel` respect the phase's `cancel`. A slot disabled under an action
+  interrupts it, newest first, with `engine:action_channel_disabled`;
+  `Sim::check_slots` does this for whatever takes slots away, a body
+  that loses a part among them: the runtime answers `slots_lost` with
+  it. An actor that leaves the world, by being
+  stored, shelved with its tract or removed, abandons its actions
+  (section 9).
+- Effect lists run with the action's locals, which `set` and `add`
+  change in place, and are caused by the actor with the kind `action`.
+- **Life** (decision D-650). The kernel hands every event, once its
+  handlers have run, to the runtime as it does to movement, and the
+  runtime answers what living things report (06 §8.4). At
+  `entity_died` the entity's running actions are abandoned
+  (`on_abandon`, `action_abandoned`), and its wait and plan are
+  dropped; at `entity_unconscious` its actions are interrupted with the
+  reason `entity_unconscious` (`on_interrupt`, `action_interrupted`)
+  and its wait and plan dropped. Neither asks anyone: a free decision
+  is not requested and `decision_needed` is not raised for an entity
+  whose mind has stopped and that nobody drives. At `entity_woke` and
+  `entity_revived` it is free, as one that has just `started`, and
+  whoever decides for it is asked. An entity that has something
+  driving it is not stopped by its own mind's state (06 §8.2).
 
 ## 7. Windows and reactions
 
@@ -478,7 +1095,30 @@ pub struct Window {
 
 A phase's `window` field opens one when the phase starts. `for` names
 those it is aimed at. `closes` names the later phase whose start is the
-deadline. The `open_window` effect opens one from any rule.
+deadline. The `open_window` effect opens one from any rule; having no
+phase to close it, it states how long it stays open.
+
+| Field of a `window_kind` | Meaning |
+|--------------------------|---------|
+| `notice` | How long a candidate takes to notice: a duration expression, in seconds of the candidate's own local time. Default 0: noticed the moment the window opens. It cannot be below zero. |
+| `noticed_if` | Whether a candidate can notice at all: a condition. Default true. |
+| `reach` | How far, in metres, a candidate the window does not name may be from the source or from someone it names. Default 0. |
+
+`notice` and `noticed_if` are evaluated once for each candidate when a
+window of the kind opens (section 7.2). They read truth and bind three
+subjects, in this order: `self`, the candidate, an `entity`; `source`,
+whose action or rule opened the window, an `entity` or null; and `window`,
+the window. Which actions may answer a window of a kind is said by the
+actions, in `reaction_to`.
+
+| Field of a phase's `window` | Meaning |
+|-----------------------------|---------|
+| `kind` | The id of a `window_kind`. Required. |
+| `for` | Those it is aimed at: a list of expressions in the action's scope, each giving an entity. One that comes to null names nobody. Default empty. |
+| `closes` | The id of a phase of the same action. It must be another phase than the one that opens the window, and one that some path from that phase leads to; otherwise the window could never close, which is a load error. Required. |
+
+If the action ends without entering that phase, the window closes when the
+action ends.
 
 **Candidates.** A window is offered to:
 
@@ -492,13 +1132,53 @@ of the source or of someone it names. All candidates then go through
 noticing (section 7.2). So an attack on someone else can be answered by
 someone who cares and is close enough and quick enough to step in.
 
+As built (decision D-710), in `clash_sim::action::windows`:
+
+- A window is plain state in the simulation's `WindowTable`, saved and
+  hashed (save layout 12): its kind, its source, the action and the
+  phase whose start closes it, those it names, when it opened, its
+  **deadline** and its candidates. The deadline is the universal tick
+  it is expected to close at, as the clocks ran when it opened: the end
+  of the phase that opened it where that phase leads straight to the
+  one that closes it, the end of its length for a window opened for a
+  length of time, and unknown otherwise. A window is a value of the
+  expression kind `window`: a handle that names it, and reads as closed
+  once it has closed.
+- **Candidates**, in this order and each once, never the source: those
+  named, in the order named; then by entity id those within `reach`
+  metres, middle of cell to middle of cell, of the source or of someone
+  named who hold an `intervenes` relation toward someone named; then by
+  entity id the directly controlled within that reach. Relations are
+  first-playable package S7's: until it lands the relation is answered
+  by `Sim::set_intervenes(fn(&Sim, holder, toward) -> bool)`, which is
+  not state and which a test supplies. Each candidate is kept with why
+  it was offered (`named`, `intervenes`, `controlled`), its delay in
+  noticing and where it is: `never` (it cannot notice), `pending`,
+  `late`, `noticed`, `asked`, `reacted` (with the action it started) or
+  `passed`.
+- A window **closes** when its action enters the phase `closes` names,
+  before anything of that phase is done, or when its action ends, by
+  any path; one opened for a length of time closes when the length is
+  over; `close_window` closes one at once. Closing cancels every delay
+  still running, withdraws a `Reaction` decision a player was being
+  asked for it, and raises `window_closed`.
+- `window_opened` is raised as before; it carries no window. The window
+  reaches rules through `window_noticed` and `window_closed`, which
+  carry it in their field `window`.
+- `Sim::open_window(OpenWindow { kind, source, aimed_at, open_for })`
+  opens one with no phase to close it, for packages that need one (a
+  shot's, 07 §11.2); the effect is the verb `open_window`.
+
 ### 7.2 Noticing
 
 For each candidate, when the window opens:
 
 1. Evaluate the kind's `noticed_if` with `self` as the candidate. If false,
    the candidate never learns of it. Document 15 supplies real perception
-   tests; until then content can write its own.
+   tests; until then content can write its own. As built (decision
+   D-615), whoever opens windows first asks perception's
+   `notices_source(candidate, source)`: a candidate that does not
+   perceive the source is not offered the window.
 2. Evaluate `notice`, a duration. Schedule a wake-up that far ahead **on the
    candidate's clock**.
 3. If that wake-up fires before the window closes, emit `WindowNoticed`.
@@ -509,6 +1189,16 @@ So an ordinary person with a quarter-second reaction time can answer a
 telegraphed swing and cannot answer a blow that lands a millisecond after it
 starts. Someone whose clock runs a thousand times faster notices almost
 everything. The gap in decision D-034 is in the arithmetic.
+
+As built (decision D-710): a candidate that does not perceive the source
+(`notices_source`) or whose `noticed_if` is false is `never` noticing. A
+`notice` that is null, below zero or not finite is a fault
+(`action.bad_time`) and counts as zero. A delay of zero is noticed the
+moment the window opens; any other is one wake-up of the `Action` domain
+on the candidate's clock, so a candidate whose clock runs four times as
+fast needs a quarter of the universal time. A wake-up due at the same
+tick as the deadline comes after it: the window has closed. Noticing
+raises `window_noticed` for the candidate.
 
 ### 7.3 Reacting
 
@@ -540,6 +1230,71 @@ the blow finds nobody there. A block puts the reactor in a phase that the
 strike's effects check for. A counter lands its own impact first and
 interrupts the attacker. Document 07 builds the rules of combat from these.
 
+As built (decision D-711), in `clash_sim::action::react`:
+
+- The engine asks nobody by itself. A rule listening for
+  `window_noticed` answers with the verbs `react` or `ask_reaction`;
+  the AI layer answers the same event for the minds it drives (09 §6.3).
+  With nothing listening, nothing happens. `mods/core` asks the player
+  (the rule `core:ask_player_to_react`, off when the setting
+  `core:ask_reactions` is false) and ships stances that answer by
+  themselves (`core:parry_on_notice` and its like, rules to attach).
+- **Starting a reaction** (`react`, the `React` command) checks, in this
+  order, and refuses with the first reason that applies, changing
+  nothing: the window is open (`engine:window_closed`); the reactor is a
+  candidate that has noticed it (`engine:window_noticed_late` for one
+  whose delay was not over when it closed, `engine:window_not_noticed`
+  otherwise); the action lists the window's kind
+  (`engine:reaction_not_listed`); the window names the reactor or the
+  action allows `on_behalf` (`engine:reaction_not_on_behalf`); then
+  everything a start checks (section 6.6), with `$window` bound before
+  the defaults are worked out. The reactor's actions in phases that
+  allow `cancel` for the reaction are cancelled to make room, as for any
+  start; slots held by one that does not make the reaction unavailable,
+  `engine:reaction_cannot_cancel` with the action holding them and its
+  phase. The reactor then turns to face the window's source, a
+  `Reaction` decision it was asked for the window is answered, and the
+  candidate is marked `reacted`.
+- **Options.** `Sim::reaction_options(entity, window)` lists every
+  action whose `reaction_to` lists the kind and that may answer for the
+  entity (named, or `on_behalf`), by each action's `offer` (a number in
+  the scope of `requires`, default 0, higher first; 0 for one that
+  cannot start) and, among equals, in order of definition (decision
+  D-943): the order a prompt shows them in, which the bundled reactions
+  make suit what is in hand. Each is a
+  `ReactionOption { action, label, in_time, refused }`: its `name`
+  rendered for the entity, or its id; whether its `ready` phase would
+  begin before the deadline, worked out from the phases' durations
+  along their default path (the following phase) as they would be if
+  it started now, with no `ready` ready at once, a held phase with no
+  `max` on the way never ready, and an unknown deadline always in time;
+  and why it cannot start now, if it cannot. One refused is shown and
+  refused if chosen; one not in time may be chosen.
+- **Asking.** `ask_reaction` asks a directly controlled candidate that
+  has noticed the window: a `Reaction` decision (section 5.2) with its
+  options, and time does not move until `React` or `Pass` answers. It
+  asks nothing, giving false, for anyone else, for one already asked,
+  and where no option is listed. `Pass` declines; it is refused
+  (`decision.none_pending`) for a window the entity was not asked about.
+  The scene's prompt (12 §9.5) answers with these two commands by name.
+
+| Command | Fields | Does |
+|---------|--------|------|
+| `React` | `entity`; `window`: the window's number; `action`: the reaction; `params`: by name | Starts the reaction for an entity under direct or delegated control, answering its `Reaction` decision for the window if it was asked. Refused with the reason it cannot start |
+| `Pass` | `entity`; `window` | Declines the `Reaction` decision the entity was asked for the window |
+
+The decision kind, as built:
+
+```rust
+Reaction { window: WindowId, deadline: Option<Tick>, options: Vec<ReactionOption> }
+pub struct ReactionOption { action: ActionDefId, label: String, in_time: bool, refused: Option<Reason> }
+```
+
+A frontend turns a window's value into its number with
+`Sim::window_of(&value)` and back with `Sim::window_value(id)`;
+`Sim::window_time_left(window, entity)` is the time the entity has left,
+in its own seconds.
+
 ## 8. Joint actions
 
 A **joint action** is one action instance with several participants.
@@ -552,7 +1307,7 @@ A **joint action** is one action instance with several participants.
     "attacker": { "uses": { "arm": "all" } },
     "victim":   { "uses": { "arm": "all", "legs": "all" }, "forced": true }
   },
-  "requires": "not perceives($victim, $attacker)",
+  "requires_at_start": "not perceives($victim, $attacker)",
   "phases": [
     { "id": "seize",  "time": "200 ms" },
     { "id": "finish", "time": "600 ms", "do": [ { "run": "takedown_result" } ] },
@@ -563,6 +1318,12 @@ A **joint action** is one action instance with several participants.
 
 `perceives` is supplied by document 15 and `takedown_result` by content.
 
+- A role has two fields: `uses`, the slots claimed on its participant,
+  written as an action's `uses` is (default none), and `forced` (default
+  false). A joint action has at least two roles and no `uses` of its own.
+- The first role written is whoever starts the action: its participant is
+  `self`, and it cannot be `forced`. The participants of the other roles
+  are given with the command, by the role's name, as parameters are.
 - Each role claims slots on its own participant. Phases run once, on the
   clock of the first role.
 - A role marked `forced` is entered without that participant's consent. The
@@ -573,9 +1334,44 @@ A **joint action** is one action instance with several participants.
 - Interrupting or disabling any participant ends the action for all.
 - All participants are locked together for its duration, which is what lets
   presentation show it as one choreographed sequence (scene S6).
+- Each role is bound as a subject under its name (`$attacker`, `$victim`)
+  in every expression and effect of the action. `self` is whoever started
+  it. A rule the action calls is passed them with `with`.
+- A role that is not forced is **offered**: `RoleOffered` is raised for
+  that participant, and `accept_role` or `decline_role` answers it. A
+  rule answers for characters the player does not control. An offer not
+  answered by the end of the action's first phase is declined.
 
 Joint actions are also how grapples, carrying someone, mounting, rituals with
 several casters and handshakes work.
+
+As built (package T6 beta, decision D-816), in `clash_sim::action::run`:
+
+- **Starting** checks, after the actor's own slots, each other role in
+  the order written: its participant is given (`engine:role_unfilled`
+  otherwise, also for the actor itself, one named twice or one not in
+  the world); its role is `forced` (`action.role_not_offered`
+  otherwise: offering a role is not built); and of each channel the
+  role uses it has enough enabled slots, `all` meaning every enabled
+  one, possibly none (`engine:action_channel_lacking`), and enough
+  free once its own actions holding them are counted out
+  (`engine:action_channel_busy` when another's joint action holds
+  them). Nothing changes on a refusal.
+- **Beginning**: the participant's own actions holding what its role
+  claims are interrupted (`action.taken_over`), and the action is
+  entered among the participant's running actions with the slots its
+  role holds, kept in the action table beside the action
+  (`ActionTable::joined`, saved, hashed only while one runs). The
+  participant is then acting: it is asked nothing, its other actions
+  find those slots busy, and it cannot cancel the action, which is not
+  its own.
+- **Ending**, by any path, lets every participant go with the actor:
+  each is free again (section 5.2). Interrupting the actor, a slot
+  disabled under any participant (`check_slots`) and any participant
+  leaving the world end it for all. A forced participant whose mind
+  stops (unconscious, dead) does not end it: going limp is what a
+  takedown is for.
+- `RoleOffered`, `accept_role` and `decline_role` are not built.
 
 ## 9. Timers and unloading
 
@@ -603,6 +1399,21 @@ agent):
   the local time that passed subtracted; any now overdue fire once,
   immediately, in order.
 
+As built (decisions D-684, D-685), for the timers of rules (05 §10.4)
+and the recurring rules of an owner (05 §9.4): a timer of an entity is
+one of its wake-ups, so it follows the entity's clocks. When the entity
+leaves the world it is taken off the timeline with its remaining local
+time, the clock it was on and that clock's local time; when it returns,
+the local time that passed on that clock (universal time if the clock is
+gone) is what has elapsed. `Pause` keeps the remaining time; `Elapse`
+subtracts what elapsed and, if that leaves nothing, fires once at once
+(an `every` then goes on with its schedule); a repeating timer may also
+fire once for each interval missed (`all`, at most 100), or skip them
+(`skip`, a recurring rule's default). Overdue timers fire in the order
+they fell due. Timers of areas, sites, realms and the simulation run on
+their clocks whatever is loaded. Pools and wounds are `Pause` timers of
+their own (D-552). Actions abandoned on leaving the world are T3's.
+
 ## 10. Stepping at lower detail
 
 | Level | How entities are stepped |
@@ -617,6 +1428,21 @@ ticket of its own promotes it. The kernel promotes a warm entity
 automatically when it is named as a participant, target or window candidate
 of a hot entity's action.
 
+As built (09 §9.4; decisions D-890 to D-892): levels are kept for
+characters with minds only, by the AI layer (`clash_sim::ai::warm`), and
+set by the attention cap; a mind in a warm tract is ranked with the
+rest, nearest first, its perception a warm observer's there. One
+stepper on universal time, a wake-up of the `Stepper` domain told apart
+by its tag, wakes every `WARM_STEP` while anybody is warm or could be,
+and advances each warm character by the time its own clock has run. An
+action that starts promotes every warm character it names (its actor, an
+entity among its parameters, a participant) before it claims anything; a
+window's candidates are those its source's action named, so they are
+promoted with it. Warm characters finish actions already running, but an
+action walking a step that moves ends at its next phase, its path kept
+(09 §9.2); they start none: a warm mind about to start one is promoted
+first. Not built: `low_attention` (section 11); a stepper per realm.
+
 ## 11. Long waits
 
 Sleeping, travelling and waiting are plans or held actions. Time passes as
@@ -628,6 +1454,44 @@ entity is in such an action, the simulation may lower their tickets from hot
 to warm, so eight hours of sleep does not cost eight hours of full detail
 for the neighbourhood. Any interruption restores them.
 
+As built (decision D-932, `clash_sim::rest`): the party **rests** while
+every character with a ticket of its own (`Ticket::player`) is in the
+world and either waits a wait with at least `sim.rest_from` (300 s) of
+its own time left (once the party rests, any wait until it is over),
+or has a mind that is not awake. While it rests and
+the setting `sim.rest_levels` is on (the engine's default is off; the
+bundled game scenarios switch it on in their `settings`):
+
+- each member's own ticket shrinks to the tracts its senses reach (the
+  longest range of its senses in whole tracts, rounded up: two for the
+  bundled senses), hot and **tight** (02 §10.1): no warm margin and no
+  unloading margin, so the tracts beyond go cold, that is unload, at
+  the next reconciliation, their residents stored as agents following
+  their routines (09 §10.6);
+- the warm stepper steps every `sim.rest_warm_step` seconds (1 to 60;
+  the bundled games 15) instead of every `WARM_STEP`;
+- no more than `sim.rest_max_hot_minds` (default 0) are hot beside the
+  characters the party sees or is involved with, who are hot whatever
+  the cap (09 §9.4).
+
+Whether the party rests is worked out from state at every safe point,
+before the world reconciles, never from the wall clock. When a member
+stops resting (its wait is over, broken off by a rule or a key, it
+acts, it wakes) its ticket is as it was at the next safe point and the
+tracts come back at that reconciliation, their residents where their
+routines put them; the stepper keeps its wide step until its next
+wake-up. The tickets are saved with the world, so a save made in the
+middle of a wait loads into the same levels. Nothing the party
+perceives changes: every tract within reach of its senses stays loaded
+and hot. A wait of less than `sim.rest_from`, a minute's (`p`), is
+waited at full detail, so a run of short waits does not unload and load
+the country round the party each time. A creature that is no resident
+(09 §10.6) and stands in a tract that goes cold is shelved where it
+stands (02 §9.5), not stepped as an agent, so a game in which something
+comes from afar while the party waits, the bundled `last_stand`, keeps
+the levels off (D-933). Not built: a resting party's ticket reaching as
+far as such creatures, and `low_attention` actions.
+
 ## 12. What presentation is given
 
 - Every `SimEvent` carries the universal tick, the local time of the clock
@@ -635,6 +1499,13 @@ for the neighbourhood. Any interruption restores them.
 - `DecisionRequest.elapsed` says how much of the entity's own time passed
   since it last chose.
 - Phase events carry start and scheduled end, so motion can be interpolated.
+
+As built: a `SimEvent` is a stamp and a body. The stamp is the universal
+tick, the clock the event happened on with that clock's local time, and
+the cause. The clock is the entity's for an event about an entity, the
+location's for one about a place, and universal time otherwise. The body
+says what happened and names its subjects in order; `actor` and
+`instigator` are added from the cause when it names them.
 
 How a thousand actions between two decisions are shown (played, blurred or
 summarised) is document 12's concern, constrained by what the viewing
@@ -646,12 +1517,233 @@ character could perceive (15).
 
 **Events**: `ActionStarted`, `PhaseEntered`, `PhaseExited`, `ActionFinished`,
 `ActionCancelled`, `ActionInterrupted`, `ActionAbandoned`, `PlanCleared`,
+`ActionRefused` (who, which action, and the reason: a failed `requires`,
+busy channels, a veto), `RoleOffered`,
 `WindowOpened`, `WindowNoticed`, `WindowClosed`, `DecisionRequested`,
 `ControlChanged`, `ClockRateChanged`, `EntityRelocated`,
 `EntityPromoted`, `EntityDemoted`.
 
 **Hooks** (events whose handlers may alter or cancel them, 05 §8.2):
-`ActionStarting` (parameters, veto), `PhaseTiming` (duration).
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `ActionStarting` | An action claims its channels and enters its first phase | Change its parameters; cancel, with a reason |
+| `PhaseTiming` | A phase is scheduled | Change its duration |
+
+Every event and hook is registered with its subjects and fields
+(05 §8.1), and the generated reference lists them (04 §13). Where this
+document names one without them, the package that builds it writes them
+here.
+
+As built: `EntityPromoted` is `entity_promoted` (`self`; `why`: string,
+`attention`, `seen`, `involved` or `acting`) and `EntityDemoted` is
+`entity_demoted` (`self`), raised for characters with minds (09 §9.4).
+
+The kernel's events, as built. Each also binds `actor` and `instigator`
+from its cause where the cause names them, and carries what section 12
+lists. A subject marked `?` is bound only when there is one.
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `entity_created` | `self`: entity | none | An entity came to exist. It is not yet anywhere |
+| `entity_removed` | `self`: entity | none | An entity ceased to exist. What it held was put where it was first |
+| `entity_relocated` | `self`: entity; `here?`: loc | `from`, `to`: a place (a cell and a height, a container, or not in the world) | An entity's place changed. `here` is bound when `to` is a cell. What it holds moves with it and is not reported |
+| `control_changed` | `self`: entity | `old`, `new`: `none`, `direct` or `delegated` | Who decides for an entity changed |
+| `clock_rate_changed` | `self?`: entity; `area?`: area | `clock`: int; `old`, `new`: real, or null where there was or is no such clock | The rate of a personal, area or realm clock changed, or a clock was given or taken away |
+| `decision_requested` | `self`: entity | `kind`: what is asked | A directly controlled entity must choose |
+| `entity_unsupported` | `self`: entity; `here`: loc | none | What held an entity up has gone (02 §14.3). It is where it was: what falling does is for the movement package. Follows the world's `occupant_unsupported` |
+| `entity_exposed` | `self`: entity; `here`: loc | `kind`: string, the qualified id of a damage type; `energy`: real, joules; `intensity`: real, pascals | Something struck the cell an entity is in (02 §14.3). What that does to it is for the body model. Follows the world's `occupant_exposed` |
+| `spawn_requested` | `here`: loc | `what`: string, the id the request names; `realm`: int | A tract that has just been loaded asks for something to be put at `here` (02 §9.4) |
+| `var_changed` | `self?`: entity; `here?`: loc; `area?`; `site?`; `tract?`; `realm?` | `name`, `scope`: string; `old`, `new`: any | A variable declared with `"watch": true` changed (05 §6). What it lives on is bound under the name of its kind |
+| `fault` | none | `code`, `message`: string | The engine contained a fault. Goes straight to the output; no handler receives it |
+| `event_cancelled` | none | `event`, `code`, `message`: string | A hook was cancelled (05 §8.2) |
+
+The events of acting, as built (decisions D-541 to D-545). Each binds
+the entity it is about as `self`, and `actor` and `instigator` from its
+cause. `action` is the qualified id of the action's definition, `id`
+the number of the running action (an int no other action of the
+simulation ever has), `phase` the id of a phase, and `code` and
+`message` the reason's code and sentence.
+
+| Event | Fields | Raised when |
+|-------|--------|-------------|
+| `action_started` | `action`, `id` | An action began: its slots are claimed and its `on_start` is about to run |
+| `phase_entered` | `action`, `id`, `phase`; `held`: bool; `duration`: real?, seconds of the actor's clock; `due`: int?, the universal tick in microseconds it is due to end at as the clocks now run | A phase began. Its stamp is the start; `duration` and `due` are null for a held phase with no `max` (section 12) |
+| `phase_exited` | `action`, `id`, `phase` | A phase ended normally: its `on_exit` has run |
+| `action_finished` | `action`, `id` | An action ran to its end: `on_finish` has run and its slots are free |
+| `action_cancelled` | `action`, `id`, `phase` | The actor abandoned an action in a phase that allows it: `on_cancel` has run |
+| `action_interrupted` | `action`, `id`, `phase`, `code`, `message` | An action was ended against the actor's will: `on_interrupt` has run |
+| `action_abandoned` | `action`, `id` | An action ended because its actor left the world or was removed (section 9): `on_abandon` has run |
+| `action_refused` | `action`, `code`, `message` | An action that an effect or a plan asked for did not start, or a handler of `action_starting` refused one a command asked for |
+| `plan_cleared` | `code?`, `message?` | A plan was emptied, with the reason if a step could not start or a rule interrupted it |
+| `window_opened` | `action`, `id`; `kind`: string; `closes`: string, a phase id; `count`: int, how many it is aimed at | A phase that opens a window began. Its candidates are worked out next and start to notice it (section 7.2); the window itself reaches rules through `window_noticed` |
+| `decision_needed` | `control`: `none` or `delegated`; `why`: `started`, `finished`, `interrupted`, `plan_empty` or `waited` | An entity that is not directly controlled is free to act (section 5.2) |
+| `message` | `text`: string, rendered for `self` as its reader; `style`: string | A rule's `message` (05 §10.6): a line for the log of whoever controls `self` |
+| `choice_made` | `choice`: int; `option`: int, from zero; `label`: string | A choice put by `ask` was answered, by `Choose` or at once; the option's effects run next |
+| `tag_changed` | `tag`: string; `added`: bool | An entity was given a tag it did not have, or lost one it had |
+
+The events of windows, as built (decision D-710), raised as payloads.
+Each also binds `actor` and `instigator`: the window's source.
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `window_noticed` | `self`: entity, the candidate; `source?`: entity | `window`: window; `kind`: string, its kind's qualified id; `action`: string?, the qualified id of the action whose phase opened it; `named`: bool, whether it names `self`; `time_left`: real?, seconds of `self`'s own time before its deadline | A candidate noticed a window before it closed (section 7.2). What it does is for rules: `react`, `ask_reaction`, or nothing |
+| `window_closed` | `self?`: entity, the source | `window`; `kind`; `action`; `offered`, `noticed`, `reacted`: int, how many candidates it was offered to, noticed it and answered it | A window closed: its deadline phase began, its action ended, its length was over, or `close_window` |
+
+The two hooks, as built: `action_starting` binds `self` and has the
+fields `action` and `params`, the parameters by name as a map with the
+defaults filled in, which a handler may change; `phase_timing` binds
+`self` and has `action`, `id`, `phase` and `duration`, seconds after
+tempo, which a handler may change (a value below zero counts as zero).
+
+The world's events (02 §7.4) are passed on under their own names. Their
+subjects are: `here` for a cell; for `area_entered` and `area_exited`,
+`area`, then `target` (the occupant), then `here`; for `area_breached` and
+`area_closed`, `area` and `here`; for `occupant_displaced`,
+`occupant_entombed`, `occupant_unsupported` and `occupant_exposed`,
+`target` and `here`. For `tract_loaded`, `tract_unloading` and
+`ticket_refused`, `here` is the tract's cell with the lowest horizontal
+coordinates at storey 0; for `collapse_started` and `collapse_settled`,
+the cell whose change started the collapse. The fields a filter can test
+are `layer` on `element_changed`, `element_damaged` and
+`element_destroyed`; `old` and `new` on `element_damaged`; `how`
+(`damage`, `crushed` or `fell`), `absorbed` and `passed` on
+`element_destroyed`; `count` on `decals_removed`; `key`, `old` and `new`
+on `cell_var_changed`; `collapse` (int) on the two collapse events;
+`energy` and `intensity` on `occupant_exposed`; `realm` (int) on the
+tract and ticket events, with `first` (bool) on `tract_loaded` and
+`ticket` (int) on `ticket_refused`.
+
+The events of fields, bodies and releases are passed on the same way.
+`field_contact`, `occupant_dosed` and `body_hit_occupant` bind `target`
+(the occupant) and `here`. `body_launched`, `body_impact`, `body_landed`
+and `body_left_loaded` bind `target` when the body is an entity, and
+`here`: the cell it starts in, the cell of the element it struck, the
+cell it came to rest in, the last loaded cell it was in. The rest bind
+`here`. Their fields are `level` (int) on `field_appeared`,
+`field_contact` and `occupant_dosed`, with `pool` (string), `amount`
+(real) and `route` (`breath`, `skin` or `any`) on the last; `active` and
+`max` (int) on `field_budget_exceeded`; on every body event `body`
+(int), `owner` (`entity`, `debris` or `projectile`) and `tag` (int, a
+projectile's, else null), with `mass` and `speed` (real) on
+`body_launched`, `layer`, `energy`, `intensity` and `result`
+(`unaffected`, `damaged` or `destroyed`) on `body_impact`, `energy` and
+`intensity` on `body_hit_occupant`, and `returns` (bool) and `energy` on
+`body_left_loaded`; `release` (int), `energy` and `reach` (real) on
+`release_started` and `energy_released`, and on the second also
+`absorbed` (real), `cells` (int), `cut_off` (bool) and its totals over
+everyone responsible: `elements`, `exposed` and `thrown` (int) and
+`mass` (real). A definition an event names by id (a field, a damage
+type, a material) is not a field a filter can test: the kernel's own
+event names it where there is one, as `entity_exposed` does.
+
+**Reasons** (14 §5) of the kernel, by code: `entity.unknown`,
+`entity.stored`, `entity.ids_exhausted`, `relocate.inside_itself`,
+`relocate.too_deep`, `world.not_loaded`, `world.outside_realm`,
+`world.unknown_grid`, `world.unknown_area`, `world.unknown_realm`,
+`world.refused`, `world.tract_failed`, `component.missing`,
+`physical.bad_measure`, `clock.unknown`, `clock.bad_rate`, `clock.loop`,
+`time.refused`, `advance.unhandled_wake`, `advance.tick_limit`,
+`events.cascade_limit`, `events.hook_depth`, `events.unknown_type`,
+`events.bad_payload`, `events.field_fixed`, `events.cancelled`,
+`decision.none_pending`, `replay.diverged`; and, from writing variables
+and properties (05 §6, §10.3), `subject.gone`, `vars.wrong_scope`,
+`vars.wrong_type`, `vars.too_deep`, `write.not_settable`,
+`write.bad_value`, `write.bad_key`, `write.cannot_add`,
+`write.not_a_subject`; and, from acting (decisions D-543, D-544),
+`action.unknown`, `action.not_running`, `action.interrupted`,
+`action.bad_time`, `command.not_controlled` and `command.bad_argument`;
+from joint actions (section 8, decision D-816), `action.taken_over`
+(an action of a participant forced into a joint action was interrupted
+to make room; value `action`) and `action.role_not_offered` (a role
+that is not `forced`, which would have to be offered; values `action`,
+`role`);
+and, from windows (decision D-710), `window.unknown_kind`: a window was
+to be opened with a kind that is not loaded (value `kind`).
+Each is documented in the table the generated reference reads.
+
+**The queries as properties** (05 §5.3). All read truth and none is safe
+for belief; a mind reads them of itself.
+
+| Property | Gives |
+|----------|-------|
+| `entity.loc` | `loc?`: the cell it is in, its own or that of what it is inside; null out of the world. **Settable**: relocates it to stand in the cell (`entity_relocated`, after the world's area events); null takes it out of the world |
+| `entity.container` | `entity?`: what it is directly inside. **Settable**: puts it inside another; null takes it out, to where its container is |
+| `entity.outermost` | `entity?`: itself, or the container everything it is nested in is inside |
+| `entity.contents` | `list<entity>`: what is directly inside it, in id order |
+| `entity.in_world` | `bool` |
+| `entity.altitude` | `real?`: metres above the base of its cell |
+| `entity.occupant_kind` | `string`: `creature`, `item`, `device` or `other` |
+| `entity.tags`, `entity.has_tag(tag: string)` | Its tags |
+| `entity.control` | `string`: `none`, `direct` or `delegated`. **Settable** (`control_changed`) |
+| `entity.time_rate` | `real?`: the rate of its personal clock, or null. **Settable**: a rate gives it a personal clock or changes it, null takes the clock away (`clock_rate_changed`) |
+| `entity.clock_rate` | `real?`: how fast time passes for it against universal time |
+| `entity.local_time` | `real?`: the local time of the clock it is on, in seconds |
+| `entity.own_time` | `real?`: its own time (section 3.4), in seconds |
+| `area.clock_rate`, `realm.clock_rate` | `real?`: the rate of the area's or the realm's own clock. **Settable** (`clock_rate_changed`); null takes an area's clock away and is refused for a realm |
+| `area.local_time`, `realm.local_time`, `loc.clock_rate`, `loc.local_time` | `real?`: 02 §23 |
+| `global.now` | `real`: universal time in seconds. Safe for belief |
+
+`now()` and `local_now(subject)` are functions (05 §17).
+
+The functions of windows (decision D-710). A window is a value of the
+kind `window`.
+
+| Function | Gives |
+|----------|-------|
+| `window_open(window: window?)` | `bool`: whether it is still open. Safe for belief |
+| `window_source(window: window?)` | `entity?`: whose action or rule opened an open window. Safe for belief: a window is offered only to those who perceive its source |
+| `window_kind_of(window: window?)` | `id<window_kind>?`: its kind, while it is open. Safe for belief |
+| `window_time_left(window: window?, who: entity)` | `real?`: seconds of `who`'s own time before its deadline; null where it is closed or its deadline is not known |
+| `away_from(who: any, from: any)` | `string?`: the step that leads straight away from `from`, by the signs of the offset on the level (`north` … `north_west`); null for two in one column. Safe for belief, as `dir` is. What a reaction that leaves steps by |
+
+**Not yet reachable from data.** Queries of what an entity is doing
+are not registered as properties yet: its running actions with their
+phase, tags and time remaining, whether a channel is free and the length
+of a plan are read in Rust (`Sim::actions_of`, `Sim::is_acting`,
+`Sim::is_free`, `Sim::enabled_slots`, `Sim::held_slots`, the plan of the
+kernel entity). A window's candidates, and where each is with it, are
+read in Rust (`Sim::windows`); so is the list of reactions a character
+could answer one with (`Sim::reaction_options`), which the AI's
+`best_reaction` (09 §6.3) will need from data. Who holds an `intervenes`
+relation toward whom is supplied in Rust (`Sim::set_intervenes`) until
+relations exist. The debug commands are not yet console commands. What
+a reader knows of others (05 §4.6) is supplied in Rust.
+
+**Settings**: `rules.max_cascade`, `rules.max_transitions` (zero-duration
+phase changes in one tick, default 1,000), `actions.idle_wait` (seconds
+an entity nobody gave anything to do idles before it is asked again,
+default 1; zero or below asks nothing more). `WARM_STEP` and
+`DEFAULT_SLOTS` (one slot of every channel for an entity with no body)
+are named constants.
+
+**Fields**: every field of the three types is in a table of this
+document: an action's in section 6.1, a parameter's in 6.3, a phase's, an
+entry of `next`'s and a variable's in 6.4, a channel's in 6.2, a window
+kind's and a phase's window's in 7.1, and a role's in section 8. Fields
+that later documents add to an action (`attacks` and `defence` in 07,
+`cutscene` in 12, the `choice` parameter type in 08 §9.2) are added by the
+packages that build them. A cost, a cooldown and a rank belong to a grant
+(08 §5.1), not to the action.
+
+**Reasons** (14 §5), each with the values it carries, in the `engine`
+namespace:
+
+| Reason | Given when |
+|--------|-----------|
+| `action_parameter_missing`, `action_parameter_invalid`, `action_list_length` | A command leaves out a parameter that has no default, gives one a value of the wrong type, or gives a list outside its `min` and `max` |
+| `action_requires` | `requires` does not hold when the action is to start, or when a step of a plan comes due. The action's `fail_text` is the sentence shown |
+| `action_not_aimed` | Asked what could be done at someone (`actions_with` with a target), the action has no parameter or role named `target` to take them: a blow at a place is not a blow at someone (12 §9.3, decision D-904). The sentence names the action |
+| `action_no_footing` | `footing` is true and nothing is under the actor |
+| `action_channel_busy`, `action_channel_lacking`, `action_slot_unavailable` | Too few slots of a channel are free; too few are enabled at all; the slot a parameter names cannot be used |
+| `action_vetoed` | A handler of `ActionStarting` cancels without a reason of its own |
+| `action_start_condition` | `requires_at_start` does not hold: the action is interrupted at once |
+| `action_cannot_cancel`, `action_cancel_only_for` | `Cancel` in a phase that does not allow it, or allows it only for other tags |
+| `action_transition_limit` | `rules.max_transitions` is passed |
+| `action_channel_disabled` | A slot the action held is disabled |
+| `reaction_not_listed`, `reaction_not_on_behalf`, `reaction_cannot_cancel` | A reaction does not list the window's kind; the window names someone else and the reaction does not allow `on_behalf`; the reactor's own actions hold the slots and cannot be cancelled |
+| `window_not_noticed`, `window_noticed_late`, `window_closed` | A candidate never noticed, noticed after the window closed, or answers a window that has closed |
+| `role_unfilled`, `role_declined`, `role_participant_left` | A role has nobody in it; an offered role was declined or not answered; a participant left a joint action |
 
 **Effects**:
 
@@ -664,9 +1756,42 @@ character could perceive (15).
 | `open_window`, `close_window` | Publish or withdraw an opportunity |
 | `react`, `ask_reaction` | Answer a noticed window |
 | `set_control` | Change who decides for an entity |
+| `accept_role`, `decline_role` | Answer an offered role in a joint action (section 8) |
 | `set_time_rate`, `anchor_clock` | Give an entity a personal clock rate; pin its clock |
 | `set_clock_rate` | Change the rate of an area's or realm's clock |
 | `wait` | Occupy an entity for a duration |
+
+The verbs as built (decisions D-541 and D-545), each with its arguments.
+An argument marked `?` may be left out, and is then null. A verb that
+declines says why (`rule.verb_refused` carries the reason), and the rule
+carries on. Whatever a verb changes is caused by the rule that called
+it (05 §13.1).
+
+| Verb | Arguments | Does | Raises |
+|------|-----------|------|--------|
+| `set_time_rate` | `who`: entity; `rate?`: real, zero or more | Gives `who` a personal clock at `rate`, or changes the rate of the one it has. With no rate the personal clock, and any anchor, is taken away | `clock_rate_changed` |
+| `anchor_clock` | `who`: entity; `to?`: an area that has a clock, a realm, a cell or an entity | Pins the personal clock of `who` under the clock `to` stands for: the area's, the realm's, the cell's location's, the clock the entity is on. An entity with no personal clock is given one at rate 1. With no `to` the anchor is lifted | `clock_rate_changed`, when a clock is given |
+| `set_clock_rate` | `of`: an area or a realm; `rate?`: real, zero or more | Changes the rate of the area's or the realm's clock. With no rate an area's clock is taken away; refused for a realm | `clock_rate_changed` |
+| `set_control` | `who`: entity; `mode`: string, `none`, `direct` or `delegated` | Changes who decides for `who` (section 5.1) | `control_changed`; `decision_requested` or `decision_needed` if it is then free |
+| `add_tag` | `to`: entity; `tag`: string | Gives an entity a tag | `tag_changed`, if it did not have it |
+| `remove_tag` | `from`: entity; `tag`: string | Takes a tag away | `tag_changed`, if it had it |
+| `start_action` | `who`: entity; `action`: id of an action; `with?`: map, the parameters by name | Starts an action as `Act` does (section 6.6). Gives whether it started; one that cannot start is not a fault | `action_started` and what follows, or `action_refused` |
+| `enqueue_action` | `who`; `action`; `with?` | Puts an action at the end of the plan (section 5.3) | as the plan goes on |
+| `cancel_action` | `who`; `action?`: id of an action; `channel?`: id of a channel; `tag?`: string | Cancels the running actions of `who` that match (all if none is named), each in a phase whose `cancel` allows it at will; a held phase is given up. Gives how many | `action_cancelled` |
+| `interrupt` | `who`; `action?`; `channel?`; `tag?` | Interrupts the matching actions not in an `uninterruptible` phase, with `action.interrupted`. Gives how many | `action_interrupted` |
+| `clear_plan` | `who` | Empties the plan | `plan_cleared`, if it held anything |
+| `interrupt_plan` | `who` | Empties the plan and asks what to do next, whatever is running | `plan_cleared`; `decision_requested` or `decision_needed` |
+| `disable_channel` | `who`; `channel`: id of a channel; `count?`: int, default 1 | Disables slots; what then holds more than are enabled is interrupted, newest first | `action_interrupted` |
+| `enable_channel` | `who`; `channel`; `count?` | Enables disabled slots again, never more than were disabled | none |
+| `wait` | `who`; `time`: real, seconds of its own time, zero or more | Occupies `who` doing nothing (section 5.3) | `decision_requested` or `decision_needed` when it is over |
+| `react` | `who`: entity, a candidate that noticed the window; `window`: window; `action`: id of an action whose `reaction_to` lists the window's kind; `with?`: map, its parameters by name | Starts a reaction (section 7.3). Gives whether it started; one that cannot start is not a fault: `action_refused` says why | `action_started` and what follows, or `action_refused` |
+| `ask_reaction` | `who`: entity; `window`: window | Asks a directly controlled `who` that noticed the window how to answer it: a `Reaction` decision. Gives whether it asked. Declines with `engine:window_closed` or `engine:window_not_noticed` | `decision_requested` |
+| `close_window` | `window`: window | Closes it now, as at its deadline. Gives whether it was open | `window_closed` |
+| `open_window` | `kind`: id of a `window_kind`; `source?`: entity; `for?`: list of entities, those it names; `time`: real, seconds of universal time it stays open | Publishes a window no phase closes: offered and noticed as a phase's is (sections 7.1, 7.2). Gives the window. Declines with `window.unknown_kind` | `window_noticed`; `window_closed` when its time is over |
+
+A verb given an argument it cannot use (null where an entity is needed,
+a word that is no mode) declines with `verb.bad_argument`, which carries
+`verb` and `argument`.
 
 **Queries** for expressions: an entity's running actions and their phase,
 tags and time remaining; whether a channel is free; plan length; control

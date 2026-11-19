@@ -1,6 +1,8 @@
 # 08 — Abilities and Powers
 
-Status: design complete, ready for implementation.
+Status: design complete. Sections 3 to 6 and 7.1 to 7.3 are built
+(packages A1 to A7); what was built, and where it differs from the
+design, is in section 12.1.
 Implementation plan: [plans/abilities.md](plans/abilities.md).
 Serves scenes S3, S10, S15, S16, S17 and S20 of [00-vision.md](00-vision.md),
 and supplies the means for most of the rest.
@@ -75,7 +77,7 @@ listed has the same parts to build it from.
   "while": "self.loc.medium.phase != 'liquid'",
   "rules": [
     { "on": "action_finished", "if": "event.action.ability == ability",
-      "do": [ { "track_add": { "who": "self", "track": "pyrokinesis", "amount": 1 } } ] } ] }
+      "do": [ { "advance_track": { "who": "self", "track": "pyrokinesis", "amount": 1 } } ] } ] }
 ```
 
 | Field | Meaning |
@@ -108,6 +110,13 @@ An entity's abilities are a component (06 §3.1). An ability instance is a
 subject of kind `ability`: inside its actions, rules and traits, `ability`
 is bound to it, and `ability.rank`, `ability.power`, `ability.owner` and
 `ability.var.x` can be read.
+
+As built (section 12.1, decision D-723): the instance is bound as
+`ability` in what the ability works out about itself: its parameters,
+`while`, its grants' parameters, costs, cooldowns and conditions, and
+its modes' upkeep, costs and effects. An action reads the ability's
+numbers as the parameters its grant hands it, and anything may read an
+instance through `self.ability('id')`. `ability.var.x` is not built.
 
 ### 3.3 Where abilities come from
 
@@ -144,8 +153,8 @@ from that rank up.
 ### 4.2 Parameters
 
 Parameters are how one definition serves a novice and a god. An action
-says `"energy": "ability.power * $effort"` and never needs to know the
-rank.
+says `"energy": "ability.power"` and never needs to know the rank. Effort
+is applied by the strike itself (07 §6.1).
 
 Parameters can be modified exactly as attributes can (06 §4.1). A modifier
 names an ability, or a tag, and a parameter:
@@ -211,6 +220,15 @@ A cost names a pool (06 §4.2), a store (16 §5), or items, and an amount.
 
   Whatever is missing is taken from the other pool at the ratio. Pushing
   past one's limits by burning oneself is a field in a data file.
+- A cost may be drawn `from` something bound to the ability (section 7.3)
+  in place of the owner: a companion, a familiar, a mount.
+
+```json
+"cost": { "resolve": { "amount": 30, "from": "ability.bound('companion')" } }
+```
+
+  If that thing is gone, or has not enough, the action is unavailable and
+  says so, unless the cost also allows overdraw from the owner.
 
 ### 5.3 Concentration and gesture
 
@@ -233,6 +251,7 @@ transformation, a stance of power, flight.
 - When the pool or store empties, the mode ends. This uses the pool's
   scheduled crossing (06 §4.2); nothing is checked per tick.
 - A mode may claim channel slots for as long as it is on.
+- A mode may carry a `look` (12 §4.4).
 
 Switching is an action the mode supplies, with whatever windup its
 definition gives it. A mode with no windup is a toggle.
@@ -276,7 +295,8 @@ The hook `ability_suppressing` lets an ability resist.
 
 ### 6.3 Loss
 
-`revoke_ability` removes an ability. So does the end of its last source.
+`revoke_ability` removes an ability whatever its sources, and it does not
+come back while they remain. So does the end of its last source.
 Either ends its modes and everything bound to it (section 7.3).
 
 Abilities can be taken as well as lost: `grant_ability` to one character of
@@ -332,11 +352,19 @@ pub struct Binding { pub what: Bound, pub ends: Option<WakeId>, pub on_end: OnEn
 | `add_trait` with `"bound": true` | A trait on someone: a curse, a blessing, a mark |
 | `summon` | An entity, created by `spawn` (06), with whatever relations are given (15 §9) |
 | `conjure` | An element placed in the world, remembering what was there |
-| `create_area`, `open_portal`, `attach` with `"bound": true` | As named |
+| `create_area`, `open_portal`, `attach_rule` with `"bound": true` | As named |
 
 A binding ends when its duration runs out, when it is dismissed, when the
-ability is suppressed or revoked, or when its owner stops (06 §8.3), as
-the ability's definition chooses. On ending:
+mode that made it ends, when the ability is suppressed or revoked, or
+when its owner stops (06 §8.3). Which of these apply is said where the
+binding is made:
+
+```json
+"bound": { "for": "2 min", "ends_on": ["mode", "suppressed", "owner_stops"], "on_end": "restore" }
+```
+
+`"bound": true` is short for ending on all of them and removing what was
+left. On ending:
 
 | `on_end` | Does |
 |----------|------|
@@ -345,6 +373,10 @@ the ability's definition chooses. On ending:
 | `release` | The thing stays, no longer bound: a summoned beast now free, a conjured wall now ordinary |
 
 `dispel { where }` ends bindings by ability tag, by owner or by place.
+
+A binding may be named when it is made (`"as": "companion"`).
+`ability.bound('companion')` is then the thing bound: the summoned
+creature, the area, the conjured element.
 
 ### 7.4 Snapshots
 
@@ -377,7 +409,8 @@ rewind_area { area, by, with_occupants, with_minds }
 ```
 
 undoes those changes, newest first, back to the moment `by` ago, through
-`WorldEdit`. Fields are restored from copies the journal takes each second.
+`WorldEdit`. Fields are restored from copies the journal takes at an
+interval (`rules.journal_copy_interval`, default one second).
 Collapses and releases that began inside the area within that span are
 ended. With `with_occupants`, characters and objects inside are put back
 from snapshots the journal took of them at the same interval.
@@ -463,6 +496,7 @@ exist. Section references are where the mechanism is specified.
 | Great strength | Attributes that feed attack `energy` (07 §3). Throwing and lifting conditions on mass. |
 | Great durability | Tissue materials with high thresholds and toughness (06 §6.1); or a rule on `hit_incoming` |
 | Energy bolt | `shoot` (07 §11) with a projectile whose impact rule calls `release` (02 §13) |
+| Bolts that seek, weapons that return | A projectile with guidance (07 §11.1) |
 | Beam | An instant shot, or `release` shaped as a beam; sustained by a ticking phase |
 | Explosion, shockwave | `release` as a sphere or cone |
 | Blow of force at range | Section 7.7 |
@@ -478,6 +512,7 @@ exist. Section references are where the mechanism is specified.
 | Speed | A personal clock rate (03 §3.5); or tempo |
 | A dash through things | `sweep` (06 §11) |
 | Great leaps | `leap` |
+| Movement planned ahead and then carried out | A committed action with a route (section 9.5) |
 | Wall-walking, burrowing, swimming | Movement modes over other surfaces |
 | Passing through matter | A movement mode over `solid`; or another plane (02 §8.2) |
 | Teleporting | `teleport`. Where to is a location the character knows (15 §7). |
@@ -506,7 +541,11 @@ exist. Section references are where the mechanism is specified.
 | Power | Built from |
 |-------|-----------|
 | Fire, frost, lightning, acid, gas | Fields (02 §16) placed with `add_field`; releases of those damage types. What they do to each other is field reactions (02 §16). |
+| Freezing, melting, boiling | Fields that warm or cool; materials and fields change state by temperature (02 §5.4) |
 | Moving water, air, smoke | `move_field` (section 7.6) |
+| Wind, whirlwinds, whirlpools | An area whose ambient override sets a drift (11 §4.7) |
+| Shaking the ground | `tremor` (02 §14.6) |
+| A great wave, an avalanche, a wall of force | A `release` shaped as a front (02 §13.5) |
 | Raising walls, pillars, bridges | `conjure` (section 7.3); or a map fragment stamped in place (02 §23) |
 | Moving earth and stone | `detach` a piece, move it as a subgrid, `merge` (02 §18.3) |
 | Throwing things by will | A grip at range (section 7.7), then `throw`; or `impulse` (02 §15) |
@@ -565,6 +604,7 @@ exist. Section references are where the mechanism is specified.
 | Conjured weapons and armour | Items created bound; armour as worn layers (06 §9.2) |
 | Animating objects | `create_mind` in an item or device; a movement mode |
 | Wards | An area with rules on entering; a rule on `interaction_starting` (16 §3.4) |
+| A space imposed on the world, with laws of its own | Section 9.6 |
 | Curses and blessings | Bound traits; bound attached rules |
 | Enchanting | Installing a module (16 §11); adding traits or abilities to an item |
 
@@ -681,6 +721,98 @@ Each point of `aegis` stops a kilojoule. A hit larger than what is left
 comes through at the difference. There is no rule that a barrier holds
 until it breaks: it holds what it has the energy to hold.
 
+### 9.5 A second planned in advance
+
+```json
+{ "type": "action", "id": "planned_second", "name": "Planned second",
+  "uses": { "legs": "all", "focus": 1 },
+  "params": { "route": { "type": "list", "of": "cell", "max": 24,
+                          "check": "route_fault(self, $route)" } },
+  "phases": [
+    { "id": "commit", "time": 0,
+      "do": [ { "set": { "$i": 0 } },
+              { "if": "route_fault(self, $route) != null",
+                "then": [ { "set_time_rate": { "who": "self", "rate": 0 } },
+                          { "after": "1 s", "owner": "self.loc.realm",
+                            "do": [ { "set_time_rate": { "who": "self", "rate": 1 } } ] },
+                          { "cancel_action": {} } ] } ] },
+    { "id": "run", "time": "1 s", "fixed": true,
+      "tick": { "every": "41.667 ms",
+                "do": [ { "sweep": { "who": "self", "to": "$route[$i]" } },
+                        { "set": { "$i": "$i + 1" } } ] } } ],
+  "on_finish":    [ { "add_trait": { "to": "self", "trait": "momentum" } } ],
+  "on_interrupt": [ { "remove_trait": { "from": "self", "trait": "momentum" } } ] }
+```
+
+The player draws up to twenty-four steps with the route picker, which
+shows as each is added whether it can be done. Then the action runs them,
+one every twenty-fourth of a second. No phase allows `cancel`, so once
+begun it cannot be changed: the user goes where they said they would, and
+an opponent who reads the route can be waiting.
+
+`route_fault` is a function of the mod's own (05 §12). Here it would
+reject a step longer than the user's `momentum` allows, or a turn too
+sharp for the speed. A plan that breaks its rule stops the user's own
+clock for a second. Someone whose clock is stopped notices nothing and
+answers nothing (03 §7.2), so nothing more needs to be written for them to
+be helpless.
+
+Each step is a `sweep` (06 §11), so the user arrives with their real mass
+and speed and strikes whatever is in the way. `momentum` is a stacking
+trait that lets each plan go further than the last, and an interruption
+takes it away.
+
+The same rule can be laid on someone else: a trait whose rule on the hook
+`ActionStarting` (03 §13) lets an action begin only if its owner wins a
+contest, and stops their clock if not.
+
+### 9.6 An imposed space
+
+```json
+[
+  { "type": "ability", "id": "walled_court", "name": "Walled Court",
+    "seat": "mind", "tags": ["imposed_space"],
+    "params": { "radius": "8 + 2 * ability.rank" },
+    "modes": [ { "id": "open", "trait": "holding_court",
+                 "upkeep": { "resolve": 6.0 },
+                 "on_start": [
+                   { "create_area": { "kind": "walled_court", "at": "self.loc",
+                                      "shape": { "radius": "ability.radius" },
+                                      "journal": "5 min", "vars": { "owner": "self" },
+                                      "bound": true, "as": "court" } },
+                   { "apply_map": { "map": "court_interior", "at": "self.loc", "mode": "replace" } } ],
+                 "on_end": [
+                   { "suppress_abilities": { "who": "self", "tags": ["imposed_space"], "for": "30 s" } } ] } ] },
+
+  { "type": "area_kind", "id": "walled_court", "tags": ["imposed_space"],
+    "ambience": "court_light",
+    "rules": [
+      { "every": "1 s",
+        "do": [ { "for_each": { "entities": { "in_area": "self",
+                                              "where": "it != self.var.owner and it.pool.resolve > 0" } },
+                  "as": "x",
+                  "do": [ { "hit": { "target": "$x", "kind": "cut", "energy": 400, "intensity": "2 MPa" } } ] } ] },
+      { "on": "binding_ending",
+        "do": [ { "rewind_area": { "area": "self", "by": "5 min" } } ] } ] }
+]
+```
+
+| Part | Built from |
+|------|-----------|
+| The space | An area bound to the ability, with a journal for as long as it may last |
+| What it is like inside | A map applied over it: floor, furniture, and the shell that closes it. An ambience (12 §6.4). |
+| What it does to those inside | Rules attached to the area kind (05 §9.3): on entering, on a schedule, or on what those inside do. A rule may deliver a `hit` directly (06 §7.1), which is not aimed and which no defence answers. It may leave out whoever it likes, by any condition: here, anyone with no `resolve` at all. |
+| Getting out | The shell is elements, as strong as the map makes them, from either side |
+| Two meeting | A rule run when one is made looks for others it overlaps and settles it by a `contest` (07 §4.1) between the two abilities. The loser's binding is ended with `dispel`, or both stand, as content chooses. |
+| When it ends | `rewind_area` puts back the cells that were there before, without moving anyone. Suppressing the ability for a time afterwards is the cost of having used it. |
+| A small one against a large one | A second ability whose anchored area suppresses the first's tag within arm's reach (section 6.2) |
+
+When the inside should be larger than the outside, or have its own
+gravity or clock, make it somewhere else: `create_realm` from an authored
+map (10 §9.3), transfer everyone inside the area to it by a fixed offset
+(02 §19), leave the shell standing, and at the end transfer them back by
+the same offset and `destroy_realm`.
+
 ## 10. Power and its price
 
 The engine imposes costs that content does not have to write, and offers
@@ -728,8 +860,24 @@ items and modules; `while` and `bound` on traits; `cost`, `cooldown`,
 `mode_ended`, `rank_changed`, `binding_created`, `binding_ended`,
 `snapshot_taken`, `snapshot_restored`, `area_moved`.
 
-**Hooks**: `ability_using`, `ability_suppressing`, `binding_ending`,
-`contest_resolving`.
+**Hooks**: `ability_using`, `ability_granting`, `ability_revoking`,
+`ability_suppressing`, `binding_ending`, `contest_resolving`.
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `ability_using` | A granted action starts | Change its cost and parameters; cancel |
+| `ability_granting`, `ability_revoking` | An ability is given or taken by a rule | Cancel: a gift that cannot be stolen |
+| `ability_suppressing` | Suppression takes hold | Cancel: resist it |
+| `binding_ending` | Something bound ends | Change how it ends; cancel |
+| `contest_resolving` | A contest is decided (07 §4.1) | Change either side's value |
+
+`restore_abilities` lifts a suppression early. `move_area` moves an
+unanchored area.
+
+**Refusals.** These are refused with a reason: `restore` of a snapshot
+that has expired; a snapshot or journal past its limit; a binding past
+`rules.max_bindings`; `restore_as_generated` over more than
+`rules.max_restore_cells`.
 
 **Effects**: `grant_ability`, `revoke_ability`, `set_rank`,
 `suppress_abilities`, `restore_abilities`, `start_mode`, `end_mode`,
@@ -741,12 +889,371 @@ items and modules; `while` and `bound` on traits; `cost`, `cooldown`,
 or owner), `modes`.
 
 **Properties**: on abilities, `rank`, each parameter by name, `owner`,
-`state`, `mode(id).on`, `cooldown(action)`, `var.*`; on entities,
+`state`, `mode(id).on`, `cooldown(action)`, `var.*`, `bound(name)`; on
+entities,
 `has_ability(id)`, `ability(id)`, `abilities_with(tag)`.
 
 **Functions**: `magnitude`.
 
-**Settings**: `max_snapshot_cells`, `max_journal_changes`, `max_bindings`.
+**Settings**: `rules.max_snapshot_cells`, `rules.max_journal_changes`,
+`rules.max_bindings`, `rules.max_restore_cells`,
+`rules.journal_copy_interval`.
+
+### 12.1 As built
+
+Packages A1 to A4 (decisions D-720 to D-729), in `clash_sim::ability`.
+What is not listed here is not built yet: see the end of this section.
+
+**The definition** (`ability`):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name`, `description` | text | What a reader calls it, and what a closer look says |
+| `tags` | list of text | What it is, for parameter modifiers and rules |
+| `seat` | `body` or `mind` | Which it stays with when they part. Default `body` |
+| `track` | id of a `track` | Its rank is the owner's level of this track |
+| `rank` | int, 0 to 10,000 | With no track, the rank it is granted at unless the grant says. Default 1; a load error beside `track` |
+| `params` | map of name to number expression | Its numbers, read as `ability.<name>` (section 4.2). A name is lowercase letters, digits and `_`; it may not be `rank`, `owner`, `state`, `def`, `id`, `tags`, `mode_on`, `cooldown`, `kind` or `var`; parameters that read each other in a circle are a load error |
+| `always` | an object, or a list of them | What it confers while active: each `{ at_rank?, traits, modifiers, params, senses }`, from `at_rank` up. `traits` are given with the instance's entry as giver; `modifiers` (`{ attr, add, mul }`) apply under the entry as a stats source; `params` are parameter modifiers (below); `senses` are carried for perception |
+| `grants` | list | Actions it makes available (below) |
+| `modes` | list | Modes (below), at most 255 |
+| `while` | condition | Kept current (05 §7.5); while false the ability is dormant |
+| `rules` | rules | Attached to the owner while the ability is active, with the owner as `self` |
+
+What an ability works out about itself (`params`, `while`, a grant's
+`params`, `cost` and `cooldown`, a mode's `upkeep` and `cost`) binds the
+owner as `self` and the instance as `ability`, and reads truth; all but
+effects are pure. A grant's `if` and `value` are in the owner's mind
+(05 §7.3): its own state, its own ability, and what is safe for belief.
+A mode's `on_start` and `on_end` are effects with the same two subjects.
+
+A **grant** is an action's id, or:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `action` | id of an `action` | What it starts. One action is granted at most once by an ability |
+| `params` | map of name to expression | Parameters of the action the ability supplies, standing in for any of the same name a command gives: how an action reads the ability's numbers (`"energy": "ability.power"`) |
+| `cost` | map | Below |
+| `cooldown` | number expression, seconds | Of the owner's own time (03 §3.4) before the grant can be used again |
+| `at_rank` | int | The least rank |
+| `if` | condition | A further condition, in the owner's mind |
+| `intent` | `harm`, `protect`, `escape`, `control`, `aid` or `utility` | A hint to whoever chooses for a character |
+| `value` | number expression | A score of a use, for the AI layer. Carried |
+
+A **cost** is keyed by the pool it is paid from, or by an item's id with
+`"item": true` (a qualified id, or a bare one looked up in sorted
+namespace order), and is an amount (a number, or an expression), or
+`{ amount, overdraw?: { from: pool, ratio: number (default 1) }, from?: expression, item?: bool, count?: int (default 1) }`.
+`from` gives the entity that pays in the owner's place, such as the
+companion an ability is bound to (`ability.bound('companion')` once
+bindings are built; any expression that gives an entity meanwhile).
+Overdraw always comes from the owner's pool. A cost naming a pool or an
+item that is not defined is a load error.
+
+A **mode**:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `id` | name | Its name within the ability |
+| `name` | text | What a reader calls it |
+| `at_rank` | int | The least rank it can be on at |
+| `trait` | id of a `trait` | Given while it is on, with the mode as giver |
+| `upkeep` | map of pool to number expression | Drained per second of the owner's time while it is on, worked out when it is switched on |
+| `cost` | map | What switching it on spends, as a grant's |
+| `uses` | map of channel to count | Carried: a mode holds no slots yet; its trait may disable some with `channels` meanwhile |
+| `on_start`, `on_end` | effects | Run as it comes on, and as it ends however it ends |
+| `look` | text | Carried for presentation |
+
+Traits list `abilities` and `ability_params` (06 §5), and templates and
+their options `abilities` (06 §10.4).
+
+**Instances.** The component `Abilities`, the seventeenth (06 §3.1),
+holds an entity's instances in the order they were made: each with its
+number, its definition, its sources (`template`, `trait` with the trait
+instance's key, `rule`), whether it was revoked, its rank set directly,
+its state (`active` or `dormant`), the modes that are on with the
+wake-up of each, its cooldowns as the owner's own time at which each
+grant is ready, and the entries of `always` it applies now. A number is
+given once in the simulation's life and never again: the simulation
+keeps the next and which entity holds each (`AbilityIndex`, saved and
+hashed with the kernel's state; save layout 11). A handle of the kind
+`ability` is that number, so it never names another instance.
+
+**Holding** (sections 3.3, 3.4, 6.3):
+
+- A template's abilities are given once the entity is made, with the
+  template as source. A trait instance that is not dormant is a source
+  of each ability its definition lists, and stops being one when it
+  ends or goes dormant. `grant_ability` makes a rule a source. One
+  ability from several sources is one instance (invariant A8).
+- An instance with no source left ends: its modes end (`lost`), what it
+  conferred is taken back, and `ability_revoked` is raised (`how`
+  `lost`).
+- `revoke_ability` ends it whatever its sources (`how` `revoked`). One
+  that traits still give stays, revoked: it is not held and confers
+  nothing until a rule grants it again; another trait listing it does
+  not bring it back.
+- When a mind moves (`mind_transferred`), the mind-seated abilities the
+  entity held only from rules and templates go with it, keeping their
+  number, rank and cooldowns (`ability_revoked` `moved` at the old
+  body, `ability_granted` at the new); for a swap, both ways. What a body
+  has through its traits stays with it.
+
+**Rank and parameters.** A track's level is read as it stands; each
+`track_advanced` of that track raises `rank_changed` for the abilities
+it ranks. When the rank changes, what applies from a rank in `always` is
+brought into line and modes above it end (`rank`). A parameter is read
+fresh each time: its expression, then `(value + Σ add) × Π mul` over the
+`ability_params` of the owner's traits that confer (once for each stack)
+and the `params` of the entries of `always` its abilities apply, each
+naming this ability or one of its tags.
+
+**Using** (`use_ability`, section 5): the instance must be held and
+active, the grant's `at_rank` met, its cooldown over, its `if` true and
+every cost payable: refused otherwise, changing nothing. The grant's
+`params` are worked out and stand in for the command's. If anything
+listens, `ability_using` is raised. The action is then prepared by the
+action runtime (03 §6.6), every cost is taken in full (invariant A4),
+the cooldown starts, the action starts and `ability_used` is raised. A
+refusal after the hook ran is raised as `ability_refused`, and a start a
+handler of `action_starting` refuses gives the pools back. A granted
+action can still be started with `Act` like any other action, without
+its ability; whoever offers actions offers granted ones through their
+abilities (the bundled ones are tagged `power`).
+
+**Modes.** Switching on takes the mode's cost, gives its trait, applies
+each pool of its upkeep as a rate of minus the amount under the mode's
+own stats source, runs `on_start` and raises `mode_started`. The moment
+the first such pool comes to nothing is worked out from its level and
+net rate and scheduled once on the owner's clock (a `Timer` wake-up with
+bit 60 of `arg` set); it is worked out again when the owner's pools are
+heard to move (`pool_crossed`, `attr_changed`, traits added or removed,
+a cost paid, the owner moving into the world). At that moment the mode
+ends with `how` `empty`. Switching is a command or a verb: a toggle with
+no windup. A mode that should take time is a grant whose action calls
+`start_mode`.
+
+**Charging** is the action runtime's held phase (section 5.5): a `tick`
+raises a variable, and `Cancel` (a command) or `cancel_action` (an
+effect) lets the hold go, which counts as release.
+
+**Suppression** (section 6.2; package A5, decision D-770). Three things
+suppress an instance, each by the tags of the abilities it names (an
+ability is reached when it has any of them):
+
+| Suppressor | Lasts | Made by |
+|------------|-------|---------|
+| `effect` | Until its `for` runs out on the owner's own time, or `restore_abilities` lifts it | `suppress_abilities`; with no `tags`, every ability |
+| `trait` | While the owner has a trait instance whose definition lists `suppresses`, and it is not dormant | Giving the trait (06 §5) |
+| `area` | While the owner is inside an area whose kind lists `suppresses` (02 §8.3) | The owner moving in, or the area being made, moved or reshaped over it |
+
+Before a suppression takes hold of an instance, the hook
+`ability_suppressing` runs once for that instance and that suppressor;
+a handler that cancels makes it **resist**, and that suppressor passes
+it over for as long as it lasts. A suppressed instance confers nothing
+(invariant A2): its modes end (`how` `suppressed`), what it conferred is
+taken back, what is bound to end on suppression ends (section 7.3), and
+its grants and modes are refused with `ability.suppressed`. When its
+last suppressor lifts (`ability_restored`) it confers again with its
+rank, cooldowns and bindings that did not end as they were; its modes
+stay off. An instance gained while a suppression lasts is suppressed
+from the start, before it confers anything (`ability_suppressed`
+follows `ability_granted`). Its `state` reads `suppressed` while it is
+active and suppressed. What suppresses each instance and what it
+resisted are kept in it, and the imposed suppressions in the owner's
+`Abilities` (save layout 16), so nothing is derived.
+
+Dormancy (section 6.1) is as A1 to A4 built it: an ability's `while` is
+kept current, and a trait's where everything it reads names its events.
+The rounds of re-evaluation are counted afresh by each pump.
+
+**Areas that move, and what areas change** (section 7.2; package A6,
+decision D-771): built in the world (02 §8.3 as built). An area
+anchored to an entity follows it as `relocate` moves it, and whoever it
+comes over or leaves is told exactly as when they move the other way;
+its maker is inside it throughout and is told nothing. An area with a
+clock rehomes whoever and whatever it comes over: a maker who anchors
+its own clock to the realm's (`anchor_clock`) walks on while everything
+else inside hangs. An area or its kind may set gravity (a scale, or a
+vector), which bodies in flight read where they are at each wake, and
+may carry a light at its middle, negative for darkness, which moves
+with it; light is never below zero. `create_area` takes `anchor`,
+`gravity`, `light` and `light_radius`.
+
+**Bindings** (section 7.3; package A7, decision D-772). What an
+ability leaves in the world is kept by the simulation as a binding with
+a number given once in its life: the instance it belongs to and its
+owner, what it holds, its name, the mode whose `on_start` made it, when
+it ends and what then happens.
+
+| Holds (`what`) | Made by | `remove` | `restore` | `release` |
+|----------------|---------|----------|-----------|-----------|
+| `trait`: a trait on someone, given with the binding as its giver | `bind_trait` | Taken away | As `remove` | Stays, given by no one who takes it back |
+| `entity`: one made from a template | `summon` | Removed from the simulation | As `remove` | Stays, free |
+| `edit`: elements placed in cells of one layer, with what was there | `conjure` | Taken away where the cell is still what was conjured | What was there put back where the cell is still what was conjured | Left |
+| `area` | `create_area` with `bound` or any term | Removed | As `remove` | Stays |
+| `rule`: a rule attached to someone | `bind_rule` | Detached | As `remove` | Stays attached |
+
+The terms are arguments of each verb that binds, beside its own (not
+the object `bound` of section 7.3, which an argument written as an
+object cannot be: 05 §6 reads it as a value source):
+
+| Argument | Type | Meaning |
+|----------|------|---------|
+| `ability` | `ability?` | The instance it is bound to. Left out, the `ability` bound where the effect is written: a mode's `on_start` and `on_end`, what an ability works out about itself. An action is handed its ability by its grant (`"params": { "by": "ability" }`, a parameter of type `ability`) |
+| `for` | `real?` | Seconds of the owner's own time it lasts; it stands still while the owner is out of the world |
+| `ends_on` | `list<string>?` | Of `mode` (the mode that made it ends), `suppressed`, `dormant` (its ability is), `owner_stops` (its owner dies). Left out, all four |
+| `on_end` | `string?` | `remove`, `restore` or `release`. Left out, `restore` for `conjure`, `remove` for the rest |
+| `as` | `string?` | Its name, for `ability.bound(name)` |
+
+A binding also always ends, whatever `ends_on` says, when its ability
+is revoked (`revoked`) or loses its last source (`lost`), moves with a
+mind to an entity that already holds it (`moved`; otherwise it moves
+with the instance), or its owner is removed from the simulation
+(`owner_removed`): invariant A3. A binding whose thing is removed by
+something else is forgotten. Before a binding ends the hook
+`binding_ending` runs; a handler may change `on_end`, set `prolong` to
+keep it that many more seconds, or cancel to keep it (one whose time ran
+out then lasts until something else ends it); when its ability is gone
+neither keeps it. Each ability holds at most `rules.max_bindings`
+bindings (default 64).
+
+`summon { template, at, mind?, obey?, … }` makes the entity through the
+template service (06 §10.3), thinking by `mind` if given. With `obey`
+(default true) it takes the stances its summoner's mind holds toward
+others (09 §3.4), holds none toward its summoner, and is given a track
+of its summoner as if told (15 §7); it is given the senses its mind
+names, and thinks at once. `conjure { at, to?, layer?, what, … }`
+places what as data writes a state in the cell, or in each cell of the
+straight line from `at` to `to` (at most 64), through `WorldEdit`,
+refusing before anything changes if a cell cannot be read.
+`dismiss { who, ability, as?, how? }` ends an owner's bindings of an
+ability, or the one of a name, `how` in place of each `on_end`.
+`dispel { tags?, owner?, at?, radius? }` ends the bindings whose
+ability has any of the tags, whose owner is `owner` and whose thing is
+within `radius` metres of `at`. Portals are not built (02 §19): nothing
+is bound to one.
+
+**Loss** (section 6.3). Revoking an instance, or losing its last
+source, ends its modes (`revoked`, `lost`) and everything bound to it
+(section 7.3, invariant A3), then takes back what it conferred.
+
+**Events**, each with the owner as `self`:
+
+| Event | Fields |
+|-------|--------|
+| `ability_granted` | `ability` (string, qualified id), `source` (string: `template`, `trait`, `rule`), `rank` (int) |
+| `ability_revoked` | `ability`, `how` (string: `revoked`, `lost`, `moved`) |
+| `ability_dormant`, `ability_active` | `ability` |
+| `rank_changed` | `ability`, `old`, `new` (int) |
+| `ability_suppressed` | `ability`, `by` (string: `effect`, `trait`, `area`, what took hold first) |
+| `ability_restored` | `ability` |
+| `binding_created` | `ability`, `name` (string, empty for none), `what` (string: `trait`, `entity`, `edit`, `area`, `rule`), `on_end` (string) |
+| `binding_ended` | `ability`, `name`, `what`, `why` (string: `duration`, `dismissed`, `dispelled`, `mode`, `suppressed`, `dormant`, `owner_stops`, `revoked`, `lost`, `moved`, `owner_removed`), `how` (string: the `on_end` carried out), `thing` (any: the entity, the area, the one a trait or rule was on, or the first conjured cell) |
+| `mode_started` | `ability`, `mode` (string) |
+| `mode_ended` | `ability`, `mode`, `how` (string: `ended`, `empty`, `dormant`, `suppressed`, `revoked`, `lost`, `rank`, `moved`) |
+| `ability_used` | `ability`, `action` (string), `cost` (map of each pool's or item's qualified id to what was spent, overdraw included) |
+| `ability_refused` | `ability`, `action`, `reason` (string, the code), `message` (string) |
+
+**Hooks**, each with the owner as `self`:
+
+| Hook | Fields | A handler may |
+|------|--------|---------------|
+| `ability_using` | `ability`, `action` (string); `params` (map of name to value); `cost` (map of qualified id to amount) | Change `params` (each held to its type again) and `cost` (an amount of zero or more), for this use; cancel |
+| `ability_granting` | `ability`, `source` (`rule`) | Cancel. Raised by `grant_ability` only |
+| `ability_revoking` | `ability` | Cancel. Raised by `revoke_ability` only, for an ability held |
+| `ability_suppressing` | `ability`; `by` (string: `effect`, `trait`, `area`); `source` (any: the area for `area`, the trait's qualified id for `trait`, null for `effect`) | Cancel: the ability resists that suppression while it lasts |
+| `binding_ending` | `ability`, `name`, `what`, `why` (as `binding_ended`); `on_end` (string); `prolong` (real, 0) | Change `on_end`; set `prolong` above zero to keep it that many seconds more; cancel to keep it. Neither keeps one whose ability is gone |
+
+**Verbs:**
+
+| Verb | Arguments | Returns |
+|------|-----------|---------|
+| `grant_ability` | `to: entity`, `ability: id<ability>`, `rank: int?` | `ability`, the instance |
+| `revoke_ability` | `from: entity`, `ability: id<ability>` | `bool`, whether it was held |
+| `set_rank` | `who: entity`, `ability: id<ability>`, `rank: int` | `int`, the rank before |
+| `use_ability` | `who: entity`, `ability: id<ability>`, `action: id<action>?`, `params: any?` (a map) | `bool`, whether it started; when not, `ability_refused` says why |
+| `start_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`, true |
+| `end_mode` | `who: entity`, `ability: id<ability>`, `mode: string` | `bool`, true |
+| `suppress_abilities` | `who: entity`, `tags: list<string>?` (left out: every ability), `for: real?` (seconds of `who`'s own time; left out: until lifted) | `int`, how many of its abilities it suppresses now |
+| `restore_abilities` | `who: entity`, `tags: list<string>?` | `int`, how many imposed suppressions were lifted: those naming any of `tags`, or naming none, or all with no `tags` |
+| `summon` | `template: id<template>`, `at: loc`, `mind: string?`, `obey: bool?`, and the terms | `entity`, the one made |
+| `conjure` | `at: loc`, `to: loc?`, `layer: string?` (default `block`), `what: string`, and the terms | `int`, how many cells |
+| `bind_trait` | `to: entity`, `trait: id<trait>`, and the terms | `int`, the stacks it has |
+| `bind_rule` | `to: entity`, `eoc: id<eoc>` (a rule with `on`), and the terms | `bool`, whether it was attached; one attached already binds nothing |
+| `dismiss` | `who: entity`, `ability: id<ability>`, `as: string?`, `how: string?` | `int`, how many ended |
+| `dispel` | `tags: list<string>?`, `owner: entity?`, `at: loc?`, `radius: real?` (default 0) | `int`, how many ended |
+| `create_area` | as 02 §23 lists it, with `bound: bool?` and the terms | `area` |
+
+**Commands** (03 §4.4): `UseAbility { entity, ability, action, params }`
+and `SetMode { entity, ability, mode, on }`.
+
+**Properties.** On an entity: `has_ability(ability: id<ability>)`
+(`bool`); `ability(ability: id<ability>)` (`ability?`, the instance, the
+owner's own); `abilities` (`list<id<ability>>`, in the order gained);
+`abilities_with(tag: string)` (`list<ability>`); `bound_by`
+(`entity?`: the owner of the ability a summoned entity is bound to,
+readable of oneself in a mind; it moves with bindings and cannot be kept
+current); `cannot_use(ability:
+id<ability>, action: id<action>?)` (`string?`, the code of the reason a
+use would be refused now, null if it would not). The first four change
+with `ability_granted` and `ability_revoked`. On the kind `ability`:
+`rank` (`int`, changed by `rank_changed`), `owner` (`entity?`),
+`state` (`string?`: `active`, `dormant` or `suppressed`; by
+`ability_dormant`, `ability_active`, `ability_suppressed` and
+`ability_restored`), `def`
+(`id<ability>?`), `id` (`string?`), `tags` (`list<string>?`),
+`mode_on(mode: string)` (`bool`, by `mode_started` and `mode_ended`),
+`bound(name: string)` (`any`: what its binding of that name holds, as
+`binding_ended`'s `thing` says, and for an `edit` every cell as a list
+of `loc`; by `binding_created` and `binding_ended`),
+`cooldown(action: id<action>)` (`real`, seconds left, 0 when ready), and
+each parameter by name (`real`). None is safe for belief or settable.
+`cooldown`, `cannot_use` and parameters move with time and anything
+else, so they cannot be kept current.
+
+**Reasons:** `ability.unknown` (`ability`), `ability.not_held`
+(`entity`, `ability`), `ability.no_grant` (`ability`, `action`),
+`ability.dormant` (`ability`), `ability.rank_too_low` (`ability`,
+`rank`, `needed`), `ability.cooling_down` (`ability`, `action`, `left`
+seconds), `ability.condition` (`ability`, `action`),
+`ability.cost_short` (`entity` who pays, `pool`, `wanted`, `have`,
+`short`), `ability.cost_source_gone` (`ability`, `pool`),
+`ability.items_short` (`item`, `wanted`, `have`), `ability.cost_unknown`
+(`cost`), `ability.mode_unknown`, `ability.mode_on`, `ability.mode_off`
+(`ability`, `mode`), `ability.upkeep` (`ability`, `mode`, `pool`),
+`ability.rank_from_track` (`ability`), `ability.bad_rank` (`rank`),
+`ability.bad_argument` (`arg`), `ability.not_registered`,
+`ability.suppressed` (`ability`, `by`), `ability.bad_duration`
+(`seconds`), `ability.no_binder`, `ability.too_many_bindings`
+(`limit`), `ability.bad_binding` (`arg`). The faults of 05 §7.5: `reactive.rounds`,
+`reactive.unwatchable`.
+
+**For the application and the AI layer.** `ability::options(sim,
+entity)` lists every grant of every ability held, with its action, its
+intent, what it costs now, the cooldown left and the reason it cannot be
+used now, if any; `ability::available(sim, entity, ability, action)`
+asks one. Both read the owner's own state and the grant's `if` in its
+mind. A choice is carried out with `UseAbility` and `SetMode` (or the
+verbs, from a rule).
+
+**Not built.** Snapshots and
+journals (A8); relays, appraisal, moving fields, contest bias (A9); the
+reference abilities of section 8 (A10). Costs from a store (16 §5).
+Bindings to portals (02 §19 is not built); `bound` on `add_trait` and
+`attach_rule` (`bind_trait` and `bind_rule` do it); orders to a summoned
+servant (until relations, 15 §10). The effect `move_area` (the world's
+`WorldCtx::move_area` is reachable only from Rust) and the queries
+`abilities`, `bindings` and `modes`: a rule reads `self.abilities`,
+`self.ability(id)`, `ability.bound(name)` and `ability.mode_on(mode)`
+meanwhile.
+Variables on the kind `ability` (`ability.var.x`). A rule attached by an
+ability does not bind `ability`. Abilities of items and body parts
+except through the traits they give. `uses` on a mode. The mind-seated
+abilities a trait gives do not move with a mind until traits' seats do.
+A level of a pool changed by a verb without crossing a threshold is not
+heard by a mode's wake-up until the next crossing or wake-up.
+Benchmarks (A11).
 
 ## 13. Invariants
 

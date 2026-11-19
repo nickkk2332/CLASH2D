@@ -1,0 +1,86 @@
+[
+  { "//": "Who a player may be (13 §4.2): templates marked `playable`, which a game scenario that lets the player make or choose their character offers; `powers/sampler.json` offers the sampler of powers as well; this file stands apart from `life/` because what the characters start with is made of the weapons of `items.json` and `combat/`. Each is a person with something more, plain and generic; values are illustrative. What each starts with in hand is given by a rule attached to it that runs once, when it is first in the world (`entity_relocated`; a rule of something out of the world does not run, 05 §13.5): the `items` of a template are not made yet (06 §10.4).",
+    "type": "template", "id": "ordinary_person", "copy_from": "person",
+    "name": "Ordinary person", "playable": true,
+    "description": "No powers and no weapon: a build and a little learning of your choosing." },
+
+  { "type": "template", "id": "brawler", "copy_from": "person",
+    "name": "Brawler", "playable": true,
+    "description": "Strong, and quick in a fight with fists or a club. Starts with a club in hand.",
+    "attributes": { "strength": 15, "wits": 11 },
+    "extend": { "rules": ["kit_club"] } },
+
+  { "type": "template", "id": "marksman", "copy_from": "person",
+    "name": "Marksman", "playable": true,
+    "description": "A steady eye and hand. Starts with a bow and a quiver of arrows, or a loaded pistol.",
+    "attributes": { "wits": 14 },
+    "extend": { "choices": [
+      { "id": "weapon", "name": "Weapon", "kind": "pick", "default": ["bow"],
+        "options": [
+          { "id": "bow", "name": "A bow and a quiver of arrows", "rules": ["kit_bow"] },
+          { "id": "pistol", "name": "A pistol, loaded, and spare rounds", "rules": ["kit_pistol"] } ] } ] } },
+
+  { "//": "Born with a few of the powers of `powers/powers.json`: the lesser cost a point each and the greater two, from three points, so two or three in all.",
+    "type": "template", "id": "adept", "copy_from": "person",
+    "name": "Adept", "playable": true,
+    "description": "Born with two or three powers of your choosing, and the reserves to pay for them.",
+    "pools": ["blood", "pain", "stamina", "reserve"],
+    "extend": { "choices": [
+      { "id": "powers", "name": "Powers", "kind": "points", "budget": 3,
+        "default": ["firebolt", "heal", "dash"],
+        "options": [
+          { "id": "dash", "name": "Dash", "cost": 1, "abilities": ["dash"] },
+          { "id": "force_push", "name": "Force push", "cost": 1, "abilities": ["force_push"] },
+          { "id": "firebolt", "name": "Fire bolt", "cost": 1, "abilities": ["firebolt"] },
+          { "id": "shield", "name": "Shield", "cost": 1, "abilities": ["shield"] },
+          { "id": "heal", "name": "Heal", "cost": 1, "abilities": ["heal"] },
+          { "id": "float", "name": "Float", "cost": 1, "abilities": ["float"] },
+          { "id": "shadow", "name": "Shadow", "cost": 1, "abilities": ["shadow"] },
+          { "id": "time_stop", "name": "Time stop", "cost": 2, "abilities": ["time_stop"] },
+          { "id": "null_field", "name": "Null field", "cost": 2, "abilities": ["null_field"] },
+          { "id": "gravity_well", "name": "Gravity well", "cost": 2, "abilities": ["gravity_well"] },
+          { "id": "summon_hound", "name": "Summon hound", "cost": 2, "abilities": ["summon_hound"] },
+          { "id": "stone_wall", "name": "Stone wall", "cost": 2, "abilities": ["stone_wall"] } ] } ] } },
+
+  { "//": "What the brawler starts with: a club, in hand.",
+    "type": "eoc", "id": "kit_club", "attached": true, "on": "entity_relocated", "once": true, "if": "not is_null(self.loc)",
+    "do": [
+      { "create_item": { "def": "club", "in": "self" } },
+      { "for_each": { "contents": { "of": "self", "where": "it.has_tag('blunt')" } }, "as": "club",
+        "do": [ { "take": { "who": "self", "what": "$club" } } ] } ] },
+
+  { "//": "A bow in hand and a quiver worn with a dozen arrows in it.",
+    "type": "eoc", "id": "kit_bow", "attached": true, "on": "entity_relocated", "once": true, "if": "not is_null(self.loc)",
+    "do": [
+      { "create_item": { "def": "quiver", "in": "self" } },
+      { "create_item": { "def": "arrow", "count": 12, "in": "self" } },
+      { "for_each": { "contents": { "of": "self", "where": "it.has_tag('quiver')" } }, "as": "quiver",
+        "do": [
+          { "wear": { "who": "self", "what": "$quiver" } },
+          { "for_each": { "contents": { "of": "self", "where": "it.has_tag('arrow')" } }, "as": "arrows",
+            "do": [ { "put_in": { "what": "$arrows", "container": "$quiver" } } ] } ] },
+      { "create_item": { "def": "bow", "in": "self" } },
+      { "for_each": { "contents": { "of": "self", "where": "it.has_tag('bow')" } }, "as": "bow",
+        "do": [ { "take": { "who": "self", "what": "$bow" } } ] } ] },
+
+  { "//": "A pistol in hand with a magazine of twelve rounds fitted, and a backpack worn with twelve more.",
+    "type": "eoc", "id": "kit_pistol", "attached": true, "on": "entity_relocated", "once": true, "if": "not is_null(self.loc)",
+    "do": [
+      { "create_item": { "def": "pistol", "in": "self" } },
+      { "for_each": { "contents": { "of": "self", "where": "it.has_tag('firearm')" } }, "as": "pistol",
+        "do": [
+          { "take": { "who": "self", "what": "$pistol" } },
+          { "create_item": { "def": "pistol_magazine", "in": "self" } },
+          { "for_each": { "contents": { "of": "self", "where": "it.has_tag('pistol_magazine')" } }, "as": "magazine",
+            "do": [ { "fit": { "what": "$magazine", "into": "$pistol" } } ] },
+          { "create_item": { "def": "pistol_round", "count": 12, "in": "self" } },
+          { "for_each": { "contents": { "of": "self", "where": "it.has_tag('pistol_round')" } }, "as": "rounds",
+            "do": [ { "load": { "into": "$pistol", "from": "$rounds" } } ] } ] },
+      { "create_item": { "def": "backpack", "in": "self" } },
+      { "for_each": { "contents": { "of": "self", "where": "it.has_tag('container') and not it.has_tag('quiver')" } }, "as": "pack",
+        "do": [
+          { "wear": { "who": "self", "what": "$pack" } },
+          { "create_item": { "def": "pistol_round", "count": 12, "in": "self" } },
+          { "for_each": { "contents": { "of": "self", "where": "it.has_tag('pistol_round')" } }, "as": "spare",
+            "do": [ { "put_in": { "what": "$spare", "container": "$pack" } } ] } ] } ] }
+]

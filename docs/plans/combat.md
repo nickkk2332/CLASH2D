@@ -16,18 +16,18 @@ With packages C1 to C8, C11 and C12 the first playable build of
 
 | WP | Title | Size | Depends on | Status |
 |----|-------|------|------------|--------|
-| C1 | Contests | S | X4, K5 | todo |
-| C2 | Surfaces and delivery | L | E5, E8, C1 | todo |
-| C3 | Aim | M | C2, S4 | todo |
-| C4 | Defences | L | C3, T5 | todo |
-| C5 | Push | M | C2, E10 | todo |
+| C1 | Contests | S | X4, K5 | done |
+| C2 | Surfaces and delivery | L | E5, E8, C1 | beta |
+| C3 | Aim | M | C2, S4 | beta |
+| C4 | Defences | L | C3, T5 | beta |
+| C5 | Push | M | C2, E10 | beta |
 | C6 | Clashes | L | C4, C5, W15 | todo |
-| C7 | Grips and throws | L | C4, C5, T6 | todo |
-| C8 | Takedowns | M | C2, T6 | todo |
-| C9 | Projectiles | L | C4, W14, S2 | todo |
-| C10 | Ranged weapons | M | C9, G9 | todo |
-| C11 | Stances, combinations, effort, previews | M | C4, C5, E3 | todo |
-| C12 | Bundled combat content | M | C6, C7, C8, C11 | todo |
+| C7 | Grips and throws | L | C4, C5, T6 | beta |
+| C8 | Takedowns | M | C2, T6 | done |
+| C9 | Projectiles | L | C4, W14, S2 | beta |
+| C10 | Ranged weapons | M | C9, G9 | beta |
+| C11 | Stances, combinations, effort, previews | M | C4, C5, E3 | beta |
+| C12 | Bundled combat content | M | C6, C7, C8, C11 | beta |
 | C13 | Benchmarks and budget gate | S | C2, then recurring | todo |
 
 ## Order and parallelism
@@ -92,6 +92,15 @@ Done when
 - Scenario `one_cut`: an arc with `through` passes five unarmoured targets
   and stops at an armoured sixth.
 
+Beta (decisions D-641, D-642): built and tested in
+`crates/clash-sim/tests/combat.rs`; `own_fist` and `one_cut` are also
+test scripts under `scenarios/combat/`, with the bundled `smash` and
+`whirl`. Stubbed: clash and defences are
+steps that find none (C6, C4); `with` a gripped thing is refused (C7);
+swings meeting the world (`swing`, review row "Swings meet the world"),
+contact surfaces (`the_pit`) and `closing_energy` are not built; `height`,
+`lands`, `clashes`, `spill` and `spill_kind` are read and carried.
+
 ### C3 — Aim
 
 **Spec** 07 §4.2 · **Size** M
@@ -104,6 +113,12 @@ Done when
 - Outcome frequencies follow the contest's margin bands.
 - A target that does not perceive its attacker is hit, using a content
   function that reads perception.
+
+Beta (decision D-643): aim by margin bands, the parts beside a part, and
+unaimed strikes by exposure are built and tested; the bundled `evasion`
+reads `perceives`. Not built: reach in height (07 §4.3, review rows
+"Reach in height" and "Reach and cover by posture"); `height` is read and
+carried.
 
 ### C4 — Defences
 
@@ -125,6 +140,23 @@ Done when
 - Scenario `too_slow`: the third; no defence exists.
 - A defender who has moved out of reach is missed without a contest.
 
+Beta (decisions D-712 to D-714): the `defence` block, in force during
+its phase only, `covers` by arc and part, `handles`, `contest`, `avoid`
+by leaving (step 2) and by slipping, `interpose` with `deflect`, `holds`
+and `brace`, the surfaces put in the way taking the rest and passing on
+what they cannot stop, `protects`, `evasion`, the hook
+`defence_resolving`, `strike_defended`, `entity.defending`; guards as
+held phases; the bundled `parry`, `block`, `dodge`, `step_back` and
+`guard`. Tested in `crates/clash-sim/tests/reactions.rs`:
+`parry_in_time`, `broken_blade` and `too_slow` to the figures of 07 §14,
+invariant C3, leaving, slipping, a guard held and let go, defending
+someone beside (the review row "Defending someone else"), and energy
+accounted for through a guard. `parry_in_time` and `too_slow` are also
+test scripts under `scenarios/combat/`, with the bundled `slash` and
+`parry`. Stubbed: a gripped creature put in the way (C7), defences
+against shots (C9), the query `defences`, previews (C11); the
+`bodyguard` script waits for relations (S7).
+
 ### C5 — Push
 
 **Spec** 07 §7 · **Size** M
@@ -138,6 +170,15 @@ Done when
 - Scenario `bar_fight`: a punch launches a target through a wall; the
   wall's failure and the target's injuries both come from the impact.
 - A braced defender is pushed by the unbraced share only.
+
+Beta (decision D-644): push speed, `knockback_incoming`, stagger, launch
+through the world's bodies and back through movement's landing,
+`knock_down`, the settings, and a target in flight taking all of a push
+are built; `bar_fight` and a shove into a wall are Rust tests in
+`crates/clash-sim/tests/combat.rs`. Stubbed: bracing waits for defences
+(C4: `brace` is 0, and the formula is tested on its own); of the review
+row "In the air", a leaping attacker's strike with the leap's speed waits
+for `leap` and `closing_energy`.
 
 ### C6 — Clashes
 
@@ -173,6 +214,21 @@ Done when
 - Scenario `human_shield`: a hit lands on the gripped creature.
 - A pinned arm's actions are unavailable until release.
 
+Beta (decisions D-812 to D-814): `seize` and `release_grip`, the
+`GripTable` tied to the maintaining action (invariant C7: a grip ends
+with its action, and one ended otherwise interrupts it), pinning,
+dragging, `combat.gripped` and `combat.too_heavy` on steps, `throw` of a
+creature held, gripped creatures as striking surfaces and as interposed
+defences, `seize_resolving`, `seized`, `grip_broken`, `entity.gripping`
+and `entity.gripped_by`; the bundled `grab`, `throw_person`, `drag`,
+`human_shield` and `break_free`. Tested in
+`crates/clash-sim/tests/grips.rs` (C7, a pinned arm, dragging, a throw
+through a window, a human shield, save and load mid-grip);
+`thrown_through` and `human_shield` are also test scripts under
+`scenarios/combat/`. Stubbed: carrying (a creature taken into a grasp),
+holding the world and `wrench` (review row "Holding the world",
+`off_its_hinges`), the query `grips`.
+
 ### C8 — Takedowns
 
 **Spec** 07 §10 · **Size** M
@@ -185,6 +241,13 @@ Done when
 - Scenario `takedown`: an unaware victim is locked in and struck;
   an aware one cannot be targeted.
 - The same takedown against a protected neck is stopped by the layer.
+
+Done (decision D-816): joint actions with forced roles (T6 beta), `sure`
+strikes, `requires_at_start` on perception and `entity.helpless`, the
+`cutscene` field raising `cutscene_cued`; the bundled `knock_out`,
+`choke` and `gorget`. Tested in `crates/clash-sim/tests/grips.rs`, and
+the test script `takedown`. The bundled humanoid has no neck: the gorget
+is worn over the head, which the takedown's blow strikes.
 
 ### C9 — Projectiles
 
@@ -207,6 +270,22 @@ Done when
   short.
 - Scenario `volley`: five hundred projectiles within the budget of 07 §18.
 
+Beta (decisions D-740 to D-744, D-748): the `projectile` type, `shoot`
+with dispersion from the stream `shots`, bodies carrying the
+projectile's surface and its delivery into creatures by height band,
+continuing with what exits, lodging, `projectile_passed`, instant shots
+by ray, `ballistic_dir` and `band_point`, all tested in
+`crates/clash-sim/tests/ranged.rs`; `through_cover` is also a test script
+under `scenarios/combat/`; `volley` is an ignored timing test there.
+The `shot` window, defences against shots and catching followed with
+combat 2 (decisions D-810, D-811, D-818): `bullet_time` and `caught_arrow`
+are Rust tests in `crates/clash-sim/tests/grips.rs` and test scripts.
+Stubbed: `intercept` (the third way of the review row "Stopping a
+shot"); `guidance`, `fuse` and
+`projectile_lost_lock` are read and carried (review row "Driven and
+guided projectiles", `heat_seeker`); `lead_point` waits for believed
+velocities.
+
 ### C10 — Ranged weapons
 
 **Spec** 07 §11.5 · **Size** M
@@ -221,6 +300,17 @@ Done when
 - A fitted module changes spread and noise and stops doing so when
   removed.
 - A bow's shot energy follows draw time up to its cap.
+
+Beta (decisions D-745 to D-747, D-749): rounds as items (`round`),
+stores (`holds.order`) fired in the order loaded, `load`, `fit` and the
+`shot` block with what is fitted multiplying it, `throw`, a held draw,
+`count` above one, a timed charge by `after`, an instant shot by ray;
+the bundled pistol, rifle, magazines, two kinds of round each, scope,
+suppressor, bow, arrows, quiver, throwing knife and charge, and the
+actions `shoot`, `aim_shot`, `reload`, `draw_and_loose` and `throw`.
+`mixed_belt` is a test script and a Rust test. Stubbed: weapons that draw
+on a power store (16 §11.2) wait for G9, so a firearm is an item with a
+magazine fitted rather than an assembly; no bundled recoil rule.
 
 ### C11 — Stances, combinations, effort, previews
 
@@ -239,6 +329,16 @@ Done when
 - Scenario `hold_back`: a default effort function chooses an effort that
   staggers and does not maim.
 
+Beta (decisions D-815, D-817): exclusive trait groups (already E3's),
+the stance traits and `take_stance`, `auto_part` and `auto_effort` as the
+bundled blows' defaults, `strike_preview` (`in_reach`, `odds`,
+`odds_near`, `energy`, `intensity`, `push_speed`, `staggers`,
+`launches`), pure and drawing nothing (invariant C5, tested). Stubbed:
+the preview's `depth`, `disables`, `severs`, `passes` and `recoil` (a dry
+run of the body model), previews from appearances and handlers run dry,
+so `strike_preview` is not safe for belief; `hold_back`; the review row
+"Fighting at lower detail".
+
 ### C12 — Bundled combat content
 
 **Spec** 07 §12 · **Size** M
@@ -254,6 +354,15 @@ Done when
   without any content outside `core`.
 - Removing `core` leaves the engine able to load a mod that defines all of
   this differently.
+
+Beta (decisions D-817 to D-819): contests, blows, shove, grab, throw,
+block, parry (now unavailable, saying why, with nothing with a flat in
+hand), dodge, step aside, catch, a shield raised against shots, two
+stances, reaction rules, stagger and exertion rules, `auto_part` and
+`auto_effort`, the guard's `apprehend` goal, in `mods/core`. Two bundled
+guards fight to a conclusion under the bundled minds, and a guard grabs a
+thief who runs (`crates/clash-sim/tests/grips.rs`). Stubbed: a test that
+loads a mod defining all of it with `core` removed.
 
 ### C13 — Benchmarks and budget gate
 
@@ -279,10 +388,17 @@ Under `scenarios/combat/`.
 | `bullet_time` | C9 | S3 | Time of flight against notice delay |
 | `volley` | C9 | S19 | Many projectiles |
 | `hold_back` | C11 | — | Effort from preview |
+| `blade_in_a_corridor` | C2 | — | Swings meet the world |
+| `off_its_hinges` | C7 | — | Holding the world |
+| `caught_arrow` | C9 | — | Stopping a shot |
+| `the_pit` | C2 | — | Contact surfaces |
+| `before_they_land` | C5 | — | In the air |
+| `heat_seeker` | C9 | — | Driven and guided projectiles |
+| `mixed_belt` | C10 | — | Ammunition as items |
 
 ## Review additions
 
-The owner's review of the open questions (decisions D-182 to D-195) added
+The owner's reviews of the design (decisions D-182 onward) added
 the items below after the packages above were written. Each belongs to the
 package named. Build it with that package and treat its "Done when" as part
 of the package's. If the package is already `done`, take the addition as a
@@ -295,3 +411,12 @@ small package of its own.
 | Defending someone else | C4 | 07 §5.1; 03 §7.1 | A defence with `protects` takes a strike aimed at the character beside the defender. Completes sim-kernel test script `bodyguard` with a real strike. |
 | Holding the world | C7 | 07 §9.3 | Test script `off_its_hinges`: a grip on a ledge stops a fall; `wrench` with enough energy brings a door away as an item and a larger piece away as a subgrid, which can then be swung or thrown; with too little it does neither. |
 | Stopping a shot | C9 | 07 §11.6 | Test script `caught_arrow`: a character quick enough to have a `shot` window interposes, catches or intercepts a projectile, each by its own mechanism; one too slow gets no window. Two projectiles crossing do not interact. |
+| Contact surfaces | C2 | 07 §6.5; 02 §5.4 | Test script `the_pit`: a fall onto spikes pierces with the energy of the fall where the same fall onto stone bruises; walking into them strikes the legs with their stated energy; the spikes take the recoil. |
+| Speed behind the blow | C2 | 07 §3.5 | `closing_energy` is zero for a standing attacker, and for a mounted one equals the stated mass at the closing speed. A couched lance delivers more at a gallop than at a walk by that amount. |
+| Reach and cover by posture | C3 | 07 §4.3; 06 §11.1 | A prone target behind a half-height wall cannot be hit by a level shot that hits a standing one. A high swing passes over someone prone. |
+| In the air | C5 | 07 §7.1; 03 §6 | Test script `before_they_land`: a launched target is struck again in flight and its velocity changes by the push; a leaping attacker's strike lands during the leap with the leap's speed added; an action that needs footing is refused in the air with a reason. |
+| Driven and guided projectiles | C9 | 07 §11.1; 02 §15 | Test script `heat_seeker`: a seeker turns toward its target within its turn rate, is drawn off by a stronger source in its cone, and loses a target that goes behind a wall. A launcher-guided shot goes ballistic when the guiding action ends. A returning projectile comes back to where its thrower then is. |
+| Ammunition as items | C10 | 07 §11.5; 06 §9.1 | Test script `mixed_belt`: a magazine loaded with two kinds of round fires them in the order loaded, each with its own projectile and energy; an empty magazine refuses with a reason; `count` above one launches that many. |
+| Fighting at lower detail | C11 | 07 §15 | A shot fired in a warm tract is instant. A warm entity attacked by a hot one is promoted before the strike resolves. Bulk exchanges themselves are ai package I8. |
+| Order across plans | C10 | — | C10 depends on devices package G9 (assemblies), which is in a later milestone. Until G9 exists C10 is built against a magazine supplied by a test fixture. |
+| Audit additions | every package | decisions D-234 to D-242 | Each package builds what its sections of the specification now state, including the hooks, verbs, events, refusals, fields and settings the pre-build audit added. The reference-coverage test of tooling package TL9 fails for anything registered without its arguments or fields. |

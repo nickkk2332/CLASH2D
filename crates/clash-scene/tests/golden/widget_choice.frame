@@ -1,0 +1,21 @@
+clash-frame 1
+size 20x2
+chars
+|Speed < normal >    |
+|Size < Large >      |
+fg
+|00000022222222220000|
+|00000000000000000000|
+bg
+|11111133333333331111|
+|11111111111111111111|
+attrs
+|....................|
+|....................|
+palette
+0 #c8c8c8 white
+1 #101010 black
+2 #000000 black
+3 #e0b040 yellow
+sprites 0
+fx shake=0.000 zoom=1.000 bars=0.000 flash=none tint=none

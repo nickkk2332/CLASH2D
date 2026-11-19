@@ -1,0 +1,8 @@
+{
+  "id": "reshapefix",
+  "name": "Body editing fixtures",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "Bodies to reshape and the rule a reshaping touch runs, for the tests of body editing (06 §6.5). Test content: nothing in the engine names any of it.",
+  "requires": ["core"]
+}

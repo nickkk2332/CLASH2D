@@ -1,0 +1,14 @@
+[
+  { "type": "variable", "id": "n", "scope": "entity", "value": "int", "default": 0,
+    "doc": "A whole number." },
+  { "type": "variable", "id": "x", "scope": "entity", "value": "real", "default": 0,
+    "doc": "A number." },
+  { "type": "variable", "id": "tag", "scope": "entity", "value": "string",
+    "doc": "A text, or nothing." },
+  { "type": "variable", "id": "log", "scope": "entity", "value": "list<string>", "default": [],
+    "doc": "Lines, in order." },
+  { "type": "variable", "id": "tally", "scope": "entity", "value": "map<int>",
+    "doc": "Counts by name." },
+  { "type": "variable", "id": "nest", "scope": "entity", "value": "any",
+    "doc": "Anything at all." }
+]

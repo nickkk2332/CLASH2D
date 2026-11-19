@@ -1,0 +1,5 @@
+[
+  { "type": "damage_type", "id": "impact", "name": "Impact" },
+  { "type": "damage_type", "id": "blast", "name": "Blast" },
+  { "type": "damage_type", "id": "heat", "name": "Heat" }
+]

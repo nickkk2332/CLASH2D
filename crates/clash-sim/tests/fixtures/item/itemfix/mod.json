@@ -1,0 +1,8 @@
+{
+  "id": "itemfix",
+  "name": "Item fixtures",
+  "version": "0.1.0",
+  "engine": ">=0.1",
+  "description": "Items, a person-shaped body and a shapeless one, two attributes and the materials they are made of, for the tests of clash_sim::item. Test content: nothing in the engine names any of it.",
+  "requires": ["core"]
+}

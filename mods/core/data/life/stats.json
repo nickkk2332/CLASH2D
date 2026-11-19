@@ -1,0 +1,24 @@
+[
+  { "//": "Drains through open wounds. Losing much of it stops a body, and losing more ends it.",
+    "type": "pool", "id": "blood", "name": "Blood",
+    "max": "(self.mass ?? 0) * 0.07", "start": "max", "regen": "0.000006 * max",
+    "thresholds": [0.0, 0.4, 0.6, 0.8],
+    "stops": [
+      { "at": 0.6, "when": "below", "state": "unconscious" },
+      { "at": 0.4, "when": "below", "state": "dead" } ] },
+
+  { "//": "Rises with every joule a body's tissues take, and fades. Enough of it knocks one out.",
+    "type": "pool", "id": "pain", "name": "Pain", "seat": "mind",
+    "max": 100, "regen": -0.5,
+    "thresholds": [0.5, 0.9],
+    "stops": [ { "at": 0.9, "when": "above", "state": "unconscious" } ] },
+
+  { "type": "attribute", "id": "strength", "name": "Strength", "base": 10, "min": 0 },
+  { "type": "attribute", "id": "wits", "name": "Wits", "seat": "mind", "base": 10, "min": 0 },
+  { "//": "Derived from what the body can do.",
+    "type": "attribute", "id": "speed", "name": "Speed",
+    "base": "(self.fn.locomotion ?? 0) * 1.4", "min": 0 },
+
+  { "type": "track", "id": "athletics", "name": "Athletics", "levels": "100 * $level ^ 1.5" },
+  { "type": "track", "id": "lore", "name": "Lore", "seat": "mind", "levels": "100 * $level ^ 1.5" }
+]

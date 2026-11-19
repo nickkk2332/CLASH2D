@@ -1,0 +1,16 @@
+[
+  { "//": "What breaks off a character's long wait or its plan (03 §5.3): the engine decides none of it. A character someone plays, waiting an hour or walking a long way, stops and is asked what it does when it comes to see someone it holds a foe or fears (by sight: footsteps of a foe moving about out of sight do not break a wait), or when it is hurt. Its own mind's stances say who is a foe, so this reads only what the character believes. A mod switches these off with the setting `core:interrupts`.",
+    "type": "rule_group", "id": "interrupts",
+    "enabled": "setting('core:interrupts') ?? true",
+    "doc": "Breaking off the waits and plans of the characters a player plays when a foe comes into sight or they are hurt. On unless the setting `core:interrupts` is false." },
+
+  { "type": "eoc", "id": "stop_for_a_foe", "on": "perceived", "group": "interrupts",
+    "if": "event.percept == 'detection' and event.signal == 'core:sight' and self.control == 'direct' and not is_null(about) and (self.hostile(about) or self.fears(about))",
+    "doc": "A character someone plays who comes to see a foe stops waiting, or stops what it planned, and is asked.",
+    "do": [ { "interrupt_plan": { "who": "self" } } ] },
+
+  { "type": "eoc", "id": "stop_when_hurt", "on": "wound_inflicted", "group": "interrupts",
+    "if": "self.control == 'direct'",
+    "doc": "A character someone plays who is wounded stops waiting, or stops what it planned, and is asked.",
+    "do": [ { "interrupt_plan": { "who": "self" } } ] }
+]

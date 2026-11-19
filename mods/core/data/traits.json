@@ -1,0 +1,47 @@
+[
+  { "//": "Plain traits for the engine's tests and for a first world (06 §5): a timed stimulant and what follows it, a stance, and a bleed that stacks. What each confers is all it is. Values are illustrative. The attribute and the pool the stimulant acts on are defined here; the bleed drains the `blood` of `life/stats.json`.",
+    "type": "attribute", "id": "quickness", "name": "Quickness",
+    "base": 1, "min": 0 },
+
+  { "type": "pool", "id": "stamina", "name": "Stamina",
+    "max": 100, "start": "max", "regen": 1,
+    "thresholds": [0.0, 0.25] },
+
+  { "//": "Quicker for half a minute, at the cost of stamina, and slower for a minute afterwards. Taken again, it starts over.",
+    "type": "trait", "id": "stimulated", "name": "Stimulated",
+    "description": "Heart racing, hands quick.",
+    "duration": "30 s", "stacking": "refresh",
+    "modifiers": [ { "attr": "quickness", "mul": 1.3 } ],
+    "rates": [ { "pool": "stamina", "rate": -0.5 } ],
+    "tags": ["stimulated"],
+    "look": "stimulated",
+    "on_remove": [ { "add_trait": { "to": "self", "trait": "crashing" } } ] },
+
+  { "type": "trait", "id": "crashing", "name": "Crashing",
+    "description": "The rush has worn off.",
+    "duration": "1 min", "stacking": "refresh",
+    "modifiers": [ { "attr": "quickness", "mul": 0.8 } ],
+    "tags": ["tired"] },
+
+  { "//": "Stances exclude each other: taking one leaves the other. A guard turns a quarter of every hit's energy aside; a lunge leaves the body open.",
+    "type": "trait", "id": "guarding", "name": "Guarding",
+    "group": "stance",
+    "tags": ["guarding"],
+    "look": "guarding",
+    "rules": [
+      { "on": "hit_incoming",
+        "do": [ { "modify": { "event.energy": "event.energy * 0.75" } } ] } ] },
+
+  { "type": "trait", "id": "lunging", "name": "Lunging",
+    "group": "stance",
+    "modifiers": [ { "attr": "quickness", "add": 0.2 } ],
+    "tags": ["lunging"],
+    "look": "lunging" },
+
+  { "//": "Each stack drains blood; another cut adds a stack and starts the time over. It stops by itself.",
+    "type": "trait", "id": "bleeding", "name": "Bleeding",
+    "duration": "20 s", "stacking": "stack", "max": 5,
+    "rates": [ { "pool": "blood", "rate": -0.01 } ],
+    "tags": ["bleeding"],
+    "look": "bleeding" }
+]

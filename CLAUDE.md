@@ -5,6 +5,12 @@ genre-neutral kit for ASCII immersive sims, with all content in JSON mods. It
 is built by agents working from written specifications. You have no memory of
 earlier sessions; the documents are the memory.
 
+## The beta is being built
+
+Read [docs/plans/beta.md](docs/plans/beta.md) first. It says what is being
+built now, in what order, and the working rules for agents, which take
+precedence over the reading order below where they differ.
+
 ## Before you write anything
 
 Read, in this order:
@@ -70,6 +76,15 @@ a *scenario* is a definition type: a game the player can start. Say
 - If a golden hash changed, the description says which and why.
 - Benchmarks exist for any budget your package touches.
 - Public items are documented.
+- Every verb, event, hook, property, query and setting the package
+  registers states its arguments, subjects and fields, and for a hook what
+  a handler may change, and appears in the generated reference. Where the
+  specification only names one, write the rest into the specification in
+  the same change.
+- Nothing a character decides by reads truth. Whatever is reached from a
+  goal, a method, a tactic, an action's defaults or an ordinary screen
+  compiles in the mind context (05 §7.3).
+- Every refusal carries a reason.
 - Anything reachable only from Rust that a modder would want is listed as a
   gap in the relevant document's modding surface section.
 - Documents and the plan's status table are up to date.

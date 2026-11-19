@@ -1,0 +1,21 @@
+[
+  { "//": "Drains when the body is opened, and says so at three marks.",
+    "type": "pool", "id": "blood", "name": "Blood",
+    "max": 5.6, "start": "max",
+    "thresholds": [0.0, 0.4, 0.7] },
+
+  { "//": "Rises with every joule taken, and fades.",
+    "type": "pool", "id": "pain", "name": "Pain",
+    "seat": "mind", "max": 100, "regen": -0.5,
+    "thresholds": [0.5] },
+
+  { "//": "Derived from what the body can do: a function feeds an attribute.",
+    "type": "attribute", "id": "speed", "name": "Speed",
+    "base": "self.fn.walking * 1.4", "min": 0 },
+
+  { "type": "channel", "id": "arm", "name": "arm" },
+  { "type": "channel", "id": "grip", "name": "grip" },
+  { "type": "channel", "id": "leg", "name": "leg" },
+  { "type": "channel", "id": "voice", "name": "voice" },
+  { "type": "channel", "id": "pseudopod", "name": "pseudopod" }
+]

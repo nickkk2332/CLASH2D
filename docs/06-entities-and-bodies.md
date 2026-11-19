@@ -49,26 +49,59 @@ templates and the choices made within them.
 ```rust
 pub struct EntityTable {
     kernel: Vec<Slot<KernelEntity>>,       // indexed by EntityId.index, checked by generation
-    // one ComponentStore<C> per component type
+}
+
+pub struct Components {                    // held beside the entity table
+    pub identity: ComponentStore<Identity>,
+    pub physical: ComponentStore<Physical>,
+    // one ComponentStore<C> for each component type, in a fixed order
 }
 
 pub struct ComponentStore<C> {
     dense: Vec<C>,
-    owners: Vec<EntityIndex>,
-    sparse: Vec<u32>,                      // entity index → position in dense
+    owners: Vec<EntityId>,                 // owners[i] owns dense[i]
+    sparse: Pages<u32>,                    // entity slot → position in dense, in pages
 }
 ```
 
-- Component types are a fixed set defined by the engine. Each is registered
-  with a name, a serialiser, a `StateHash` implementation and its properties
-  (05 §5.3).
-- Iteration is in dense order. Dense order is saved and restored, so it is
-  identical across runs and across saves.
+- Component types are a fixed set defined by the engine. Each has a name, a
+  serialiser, a `StateHash` implementation and its properties (05 §5.3).
+  The set is one list in the engine's source: a line in it gives a type its
+  store, its `ComponentKind`, its place in saves and in the hash, and
+  removal with its entity.
+- A store holds at most one component for an entity slot. It keeps the
+  whole id of each owner and checks it on every lookup, so an id whose slot
+  has since been given to another entity finds nothing. Whoever destroys an
+  entity removes its components from every store, in one call, before the
+  slot is given out again.
+- Iteration is in dense order. A new component goes to the end, a replaced
+  one keeps its position, and a removed one's position is taken by the
+  last. Dense order is saved and restored, so it is identical across runs
+  and across saves, and it is hashed as it is: two stores holding the same
+  components in different orders are different states. The index from slot
+  to position is rebuilt on loading and is neither saved nor hashed.
 - A component's fields are private to the module that owns it. Other code
-  changes them through that module's functions, which emit events. Rules
-  reach them only through properties and verbs.
+  changes them through that module's functions, which report what changed
+  so that events can be raised. There is no separate change log. Rules
+  reach components only through properties and verbs.
 - Mods do not add component types. They add variables (05 §6), attributes,
   traits and rules, which cover the same ground with full tooling support.
+
+As held by the simulation (decision D-460). `Sim::components()` reads
+every store and `Sim::components_mut()` hands them out to change. A
+`Physical` is the exception: the masses of the containers round it and
+the world's occupant record depend on it, so it is given and changed
+only through `Sim::set_shape(entity, shape, cause)` and
+`Sim::set_own_mass(entity, mass, cause)`. Both work out again the mass of
+the entity and of every container round it and write each new mass to
+the kernel's record of the entity and, for one that stands in the world,
+to the world's occupant record (02 §8.1); `set_shape` also gives the
+entity the shape's footprint and is refused if that does not fit where
+it stands. Relocation does the same for the container an entity left and
+the one it entered. Removing an entity removes its components. An entity
+shelved with an unloaded tract (03 §4.3) keeps its id, so its components
+stay where they are. The reasons are `component.missing` and
+`physical.bad_measure` (03 §13).
 
 ### 3.1 Components
 
@@ -88,14 +121,40 @@ pub struct ComponentStore<C> {
 | `Vehicle` | Vehicles | Document 11 |
 | `Senses`, `Beliefs`, `Relations` | Minds | Document 15 |
 
-`Physical` is derived and cached: mass is the body's or item's own mass plus
-everything it holds. It is what the world uses when an entity becomes a body
-in flight (02 §15) or collides with one.
+**Identity.** The definition is named by its type and its id within the
+type, since an entity may be made from a creature, an item or any other
+type of definition. The name and the description are the entity's own and
+are usually absent: a thing with none goes by its definition's. Templates
+are listed in the order they were applied. Tags are the kernel entity's.
+
+**Physical.** It holds what the thing itself measures: its own mass,
+volume, height, footprint and cross-section, supplied by whatever knows
+its make-up (the body, the item). Each is finite and at least zero. From
+these and from containment (01 §6) it derives and caches the mass of
+everything inside the thing:
+
+```
+mass(e)    = own mass(e) + carried(e)
+carried(e) = Σ mass(c), for each c directly inside e, in order of id
+```
+
+`mass` is what the world uses when an entity becomes a body in flight
+(02 §15) or collides with one, and `carried_mass` is the second term. An
+entity with no `Physical` weighs nothing itself and passes on the mass of
+what is inside it.
+
+The cache is brought up to date whenever a thing's own mass changes and
+whenever something enters or leaves a container, for that container and
+every container around it. A sum is always made again from its parts and
+never adjusted by a difference, so that the cache is bit for bit what a
+from-scratch recomputation gives (invariant B3). It is saved and hashed
+with the component. Containment deeper than 64 levels is refused.
 
 ## 4. Attributes, pools and tracks
 
 Three numeric primitives. Every stat, resource and progression scheme in any
-content is built from them.
+content is built from them. An entity that has them carries a `Stats`
+component, and everything about them is saved and hashed with it.
 
 ### 4.1 Attributes
 
@@ -106,16 +165,43 @@ content is built from them.
 
 An attribute is a number with a base and a stack of **modifiers**.
 
-- `base` is a literal or an expression (a derived attribute:
-  `"base": "self.attr.strength * 0.5 + self.fn.locomotion * 4"`).
-- Modifiers come from traits, held items and rules: `add`, then `mul`,
-  applied in that order. Each remembers its source and is removed with it.
-- `seat` is `body` or `mind`. It decides which goes where when the two are
-  separated (section 8). Strength stays with the body; knowledge leaves with
-  the mind.
-- Values are cached and recomputed when a dependency changes.
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls it. |
+| `seat` | `body` (the default) or `mind`. It decides which goes where when the two are separated (section 8). Strength stays with the body; knowledge leaves with the mind. |
+| `base` | The value before modifiers: a literal, or an expression about the owner, bound as `self` (a **derived** attribute: `"base": "self.attr.strength * 0.5 + self.fn.locomotion * 4"`). Pure. Zero if left out. |
+| `min`, `max` | The least and the most the value can be after modifiers. Each may be left out. |
 
-Read as `self.attr.strength`.
+- The value is `bound((base + Σ add) × Π mul)`: every addition, then every
+  multiplication, then `min` and `max`. A base that comes to null counts as
+  zero.
+- Modifiers come from traits, held items, wounds, abilities, templates and
+  rules. A modifier has an `add`, a `mul` or both. Each remembers its
+  **source** and is removed with it: removing a source removes exactly what
+  it added, and a source may add several to one attribute. They are applied
+  in order of source, and those of one source in the order they were added,
+  so that a sum of the same modifiers is always the same number.
+- An entity may be given a base of its own (`set_attr_base`; a template's
+  `attributes`). It stands in for the definition's, an expression included,
+  until it is taken back.
+- An entity with stats has every attribute that is defined. One it was never
+  given a base or a modifier for has its definition's base.
+- A derived attribute **depends on** the attributes its `base` reads
+  directly, as `self.attr.<id>`. That is known when mods load, and an
+  attribute that depends on itself, directly or through others, is a load
+  error at its `base`. When an attribute's value changes, exactly those that
+  depend on it are worked out again, each after what it reads, and then the
+  pools whose `max` or `regen` read one that changed. Nothing else is
+  touched.
+- A `base` may read more than attributes: `self.mass`, a body function, a
+  variable. Whatever changes one of those has every attribute and pool of
+  the entity worked out again (section 6.5 does). An attribute of the owner
+  read inside a function, where loading cannot see it, is null with a
+  warning, so that no value can go stale unnoticed.
+- Values are cached, and the cache is bit for bit what working everything
+  out from scratch gives (invariant B3).
+
+Read as `self.attr.strength`. A change is the event `attr_changed`.
 
 ### 4.2 Pools
 
@@ -127,16 +213,50 @@ Read as `self.attr.strength`.
 
 A pool is a bounded quantity that fills, drains and regenerates.
 
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls it. |
+| `seat` | `body` (the default) or `mind`, as for an attribute. |
+| `max` | The most it holds: an expression about the owner, `self`. Pure. Required. Null, a negative number and anything not finite count as zero. |
+| `start` | What it holds when its owner is given it. May name `max`. Zero if left out. |
+| `regen` | What it gains in a second of its owner's time with nothing else acting on it; negative to decay. May name `max`. Zero if left out. |
+| `thresholds` | Fractions of `max`, from 0 to 1, in any order, none twice; at most 256. |
+
+- An entity has the pools it was given and no others.
 - A pool has a current level and a net rate, the sum of its `regen` and
   every drain and feed currently applied. Between changes the level is a
-  straight line, so nothing runs per tick: when a rate changes the level is
-  brought up to date, and the next threshold crossing is scheduled as a
-  single wake-up.
-- Crossing a threshold (a fraction of `max`) emits `pool_crossed`. What
+  straight line, kept between zero and `max`, so nothing runs per tick:
+  when a rate changes the level is brought up to date, and the next
+  threshold crossing is scheduled as a single wake-up.
+- A rate is applied under a source, as a modifier is, and goes with it. One
+  source has one rate on a pool; applying another replaces it.
+- `max` and `regen` are worked out when the pool is given, when an attribute
+  they read directly changes, and whenever the entity's attributes are
+  worked out from scratch (section 4.1). A level above a new `max` comes
+  down to it.
+- Crossing a threshold emits `pool_crossed`, whatever moved the level: a
+  rate, a verb, or a change of `max`. A level that rises to a threshold
+  exactly has crossed it upward, and one that falls to it exactly has
+  crossed it downward. One change that passes several reports each, in the
+  order they were passed. A pool is not said to cross the thresholds it
+  starts beyond, and one whose `max` is zero is below them all. What
   happens at 40 % blood is a rule.
+- The wake-up is for the moment the line meets the next threshold in its
+  way, rounded up to a whole tick, on the owner's clock. A pool with no net
+  rate, or with no threshold ahead of it, schedules nothing. When the
+  clock's rate changes the timeline moves the wake-up and keeps its
+  remaining local time (03 §3.3), so the crossing still falls when the
+  owner's own time says it should.
+- Adding to a pool stops at its bounds, and says how much was added. A cost
+  (08 §5.2) is taken in full or refused with the reason `pool_too_low`.
+- When the owner leaves the simulation (03 §9) its pools are brought up to
+  date and their wake-ups cancelled. When it returns, the local time that
+  passed for them is applied in one step: none if they were paused. The
+  thresholds passed are reported once each, in order.
 - Verbs add, drain, and add or remove named rates.
 
-Read as `self.pool.blood` and `self.pool.blood.frac`.
+Read as `self.pool.blood`, the level, and `self.pool.frac('blood')`, the
+level as a fraction of `max`.
 
 ### 4.3 Tracks
 
@@ -145,13 +265,116 @@ Read as `self.pool.blood` and `self.pool.blood.frac`.
   "seat": "mind", "levels": "100 * $level ^ 1.6" }
 ```
 
-A track is an accumulating counter with levels. `levels` gives the amount
-needed for each level. Reaching one emits `track_advanced`.
+A track is an accumulating counter with levels.
+
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls it. |
+| `seat` | `body` (the default) or `mind`, as for an attribute. |
+| `levels` | The total the counter must reach for the track to be at level `$level`. An expression about the owner, `self`, asked for each level in turn from 1. Pure. Required. |
+| `max_level` | The highest level, if there is one. No track passes level 10,000. |
+| `on_advance` | Effects run for each level reached, after `track_advanced`, with the owner as `self` and the level as `$level`. |
+
+The track is at the highest level whose total it has reached. Reaching one
+emits `track_advanced`, once for that level; an advance that passes several
+emits one for each, lowest first. A level reached is kept, and a track never
+advanced is at level 0 with nothing accumulated. The counter only grows.
 
 How a track gains is entirely rules: on use, from training actions, from
 points spent, from a quest, never. Use-based skills, experience levels,
 training and cheat skills are all tracks with different rules feeding them,
 and a mod may mix them freely (decision D-038).
+
+Read as `self.track.swordsmanship`, the level.
+
+### 4.4 Reading and changing them
+
+`attr`, `pool` and `track` are properties of an entity that give its
+attributes, pools and tracks: subjects of the kinds `attrs`, `pools` and
+`tracks`. Each definition is a property of its kind, under its qualified
+id (`self.attr.core:strength`) and, where no other definition of the type
+and no property of the kind has the same name, under its bare id. A
+misspelt name is a load error.
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.attr`, `entity.pool`, `entity.track` | `attrs`, `pools`, `tracks` | The entity's stats of that sort |
+| `attrs.<id>` | `real` | An attribute's value |
+| `attrs.value(attribute)` | `real` | The same, for an attribute chosen at run time |
+| `pools.<id>`, `pools.level(pool)` | `real` | A pool's level now |
+| `pools.frac(pool)` | `real` | The level as a fraction of `max`; 0 for a pool that holds nothing |
+| `pools.max(pool)` | `real` | The most it holds |
+| `pools.rate(pool)` | `real` | Its net rate, per second of its owner's time |
+| `tracks.<id>`, `tracks.level(track)` | `int` | A track's level |
+| `tracks.amount(track)` | `real` | What it has accumulated |
+
+None is settable: stats change through the verbs, so that hooks run and
+crossings are reported. None is safe for belief: a character reads its own
+and no one else's (05 §7.3). Anything read of an entity with no stats, of a
+pool it does not have, or by an id that names nothing is null. An
+attribute's value and a track's level name the events that change them, so
+they may be read in reactive expressions (05 §7.5). A pool's level moves
+all the time and may not: react to its thresholds.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `attr_changed` | `self` | `attr` (`id<attribute>`), `old`, `new` (`real`) |
+| `pool_crossed` | `self` | `pool` (`id<pool>`); `threshold` (`real`), the fraction listed; `rising` (`bool`), true if the level rose to it or past it; `level` (`real`), the level afterwards |
+| `track_advanced` | `self` | `track` (`id<track>`), `level` (`int`), the level reached |
+| `pool_changing` (hook) | `self` | `pool` (`id<pool>`), `amount` (`real`), which a handler may change |
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `set_attr_base` | `who`, `attr`, `base` | Gives the entity a base of its own; `null` gives the definition's back |
+| `add_modifier` | `who`, `attr`, `add`, `mul`, `key` | Adds a modifier under the rule's source and `key` |
+| `remove_modifier` | `who`, `key`, `attr` | Removes what was added under `key`, to one attribute or to all |
+| `pool_add` | `who`, `pool`, `amount` | Adds to a pool, negative to drain, after the hook `pool_changing` |
+| `pool_rate` | `who`, `pool`, `rate`, `key` | Applies a rate under `key`; `null` removes it |
+| `advance_track` | `who`, `track`, `amount` | Adds to a track's counter |
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `no_stats` | The entity has no stats | `entity` |
+| `has_stats` | It is given stats and has them | `entity` |
+| `unknown_stat` | The id is not an attribute, pool or track | `what` |
+| `no_such_pool` | It does not have the pool | `entity`, `pool` |
+| `has_pool` | It is given a pool it has | `entity`, `pool` |
+| `pool_too_low` | A cost is more than the pool holds | `entity`, `pool`, `wanted`, `have` |
+| `bad_amount` | An amount is not finite, or negative where it may not be: a cost, an advance | `amount` |
+| `no_clock` | The clock the pools run on is gone | — |
+| `stats_not_registered` | The definitions were loaded without the stats' definition types and properties | — |
+
+As built (decision D-550). The simulation holds the stats and raises
+`attr_changed`, `pool_crossed` and `track_advanced` from every change,
+in order; `pool_changing` is raised by `pool_add` before the level
+moves. Each event binds `self` and the cause's `actor` and
+`instigator`. The verbs take their arguments in this order:
+`set_attr_base { who, attr, base? }`, `add_modifier { who, attr, key,
+add?, mul? }` (`add` defaults to 0 and `mul` to 1), `remove_modifier {
+who, key, attr? }`, `pool_add { who, pool, amount }`, which gives what
+was in fact added, `pool_rate { who, pool, key, rate? }` and
+`advance_track { who, track, amount }`. `attr`, `pool` and `track` are
+ids of their types, or texts holding qualified ids. A `key` is a text:
+whatever is added under it is removed by the same key, whichever rule
+asks (the source of kind `rule` numbered by the key's 64-bit FNV-1a
+hash). An argument that is null where it is needed, or of the wrong
+sort, is refused with `verb.bad_argument` and the value `argument`.
+
+Stats are worked out again from scratch when a function of the body
+moves, when the entity's mass or the mass of what it holds changes, and
+when a variable of the entity changes that an attribute's `base` or a
+pool's `max` or `regen` reads directly. Pools run on the clock the
+entity is on and follow it to another; they stand still while the
+entity is out of the world, and no time passes for them there: a pool
+is a `Pause` timer (03 §9; decision D-552).
+
+A pool's `stops` (section 8.3) are a field of the pool definition:
+
+| Field | Meaning |
+|-------|---------|
+| `stops` | A list of `{ at, when, state }`: while the level is `below` (the default) or `above` the threshold `at`, which must be one of the pool's `thresholds`, an owner with a mind is `unconscious` or `dead`. |
 
 ## 5. Traits
 
@@ -165,28 +388,135 @@ a species feature, a mutation, a perk, a blessing, a curse, a drug, a stun.
   "modifiers": [ { "attr": "quickness", "mul": 1.3 }, { "attr": "pain_felt", "mul": 0.3 } ],
   "tags": ["stimulated"],
   "grants": ["reckless_charge"],
-  "rules": [ { "on": "trait_removed", "do": [ { "add_trait": { "to": "self", "trait": "crash" } } ] } ] }
+  "on_remove": [ { "add_trait": { "to": "self", "trait": "crash" } } ] }
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `modifiers` | Attribute modifiers while present |
-| `rates` | Pool rates while present |
-| `tags` | Added to the entity |
-| `grants` | Actions the entity may use (03 §6). An entry may carry a cost, a cooldown and a condition (08 §5.1). |
-| `abilities` | Abilities conferred while the trait is present (08 §3.3) |
-| `channels` | Channel slots added or disabled |
-| `senses` | Senses added or altered (15) |
-| `rules` | Attached rules (05 §9.3) |
-| `on_apply`, `on_remove` | Effect lists, which may edit the body |
-| `duration` | If present, the trait ends by itself. A timer (03 §9). |
-| `stacking` | `none`, `refresh`, or `stack` with a `max`; a stacked trait has a `stacks` count its expressions can read |
-| `group` | Traits in the same group exclude each other: adding one removes the others. Stances, forms, moods. |
-| `while` | A reactive condition (05 §7.5). While false the trait is dormant and confers nothing. |
-| `bound` | When added by an ability: the trait ends when that ability does (08 §7.3) |
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name`, `description` | text | What a reader calls it, and what a closer look says |
+| `seat` | `body` or `mind` | Which it stays with when they part (section 8.2). Default `body`. |
+| `modifiers` | list of `{ attr, add, mul }` | Attribute modifiers while present (section 4.1), once for each stack. `add` defaults to 0, `mul` to 1. |
+| `rates` | list of `{ pool, rate }` | Pool rates while present (section 4.2), per second of the holder's time, negative to drain; times the stacks |
+| `tags` | list of tags | Added to the entity |
+| `grants` | list | Actions the entity may use (03 §6). An entry is an action's id, or `{ action, cost, cooldown, at_rank, if }` (08 §5.1). |
+| `abilities` | list of ids | Abilities conferred while the trait is present (08 §3.3) |
+| `channels` | map of `id<channel>` to count | Channel slots added (a count above zero) or disabled (below zero) |
+| `senses` | list of names | Senses added or altered (15) |
+| `rules` | list of rule ids or rules | Attached rules (05 §9.3), attached to the holder while the trait confers |
+| `on_apply`, `on_remove` | effects | Effect lists, which may edit the body, run with the holder as `self`: when the trait is first given, and when it ends however it ends |
+| `duration` | time | If present, the trait ends by itself. A timer (03 §9). Above zero. |
+| `while_unloaded` | `pause` or `elapse` | What the duration does while the holder is out of the simulation (03 §9). Default `pause`. |
+| `stacking` | `none`, `refresh` or `stack` | What giving it again does. Default `none`. |
+| `max` | int | For `stack`: the most stacks, from 1 to 1,000. Default 1,000. |
+| `group` | text | Traits in the same group exclude each other: adding one removes the others. Stances, forms, moods. |
+| `while` | condition | A reactive condition (05 §7.5) about the holder, `self`. While false the trait is dormant and confers nothing. |
+| `bound` | bool | When added by an ability: the trait ends when that ability does (08 §7.3) |
+| `look` | text | How its holder appears while it lasts (12 §4.4), as written; reported with `trait_added` and `trait_removed` |
+| `goals`, `weights` | list of ids; map of names to numbers | Goals added to the holder's mind, and changes to the weights it scores them by (09 §3) |
 
 There is no separate concept of "status effect", "mutation" or "perk".
 A trait with a duration is a status. Without one it lasts until removed.
+
+**Instances and givers.** An entity has a trait once for each thing that
+gave it, its **giver**: every rule is one giver, each item held or worn is
+another, the posture it is in another, and an ability or a template
+another. Each instance has its own stacks and its own duration, and each
+confers what the trait lists. `has_trait` is true while any giver's
+instance is there.
+
+**Giving it again.** A trait given again by the same giver does what its
+`stacking` says: `none` changes nothing and raises nothing; `refresh`
+starts its duration again; `stack` adds a stack, up to `max`, and starts
+its duration again. A trait given by a new giver is a new instance with
+one stack. Adding a trait of a `group` first removes every trait of the
+same group the entity has, from any giver.
+
+**Exactly what it added.** What an instance confers is applied when it is
+given and taken back exactly when it goes. Its modifiers and rates are
+kept by the stats under the instance as their source (section 4.1), so
+removing it removes those and nothing else. A tag is recorded as the
+trait's only if the entity did not carry it of its own, and a rule only
+if it was not attached already; a tag or a rule two instances confer
+stays until neither does, and a tag an item confers too (section 9.1)
+stays while either does. A trait's attached rules are detached when it
+ends, before its `trait_removed` is delivered: a trait answers its own
+ending with `on_remove`.
+
+`on_apply` runs when an instance is first given and `on_remove` when it
+ends, however it ends, each against the simulation with the holder as
+`self`. What a trait changes of its holder's stats is reported as
+`attr_changed` and `pool_crossed` (section 4.4).
+
+**Dormancy.** A trait whose `while` does not hold confers nothing; its
+duration still runs. `while` is worked out when a trait of the holder is
+added or removed, and when the kernel asks (`traits::reconsider`); and,
+where everything it reads names the events that change it, it is kept
+current as a reactive expression (05 §7.5): the kernel calls
+`traits::reconsider` when its value changes.
+
+**Abilities** (package A2, decision D-722). Each instance that is not
+dormant is a source of every ability its `abilities` lists (08 §3.3):
+the entity holds the ability while any source remains, and loses that
+source when the instance ends or goes dormant. `ability_params` changes
+the parameters of the holder's abilities while the instance confers,
+once for each stack (08 §4.2): a list of
+`{ "ability": id?, "tag": text?, "param": name, "add": number, "mul": number }`,
+each naming one ability or a tag (not both) and a parameter; `add`
+defaults to 0 and `mul` to 1. An ability that names nothing, both or
+neither of `ability` and `tag`, and an `add` or `mul` that is not finite
+are load errors. `suppresses` (a list of tags; package A5, decision
+D-770) suppresses the holder's abilities that carry any of them while
+the instance lasts and is not dormant (08 §6.2): a null collar, a
+dampener.
+
+**Durations** are wake-ups on the holder's clock (03 §3.4), so they speed
+and slow with it and move with it from clock to clock. When the holder
+leaves the simulation (its tract unloads, it is stored, or it is put
+inside something that is not in the world) each is taken off the timeline
+with the local time it had left; when it returns, a `pause` duration goes
+on with that, and an `elapse` one has the local time that passed on the
+clock it left taken off. One whose time has run out then ends at once,
+those that ran out first first. A trait given while its holder is out of
+the world waits with all its time.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `trait_added` | `self` | `trait` (`string`), its qualified id; `giver` (`string`): `rule`, `item`, `posture`, `ability`, `template` or `other`; `stacks` (`int`), the instance's stacks now; `first` (`bool`), false for a refresh or another stack; `duration` (`real?`), seconds, null for none; `look` (`string`) |
+| `trait_removed` | `self` | `trait`, `giver`; `stacks` (`int`), how many went; `left` (`int`), how many the instance has left, 0 when it is gone; `how` (`string`): `removed`, `expired`, `replaced` (by its group) or `withdrawn` (by its giver); `look` |
+| `trait_expired` | `self` | `trait`, `giver`. Its duration ran out; `trait_removed` follows. |
+| `trait_adding` (hook) | `self` | `trait`, `giver`; `stacks` (`int`), the stacks it will have; `duration` (`real?`), which a handler may change to another time above zero, or null. A handler may cancel. Not raised when giving it would change nothing. |
+| `trait_removing` (hook) | `self` | `trait`; `stacks` (`int`), how many would go. A handler may cancel. Raised by `remove_trait` only: not when a trait expires, is replaced by its group or is withdrawn by its giver. |
+
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `add_trait` | `to: entity`, `trait: id<trait>`, `duration: real?` | `int`, the instance's stacks | Gives a trait as a rule gives it. `duration`, in seconds above zero, stands in for the definition's this time. |
+| `remove_trait` | `from: entity`, `trait: id<trait>`, `stacks: int?` | `int`, the stacks that went | Removes a trait whoever gave it: every stack, or that many, taken from the instances in the order they were given. A trait the entity lacks changes nothing. |
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.has_trait(trait: id<trait>)` | `bool` | Whether it has the trait, from any giver, dormant or not |
+| `entity.traits` | `list<id<trait>>` | The traits it has, each once, in the order first given |
+| `entity.trait_stacks(trait: id<trait>)` | `int` | Its stacks over every giver; 0 for one it lacks |
+| `entity.trait_active(trait: id<trait>)` | `bool` | Whether some giver's instance is not dormant |
+| `entity.trait_left(trait: id<trait>)` | `real?` | Seconds of its own time until the trait ends by itself, the longest over its givers; null if it lacks it or has it for good |
+
+None is settable and none is safe for belief: a character reads its own
+(05 §7.3). The first three name `trait_added` and `trait_removed` as the
+events that change them (05 §7.5).
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `trait.unknown` | The id is not a `trait` definition | `trait` |
+| `trait.bad_duration` | A duration given, or left by a handler of `trait_adding`, is not a finite time above zero | `duration` |
+| `trait.bad_stacks` | A count of stacks to remove is not a whole number above zero | `stacks` |
+| `trait.bad_argument` | A verb's argument is missing or of the wrong kind | `arg` |
+| `trait.not_registered` | The definitions were loaded without the `trait` type | — |
+
+A trait an item or a posture names that no definition has is a load
+error at the definition that names it. A name is a qualified id, or a bare
+one looked up in sorted namespace order.
 
 ## 6. Bodies
 
@@ -211,22 +541,38 @@ A trait with a duration is a status. Without one it lasts until removed.
 
 | Field | Meaning |
 |-------|---------|
-| `layers` | Outermost first. Each is a material (02 §5.4) and a thickness. `weight` says how much the part's working depends on that layer. |
-| `provides` | Contribution to body functions (section 6.3) |
-| `channels` | Channel slots this part supplies (03 §6.2) |
-| `sockets` | Where other parts may attach, how many, and which kinds |
-| `exposure` | Relative likelihood of being struck by an unaimed hit |
-| `surfaces` | What the part can strike with: fists, feet, claws, teeth, horns (07 §3.2) |
-| `band` | The share of the body's height the part occupies, from the ground up. Decides what a shot at a given height can hit, and what cover protects (07 §11.1). |
-| `inside` | For organs: listed under the part that contains them |
+| `name` | What a reader calls it. |
+| `mass` | Its mass at scale 1. Required. |
+| `length`, `girth` | How long it is and how far across, at scale 1. Required, above zero. The **area** a part presents is its silhouette, `length × girth`, and every layer of it has that area. A cut whose span is at least the girth goes all the way through (section 7.2). |
+| `layers` | Outermost first, from one to 16. Each is a `material` (02 §5.4) and a `thickness`. `weight`, from 0 to 1, says how much the part's working depends on that layer; the weights of a part add up to at most 1. Layers that leave it out share what the others leave of 1, by thickness. |
+| `provides` | Contribution to body functions (section 6.3): for each function, what the part gives in perfect condition. |
+| `channels` | Channel slots this part supplies while it works (03 §6.2): for each channel, how many. |
+| `sockets` | Where other parts may attach, by name: `count`, how many it takes (default 1), and `accepts`, the part definitions it takes (empty for any). |
+| `exposure` | Relative likelihood of being struck by an unaimed hit, as a factor on the part's area. Default 1. |
+| `surfaces` | What the part can strike with: fists, feet, claws, teeth, horns (07 §3.2). Each has an `id`, a `kind` (a damage type), an `area` in square metres, a `give` and a `span`. |
+| `band` | The share of the body's height the part occupies, from the ground up: `[low, high]`, each from 0 to 1. Decides what a shot at a given height can hit, and what cover protects (07 §11.1). The body's height is scaled by its posture (section 11.1). A part with no band is never found by height. |
+| `disable_below` | The condition below which the part stops working (section 6.4). Default 0.5. |
+| `inside` | Organs that come with the part wherever it is used: a list of `{ "id", "part" }`. In a body each is a part `in` this one, named `<this part's name>.<id>`. A plan may instead list an organ itself, with `in`. |
+| `leaves` | What the part leaves when it is severed or destroyed (section 7.5): `item` (the default), or `nothing`. |
+| `tags` | Free-form tags. |
 
-Materials used as tissue carry three optional extras:
+Materials used as tissue carry three optional extras. They are fields of
+the world's `material` type, which reads them and gives them no meaning:
 
 | Property | Meaning |
 |----------|---------|
-| `leak` | When breached, drains a named pool at a rate per square metre |
-| `signal` | When damaged, adds to a named pool per joule absorbed (pain, alarm, heat) |
-| `heal` | Rate at which damage recovers unaided |
+| `leak` | `{ "pool", "rate", "closes" }`. While a wound through a layer of this material is open, it drains the named pool by `rate` for each second and each square metre of the layer the wound lays open (section 7.3). `closes` is how long such a breach leaks before it closes by itself; left out, it leaks until something closes it. If the pool names a substance (16 §9.5), what drains is spilled where the body is. |
+| `signal` | `{ "pool", "per_joule" }`. When a layer of this material absorbs energy from a hit, the named pool gains `per_joule` for each joule (pain, alarm, heat), stopping at its bounds. It is added as it is: the hook `pool_changing` is for verbs (section 4.4). |
+| `heal` | The share of a layer that recovers each second, unaided: `"0.5 /d"`. Left out, damage to it stays until something mends it. |
+
+The pool is named by id, bare or qualified. A bare id is looked up in the
+namespace of the material's own definition and then in every namespace in
+sorted order, as the world's own references are (decision D-283). A pool
+that does not exist is a load error. A body with no such pool, or with no
+stats at all, simply does not leak or signal: a robot built of flesh by
+mistake bleeds nothing.
+
+A damage type may be flagged `severs` (section 7.2).
 
 A robot's plating leaks nothing and signals nothing. A slime is one layer.
 
@@ -247,7 +593,32 @@ A robot's plating leaks nothing and signals nothing. A slime is one layer.
 `on` attaches a part externally: lose the parent and it goes too. `in` puts
 it inside: it can be reached only through the parent's layers.
 
+| Field | Meaning |
+|-------|---------|
+| `name` | What a reader calls the plan. |
+| `height` | How tall a body of this plan stands at scale 1. |
+| `footprint` | The cells it fills, `[x, y, storeys]`. Default one cell. |
+| `parts` | The parts, each with: `id`, its name in the body; `part`, its definition; `on` or `in`, the name of the part it is joined to; `socket`, the socket of that part it takes, for a part that is `on`; `side`, a free-form label that tells it from its twin; `name`, what a reader calls it (`left arm`; decision D-863); `scale`, its size relative to the rest of the body (default 1). |
+
+Exactly one part is joined to nothing: the **root**. Names are not
+repeated. A socket must exist on the parent's definition, accept the
+part's definition, and have room. No part is joined to itself, directly or
+round in a circle. A body has at most 1024 parts, organs included, and
+organs nest at most eight deep by their definitions' `inside` lists. Each
+of these is a load error at the entry that breaks it.
+
+A part's place in the plan gives it its **key** in a body made from it:
+the plan's parts in the order written, then the organs their definitions
+bring. A key is never given to another part of the same body, so it means
+the same part after others have come and gone.
+
 A plan is only a starting point. The instance owns its own tree.
+
+**What a reader calls a part** (decision D-863) is the property
+`part.label`: the `name` its body's plan gives it, or else its side and
+its definition's name (`left arm`), or the definition's name alone.
+`part.name` stays the part's name in the body, which properties such as
+`worn_on` take. Screens show the label.
 
 ### 6.3 Functions
 
@@ -257,11 +628,22 @@ A plan is only a starting point. The instance owns its own tree.
 
 A **function** is something the body as a whole can do to some degree:
 manipulate, move about, see, breathe, circulate, think. Its capacity is the
-combination (`sum`, `min`, `max` or `mean`) of every working part's
-contribution, each scaled by that part's condition.
+combination (`sum`, the default, `min`, `max` or `mean`) of every working
+part's contribution, each scaled by that part's condition. It may have a
+`name`.
+
+Every part that `provides` the function counts. One that works contributes
+what it provides times its condition. One that is disabled or gone
+contributes nothing and still counts: with `min` the function is then
+zero, and with `mean` it falls by that part's share. Contributions are
+combined in order of part key. A function nothing provides is zero. A
+part taken off by an edit (section 6.5) no longer counts at all: the body
+simply has no such part.
 
 Functions are read as `self.fn.manipulation`, feed derived attributes, and
-emit `function_changed` when they move. What losing a function means is a
+emit `function_changed` when they move. The body does not work the
+attributes out again itself: whoever is told of the change does
+(section 4.1). What losing a function means is a
 rule: bundled content says a body with no circulation dies; a skeleton's
 content says no such thing.
 
@@ -271,53 +653,164 @@ content says no such thing.
 pub struct Body {
     plan: BodyPlanId,                // where it started
     scale: Real,                     // overall size factor
-    parts: Vec<PartInst>,            // the live tree
-    wounds: Vec<Wound>,
-    functions: Vec<Real>,            // cached capacities
+    height_factor: Real,             // what its posture makes of its height
+    parts: Vec<PartInst>,            // the live tree, in order of key
+    wounds: Vec<Wound>,              // in order of id
+    derived: Derived,                // cached: functions, slots, mass and size
+    clock: ClockId, synced: Dur,     // the time wounds close and heal on (section 7.3)
+    wake: Option<WakeId>,
 }
 
 pub struct PartInst {
-    id: PartKey,
+    key: PartKey,                       // its number in this body
+    name: String,                       // its name: the plan's `id`
     def: BodyPartId,
-    parent: Option<PartIdx>, relation: On | In,
-    scale: Real,
-    layers: SmallVec<[LayerInst; 4]>,   // material (overridable), thickness, damage 0..=255
+    parent: Option<PartKey>, relation: On | In,
+    socket: Option<String>, side: Option<String>,
+    scale: Real,                        // relative to the body's
+    layers: Vec<LayerInst>,             // material (overridable), thickness, weight, damage 0..=255
     state: PartState,                   // Whole | Disabled | Severed | Destroyed
+    held: bool,                         // disabled from outside
 }
 ```
 
-A part's **condition** is `1 − Σ (layer weight × layer damage fraction)`.
-Below its `disable_below` (default 0.5) the part is disabled: it contributes
-nothing and its channel slots are disabled, which interrupts any action
-using them (03 §6.2).
+A part's **condition** is `1 − Σ (layer weight × layer damage fraction)`,
+kept between 0 and 1. Below its `disable_below` (default 0.5) the part is
+disabled: it contributes nothing and its channel slots are disabled, which
+interrupts any action using them (03 §6.2). A part may also be disabled
+from outside, whatever its condition, by `disable_part`, and is then
+disabled until `restore_part`.
 
-Size matters physically. Thickness scales with `scale`, area with its
-square, mass with its cube. A giant is harder to cut through because there
-is more of it.
+| State | Means |
+|-------|-------|
+| `whole` | There, and working. |
+| `disabled` | There, and not working: its condition is below `disable_below`, or something disabled it. |
+| `severed` | Gone: cut off, or gone with the part it was on. |
+| `destroyed` | Gone: destroyed where it was (section 7.5). |
+
+A part that is gone stays listed, with no layers, so that what a body has
+lost can be read and still counts, as nothing, toward its functions
+(section 6.3).
+
+Size matters physically. Thickness and length scale with `scale`, area
+with its square, mass with its cube. A giant is harder to cut through
+because there is more of it. A part's size factor is the body's times its
+own.
+
+**What follows from the parts** is cached, saved and hashed, and always
+equals a recomputation (invariants B2, B3):
+
+| Value | Is |
+|-------|----|
+| Functions | Section 6.3. |
+| Channel slots | For each channel, the sum over working parts of the slots they supply; and the set of those channels. When a part stops working or comes off, the change that reports it names the part, the channels and how many slots of each went, so that an action holding one can be interrupted. |
+| Mass | The sum of the masses of the parts that are there. |
+| Volume | For each part that is there, its mass over the mean density of its layers, by thickness. |
+| Height | The plan's `height` × `scale` × the posture's factor (section 11.1). |
+| Cross-section | The sum of the areas of the parts on the outside. |
+
+Mass, volume, height and cross-section are handed to the entity's
+`Physical` (section 3.1) whenever they change. The footprint is the plan's
+when the body is made, and whatever `Physical` holds afterwards.
+
+A body's **reach** is the greatest, among its working parts that have a
+striking surface, of the part's own length and that of every part between
+it and the root.
 
 A body that has never been wounded or edited does not hold a copy of its
 parts. It shares them with every other unchanged body of the same plan and
 scale, and is given its own at the first change. Rules cannot tell the
-difference. A crowd of the unhurt costs little.
+difference. A crowd of the unhurt costs little. (Not built yet: every
+body holds its own parts.)
 
 ### 6.5 Editing bodies
 
-Because the instance owns its tree, effects can change it at any time:
+Because the instance owns its tree, effects can change it at any time.
+A part is a subject of its own kind that says whose body it is of, so a
+verb that names a part takes no `who` (decision D-550); `self.part(name)`
+gives one:
 
-| Verb | Does |
-|------|------|
-| `add_part` | Attach a new part to a free socket, or inside a part |
-| `remove_part` | Detach a part and everything on it; optionally leave it as an item |
-| `replace_part` | Swap a part's definition, keeping what is attached |
-| `graft_part` | Attach a severed part, from this body or another |
-| `set_layer` | Change a layer's material or thickness, on one part or many |
-| `scale_part`, `scale_body` | Resize |
-| `set_body_plan` | Rebuild from another plan, mapping parts by id where possible |
-| `heal_part`, `damage_part` | Direct changes to layer damage |
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `add_part` | `on: part`, `part: id<body_part>`, `socket: string?`, `inside: bool?`, `name: string?`, `side: string?`, `scale: real?` | `part` | Attach a new part to a free socket of `on`, or with `inside` inside it, with the organs its definition brings. `name` defaults to its definition's bare id, numbered `_2`, `_3` if that is taken; `scale`, its size relative to the body, to 1 |
+| `remove_part` | `part: part`, `sever: bool?` | null | Detach a part and everything on it and in it (below) |
+| `replace_part` | `part: part`, `with: id<body_part>` | null | Swap a part's definition, keeping its name, its place and what is attached; its layers are new and its wounds gone. What is on it and no longer fits comes off |
+| `graft_part` | `item: entity`, `on: part`, `socket: string?`, `inside: bool?` | `part` | Attach a part that came off, from this body or another: the item it left. Its parts keep their names, layers, damage and size, not their wounds; the item is used up |
+| `set_layer` | `part: part`, `layer: int?`, `material: id<material>?`, `thickness: real?` | null | Change a layer's material or thickness (metres, at the part's size); `layer` left out is every layer |
+| `scale_part` | `part: part`, `scale: real` | null | Give a part a new size relative to its body |
+| `scale_body` | `who: entity`, `scale: real` | null | Give the body a new overall size |
+| `set_body_plan` | `who: entity`, `plan: id<body_plan>` | null | Rebuild from another plan, mapping parts by name where the definition is the same |
+| `heal_part` | `part: part`, `share: real` | null | Take a share of a whole layer off the damage of every layer of a part |
+| `damage_part` | `part: part`, `layer: int?`, `share: real` | null | Add a share of a whole layer to the damage of a layer of a part, or of each; no layer passes 254 255ths and no wound is made |
+| `disable_part`, `restore_part` | `part: part` | null | Disable a part from outside, whatever its condition, and let it go again |
 
-Every edit recomputes functions, channel slots, mass and attributes, and
-emits `body_changed`. Scene S17 is a rule that calls several of these on its
-target.
+Every edit recomputes functions, channel slots, mass and attributes and
+raises the events of section 7.6 for what changed. What comes off is
+reported as `part_detached` and leaves what its definition's `leaves`
+says (section 7.5), where the body is; what a part that can no longer
+hold was grasping falls, what was worn only over parts that are gone
+comes off, and the masses that changed reach the world's records. The
+edits that reshape a body (`add_part`, `replace_part`, `graft_part`,
+`set_layer`, `scale_part`, `scale_body`, `set_body_plan`, `damage_part`)
+raise the hook `body_changing` first, which may cancel, and `body_changed`
+after. Scene S17 is a rule that calls several of these on its target.
+
+- **Sockets.** A part `on` another takes a socket of it that its
+  definition has, that accepts the part's definition (any, if its
+  `accepts` is empty) and has room. Left unnamed, the socket is the first
+  of the parent's, by name, that would take it. A part `in` another takes
+  none.
+- **Names.** No two parts that are there share a name. A part that is
+  gone keeps its name until a new part takes it: adding, grafting or
+  replanning a part of that name drops the listing of the gone one and
+  of what was gone with it, so that a limb that grows back is that limb
+  again, with a new key. Removing a part drops the listings of what was
+  gone already beneath it.
+- **Replacing.** What is on the part keeps its socket if the new
+  definition has it, takes what is in it and has room; the rest comes
+  off. The organs the new definition brings that the part lacks are
+  added; those it had stay.
+- **Grafting.** Each part grafted gets a new key; its size in metres is
+  kept whatever the body's scale. The stump the part left heals as a
+  stump does.
+- **Replanning.** A part of the new plan with the name and definition of
+  one the body has keeps that one: its key, layers, damage, wounds and
+  state (a limb that was lost stays lost), with the plan's place, socket,
+  side and size. Every other part of the plan is new. What the body has
+  that the plan does not map comes off in pieces, each with what was on
+  it and in it; what was gone already is forgotten; a new part on one
+  that is gone is gone with it. The body's overall scale stays; its height
+  is the new plan's; the footprint is whatever `Physical` holds.
+- **Size.** Resizing multiplies the thickness of the layers it reaches;
+  length and girth follow the scale, area its square and mass its cube.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `body_changing` (hook) | `self` | `verb` (`string`), the verb's name; `part` (`string`), the name of the part edited or of the one a new part goes on, empty for the whole body. A handler may cancel: a body that cannot be reshaped. |
+| `body_changed` | `self` | `verb`, `part`; `parts` (`int`), the parts that are there now |
+
+These are refused with a reason (14 §5) and change nothing, beside those
+of section 7.6 (`no_body`, `no_such_part`, `part_missing`, `root_part`,
+`unknown_plan`, `bad_amount`):
+
+| Reason | When | Values |
+|--------|------|--------|
+| `unknown_part` | The id is not a `body_part` definition | — |
+| `no_such_socket` | The parent has no socket of that name | `entity`, `part`, `socket` |
+| `socket_refuses` | The socket does not accept that kind of part | `entity`, `part`, `socket` |
+| `no_free_socket` | The socket is full, or no socket of the parent would take the part | `entity`, `part` |
+| `part_name_taken` | A part that is there has the name | `entity`, `name` |
+| `too_many_parts` | The body would have more than 1024 parts | — |
+| `no_such_layer` | The part has no layer of that number | `entity`, `part`, `layer` |
+| `unknown_material` | The id is not a material | — |
+| `not_a_part` | What was to be grafted is not a part that came off a body | `item` |
+
+`remove_part`: with `sever` true the parts stay listed as gone, as a hit
+that severs leaves them, and left out the body no longer has them. The
+wound verbs are `close_wound { wound }` and `reopen_wound { wound }`
+(section 7.3). A verb's argument that is null or of the wrong sort is
+`verb.bad_argument`. The edits are functions of the body model
+(`body::edit`) and of the simulation (`reshape`).
 
 ### 6.6 Bodies made of cells
 
@@ -344,7 +837,11 @@ part's materials.
   their damage. Functions, channel slots, leaks and signals follow as in
   sections 6.3 and 7.3. A breached cell of tissue that leaks, leaks.
 - Harm reaches it as harm to cells (02 §12). There is no aiming at it: an
-  attacker damages the cells they can reach. Severing a limb is `detach`
+  attacker damages the cells they can reach. Because that is the world's
+  work, `hit_incoming` does not run for it and cannot veto it (05 §8.2).
+  The creature's defences are the thresholds of what it is made of. The
+  simulation raises `body_cells_damaged`, with the part and what it lost,
+  for rules to answer afterwards. Severing a limb is `detach`
   (02 §18.3) of its cells, after which the limb is a piece of world.
 - It moves by a motion model (11 §5), usually `stride`, steered by its own
   mind as a crew steers a vessel, and turns in quarter-turns (11 §5.5).
@@ -367,6 +864,64 @@ into battle with archers on its back, is a body made of cells.
 A power that grows a creature across that line is a change of body plan
 (section 6.5).
 
+### 6.7 Reading a body
+
+`fn` is a property of an entity that gives what its body can do: a subject
+of the kind `functions`, the same entity seen as its functions. Each
+`body_function` definition is a property of that kind, under its qualified
+id and, where nothing else has the name, under its bare id, as stats are
+(section 4.4). A part and a wound are subjects of their own kinds, `part`
+and `wound` (05 §5.1).
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.fn` | `functions` | What the entity's body can do |
+| `functions.<id>`, `functions.value(function)` | `real` | A function's capacity |
+| `entity.scale` | `real?` | The body's overall size factor |
+| `entity.reach` | `real?` | How far it can reach to strike, in metres (section 6.4) |
+| `entity.part(name)` | `part?` | A part by its name in the body, one that is gone included |
+| `entity.parts` | `list<part>` | Every part that is there, in order of key |
+| `entity.wounds` | `list<wound>` | Every wound, in order of id |
+| `part.name` | `string` | Its name in its body |
+| `part.def` | `id<body_part>` | What kind of part it is |
+| `part.owner` | `entity` | Whose body it is a part of |
+| `part.parent` | `part?` | The part it is joined to |
+| `part.side` | `string?` | Its side label |
+| `part.condition` | `real` | From 0 to 1 (section 6.4); 0 for a part that is gone |
+| `part.state` | `string` | `whole`, `disabled`, `severed` or `destroyed` |
+| `part.working` | `bool` | Whether it is there and not disabled |
+| `part.exposed` | `bool` | Whether it is there and on the outside: it sits inside no other part |
+| `part.size` | `real` | The area it presents, in square metres |
+| `part.length`, `part.girth`, `part.mass` | `real` | Scale applied; a part that is gone has no mass |
+| `part.reach` | `real` | Its own length and that of every part between it and the root |
+| `part.layers` | `int` | How many layers it is built of |
+| `part.layer_damage(layer)` | `real?` | A layer's damage, from 0 to 1; layer 0 is the outermost |
+| `part.layer_material(layer)` | `id<material>?` | What a layer is made of |
+| `part.layer_thickness(layer)` | `real?` | How thick a layer is, in metres |
+| `part.has_tag(tag)` | `bool` | Whether its definition carries a tag |
+| `part.wounds` | `list<wound>` | The wounds on it |
+| `part.inside`, `part.attached` | `list<part>` | The parts that are there and sit in it, or on it |
+| `wound.part` | `part` | The part it is on |
+| `wound.owner` | `entity` | Whose wound it is |
+| `wound.kind` | `id<damage_type>` | The kind of damage that made it |
+| `wound.depth` | `int` | How many of the part's layers it goes through |
+| `wound.area`, `wound.energy` | `real` | Section 7.3 |
+| `wound.age` | `real` | Seconds of its owner's time since it was made |
+| `wound.state` | `string` | `open` or `closed` |
+| `wound.rate` | `real` | What it drains from pools each second, every pool summed |
+| `wound.stump` | `bool` | Whether it is where a part came off |
+
+None is settable: a body changes through hits and the body verbs, so that
+hooks run and what follows is reported. None is safe for belief: what a
+body can do, the state of its parts and the wounds it carries are its
+owner's to know and anyone else's to perceive (15). A character reads its
+own (05 §7.3). Anything read of an entity with no body, of a part or a
+wound that is not there, or by an id that names nothing is null. A
+function's capacity, a part's state and the lists name the events that
+change them, so they may be read in reactive expressions (05 §7.5). A
+part's condition moves a 255th at a time as it heals and may not: react
+to its state.
+
 ## 7. Hits and wounds
 
 ### 7.1 A hit
@@ -374,18 +929,29 @@ A power that grows a creature across that line is a change of body plan
 ```rust
 pub struct Hit {
     pub target: EntityId,
-    pub part: Option<PartKey>,     // None: spread over the body
+    pub at: HitAt,                 // Part(key) | Height(m) | Any | Spread
     pub packet: DamagePacket,      // kind, energy, intensity, cause (02 §12.1)
     pub area: Real,                // m² of contact
     pub span: Real,                // m of contact across the part (07 §3.2)
-    pub dir: Option<[Real; 3]>,
+    pub dir: Option<[Real; 3]>,    // east, south, up
 }
 ```
 
 Everything that harms a body arrives as a `Hit`: a strike (07), a field
 (02 §16), an impact after being thrown (02 §15.2), exposure to a pressure
 wave (02 §13.2). The hook `hit_incoming` lets rules alter, redirect or
-cancel it first.
+cancel it first (section 7.6).
+
+| A hit `at` | Lands |
+|------------|-------|
+| `Part` | On that part. |
+| `Height` | On one outer part whose band (section 6.1) holds that height above the target's footing, chosen by exposed area. If none does, on nothing. |
+| `Any` | On one outer part, chosen by exposed area. |
+| `Spread` | On every outer part (section 7.4). |
+
+A part's **exposed area** is its area times its `exposure`, and nothing
+for a part that is gone or sits inside another. A hit that lands on
+nothing is not refused: all of its energy exits.
 
 ### 7.2 Through the layers
 
@@ -393,26 +959,50 @@ For the struck part, the layers are: anything worn over it, outermost first
 (section 9.2), then the part's own.
 
 ```
-energy = packet.energy
+contact = min(hit.area, the part's area)
+cover   = min(1, hit.span / the part's girth)
+energy  = packet.energy
 for each layer, outside in:
     if the layer is worn and the hit found a gap in its coverage: skip it
-    capacity = material.toughness × area × thickness
-    apply the packet rule of 02 §12.2 with that capacity
-    record what the layer absorbed as damage to it
-    if the layer was not breached: stop
-    energy = what passed
+    if the layer is the part's own and wholly gone (damage 255): it is not in the way
+    capacity = material.toughness × contact × thickness
+    apply the packet rule of 02 §12.2 with that capacity and the layer's damage
+    unaffected:  stop. The energy stays with whatever delivered it (07 §6.3)
+    damaged:     the layer gains cover × the 255ths the rule gives; stop
+    breached:    the layer gains cover × 255; energy = what passed
 ```
+
+The rule is applied to the volume under the contact, which is why a small
+contact goes deep. What is recorded on the layer is the share of the
+part's width the breach crosses, because that is what the part's working
+depends on: a blade drawn across a limb undoes it, and a needle through it
+does not. A layer that is affected always gains at least one 255th, and
+one that is damaged and not breached stops at 254. A hit below a layer's
+threshold changes nothing, however often it is repeated.
 
 If every layer is breached:
 
-- Parts `inside` this one may be struck with what remains, each with a
-  chance in proportion to its size.
-- If the damage type is flagged `severs` and the hit's `span` is at least
-  the part's girth, the part is **severed**: it and everything on it become
-  an item, and the wound is on the parent.
-- Otherwise what remains exits, and may strike whatever is behind.
+- One of the parts `inside` this one may be struck with what remains: each
+  has a chance equal to its area over this part's, and at most one is
+  struck. It is resolved in the same way, and what it passes goes on.
+- If the hit named or found this one part, the damage type is flagged
+  `severs`, the hit's `span` is at least the part's girth, and the part is
+  `on` another, the part is **severed**: it and everything on it and in it
+  come off as they were before the hit, and the wound is on the parent
+  (section 7.3). The root, and a part `in` another, cannot be severed.
+- Whatever energy remains exits, and is returned so that it can be carried
+  on to whatever is behind.
 
-A worn layer's damage is damage to that item.
+A worn layer is handed in by whoever holds the items, with its material,
+thickness, `coverage` and the item's damage. It is resolved by the same
+rule and its own damage is not changed here: what it absorbed, and whether
+it was unaffected, damaged or breached, is handed back as damage to that
+item. A layer whose coverage is between 0 and 1 is in the way with that
+chance.
+
+Energy is accounted for: what the body's layers absorbed, what worn
+layers absorbed, what was stopped by a layer it could not affect and what
+exits add up to what the hit delivered.
 
 This is the rule that broke the wall in 02 §12.2, applied to a smaller
 volume. A blade concentrates its energy on a tiny area, so its intensity is
@@ -424,16 +1014,33 @@ what "bulletproof" means.
 
 ```rust
 pub struct Wound {
+    pub id: WoundId,               // its number in this body
     pub part: PartKey,
     pub kind: DamageTypeId,
-    pub depth: u8,                 // layers breached
-    pub area: Real,
+    pub depth: u8,                 // layers it goes through, from the outside
+    pub area: Real,                // m² of tissue it lays open
     pub energy: Real,              // absorbed
     pub age: Dur,
     pub state: WoundState,         // Open | Closed | Healed
+    pub closes_in: Option<Dur>,    // local time left before it closes by itself
+    pub lost: Option<PartKey>,     // for a stump: the part that came off
     pub cause: Cause,
 }
 ```
+
+A hit that breaches at least one layer of a part leaves a wound on it. Its
+`depth` is how many layers the hit got through. Its `area` is the tissue
+it lays open: the contact area, or, where that is larger, the face of the
+cut, which is as wide as the contact crosses the part (the lesser of the
+hit's `span` and the part's girth) and as deep as the layers it went
+through. A breach of a part that already has an open wound of the same
+kind makes that wound worse (deeper, larger, its time to close begun
+again) and does not add another. Damage that breaches nothing leaves no
+wound, and heals all the same.
+
+A part that is severed, or destroyed while `on` another, leaves a **stump**
+on the part it was joined to: a wound through every layer of that part,
+with the area of the lost part's cross-section, girth × girth.
 
 A wound has consequences, all through mechanisms already described:
 
@@ -450,23 +1057,157 @@ The last row is the death spiral of scene S14, and it is content. The engine
 guarantees only that nothing is cushioned: there is no buffer between being
 cut and being impaired.
 
-Wounds close and heal over time at their tissues' `heal` rates, as timers.
-Treatment, regeneration and scarring are verbs and rules.
+A wound is open, then closed, then gone:
+
+| State | Means |
+|-------|-------|
+| Open | It leaks. Each layer it goes through has its share of the wound's area, by thickness, and one whose tissue has a `leak` drains its pool by `rate × that share`. The sum for each pool is a rate on the pool with the wound as its source (section 4.2). The layers it goes through do not heal. |
+| Closed | Nothing leaks: its rates are removed. Its layers recover at their tissues' `heal` rates. |
+| Healed | Every layer it went through is whole again. The wound is removed and reported once. |
+
+- An open wound closes by itself after the longest `closes` among the
+  leaking tissues it goes through, if each gives one. With a tissue that
+  gives none it stays open until `close_wound`. A wound through nothing
+  that leaks is closed from the start.
+- A damaged layer whose tissue has a `heal` rate recovers one 255th at a
+  time, each after `1 / (255 × heal)` seconds of its owner's time, unless
+  an open wound goes through it. As it recovers the part's condition
+  rises, and a part that was disabled by its condition works again
+  (`part_restored`).
+- A stump is healed as soon as it has closed.
+- Nothing runs per tick. A body with something ahead keeps one wake-up,
+  on its owner's clock, for the earliest wound to close or layer to
+  recover a 255th. It is a timer of 03 §9: when its owner leaves the
+  simulation it stands still, and when the owner returns the local time
+  that passed is applied in one step, each closing and healing in order.
+- `close_wound { who, wound }` closes an open wound. `reopen_wound { who,
+  wound }` opens a closed one again: it leaks as it did and its time to
+  close starts over. `heal_part` (section 6.5) takes damage off layers
+  directly, and a wound whose layers are whole again is healed whatever
+  state it was in.
+
+Which part an unaimed hit finds, which inner part is struck, and whether a
+hit finds a gap in what is worn are drawn from the simulation's random
+stream. A rule on `hit_incoming` may set the part outright. A hit at a
+named part, with nothing worn loosely over it and nothing inside it, draws
+nothing.
 
 ### 7.4 Spread hits
 
-A hit with no part is distributed. Parts are chosen in proportion to
-exposure, limited to those facing `dir` if given, and each receives a share
-of the energy at the hit's intensity. A hit whose energy exceeds what the
-whole body could absorb many times over destroys it outright without
-resolving layers.
+A spread hit is distributed. Every outer part that is there receives a
+share of the energy in proportion to its exposed area (section 7.1), at
+the hit's intensity, over the whole of the part: its contact is the part's
+area and its cover is 1. Each part is resolved as in section 7.2. A spread
+hit severs nothing: a part it takes every layer of is destroyed.
+
+`dir`, if given, is meant to limit the hit to the parts that face it.
+Nothing yet says which way a body or a part of it faces, so every exposed
+part takes its share, and `dir` is carried on with whatever exits.
+
+A hit whose energy exceeds what the whole body could absorb many times
+over destroys it outright without resolving layers. That is so when the
+hit has full effect on every layer of every part that is there (its
+intensity is at least twice each threshold, and no factor is zero) and its
+energy is at least `hit.overkill_factor` (default 10, and never less than
+1) times the sum, over those layers, of `toughness × area × thickness ×
+(1 − damage) / factor`. Every part is then destroyed and that sum is what
+the body absorbed.
+
+**What the world reports** becomes a hit:
+
+| Report | Hit |
+|--------|-----|
+| `OccupantExposed { kind, energy, intensity }` (02 §13.2, §14.3) | Spread. The cell was delivered `energy`; the body takes what that intensity puts into its own volume, `intensity × volume`, and never more than was delivered. |
+| A body impact (02 §15.2): the energy the flying creature lost, and the intensity | Spread, with all of that energy and the direction of travel. If what it struck has a contact surface of its own (07 §6.5), a hit `Any` with that surface's kind, area and span instead. |
+| A field's `damage` rule (02 §16) | As `OccupantExposed`, with the field's level times its `energy_per_level` and `intensity_per_level`. |
+
+As built (decision D-553). The simulation answers the world's
+`occupant_exposed` after it has passed on its own `entity_exposed`: an
+entity with a body takes the spread hit through `hit_incoming` and the
+layers like any other, and one with none is not hurt. The world's
+`body_impact` whose body is an entity hurts that entity with all the
+energy it lost: spread with no direction, or with the element's contact
+surface, its kind, area and span (the square root of its area if it
+gives none), as a hit `Any`; a world with no kinetic damage type hurts
+nothing. The world's `body_hit_occupant` hurts the occupant struck with
+the blow's packet, spread, travelling the way the body was. Both are
+`Sim::body_impact`. The world's `occupant_dosed` (02 §16) raises the hook
+`exposure_incoming` and then adds what its handlers left of the amount
+to the named pool, stopping at its bounds; a body with no stats or
+without that pool takes nothing. The pool is text, resolved as a
+tissue's is (section 6.1). The route is told to the hook and applied by
+no one else: a mask is a handler (06 §9.1 `guards`, the item
+package's).
+
+What exits a body with a direction is carried on: the block of the next
+cell along that direction is struck with it by the world's own rule
+(02 §12.2), and `hit_exited` reports it. Which cell is next: each axis
+steps whose share of the direction is at least half the greatest.
 
 ### 7.5 Destruction and remains
 
+A part every layer of which is gone is **destroyed**. If it is `on`
+another it comes off, with everything on it and in it, and leaves a stump
+(section 7.3). If it is `in` another it is gone where it was. If it is the
+root, the body is **in pieces**: everything `on` the root comes off as it
+is, the root and what is inside it are destroyed, and its wounds are gone
+with it.
+
 A destroyed or severed part becomes an item made of its materials, or
-nothing, as its definition says. A body destroyed entirely leaves whatever
-its template's `remains` names. A body that stops working but is not
-destroyed is still that body: see section 8.3.
+nothing, as its definition's `leaves` says. What the body model hands on
+is the part as it was: the keys, names, layers and damage of the part and
+of everything that went with it, the wounds that were on them, their mass,
+how it came off (severed, destroyed, or removed by an edit) and the cause.
+Making the item is the item package's.
+
+A body destroyed entirely leaves whatever its template's `remains` names.
+The body model reports that the body is in pieces and decides nothing
+more: whether that ends the creature is section 8.3. A body that stops
+working but is not destroyed is still that body.
+
+### 7.6 Events, the hook and refusals
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `hit_incoming` (hook) | `self` | `part` (`part?`), the part aimed at; `height` (`real?`), for a hit at a height; `spread` (`bool`); `kind` (`id<damage_type>`); `energy`, `intensity`, `area`, `span` (`real`); `dir` (`list<real>?`). A handler may change `energy`, `intensity`, `part` and `dir`, or cancel. `actor` and `instigator` are whoever is behind the hit. |
+| `hit_landed` | `self` | `part` (`part`); `kind` (`id<damage_type>`); `absorbed`, `passed` (`real`), the joules the part's layers took and those that went on; `depth` (`int`), the layers the hit got through. Once for each part reached: the part struck, then a part inside it. |
+| `wound_inflicted` | `self` | `wound` (`wound`), `part` (`part`), `kind` (`id<damage_type>`), `depth` (`int`), `area` (`real`). Also raised when a wound is made worse, and for a stump. |
+| `wound_closed`, `wound_reopened` | `self` | `wound` (`wound`), `part` (`part`) |
+| `wound_healed` | `self` | `part` (`part`), `kind` (`id<damage_type>`) |
+| `part_disabled`, `part_restored`, `part_destroyed` | `self` | `part` (`part`) |
+| `part_severed` | `self` | `part` (`part`), `parent` (`part?`). For the part cut, not for what went with it. |
+| `function_changed` | `self` | `function` (`id<body_function>`), `old`, `new` (`real`) |
+| `slots_lost`, `slots_gained` | `self` | `part` (`part`), the part that stopped or started working or came off; `channels` (`list<id<channel>>`), in order of channel; `counts` (`list<int>`), how many slots of each. The action runtime interrupts whatever held a slot that went (03 §6.2). |
+| `body_destroyed` | `self` | None. The root was destroyed: the body is in pieces (section 7.5). |
+| `part_detached` | `self`, `here?` | `part` (`string`), the name of the part that came off; `how` (`string`), `severed`, `destroyed` or `removed`; `mass` (`real`), kilograms of it and everything that went with it; `parts` (`int`), how many parts came off; `leaves_item` (`bool`), whether its definition says it leaves an item. In Rust it carries the part itself, for whoever makes an item of it (section 7.5). |
+| `hit_exited` | `self`, `here?` | `part` (`part?`), the part it left through; `kind` (`id<damage_type>`); `energy`, `intensity` (`real`); `dir` (`list<real>?`) |
+| `exposure_incoming` (hook) | `self`, `here?` | `pool` (`id<pool>`), `amount` (`real`), `route` (`string`: `breath`, `skin` or `any` from a field; `ingest`, `inject`, `skin` or `breath` for a substance, 16 §9.5), `field` (`string`, the qualified id of the field, or of the substance dosed). A handler may change `amount`, or cancel. |
+
+The hit is the verb `hit { target, kind, energy, intensity, part?,
+height?, spread?, area?, span?, dir? }`: with `spread` true it is spread
+over the body, with a `part` (of the target's body) it is aimed at it,
+with a `height` it arrives at that height, and otherwise it lands
+anywhere. It gives a map: `absorbed`, `returned` and `exited` (joules),
+`destroyed` and `cancelled` (`bool`). Every event above binds the cause's
+`actor` and `instigator` after its own subjects.
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `no_body` | The entity has no body | `entity` |
+| `has_body` | It is given a body and has one | `entity` |
+| `unknown_plan` | The id is not a plan a body can be built from | — |
+| `no_such_part` | The body has no part with that key | `entity`, `part` |
+| `part_missing` | The part is gone | `entity`, `part` |
+| `root_part` | The part is the root, which cannot be taken off | `entity`, `part` |
+| `no_such_wound` | The body has no wound with that id | `entity`, `wound` |
+| `wound_not_open`, `wound_not_closed` | `close_wound` of one that is not open; `reopen_wound` of one that is not closed | `entity`, `wound` |
+| `bad_amount` | A scale, a share or a factor is not finite and above zero | `amount` |
+| `bad_hit` | A hit's energy, intensity, area, span, height or direction is negative or not finite | `what` |
+| `no_clock` | The clock the body runs on is gone | — |
+| `bad_shape` | The body's mass and size could not be handed on (section 3.1) | — |
+| `bodies_not_registered` | The definitions were loaded without the bodies' definition types and properties | — |
 
 ## 8. Minds
 
@@ -499,8 +1240,16 @@ separate components so that they can part company.
   that needs channels.
 - A body with no active mind does not act. With a **driver** it acts as the
   driver directs: a puppet, a remote drone, a raised corpse on strings.
+- A seat inside a body may make whoever sits in it that body's driver
+  (11 §8.1): a machine with a pilot.
 - A raised corpse that acts for itself is a body given a new mind by
   `create_mind`.
+
+Pools, tracks and traits may state a `seat`, as attributes do. Those
+seated in the mind go with it; the rest stay with the body. After a
+transfer, where abilities come from is worked out again for both: one
+whose source stayed behind is lost to the mind, and one whose source came
+along is kept (08 §3.4).
 
 All of scene S16 is these four verbs plus relations (15).
 
@@ -519,6 +1268,96 @@ zero. An undead template simply does not include that rule.
 After `die` the entity is still there with its body, wounds and holdings. It
 can be carried, searched, eaten, raised, or have its mind taken. The
 `mind_released` event at death is the hook for anything that collects them.
+
+### 8.4 As built
+
+Decisions D-554 and D-555. A mind is the component `Mind`: the
+behaviour profile it was given, as text, and its **vital state**,
+`awake`, `unconscious` or `dead`. What is seated in a mind is kept with
+the rest of the entity's stats and moved with it. A driver is the
+component `Driver` of the body's entity: who acts for it.
+
+**When a creature stops is data.** Two fields say it, and the engine
+knows nothing of blood or brains:
+
+| Definition | Field | Says |
+|------------|-------|------|
+| `body_plan` | `needs: { <function>: <state> }` | While the body can do none of a function (its capacity is zero), its owner is in that state. |
+| `pool` | `stops: [ { at, when, state } ]` | Section 4.4. |
+
+where a state is `unconscious` or `dead`. Whenever a pool crosses a
+threshold, a body changes, a mind arrives or a creature is made, the
+simulation asks what these say and the worst holds: `dead` is `die`;
+`unconscious` stops the mind until nothing says so (`entity_unconscious`,
+then `entity_woke`). Only `revive` starts the dead; one that still
+lacks what it needs stops again at once. An entity with no mind is
+never stopped. A body in pieces (section 7.5) is stopped by whatever its
+plan `needs`, since none of its functions is left.
+
+`die` releases control of the entity (`control_changed`), forgets any
+decision it was asked for, and raises `entity_died` and then
+`mind_released`. Its body, wounds and holdings remain. Ending its
+running actions is the action runtime's answer to `entity_died`: they
+are abandoned and its wait and plan dropped, and nobody is asked
+anything. Falling unconscious interrupts them with the reason
+`entity_unconscious`, again asking no one; waking, or being revived,
+makes the entity free, and whoever decides for it is asked (03 §6.6,
+decision D-650).
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `die` | `who` | Section 8.3, after the hook `entity_dying` |
+| `revive` | `who` | Section 8.3 |
+| `create_mind` | `in`, `def?` | A new mind, awake; `def` is the behaviour profile, as text |
+| `remove_mind` | `from` | Removes it with what is seated in it; control is released |
+| `transfer_mind` | `from`, `to`, `swap?` | After the hook `mind_transferring`; with `swap` a mind `to` has goes the other way. The mind's vital state goes with it, and is then asked afresh of the body it arrives in |
+| `set_driver` | `of`, `driver?` | After the hook `mind_transferring`; left out, nobody drives it |
+
+Each gives null.
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `entity_dying` (hook) | `self` | None. A handler may cancel. |
+| `entity_died`, `mind_released`, `entity_revived`, `entity_unconscious`, `entity_woke` | `self` | None |
+| `mind_transferring` (hook) | `self`, `target?` | `swap` (`bool`). A handler may cancel. |
+| `mind_transferred` | `self`, `target` | `swap` (`bool`) |
+| `driver_changed` | `self`, `driver?` | None |
+
+Whoever turns a command into an action asks `Sim::can_act(entity)`: an
+entity acts if its mind is awake or it has a driver. The action runtime
+asks it of every start, a command's, a rule's and a plan step's, through
+`Sim::life_lets_act`, for anything that has a mind or a body; an entity
+with neither is not life's to stop (a thing a tool or a test made, a
+device that rules move), and acts as the runtime alone allows (decision
+D-650). These are refused with a reason and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `no_mind` | It has no mind (and, for acting, no driver) | `entity` |
+| `has_mind` | `create_mind` in, or `transfer_mind` without `swap` into, something that has a mind | `entity` |
+| `entity_dead` | It is dead: it cannot act, and cannot die again | `entity` |
+| `entity_unconscious` | It is unconscious: it cannot act | `entity` |
+| `not_dead` | `revive` of one that is not dead | `entity` |
+| `same_entity` | An entity named as its own driver or as where its own mind goes | `entity` |
+
+**What a stopped mind perceives** (D-930). A vital state stops no sense
+by itself: each sense says which states stop it (its `stopped_by`,
+15 §4), vital states of its owner's mind and tags its owner carries.
+The bundled senses are stopped by `unconscious` and `dead`, and sight
+by the tag `asleep` too, so the dead and the unconscious perceive
+nothing and a sleeper hears but does not see. Being asleep is not a
+vital state: a sleeper's mind is awake and decides as ever; in the
+bundled content the trait `asleep` (given by the rule
+`core:fall_asleep` to a mind that takes up the `sleep` goal) carries
+the tag.
+
+| Property | Type | Is |
+|----------|------|----|
+| `entity.vital` | `string?` | `awake`, `unconscious` or `dead`; null for an entity with no mind. Not safe for belief. Changed by `entity_died`, `entity_revived`, `entity_unconscious`, `entity_woke` and `mind_transferred` |
+
+Not built: beliefs, relations and senses moving with a mind (15); the
+`mind` definition type (09); where abilities come from after a transfer
+(08 §3.4).
 
 ## 9. Items and holding
 
@@ -542,43 +1381,334 @@ An item is an entity with an `Item` component. Items are made of materials
 and take damage by the element rule (02 §12.2) with a capacity from their
 material and volume. Weapons notch and break; armour wears through.
 
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name`, `description` | text | What a reader calls it, and what a closer look says |
+| `unknown_name` | text | What it is called by someone who has not learned what it is (05 §4.6) |
+| `material` | `id<material>`, required | What it is made of. It takes damage as that material does. |
+| `mass` | mass, required | The mass of one |
+| `volume` | volume | The space one takes up. Left out, its mass over its material's density. |
+| `length` | length | Along its greatest dimension. The area it presents lying flat is its volume over its length. |
+| `tags` | list of tags | Free-form. An item is made with them as its own (the kernel entity's tags). |
+| `surfaces` | list | Parts of the item that can be brought to bear, each with a damage type, contact area, give and span (07 §3.2). Combat turns energy over that area into intensity. Carried for combat. |
+| `grip` | map of `id<channel>` to count | Channel slots needed to hold it in a grasp. An item with none cannot be. |
+| `wear` | one entry or a list, at most 32 | The layers it adds over the parts it is worn on; below. An item with none cannot be worn. |
+| `holds` | `{ volume, mass, accepts, order }` | Capacity as a container: the most volume and mass what is stowed in it may take, each left out for any; `accepts`, tags of which a thing must carry one, empty for anything; `order`, `first_in` or `last_in`, makes it a store that gives up what is stowed in it in the order it was put in (07 §11.7). A container cannot `stack`. |
+| `stack` | bool | Whether items equal in every respect (definition, material, damage, colour, tags, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
+| `modifiers` | list of `{ attr, add, mul }` | Attribute modifiers on whoever holds it in a grasp or wears it, under the item as their source (section 4.1). `add` defaults to 0, `mul` to 1. |
+| `holder_tags` | list of tags | Tags whoever holds it in a grasp or wears it carries while they do |
+| `grants`, `traits`, `rules` | lists | Given to whoever holds or wears it. Its `traits`, by id, are given to the holder with the item as their giver (section 5) and withdrawn when it leaves the grasp or comes off; `grants` and `rules` are carried until actions and the rule runtime read them. |
+| `guards` | map of route to share | While worn, the share of exposure it keeps out, by route: `{ "breath": 0.95 }` for a mask (02 §16). Carried until exposure reads it. |
+| `contains` | volume | A volume it can hold of any substances, as a mixture (16 §9.5): a flask, a syringe, a cup. |
+| `filled` | map of `id<substance>` to volume | What each one holds when it is made (16 §9.5). An item filled with no `contains` holds what it was filled with: a loaf is made of bread. |
+| `qualities` | map of name to number | The tool qualities it has, each at a level (16 §8.3): `{ "cutting": 2 }`. |
+| `provides` | list of `id<know_how>` | Know-how known at a station it lies in (16 §8.5): a manual on a bench, a pattern in a machine. |
+| `teaches` | list of `id<know_how>` | Know-how reading it teaches: the verb `learn_from` (16 §8.5). |
+| `color` | colour name, or a list | A colour this particular item carries: fixed, or picked from a list by the item's seed when it is made. `set_color` changes it. Glyphs draw it with `"fg": "own"` and descriptions name it (12 §4.3). Creatures may carry one too. |
+| `glyph` | glyph | How it is drawn |
+| `contents` | list of `{ item, count, chance }` | What a container is found to hold when it is first opened (section 9.3). `count` is a number or `[least, most]`, default 1; `chance` from 0 to 1, default 1. Needs `holds`. |
+| `ages` | `{ life, rate, stages, into }` | How it ages (section 9.4) |
+| `keeps` | `{ temperature, ageing }` | What a container keeps for its contents (section 9.4) |
+| `look` | | How whoever wears or holds it appears (12 §4.4). Not a field yet. |
+| `round` | `{ projectile, energy, count, casing }` | For ammunition: the projectile it fires, with what energy, how many at once, and what it leaves (07 §11.7) |
+| `shot` | `{ spread, efficiency, noise, flash, energy, fits }` | For what fires shots, or is fitted to what does: the numbers a shot through it takes, multiplied by those of what is fitted to it, and the tags of what may be fitted (07 §11.7) |
+| `interactions`, `device` | | As for elements (02 §5.5; 16). Not fields yet. |
+
+A `wear` entry:
+
+```json
+{ "parts": ["torso", "arm"], "layer": 3, "material": "leather",
+  "thickness": "3 mm", "coverage": 0.9 }
+```
+
 | Field | Meaning |
 |-------|---------|
-| `surfaces` | Parts of the item that can be brought to bear, each with a damage type, contact area, give and span (07 §3.2). Combat turns energy over that area into intensity. |
-| `grip` | Channel slots needed to wield it |
-| `wear` | Which body parts it covers, in which layer order, its thickness there and its coverage (the fraction of hits it intercepts) |
-| `holds` | Capacity as a container: volume, mass, what kinds |
-| `stack` | Items equal in every respect (definition, material, damage, traits, variables, contents) may share one entity with a count. Anything that would change one member first splits it off as its own entity. Items that become equal again in the same hold may rejoin. |
-| `grants`, `traits`, `rules` | Given to whoever holds or wears it |
-| `interactions`, `device` | As for elements (02 §5.5; 16) |
+| `parts` | `"all"` for every outer part, one name, or a list. A part answers to a name that is its name in the body (`l_arm`), the id of its definition (`arm`, `core:arm`), or a tag its definition carries (`limb`). Only parts on the outside of the body are covered. |
+| `layer` | Its order among what is worn over a part, an integer, default 0: a higher layer is further out. A part takes one item at each layer; the first entry of an item to cover a part at a layer has it. |
+| `material` | What the layer is made of. Left out, the item's own. |
+| `thickness` | How thick the layer is there. Above zero. |
+| `coverage` | The share of hits on a covered part that it is in the way of, from 0 to 1, default 1 |
+
+**The component.** `Item` holds the definition the item was made from
+(none for a part that came off a body), its material, its count (at least
+one), its damage in 255ths, its colour, its seed, whether its contents are
+still latent, and for a part that came off a body the part as it was. Its
+`Physical` is one member's mass and volume times the count, with a height
+of zero. It is made by `create_item` from a definition, of the entity kind
+`item`, with an `Identity` naming the definition and the definition's tags.
+Its seed comes from the random stream `items`, or is given by whoever
+generates it (the positional seed of section 9.3); its colour, when picked
+from a list, is drawn from the seed.
+
+**Damage.** An item's capacity is its material's toughness times the
+volume of one member, and its damage is counted in 255ths of that, as an
+element's is. A packet is applied by the element rule; one that cannot
+affect the material changes nothing; one that affects a member of a stack
+splits that member off first. At 255 the item is **broken**: it is still
+there, it is no longer a layer when worn, and what else being broken means
+is a rule's to say. `repair_item` takes a share of the capacity off the
+damage.
+
+**Anonymous stacks and notable items** (section 12.2). For the beta, a
+pile of equal things is one entity with a count, and a thing becomes one
+of its own by being split off: when it is damaged, worn, or split by a
+verb. Nothing more is kept for an anonymous member.
 
 ### 9.2 Holding
 
-Containment (01 §6) says an entity may be inside another. `Holds` says how.
+Containment (01 §6) says an entity may be inside another. `Holds`, a
+component of the holder, says how: it lists what the holder holds in some
+way other than `Inside`, and the tags the holder carries only because of
+what it holds.
 
-| Hold | Meaning |
-|------|---------|
-| `Grasp(part)` | In a hand or equivalent; occupies that part's grasp |
-| `Worn(parts, layer)` | Covering parts; acts as outer layers for hits |
-| `Stowed` | Inside a container's capacity |
-| `Seat(n)` | Riding or seated (11) |
-| `Inside` | Enclosed: a person in a locker, something swallowed |
-| `Fixed` | Attached: a mounted device, an implant, a grafted tool |
+| Hold | Rules read | Meaning |
+|------|------------|---------|
+| `Grasp(slots)` | `grasp` | In a hand or equivalent; occupies slots of the channels its `grip` names, on one or more working parts (03 §6.2). The pieces split from a grasped stack share its slots. |
+| `Worn(parts)` | `worn` | Covering parts, each at the layer of the `wear` entry that covers it; acts as outer layers for hits |
+| `Stowed` | `stowed` | Inside a container's capacity |
+| `Seat(n)` | `seat` | Riding or seated (11) |
+| `Inside` | `inside` | Enclosed: a person in a locker, something swallowed. What is inside another with no record is held this way. |
+| `Fixed` | `fixed` | Attached: a mounted device, an implant, a grafted tool |
 
-Moving something between holds is done by verbs (`take`, `drop`, `stow`,
-`wear`, `remove`, `give`, `put_in`, `take_out`), which check capacity and
-free grasps and go through relocation.
+Moving something between holds is done by verbs, which check capacity and
+free grasps and go through relocation. Each raises the hooks
+`item_leaving` (for a thing in a hold) and `item_taking` before it changes
+anything, and changes nothing if a handler cancels. None asks how far away
+the thing is or how strong its holder is: an action's `requires` does.
+
+| Verb | Arguments | Returns | Does |
+|------|-----------|---------|------|
+| `take` | `who: entity`, `what: entity` | entity | Takes a thing into a grasp of `who`, wherever it is: picks it up, draws it from a pack, takes it from another's hand, takes it off if `who` wears it. The slots are found among the working parts of `who`'s body in order of part. An equal stack already in `who`'s grasp takes it without another hand. Returns what is grasped. |
+| `drop` | `what: entity` | entity | Puts a held thing down where its holder is: in the holder's cell, or inside whatever encloses the holder. Returns what lies there, which may be an equal stack it joined. |
+| `give` | `what: entity`, `to: entity` | entity | `take` by `to`, of a thing that is held |
+| `wear` | `who: entity`, `what: entity` | entity | Puts an item on: it covers the outer parts its `wear` selects. One member of a stack is split off and worn. |
+| `remove` | `what: entity` | entity | Takes a worn item off into its wearer's grasp. To take it off and put it down, `drop` it. |
+| `stow` | `who: entity`, `what: entity` | entity | `put_in` the first container `who` wears or grasps that would take it, in order of id |
+| `put_in` | `what: entity`, `container: entity` | entity | Puts a thing into a container: an item is stowed in its capacity, anything else enclosed. A latent container is opened first. Returns what is in it, which may be an equal stack it joined. |
+| `take_out` | `what: entity`, `to: entity?` | entity | Out of the container it is stowed in or enclosed by: into the grasp of `to`, or with none to where the container is |
+| `create_item` | `def: id<item>`, `count: int?`, `at: loc?`, `in: entity?` | entity | Makes `count` items (default 1) as one entity: inside `in`, at `at`, or out of the world. More than one needs a definition that stacks. |
+| `split` | `item: entity`, `count: int` | entity | Splits `count` members off a stack, in the same place and hold. Returns the piece. |
+| `destroy_item` | `item: entity` | null | Unmakes an item and every member of its stack. What it held is put down where it was; latent contents are never made. |
+| `set_color` | `of: entity`, `color: string?` | null | Changes the colour an item carries; null takes it away |
+| `repair_item` | `item: entity`, `share: real` | entity | Takes a share of its capacity off its damage; 1 mends it entirely. It rejoins an equal stack in the same hold. |
+| `materialise_contents` | `container: any` | `list<entity>` | Makes a latent container's contents (section 9.3): an item's, or an element's that generation filled |
+
+A debug command, `CreateItem { def, count, place }`, makes items by
+qualified id for tools and test scripts.
+
+**What a held thing confers.** An item in a grasp or worn confers its
+`modifiers` and `holder_tags`; stowed it confers nothing. They are applied
+when it enters such a hold and taken back when it leaves, by whatever
+moved it: when anything leaves a container through relocation, the kernel
+tells the holder, which forgets how it held the thing. So what a holder
+has from its items always equals what a recomputation from what it holds
+gives (invariant B3), and a record never names something that is not
+there (B6).
+
+**What is worn and who one looks like.** Wearing something changes
+nothing of who its wearer presents as by itself: a disguise is content,
+rules on `item_worn` and `item_removed` that make the wearer present a
+persona and drop it (15 §8.3). The bundled hooded cloak
+(`core:hooded_cloak`, decision D-971) is one: put on, its wearer
+presents a stranger in a hood, made for them the first time they wear
+it and known again whenever they wear it again; taken off or dropped,
+they present themselves again. A worn item destroyed where it is worn
+raises no `item_removed`, so a rule that wants the persona dropped then
+listens for that too; the bundled cloak does not yet.
+
+**Containers.** A thing goes into a container if the container has
+`holds` (an item's, or a device's by its definition, 16 §4.3), it
+carries one of the tags `accepts` lists (if any), and the
+volume and the mass of what is directly inside, with it, are within the
+container's. Mass counts everything inside the thing. Carried mass reaches
+the holder's `Physical` through containment (section 3.1).
+
+When a part can no longer hold, because it is disabled, severed or
+destroyed, what it grasped is dropped where the holder is, with
+`item_dropped` and the cause; no hook can stop it. What was worn on a
+severed part goes with the part; what was worn on it and on other parts
+stays on those. When a holder is destroyed, everything it held, wore,
+stowed or enclosed is left where it was, whole.
+
+Whoever applies a hit hands the layers the target wears (`worn_layers`,
+over each part outermost first; a broken item adds none) to the body's
+hit, and what each layer took back to the items: the 255ths of the item's
+whole capacity that the joules it absorbed amount to, at least one; a
+layer that was not breached stops short of broken.
 
 Whether a contained entity can perceive, be perceived or be hit depends on
 the hold and on the container, and is defined with the relevant system: an
 exposed rider can be hit; a person in a closed locker cannot be seen.
 
+| Event | Subjects | Fields |
+|-------|----------|--------|
+| `item_taking` (hook) | `self`; `holder`, what is to hold it | `hold` (`string`), the kind of hold it is to enter. A handler may cancel. |
+| `item_leaving` (hook) | `self`; `holder`, what holds it now | `hold` (`string`), the kind it is in. A handler may cancel. Not raised when a part that can no longer hold lets go, nor when its holder is removed. |
+| `item_taken` | `self`, `holder`, `from?` | `hold` (`string`); `count` (`int`), its members. A thing entered a hold other than a worn one. |
+| `item_dropped` | `self`; `holder`, what held it | `count` (`int`). It lies where its holder was. |
+| `item_worn` | `self`, `holder` | `parts` (`int`), how many parts it covers |
+| `item_removed` | `self`, `holder` | — A worn item came off; `item_taken` or `item_dropped` follows. |
+| `item_damaged` | `self` | `old`, `new` (`int`), in 255ths; `kind` (`string`), the qualified id of the damage type |
+| `item_repaired` | `self` | `old`, `new` (`int`) |
+| `item_broken` | `self` | — Its damage reached 255. |
+| `item_split` | `self`, `piece` | `count` (`int`), the piece's members |
+| `item_merged` | `self`, the stack that remains | `count` (`int`), the members that joined. The entity that joined it is gone. |
+| `contents_materialised` | `self` | `count` (`int`), the entities made |
+
+These are refused with a reason (14 §5) and change nothing:
+
+| Reason | When | Values |
+|--------|------|--------|
+| `item.unknown_def` | The id is not an `item` definition | `def` |
+| `item.not_an_item` | The entity has no `Item` | `entity` |
+| `item.bad_count` | A count is zero, or a split would leave nothing | `count`, `have` |
+| `item.not_stackable` | More than one of a definition that does not stack | `item` |
+| `item.not_equal` | Two items to be merged are not equal, or not in the same hold | `item`, `into` |
+| `item.no_grip` | A thing with no `grip` is to be grasped | `item` |
+| `item.no_free_grasp` | The holder's working parts supply too few free slots of a channel | `holder`, `channel`, `needed`, `free` |
+| `item.no_body` | Something with no body is to grasp or wear | `entity` |
+| `item.not_wearable` | The item has no `wear` | `item` |
+| `item.no_part_to_wear_on` | The wearer has no outer part the item goes on | `item`, `wearer` |
+| `item.layer_taken` | A part it would cover already wears something at that layer | `item`, `part`, `layer`, `by` |
+| `item.not_a_container` | The container has no `holds` | `container` |
+| `item.not_accepted` | The container accepts none of the thing's tags | `item`, `container` |
+| `item.does_not_fit` | Too large or too heavy for the room left | `item`, `container`, `what` (`volume` or `mass`), `needed`, `room` |
+| `item.not_held` | A thing inside nothing is to be dropped or given | `item` |
+| `item.not_worn` | `remove` of a thing not worn | `item` |
+| `item.not_contained` | `take_out` of a thing not stowed or enclosed | `item` |
+| `item.no_container` | `stow` finds nothing that would take it | `who`, `item` |
+| `item.bad_amount` | A share to repair, or a packet's energy or intensity, is negative or not finite | `amount` |
+| `item.not_registered` | The definitions were loaded without the `item` type | — |
+| `item.bad_argument` | A verb's argument is missing or of the wrong kind | `arg` |
+
+What relocation refuses (an unknown entity, a thing put inside itself,
+nesting too deep, a cell not loaded) is refused as relocation refuses it.
+
+**Item actions** (decisions D-861, D-865). The verbs refuse in the
+engine's words, for rules and the console. A character's own handling of
+things is content: actions with a time and a hand, which content writes
+round the verbs. Two properties of the entity, read of the character
+itself in a mind context, let their `requires` and `fail_text` say why
+in words for it to read:
+
+| Property | Gives |
+|----------|-------|
+| `hold_fault(verb, what, other?)` | `string?`: why the entity, as it believes, could not do a holding verb to a thing now, as a sentence ("Your hands are full: put something down or away first."); null if it could. `take`: pick up a thing lying loose within reach, or take one it carries into a hand (a thing with no grip goes into something carried that takes it); `grasp`: hold it in a hand; `drop`; `wear`; `remove`, into a hand; `stow`; `put_in`, into `other`, carried or within reach; `take_out`, out of a container carried or within reach, into a hand; `give`, to `other`, within reach, with a hand free for it. `take` of the entity itself says there is nothing within reach to pick up |
+| `loose_near` | `list<map<any>>`: what the entity perceives lying loose in its cell or the eight round it on its storey, its own cell first: each `value` (the thing), `label` (what the entity calls it, with its article) and `where` (`here`, `north`, ...) |
+
+What lies in a cell counts as perceived where the cell was in a party
+member's last view, or is its own cell; for one not of the party,
+whatever lies within reach. The bundled actions are `core:pick_up`,
+`drop`, `wear`, `take_off`, `stow`, `put_in`, `take_out` and `give`
+(`mods/core/data/holding.json`): each asks `hold_fault` again against
+the truth as it ends, says what is wrong if the world moved meanwhile,
+and otherwise runs the verb; `give` is turned down, in words, by one
+who opposes or fears the giver (09 §3.4).
+
 ### 9.3 Latent contents
 
 A container that generation filled does not create its items until
-something looks. It keeps a reference to a content table and the positional
-seed. The first search, opening or hit materialises the items, and they are
-always the same items. A city of unopened drawers costs nothing.
+something looks. It keeps the positional seed it was made with, and its
+definition's `contents` list, or what a map put in it (below). The first search, opening or hit
+materialises the items, and they are always the same items: each entry is
+drawn, in order, from a generator seeded by the container's seed alone,
+with every draw made whether or not it matters, so that the same seed
+gives the same contents whenever and in whatever order containers are
+opened. A city of unopened drawers costs nothing.
+
+What opens it: `materialise_contents`, putting something into it, and the
+first packet that affects it. What the list gives is stowed whether or not
+it fits: the list is its author's to keep within `holds`. A thing that
+stacks is made as one stack; one that does not, as so many entities.
+`contents_materialised` reports it.
+
+**Content tables** (decision D-852). What a map puts in a cell (10 §3.2)
+is an item or a `content_table`, shared by every map and table that
+names it:
+
+```json
+{ "type": "content_table", "id": "kitchen_goods", "each": true,
+  "entries": [ { "item": "loaf", "count": [1, 2], "chance": 0.8 },
+               { "table": "drinks", "chance": 0.7 },
+               { "item": "knife", "chance": 0.6 } ] }
+```
+
+| Field | Meaning | Default |
+|-------|---------|---------|
+| `entries` | The entries, in order, at least one. Each names exactly one of `item` (an item definition), `table` (another content table) and `none` (nothing), with `weight` (above zero), `count` (a number or `[least, most]`: how many of the item, or how many draws from the table) and `chance` (from 0 to 1, that a chosen entry gives anything) | required |
+| `each` | Every entry is rolled on each draw, each with its `chance`, rather than one picked by `weight` | false |
+
+A table is drawn from with a seed and a number of draws. Every random
+number a draw could use is made whether or not it matters, from a
+generator seeded by the seed alone, so the same seed always gives the
+same things. A table nested more than eight deep gives nothing there; a
+table that nests itself is a load error, at the entry that closes the
+loop.
+
+**Generation's containers** (decisions D-850, D-851). Items a map puts in
+a cell whose element is a container, an element whose device `holds`
+things (16 §4.3), are that element's **latent contents**. The element
+stays an element: the simulation keeps the lots by element (its cell
+and layer) with the seed each was drawn from, saves and hashes them, and
+makes them, stowed in the device, the first time the element becomes a
+device for whatever reason (opened, something put in it, someone hiding
+in it, work started at it, a rule's `promote`), when
+`materialise_contents` is called on it, or when a packet damages it.
+If another element, or none, stands there first (destroyed, replaced),
+they spill where something dropped into the cell comes to rest, as a
+device's contents do. They are not made when the tract is realised, and
+they stay the same through saving, loading and unloading. Anywhere else
+a map's items are made lying in the cell when the tract first loads,
+and nothing is ever made twice: what was made is in the world, shelved
+with its tract when the tract unloads.
+
+| Property | Gives |
+|----------|-------|
+| `element.latent` | `bool`: whether generation left contents in the element that have not been made yet. Not safe for belief |
+
+`materialise_contents` takes an element as well as an item: it promotes
+the element, which makes its latent contents, and gives what its device
+holds.
+
+### 9.4 Ageing
+
+An item may age.
+
+```json
+{ "type": "item", "id": "raw_meat", "name": "raw meat",
+  "ages": { "life": "2 d",
+            "rate": "clamp((here.temperature - 271) / 20, 0.02, 3)",
+            "stages": [ { "at": 0.7, "trait": "going_off" } ],
+            "into": "rotten_meat" } }
+```
+
+Its **age** runs from 0 to 1. Between changes it is a straight line:
+`rate × time / life`. Reaching a stage, and reaching 1, are each one
+scheduled wake-up, moved when the rate changes. At 1 the item becomes
+`into`, or is removed.
+
+- `rate` is evaluated for where the item is. In the open that is its cell.
+  In a container that states what it `keeps`, it is that instead:
+
+```json
+"when_supplied": { "keeps": { "temperature": "3 C" } }
+```
+
+  A cold box with power keeps its contents cold. Without, it keeps nothing
+  and they read the room. A container may also keep `ageing` at a factor:
+  a sealed jar, a stasis locker.
+- The rate is worked out again when the item is moved, when its container
+  changes what it keeps, and at each weather step of its region. For time
+  spent unloaded, the rate found at loading is used for the whole span.
+- For stacking (section 9.1), ages in the same stage count as equal, and
+  a stack takes the age of its oldest member.
+
+Food spoiling, iron rusting in the wet, wine improving, medicine expiring,
+ice melting in a pack and a corpse going over are items that age.
+
+For the beta, `ages` and `keeps` are read and checked (a `life` above
+zero, stages at ages from 0 to 1, a factor of zero or more) and carried;
+nothing ages yet, and `rate` is kept as written.
 
 ## 10. Templates, choices and creation
 
@@ -654,9 +1784,120 @@ edits, what a scenario supplies for pre-made characters, and what a
 `unselected` says what to do with choices the definition does not fix:
 `default` or `random` (positionally seeded).
 
+### 10.4 As built
+
+Decisions D-556 to D-558. A `template` has these fields, every one
+optional:
+
+| Field | Meaning |
+|-------|---------|
+| `kind`, `name` | A free-form label and what a reader calls it |
+| `body` | A body plan. A later template's replaces an earlier one's |
+| `attributes` | `{ <attribute>: <number> }`: bases of its own. A later contribution replaces an earlier |
+| `pools` | Pools it is given, at their `start` |
+| `tracks` | `{ <track>: <amount> }`: added to the counter |
+| `tags` | Tags of the entity |
+| `variables` | `{ <name>: <constant expression> }` |
+| `rules` | Rules (`eoc`) attached to the entity (05 §9.3) |
+| `traits`, `items` | Ids as written, carried for whoever gives traits and makes items: `entity_spawned` names them |
+| `abilities` | Ids of abilities as written, each given with the template as its source once the entity is made (08 §3.3), in order, each once; held until revoked. One that names nothing is a load error (decision D-722) |
+| `scale` | A factor on the body's size |
+| `mind` | `true` for a mind, `false` for none, or the id of a behaviour profile as text: a `mind` definition (09 §3.5) the character thinks by |
+| `senses` | Senses it is given (15 §4), by id as written: attached when it is made where perception's definitions are loaded (decision D-696). The bundled `person` gives none: its mind does, and a start the player's |
+| `glyph` | `{ ch, fg?, bg? }`: one character and colours by name, for presentation. A later template's replaces an earlier one's |
+| `remains` | What is left of a body destroyed entirely, as written |
+| `blocks` | Whether it blocks movement through its cell. Default true for one with a body. A thing with a body also collides with bodies in flight (02 §15.2; decision D-741) |
+| `choices` | Section 10.2 |
+| `know_how` | Know-how its mind knows (16 §8.5), by id as written: given when `entity_spawned` is raised, without asking what each needs (decision D-825). Not on options |
+| `groups` | The groups a thing made from it joins, by id, each with its role there (`""` for none), openly, when `entity_spawned` is delivered (15 §9.2). A group no definition answers to is a load warning and is skipped (decision D-767) |
+| `playable` | Whether a player's character may be made from it: a game scenario that lets the player make or choose its character offers every playable template unless it names its own (13 §4.2, decision D-860). Default false. Inherited by a `copy_from` |
+| `description` | A line about it for the screens that offer it: what sort of person it makes |
+
+A choice has an `id` (no `.`), a `name`, a `kind` and a `default`; a
+`pick` has `options` and `count` (default 1); `points` has `options`,
+each with a `cost` (default 1), and a `budget`; `range` has `min`,
+`max` and either `sets: "scale"` (the body's size is multiplied by the
+value) or an `attribute` whose base the value becomes; `text` has
+`max_length` (default 64), `suggestions` (what a random choice picks
+from) and `sets: "name"` or `"description"`; `assemble` has the `parts`
+it allows and a `budget`, one point a part. An option has an `id`, a
+`name`, a `cost`, everything a template gives except `body`, `glyph`,
+`remains` and `blocks`, and `choices` of its own, at most eight deep.
+
+A **character spec** is `{ templates, select, unselected, seed,
+anonymous }`. A choice is named by its template's id, qualified or
+bare, and its own: `core:person.stature`; one inside an option by the
+choice, the option and its own: `core:person.craft.smith.metal`. A
+selection is a list of option or part ids, a number or a text. Every
+choice is visited in the order written, nested choices right after the
+option that opens them; one not selected takes its `default` (a
+`pick`'s first `count` options, a `range`'s `min`, nothing for the
+rest) or, with `unselected: random`, a selection drawn from a stream
+seeded by `seed` alone. A selection for a choice that is not open, and
+one that does not suit its choice, are refused.
+
+Spawning makes the entity out of the world with its tags and
+variables; gives it its body, then stats if anything gives a body or a
+stat, bases, pools and tracks; its `Identity`, naming the first
+template as its definition, every template applied, and its own name
+and description; a mind; its rules; puts it in its place; and raises
+`entity_spawned`. It is `Sim::spawn_template`, the verb `spawn`, the
+debug command `spawn`, and the answer to a loaded tract's
+`spawn_requested` whose `what` names a template, which makes an
+anonymous individual whose random selections are seeded by where it
+stands.
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `spawn` | `template`, `at?`, `in?`, `also?` (more templates), `random?`, `seed?`, `anonymous?` | Gives the entity made; with neither `at` nor `in` it is made out of the world |
+| `make_notable` | `who` | Section 12.2; gives null |
+| `make_anonymous` | `who` | Section 12.2: a notable individual is anonymous again, and forgotten when its tract unloads; an agent made anonymous is forgotten at once. Gives null. Refused with `agent.not_an_individual` for something with no identity |
+
+| Event | Subject | Fields |
+|-------|---------|--------|
+| `entity_spawned` | `self`, `here?` | `templates`, `items`, `traits` (`list<string>`): the qualified ids applied, and what it is to start with, as written |
+| `became_notable` | `self` | None |
+| `became_anonymous` | `self` | None: `make_anonymous` made it anonymous again |
+
+| Reason | When | Values |
+|--------|------|--------|
+| `templates_not_registered` | The definitions were loaded without the `template` type | — |
+| `no_templates` | A spec names no template | — |
+| `unknown_template` | An id names no template | `what` |
+| `unknown_choice` | A selection names a choice the spec's templates do not open | `choice` |
+| `bad_selection` | A selection does not suit its choice: an option it lacks, too many or too few, over budget, out of range, too long, of the wrong shape | `choice`, `why` |
+
+The **creation session** is the state a creation screen edits: a spec
+whose every change is checked as it is made. It lists the choices open
+now with their options, costs, budget spent and current selection,
+drops selections for choices a change closes, and gives the complete
+spec when the player is done. The application hands it to the interface
+as `app.creation`: a map of `templates`, `choices` (each a map of `key`,
+`name`, `kind`, `depth`, `count`, `budget`, `spent`, `left`, `min`,
+`max`, `max_length`, `options`, `parts`, `value`, `by_default`),
+`complete` and `problem`, with the application's own `template`,
+`name`, `seed` and `finished`; the interface edits it with the service
+`creation` (12 §3.4, decision D-653), and a new game's player is
+spawned from the finished spec, or from its start's template.
+
+The bundled playable templates (`mods/core/data/playable.json`,
+`powers/sampler.json`) are an ordinary person, a brawler, a marksman (a
+bow and arrows or a loaded pistol, a choice), an adept (two or three
+powers from a points choice) and the sampler of every power. What each
+starts with in hand is given by a rule attached to it that runs once,
+when it is first in the world (`entity_relocated`), since a template's
+`items` are not made yet.
+
+Not built: the `creature` type; `apply_template` on an entity that
+exists; making a template's `items`; adding the parts an `assemble` choice chose, which waits for
+`add_part`; conditions on options; a range's `apply` effects and
+`body_edits`, which wait for the rule runtime and body editing.
+
 ## 11. Movement
 
-Moving is an action (03 §6.6) whose effect is one of these verbs.
+Moving is an action (03 §6.6) whose effect is one of these verbs. A verb
+takes no time: the action's phase waits as long as the step takes, and the
+verb then takes it, checked against the world as it is at that moment.
 
 ```json
 { "type": "movement", "id": "walk",
@@ -664,30 +1905,228 @@ Moving is an action (03 §6.6) whose effect is one of these verbs.
   "speed": "1.4 * self.fn.locomotion",
   "step_up": 0.6,
   "uses": { "legs": "all" },
-  "noise": 0.3 }
+  "noise": 0.3,
+  "default": true }
 ```
 
-A `movement` definition says where a mover may go (`standable`, `liquid`,
-`open`, `climbable`, `solid` for burrowers and phasers), how fast, and what
-it costs. The engine checks a step against the world's geometry
-(02 §22 `neighbours`) and the mover's size.
+A `movement` definition is a way of moving: where it takes a mover, how
+fast, and what it needs. The engine checks a step against the world's
+geometry (02 §22 `neighbours`) and the mover's size, and names no leg, fin
+or wing: what a creature can do is what its definitions say.
 
-| Verb | Does |
-|------|------|
-| `move` | One step to an adjacent cell by a movement mode |
-| `sweep` | Many cells in one go along a line. Stops at the first obstruction and strikes it as a body impact (02 §15.2) with the mover's mass and speed. A speedster's dash. |
-| `leap` | Launches the mover as a body with a computed velocity (02 §15). Lands where physics says. |
-| `set_altitude` | Changes height within the cell for fliers and climbers |
-| `teleport` | Realm transfer (02 §19) |
+| Field | Effect |
+|-------|--------|
+| `name` | What a reader calls it |
+| `surface` | Where it takes the mover: one of the table below. `standable` if left out |
+| `speed` | Metres for each second of the mover's own time: an expression about the mover (`self`), pure and reading truth, compiled at load and worked out whenever a step is priced. It may read attributes, body functions, `carried_mass` or anything else of the mover. Zero, less or null: the mover cannot move this way now |
+| `step_up` | The tallest thing in a cell the mover steps over, in metres. 0.5, ordinary walking (02 §5.2), if left out |
+| `rough` | How many times longer a step into a `rough` cell takes. At least 1; 2 if left out |
+| `climb` | How many times longer a step between storeys takes. At least 1; 1 if left out |
+| `uses` | The channel slots that must be working to move this way, written as an action's `uses` (03 §6.2). A body's slots are counted less those its posture `occupies`; a mover with no body is not asked |
+| `noise` | How loud a step is, as a factor for signals (15 §3). Carried for perception |
+| `default` | Whether a creature that lists no ways of moving of its own moves this way |
 
-An entity whose footing goes (`OccupantUnsupported`), or who is struck hard
-enough, becomes a world body and is the world's until it lands or is caught.
+| Surface | The mover may be in | Steps it makes |
+|---------|---------------------|----------------|
+| `standable` | A cell with footing that is not liquid | On the level; up from a cell that holds a ramp or stairs, and down into one |
+| `climbable` | A cell that holds a ramp, stairs or ladder, or the cell its top holds up | Up from a cell that holds any of them, and down into one |
+| `liquid` | A liquid cell | On the level into liquid; up and down between liquid cells |
+| `open` | Any cell | On the level; up where the cell above has no floor, down where neither this cell's floor nor a solid top below is in the way |
+| `solid` | Any cell, whatever stands in it | Any |
 
-One creature that blocks movement may occupy a cell per plane. A mover may
-**swap** places with a creature that yields to it: both are relocated
-together, and it counts as the mover's step. Who yields is decided by the
-hook `passage_requested`; members of a formation yield to each other
-(09 §5.5). Shoving and forcing past are actions content defines.
+Whatever the surface but `solid`, a cell is closed to the mover where
+something in it stands taller than `step_up`, and a diagonal step is
+refused where either cell it passes is closed so: movers do not cut
+corners.
+
+**A mover's ways of moving.** An entity's are those it has been given
+(`set_movement`, which whoever builds a creature from its template calls),
+in order; a creature that has been given none moves by every definition
+flagged `default`, in order of id; anything else that has been given none
+does not move by itself. Of those, a way counts only while its posture
+allows it, its body has the slots it `uses`, and its `speed` comes to more
+than zero; the posture's `speed` multiplies that. An entity left with none
+cannot move. Together these are the mover's rules, the world's `MoveRules`
+for that one mover (02 §22).
+
+**What a step costs.** A step's length (1 m on the level, √2 m on a
+diagonal, a storey between storeys), times `rough` into a rough cell,
+times `climb` between storeys, over the speed of the way of moving, is
+the time it takes in the mover's own time. Of the ways that make the step,
+the quickest is used, the first listed on a tie. A path search adds up
+each step's time times the mover's best speed: metres at that speed, so
+the cheapest path is the quickest, and never below the step's length.
+Because the time is the mover's own (03 §3.4), the same step takes half as
+long, as the world counts it, where the mover's clock runs twice as fast.
+
+**What a step checks**, in this order, against truth at the moment it is
+taken: the mover stands in the world and can move; there is a cell there;
+one of its ways of moving makes the step (nothing in the way, footing or
+whatever else its surface asks, a ramp, stairs or ladder between storeys,
+no corner cut); a mover wider or taller than a cell fits; and nobody who
+blocks movement fills the cell on a plane it shares. A step into a cell
+with nothing to stand on is refused (`move.no_footing`) unless the mover
+can be there, flying or swimming, or the step is given `drop`: then it is
+taken and the mover falls. A refused step changes nothing and raises
+`step_refused` with its reason.
+
+**Occupancy.** One creature that blocks movement may occupy a cell per
+plane. A mover may **swap** places with a creature that yields to it: both
+are relocated together, and it counts as the mover's step. Who yields is
+decided by the hook `passage_requested`: a handler sets its field `yields`
+to true. Only a single cell mover swaps with a single cell creature; two
+or more in the way refuse the step. Members of a formation yield to each
+other (09 §5.5). Shoving and forcing past are actions content defines.
+In the bundled content the dead and the senseless yield
+(`core:step_over_the_fallen`, decision D-964): changing places with them
+is stepping over them, so a body does not seal a doorway.
+
+**Paths.** A path is planned from what the mover believes (01 R11) and
+kept with the mover; each step of it is checked against truth when it is
+taken. The plan goes through what the mover expects to open, a closed
+door, at the cost of 2 m of walking. A step that is refused marks the path
+stale and teaches the mover that it cannot enter that cell: the next plan
+to the same place goes round it, and when no plan is left the journey ends
+with the reason, raised as `path_failed`. The functions that read what a
+mover believes are one seam (`clash_sim::movement::belief`), which reads
+truth until perception is built (document 15).
+
+**Losing one's footing.** When the world reports an entity with nothing
+under it (`entity_unsupported`, 02 §14.3), a mover that can stay where it
+is, by flying or swimming, stays; anything else falls. An entity that
+falls becomes a world body (02 §15) and is the world's until it lands or
+is caught; so is one struck hard enough. `fell` is raised where it lost
+its footing, and the entity is launched (02 §15) at rest from the middle
+of its cell, with its mass, volume, cross-section and planes. The world
+carries the occupant down, and the kernel follows each cell as
+`entity_relocated`; while it is carried it cannot step or be placed
+(`move.in_flight`). When the world reports `body_landed`, `landed` is
+raised where it came to rest, with the height below where it set off,
+and the speed and energy of a free fall that far. So is any entity the
+world carries, whoever launched it. What the landing does to it is the
+hit that the world's `body_impact` makes (section 7). Where there is no
+gravity, or nowhere below to come to rest, it stays; one the world will
+not take as a body, having no mass, is put where something dropped from
+its cell comes to rest (`resting_cell`) at once, and `landed` follows
+straight away.
+
+| Verb | Arguments | Does |
+|------|-----------|------|
+| `step` | `who: entity`, `dir: string`, `drop: bool?` | One step to the cell next to the mover in `dir`: `north`, `north_east`, `east`, `south_east`, `south`, `south_west`, `west`, `north_west`, `up` or `down`. Gives `distance` and `cost` in metres and `time` in seconds of the mover's own time; a step the world refuses raises `step_refused` and gives null, which is an outcome of moving and not a fault of the rule (decision D-870) |
+| `move_to` | `who: entity`, `to: loc` | Puts an entity in a cell, from anywhere and without time, where nothing it does not step over stands, it fits and nobody who blocks it is. Nobody is asked to yield. If nothing holds it up there it falls. For rules that place someone |
+| `set_posture` | `who: entity`, `posture: id<posture>?` | Section 11.1 |
+| `plan_path` | `who: entity`, `to: loc`, `max_cost: number?` | Plans a path from what the mover believes and keeps it as the path it follows. Gives `steps` and `cost`; no way there raises `path_failed` and gives null, not a fault (D-870) |
+| `follow_path` | `who: entity` | Takes the next step of the path the mover follows, as `step` does. Entering the last cell ends the journey. A refused step marks the path stale and gives null, as does a stale path or none, not a fault (D-870) |
+| `clear_path` | `who: entity` | Forgets the path the mover follows |
+| `set_movement` | `who: entity`, `modes: list<id<movement>>` | Says which ways of moving an entity has, in the order they are tried. Empty: the definitions flagged `default`, for a creature |
+| `sweep` | | Many cells in one go along a line. Stops at the first obstruction and strikes it as a body impact (02 §15.2) with the mover's mass and speed. A speedster's dash. **Not built** |
+| `leap` | | Launches the mover as a body with a computed velocity (02 §15). Lands where physics says. **Not built** |
+| `set_altitude` | | Changes height within the cell for fliers and climbers. **Not built** |
+| `teleport` | | Realm transfer (02 §19). **Not built** |
+
+The bundled mod defines the actions the play screen's controls name
+(12 §9.2), in `mods/core/data/movement.json`:
+
+| Action | Parameters | Phases |
+|--------|------------|--------|
+| `step` | `dir: string` | `stride`, lasting `self.step_time($dir)`, and `step` as it ends. `requires` is `self.can_step($dir)`, and `fail_text` gives `self.step_fault($dir)` |
+| `go_to` | `to: cell` | `plan` (no time): `plan_path`, then `stride` while a path is left. `stride`, lasting `self.step_time(self.path_next)`: `follow_path` as it ends, then `plan` again if the path went stale, `stride` while a path is left, and the end. Cancelled or interrupted, it forgets the path |
+| `set_posture` | `posture: id<posture>` | `shift`, 600 ms, and `set_posture` as it ends |
+
+| Event | Subjects | Fields | Raised when |
+|-------|----------|--------|-------------|
+| `step_refused` | `self`: entity | `dir`: string, empty for a placement; `code`, `message`: string, the reason | A step, or a placement by `move_to`, was refused. The mover is where it was |
+| `path_failed` | `self`: entity; `here`: loc, the goal, if it is a cell | `code`, `message`: string | No path could be planned. Whatever path the mover followed is forgotten |
+| `posture_changed` | `self`: entity | `from`, `to`: string, qualified ids of the postures, empty for none; `look`: string, the new posture's | An entity's posture changed |
+| `fell` | `self`: entity; `here`: loc | none | An entity lost its footing where it could not stay, and began to fall from `here`: the world carries it as a body |
+| `landed` | `self`: entity; `here`: loc | `height`: real, metres below where it set off, zero if higher; `speed`: real, metres a second, `sqrt(2 g h)`; `energy`: real, joules, its mass with what it carries times gravity times the height | The world stopped carrying an entity as a body: it came to rest at `here`, after a fall or a throw |
+
+Moving itself is the kernel's `entity_relocated` (03 §13).
+
+| Hook | Subjects | Fields | A handler may |
+|------|----------|--------|---------------|
+| `posture_changing` | `self`: entity | `from`, `to`: string | Cancel: the posture stays |
+| `passage_requested` | `self`: the mover; `target`: who fills the cell; `here`: loc | `yields`: bool, false | Set `yields` to make the two change places. Cancelling, or leaving it false, refuses the step |
+
+| Property | Gives |
+|----------|-------|
+| `entity.posture` | `id<posture>?`: the posture it is in; null in none |
+| `entity.speed` | `real?`: metres for each second of its own time by its fastest way of moving that works, posture included; null if it cannot move |
+| `entity.can_step(dir: string)` | `bool`: whether it believes it can step that way: a cell is there and one of its ways makes the step. Who is in the cell is not asked |
+| `entity.step_fault(dir: string)` | `string?`: why it believes it cannot, as a sentence; null if it believes it can |
+| `entity.step_time(dir: string)` | `real?`: how long it expects the step to take, in seconds of its own time; null if it believes it cannot make it. What a phase's `time` waits |
+| `entity.can_reach(to: loc)` | `bool`: whether `to` is next to it and it believes it can step there |
+| `entity.path_cost(to: loc)` | `real?`: what the way to `to` costs as it believes the way to be, in metres at its best speed (09 §6.4); null if it believes there is none. A search each time |
+| `entity.path_left` | `int?`: steps left of the path it follows; null for none |
+| `entity.path_next` | `string?`: the direction of its path's next step; null for none, or if it is not next to that cell |
+| `entity.path_stale` | `bool`: whether its path must be planned again before the next step |
+
+None is safe for belief (D-466): each is the mover's own state, which a
+mind context reads of its own subject (05 §7.3). Those that read the world
+beyond the mover read it through what the mover believes, so a character
+may decide by them; a step is still checked against truth when it is
+taken.
+
+| Reason | When |
+|--------|------|
+| `move.cannot_move` | The mover has no way of moving that works now, or none makes this step and nothing more particular applies. Carries `entity` |
+| `move.nowhere` | The mover is not standing in the world. Carries `entity` |
+| `move.bad_direction` | A direction is not one of the ten. Carries `dir` |
+| `move.bad_argument` | A verb was given something it does not take. Carries `argument` |
+| `move.edge` | There is no cell to step into: not loaded, or beyond the realm. Carries `dir` |
+| `move.blocked` | Something stands in the cell that the mover does not step over and that cannot stand aside: a wall. Carries `height` |
+| `move.closed` | What stands in the cell could stand aside and does not: a closed door. Carries `height` |
+| `move.corner` | A diagonal step would cut past something in the way |
+| `move.too_steep` | No way up or down here for this mover |
+| `move.no_footing` | Nothing to stand on, and the mover cannot be there otherwise |
+| `move.liquid` | The cell is liquid, and the mover does not swim |
+| `move.occupied` | Someone who blocks movement fills the cell on a shared plane and did not yield. Carries `by` |
+| `move.no_room` | A mover wider or taller than a cell does not fit |
+| `move.no_way` | No path leads to the goal, or none was found in as many cells as the search may settle (`searched`) |
+| `move.too_far` | No path within the cost allowed. Carries `max_cost` |
+| `move.goal_blocked` | The mover believes it cannot be in the goal cell |
+| `move.other_grid` | The goal is in another grid |
+| `move.no_path` | `follow_path` for a mover that follows no path |
+| `move.in_flight` | The world is carrying the mover as a body: it is falling or thrown. Carries `entity` |
+| `move.off_path` | The mover is not where its path left it, or a step of it was refused: plan again |
+| `move.unknown_movement` | A way of moving no loaded definition has |
+| `posture.unknown` | A posture no loaded definition has |
+
+### 11.1 Posture
+
+A character is in one **posture** at a time, or in none, which changes
+nothing about it.
+
+```json
+[
+  { "type": "posture", "id": "standing", "height": 1.0 },
+  { "type": "posture", "id": "crouched", "height": 0.6, "speed": 0.5, "signature": 0.6 },
+  { "type": "posture", "id": "prone",    "height": 0.2, "speed": 0.15, "signature": 0.3,
+    "movement": ["crawl"], "occupies": { "leg": "all" }, "traits": ["steadied"] }
+]
+```
+
+| Field | Effect |
+|-------|--------|
+| `name` | What a reader calls it |
+| `height` | Scales the body's height, and with it the height of every part's band. So it decides what cover hides (02 §5.3), what a shot at a given height meets (07 §11.1), and what can be reached (07 §4.3). The share of its standing height, above zero; 1 if left out |
+| `speed`, `movement` | A factor on the speed of every way of moving (1 if left out), and which ways of moving are allowed (all if left out) |
+| `signature` | A factor on how easily the body is perceived (15 §5.3); 1 if left out |
+| `occupies` | Channel slots unavailable while in it, written as an action's `uses` |
+| `traits` | Whatever else content wants it to carry: a steadier aim, a weaker guard. Given with the posture as their giver (section 5) while the entity is in it |
+| `look` | How the body is drawn in it (12 §4.4), reported with `posture_changed` |
+
+Changing posture is an action, with a time and a noise. `set_posture`
+forces one: a rule may put someone on the ground when a stagger is severe
+enough (07 §7). The hook `posture_changing` runs first and may cancel; then
+the height of the entity's `Physical` becomes the posture's share of its
+standing height, which sight and cover read, and `posture_changed` is
+raised. A posture the entity is already in changes nothing. A body with
+nobody acting for it takes the posture its plan names as `limp`.
+
+Getting up takes time, and someone lying down is below most swings and
+within reach of every boot. Postures are content. A body plan lists which
+it has: a horse has its own, and a snake has one.
 
 ## 12. Coming and going
 
@@ -711,61 +2150,274 @@ would be lost by forgetting it:
 - it took part in an action with a controlled or notable entity;
 - it was wounded, or gained or lost a trait, item or relation;
 - a variable on it was set;
-- a rule called `remember` on it.
+- a rule called `make_notable` on it.
 
 When a tract unloads:
 
 | Individual | Becomes |
 |------------|---------|
 | Anonymous | Nothing. Its population count is adjusted if it died or left. |
-| Notable, with nothing to pursue | Stored with the tract |
-| Notable, with goals elsewhere | An agent |
+| Notable | An agent (09 §10). With a routine or goals it goes on living while unloaded. With neither it waits where it was. |
 
 Named characters created by scenarios or generation are notable from the
-start. `forget` makes an individual anonymous again.
+start. `make_anonymous` makes an individual anonymous again.
+
+As built (package E11; decisions D-558, D-780, D-783), in
+`clash_sim::agent`: an `Identity` says whether its entity is anonymous;
+anything without one is notable. A spawn is notable unless it asks to be
+anonymous.
+
+**Residents.** A loaded tract's `spawn_requested` that names a template
+(10 §11.2) makes a **resident**: a record keyed on the realm, the cell
+it was asked for at (its **home**) and which of those asked for at that
+cell it is (`ResidentKey { realm, home, index }`), holding the template
+as written, the map that asked, and a seed drawn from the named stream
+`agent.resident` keyed on the realm, the home and the index. Its
+individual is made anonymous from the template with that seed, so it has
+the same name, build and looks every time it is made (invariant B7), and
+is put where its routine (09 §10.2) has it now, at the nearest free cell
+it can stand in within six cells (`SPOT_RADIUS`); if that is not loaded,
+it is an agent from the start. A settlement's residents are its
+population: one record each, a few dozen bytes, and no separate count.
+
+**What makes one notable**, each raising `became_notable` once: a wound;
+a variable set on it; a trait gained or lost (`trait_added`,
+`trait_removed`); an item taken into or dropped from its holds
+(`item_taken`, `item_dropped` with it as `holder`); a relation it holds
+changing (`relation_changed`); an action begun that it shares (as actor
+or as an entity among the parameters) with an entity under control
+(direct or delegated) or a notable one (`action_started`); and
+`make_notable`. `make_anonymous` makes a notable individual anonymous
+again, raising `became_anonymous`.
+
+**When its tract unloads**, before the kernel shelves what stands there:
+a resident's anonymous individual is removed, its record kept cold; a
+notable one is stored, out of the world, and becomes an agent
+(`agent_stored`; 09 §10.4). Neither is on the shelf: a resident comes
+back where its routine puts it, not where it stood. An individual with
+no record (made by a rule or a scenario) is shelved as before and waits
+where it was. A resident's individual that dies or is removed leaves its
+record `gone`: it is never made again. An agent made anonymous is
+removed at once.
+
+Not built: populations as counts with presence tables (09 §13.1), and a
+population's count adjusted by deaths (a resident is gone instead).
 
 ### 12.3 Stored entities
 
 A stored entity keeps every component. Its timers follow 03 §9. Its place is
-`Stored`. Loading restores it exactly; invariant R7 covers it.
+`Stored`. Loading restores it exactly; rule R7 (01 §2) covers it.
 
 ## 13. Modding surface
 
 **Definition types**: `attribute`, `pool`, `track`, `trait`, `body_part`,
 `body_plan`, `body_function`, `template`, `creature`, `mind`, `item`,
-`movement`, `population`, `content_table`. Tissue extras on `material`.
+`movement`, `posture`, `population`, `content_table`. Tissue extras on
+`material` (`leak`, `signal`, `heal`; section 6.1). `seat` on attributes,
+pools, tracks and traits. `limp`, `postures` and `needs` on body plans;
+`stops` on pools; `remains` on templates.
+`ages` on items and `keeps` on containers.
 Body flags on `damage_type` (`severs`).
 
 **Events**: `entity_created`, `entity_destroyed`, `entity_died`,
 `entity_revived`, `mind_released`, `mind_transferred`, `hit_landed`,
 `wound_inflicted`, `wound_healed`, `part_disabled`, `part_restored`,
-`part_severed`, `part_destroyed`, `body_changed`, `function_changed`,
+`part_severed`, `part_destroyed`, `body_changed`, `body_cells_damaged`,
+`wound_closed`, `wound_reopened`, `function_changed`, `attr_changed`,
 `pool_crossed`, `track_advanced`, `trait_added`, `trait_removed`,
-`item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
-`item_broken`, `contents_materialised`, `became_notable`.
+`trait_expired`, `item_taken`, `item_dropped`, `item_worn`, `item_removed`, `item_damaged`,
+`item_repaired`, `item_broken`, `item_split`, `item_merged`,
+`item_stage_reached`, `item_turned`, `posture_changed`,
+`contents_materialised`, `became_notable`, `step_refused`, `path_failed`,
+`fell`, `landed`; as built also `slots_lost`, `slots_gained`,
+`body_destroyed`, `part_detached`, `hit_exited`, `entity_unconscious`,
+`entity_woke`, `driver_changed` and `entity_spawned`. Those of traits are
+described with their fields in section 5, those of editing in
+section 6.5, those of items in section 9.2, and those of movement and
+posture in section 11.
 
-**Hooks**: `hit_incoming`, `entity_dying`, `trait_adding`, `pool_changing`,
-`item_taking`, `passage_requested`.
+**Hooks**: `hit_incoming`, `exposure_incoming`, `entity_dying`,
+`trait_adding`, `trait_removing`, `pool_changing`, `item_taking`,
+`item_leaving`, `body_changing`, `mind_transferring`, `posture_changing`,
+`passage_requested`. Each is described in the table below, the last two
+with their fields in section 11, `trait_adding` and `trait_removing`
+with theirs in section 5, `body_changing` with its fields in
+section 6.5,
+`pool_changing` with its fields in section 4.4, and `hit_incoming` with
+its fields, and the events of bodies and wounds with theirs, in
+section 7.6.
 
 **Effects**: the verbs of sections 6.5, 8.2, 8.3, 9.2 and 11, and:
 `hit`, `add_trait`, `remove_trait`, `set_attr_base`, `add_modifier`,
-`remove_modifier`, `pool_add`, `pool_rate`, `track_add`, `spawn`,
-`destroy`, `apply_template`, `remember`, `forget`, `rename`.
+`remove_modifier`, `pool_add`, `pool_rate`, `advance_track`, `spawn`,
+`destroy`, `apply_template`, `make_notable`, `make_anonymous`, `rename`,
+`set_color`, `close_wound`, `reopen_wound`, `disable_part`,
+`restore_part`. The verbs of items (section 9.2) are registered with their
+arguments: `take`, `drop`, `give`, `wear`, `remove`, `stow`, `put_in`,
+`take_out`, `create_item`, `split`, `destroy_item`, `set_color`,
+`repair_item` and `materialise_contents`.
+
+| Hook | Runs before | A handler may |
+|------|-------------|---------------|
+| `hit_incoming` | A hit is applied to a body (section 7.1) | Change its energy, intensity, part and direction; cancel |
+| `exposure_incoming` | A dose reaches a body by any route (02 §16; 16 §9.5) | Change the amount; cancel |
+| `entity_dying` | An entity stops for good (section 8.3) | Cancel |
+| `trait_adding`, `trait_removing` | A trait is given, or `remove_trait` removes one (section 5) | Cancel; on `trait_adding`, change `duration` |
+| `pool_changing` | A verb changes a pool's level (section 4.4). Rates and regeneration do not raise it. | Change the amount; cancel |
+| `item_taking`, `item_leaving` | An item enters or leaves a hold | Cancel: a thing that will not be picked up, or will not come off |
+| `body_changing` | A verb of section 6.5 that reshapes a body (the list there) | Cancel: a body that cannot be reshaped |
+| `mind_transferring` | `transfer_mind`, `set_driver` | Cancel: a mind that cannot be moved or ridden |
+| `posture_changing` | A posture is forced | Cancel |
+| `passage_requested` | A mover asks to swap places | Decide who yields |
+
+**Refusals.** These are refused with a reason (14 §5) and change nothing:
+`add_part` with no free socket; removing a body's root part; `create_mind`
+in something that has a mind; `transfer_mind` into something that has a
+mind, unless it says `"swap": true`, in which case the two change places.
+Parts of an old plan that `set_body_plan` cannot map are dropped as items.
+The refusals of attributes, pools and tracks are tabled in section 4.4,
+those of bodies, hits and wounds in section 7.6, those of items in
+section 9.2, and those of movement and posture in section 11.
+
+**Settings**: `hit.overkill_factor` (how many times what a whole body could
+absorb destroys it outright, section 7.4).
 
 **Queries** (05 §11): `parts`, `wounds`, `traits`, `held`.
 
-**Properties**: `attr.*`, `pool.*`, `track.*`, `fn.*`, `mass`, `height`,
-`volume`, `scale`, `part(key)` and its `condition`, `state`, `layers`,
-`exposed`; `has_trait`, `trait(id).stacks`, `can(action)`, `is_alive`,
+**Properties**: `attr.*`, `pool.*`, `track.*` (section 4.4); `fn.*`,
+`scale`, `reach`, `part(name)`, `parts`, `wounds` and the properties of a
+part and of a wound (section 6.7); `mass`, `height`, `volume`;
+`has_trait(trait)`, `traits`, `trait_stacks(trait)`, `trait_active(trait)`,
+`trait_left(trait)` (section 5), `can(action)`, `is_alive`,
 `has_mind`, `driver`, `holder`, `held(hold)`, `carried_mass`, `is_notable`,
-`templates`, `name`.
+`templates`, `name`, `posture`, `velocity`, `color`; on items, `age`;
+`speed`, `can_step(dir)`, `step_fault(dir)`, `step_time(dir)`,
+`can_reach(to)`, `path_cost(to)`, `path_left`, `path_next` and
+`path_stale` (section 11).
+
+**Registered so far** (05 §5.3), from `Identity` and `Physical`, and
+movement's, which are tabled in section 11. None is safe for belief;
+those of `Identity` and `Physical` read truth.
+
+| Property | Gives |
+|----------|-------|
+| `entity.mass` | `real?`: kilograms, with everything inside it |
+| `entity.own_mass` | `real?`: kilograms, of the entity alone; null without a `Physical`. **Settable**: every container round it and the world's record of each follow (section 3) |
+| `entity.carried_mass` | `real?`: kilograms, of everything inside it |
+| `entity.volume`, `entity.height` | `real?`: cubic metres; metres |
+| `entity.name`, `entity.description` | `string?`: the entity's own, null for one that goes by its definition's |
+| `entity.def` | `any`: the definition it was made from, as an id of whatever type that is; null for none |
+| `entity.has_component(component: string)` | `bool`: by the component's name, `identity`, `physical`, `stats`, `body`, `item` or `holds` |
+
+**Registered for items** (section 9). All read truth; none is safe for
+belief. `held`, `carried` and `worn_on` yield what belongs to the same
+owner as the subject, so a character may read what it holds, wears and
+carries, and what its own pack holds; what is inside someone else's pack
+is not reachable from a mind (05 §7.3). Those that follow holding name
+`item_taken`, `item_dropped`, `item_worn`, `item_removed` and
+`entity_relocated` as the events that change them (05 §7.5).
+
+| Property | Gives |
+|----------|-------|
+| `entity.item` | `id<item>?`: the definition it was made from; null for what is not an item and for a part that came off a body |
+| `entity.is_item` | `bool` |
+| `entity.count` | `int?`: the members of a stack; null for what is not an item |
+| `entity.condition` | `real?`: from 1, undamaged, to 0, broken: one less its damage in 255ths |
+| `entity.is_broken` | `bool` |
+| `entity.material` | `id<material>?`: what an item is made of |
+| `entity.color` | `string?`: the colour an item carries. **Settable**: `set_color`; null takes it away |
+| `entity.holder` | `entity?`: what the entity is directly inside; the same as `container` |
+| `entity.hold` | `string?`: how it is held there: `grasp`, `worn`, `stowed`, `seat`, `inside` or `fixed` |
+| `entity.held(hold: string)` | `list<entity>`: what the entity holds in that kind of hold, in order of id |
+| `entity.carried` | `list<entity>`: everything inside it at any depth, each container before its contents |
+| `entity.worn_on(part: string)` | `list<entity>`: what it wears over the part of that name, outermost first; a broken item is not listed |
+| `entity.free_grasp(channel: id<channel>)` | `int`: the slots of the channel its working parts supply that nothing it grasps occupies |
+| `entity.capacity_volume`, `entity.capacity_mass` | `real?`: a container's `holds`, in cubic metres and kilograms; null for none or no limit |
+| `entity.stowed_volume` | `real?`: the space what is directly inside it takes up |
+| `entity.is_latent` | `bool`: a container whose contents have not been made |
+| `element.latent` | `bool`: an element whose contents generation left latent (section 9.3) |
+| `entity.conferred_tags` | `list<string>`: the tags it carries only because of what it grasps or wears |
+
+**Traits** are built with their definition type, verbs, properties,
+events, hooks and reasons (section 5), `on_apply` and `on_remove` run,
+and items and postures give theirs. Not yet: what `grants`,
+`abilities`, `senses`, `bound`, `goals`, `weights` and `seat` give,
+which are read, checked and carried for the packages of actions,
+abilities, perception and minds; the slots a trait's `channels` adds or
+disables, which `traits::channel_change` gives the action runtime;
+keeping `while` current, which waits for reactive expressions; and the
+query `traits` (05 §11), which is the list property until queries are
+built.
+
+**Gaps.** Reachable only from Rust for now: `templates`, until
+`template` is a definition type an id can name; the name and the
+description an entity takes from its definition, which need a way to
+read a field of a definition of any type; and `scale`, `color`,
+`velocity` and the rest of the list above, which wait for the
+components that hold them.
+Whether an entity has a component of a given kind is the property
+`entity.has_component`, by the component's name: `identity`,
+`physical`, `stats`, `body`, `item`, `holds`, `mind` or `driver`.
+Items and holding are built with their
+definition type, components, verbs, properties, events and refusals
+(section 9). A hit goes through what is worn (`Sim::hit` asks the item
+package), what the worn layers took is damage to the items, a part that
+came off becomes an item with what was worn on it, and what a part that
+can no longer hold was grasping is dropped. The query `held` (05 §11) is
+a list property until queries are built. Not built: ageing (section 9.4),
+`look`, `round`, `interactions` and `device` on items, a `table` in an
+item's own `contents`, a verb that makes items from a content table
+(drawing from one is reachable only from Rust: `item::table::draw`, and
+answering a tract's furnishing requests is `furnish::honour`), what `grants`, `rules`, `guards` and `contains` give (carried
+as data), what seats and fixed holds mean, a check of an item's colour
+names against the `color` definitions, and `age`.
+
+Built and reachable from rules once the rule runtime is bound to the
+simulation: attributes, pools and tracks with their definition types,
+properties, events, hook and verbs (section 4.4); bodies, hits and
+wounds with theirs (sections 6.5, 6.7 and 7), harm from the world
+(section 7.4); minds and vital state (section 8.4); templates, specs,
+spawning and the creation session (section 10.4). The reasons of each
+are tabled in its section; a verb's argument that is null or of the
+wrong sort is `verb.bad_argument`, with the value `argument`. A stat's
+expression that raises a run-time warning while it is worked out is
+reported as the fault `stats.expression_warning`, with `entity`,
+`count` and `warning`.
+
+**Gaps.** Reachable only from Rust for now: `templates` as a property,
+the name and description an entity takes from its definition, and
+`scale`, `color`, `velocity`, `is_alive`, `has_mind`, `driver` and
+`is_notable` as properties (the simulation answers `Sim::vital`,
+`Sim::driver` and `Sim::is_notable`); a template's glyph
+(`Sim::glyph`); and the creation session, which the application
+holds. A track's `on_advance` is kept and not yet run. A pool cannot
+yet name a substance (16 §9.5). The queries `parts` and `wounds`
+(05 §11) are list properties until queries are built. Not built: the
+events of section 7.6 for what an edit of section 6.5 changed, a change
+of footprint with a change of plan, bodies made of cells (section 6.6), shared
+parts (section 6.4), which parts face a hit's direction (section 7.4),
+what a pool that names a substance spills, the `creature` and `mind`
+types, and populations.
+
+Movement and posture are built with their definition types, verbs,
+properties, events, hooks and reasons (section 11), and the bundled
+`step`, `go_to` and `set_posture` actions are data that calls them. Not
+yet: the verbs `sweep`, `leap`, `set_altitude` and `teleport`; catching
+a falling entity, and a body that leaves loaded space; what a mover
+believes, which reads truth behind one seam until perception is
+built; a posture's effect on a body's part bands and the
+`limp` posture, and the slots it `occupies` being held against actions,
+which is a function in Rust (`posture_occupies`) until the action
+runtime claims slots; `noise` and `signature`, which are carried for
+perception; and a path for a mover wider than a cell, which is planned
+for its corner cell and checked whole at each step.
 
 ## 14. Invariants
 
 | # | Invariant |
 |---|-----------|
 | B1 | Nothing reduces a hit's effect except layers, hooks and rules. There is no hidden health value. |
-| B2 | A part's channel slots are enabled exactly when the part is whole. |
+| B2 | A part's channel slots are enabled exactly when the part is whole and nothing holds them: a grip that pins, a posture, a trait, or `disable_channel`. |
 | B3 | Function capacities, mass and attribute caches always equal a from-scratch recomputation. |
 | B4 | Applying the same character spec with the same seed yields the same entity. |
 | B5 | A mind is on exactly one entity. Moving it leaves none behind. |

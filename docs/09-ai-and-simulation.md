@@ -1,6 +1,7 @@
 # 09 — AI and the Layered Simulation
 
-Status: design complete, ready for implementation.
+Status: design complete; the beta subset of sections 3 to 6 is built
+(sections 3.5, 4.1, 5.4a and 6.6).
 Implementation plan: [plans/ai.md](plans/ai.md).
 Serves scenes S7, S13, S14, S16, S19 and S24 of [00-vision.md](00-vision.md).
 
@@ -156,6 +157,98 @@ say `target.loc`; it must say `self.believed_loc(target)` and accept that
 the answer may be stale or `null`. This is rule R11 enforced by the
 compiler.
 
+Everything a goal, a method or a tactic reaches is compiled in the same
+context (05 §7.3): the mod's own functions, a grant's `value`, the rules
+a `run` step calls, and handlers of `goal_scoring` and `option_scoring`.
+Options are gathered from what the character believes. An action that
+turns out, when tried, not to be possible is a failed step, and the mind
+thinks again.
+
+"Static geometry" is the shape of the world (02 §23): what is solid and
+what can be walked. It is not the state of a door, a fire in the next
+room or what lies on a shelf. Those the character has to have **noted**
+(15 §7.1). Path costs, `near` and hauling read what has been noted.
+
+Who a mind counts as an enemy or a friend is read from its relations
+(15 §9.1): `threats` are those it knows of toward whom it, or its group,
+holds a relation whose kind is flagged `opposes`, and `allies` those
+with one flagged `sides_with`. Warm characters are opposed when their
+groups are. The engine has no other idea of sides.
+
+### 3.5 As built (beta)
+
+Built in `clash_sim::ai` (decisions D-690 to D-698). What follows is the
+whole of what a modder writes and reads; section 17 lists it by kind.
+
+**`mind`** (D-690, D-694, D-695):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `goals` | list of `goal` ids | The goals it may have, in the order ties are broken |
+| `weights` | map of name to number | Read by `self.weight(name)` |
+| `adjust` | list of `{ if, weights?, goals? }` | While `if` (a pure condition on `self`, in the mind context) holds, `weights` are added to the mind's and `goals` may be had too: how traits colour a mind |
+| `think` | time, default `1 s` | How long it waits between thoughts when nothing happens, in its own time |
+| `stretch` | int ≥ 1, default 8 | How many times `think` the interval stretches to while thoughts change nothing |
+| `wake_clarity` | number ≥ 0, default 1 | How clear a percept (`perceived`'s `clarity`) must be to make it think at once |
+| `go_action` | `action` id | The action a `go`, `keep_near` or `keep_from` step starts, given the cell as its parameter `to`. Required if a goal has such a step |
+| `interact_action` | `action` id, as written | The action it does an interaction with (16 §3.5.1): one with the parameters `target` and `interaction`, as `core:interact` has. With one, a closed door on its way is opened (section 4.1) and its paths count a closed door as passable at the cost of opening it; without, a closed door is a wall to it (decision D-781). Checked where interactions are loaded |
+| `routine` | `routine` id, as written | The routine it keeps (section 10.6): checked where routines are loaded |
+| `hostile_to`, `fear_of` | list of entity tags | Whoever presents one of these, once perceived, is held hostile or feared |
+| `hostile_after`, `fear_after` | list of event types | Whoever the mind makes out as the actor of such an event it perceives is held hostile or feared from then on |
+| `crowd_cost` | metres, default 3 | What a step into a cell where it saw someone in the last five seconds costs it more (section 5.3) |
+| `hazards` | list of `{ events, radius = 2, cost = 10, below = 0.05 }` | Wherever it remembers one of `events` with salience at least `below`, steps within `radius` metres cost `cost` metres more |
+| `senses` | list of `sense` ids | Given to its character when the mind's state is first made, if it has no senses: when it first thinks, or before that when it is given a stance, a goal or a home (decision D-901). A character made without any perceives with these. A directly controlled character never thinks, and is given senses by whoever made it |
+| `reactions` | list of `action` ids | The reactions it answers a window its character noticed with, in order of preference (section 6.3). Default none: it answers nothing |
+| `doc` | text | What it is |
+
+`tactics` is not built.
+
+**`goal`** (D-691):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `score` | number, mind context | How much it is wanted; zero, below or null is not at all |
+| `about` | one of `{ "track": { where?, best? } }`, `{ "memory": { events?, where?, best? } }`, `{ "place": expr }` | What it concerns, bound as `$about` |
+| `methods` | list of `{ if?, steps }` or `{ if?, method }` | Its ways, in order |
+| `done`, `fail` | conditions, mind context | When it is over; a failed goal is set aside |
+| `commit` | fraction ≥ 0 | How much another must outscore it to displace it |
+| `interrupts` | bool | Whether taking it up cancels what the mind set the character doing (its step's action, where the phase allows, and its own wait); what a command or a rule set going runs on |
+| `retry_after` | time, default `10 s` | How long it is set aside after failing |
+| `noise` | number ≥ 0 | Up to this much is added to its score at each thought, from the character's own stream |
+| `wake_on` | list of event types | Such an event makes every mind that binds it as a subject, and has thought before, think at once |
+| `doc` | text | What it is |
+
+`$about` has a type the compiler knows: `entity` for a track, `map<any>`
+for a memory, `loc` for a place; a goal whose `about` found nothing is
+not scored, and one held whose `about` is no longer believed is given up. Of the candidates whose `where` holds
+(compiled in the mind context with the candidate as `it`), the greatest
+`best` is chosen; for a memory with no `best`, the most recent. The goal
+held keeps what it is about while that is still a candidate. A memory
+reads as a map with `event`, `loc`, `age` (seconds), `salience` (faded),
+`confidence`, `actor` (the entity the mind made out, or null) and `how`
+(the signal kind's qualified id, `told`, `inferred` or `carried`). A
+goal whose `about` finds nothing is not wanted. A track or a memory the
+`settle` step marked is passed over: a track until it is perceived again.
+
+**Thinking** (D-690). A mind is prompted by `decision_needed`, by a
+percept at least as clear as `wake_clarity`, by coming to perceive
+someone or losing them (`detected`, `lost_track`), by remembering
+something (`memory_added`), by a `wake_on` event, by
+entering the world or leaving direct control, by `entity_spawned`,
+`entity_woke`, `entity_revived` and `mind_transferred`, by the end of a
+step's action, by coming close enough on a step that moves, and by the
+`think` verb. Prompted minds think when the event queue is next empty, as
+one batch in order of entity; what one does reaches another only through
+events delivered after the batch. Each thought scores goals, settles the
+step under way and pursues the goal held. A mind with nothing to do waits
+its interval, staggered by up to a quarter by a hash of its entity; a busy
+one thinks again when its interval has passed. A directly controlled
+character's mind does not decide. Settings: `ai.max_thoughts_per_tick`
+(4), `ai.max_minds_per_batch` (256), `ai.max_steps_per_thought` (16).
+
+`weight` is a property of the character, `self.weight('duty')`, not a
+function: a function is not told whose mind asks (D-692).
+
 ## 4. Methods and steps
 
 A method is a list of **steps**. Steps are fed into the character's plan
@@ -183,6 +276,109 @@ Reactions written as rules (15 §12) and goals coexist. A rule that reacts
 to a scream by planning an action is immediate and authored. A goal whose
 score rises because of the memory of the scream is deliberate. Most
 characters have both.
+
+### 4.1 As built (beta)
+
+A method is written in a goal's `methods` with its `if` and `steps`, or
+on its own as a **`method`** definition (`about`: `track`, `memory`,
+`place` or left out; `if`; `steps`) and named there with `{ "method": id }`
+beside an optional `if` of the entry's own; both conditions must hold. A
+goal may name only methods written for its own kind of `about`
+(D-697). The first method whose conditions hold and that has not failed
+in this pursuit is followed; when its last step is done the goal is done
+if its `done` holds, and is otherwise taken up again at the next thought.
+
+A step is an object with exactly one of the kinds below and, beside it,
+an optional `if` (passed over when it does not hold). Every expression is
+in the mind context with `$about` bound (D-693).
+
+| Step | Arguments | Becomes | Ends |
+|------|-----------|---------|------|
+| `go` | `to`: a cell, or an entity, meaning where the mind believes it is; `within`: metres, default 0 | The mind's `go_action` with `to` the cell, or the nearest it believes it can stand in | Done within `within` (and half a metre) of it; fails with `ai.not_arrived` if the action ends short |
+| `do` | `action`: an action id; `with`: map of parameter name to expression | That action, missing parameters taking their defaults; a text given for a parameter that takes a definition is that definition (`'core:search'`, decision D-951) | When it finishes; fails with its refusal, its interruption, or `ai.cancelled` |
+| `choose` | `purpose`: an action tag; `target`: expression, optional | The first action carrying the tag, in load order, that can start, with `target` as its parameter `target` | As `do`; fails with `ai.no_option` when none can start |
+| `wait` | `time`: seconds; `until`: condition | A wait of `time`, or of the mind's interval | After the wait, or when `until` holds at a thought |
+| `look` | `at`: a cell or an entity; `time`: seconds, default 2 | Turning to face it, and a wait | After the wait |
+| `say` | `text`: a text template; `volume`: number, default 1; `kind`: a `message_kind` id, as written | The event `said`; with `kind`, also a message of that kind to everyone who hears it (15 §11), so that rules listening for `message_heard` answer it: a call for help the watch hears (decision D-784) | At once |
+| `set` | `var`: the variable's name as the simulation keeps it, qualified for a declared one; `value`: expression | A variable of the character's own | At once |
+| `settle` | `true` | Marks `$about` settled | At once |
+| `stance` | `of`: an entity; `toward`: `hostile`, `feared` or `none` | The mind's stance toward what it perceives `of` as | At once |
+| `keep_near` | `who`: a cell or an entity; `within`: metres, default 1.5 | A `go` toward where `who` is believed to be, begun again whenever they are believed to have moved further than `within`, and a wait while near | Never by itself |
+| `keep_from` | `from`: a cell or an entity; `distance`: metres, default 12 | A `go` to a place `distance` metres away, in a direction of the compass not back toward `from`, that the mind believes it can reach: the one furthest from `from` for the least walking | When there; fails with `ai.no_way_out` |
+
+A step that fails raises `step_failed`, the method is given up and the
+next is tried; with none left the goal fails with `ai.no_method`, raises
+`goal_failed` and is set aside for its `retry_after`. A step whose
+action cannot be started for a reason waiting will not change (decision
+D-961) fails the goal itself, not only the method: the goal raises
+`goal_failed` with the action's own refusal and is set aside for its
+`retry_after`, and the mind chooses again at once (section 3.3), so that
+it does not stand trying what it cannot do, or fall back on a method
+that only waits for it to become possible. Those reasons are the
+engine's `engine:action_channel_lacking` (too few slots of a channel
+enabled at all: a limb missing, bound or broken),
+`engine:action_not_aimed`, `engine:action_parameter_missing` and
+`engine:action_list_length` (`ai::LASTING_REFUSALS`). A `choose` step
+fails so only if every action it tried was refused so; a refusal that
+waiting may change (out of reach, slots busy, a `requires` that does
+not hold) fails the method as before. A step that moves
+toward an entity starts again toward where the mind now believes it is
+when that is more than `within`, or 1.5 m, from where the step was
+going. At most `ai.max_steps_per_thought` steps that take no time run in
+one thought. Every act is an action, a wait, a turn or speech that a
+player could have chosen (invariant N2): actions start through the same
+`start_action` that the `Act` command uses. An interaction (16 §3) is
+done as a player does one, by a `do` step of the action that does
+interactions (in `mods/core`, `core:interact` with `target` and
+`interaction`); a `use` step of its own is not built, nor are `job`,
+`goal`, `follow` and `run`, which wait for jobs and queries.
+
+**Searching** (decision D-950). A search is written with the steps
+above and one function, `places(at, radius, interaction, except?)`:
+the elements (blocks and fixtures) within `radius` metres of a cell,
+at most 16, whose definition lists an interaction, nearest the cell
+first, leaving out those whose cell is in `except`. Which elements
+stand where and what their definitions offer is static geometry
+(section 3.4), so the function is safe for belief; an element tagged
+`hidden` is not listed; what state anything is in, and what it holds,
+is not told. Methods could not say where the places to search are
+without it: no query is answered in a mind context, and no property of
+a cell but its coordinates is safe for belief. A goal keeps the places
+it has searched in a variable of the character's own, and its method
+is begun again, one place at a time, until none is left:
+
+```json
+{ "if": "len(places(self.believed_loc($about), 6, 'core:search', self.var.searched ?? [])) > 0",
+  "steps": [
+    { "set": { "var": "core:search_spot", "value": "first(places(self.believed_loc($about), 6, 'core:search', self.var.searched ?? []))" } },
+    { "set": { "var": "core:searched", "value": "(self.var.searched ?? []) + [self.var.search_spot]" } },
+    { "go": { "to": "self.var.search_spot", "within": 1.5 } },
+    { "do": { "action": "core:interact", "with": { "target": "self.var.search_spot", "interaction": "'core:search'" } } },
+    { "look": { "at": "self.var.search_spot", "time": "rand(2, 4)" } } ] }
+```
+
+What is found is perception's and the world's, never a draw of the
+engine's: walking the rooms the searcher sees whoever stands in the open
+as the light and its eyes let it, and hears whoever moves; the bundled
+interaction `core:search` opens what a person could hide in and brings
+out whoever hides there. The bundled goal is `core:search_hiding_places`
+(the `guard` mind, the last stand's strangers).
+
+**Doors on the way** (decision D-781). A step of a `go`, `keep_near` or
+`keep_from` whose action's step is refused because the way is closed
+(`step_refused` with the code `move.closed`, what the player meets as a
+bump) is not given up: at its next thought the mind stops walking and
+starts its `interact_action` with the default interaction of what is
+there that can be done now (the block's, else the fixture's, else the
+floor's: `interaction::bump_default`, what walking into it does for the
+player), and when that action ends begins the step again, planning
+afresh. With nothing there it can do by default (a locked door and no
+key), with no `interact_action`, or after four openings on one step,
+the step fails with `ai.door_shut` (values `entity`, `dir`, `why`: what
+the default there says) and the cell is kept among the mind's **shut
+doors**, at most sixteen, which its paths go round from then on. Every
+door opened is an action and an interaction the player could have
+chosen (invariant N2).
 
 ## 5. Navigation
 
@@ -225,6 +421,52 @@ passed through them are rechecked.
 Fliers try a straight line first, checked by ray, and fall back to a search
 over regions of open cells. Movers larger than a cell use clearance kept
 with each region.
+
+### 5.4a As built (beta)
+
+Paths are searched cell by cell over what the mover believes, through
+`movement::believed_path` (D-574, D-619): the mover's own ways of moving
+and their speeds are its profile; static geometry is common knowledge,
+hidden elements count once noted; doors cost 2 m of walking for one
+that can open them: a character with no mind definition, or one whose
+mind names an `interact_action`; a mind that names none takes a closed
+door for a wall, and every mind goes round the doors it found it could
+not open (decision D-781). A character
+whose mind has thought adds, through `ai::MindCosts` (D-695):
+
+- `crowd_cost` metres for a step into a cell where it saw someone in the
+  last five seconds of its own time: others are stepped round, not walls;
+- each hazard's `cost` for a step within its `radius` of a place it
+  remembers one of the hazard's events, while the memory is salient;
+- room for a footprint wider than a cell: a cell is one it can be in only
+  if every cell of the footprint is.
+
+When an element changes or is destroyed, every path in use that passes
+within a cell of it is checked again, step by step, at the next batch; a
+path whose remaining steps the mover now believes it cannot make is
+marked stale, so that `go_to` plans again before its next step, and
+`route_blocked` is raised with the first cell that cannot be entered.
+Paths found this way cost what a brute-force search finds (tested on
+random walls). The region and tract graphs, links over portals and
+subgrids, the flier's straight line and flow fields are not built.
+Measured in the timing tests of `tests/ai.rs`, in a release build on a
+loaded machine: a path across a tract of the test city takes about
+43 µs with the world's caches warm, the same with a mind's costs as
+without; twenty minds in a block of the test city (four of them guards)
+cost about 15 ms of real time for each simulated second, perception and
+movement included, about 37 µs a wake-up. No path is cached per mind:
+none was needed.
+
+Two rules came of the market town (performance 2). A mind searches for
+a way to a place over at most 1,500 cells and 150 more for each metre
+the place is off in a straight line (`nav::way_limits`, D-896): a way
+it cannot find within that is no way it sets out on, so a place a few
+steps off behind a wall with no way round is given up without
+searching the town. A hot mind looks before its `go_action` sets out;
+a warm one plans its bulk walk within the same limits. And a closed way
+met by a mind that opens what it meets ends the path there instead of
+being planned round (D-895): the mind opens it at its next thought and
+begins the step again, as section 4.1 says.
 
 ### 5.5 Flow fields
 
@@ -338,6 +580,17 @@ engine for `best_reaction`: the available reaction that would be ready in
 time and most reduces the previewed harm, by its tactics. A character's
 stance (07 §12) may forbid or prefer some.
 
+As built by package T5 (decisions D-711, D-716): when a character that
+is not directly controlled notices a window (`window_noticed`), its mind
+answers with the first of its definition's `reactions` that may start
+and would be ready in time, else the first that may start, through
+`Sim::react`; `Sim::reaction_options(entity, window)` gives each option's
+timing and refusal. A mind with no `reactions` answers nothing, and a
+stance attached as a rule (`core:parry_on_notice` and its like) answers
+beside it. The bundled guard blocks, then ducks; the townsperson and the
+dog answer nothing. `best_reaction`, scored by tactics and previews, is
+not built.
+
 ### 6.4 Positions
 
 `pick_position` scores cells within a radius by an expression. Helpers
@@ -360,6 +613,47 @@ doorway are expressions over these.
 Effort (07 §3.3) is chosen by the tactics' `effort` expression. A character
 may hit as hard as it takes to stop someone and no harder, or as hard as it
 can. Which, is its mind's weights.
+
+### 6.6 As built (beta)
+
+Options, tactics, `threat`, `standing`, positions and reactions are not
+built. What stands in for them in the beta (D-693, D-694):
+
+- **Threat from belief** is what goals read: memories of what was seen
+  or heard (a blow, a blast, a collapse, a death) with their place, age
+  and salience, and tracks of those the mind holds hostile or fears.
+- **Stances** stand in for relations (15 §9): a mind holds someone
+  `hostile` or `feared` by a tag they present (`hostile_to`, `fear_of`,
+  once perceived), by what it saw them do (`hostile_after`, `fear_after`)
+  or by a `stance` step or the `set_stance` verb. Relations (15 §9) are
+  read as well (decision D-762): once it has perceived someone, a mind
+  holds them hostile if its relations oppose them (`stance_to` is
+  `opposes`, through its groups and what the persona claims), and
+  feared if it holds a kind flagged `avoids` toward them, besides the
+  tags of its definition; the tags read are those of the persona it
+  takes them for (15 §8). A stance it took itself comes first. The
+  stance step and `set_stance` stay the mind's own until `threats`
+  replaces them.
+- **Fleeing** is a `keep_from` step; **fighting back** a `choose` step
+  whose purpose is a tag carried by the attacks content defines (the
+  bundled `punch`, `kick` and the rest carry `strike`), with a method
+  behind it for when none can start.
+
+The bundled minds of `mods/core/data/ai/` (`townsperson`, `guard`, `dog`)
+are written with these, and say in their documentation how each behaves.
+
+Since decision D-941 the town's people (`townsperson`, `shopkeeper` and
+the trades that copy it, `watchman`) take no stance from a blow they
+perceive: what a blow struck without cause makes them hold toward the
+striker is a relation that rules of content form, by each mind's own
+weights and only for a blow against someone it holds no foe (15 §12),
+and that fades. A `stance` taken by `hostile_after` or `fear_after` is
+unconditional and does not fade, so a watchman who held hostile whoever
+he saw strike anyone went for a fellow watchman at work; the brawler, the
+guard and the dogs keep theirs, as their documentation says. The
+watchman also lays hands on whoever it goes for (`apprehend`, 07 §12).
+Every bundled mind names the sense `touch` beside sight and hearing, so
+that a blow on its own body is felt (15 §3.2).
 
 ## 7. Working
 
@@ -506,6 +800,89 @@ In a quiet town of eighty everyone is hot. In a duel both are. In a battle
 the hundred and fifty nearest and most involved are, and that set moves
 with the player.
 
+### 9.4 As built (beta)
+
+Built in `clash_sim::ai::warm` (packages I8 and T7, beta; decisions
+D-890 to D-899): what a town of hundreds needs to be cheap around the
+player. Only characters with minds have levels; a directly controlled
+character has none and is never warm.
+
+**Who is warm.** Of the minds in the world, those ranked beyond
+`sim.max_hot_minds` (default 150; measured, a minute's wait in the
+market town keeps to its budget from 50 down, D-927). A mind's tract does not make it warm: one in a warm tract is ranked as any other, nearest first, and so
+is among the first stepped down, while its perception is a warm
+observer's there whatever its level (15 §14). One **stepper** (03 §10)
+on universal time works levels out every `WARM_STEP` (1 s) while
+anybody is warm or could be: it starts when a mind thinks while more
+minds have thought than the cap, and stops when nobody is warm. While it is
+not running nothing of levels is kept, so a simulation in which nobody
+was ever warm hashes and saves as before (D-890).
+
+**Ranking** (D-891). At each step every mind in the world is ranked:
+first those the cap never steps down (one holding a hot ticket of its
+own, one sharing an action, a window or a grip with a directly
+controlled character or such a holder, and one standing in a cell the
+party sees, 15 §13), then those that became hot less than `DWELL`
+(5 s) ago, then the rest, then those that became warm less than `DWELL`
+ago; within each by the classes of section 9.3 (holder, involved,
+notable, anonymous), then seen by the party first, then nearest to a
+directly controlled character (else to the anchor of a hot ticket),
+then by id. The first group is hot whatever the cap; the others fill what is
+left of it in that order. So the cap is exceeded
+only by characters the party sees or that are involved with it, and a
+character keeps its level for `DWELL` unless the cap or the first group
+makes otherwise.
+
+**Promotion between steps.** A warm character is promoted at once when
+it hears a message that involves it (said to it or its group, or of a
+kind that `calls`, heard at its ordinary threshold: 15 §14, D-934), when
+a sweep of the party's sight finds it standing in view, when its bulk
+walk takes it into a cell the party sees, when an action that starts
+names it (its actor, a parameter or a participant: 03 §10, before the
+action claims anything), and when its own mind would start an action
+(a `do` or `choose` step, or a door to open: a warm character starts
+none). The next step steps the lowest-ranked down to keep the cap.
+Promotion and demotion raise `entity_promoted` (`why`: `attention`,
+`seen`, `involved`, `acting`) and `entity_demoted`.
+
+**Warm** (D-892). A warm character does not sweep and receives only
+signals at or over `perception.warm_factor` times its threshold
+(15 §14). Its mind thinks only at the stepper's steps, in order of
+entity, when it is due (prompted, or its interval passed), by the same
+goals and beliefs as a hot one. A step that moves is walked in bulk:
+its path is planned from belief as the `go_action` would plan it, and
+at each step it takes as many steps of the path, each checked against
+the world, as the time its own clock has run allows. Someone standing
+in its way is waited for three steps (`HELD_STEPS`); a step refused
+ends the walk and the mind judges the step at its next thought, as it
+judges a `go_action` that ended short (D-893). Waits, looks and steps
+that take no time are as for a hot mind.
+
+**Moving between levels** (section 9.2). Warm to hot: its sweeps begin
+again and it thinks at once; a step it was walking in bulk is begun
+again as its `go_action`, toward the same place. Hot to warm: what it is
+doing runs on, but an action walking a step that moves ends at its next
+phase and its path becomes the route it walks in bulk, toward the same
+place.
+
+**While the party rests** (03 §11, D-932): the tracts beyond the reach
+of the party's senses go cold, so the residents there are agents
+following their routines, and the stepper steps every
+`sim.rest_warm_step` seconds (15 in the bundled games) instead of every
+`WARM_STEP`: a warm character walks as far in a step as its clock has
+run and thinks when its interval has passed, at fewer steps. Whoever
+the party could see or hear stays in a hot tract; of those, only the
+ones it sees or is involved with are kept hot, besides
+`sim.rest_max_hot_minds` (default 0) ranked as ever.
+
+**Not built**: bulk exchanges between opposed warm characters (a warm
+mind that would strike starts an action, so it is promoted and the fight
+is resolved in full: nothing is softened, only not made cheaper);
+`low_attention` actions (03 §11); a stepper for each realm on its own
+clock (one universal stepper advances each warm character by its own
+clock's time); folding a warm character's thoughts beyond its
+`think` interval. Measured: section 19.
+
 ## 10. Agents
 
 ### 10.1 What is kept
@@ -551,6 +928,7 @@ A goal may have **cold methods**: steps that work on records.
 | `obtain`, `deliver` | Move stock between a site and itself |
 | `meet` | Be where another agent is, when they are |
 | `learn` | Draw on a knowledge store (section 12) |
+| `examine` | Gain findings about a case from a place, a body or a witness (13 §8.4) |
 
 A thief with a goal to grow rich, a watch captain with one to keep the
 peace, and a wandering swordsman with one to find a worthy opponent pursue
@@ -579,6 +957,145 @@ routine, no unusual state and nothing known about it by anyone notable may
 be folded back into its population, leaving what it knew in the local
 knowledge of its home (section 12). A cap per region applies, least
 salient first.
+
+### 10.6 As built (beta)
+
+Built in `clash_sim::agent` (packages E11, L1, L2; decisions D-780 to
+D-789): the part of this section a town needs to look alive.
+
+**Who is an agent.** A settlement's people are **residents** (06 §12.2):
+one record each, keyed on its home and index, with a seed that makes it
+the same person every time it is made. A resident that is not loaded,
+anonymous or notable, keeps an `AgentState`:
+
+| Field | Type | Is |
+|-------|------|----|
+| `at` | `At { loc }` or `Travelling { from, to, since, until }` | Where it is: its own spot at a place, or on the straight line between two, from one tick to another |
+| `doing` | `{ what, since, until? }` | Its routine's `doing` now (`waiting` for one with no routine), since when and until when |
+| `aim` | goal id, or null | The goal it held when stored, if not its routine's. Carried: long goals and cold methods (section 10.3) are not built |
+| `wake` | tick, or null | When it next needs attention: the next part of its day it keeps, or its arrival. Null for one with no routine, which waits where it was |
+
+**Wake-ups** (invariant N7). Every cold resident with a wake-up has one
+entry in one schedule, ordered by tick and key, and the timeline holds
+one wake-up for the earliest (in the `Stepper` domain, told from a
+recipe's by its tag). At a wake-up each resident due is placed again by
+its routine; if that place is loaded it comes into view, else its state
+and its next wake-up are kept. Nothing else is scheduled for it. The
+schedule's ticks are worked out at the rate the realm's clock runs when
+they are: a change of rate is caught up at the next wake-up.
+
+**Leaving view.** When a tract unloads, before the kernel shelves what
+stands there, each resident's individual in it becomes an agent: an
+anonymous one is removed, a notable one stored (`agent_stored`). What
+it was pursuing, if not its routine's goal, is its `aim`.
+
+**Coming into view.** When a tract loads, each cold resident of its
+realm whose place, or either end of whose way, is in it is placed by its
+routine; when a wake-up finds a resident's place loaded, the same. It
+comes into view at the free cell nearest where it is (`SPOT_RADIUS`, six
+cells): a stored one comes back (`agent_loaded`), an anonymous one is
+made again from its seed. Its mind thinks as it enters the world, and
+takes up its routine's goal.
+
+**Routines** (`routine`; section 10.2):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `day` | list of parts | The parts of the day, in order of `from`; the last runs on past midnight into the first |
+| `speed` | metres a second, default 1.2 | How fast it is taken to walk between places while unloaded, over a way 1.3 times the straight line (`TRAVEL_DETOUR`) |
+| `doc` | text | What it is |
+
+| Field of a part | Type | Meaning |
+|-----------------|------|---------|
+| `from` | `"HH:MM"` | When it begins, of a twenty-four hour day scaled to the realm's (section 17) |
+| `at` | a place, or a list of places | Where it is meant to be; of a list, the first that names any place. A place is exactly one of `home: true` (where the settlement put it; for a character that is no resident, its mind's home), `site: id` (a site of its realm by definition) and `site_tag: tag`, with `pick`: `nearest` (to its home, the default), `any` (one drawn from its seed, the same every day) or `all` (every one, nearest first). `role` is carried: the world does not record where a site's marks went, so its anchor stands for every role (D-751) |
+| `doing` | text | What it is doing there, a word content chooses |
+| `goal` | `goal` id | The goal it pursues during the part when loaded: it joins the goals its mind may have and is scored as they are |
+| `within` | metres, default 2 | How close to its place counts as there |
+| `spread` | cells, 0 to 16, default 3 | How far from a site's anchor its own spot there may be, drawn from its seed; a home is exact |
+| `chance` | 0 to 1, default 1 | The share of days it keeps the part, drawn for each character and day from its seed; on a day it does not, the part before runs on |
+| `jitter` | time, default 0 | Up to how much after `from` each character begins it, the same every day, drawn from its seed; less than the time to the next part |
+| `beat` | time, default 0 | For a part naming several places: how long it keeps to each, in turn from the first, a beat between them |
+
+Unloaded, a character is at its place, or, from the start of a part for
+the time it takes to walk there from the place of the part before, on
+the straight line between them. Loaded, its routine reaches its mind
+only through its goals: the part's `goal`, and whatever goals of its
+mind read the properties below, so a disturbance another goal scores
+higher overrides the routine and the routine is taken up again after.
+A loaded character whose place is in a tract that is not loaded does not
+walk out of view toward it: `routine_place` is null, and goals that
+read it are not wanted, until the place loads.
+
+**Properties** of an `entity`, read of oneself in a mind context:
+`routine` (`string?`), `routine_doing` (`string?`), `routine_place`
+(`loc?`: its own spot at the place it keeps to now, its home if the part
+names none that answers; null if it keeps no routine or the place is not
+loaded), `routine_places` (`list<loc>`: every place the part names that
+is loaded), `routine_away` (`bool?`: further from `routine_place` than
+the part's `within`), `resident` (`bool`), `resident_home` (`loc?`),
+`agent_doing` (`string?`: an agent's activity). A resident's `home` is
+its resident home.
+
+**Verbs**: `set_routine { who, routine? }` (a routine in place of its
+mind's; left out, its mind's again; refused with
+`agent.unknown_routine`), `make_anonymous { who }` (06 §12.2).
+
+**Events**: `agent_stored` (`self`; `doing`: string, `aim`: string?),
+`agent_loaded` (`self`; `doing`: string), `became_anonymous` (`self`).
+
+**Reasons**: `agent.not_an_individual` (values `entity`),
+`agent.unknown_routine` (values `routine`).
+
+**The bundled town** (package I10; `mods/core/data/ai/`,
+`routines/`, `town/`). Its people and how each behaves:
+
+| Template | Mind | Routine | A day |
+|----------|------|---------|-------|
+| `person` | `townsperson` | `townsfolk_day` | Up at half past six, working at home from nine, to the market at noon on about one day in four, home in the afternoon, asleep from half past nine. Calls for help and runs from danger |
+| `shopkeeper` | `shopkeeper` | `shopkeeping` | Lives over the shop; keeps it from eight to six, a turn round the market at noon now and then |
+| `watch_guard` | `watchman` | `watch_shift` | From six a beat between the civic places, five minutes at each; the evening at the watch's post; asleep after midnight. Answers a call for help, goes for whoever it sees strike |
+| `rowdy` | `brawler` | `carousing` | Asleep till late, at the tavern from seven in the evening until two; fights back, joins fights it sees, and while drinking now and then picks one |
+| `house_dog` | `house_dog` | none | Keeps near the person it is loyal to (the nearest person when it was made), barks at anyone else close by at most once in half a minute, cannot open doors |
+| `baker` | `baker` | `baking` | At the bakery's oven from four, keeping its shop from nine to three, asleep from eight |
+| `tavern_keeper` | `tavern_keeper` | `tavern_keeping` | Keeps the tavern from eleven until half past midnight |
+| `artisan`, `healer` | `tradesperson` | `trade_day` | At work where they live, at the workshop or the healer's house, from eight to six |
+| `stall_keeper` | `stall_keeper` | `stall_keeping` | Lives in a house of the town, keeps a stall of the market from half past seven to five |
+
+The town's settlement data says who lives where by role (10 §11.2): its
+zones' houses ask for townsfolk, stall keepers, brawlers and dogs, its
+shops and offices for shopkeepers, and the sites of its trades
+(`gen/trades.json`, patched in `town/trades.json`) for their bakers,
+keeper, artisans, healer and the watch, which is based at the
+guardhouse. A site's staff live where they work. The guards do not
+carry the armoury's key: a template cannot give items yet.
+
+`keep_routine` takes anyone who is away from its routine's place there;
+`linger`, `keep_shop`, `stand_post` and `sleep` are what the parts name.
+Taking up `sleep` puts a character to sleep (the trait `asleep`, given
+by the rule `core:fall_asleep`; D-930): it sees nothing, hears only
+what is loud at its ear, and whatever it hears wakes it
+(`core:woken_by_a_noise`); woken, it lies awake a minute (the trait
+`woken`) and drops off again if its mind still holds `sleep`
+(`core:back_to_sleep`); taking up any other goal gets it up
+(`core:get_up`).
+The townsperson's calls for help are messages of the kind `core:help`,
+which `core:heed_help` makes every member of the watch who hears one
+remember as `core:help_called`, and the watchman's `answer_call` takes
+it there.
+
+The content functions `core:doing_near(at, radius, doing)`,
+`core:pursuing_near(at, radius, goal)` and `core:away_near(at, radius)`
+count those near a cell doing something by their routines, holding a
+goal, or on their way somewhere: what a rule asks to know how busy a
+place is.
+
+**Not built**: long goals and cold methods (section 10.3); folding agents
+into populations and the regional cap (section 10.5); walking out of view
+toward an unloaded place; `day_part_changed`; the effects `set_agent`,
+`make_agent` and `fold_agent` (`make_anonymous` does the last for an
+agent); the `agents` query; the hooks `agent_storing` and
+`agent_loading`. Measured: see section 19.
 
 ## 11. Incidents
 
@@ -649,7 +1166,7 @@ An incident whose place is not loaded is **abstract**. Each stage's
 | `move_stock`, `set_stock` | Section 13.2 |
 | `add_knowledge` | Section 12 |
 | `pending_edit`, `stamp` | Changes the place for when it is next loaded (02 §17) |
-| `set_service`, `set_site`, `set_region` | Services, tags and variables |
+| `set_service`, `set_site`, `set_region` | Services, tags, variables, and who holds a site |
 | `set_agent` | An agent's aim, place, relations, variables |
 | `start_incident`, `end_incident` | Chains and endings |
 
@@ -699,7 +1216,7 @@ its goal.
 | A mind's beliefs (15 §7) | That character knows |
 | A group's knowledge (15 §9.2) | The group knows collectively |
 | **Local knowledge** of a site or tract | People there know: what the anonymous saw |
-| A **channel** | Has been published: a newspaper, a broadcast, a town crier, a rumour mill |
+| An **outlet** | Has been published: a newspaper, a broadcast, a town crier, a rumour mill |
 
 Local knowledge is what makes witnesses out of a crowd. When anonymous
 individuals are instantiated in a place, each draws from its local
@@ -710,7 +1227,7 @@ street saw it.
 
 Knowledge moves by rules listening for `knowledge_added`, with delays:
 from a site's locals to the watch after a few minutes if anyone reports
-it; from the watch to a channel; from a channel to every site that
+it; from the watch to an outlet; from an outlet to every site that
 receives it. Each hop may lose confidence and detail.
 
 `add_knowledge`, `share_knowledge` and `publish` are the verbs. What
@@ -764,26 +1281,95 @@ supplies a service to a region does so while it stands, is staffed and is
 supplied itself. Knock out the power station and the district goes dark by
 one value changing.
 
+### 13.4 Holdings
+
+A site is **held** by a group or by a character: the `owner` of its
+definition (10 §11.1) to begin with. `set_site { site, holder }` changes
+it, as does a trade (16 §3.6), and `site_changed_hands` is raised.
+
+Holding a site does nothing by itself. What it is worth to hold one is
+written with what already exists:
+
+| A holding | How |
+|-----------|-----|
+| Earns | The site's stock of an account resource is its balance (16 §5.6), with a rate from its definition, its people and its machines. A standing payment from the site to its holder passes on whatever share content says. |
+| Pays its people | Standing payments to its staff. When one stops, rules on `payment_stopped` decide whether they stay. |
+| Supplies its holder | The holder trades with its own site, taking from stock and having it delivered |
+| Can be lost | Incidents, devastation and other holders change its stock, its staff and who holds it, like anything else |
+
+Someone with factories, a guild with chapter houses, a gang with fronts
+and a lord with manors are holders of sites.
+
+### 13.5 Founding a site
+
+Sites usually come from generation (10 §11). One can also be founded in
+play.
+
+`found_site { def, over, name, holder }` creates a site of the given
+definition over an area or a list of tracts. `set_site_role { site, role,
+at }` names places in it, as a map's marks would. `dissolve_site` ends it.
+
+From then on it is a site like any other:
+
+- It has a job board (section 7.1), and those who belong to it take its
+  jobs.
+- It has a holder (section 13.4), local knowledge (section 12) and tags,
+  so incidents may choose it. A raid on a base is an incident whose `at`
+  matches it.
+- Its stock is what lies in its storage areas (16 §10.4). While it is
+  unloaded the stock is kept as numbers, changed by shipments and trade
+  and by the rates its machines had when it unloaded (16 §13.1). When it
+  loads, its machines catch up first (16 §13.2); then whatever was shipped
+  or traded away is taken out of storage, and nothing else is altered.
+
+A definition meant for founding is flagged `founded`. It names roles that
+may be filled later and need not have a map.
+
+A camp, a homestead, a hideout, a workshop and a colony begin this way.
+
 ## 14. Weather and time of day
 
 ### 14.1 Weather
 
 ```json
 { "type": "weather", "id": "temperate_coast",
+  "temperature": { "mean": "11 C", "season": 8, "day": 4 },
+  "wind_from": "west", "current": { "speed": 0.4, "toward": "east" },
+  "lasting": ["snow", "wet"],
   "states": {
     "clear": { "light": 1.0, "wind": [0, 6],  "sea": 2, "to": { "cloud": 0.3 } },
     "cloud": { "light": 0.7, "wind": [2, 10], "sea": 3, "to": { "clear": 0.3, "rain": 0.25 } },
     "rain":  { "light": 0.5, "wind": [4, 14], "sea": 4, "field": { "rain": 30 }, "to": { "cloud": 0.4, "storm": 0.1 } },
-    "storm": { "light": 0.3, "wind": [12, 28], "sea": 7, "field": { "rain": 80 }, "to": { "rain": 0.5 } } },
+    "storm": { "light": 0.3, "wind": [12, 28], "sea": 7, "temp": -3, "field": { "rain": 80 }, "to": { "rain": 0.5 } } },
   "step": "1 h" }
 ```
 
 Each region has a weather state from its climate's definition. It changes
-by the given chances each step. The state sets values on the region: light
+by the given chances each step. A state may name an `ambience`: how it
+looks (12 §6.4). The state sets values on the region: light
 (15 §3.3), wind and sea state (11 §4.3), temperature, and fields laid on
 loaded cells open to the sky.
 
 Rules may set a region's weather. A power over storms does.
+
+Wind blows from the climate's `wind_from`, turned at each step by a draw
+within `wind_swing`, at the speed the state gives. `current` is the
+steady movement of the region's sea (11 §4.7).
+
+**Temperature.** A region's temperature is its climate's `mean`, plus a
+seasonal swing by the calendar (section 14.2), plus a daily swing by the
+time of day, plus the current state's `temp`. Between weather steps it is
+a known function of time, so the moment it will cross any given value can
+be computed in advance (02 §5.4). The temperature of a particular cell
+follows from it (11 §4.6).
+
+**What lies.** Each field named in `lasting` is kept for the region as one
+number, its **cover**. It rises while a state lays the field, and falls
+by the field's `cover_loss`, an expression that may read the region's
+temperature: snow goes when it thaws, wet ground dries. When a tract
+loads, cells with nothing overhead are given the field at the region's
+cover. Snow that fell while nobody was there is lying when someone
+arrives.
 
 ### 14.2 Calendars
 
@@ -791,6 +1377,23 @@ A realm has a **calendar**: the length of its day and year and the names
 of their parts. `here.realm.time_of_day`, `day`, `season` are read by
 routines, sky light and rules. A realm whose clock runs at another rate
 (03 §3.3) has days to match.
+
+As built (package L1; decision D-782): a realm's day is its sky's (02
+§4.1): its length and the time of day its clock starts at, from the sky
+over storey 0 of its base grid, else at its top; a realm with no sky has
+days of twenty-four hours from midnight. Its clock runs at the realm's
+rate, so a fast clock has fast days. A `calendar` definition, named by
+the realm's `calendar` field, adds names: `parts` (each `{ name, from:
+"HH:MM" }`, in order; before the first, the last runs on), `year` (days,
+0 for none) and `seasons` (each `{ name, from }`, a day of the year from
+0, in order). Properties of a `realm`, all safe for belief:
+`time_of_day` (`real?`, seconds since midnight), `day` (`int?`, from 1 on
+the day its clock began, as 13 §4.3 counts), `day_length` (`real?`,
+seconds), `day_part` (`string?`), `season` (`string?`). The bundled
+`core:common` names night, dawn, morning, noon, afternoon, dusk and
+evening, and a year of four seasons; `core:town` names it. The day's
+length stays the sky's: moving it to the calendar (D-411) would make a
+realm's light and its routines disagree when the two were set apart.
 
 ## 15. Devastation
 
@@ -800,6 +1403,15 @@ populations and agents in proportion to devastation; services lost;
 survivors migrating; groups whose goals accept disasters responding. The
 bundled content supplies a plain set. A mod about the aftermath supplies a
 richer one.
+
+Devastation has a kind (02 §17.2), carried by the event, so rules may
+answer a flood differently from a blast.
+
+Natural disasters are incidents (section 11). Their stages call what the
+world offers: `tremor`, a `release` shaped as a front, `set_liquid_level`,
+`set_weather`, fields, and `devastate` for wherever nobody is looking. The
+reference content includes an earthquake, a flood, a wildfire, an
+eruption, a great storm and a falling star, as examples to copy.
 
 ## 16. Explaining
 
@@ -822,7 +1434,14 @@ views are how it is found.
 ## 17. Modding surface
 
 **Definition types**: `mind`, `goal`, `tactics`, `collective`, `formation`,
-`routine`, `incident`, `weather`, `channel`. Fields `calendar` on realms;
+`routine`, `incident`, `weather`, `outlet`. Fields `calendar` on realms;
+`wake_clarity` on minds (how clear a percept must be to make it think
+again); `noise` on tactics; `retry_after` on goals; `if` on routine
+entries; `on_start` and `on_end` on incident stages, run whether the
+stage is played out or settled by arithmetic. A `tactics` definition maps
+any purpose tag to an expression; the option field `preview_incoming` is
+the preview of what the option's target could do in return.
+`cover_loss` on fields;
 `stocks` and `supplies` on site definitions; `cold` on goals; `intent`
 and `value` on grants (08 §11).
 
@@ -831,16 +1450,32 @@ and `value` on grants (08 §11).
 `agent_loaded`, `agent_stored`, `agent_folded`, `incident_started`,
 `incident_stage`, `incident_ended`, `responder_arrived`,
 `knowledge_added`, `published`, `population_changed`, `stock_changed`,
-`shipment_sent`, `shipment_arrived`, `weather_changed`, `day_part_changed`.
+`shipment_sent`, `shipment_arrived`, `site_changed_hands`,
+`site_dissolved`,
+`weather_changed`, `day_part_changed`.
 
 **Hooks**: `goal_scoring` (adjust a score), `option_scoring`,
 `incident_starting`, `casualties_applying`.
 
 **Effects**: `think`, `set_goal`, `clear_goal`, `claim_job`, `release_job`,
 `form_up`, `disband`, `start_incident`, `end_incident`, `advance_stage`,
-`casualties`, `set_agent`, `make_agent`, `fold_agent`, `add_knowledge`,
+`casualties`, `set_agent`, `make_agent`, `fold_agent`, `found_site`,
+`set_site_role`, `dissolve_site`, `add_knowledge`,
 `share_knowledge`, `publish`, `migrate`, `move_stock`, `set_stock`,
-`send_shipment`, `set_weather`.
+`send_shipment`, `set_weather`, `set_service`, `set_site`, `set_region`,
+`set_mind_def`, `set_routine`, `join_site` (who, site, role, home),
+`leave_site`, `cancel_order`, `remove_knowledge`. `fold_agent` is
+`make_anonymous` (06 §12.2) for an agent.
+
+`start_incident` is refused, with a reason and the event
+`incident_refused`, when no place fits or a cast role with no `else`
+cannot be filled. A stage lasts at least `incident.min_stage_time`, and
+one incident may start at most `incident.max_chain` others in one tick.
+
+For minds that something is listening to, `method_chosen`, `step_started`
+and `option_chosen` are raised, so a rule can observe a decision as the
+inspector can. `agent_storing` and `agent_loading` are hooks: a rule may
+change what an agent carries across.
 
 **Queries**: `visible`, `heard`, `allies`, `threats` (all from belief),
 `jobs`, `agents` (of a site, group or region), `incidents`, `knowledge`.
@@ -848,13 +1483,78 @@ and `value` on grants (08 §11).
 **Functions**: `weight`, `threat`, `standing`, `strength`, `severity`,
 `best_reaction`, `pick_position`, `path_cost`, `least_effort_that`,
 `price`, `threat_removed`, `harm_prevented`, `escape_margin`,
-`detection_risk`.
+`detection_risk`, `places` (built, section 4.1: where a searcher
+looks).
 
-**Settings**: `max_hot_minds`.
+**Settings**: `sim.max_hot_minds`, `mind.max_memories`, `mind.max_tracks`,
+`mind.max_noted`, `incident.min_stage_time`, `incident.max_chain`,
+`incident.region_cap`.
+
+Rates in this document are written with a unit of time (04 §7.1):
+`"0.02 /d"`, `"0.15 /h"`. A time of day such as `"06:00"` is hours and
+minutes of a twenty-four hour day, scaled to the length of the realm's
+own; `realm.clock` gives the same as a fraction of the day.
+
+**As built in the beta** (section 3.5, 4.1, 5.4a, 6.6, 9.4, 10.6, 14.2):
+
+- Detail levels (section 9.4): the setting `sim.max_hot_minds` (default
+  150); the events `entity_promoted` (`self`; `why`: `attention`,
+  `seen`, `involved` or `acting`) and `entity_demoted` (`self`), named
+  in 03 §13.
+
+- Definition types `routine` (section 10.6) and `calendar` (section
+  14.2); the fields `interact_action` and `routine` on minds and `kind`
+  on a `say` step; `calendar` on realms.
+- Properties of an `entity`: `routine`, `routine_doing`, `routine_place`,
+  `routine_places`, `routine_away`, `resident`, `resident_home`,
+  `agent_doing` (section 10.6); of a `realm`: `time_of_day`, `day`,
+  `day_length`, `day_part`, `season` (section 14.2).
+- Verbs `set_routine { who, routine? }` and `make_anonymous { who }`;
+  events `agent_stored`, `agent_loaded`, `became_anonymous`; reasons
+  `ai.door_shut`, `agent.not_an_individual`, `agent.unknown_routine`
+  (section 10.6).
+
+- Definition types `mind`, `goal`, `method`, with the fields listed there.
+- Events, each with `self` the character: `goal_adopted` (`goal`,
+  `about`, `score`, `previous`), `goal_done` (`goal`), `goal_failed`
+  (`goal`, `code`, `message`), `step_failed` (`goal`, `step`, `code`,
+  `message`), `method_chosen` (`goal`, `method`), `step_started`
+  (`goal`, `step`), `option_chosen` (`purpose`, `action`), `said`
+  (`text`, `volume`), `route_blocked` (`here`). The three raised only
+  while something listens are `method_chosen`, `step_started` and
+  `option_chosen`.
+- Properties of an `entity`, read of the character itself in a mind
+  context: `weight(name)` (`real`), `goal` (`string?`), `goal_about`
+  (`any`), `step` (`string?`), `last_failure` (`string?`), `home`
+  (`loc`: where the character is, for a mind that has not thought),
+  `mind_def` (`string?`), `hostile(x)` (`bool`), `fears(x)` (`bool`),
+  `stance(x)` (`string?`).
+- Verbs: `think { who }`; `set_goal { who, goal, about? }`, which holds
+  the goal until it is done, fails or is cleared; `clear_goal { who }`;
+  `set_stance { who, of, stance }`; `set_home { who, at }`;
+  `set_mind_def { who, mind }`.
+- Reasons: `ai.no_mind_def`, `ai.unknown_goal`, `ai.bad_value`,
+  `ai.no_method`, `ai.goal_failed`, `ai.no_target`, `ai.not_arrived`,
+  `ai.no_go_action`, `ai.no_way_out`, `ai.no_option`, `ai.refused`,
+  `ai.cancelled`.
+- Settings: `ai.max_thoughts_per_tick`, `ai.max_minds_per_batch`,
+  `ai.max_steps_per_thought`.
+- Not built: `tactics`, `collective`, `formation`, the cold layer
+  beyond agents and routines (section 10.6); the hook `goal_scoring`; the effects `set_goal` and
+  `clear_goal` as effects (they are verbs); the functions `weight`
+  (a property), `threat`, `standing` and the rest of section 6; the
+  queries `visible`, `heard`, `allies`, `threats`; `retry_after` is
+  built, `wake_clarity` is a field of `mind`.
+- Gap (decision D-961): which refusals fail a goal rather than a method
+  is the engine's list, `ai::LASTING_REFUSALS`; a mod cannot mark one of
+  its own `reason` definitions, or a `requires` that will not come to
+  hold, as lasting. A goal that should give up on such a refusal says
+  so with its own `fail`.
 
 **Properties**: on minds, `goal`, `goal_about`, `step`, `orders`; on
-sites, `locals`, `stock(what)`, `population(kind)`; on regions,
-`weather`, `wind`, `sea_state`; on realms, `time_of_day`, `day`, `season`;
+sites, `locals`, `stock(what)`, `population(kind)`, `holder`; on regions,
+`weather`, `wind`, `current`, `sea_state`, `temperature`, `cover(field)`;
+on realms, `time_of_day`, `day`, `season`;
 on incidents, `stage`, `cast(role)`.
 
 ## 18. Invariants
@@ -872,18 +1572,122 @@ on incidents, `stage`, `cast(role)`.
 
 ## 19. Budgets
 
-Targets, unmeasured.
+Targets, unmeasured but where a figure is given: those rows are in
+`budgets.toml` and measured by `cargo xtask bench` (14 §6.3, D-730).
 
 | Operation | Target |
 |-----------|--------|
 | A mind thinking: scoring ten goals | under 20 µs |
 | A `choose` among thirty options | under 80 µs |
-| A path across a loaded tract, typical | under 150 µs |
+| A path across a loaded tract, typical | under 150 µs (measured: 0.48 ms for 66 steps through a block of the test city, settling 708 cells; 0.55 to 0.76 ms before D-736) |
 | Rebuilding one chunk's regions | under 200 µs |
 | A flow field over 64 × 64 cells | under 1 ms |
 | One warm step for 2,000 characters | under 3 ms |
 | A simulated day for 20,000 agents, 500 sites and their incidents | under 60 ms |
 | An idle agent | no cost between wake-ups |
+| The bundled town (`core:town`, seed 7), every resident hot, for one simulated hour from 09:00 | no target (measured before levels, release build on four shared cores beside a script run: 953 s of real time for 565 residents and 37.9 million wake-ups, about 0.26 s a simulated second and 25 µs a wake-up) |
+| The same hour with the town unloaded, its residents agents (section 10.6) | no target yet (measured: 7 ms of real time) |
+| A player's step in the bundled town: one simulated second in the square from 09:00, its residents loaded round the player | under 100 ms (measured: see below) |
+| A minute's wait in the bundled town, in the square from 09:00 | under 1 s (measured: see below) |
+| A minute's wait in the bundled town at night, in the square from 23:00 | under 1 s (measured: see below) |
+| An hour's wait in the bundled town, in the square from 09:00, as the bundled game waits it | under 5 s (measured: see below) |
+| An hour's wait in the bundled town at night, in the square from 23:00, as the bundled game waits it | under 5 s (measured: see below) |
+
+The town's first two rows are the ignored test
+`timing_the_whole_town_for_one_simulated_hour` in
+`crates/clash-save/tests/town_life.rs`, run with `cargo test --release
+-p clash-save --test town_life timing -- --ignored --nocapture`. The
+other three are the benchmarks `town.step_in_market` (the mean of a
+simulated minute taken a second at a time), `town.minute_wait` and
+`town.minute_wait_night` (the player taken out of the town while the day
+passes and brought back to the square at eleven at night, when most of
+it is asleep) of `cargo xtask bench`; `town.step_walking` times the step
+with the player walking across the town, with no row. Measured on four
+shared cores:
+
+| | Before levels | With the cap and the rest of performance 2 |
+|---|---|---|
+| A step in the square | 226 ms (slowest 349 ms; 9,809 wake-ups a second) | 38 ms (slowest 90 ms; 1,044 wake-ups a second) |
+| A step walking across the town | — | 37 ms (slowest 63 ms) |
+| A minute's wait | 14.05 s | 2.2 to 2.6 s |
+
+With the cap (section 9.4) 150 of the 565 are hot and the rest warm.
+What a step cost after performance 2 was, in order: the sweeps of the
+150 hot characters and the party's own (a sweep looked at everyone in a
+60 m range, items and furniture included, to keep the nearest
+`perception.max_candidates`); minds thinking, chiefly paths for those
+going about near their homes, and how they stand toward everyone they
+know of; and the actions of the hot.
+
+Performance 3 (D-920 to D-928) made sight and thinking cheaper with every
+result as it was: a sweep finds its candidates nearest first and stops
+at the first part of the index farther than the farthest it keeps; a
+party member standing still keeps its field of view and its view while
+nothing about them changes; while a mind weighs its goals, how it stands
+toward others and which part of its day its routine has it in are worked
+out once; a relation lookup reads the groups of both minds once for all
+the kinds it reads; and an entity's clock is read without the rest of
+the ambient conditions. Counted in instructions, a minute's wait in the
+square by day fell by a fifth (the sweeps by a third, the party's sweep
+by half); in time, on a shared machine, by a tenth to a quarter.
+Measured with each cap given to the game scenario, the best of two to
+five runs, before and after:
+
+| `sim.max_hot_minds` | A minute's wait by day | At night | A step in the square |
+|---|---|---|---|
+| 150 | 2.15 s, 1.89 s | 0.65 s, 0.60 s | 36.3 ms, 32.1 ms |
+| 100 | 1.64 s, 1.42 s | 0.55 s, 0.46 s | 27.3 ms, 24.1 ms |
+| 80 | 1.37 s, 1.26 s | 0.48 s, 0.47 s | 21.9 ms, 19.8 ms |
+| 60 | 1.28 s, 1.03 s | 0.39 s, 0.28 s | 20.6 ms, 16.9 ms |
+| 50 | 1.05 s, 0.81 s | 0.30 s, 0.20 s | 18.2 ms, 15.7 ms |
+| 40 | 0.94 s, 0.81 s | 0.31 s, 0.18 s | 16.1 ms, 14.1 ms |
+
+A minute's wait at night is within its target at every cap. By day it is
+within it from a cap of 50 down (at 50, 0.81 to 1.03 s over five runs; at
+60 never under 1.03 s). The bundled game scenarios do not set it yet
+(D-927, D-911): given 50, a minute's wait in the square took 0.77 to
+0.79 s, a minute at night 0.18 to 0.20 s and a step 13.4 ms in release
+(two runs, on the play-testing stream's merge), but the watch 40 m from
+a brawl in the market no longer took up the call for help
+(`a_brawl_in_the_market_draws_the_watch_which_arrives_and_acts`),
+probably because the watchmen were warm and a warm listener hears only
+at four times its threshold (D-894). The play sessions' walk now waits
+behind a person it cannot go round, which the walk to the bakery's wood
+needed at 50; on the errand fewer footsteps were heard at 50, so its
+last frame would show another line of the log. Below about 60 the cost is that of the warm characters, who
+think by the same goals as the hot and plan the paths they walk in bulk,
+and it falls little with the cap. Whoever the player sees is hot at any
+cap (D-891), so the market seen from the square is the same. What is
+still slow is in the model: paths, which are a fifth of a minute's wait
+and mostly the warm going about near their homes, and the goals of five
+hundred minds weighed at their intervals; a path planned to see whether
+a way is there is planned again when the walk sets out (D-928).
+
+Smooth play (D-930 to D-935), measured on four shared cores with
+`sim.max_hot_minds` at 50 (the bundled games but `town_life` set it,
+D-934), the levels of a resting party on and a warm step of 15 s while
+resting, the benchmarks
+`town.hour_wait` and `town.hour_wait_night` (the player's own wait of
+an hour, as `shift+p` waits it) and the minute's waits:
+
+| | Without resting levels, cap 50 | With them |
+|---|---|---|
+| An hour's wait in the square by day | 63.4 s | 6.1 s (10.2 s while the levels came back with five minutes still to wait, 13.0 s with a warm step of 5 s besides, 37 s while 50 stayed hot out of sight) |
+| An hour's wait at night | 12.9 s | 1.2 s (2.8 s with the levels back five minutes early) |
+| A minute's wait by day | 0.79 s | the same (a minute is under `sim.rest_from`) |
+| A minute's wait at night, sleepers blind (D-930) | 0.44 s | the same |
+
+At cap 150 and without resting levels the hour by day took 130 s. Half
+way through a resting hour the town has 204 of its 565 people in the
+world (the 25 tracts round the square), 2 hot (those in the player's
+view) and 202 warm; the rest are agents. The hour by day is just over
+its target of 5 s (within the benchmark's margin): what is left is
+those two hundred warm characters
+in the five tracts across that sight needs, which think when their
+intervals come round and plan and walk their routes in bulk (widening
+the warm step from 5 to 15 s took a fifth off), and loading the 264
+tracts round the party again when the wait ends (the longest frame of
+the wait, about a tenth of a second, 12 §15).
 
 ## 20. Open questions
 

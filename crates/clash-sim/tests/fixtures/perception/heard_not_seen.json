@@ -1,0 +1,7 @@
+[
+  { "//": "Test script `heard_not_seen` (15 §6, §12): a character who hears something break and could not see who did it goes to look. Kept for when rules run against the simulation and the `investigate` action exists; `crates/clash-sim/tests/perception.rs` checks that `perceived` carries everything this reads.",
+    "type": "eoc", "id": "investigate_sounds", "on": "perceived", "attached": true,
+    "filter": { "event": "element_destroyed", "signal": "core:sound" },
+    "if": "event.clarity > 1 and event.about_actor == null",
+    "do": [ { "enqueue_action": { "entity": "self", "action": "investigate", "params": { "at": "event.where" } } } ] }
+]

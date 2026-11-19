@@ -1,0 +1,335 @@
+//! The workspace's task runner.
+//!
+//! `cargo xtask check` is the gate every change must pass (see `CLAUDE.md`).
+//! It runs, in order:
+//!
+//! 1. `cargo fmt --all --check`
+//! 2. `cargo clippy --workspace --all-targets` with warnings denied
+//! 3. `cargo test --workspace`
+//! 4. `cargo doc --workspace --no-deps` with warnings denied
+//! 5. the check that the literals for chunk, tract and region sizes appear
+//!    only in `clash_world::dims` (see the `dims` module)
+//!
+//! Every step runs even when an earlier one fails, so one run shows
+//! everything that is wrong. `cargo xtask <step>` runs a single step by name
+//! (`fmt`, `clippy`, `test`, `doc`, `dims`).
+//!
+//! `cargo xtask bench [--check] [<filter>...]` is not a step of `check`:
+//! it builds the tools in release and runs the benchmarks of the
+//! specifications' budget tables against `budgets.toml` (14 §6.3), which
+//! takes minutes and gives figures that depend on the machine. With
+//! `--check` it fails when one is over its limit by more than its margin.
+
+mod dims;
+
+use std::env;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
+use std::time::{Duration, Instant};
+
+/// The name of the one step that is not a cargo command: the size-literal
+/// check, which this program does itself.
+const DIMS_STEP: &str = "dims";
+
+/// One step of `cargo xtask check`: a cargo command and the environment it
+/// needs, or the built-in size-literal check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Step {
+    /// The name used on the command line and in the summary.
+    name: &'static str,
+    /// Arguments passed to cargo. Empty for the built-in check.
+    args: &'static [&'static str],
+    /// Environment variables set for the command.
+    env: &'static [(&'static str, &'static str)],
+}
+
+/// The steps of `cargo xtask check`, in the order they run.
+const STEPS: &[Step] = &[
+    Step {
+        name: "fmt",
+        args: &["fmt", "--all", "--check"],
+        env: &[],
+    },
+    Step {
+        name: "clippy",
+        args: &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+        env: &[],
+    },
+    Step {
+        name: "test",
+        args: &["test", "--workspace"],
+        env: &[],
+    },
+    Step {
+        name: "doc",
+        args: &["doc", "--workspace", "--no-deps"],
+        env: &[("RUSTDOCFLAGS", "-D warnings")],
+    },
+    Step {
+        name: DIMS_STEP,
+        args: &[],
+        env: &[],
+    },
+];
+
+/// The command `cargo xtask bench` runs, before the arguments given to
+/// it: the tools' benchmarks, built in release, against the budgets file
+/// at the root of the workspace.
+const BENCH_ARGS: &[&str] = &[
+    "run",
+    "--release",
+    "--quiet",
+    "--package",
+    "clash-tools",
+    "--",
+    "bench",
+    "--budgets",
+    "budgets.toml",
+];
+
+/// What the command line asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Request {
+    /// Run these steps and summarise.
+    Run(Vec<&'static Step>),
+    /// Run the benchmarks with these arguments.
+    Bench(Vec<String>),
+    /// Print the usage text.
+    Help,
+    /// The arguments were not understood.
+    Unknown(String),
+}
+
+/// Works out what to do from the arguments after `cargo xtask`.
+fn parse(args: &[String]) -> Request {
+    match args {
+        [] => Request::Help,
+        [first, rest @ ..] if first == "bench" => Request::Bench(rest.to_vec()),
+        [only] => match only.as_str() {
+            "check" => Request::Run(STEPS.iter().collect()),
+            "help" | "--help" | "-h" => Request::Help,
+            name => match STEPS.iter().find(|step| step.name == name) {
+                Some(step) => Request::Run(vec![step]),
+                None => Request::Unknown(name.to_owned()),
+            },
+        },
+        [_, extra, ..] => Request::Unknown(extra.clone()),
+    }
+}
+
+/// The usage text.
+fn usage() -> String {
+    let mut text = String::from(
+        "usage: cargo xtask <command>\n\ncommands:\n  check    run every step below, in order\n",
+    );
+    for step in STEPS {
+        text.push_str(&format!("  {:<8} {}\n", step.name, command_line(step)));
+    }
+    text.push_str(&format!(
+        "  bench    cargo {} [--check] [<filter>...]\n           (not part of check: the benchmarks against budgets.toml, in release)\n",
+        BENCH_ARGS.join(" ")
+    ));
+    text
+}
+
+/// The command a step runs, as a person would type it.
+fn command_line(step: &Step) -> String {
+    if step.name == DIMS_STEP {
+        return String::from("(built in) size literals appear only in clash_world::dims");
+    }
+    let mut line = String::new();
+    for (key, value) in step.env {
+        line.push_str(&format!("{key}=\"{value}\" "));
+    }
+    line.push_str("cargo ");
+    line.push_str(&step.args.join(" "));
+    line
+}
+
+/// The workspace root: the directory that holds this crate's directory.
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Runs one step and reports whether it passed and how long it took.
+fn run(step: &Step, root: &Path) -> (bool, Duration) {
+    println!("\nxtask: {} — {}", step.name, command_line(step));
+    if step.name == DIMS_STEP {
+        let started = Instant::now();
+        let found = dims::violations(root);
+        for violation in &found {
+            eprintln!("{violation}");
+        }
+        return (found.is_empty(), started.elapsed());
+    }
+    let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+    let started = Instant::now();
+    let status = Command::new(cargo)
+        .args(step.args)
+        .envs(step.env.iter().copied())
+        .current_dir(root)
+        .status();
+    let passed = match status {
+        Ok(status) => status.success(),
+        Err(error) => {
+            eprintln!("xtask: could not run cargo: {error}");
+            false
+        }
+    };
+    (passed, started.elapsed())
+}
+
+/// Runs the benchmarks, passing on their exit code.
+fn bench(root: &Path, rest: &[String]) -> ExitCode {
+    let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+    let status = Command::new(cargo)
+        .args(BENCH_ARGS)
+        .args(rest)
+        .current_dir(root)
+        .status();
+    match status {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::FAILURE,
+        Err(error) => {
+            eprintln!("xtask: could not run cargo: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = env::args().skip(1).collect();
+    let steps = match parse(&args) {
+        Request::Run(steps) => steps,
+        Request::Help => {
+            print!("{}", usage());
+            return ExitCode::SUCCESS;
+        }
+        Request::Unknown(word) => {
+            eprintln!("xtask: unknown command `{word}`\n\n{}", usage());
+            return ExitCode::from(2);
+        }
+        Request::Bench(rest) => return bench(&workspace_root(), &rest),
+    };
+
+    let root = workspace_root();
+    let results: Vec<(&Step, bool, Duration)> = steps
+        .into_iter()
+        .map(|step| {
+            let (passed, took) = run(step, &root);
+            (step, passed, took)
+        })
+        .collect();
+
+    println!("\nxtask: summary");
+    for (step, passed, took) in &results {
+        let verdict = if *passed { "ok  " } else { "FAIL" };
+        println!(
+            "  {verdict}  {:<7} {:>7.1}s  {}",
+            step.name,
+            took.as_secs_f64(),
+            command_line(step)
+        );
+    }
+    let failed = results.iter().filter(|(_, passed, _)| !passed).count();
+    if failed == 0 {
+        println!("xtask: all {} steps passed", results.len());
+        ExitCode::SUCCESS
+    } else {
+        println!("xtask: {failed} of {} steps failed", results.len());
+        ExitCode::FAILURE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    #[test]
+    fn check_runs_every_gate_in_order() {
+        let Request::Run(steps) = parse(&args(&["check"])) else {
+            panic!("`check` must run steps");
+        };
+        let names: Vec<&str> = steps.iter().map(|step| step.name).collect();
+        assert_eq!(names, ["fmt", "clippy", "test", "doc", "dims"]);
+    }
+
+    #[test]
+    fn the_size_literal_check_is_built_in() {
+        let dims = STEPS.iter().find(|step| step.name == DIMS_STEP).unwrap();
+        assert!(dims.args.is_empty());
+        assert!(command_line(dims).contains("clash_world::dims"));
+        assert!(
+            STEPS
+                .iter()
+                .all(|step| step.name == DIMS_STEP || !step.args.is_empty())
+        );
+    }
+
+    #[test]
+    fn a_step_name_runs_that_step_alone() {
+        for step in STEPS {
+            assert_eq!(parse(&args(&[step.name])), Request::Run(vec![step]));
+        }
+    }
+
+    #[test]
+    fn warnings_are_denied_where_the_gate_says_so() {
+        let clippy = STEPS.iter().find(|step| step.name == "clippy").unwrap();
+        assert!(clippy.args.ends_with(&["--", "-D", "warnings"]));
+        assert!(clippy.args.contains(&"--all-targets"));
+        let doc = STEPS.iter().find(|step| step.name == "doc").unwrap();
+        assert_eq!(doc.env, [("RUSTDOCFLAGS", "-D warnings")]);
+        assert!(doc.args.contains(&"--no-deps"));
+    }
+
+    #[test]
+    fn help_and_mistakes_are_told_apart() {
+        assert_eq!(parse(&args(&[])), Request::Help);
+        assert_eq!(parse(&args(&["--help"])), Request::Help);
+        assert_eq!(
+            parse(&args(&["chekc"])),
+            Request::Unknown("chekc".to_owned())
+        );
+        assert_eq!(
+            parse(&args(&["check", "now"])),
+            Request::Unknown("now".to_owned())
+        );
+    }
+
+    #[test]
+    fn bench_is_not_a_step_of_check_and_passes_its_arguments_on() {
+        assert!(STEPS.iter().all(|step| step.name != "bench"));
+        assert_eq!(
+            parse(&args(&["bench", "--check", "light"])),
+            Request::Bench(vec!["--check".to_owned(), "light".to_owned()])
+        );
+        assert_eq!(parse(&args(&["bench"])), Request::Bench(Vec::new()));
+        assert!(BENCH_ARGS.contains(&"--release"));
+        assert!(usage().contains("bench"));
+    }
+
+    #[test]
+    fn the_usage_text_names_every_step() {
+        let text = usage();
+        assert!(text.contains("check"));
+        for step in STEPS {
+            assert!(text.contains(step.name));
+        }
+    }
+}

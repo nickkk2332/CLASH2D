@@ -1,0 +1,68 @@
+[
+  { "//": "A blow. The world's bodies and falling masses deliver it.",
+    "type": "damage_type", "id": "impact", "kinetic": true },
+  { "//": "An edge. Across the whole width of a part, it takes the part off.",
+    "type": "damage_type", "id": "cut", "severs": true },
+  { "type": "damage_type", "id": "pierce" },
+  { "type": "damage_type", "id": "blast" },
+
+  { "//": "Thin, easily opened, bleeds a little and stops by itself.",
+    "type": "material", "id": "skin", "density": 1100, "toughness": "2 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "200 kPa" },
+      "cut":    { "threshold": "1 MPa" },
+      "pierce": { "threshold": "1 MPa" },
+      "blast":  { "threshold": "50 kPa" } },
+    "leak":   { "pool": "blood", "rate": 0.05, "closes": "5 min" },
+    "signal": { "pool": "pain", "per_joule": 0.5 },
+    "heal":   "0.5 /d" },
+
+  { "//": "Where the blood is.",
+    "type": "material", "id": "muscle", "density": 1060, "toughness": "1 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "100 kPa" },
+      "cut":    { "threshold": "500 kPa" },
+      "pierce": { "threshold": "500 kPa" },
+      "blast":  { "threshold": "50 kPa" } },
+    "leak":   { "pool": "blood", "rate": 3.0, "closes": "30 min" },
+    "signal": { "pool": "pain", "per_joule": 0.2 },
+    "heal":   "0.1 /d" },
+
+  { "//": "Hard to get through, and slow to mend.",
+    "type": "material", "id": "bone", "density": 1900, "toughness": "100 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "2 MPa" },
+      "cut":    { "threshold": "50 MPa" },
+      "pierce": { "threshold": "50 MPa" },
+      "blast":  { "threshold": "500 kPa" } },
+    "signal": { "pool": "pain", "per_joule": 0.1 },
+    "heal":   "0.02 /d" },
+
+  { "//": "What organs are made of. Opened, it does not stop bleeding unaided.",
+    "type": "material", "id": "organ", "density": 1050, "toughness": "300 kJ/m3",
+    "resist": {
+      "impact": { "threshold": "50 kPa" },
+      "cut":    { "threshold": "100 kPa" },
+      "pierce": { "threshold": "100 kPa" },
+      "blast":  { "threshold": "30 kPa" } },
+    "leak":   { "pool": "blood", "rate": 40.0 },
+    "signal": { "pool": "pain", "per_joule": 0.5 },
+    "heal":   "0.05 /d" },
+
+  { "//": "One stuff all the way through: leaks nothing, feels nothing, closes up fast.",
+    "type": "material", "id": "jelly", "density": 1000, "toughness": "200 kJ/m3",
+    "resist": {
+      "impact": { "threshold": "10 kPa", "factor": 0.5 },
+      "cut":    { "threshold": "10 kPa" },
+      "pierce": { "threshold": "10 kPa" },
+      "blast":  { "threshold": "10 kPa" } },
+    "heal": "1 /h" },
+
+  { "//": "Something to wear. Stops an edge it can hold, and is cut through by one it cannot.",
+    "type": "material", "id": "mail", "density": 7800, "toughness": "500 MJ/m3",
+    "resist": {
+      "impact": { "threshold": "5 MPa" },
+      "cut":    { "threshold": "300 MPa" },
+      "pierce": { "threshold": "100 MPa" },
+      "blast":  { "threshold": "1 MPa" } } }
+]

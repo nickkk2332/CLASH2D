@@ -1,0 +1,7 @@
+{
+  "id": "ashlands",
+  "name": "Ashlands",
+  "description": "A fixture: a function and a trap that use what core declares.",
+  "requires": ["core"],
+  "strict_vars": true
+}

@@ -1,0 +1,8 @@
+[
+  { "type": "material", "id": "base", "abstract": true,
+    "density": 2600,
+    "toughness": 1.5e6,
+    "tags": ["mineral"] },
+  { "type": "material", "id": "granite", "copy_from": "base",
+    "toughness": 2.5e6 }
+]

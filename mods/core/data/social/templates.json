@@ -1,0 +1,11 @@
+[
+  { "//": "Roles a person may be made with, applied after `person`: `spawn { template: person, also: [watchman] }`. Each joins its group in its role (15 §9.2).",
+    "type": "template", "id": "watchman", "kind": "role", "name": "Watchman",
+    "tags": ["watch"],
+    "groups": { "watch": "guard" } },
+  { "type": "template", "id": "watch_sergeant", "kind": "role", "name": "Sergeant",
+    "tags": ["watch"],
+    "groups": { "watch": "sergeant" } },
+  { "type": "template", "id": "thug", "kind": "role", "name": "Thug",
+    "groups": { "gang": "thug" } }
+]

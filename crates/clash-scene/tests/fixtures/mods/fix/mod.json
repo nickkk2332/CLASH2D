@@ -1,0 +1,7 @@
+{
+  "id": "fix",
+  "name": "Input fixture",
+  "version": "0.1.0",
+  "description": "Actions, controls and a small world for the tests of input, controls and pickers. It names things the engine never does.",
+  "requires": ["ui"]
+}

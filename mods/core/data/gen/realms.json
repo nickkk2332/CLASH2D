@@ -1,0 +1,21 @@
+[
+  { "//": "Fields and woods on gently rolling ground, with a lane of houses written in by hand: the `standard` generator, built from tract definitions, a ground and the bundled maps.",
+    "type": "realm", "id": "countryside",
+    "size_regions": [1, 1],
+    "wrap": [],
+    "z_range": [-32, 64],
+    "generator": "standard",
+    "generator_params": {
+      "tracts": [ { "tract": "field", "weight": 5 }, { "tract": "wood", "weight": 3 } ],
+      "patch": 2,
+      "layout": { "at": [0, 0],
+                  "rows": [ "wff ",
+                            "llll",
+                            "fwf " ],
+                  "legend": { "f": "field", "w": "wood", "l": "lane" } },
+      "height": { "noise": { "octaves": 3, "scale": 8 }, "range": [0, 3] }
+    },
+    "fill": { "below": "solid@granite", "above": null },
+    "strata": [ { "from_z": -32, "gravity": 9.81, "atmosphere": "air", "sky": "day_night" } ],
+    "time_rate": 1.0 }
+]

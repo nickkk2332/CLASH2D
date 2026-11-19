@@ -1,0 +1,5 @@
+# This crate is outside the simulation (docs/01-architecture.md section 2), so
+# the determinism contract's disallow lists in the workspace's clippy.toml do
+# not apply to it: it may read the wall clock and use ordinary collections and
+# floating point. A clippy.toml beside a crate's Cargo.toml replaces the
+# workspace's one for that crate, and this one disallows nothing.

@@ -1,0 +1,53 @@
+[
+  { "//": "How the people of this mod answer what the social layer tells them (15 §10 to §12), until minds and goals (09) do it for them. Each is a plain rule a mod may switch off with its rule group: set the setting `core:social_life` to false.",
+    "type": "rule_group", "id": "social_life",
+    "enabled": "setting('core:social_life') ?? true",
+    "doc": "The bundled answers to orders, calls for help and reports. On unless the setting `core:social_life` is false." },
+
+  { "//": "Do as ordered: an order kept is put in the plan. The AI's goal of the same name replaces this (09 §8.1).",
+    "type": "eoc", "id": "do_as_ordered", "on": "order_given", "group": "social_life",
+    "doc": "Puts the action an order says to do at the end of the plan of whoever kept it.",
+    "do": [ { "enqueue_action": { "who": "self", "action": { "expr": "event.action" }, "with": "event.with" } } ] },
+
+  { "type": "eoc", "id": "stop_when_released", "on": "order_cancelled", "group": "social_life",
+    "if": "event.how == 'relation_lost'",
+    "doc": "A servant that is no longer one drops what it was told to do.",
+    "do": [ { "clear_plan": { "who": "self" } } ] },
+
+  { "//": "The watch hears a call for help: a guard remembers it, where it came from and who called, for a goal to answer.",
+    "type": "eoc", "id": "heed_help", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:help" },
+    "if": "self.in_group('core:watch')",
+    "doc": "A member of the watch who hears a call for help remembers it, as `core:help_called`, where it came from.",
+    "do": [ { "remember": { "who": "self", "event": "core:help_called", "at": "event.where",
+                            "salience": 0.9, "actor": "speaker" } } ] },
+
+  { "type": "eoc", "id": "heed_alarm", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:alarm" },
+    "if": "self.in_group('core:watch')",
+    "doc": "A member of the watch who hears someone shout for the watch remembers it as a call for help (`core:help_called`), where it came from, as `core:heed_help` does.",
+    "do": [ { "remember": { "who": "self", "event": "core:help_called", "at": "event.where",
+                            "salience": 0.9, "actor": "speaker" } } ] },
+
+  { "type": "eoc", "id": "pass_alarms_to_the_watch", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:alarm" },
+    "if": "event.report and self.in_group('core:watch') and not is_null(about)",
+    "doc": "A member of the watch who hears someone shout for the watch about someone adds what it was told of them to the watch's knowledge, as `core:pass_reports_to_the_watch` does for a report.",
+    "do": [ { "report_to_group": { "who": "self", "group": "core:watch", "about": "about" } } ] },
+
+  { "//": "Calls for help are passed on, once: one of the townsfolk who hears one and is not played by anyone shouts for the watch (an alarm, which is not passed on again), so that a call reaches a watchman at twice the reach of a voice, and no further (D-948).",
+    "type": "eoc", "id": "pass_on_a_call", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:help" },
+    "if": "self.in_group('core:townsfolk') and not self.in_group('core:watch') and self.control != 'direct' and now() - self.var.called_out_at > 30",
+    "doc": "One of the townsfolk not played by anyone who hears a call for help, and has not called out in the last half minute, shouts for the watch: an alarm, which the watch answers and the townsfolk do not pass on.",
+    "do": [ { "set": { "self.var.called_out_at": "now()" } },
+            { "say": { "who": "self", "kind": "core:alarm", "line": "core:alarm_calls",
+                       "event": "core:unprovoked_blow" } } ] },
+
+  { "//": "A guard told what someone saw passes it to the watch, so that every guard knows it (15 §9.2).",
+    "type": "eoc", "id": "pass_reports_to_the_watch", "on": "message_heard", "group": "social_life",
+    "filter": { "kind": "core:report" },
+    "if": "event.report and self.in_group('core:watch')",
+    "doc": "A member of the watch who is told something adds it to the watch's knowledge.",
+    "do": [ { "report_to_group": { "who": "self", "group": "core:watch", "about": "about" } } ] }
+]

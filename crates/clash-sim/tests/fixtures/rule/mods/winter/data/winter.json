@@ -1,0 +1,43 @@
+[
+  { "type": "variable", "id": "deep_winter", "scope": "global", "value": "bool", "default": false,
+    "doc": "Whether the world has gone into deep winter." },
+  { "type": "variable", "id": "chills", "scope": "entity", "value": "int", "default": 0,
+    "doc": "How often the cold has bitten." },
+  { "type": "variable", "id": "alarms", "scope": "entity", "value": "int", "default": 0,
+    "doc": "How many alarms it has set off." },
+
+  {
+    "//": "05 §9.6: a group that a setting or a variable switches on.",
+    "type": "rule_group", "id": "harsh_winter",
+    "enabled": "setting('harsh_winter') == true or global.var.deep_winter",
+    "doc": "The cold bites."
+  },
+
+  {
+    "type": "eoc", "id": "chill",
+    "on": "alarm_tripped", "group": "harsh_winter",
+    "doc": "In a harsh winter, whoever trips an alarm is chilled.",
+    "do": [ { "add": { "who.var.chills": 1 } } ]
+  },
+  {
+    "type": "eoc", "id": "count",
+    "on": "alarm_tripped",
+    "doc": "In no group: runs whatever the season.",
+    "do": [ { "add": { "who.var.alarms": 1 } } ]
+  },
+  {
+    "type": "eoc", "id": "shiver",
+    "group": "harsh_winter",
+    "subjects": { "self": "entity" },
+    "returns": "int",
+    "doc": "A rule that is called is in its group too.",
+    "do": [ { "add": { "self.var.chills": 10 } }, { "return": 1 } ]
+  },
+
+  { "type": "eoc", "id": "thaw",
+    "do": [ { "set_rule_group": { "group": "harsh_winter", "on": false } } ] },
+  { "type": "eoc", "id": "freeze",
+    "do": [ { "set_rule_group": { "group": "harsh_winter", "on": true } } ] },
+  { "type": "eoc", "id": "seasons",
+    "do": [ { "set_rule_group": { "group": "harsh_winter", "on": null } } ] }
+]

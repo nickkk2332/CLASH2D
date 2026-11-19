@@ -1,0 +1,21 @@
+# The gate every change must pass: format, clippy with warnings denied,
+# tests and docs. The same command runs locally: `cargo xtask check`.
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    # x86-64. The reference vectors in crates/clash-core/tests are the
+    # contract for every supported target, so add an aarch64 runner to a
+    # matrix here when one is available.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Installs the toolchain pinned in rust-toolchain.toml.
+      - name: Install the pinned toolchain
+        run: rustup show
+      - name: cargo xtask check
+        run: cargo xtask check
