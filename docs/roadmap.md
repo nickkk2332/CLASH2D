@@ -55,7 +55,8 @@ for a working subset with the rest stubbed, `todo`).
 ## After the beta
 
 First, what play-testing the beta finds (the release notes' known
-issues). Then the packages still `todo` that matter most, roughly in
+issues) and the [polish audit](polish-beta.md): 172 ranked entries,
+`PB-001` to `PB-172`, with the ten to fix first at its top. Then the packages still `todo` that matter most, roughly in
 this order:
 
 | Work | Packages | Why |
